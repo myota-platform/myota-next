@@ -566,6 +566,113 @@ export class GeodataImportMutationRepository {
     }
   }
 
+  async redriveImportProcessingQueue(
+    runId: string,
+    queueId: string,
+    key: string | undefined,
+    requestedBy: string,
+    reasonValue: unknown,
+  ) {
+    const reason = typeof reasonValue === 'string' ? reasonValue.trim() : '';
+    if (!reason || reason.length > 1000)
+      throw new BadRequestException(
+        'reason is required and must be at most 1000 characters',
+      );
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      if (key) {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-import-redrive:' || $1,0))",
+          [key],
+        );
+        const previous = await client.query(
+          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          ['geodata-import-redrive', key],
+        );
+        if (previous.rows[0]) {
+          await client.query('COMMIT');
+          return previous.rows[0].response;
+        }
+      }
+      const selected = await client.query(
+        `SELECT id,import_run_id,candidate_ids,target_status,requested_by,status,
+          requested_at,started_at,completed_at,attempt_count,result,error,job_metadata
+         FROM geodata_import_processing_queue
+         WHERE id=$1 AND import_run_id=$2 FOR UPDATE`,
+        [queueId, runId],
+      );
+      const previous = selected.rows[0];
+      if (!previous)
+        throw new NotFoundException('import processing queue not found');
+      if (previous.status !== 'FAILED')
+        throw new BadRequestException(
+          'only failed promotion queues can be redriven',
+        );
+
+      const metadata = isRecord(previous.job_metadata)
+        ? previous.job_metadata
+        : {};
+      const priorHistory = Array.isArray(metadata.redriveHistory)
+        ? metadata.redriveHistory
+        : [];
+      const history = [
+        ...priorHistory,
+        {
+          requestedAt: new Date().toISOString(),
+          requestedBy,
+          reason,
+          previousAttemptCount: Number(previous.attempt_count),
+          previousError: previous.error,
+          previousResult: previous.result,
+        },
+      ].slice(-20);
+      const updatedMetadata = { ...metadata, redriveHistory: history };
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await client.query(
+        `UPDATE geodata_import_processing_queue SET status='QUEUED',
+          requested_by=$3,requested_at=now(),started_at=NULL,completed_at=NULL,
+          attempt_count=0,heartbeat_at=NULL,lease_until=NULL,error=NULL,
+          result='{}'::jsonb,job_metadata=$4::jsonb,work_dispatched_at=now()
+         WHERE id=$1 AND import_run_id=$2 AND status='FAILED'`,
+        [queueId, runId, requestedBy, JSON.stringify(updatedMetadata)],
+      );
+      const candidateIds = Array.isArray(previous.candidate_ids)
+        ? previous.candidate_ids
+        : JSON.parse(String(previous.candidate_ids));
+      const response = {
+        id: queueId,
+        importRunId: runId,
+        candidateIds,
+        targetStatus: previous.target_status,
+        requestedBy,
+        status: 'QUEUED',
+        requestedAt: new Date().toISOString(),
+        redriven: true,
+      };
+      await client.query(
+        `INSERT INTO outbox_event
+         (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+         VALUES ($1,'geodata.import.processing.queued.v1','geodata-service','import_processing_queue',$2,$3::jsonb,now(),$4)`,
+        [randomUUID(), queueId, JSON.stringify({ queueId }), randomUUID()],
+      );
+      if (key)
+        await client.query(
+          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+          ['geodata-import-redrive', key, JSON.stringify(response)],
+        );
+      await client.query('COMMIT');
+      return response;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   private async connect(): Promise<PoolClient> {
     if (!this.pool)
       throw new ServiceUnavailableException(
@@ -583,4 +690,8 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

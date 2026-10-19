@@ -278,6 +278,25 @@ export class GeodataController {
     return this.repository.getImportProcessingQueue(runId, queueId);
   }
 
+  @Post('imports/:runId/processing-queues/:queueId/redrive')
+  @HttpCode(202)
+  redriveImportProcessingQueue(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Param('runId') runId: string,
+    @Param('queueId') queueId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const claims = authorizeImport(authorization);
+    return this.importMutations.redriveImportProcessingQueue(
+      runId,
+      queueId,
+      key,
+      claims.sub,
+      body.reason,
+    );
+  }
+
   @Get('imports/:runId/candidates')
   listImportCandidates(
     @Headers('authorization') authorization: string | undefined,

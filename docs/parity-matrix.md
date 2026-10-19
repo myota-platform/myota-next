@@ -80,9 +80,11 @@ worker inputs. Refresh schedules can be listed and created, and manual complete-
 snapshot runs queue GeoJSON imports, promote validated candidates, record
 manifests, and apply disappearance policy after successful promotion.
 Import promotion generates deduplicated conflation candidates from overlapping
-PostGIS bounding boxes using the baseline 0.55 scoring threshold. Automatic
-scheduled execution, remaining review workflows, queue-level redrive, NATS delivery, and
-remaining worker operations are outstanding. Finalization removes staged candidates and queues transactionally
+PostGIS bounding boxes using the baseline 0.55 scoring threshold. Failed
+promotion queues can be redriven with a required reason recorded in queue
+metadata and the outbox. Automatic scheduled execution, remaining review
+workflows, NATS delivery, and remaining worker operations are outstanding.
+Finalization removes staged candidates and queues transactionally
 while preserving the import summary and materialized entities. Pending
 candidates can be paged; administrators can confirm or
 reject selected rows transactionally. Selected candidates can also be queued

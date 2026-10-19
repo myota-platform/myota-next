@@ -90,9 +90,9 @@
   full validated candidate set, record source manifests, and apply configured
   disappearance policies only after successful promotion. Automatic scheduled
   execution remains outstanding.
-  Candidate-level failures from a FAILED
-  promotion queue can be resubmitted through the promotion API; queue-level
-  redrive and NATS delivery remain outstanding. Community proposals now enter
+  Candidate-level failures from a FAILED promotion queue can be resubmitted
+  through the promotion API, and failed queues can now be redriven as a whole
+  with a recorded reason. NATS delivery remains outstanding. Community proposals now enter
   the same validated import pipeline and automatically queue promotion to the
   CANDIDATE lifecycle state. Tagged load-test cleanup is opt-in, confirmation
   protected, restricted to terminal runs and owned object storage, and refuses
@@ -143,12 +143,12 @@
   first Identity slice are still outstanding.
 - Remaining Activity operational workflows are outstanding. CSV file import
   validates bounded UTF-8 logs and queues normalized QSO rows for the existing
-  ingestion worker. Geodata queue-level redrive and remaining worker operations are
+  ingestion worker. Geodata remaining worker operations are
   outstanding, along with Gateway routing and protected
   observability proxy behavior.
 - Activity NATS delivery, redrive, and remaining job consumers. The Activity
   worker now extends active job leases while long batches run. Geodata NATS delivery, lease heartbeats for large
-  jobs, explicit redrive, and remaining enrichment and retention consumers.
+  jobs, and remaining enrichment and retention consumers.
 - Admin and Participant web applications.
 - Database migration runner, data transfer tooling, deployment images, and
   production observability configuration.

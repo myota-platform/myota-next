@@ -487,6 +487,24 @@ paths:
           content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportProcessingQueue' } } }
         '403': { description: geodata.import scope required }
         '404': { description: Queue not found for this import run }
+  /v1/geodata/imports/{runId}/processing-queues/{queueId}/redrive:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Redrive a failed import promotion queue
+      description: Requeues the original candidate set, resets the worker retry count, and records the authenticated administrator and required reason in queue metadata. Processed candidates are handled idempotently by the worker.
+      parameters:
+        - { in: path, name: runId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: queueId, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportProcessingRedrive' } } }
+      responses:
+        '202': { description: Failed queue requeued for processing }
+        '400': { description: Queue is not failed or redrive reason is invalid }
+        '403': { description: geodata.import scope required }
+        '404': { description: Queue not found for this import run }
   /v1/geodata/imports/{runId}/processed:
     post:
       tags: [Geodata]
@@ -2049,6 +2067,20 @@ components:
         requestedAt: { type: string, format: date-time }
         startedAt: { type: string, format: date-time, nullable: true }
         completedAt: { type: string, format: date-time, nullable: true }
+        attemptCount: { type: integer, minimum: 0 }
+        error: { type: string, nullable: true }
+        redriveHistory:
+          type: array
+          items:
+            type: object
+            required: [requestedAt, requestedBy, reason]
+            properties:
+              requestedAt: { type: string, format: date-time }
+              requestedBy: { type: string }
+              reason: { type: string }
+              previousAttemptCount: { type: integer }
+              previousError: { type: string, nullable: true }
+              previousResult: { type: object, nullable: true, additionalProperties: true }
         result:
           type: object
           properties:
@@ -2063,7 +2095,11 @@ components:
                   candidateId: { type: string, format: uuid }
                   message: { type: string }
           additionalProperties: true
-        error: { type: string, nullable: true }
+    GeoImportProcessingRedrive:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 1000 }
     GeoEntity:
       type: object
       required: [id, name, status, geometry]

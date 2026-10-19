@@ -232,7 +232,7 @@ export class GeodataRepository {
     try {
       const result = await client.query(
         `SELECT id,import_run_id,candidate_ids,target_status,requested_by,status,
-          requested_at,started_at,completed_at,result
+          requested_at,started_at,completed_at,attempt_count,error,result,job_metadata
          FROM geodata_import_processing_queue WHERE id=$1 AND import_run_id=$2`,
         [queueId, runId],
       );
@@ -249,6 +249,11 @@ export class GeodataRepository {
         requestedAt: row.requested_at,
         startedAt: row.started_at,
         completedAt: row.completed_at,
+        attemptCount: Number(row.attempt_count),
+        error: row.error,
+        redriveHistory: Array.isArray(row.job_metadata?.redriveHistory)
+          ? row.job_metadata.redriveHistory
+          : [],
         result: row.result,
       };
     } finally {
