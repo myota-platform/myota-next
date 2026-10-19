@@ -100,6 +100,7 @@ function renderEntities() {
             headers: { 'Idempotency-Key': crypto.randomUUID() },
             body: JSON.stringify({
               proposerId: awardAccount.id,
+              programmeSlug: $('programme-select').value,
               entityTypes: [entity.entityType],
               source: {
                 name: 'Public programme proposal',
