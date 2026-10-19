@@ -81,6 +81,11 @@
   fields queues only missing values. Candidate-level failures from a FAILED
   promotion queue can be resubmitted through the promotion API; queue-level
   redrive and NATS delivery remain outstanding.
+  Owner-scoped resumable S3 multipart uploads now support idempotent session
+  creation, bounded binary parts, progress reads, completion, checksum and
+  malware scanning, abort, and transactional import-run/outbox creation. This
+  path currently accepts GeoJSON up to the worker's 20 MiB in-memory limit;
+  other legacy import formats and larger streaming imports remain outstanding.
   The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
   paged import-run status reads are also exposed. Authenticated entity audit
@@ -107,8 +112,7 @@
 - Profile-image orphan cleanup and automated compatibility coverage for the
   first Identity slice are still outstanding.
 - Remaining Activity APIs include CSV file import and operational
-  workflows. Geodata multipart/resumable and external object-reference imports,
-  queue-level redrive, and remaining
+  workflows. Geodata external object-reference imports, queue-level redrive, and remaining
   worker operations are outstanding, along with Gateway routing and protected
   observability proxy behavior.
 - Activity NATS delivery, lease heartbeats during large batches, redrive, and
