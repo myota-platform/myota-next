@@ -832,16 +832,15 @@ export class IdentityAccountService {
       const nextStatus = body.status ?? account.status;
       const anonymize = Boolean(body.anonymize && nextStatus === 'DEACTIVATED');
       let email: string | null | undefined;
+      let emailKey: string | null = null;
       if ('email' in body) {
-        email = body.email?.trim().toLowerCase() || null;
-        if (email && !email.includes('@')) {
-          throw new BadRequestException('email must be a valid address');
-        }
-        if (email) {
+        email = body.email || null;
+        emailKey = email?.trim().toLowerCase() || null;
+        if (emailKey) {
           const duplicate = await client.query(
             `SELECT 1 FROM public.account
               WHERE lower(btrim(email::text)) = $1 AND id <> $2`,
-            [email, accountId],
+            [emailKey, accountId],
           );
           if (duplicate.rowCount) {
             throw new BadRequestException('email already exists');
@@ -862,7 +861,7 @@ export class IdentityAccountService {
       if (nextDisplayName !== undefined) set('display_name', nextDisplayName);
       if ('email' in body || anonymize) {
         set('email', nextEmail ?? null);
-        set('identity_email_key', nextEmail ?? null);
+        set('identity_email_key', anonymize ? null : (emailKey ?? null));
       }
       if (body.participationType !== undefined) {
         set('participation_type', body.participationType);
