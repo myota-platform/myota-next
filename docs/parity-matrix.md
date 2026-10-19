@@ -76,8 +76,10 @@ Geodata provides PostGIS-backed public
 entity list/detail reads with filters and bounds, the import adapter catalogue,
 provider-derived location options, and authorized import-run list/status reads;
 authenticated audit reads and approved-entity vector tiles are also implemented.
-JSON GeoJSON import creation stores source documents in S3-compatible storage
-and queues idempotent import runs transactionally. The worker validates feature
+JSON GeoJSON, WFS GeoJSON, and ArcGIS FeatureServer JSON import creation stores
+normalized GeoJSON source documents in S3-compatible storage and queues
+idempotent import runs transactionally. ArcGIS geometries with WGS84 and
+Web Mercator spatial references are normalized to WGS84. The worker validates feature
 names and WGS84 geometries, stages candidates with provenance and 50 m duplicate
 warnings, records errors, and emits the preprocessing fact. Community proposals
 join this pipeline and automatically queue promotion to CANDIDATE. Multipart/resumable

@@ -73,9 +73,12 @@
   deleting Geodata references and the entity. Both services persist outbox
   events. Geodata deletion now runs through its registered durable and extends
   the owner lease; explicit redrive and outage/recovery evidence remain open.
-- Geodata now accepts bounded JSON GeoJSON imports, stores the source document
-  in S3-compatible object storage, and creates an idempotent queued import run
-  (20 MiB request limit and 5,000 feature default, adjustable with
+- Geodata now accepts bounded JSON GeoJSON, WFS GeoJSON, and ArcGIS
+  FeatureServer JSON imports; ArcGIS features are normalized to WGS84 GeoJSON
+  before storage, and the source format is retained in import metadata. Import
+  creation stores the normalized source document in S3-compatible object
+  storage and creates an idempotent queued import run (20 MiB request limit
+  and 5,000 feature default, adjustable with
   `GEODATA_MAX_IMPORT_FEATURES`) with a transactional outbox event. The
   Geodata worker consumes registered preprocessing work and claims the named run,
   validates feature names and WGS84 geometries, stages candidates with

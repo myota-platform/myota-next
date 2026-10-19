@@ -84,6 +84,7 @@ export class GeodataImportService {
         entityTypes: prepared.entityTypes,
         filename: prepared.filename,
         format: 'GEOJSON',
+        sourceFormat: prepared.sourceFormat,
         programmeSlug: prepared.programmeSlug,
         completeSnapshot: prepared.completeSnapshot,
         disappearancePolicy: prepared.disappearancePolicy,
@@ -292,9 +293,9 @@ function prepareImport(
   const format = (typeof body.format === 'string' ? body.format : 'GEOJSON')
     .trim()
     .toUpperCase();
-  if (format !== 'GEOJSON')
+  if (!['GEOJSON', 'WFS', 'ARCGIS_FEATURESERVER'].includes(format))
     throw new BadRequestException(
-      'this import endpoint currently accepts GEOJSON only',
+      'this import endpoint accepts GEOJSON, WFS GeoJSON, or ARCGIS_FEATURESERVER JSON',
     );
   const source = body.source;
   if (!source || typeof source !== 'object' || Array.isArray(source))
@@ -339,11 +340,14 @@ function prepareImport(
       if (!isRecord(parsed)) throw new Error('expected an object');
       document = parsed;
     } catch {
-      throw new BadRequestException('GEOJSON content must be valid JSON');
+      throw new BadRequestException(`${format} content must be valid JSON`);
     }
   } else {
-    throw new BadRequestException('features or GEOJSON content is required');
+    throw new BadRequestException(`features or ${format} content is required`);
   }
+  const sourceFormat = format;
+  if (format === 'ARCGIS_FEATURESERVER')
+    document = normalizeArcGisDocument(document);
   let features: unknown[];
   if (
     document.type === 'FeatureCollection' &&
@@ -385,6 +389,7 @@ function prepareImport(
         : null,
     completeSnapshot: body.completeSnapshot === true,
     disappearancePolicy,
+    sourceFormat,
     document,
     features,
   };
@@ -392,6 +397,70 @@ function prepareImport(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeArcGisDocument(
+  document: Record<string, unknown>,
+): Record<string, unknown> {
+  if (isRecord(document.error))
+    throw new BadRequestException('ArcGIS source returned an error document');
+  if (!Array.isArray(document.features))
+    throw new BadRequestException('ArcGIS response has no features array');
+  const documentReference = isRecord(document.spatialReference)
+    ? document.spatialReference
+    : undefined;
+  const features = document.features.map((raw) => {
+    if (!isRecord(raw))
+      throw new BadRequestException('ArcGIS feature is invalid');
+    const geometry = isRecord(raw.geometry) ? raw.geometry : {};
+    const reference =
+      documentReference ??
+      (isRecord(geometry.spatialReference)
+        ? geometry.spatialReference
+        : undefined);
+    const wkid = Number(reference?.latestWkid ?? reference?.wkid ?? 4326);
+    if (![4326, 3857, 102100, 102113, 900913].includes(wkid))
+      throw new BadRequestException(
+        `unsupported ArcGIS spatial reference WKID ${String(wkid)}`,
+      );
+    const properties = isRecord(raw.attributes) ? { ...raw.attributes } : {};
+    let normalized: Record<string, unknown>;
+    if (Array.isArray(geometry.rings))
+      normalized = { type: 'Polygon', coordinates: geometry.rings };
+    else if (Array.isArray(geometry.paths))
+      normalized = {
+        type: 'MultiLineString',
+        coordinates: geometry.paths,
+      };
+    else if (typeof geometry.x === 'number' && typeof geometry.y === 'number')
+      normalized = {
+        type: 'Point',
+        coordinates: [geometry.x, geometry.y],
+      };
+    else
+      throw new BadRequestException('ArcGIS feature geometry is unsupported');
+
+    if ([3857, 102100, 102113, 900913].includes(wkid))
+      normalized.coordinates = reprojectCoordinates(normalized.coordinates);
+    properties.sourceFormat = 'ARCGIS_FEATURESERVER';
+    properties.sourceRef ??=
+      properties.objectId ?? properties.OBJECTID ?? properties.id;
+    return { type: 'Feature', properties, geometry: normalized };
+  });
+  return { type: 'FeatureCollection', features };
+}
+
+function reprojectCoordinates(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  if (value.length >= 2 && value.slice(0, 2).every(Number.isFinite)) {
+    const x = Number(value[0]);
+    const y = Number(value[1]);
+    const longitude = (x / 6378137) * (180 / Math.PI);
+    const latitude =
+      (2 * Math.atan(Math.exp(y / 6378137)) - Math.PI / 2) * (180 / Math.PI);
+    return [longitude, latitude, ...value.slice(2)];
+  }
+  return value.map(reprojectCoordinates);
 }
 
 function boundedInteger(value: string | undefined, fallback: number) {
