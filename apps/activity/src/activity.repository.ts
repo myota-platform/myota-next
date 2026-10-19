@@ -393,6 +393,52 @@ export class ActivityRepository {
     }
   }
 
+  async createAdifImport(
+    activationId: string,
+    metadata: JsonRecord,
+    key?: string,
+  ): Promise<JsonRecord> {
+    return this.mutate(key ? `adif:${key}` : undefined, async (client) => {
+      const id = randomUUID();
+      const createdAt = new Date().toISOString();
+      const record: JsonRecord = {
+        id,
+        activationId,
+        ...metadata,
+        status: 'QUEUED',
+        malwareStatus: 'CLEAN',
+        recordsSeen: 0,
+        recordsAccepted: 0,
+        recordsRejected: 0,
+        errors: [],
+        createdAt,
+      };
+      await client.query(
+        `INSERT INTO activity_import
+         (id,activation_id,filename,object_key,bucket,sha256,content_size,malware_status,status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'CLEAN','QUEUED')`,
+        [
+          id,
+          activationId,
+          metadata.filename,
+          metadata.objectKey,
+          metadata.bucket,
+          metadata.sha256,
+          metadata.contentSize,
+        ],
+      );
+      await this.job(client, 'ADIF_IMPORT', { importId: id }, `adif:${id}`);
+      await this.event(
+        client,
+        'activity.adif.queued.v1',
+        'adif_import',
+        id,
+        record,
+      );
+      return record;
+    });
+  }
+
   async subjectFacts(
     programme: string,
     subjectId: string,

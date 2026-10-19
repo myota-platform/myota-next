@@ -2,7 +2,16 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  CreateBucketCommand,
+  DeleteObjectCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { ActivityRepository } from './activity.repository.js';
 import {
@@ -13,6 +22,7 @@ import {
 
 @Injectable()
 export class ActivityService {
+  private storage?: S3Client;
   constructor(private readonly repository: ActivityRepository) {}
 
   async list(
@@ -163,6 +173,110 @@ export class ActivityService {
     const activation = await this.repository.get(record.activationId);
     this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
     return record;
+  }
+
+  async createAdifImport(
+    authorization: string | undefined,
+    key: string | undefined,
+    body: JsonRecord,
+  ) {
+    const claims = verifyAccessToken(authorization);
+    const activationId =
+      typeof body.activationId === 'string' ? body.activationId : '';
+    const filename =
+      typeof body.filename === 'string' ? body.filename.trim() : '';
+    if (!activationId || !filename || typeof body.contentBase64 !== 'string')
+      throw new BadRequestException(
+        'activationId, filename, and contentBase64 are required',
+      );
+    if (filename.length > 255 || /[\\/]/.test(filename))
+      throw new BadRequestException(
+        'filename must be a simple filename of 255 characters or fewer',
+      );
+    const activation = await this.repository.get(activationId);
+    this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
+    const content = decodeBase64(body.contentBase64);
+    const maxBytes = positiveInt(
+      process.env.MYOTA_UPLOAD_MAX_BYTES,
+      25 * 1024 * 1024,
+    );
+    if (content.length > maxBytes)
+      throw new BadRequestException(
+        'ADIF upload exceeds the configured size limit',
+      );
+    const eicar = Buffer.from(
+      'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*',
+    );
+    if (content.includes(eicar))
+      throw new BadRequestException('malware scan rejected the upload');
+    await scanUpload(content, filename);
+    const sha256 = createHash('sha256').update(content).digest('hex');
+    const bucket = process.env.MYOTA_ADIF_BUCKET ?? 'myota-adif';
+    const objectKey = `adif/${activationId}/${randomUUID()}-${filename}`;
+    try {
+      const client = this.s3();
+      try {
+        await client.send(new HeadBucketCommand({ Bucket: bucket }));
+      } catch {
+        await client.send(new CreateBucketCommand({ Bucket: bucket }));
+      }
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: objectKey,
+          Body: content,
+          ContentType: 'text/plain',
+        }),
+      );
+    } catch {
+      throw new ServiceUnavailableException(
+        'ADIF object storage upload failed',
+      );
+    }
+    let created: JsonRecord;
+    try {
+      created = await this.repository.createAdifImport(
+        activationId,
+        {
+          filename,
+          objectKey,
+          bucket,
+          sha256,
+          contentSize: content.length,
+          scan: { status: 'CLEAN', sha256, size: content.length },
+        },
+        key,
+      );
+    } catch (error) {
+      await this.s3()
+        .send(new DeleteObjectCommand({ Bucket: bucket, Key: objectKey }))
+        .catch(() => undefined);
+      throw error;
+    }
+    if (created.objectKey !== objectKey)
+      await this.s3()
+        .send(new DeleteObjectCommand({ Bucket: bucket, Key: objectKey }))
+        .catch(() => undefined);
+    return created;
+  }
+
+  private s3() {
+    if (!this.storage)
+      this.storage = new S3Client({
+        endpoint:
+          process.env.MYOTA_OBJECT_STORAGE_ENDPOINT ?? 'http://seaweedfs:8333',
+        region: process.env.MYOTA_OBJECT_STORAGE_REGION ?? 'us-east-1',
+        forcePathStyle:
+          (process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE ?? 'path') ===
+          'path',
+        credentials: {
+          accessKeyId:
+            process.env.MYOTA_OBJECT_STORAGE_ACCESS_KEY ?? 'myota-s3',
+          secretAccessKey:
+            process.env.MYOTA_OBJECT_STORAGE_SECRET_KEY ?? 'myota-s3-dev-only',
+        },
+      });
+    return this.storage;
   }
 
   async publicHistory(programme?: string, page?: string, pageSize?: string) {
@@ -357,6 +471,40 @@ export class ActivityService {
 function positiveInt(value: string | undefined, fallback: number) {
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function decodeBase64(value: string) {
+  if (
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+      value,
+    )
+  )
+    throw new BadRequestException('contentBase64 must be valid base64');
+  const content = Buffer.from(value, 'base64');
+  if (content.toString('base64') !== value)
+    throw new BadRequestException('contentBase64 must be valid base64');
+  return content;
+}
+
+async function scanUpload(content: Buffer, filename: string) {
+  const endpoint = process.env.MYOTA_CLAMAV_URL?.trim();
+  if (!endpoint) return;
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/octet-stream',
+        'x-upload-name': filename,
+      },
+      body: new Uint8Array(content),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error('malware scanner rejected the upload');
+  } catch {
+    throw new ServiceUnavailableException(
+      'malware scanner is unavailable; upload was not stored',
+    );
+  }
 }
 
 function maskCallsign(value: string) {

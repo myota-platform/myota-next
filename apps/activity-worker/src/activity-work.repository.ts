@@ -14,6 +14,7 @@ import {
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import {
+  parseAdif,
   normalizeQso,
   type JsonRecord,
 } from '../../activity/src/activity-domain.js';
@@ -44,6 +45,7 @@ export class ActivityWorkRepository {
         [
           [
             'QSO_INGESTION',
+            'ADIF_IMPORT',
             'AWARD_EVALUATION',
             'AWARD_RECALCULATE',
             'PDF_RENDER',
@@ -89,7 +91,9 @@ export class ActivityWorkRepository {
       );
       if (!lease.rows[0])
         throw new Error('worker lease was lost before processing');
-      if (job.kind === 'QSO_INGESTION') {
+      if (job.kind === 'ADIF_IMPORT') {
+        await this.processAdifImport(client, job.payload);
+      } else if (job.kind === 'QSO_INGESTION') {
         const activationResult = await client.query(
           'SELECT * FROM activity_activation WHERE id=$1 FOR UPDATE',
           [job.payload.activationId],
@@ -228,6 +232,258 @@ export class ActivityWorkRepository {
     } finally {
       client.release();
     }
+  }
+
+  private async processAdifImport(client: PoolClient, payload: JsonRecord) {
+    const importId = String(payload.importId ?? '');
+    if (!importId) throw new Error('ADIF import id is required');
+    const selected = await client.query(
+      `SELECT i.*,a.programme_slug,a.operator_id,a.operator_callsign,a.entity_id,
+        a.entity_type,a.status AS activation_status,a.started_at,a.validity_expires_at
+       FROM activity_import i JOIN activity_activation a ON a.id=i.activation_id
+       WHERE i.id=$1 FOR UPDATE OF i,a`,
+      [importId],
+    );
+    const record = selected.rows[0];
+    if (!record) throw new Error('ADIF import not found');
+    if (['COMPLETED', 'FAILED'].includes(record.status)) return;
+    await client.query(
+      "UPDATE activity_import SET status='PROCESSING',started_at=COALESCE(started_at,now()) WHERE id=$1",
+      [importId],
+    );
+    if (record.activation_status !== 'OPEN') {
+      await this.finishAdifImport(
+        client,
+        record,
+        0,
+        0,
+        1,
+        ['activation is not open'],
+        'FAILED',
+      );
+      return;
+    }
+    let content: Buffer;
+    try {
+      content = await readObject(
+        objectStoreClient(),
+        record.bucket,
+        record.object_key,
+      );
+    } catch {
+      await this.finishAdifImport(
+        client,
+        record,
+        0,
+        0,
+        1,
+        ['uploaded object is not available'],
+        'FAILED',
+      );
+      return;
+    }
+    let rows: JsonRecord[];
+    try {
+      await scanAdifContent(content, record.filename);
+      rows = parseAdif(
+        new TextDecoder('utf-8', { fatal: true }).decode(content),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await this.finishAdifImport(client, record, 0, 0, 1, [message], 'FAILED');
+      return;
+    }
+    if (!rows.length) {
+      await this.finishAdifImport(
+        client,
+        record,
+        0,
+        0,
+        1,
+        ['ADIF file contains no valid QSO records'],
+        'FAILED',
+      );
+      return;
+    }
+    let accepted = 0;
+    let rejected = 0;
+    const errors: string[] = [];
+    for (let index = 0; index < rows.length; index++) {
+      const savepoint = `adif_record_${index}`;
+      await client.query(`SAVEPOINT ${savepoint}`);
+      try {
+        const qso = normalizeQso(
+          { ...rows[index], source: 'adif', sourceImportId: importId },
+          String(record.activation_id),
+        );
+        const occurred = new Date(qso.timestamp);
+        if (
+          occurred < new Date(record.started_at) ||
+          (record.validity_expires_at &&
+            occurred > new Date(record.validity_expires_at))
+        )
+          throw new Error('QSO is outside the activation validity window');
+        const inserted = await client.query(
+          `INSERT INTO activity_qso
+           (id,activation_id,programme_slug,operator_id,operator_callsign,hunter_id,hunter_callsign,
+            worked_callsign,worked_station_key,worked_entity_id,occurred_at,band,mode,rst,source,
+            source_import_id,deduplication_key,raw_payload)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb)
+           ON CONFLICT (deduplication_key) DO NOTHING RETURNING *`,
+          [
+            qso.id,
+            record.activation_id,
+            record.programme_slug,
+            record.operator_id,
+            record.operator_callsign,
+            qso.hunterId ?? null,
+            qso.hunterCallsign ?? null,
+            qso.workedCallsign,
+            qso.workedStationKey,
+            qso.workedEntityId ?? null,
+            occurred,
+            qso.band,
+            qso.mode,
+            qso.rst ?? null,
+            'adif',
+            importId,
+            qso.deduplicationKey,
+            JSON.stringify(qso),
+          ],
+        );
+        const row = inserted.rows[0];
+        if (!row) {
+          rejected++;
+          await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+          continue;
+        }
+        accepted++;
+        await upsertSubject(
+          client,
+          record.programme_slug,
+          record.operator_id,
+          'ACTIVATOR',
+          qso.workedCallsign,
+          record.entity_id,
+          record.entity_type,
+        );
+        if (qso.hunterId)
+          await upsertSubject(
+            client,
+            record.programme_slug,
+            qso.hunterId,
+            'HUNTER',
+            qso.workedCallsign,
+            qso.workedEntityId ?? null,
+            record.entity_type,
+          );
+        await client.query(
+          `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+           VALUES ($1,'activity.qso.recorded.v1','activity-service','qso',$2,$3::jsonb,now(),$4)`,
+          [
+            randomUUID(),
+            String(row.id),
+            JSON.stringify(qsoRecord(row)),
+            randomUUID(),
+          ],
+        );
+        await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+      } catch (error) {
+        await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+        await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+        rejected++;
+        errors.push(
+          `record ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    if (accepted) {
+      await client.query(
+        `UPDATE activity_activation SET qso_count=qso_count+$2,
+         unique_callsign_count=(SELECT count(DISTINCT worked_callsign) FROM activity_qso WHERE activation_id=$1 AND status<>'VOID'),
+         unique_entity_count=(SELECT count(DISTINCT worked_entity_id) FROM activity_qso WHERE activation_id=$1 AND worked_entity_id IS NOT NULL AND status<>'VOID'),
+         updated_at=now() WHERE id=$1`,
+        [record.activation_id, accepted],
+      );
+      const awardId = randomUUID();
+      await client.query(
+        `INSERT INTO activity_job(id,kind,payload,idempotency_key)
+         VALUES ($1,'AWARD_RECALCULATE',$2::jsonb,$3) ON CONFLICT (idempotency_key) DO NOTHING`,
+        [
+          awardId,
+          JSON.stringify({
+            programmeSlug: record.programme_slug,
+            subjectIds: [record.operator_id],
+          }),
+          `adif:${importId}:award-recalculate`,
+        ],
+      );
+      await client.query(
+        `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at,correlation_id)
+         SELECT id,'activity.award-recalculate.v1','activity-service','activity_job',id,jsonb_build_object('jobId',id),now(),now(),$2
+         FROM activity_job WHERE idempotency_key=$1 ON CONFLICT DO NOTHING`,
+        [`adif:${importId}:award-recalculate`, randomUUID()],
+      );
+    }
+    await this.finishAdifImport(
+      client,
+      record,
+      rows.length,
+      accepted,
+      rejected,
+      errors,
+      'COMPLETED',
+    );
+    const notificationType =
+      rejected || errors.length
+        ? 'ADIF_IMPORT_COMPLETED_WITH_ERRORS'
+        : 'ADIF_IMPORT_COMPLETED';
+    await client.query(
+      `INSERT INTO activity_notification(id,recipient_id,notification_type,payload,status,delivered_at,deduplication_key)
+       VALUES ($1,$2,$3,$4::jsonb,'DELIVERED',now(),$5) ON CONFLICT DO NOTHING`,
+      [
+        randomUUID(),
+        record.operator_id,
+        notificationType,
+        JSON.stringify({
+          importId,
+          recordsSeen: rows.length,
+          recordsAccepted: accepted,
+          recordsRejected: rejected,
+          errors,
+        }),
+        `adif:${importId}:completed`,
+      ],
+    );
+  }
+
+  private async finishAdifImport(
+    client: PoolClient,
+    record: JsonRecord,
+    seen: number,
+    accepted: number,
+    rejected: number,
+    errors: string[],
+    status: string,
+  ) {
+    await client.query(
+      'UPDATE activity_import SET status=$2,records_seen=$3,records_accepted=$4,records_rejected=$5,errors=$6::jsonb,completed_at=now() WHERE id=$1',
+      [record.id, status, seen, accepted, rejected, JSON.stringify(errors)],
+    );
+    if (status === 'FAILED')
+      await client.query(
+        `INSERT INTO activity_notification(id,recipient_id,notification_type,payload,status,delivered_at,deduplication_key)
+         VALUES ($1,$2,'ADIF_IMPORT_FAILED',$3::jsonb,'DELIVERED',now(),$4) ON CONFLICT DO NOTHING`,
+        [
+          randomUUID(),
+          record.operator_id,
+          JSON.stringify({
+            importId: record.id,
+            reason: errors[0] ?? 'ADIF import failed',
+          }),
+          `adif:${record.id}:failed`,
+        ],
+      );
   }
 
   private async processPdfRender(client: PoolClient, payload: JsonRecord) {
@@ -646,6 +902,38 @@ async function readObject(client: S3Client, bucket: string, key: string) {
   );
   if (!response.Body) throw new Error(`award asset is missing: ${key}`);
   return Buffer.from(await response.Body.transformToByteArray());
+}
+
+async function scanAdifContent(content: Buffer, filename: string) {
+  const maxBytes = Number.parseInt(
+    process.env.MYOTA_UPLOAD_MAX_BYTES ?? `${25 * 1024 * 1024}`,
+    10,
+  );
+  if (
+    content.length > (Number.isFinite(maxBytes) ? maxBytes : 25 * 1024 * 1024)
+  )
+    throw new Error(`${filename} exceeds the configured upload limit`);
+  const eicar = Buffer.from(
+    'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*',
+  );
+  if (content.includes(eicar))
+    throw new Error('malware scan rejected the upload');
+  const endpoint = process.env.MYOTA_CLAMAV_URL?.trim();
+  if (!endpoint) return;
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/octet-stream',
+        'x-upload-name': filename,
+      },
+      body: new Uint8Array(content),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error('malware scanner rejected the upload');
+  } catch {
+    throw new Error('malware scanner is unavailable; import was rejected');
+  }
 }
 
 async function renderCertificate(

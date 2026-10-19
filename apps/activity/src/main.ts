@@ -1,4 +1,4 @@
 import { bootstrapHttpService } from '@app/platform';
 import { ActivityModule } from './activity.module.js';
 
-await bootstrapHttpService(ActivityModule, 8004);
+await bootstrapHttpService(ActivityModule, 8004, '35mb');

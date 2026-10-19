@@ -154,6 +154,54 @@ export function normalizeQso(
   };
 }
 
+export function parseAdif(text: string): JsonRecord[] {
+  const records: JsonRecord[] = [];
+  const fields = /<([^:>]+)(?::(\d+))?(?:[:][^>]*)?>(.*?)(?=<[^>]*>|$)/gis;
+  const mapping: Record<string, string> = {
+    CALL: 'workedCallsign',
+    QSO_DATE_TIME: 'timestamp',
+    QSO_DATE: 'date',
+    TIME_ON: 'time',
+    BAND: 'band',
+    MODE: 'mode',
+    RST_SENT: 'rst',
+    RST_RCVD: 'rstReceived',
+    STATION_CALLSIGN: 'operatorCallsign',
+    MY_SIG_INFO: 'workedEntityId',
+    SIG_INFO: 'workedEntityId',
+    GRIDSQUARE: 'workedLocator',
+  };
+  let current: JsonRecord = {};
+  for (const match of text.matchAll(fields)) {
+    const name = match[1].toUpperCase().trim();
+    const value = (match[3] ?? '')
+      .slice(0, match[2] ? Number(match[2]) : undefined)
+      .trim();
+    if (name === 'EOR') {
+      if (Object.keys(current).length) records.push(current);
+      current = {};
+      continue;
+    }
+    const mapped = mapping[name];
+    if (mapped) current[mapped] = value;
+  }
+  if (Object.keys(current).length) records.push(current);
+  return records.flatMap((record) => {
+    let timestamp = record.timestamp;
+    if (!timestamp && record.date && record.time) {
+      const date = String(record.date).replaceAll('/', '-');
+      let time = String(record.time);
+      if (/^\d{8}$/.test(date) && /^\d{4}(?:\d{2})?$/.test(time)) {
+        if (time.length === 4) time += '00';
+        timestamp = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T${time.slice(0, 2)}:${time.slice(2, 4)}:${time.slice(4, 6)}Z`;
+      } else {
+        timestamp = `${date}T${time}Z`;
+      }
+    }
+    return record.workedCallsign && timestamp ? [{ ...record, timestamp }] : [];
+  });
+}
+
 export function evaluateActivation(
   activation: JsonRecord,
   qsos: JsonRecord[],

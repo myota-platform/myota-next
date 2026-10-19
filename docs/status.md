@@ -53,8 +53,9 @@
   recalculation. Activity statistics can be listed and rebuild jobs queued,
   processed into versioned programme/category/entity/jurisdiction snapshots,
   and inspected; recipient notifications can be read with owner/admin checks.
-  ADIF import status reads now return persisted counters and errors after
-  checking access through the owning activation.
+  ADIF uploads are ownership-checked, size-limited, scanned, stored in S3, and
+  queued transactionally; the Activity worker parses the source, persists QSOs,
+  updates aggregates, records per-record errors, and updates the import status.
 - Geodata now accepts bounded JSON GeoJSON imports, stores the source document
   in S3-compatible object storage, and creates an idempotent queued import run
   (20 MiB request limit and 5,000 feature default, adjustable with
@@ -102,7 +103,7 @@
 
 - Profile-image orphan cleanup and automated compatibility coverage for the
   first Identity slice are still outstanding.
-- Remaining Activity APIs include file-based QSO import and operational
+- Remaining Activity APIs include CSV file import and operational
   workflows. Geodata multipart/resumable and external object-reference imports,
   automatic location enrichment triggers, failed-queue redrive, and remaining
   worker operations are outstanding, along with Gateway routing and protected

@@ -1360,6 +1360,19 @@ paths:
       summary: Get ADIF import status
       parameters: [{ in: path, name: importId, required: true, schema: { type: string, format: uuid } }]
       responses: { '200': { description: ADIF import status } }
+  /v1/adif/imports:
+    post:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Upload and queue an ADIF log for an activation
+      operationId: createAdifImport
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AdifImportRequest' } } }
+      responses:
+        '202': { description: ADIF source stored and import queued }
+        '403': { description: Caller does not operate the activation }
   /v1/qsos/{qsoId}/corrections:
     post:
       tags: [Activity]
@@ -2249,6 +2262,13 @@ components:
         activationId: { type: string, format: uuid }
         sourceFormat: { type: string, enum: [JSON, CSV, ADIF] }
         qsos: { type: array, minItems: 1, items: { $ref: '#/components/schemas/Qso' } }
+    AdifImportRequest:
+      type: object
+      required: [activationId, filename, contentBase64]
+      properties:
+        activationId: { type: string, format: uuid }
+        filename: { type: string, minLength: 1, maxLength: 255 }
+        contentBase64: { type: string, contentEncoding: base64 }
     QsoCorrectionReview:
       type: object
       required: [decision, reviewedBy]

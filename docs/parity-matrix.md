@@ -41,12 +41,15 @@ evaluation/recalculation job APIs persist versioned progress and qualification
 notifications through the Activity worker. Award requests validate eligibility,
 issuance is transactional and permanent, and PDF render jobs store artifacts in
 S3-compatible storage with authorized presigned download URLs. Registered award
-assets and bounded content storage are implemented. Remaining Activity work
-includes ADIF/CSV file imports, notification production beyond qualification,
-NATS delivery, and worker recovery. Statistics listing and rebuild-job APIs,
+assets and bounded content storage are implemented. ADIF uploads now pass
+authorization, malware checks, and object storage before durable queueing; the
+Activity worker parses records, records successes and rejects, updates
+aggregates, and reports import status. Remaining Activity work includes CSV
+file imports, notification production beyond qualification, NATS delivery, and
+worker recovery. Statistics listing and rebuild-job APIs,
 transactional snapshot rebuilds, and owner-scoped notification reads are
-implemented. The ADIF import status read is implemented; import creation and
-file processing still need completion. Geodata provides PostGIS-backed public
+implemented. ADIF import creation, processing, and status reads are implemented.
+Geodata provides PostGIS-backed public
 entity list/detail reads with filters and bounds, the import adapter catalogue,
 provider-derived location options, and authorized import-run list/status reads;
 authenticated audit reads and approved-entity vector tiles are also implemented.
