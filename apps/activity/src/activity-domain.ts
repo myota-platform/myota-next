@@ -20,6 +20,8 @@ export function parseTimestamp(value: string): Date {
     if (compactDate)
       normalized = `${compactDate[1]}-${compactDate[2]}-${compactDate[3]}`;
   }
+  if (/[T ]\d{2}:\d{2}/.test(normalized))
+    normalized = normalized.replace(/([+-]\d{2})$/i, '$1:00');
   if (
     /[T ]\d{2}:\d{2}/.test(normalized) &&
     !/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(normalized)
