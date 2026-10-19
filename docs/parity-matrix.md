@@ -46,7 +46,9 @@ includes ADIF/CSV file imports, notification production beyond qualification,
 NATS delivery, and worker recovery. Statistics listing and rebuild-job APIs,
 transactional snapshot rebuilds, and owner-scoped notification reads are
 implemented. The ADIF import status read is implemented; import creation and
-file processing still need completion.
+file processing still need completion. Geodata provides PostGIS-backed public
+entity list/detail reads with filters and bounds; import, edit, review, and
+worker operations remain to be implemented.
 
 ## User applications
 

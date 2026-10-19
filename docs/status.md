@@ -55,6 +55,9 @@
   and inspected; recipient notifications can be read with owner/admin checks.
   ADIF import status reads now return persisted counters and errors after
   checking access through the owning activation.
+- Geodata now has PostGIS-backed public entity list/detail reads with bounded
+  paging, status/category/location filters, and bounding-box queries. Import,
+  edit, review, and worker operations remain outstanding.
 - Award definitions now support public published-only reads, administrative
   draft create/edit, review submission and decisions, print-readiness
   validation, publication, and retirement. Saved and published facts commit to
@@ -77,8 +80,8 @@
   as its dedicated operation. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
 - Remaining Activity APIs include file-based QSO import and operational
-  workflows. Geodata and Gateway handlers,
-  authorization rules, persistence repositories, and event/outbox behavior
+  workflows. Remaining Geodata mutations, import handlers and worker
+  operations, plus Gateway routing and protected observability proxy behavior,
   remain unimplemented.
 - Activity NATS delivery, lease heartbeats during large batches, redrive, and
   remaining job consumers. Geodata consumers, leases, recovery, retries, and
