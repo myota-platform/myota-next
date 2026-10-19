@@ -360,8 +360,8 @@ export class GeodataEntityMutationRepository {
             );
         }
         const catalogue = await client.query(
-          `SELECT DISTINCT continent,continent_code,country,country_code,region,region_code,
-            subdivision,subdivision_code,province,province_code FROM geodata_entity`,
+          `SELECT DISTINCT continent,continent_code,country,country_code,
+            region,region_code,province,province_code FROM geodata_entity`,
         );
         const codes = deriveManualLocationCodes(
           nextLocation,
@@ -1105,96 +1105,145 @@ function deriveManualLocationCodes(
   manual: Set<string>,
   rows: Record<string, unknown>[],
 ) {
-  const matches = (field: string, value: unknown) =>
-    rows.filter((row) => sameText(row[field], value));
+  const continents = buildManualLocationTree(rows);
+  const continent = findLocationNode(continents, location.continent);
   const result: Record<string, unknown> = {};
-  const continentRows = sortLocationRowsByCode(
-    matches('continent', location.continent),
-    'continent_code',
-  );
   if (manual.has('continent')) {
-    if (!textValue(location.continent) || !continentRows.length)
+    if (!continent)
       throw new BadRequestException(
         'continent must match the location catalogue',
       );
-    result.continentCode = normalizedLocationCode(
-      continentRows[0].continent_code,
-    );
+    result.continentCode = continent.code;
   }
-  const countryRows = sortLocationRowsByCode(
-    rows.filter(
-      (row) =>
-        sameText(row.country, location.country) &&
-        (!location.continent || sameText(row.continent, location.continent)),
-    ),
-    'country_code',
-  );
+  const countries = continent
+    ? (continent.countries ?? [])
+    : flattenLocationNodes(continents, 'countries');
+  const country = findLocationNode(countries, location.country);
   if (manual.has('country')) {
-    if (!textValue(location.country) || !countryRows.length)
+    if (!country)
       throw new BadRequestException(
         'country must match the location catalogue',
       );
-    result.countryCode = normalizedLocationCode(countryRows[0].country_code);
+    result.countryCode = country.code;
   }
   const subdivisionValue = location.region || location.subdivision;
-  const subdivisionRows = sortLocationRowsByCode(
-    rows.filter(
-      (row) =>
-        sameText(row.region || row.subdivision, subdivisionValue) &&
-        (!location.country || sameText(row.country, location.country)),
-    ),
-    'region_code',
-  );
+  const subdivisions = country
+    ? (country.subdivisions ?? [])
+    : flattenLocationNodes(countries, 'subdivisions');
+  const subdivision = findLocationNode(subdivisions, subdivisionValue);
   if (manual.has('region') || manual.has('subdivision')) {
-    if (!subdivisionRows.length)
+    if (!subdivision)
       throw new BadRequestException(
         'region or subdivision must match the location catalogue',
       );
-    result.regionCode = normalizedLocationCode(
-      subdivisionRows[0].region_code ?? subdivisionRows[0].subdivision_code,
-    );
-    result.subdivisionCode = normalizedLocationCode(
-      subdivisionRows[0].subdivision_code ?? subdivisionRows[0].region_code,
-    );
+    result.regionCode = subdivision.code;
+    result.subdivisionCode = subdivision.code;
   }
-  const provinceRows = sortLocationRowsByCode(
-    rows.filter(
-      (row) =>
-        sameText(row.province, location.province) &&
-        (!location.country || sameText(row.country, location.country)) &&
-        (!subdivisionValue ||
-          sameText(row.region || row.subdivision, subdivisionValue)),
-    ),
-    'province_code',
-  );
+  const provinces = subdivision
+    ? (subdivision.provinces ?? [])
+    : flattenLocationNodes(subdivisions, 'provinces');
+  const province = findLocationNode(provinces, location.province);
   if (manual.has('province')) {
-    if (!textValue(location.province) || !provinceRows.length)
+    if (!province)
       throw new BadRequestException(
         'province must match the location catalogue',
       );
-    result.provinceCode = normalizedLocationCode(provinceRows[0].province_code);
+    result.provinceCode = province.code;
   }
   return result;
 }
 
+type ManualLocationBuilderNode = {
+  name: string;
+  code: string | null;
+  children: Map<string, ManualLocationBuilderNode>;
+};
+
+type ManualLocationNode = {
+  name: string;
+  code: string | null;
+  countries?: ManualLocationNode[];
+  subdivisions?: ManualLocationNode[];
+  provinces?: ManualLocationNode[];
+};
+
+function buildManualLocationTree(rows: Record<string, unknown>[]) {
+  const continents = new Map<string, ManualLocationBuilderNode>();
+  const upsert = (
+    nodes: Map<string, ManualLocationBuilderNode>,
+    name: unknown,
+    code: unknown,
+  ) => {
+    const label = textValue(name);
+    if (!label) return null;
+    const normalizedCode = normalizedLocationCode(code);
+    const key = `${normalizedCode ?? ''}:${label.toLowerCase()}`;
+    let node = nodes.get(key);
+    if (!node) {
+      node = { name: label, code: normalizedCode, children: new Map() };
+      nodes.set(key, node);
+    } else if (!node.code && normalizedCode) {
+      node.code = normalizedCode;
+    }
+    return node;
+  };
+  for (const row of rows) {
+    const continent = upsert(continents, row.continent, row.continent_code);
+    if (!continent) continue;
+    const country = upsert(continent.children, row.country, row.country_code);
+    if (!country) continue;
+    const subdivision = upsert(country.children, row.region, row.region_code);
+    if (!subdivision) continue;
+    upsert(subdivision.children, row.province, row.province_code);
+  }
+  const sorted = (
+    nodes: Map<string, ManualLocationBuilderNode>,
+    childFields: ('countries' | 'subdivisions' | 'provinces')[],
+  ): ManualLocationNode[] =>
+    [...nodes.values()]
+      .map((node) => {
+        const result: ManualLocationNode = { name: node.name, code: node.code };
+        const childField = childFields[0];
+        if (childField) {
+          result[childField] = sorted(node.children, childFields.slice(1));
+        }
+        return result;
+      })
+      .sort(
+        (left, right) =>
+          compareText(left.name.toLowerCase(), right.name.toLowerCase()) ||
+          compareText(left.code ?? '', right.code ?? ''),
+      );
+  return sorted(continents, ['countries', 'subdivisions', 'provinces']);
+}
+
+function findLocationNode(nodes: ManualLocationNode[], name: unknown) {
+  const target = textValue(name).toLowerCase();
+  return target
+    ? nodes.find((node) => node.name.toLowerCase() === target)
+    : undefined;
+}
+
+function flattenLocationNodes(
+  nodes: ManualLocationNode[],
+  childField: 'countries' | 'subdivisions' | 'provinces',
+): ManualLocationNode[] {
+  return nodes.flatMap((node) => {
+    const children = node[childField] ?? [];
+    return childField === 'provinces'
+      ? children
+      : [
+          ...children,
+          ...flattenLocationNodes(
+            children,
+            childField === 'countries' ? 'subdivisions' : 'provinces',
+          ),
+        ];
+  });
+}
+
 function textValue(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function sameText(left: unknown, right: unknown) {
-  return textValue(left).toLowerCase() === textValue(right).toLowerCase();
-}
-
-function sortLocationRowsByCode(
-  rows: Record<string, unknown>[],
-  codeField: string,
-) {
-  return [...rows].sort((left, right) =>
-    compareText(
-      normalizedLocationCode(left[codeField]) ?? '',
-      normalizedLocationCode(right[codeField]) ?? '',
-    ),
-  );
 }
 
 function normalizedLocationCode(value: unknown) {
