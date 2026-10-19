@@ -44,8 +44,9 @@ S3-compatible storage with authorized presigned download URLs. Registered award
 assets and bounded content storage are implemented. ADIF uploads now pass
 authorization, malware checks, and object storage before durable queueing; the
 Activity worker parses records, records successes and rejects, updates
-aggregates, and reports import status. Remaining Activity work includes CSV
-file imports, notification production beyond qualification, NATS delivery, and
+aggregates, and reports import status. CSV file uploads now validate bounded
+UTF-8 input and queue normalized rows through the same ingestion job. Remaining
+Activity work includes notification production beyond qualification, NATS delivery, and
 worker recovery. Statistics listing and rebuild-job APIs,
 transactional snapshot rebuilds, and owner-scoped notification reads are
 implemented. ADIF import creation, processing, and status reads are implemented.

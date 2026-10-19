@@ -141,8 +141,9 @@
 
 - Profile-image orphan cleanup and automated compatibility coverage for the
   first Identity slice are still outstanding.
-- Remaining Activity APIs include CSV file import and operational
-  workflows. Geodata queue-level redrive and remaining worker operations are
+- Remaining Activity operational workflows are outstanding. CSV file import
+  validates bounded UTF-8 logs and queues normalized QSO rows for the existing
+  ingestion worker. Geodata queue-level redrive and remaining worker operations are
   outstanding, along with Gateway routing and protected
   observability proxy behavior.
 - Activity NATS delivery, lease heartbeats during large batches, redrive, and

@@ -14,6 +14,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { ActivityRepository } from './activity.repository.js';
+import { parseQsoCsv } from './qso-csv.js';
 import {
   normalizeActivation,
   normalizeQso,
@@ -172,6 +173,52 @@ export class ActivityService {
     };
     const job = await this.repository.enqueueJob('QSO_INGESTION', payload, key);
     return { ingestionId: job.id, ...job };
+  }
+
+  async enqueueCsvQsoIngestion(
+    authorization: string | undefined,
+    key: string | undefined,
+    body: JsonRecord,
+  ) {
+    const activationId =
+      typeof body.activationId === 'string' ? body.activationId : '';
+    const filename =
+      typeof body.filename === 'string' ? body.filename.trim() : '';
+    if (!activationId || !filename || typeof body.contentBase64 !== 'string')
+      throw new BadRequestException(
+        'activationId, filename, and contentBase64 are required',
+      );
+    if (
+      filename.length > 255 ||
+      /[\\/]/.test(filename) ||
+      !/\.csv$/i.test(filename)
+    )
+      throw new BadRequestException(
+        'filename must be a CSV filename of 255 characters or fewer',
+      );
+    const maxBytes = positiveInt(
+      process.env.MYOTA_UPLOAD_MAX_BYTES,
+      25 * 1024 * 1024,
+    );
+    const content = decodeBase64(body.contentBase64);
+    if (content.length > maxBytes)
+      throw new BadRequestException(
+        'CSV upload exceeds the configured size limit',
+      );
+    await scanUpload(content, filename);
+    let text: string;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(content);
+    } catch {
+      throw new BadRequestException('CSV file must use UTF-8 encoding');
+    }
+    const maximum = positiveInt(process.env.MYOTA_MAX_BATCH_QSOS, 5000);
+    const qsos = parseQsoCsv(text, maximum);
+    return this.enqueueQsoIngestion(authorization, key, {
+      activationId,
+      sourceFormat: 'CSV',
+      qsos,
+    });
   }
 
   async getJob(authorization: string | undefined, id: string) {

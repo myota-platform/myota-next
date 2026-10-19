@@ -1364,6 +1364,20 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/QsoIngestionRequest' } } }
       responses: { '202': { description: Ingestion queued for COPY-based processing } }
+  /v1/qso-ingestions/csv:
+    post:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Upload and queue a CSV QSO log for an activation
+      operationId: createCsvQsoIngestion
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CsvQsoIngestionRequest' } } }
+      responses:
+        '202': { description: Validated CSV rows queued for asynchronous ingestion }
+        '400': { description: Invalid file encoding, CSV structure, or row limit }
+        '403': { description: Caller does not operate the activation }
   /v1/qso-ingestions/{ingestionId}:
     get:
       tags: [Activity]
@@ -2281,6 +2295,13 @@ components:
         activationId: { type: string, format: uuid }
         sourceFormat: { type: string, enum: [JSON, CSV, ADIF] }
         qsos: { type: array, minItems: 1, items: { $ref: '#/components/schemas/Qso' } }
+    CsvQsoIngestionRequest:
+      type: object
+      required: [activationId, filename, contentBase64]
+      properties:
+        activationId: { type: string, format: uuid }
+        filename: { type: string, minLength: 5, maxLength: 255, pattern: '\.csv$' }
+        contentBase64: { type: string, contentEncoding: base64, description: UTF-8 CSV with workedCallsign and timestamp columns; optional band, mode, rst, hunterCallsign, hunterId, workedEntityId, and workedLocator columns }
     AdifImportRequest:
       type: object
       required: [activationId, filename, contentBase64]
