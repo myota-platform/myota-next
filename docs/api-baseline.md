@@ -1,6 +1,22 @@
 # HTTP API baseline
 
-Generated from `contracts/openapi.yaml` copied from the reference implementation. Map each operation to a target handler and compatibility test.
+The reference is `myota-platform/myota` at commit
+[`7f904a5130e59006765cf882956a4adbfecb17ec`](https://github.com/myota-platform/myota/tree/7f904a5130e59006765cf882956a4adbfecb17ec).
+Its `contracts/openapi.yaml` has SHA-256
+`af9b9bd81c723f040ae3ddd407992cb53c89c18a6fbd4f5e147fa0df27025eba` and
+defines 135 operations across 113 paths. The target
+[`contracts/openapi.yaml`](../contracts/openapi.yaml) contains that baseline
+plus four target-only operations, for 139 operations across 117 paths. The table
+below inventories the target contract; the four added operations are extensions,
+not upstream OpenAPI parity requirements, and need separate evidence against
+current source behavior.
+
+Target-only operations:
+
+- `POST /v1/activity/work-jobs/{jobId}/redrive`
+- `POST /v1/adif/imports`
+- `POST /v1/geodata/imports/{runId}/processing-queues/{queueId}/redrive`
+- `POST /v1/qso-ingestions/csv`
 
 OpenAPI 3.1.0; 139 operations across 117 paths.
 

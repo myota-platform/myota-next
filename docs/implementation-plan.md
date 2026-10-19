@@ -10,8 +10,9 @@ current reference.
   contracts, event registry, schemas, and migration files.
 - Inventory API operations, event producers/consumers, worker kinds, UI routes,
   database tables, object storage buckets, environment settings, and runbooks.
-- Map the 139 OpenAPI operations across 117 paths in [`api-baseline.md`](api-baseline.md) to
-  service handlers and compatibility tests.
+- Map the 135 upstream OpenAPI operations across 113 paths to service handlers
+  and compatibility evidence. Track the four target-only API extensions listed
+  in [`api-baseline.md`](api-baseline.md) separately from upstream parity.
 - Build a traceability table from each baseline behavior to target code and
   tests. Resolve ambiguities against current source and contract tests.
 
