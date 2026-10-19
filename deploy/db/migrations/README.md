@@ -31,5 +31,7 @@ Do not introduce cross-database foreign keys or combine the three restore
 boundaries.
 
 `core/002` through `core/004` add Identity's relational support, backfill, and
-callsign projection after the initial Core baseline. The JSONB Identity
-snapshot remains intact; runtime cutover is a separate gated change.
+callsign projection after the initial Core baseline. `core/005` adds the
+redacted email delivery ledger to the Core owner, so email delivery does not
+introduce a fourth database. The JSONB Identity snapshot remains intact;
+runtime cutover is a separate gated change.

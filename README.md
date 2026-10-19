@@ -20,8 +20,10 @@ The reference implementation is MyOTA monorepo commit
 - Keep three independent database targets: Core PostgreSQL, Activity
   PostgreSQL, and Geodata PostgreSQL with PostGIS.
 
-The persistence library and the treatment of the currently gated email worker
-remain open. See [implementation status](docs/status.md).
+The persistence library and production runtime qualification remain open. Email
+delivery now uses the Core database owner and a NestJS worker, while its Identity
+producer, deployment, and full telemetry qualification remain gated. See
+[implementation status](docs/status.md).
 
 ## Repository map
 
@@ -29,7 +31,7 @@ remain open. See [implementation status](docs/status.md).
 - `apps/programmes` — programme configuration, policy, content, and categories.
 - `apps/activity` — activations, QSOs, awards, statistics, and activity jobs.
 - `apps/geodata` — spatial catalogue, imports, review, and enrichment.
-- `apps/email` — email delivery worker, subject to the current delivery gate.
+- `apps/email-worker` — Core-owned JetStream email delivery consumer.
 - `web/admin` and `web/participant` — separate browser applications.
 - `contracts` — HTTP and event compatibility contracts.
 - `deploy` — owner-scoped database migrations and image build guidance.

@@ -198,10 +198,15 @@
   migration runner applies the checked-in SQL baseline and forward migrations
   with checksums and per-file transactions; production cutover and rollback
   rehearsals remain outstanding.
-- Email delivery. Its source contract is recorded, but the current Identity
-  producer/runtime is gated and its separate database conflicts with the
-  requested three-database target until its ownership is resolved.
+- Email delivery. The NestJS consumer now validates `email.send.v1`, resolves
+  recipients through Identity, sends through TLS-configured SMTP, and records
+  deduplication, attempts, and redacted dead letters in the Core database. The
+  former fourth email database is removed from the target. Identity production,
+  OpenTelemetry export, and deployment integration remain outstanding. The
+  worker exposes `/healthz`, `/readyz`, and Prometheus metrics. An audited
+  redrive CLI resets one dead-letter record and records the operator's reason
+  before the original command is replayed from its producer outbox.
 
-The email worker remains an explicit stub. Contract presence and successful
+Email delivery is not end-to-end qualified. Contract presence and successful
 builds do not count as function parity. Track completion against the
 [parity matrix](parity-matrix.md).
