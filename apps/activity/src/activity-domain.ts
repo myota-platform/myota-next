@@ -57,6 +57,11 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
       'programme rules require an activation location',
     );
   }
+  if (!pointInBounds(location, rules.entityBounds)) {
+    throw new BadRequestException(
+      'activation location is outside the entity bounds',
+    );
+  }
   const callsign = data.operatorCallsign
     ? normalizeCallsign(data.operatorCallsign)
     : null;
@@ -93,6 +98,23 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
     location,
     startedAt,
   };
+}
+
+function pointInBounds(
+  location: JsonRecord | null | undefined,
+  bounds: JsonRecord | null | undefined,
+): boolean {
+  if (!bounds || Object.keys(bounds).length === 0) return true;
+  if (!location || location.latitude == null || location.longitude == null)
+    return false;
+  const latitude = Number(location.latitude);
+  const longitude = Number(location.longitude);
+  return (
+    Number(bounds.minLatitude) <= latitude &&
+    latitude <= Number(bounds.maxLatitude) &&
+    Number(bounds.minLongitude) <= longitude &&
+    longitude <= Number(bounds.maxLongitude)
+  );
 }
 
 export function normalizeQso(
