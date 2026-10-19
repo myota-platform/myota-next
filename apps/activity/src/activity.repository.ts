@@ -44,6 +44,50 @@ export class ActivityRepository {
     }
   }
 
+  async listStatistics(programme?: string): Promise<JsonRecord[]> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT id,programme_slug,statistic_type,scope_key,metric_values,algorithm_version,generated_at
+         FROM activity_statistic_snapshot${programme ? ' WHERE programme_slug=$1' : ''} ORDER BY generated_at DESC`,
+        programme ? [programme] : [],
+      );
+      return result.rows.map((row) => ({
+        id: String(row.id),
+        programme: row.programme_slug,
+        type: row.statistic_type,
+        scope: row.scope_key,
+        values: row.metric_values,
+        algorithmVersion: row.algorithm_version,
+        generatedAt: date(row.generated_at),
+      }));
+    } finally {
+      client.release();
+    }
+  }
+
+  async listNotifications(recipientId: string): Promise<JsonRecord[]> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT id,recipient_id,notification_type,payload,status,created_at,delivered_at
+         FROM activity_notification WHERE recipient_id=$1 ORDER BY created_at DESC`,
+        [recipientId],
+      );
+      return result.rows.map((row) => ({
+        id: String(row.id),
+        recipientId: row.recipient_id,
+        type: row.notification_type,
+        payload: row.payload,
+        status: row.status,
+        createdAt: date(row.created_at),
+        deliveredAt: date(row.delivered_at),
+      }));
+    } finally {
+      client.release();
+    }
+  }
+
   async get(id: string): Promise<JsonRecord> {
     const client = await this.connect();
     try {

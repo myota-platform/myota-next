@@ -36,7 +36,9 @@ read path, and the separate Activity worker processes those jobs with database
 leases, retries, and dead-letter state. NATS delivery and other Activity consumers
 remain outstanding. QSO correction requests and administrator review are also
 implemented, with applied changes queuing recalculation. Remaining Activity
-work includes ADIF/CSV file imports, awards, notifications, and worker recovery.
+work includes ADIF/CSV file imports, awards, notification production, statistics
+rebuild processing, and worker recovery. Statistics listing/rebuild job APIs and
+owner-scoped notification reads are implemented.
 
 ## User applications
 

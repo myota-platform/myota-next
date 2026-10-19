@@ -273,6 +273,59 @@ export class ActivityService {
     return this.repository.reviewCorrection(qsoId, correctionId, body, key);
   }
 
+  async listStatistics(
+    authorization: string | undefined,
+    query: { programme?: string; page?: string; pageSize?: string },
+  ) {
+    this.authorize(authorization, ['activity.read', 'activity.admin']);
+    const items = await this.repository.listStatistics(query.programme);
+    const page = positiveInt(query.page, 1);
+    const pageSize = Math.min(100, positiveInt(query.pageSize, 50));
+    const start = (page - 1) * pageSize;
+    return {
+      items: items.slice(start, start + pageSize),
+      page,
+      pageSize,
+      total: items.length,
+      nextPage: start + pageSize < items.length ? page + 1 : null,
+    };
+  }
+
+  async createStatisticsRebuild(
+    authorization: string | undefined,
+    key: string | undefined,
+    body: JsonRecord,
+  ) {
+    this.authorize(authorization, ['activity.admin']);
+    const programmeSlug = body.programmeSlug ?? null;
+    const today = new Date().toISOString().slice(0, 10);
+    const job = await this.repository.enqueueJob(
+      'STATISTICS_REBUILD',
+      { programmeSlug },
+      key ?? `statistics:${programmeSlug ?? 'all'}:${today}`,
+    );
+    return { jobId: job.id, ...job };
+  }
+
+  async listNotifications(
+    authorization: string | undefined,
+    recipientId?: string,
+  ) {
+    const claims = this.authorize(authorization, [
+      'activity.read',
+      'identity.me',
+    ]);
+    const recipient = recipientId ?? claims.sub;
+    if (
+      claims.sub !== recipient &&
+      !claims.scp.some((scope) => ['*', 'activity.admin'].includes(scope))
+    )
+      throw new ForbiddenException(
+        'activity.admin scope is required to read another recipient',
+      );
+    return { items: await this.repository.listNotifications(recipient) };
+  }
+
   private authorize(authorization: string | undefined, scopes: string[]) {
     const claims = verifyAccessToken(authorization);
     if (!claims.scp.some((scope) => scope === '*' || scopes.includes(scope)))

@@ -50,7 +50,8 @@
   callsigns, leaderboards use subject aggregates, and result exports support
   JSON and CSV. QSO correction requests and administrator review now use
   transactional Activity persistence; applying a correction queues award
-  recalculation.
+  recalculation. Activity statistics can be listed and rebuild jobs queued and
+  inspected; recipient notifications can be read with owner/admin checks.
 
 ## Not implemented yet
 
@@ -58,7 +59,8 @@
   as its dedicated operation. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
 - Remaining Activity APIs include file-based QSO import, awards,
-  and operational workflows. Geodata and Gateway handlers,
+  and operational workflows. The statistics rebuild job still needs its worker
+  consumer. Geodata and Gateway handlers,
   authorization rules, persistence repositories, and event/outbox behavior
   remain unimplemented.
 - Activity NATS delivery, lease heartbeats during large batches, redrive, and
