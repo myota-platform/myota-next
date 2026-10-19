@@ -796,8 +796,13 @@ export class ActivityWorkRepository {
         Number(award.version ?? 1) !== Number(payload.ruleVersion)
       )
         continue;
-      const subjects: string[] = payload.subjectIds?.length
-        ? payload.subjectIds.map(String)
+      const requestedSubjects: string[] = Array.isArray(payload.subjectIds)
+        ? [
+            ...new Set<string>(payload.subjectIds.filter(Boolean).map(String)),
+          ].sort()
+        : [];
+      const subjects: string[] = requestedSubjects.length
+        ? requestedSubjects
         : (
             await client.query(
               'SELECT DISTINCT subject_id FROM activity_subject_aggregate WHERE programme_slug=$1 AND category=$2 ORDER BY subject_id',
