@@ -19,17 +19,26 @@ import {
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
+import { integerSetting } from '@app/platform/integer-setting.js';
 import { DEFAULT_ROLE_SCOPES } from './role-catalog.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
 
-const ACCESS_SECONDS = Number(process.env.MYOTA_ACCESS_TOKEN_SECONDS ?? 600);
-const REFRESH_SECONDS = Number(
-  process.env.MYOTA_REFRESH_TOKEN_SECONDS ?? 2_592_000,
+const ACCESS_SECONDS = integerSetting(
+  process.env.MYOTA_ACCESS_TOKEN_SECONDS,
+  600,
 );
-const LOGIN_WINDOW_SECONDS = Number(
-  process.env.MYOTA_LOGIN_WINDOW_SECONDS ?? 900,
+const REFRESH_SECONDS = integerSetting(
+  process.env.MYOTA_REFRESH_TOKEN_SECONDS,
+  2_592_000,
 );
-const MAX_LOGIN_ATTEMPTS = Number(process.env.MYOTA_MAX_LOGIN_ATTEMPTS ?? 8);
+const LOGIN_WINDOW_SECONDS = integerSetting(
+  process.env.MYOTA_LOGIN_WINDOW_SECONDS,
+  900,
+);
+const MAX_LOGIN_ATTEMPTS = integerSetting(
+  process.env.MYOTA_MAX_LOGIN_ATTEMPTS,
+  8,
+);
 const DEVELOPMENT_SIGNING_KEY = 'myota-development-key-change-me';
 
 interface RequestContext {
@@ -324,7 +333,7 @@ export class IdentityAuthService {
           [
             createHash('sha256').update(token).digest('hex'),
             account.id,
-            Number(process.env.MYOTA_RECOVERY_TOKEN_SECONDS ?? 1800),
+            integerSetting(process.env.MYOTA_RECOVERY_TOKEN_SECONDS, 1800),
           ],
         );
         await this.writeAudit(client, 'identity.recovery.requested.v1', {

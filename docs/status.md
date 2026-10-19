@@ -30,7 +30,9 @@
   Authentication uses the existing scrypt hash format, HS256 token contract,
   persisted session, revocation, lockout and rate-limit tables. A separate
   Core-owned maintenance process expires Identity records and removes aged,
-  unreferenced profile-image objects.
+  unreferenced profile-image objects. Token, recovery, lockout, and maintenance
+  integer settings use the shared strict parser to match Python's environment
+  value handling.
 - Transactional event helpers write domain events to the Core outbox and
   security events to both the security-event table and outbox.
 - Programme listing, detail and effective-policy reads, plus scoped creation,

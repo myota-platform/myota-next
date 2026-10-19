@@ -12,10 +12,9 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { verifyAccessToken } from '@app/platform/access-token.js';
+import { integerSetting, verifyAccessToken } from '@app/platform';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { ActivityRepository } from './activity.repository.js';
-import { integerSetting } from './activity-config.js';
 import { parseQsoCsv } from './qso-csv.js';
 import {
   normalizeActivation,

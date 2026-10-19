@@ -3,6 +3,7 @@ export * from './certificate-renderer.js';
 export * from './access-token.js';
 export * from './database.module.js';
 export * from './health.controller.js';
+export * from './integer-setting.js';
 export * from './outbox.js';
 export * from './outbox-routing.js';
 export * from './pagination.js';

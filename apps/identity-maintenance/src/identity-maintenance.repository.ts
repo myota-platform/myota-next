@@ -11,6 +11,7 @@ import {
 } from '@aws-sdk/client-s3';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { integerSetting } from '@app/platform/integer-setting.js';
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -35,11 +36,11 @@ export class IdentityMaintenanceRepository {
 
   private async removeExpiredRecords(): Promise<number> {
     const client = await this.connect();
-    const refreshSeconds = positiveInteger(
+    const refreshSeconds = integerSetting(
       process.env.MYOTA_REFRESH_TOKEN_SECONDS,
       30 * 86400,
     );
-    const securityRetentionSeconds = positiveInteger(
+    const securityRetentionSeconds = integerSetting(
       process.env.MYOTA_SECURITY_EVENT_RETENTION_SECONDS,
       365 * 86400,
     );
@@ -92,7 +93,7 @@ export class IdentityMaintenanceRepository {
   private async removeOrphanProfileImages(): Promise<number> {
     const graceSeconds = Math.max(
       3600,
-      positiveInteger(
+      integerSetting(
         process.env.MYOTA_PROFILE_IMAGE_ORPHAN_GRACE_SECONDS,
         86400,
       ),
@@ -175,11 +176,4 @@ export class IdentityMaintenanceRepository {
     });
     return this.storage;
   }
-}
-
-function positiveInteger(raw: string | undefined, fallback: number): number {
-  const value = raw === undefined ? fallback : Number(raw);
-  if (!Number.isInteger(value) || value < 1)
-    throw new Error('Identity maintenance settings must be positive integers');
-  return value;
 }

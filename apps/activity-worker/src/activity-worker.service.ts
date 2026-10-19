@@ -15,7 +15,7 @@ import {
   workerProbePort,
 } from '@app/platform/worker-probes.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
-import { integerSetting } from '../../activity/src/activity-config.js';
+import { integerSetting } from '@app/platform/integer-setting.js';
 import {
   ActivityWorkRepository,
   type ClaimedJob,

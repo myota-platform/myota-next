@@ -7,7 +7,7 @@ import {
 import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import { integerSetting } from '../../activity/src/activity-config.js';
+import { integerSetting } from '@app/platform/integer-setting.js';
 
 @Injectable()
 export class ActivityRetentionRepository {

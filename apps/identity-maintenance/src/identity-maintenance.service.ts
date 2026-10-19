@@ -5,10 +5,11 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { IdentityMaintenanceRepository } from './identity-maintenance.repository.js';
+import { integerSetting } from '@app/platform/integer-setting.js';
 
 const INTERVAL_SECONDS = Math.max(
   60,
-  Number(process.env.MYOTA_IDENTITY_MAINTENANCE_SECONDS ?? 3600),
+  integerSetting(process.env.MYOTA_IDENTITY_MAINTENANCE_SECONDS, 3600),
 );
 
 @Injectable()
