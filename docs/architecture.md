@@ -45,6 +45,15 @@ Preserve the three current stream purposes: bounded domain facts, Activity
 work, and Geodata work. Work remains owned by the Activity or Geodata service
 even when several worker replicas process it.
 
+Run one outbox relay instance group for each owning database (`core`,
+`activity`, and `geodata`). Each process receives only that database's
+`OUTBOX_DATABASE_URL`, plus `OUTBOX_OWNER`, `NATS_URL`, and the shared event
+registry. The relay uses `Nats-Msg-Id` from the durable outbox event ID so a
+broker acknowledgement followed by a database update failure can be retried
+safely. It retries transient publish failures with bounded backoff and stores
+permanent or exhausted failures in the owning database's dead-letter table.
+Do not point one relay at multiple databases or combine their transactions.
+
 ## Shared runtime dependencies
 
 Keep the existing API contracts and event schemas compatible while replacing

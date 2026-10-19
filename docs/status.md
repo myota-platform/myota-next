@@ -146,10 +146,14 @@
   ingestion worker. The Gateway now routes public API requests to their owning
   services and protects the Grafana identity callback. Geodata remaining worker
   operations are outstanding.
-- Activity NATS delivery and remaining job consumers. Activity job redrive is
-  audited and available to administrators; the Activity worker now extends
-  active job leases while long batches run. Geodata NATS delivery, lease heartbeats for large
-  jobs, and remaining enrichment and retention consumers.
+- The NestJS outbox relay now publishes contract-routed facts and work from one
+  configured owner database per process, with stable JetStream message IDs,
+  bounded retries, and dead-letter persistence. Deployment-owned stream and
+  consumer topology validation, relay metrics, and outage/recovery evidence
+  remain outstanding. Activity job redrive is audited and available to
+  administrators; the Activity worker now extends active job leases while
+  long batches run. Geodata lease heartbeats for large jobs and remaining
+  enrichment and retention consumers remain outstanding.
 - Admin and Participant web applications.
 - Database migration runner, data transfer tooling, deployment images, and
   production observability configuration.

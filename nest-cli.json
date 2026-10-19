@@ -73,6 +73,13 @@
       "sourceRoot": "apps/email-worker/src",
       "compilerOptions": { "tsConfigPath": "apps/email-worker/tsconfig.app.json" }
     },
+    "outbox-worker": {
+      "type": "application",
+      "root": "apps/outbox-worker",
+      "entryFile": "main",
+      "sourceRoot": "apps/outbox-worker/src",
+      "compilerOptions": { "tsConfigPath": "apps/outbox-worker/tsconfig.app.json" }
+    },
     "platform": {
       "type": "library",
       "root": "libs/platform",
