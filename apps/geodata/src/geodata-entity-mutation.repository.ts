@@ -1106,80 +1106,104 @@ function deriveManualLocationCodes(
   rows: Record<string, unknown>[],
 ) {
   const matches = (field: string, value: unknown) =>
-    rows.filter(
-      (row) =>
-        textValue(row[field]).toLocaleLowerCase() ===
-        textValue(value).toLocaleLowerCase(),
-    );
+    rows.filter((row) => sameText(row[field], value));
   const result: Record<string, unknown> = {};
-  const continentRows = matches('continent', location.continent);
+  const continentRows = sortLocationRowsByCode(
+    matches('continent', location.continent),
+    'continent_code',
+  );
   if (manual.has('continent')) {
     if (!textValue(location.continent) || !continentRows.length)
       throw new BadRequestException(
         'continent must match the location catalogue',
       );
-    result.continentCode = continentRows[0].continent_code ?? null;
+    result.continentCode = normalizedLocationCode(
+      continentRows[0].continent_code,
+    );
   }
-  const countryRows = rows.filter(
-    (row) =>
-      textValue(row.country).toLocaleLowerCase() ===
-        textValue(location.country).toLocaleLowerCase() &&
-      (!location.continent || sameText(row.continent, location.continent)),
+  const countryRows = sortLocationRowsByCode(
+    rows.filter(
+      (row) =>
+        sameText(row.country, location.country) &&
+        (!location.continent || sameText(row.continent, location.continent)),
+    ),
+    'country_code',
   );
   if (manual.has('country')) {
     if (!textValue(location.country) || !countryRows.length)
       throw new BadRequestException(
         'country must match the location catalogue',
       );
-    result.countryCode = countryRows[0].country_code ?? null;
+    result.countryCode = normalizedLocationCode(countryRows[0].country_code);
   }
   const subdivisionValue = location.region || location.subdivision;
-  const subdivisionRows = rows.filter(
-    (row) =>
-      textValue(row.region || row.subdivision).toLocaleLowerCase() ===
-        textValue(subdivisionValue).toLocaleLowerCase() &&
-      (!location.country || sameText(row.country, location.country)),
+  const subdivisionRows = sortLocationRowsByCode(
+    rows.filter(
+      (row) =>
+        sameText(row.region || row.subdivision, subdivisionValue) &&
+        (!location.country || sameText(row.country, location.country)),
+    ),
+    'region_code',
   );
   if (manual.has('region') || manual.has('subdivision')) {
     if (!subdivisionRows.length)
       throw new BadRequestException(
         'region or subdivision must match the location catalogue',
       );
-    result.regionCode =
-      subdivisionRows[0].region_code ??
-      subdivisionRows[0].subdivision_code ??
-      null;
-    result.subdivisionCode =
-      subdivisionRows[0].subdivision_code ??
-      subdivisionRows[0].region_code ??
-      null;
+    result.regionCode = normalizedLocationCode(
+      subdivisionRows[0].region_code ?? subdivisionRows[0].subdivision_code,
+    );
+    result.subdivisionCode = normalizedLocationCode(
+      subdivisionRows[0].subdivision_code ?? subdivisionRows[0].region_code,
+    );
   }
-  const provinceRows = rows.filter(
-    (row) =>
-      textValue(row.province).toLocaleLowerCase() ===
-        textValue(location.province).toLocaleLowerCase() &&
-      (!location.country || sameText(row.country, location.country)) &&
-      (!subdivisionValue ||
-        sameText(row.region || row.subdivision, subdivisionValue)),
+  const provinceRows = sortLocationRowsByCode(
+    rows.filter(
+      (row) =>
+        sameText(row.province, location.province) &&
+        (!location.country || sameText(row.country, location.country)) &&
+        (!subdivisionValue ||
+          sameText(row.region || row.subdivision, subdivisionValue)),
+    ),
+    'province_code',
   );
   if (manual.has('province')) {
     if (!textValue(location.province) || !provinceRows.length)
       throw new BadRequestException(
         'province must match the location catalogue',
       );
-    result.provinceCode = provinceRows[0].province_code ?? null;
+    result.provinceCode = normalizedLocationCode(provinceRows[0].province_code);
   }
   return result;
 }
 
 function textValue(value: unknown) {
-  return typeof value === 'string' ? value : '';
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function sameText(left: unknown, right: unknown) {
-  return (
-    textValue(left).toLocaleLowerCase() === textValue(right).toLocaleLowerCase()
+  return textValue(left).toLowerCase() === textValue(right).toLowerCase();
+}
+
+function sortLocationRowsByCode(
+  rows: Record<string, unknown>[],
+  codeField: string,
+) {
+  return [...rows].sort((left, right) =>
+    compareText(
+      normalizedLocationCode(left[codeField]) ?? '',
+      normalizedLocationCode(right[codeField]) ?? '',
+    ),
   );
+}
+
+function normalizedLocationCode(value: unknown) {
+  const code = textValue(value).toUpperCase();
+  return code || null;
+}
+
+function compareText(left: string, right: string) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function parseIfMatch(value: string | undefined) {
