@@ -131,7 +131,10 @@
   256 MiB and can be raised to 512 MiB with
   `MYOTA_OSM_PBF_MAX_UPLOAD_BYTES`. Decoded output is capped at 128 MiB, with 16 MiB and
   250,000 vertices per feature, plus the configured feature cap. Larger
-  streaming imports remain outstanding.
+  GeoJSON and Shapefile imports still use the 20 MiB path and materialize the
+  full source and FeatureCollection in worker memory. The reference parser
+  streams GeoJSON features and Shapefile records, with a 1 GiB default cap on
+  expanded Shapefile data. Matching those bounded streaming paths remains open.
   The adapter catalogue and admin selector now expose only import formats the
   current boundary can decode. The admin file picker accepts GeoJSON, OSM PBF,
   and Shapefile ZIP files up to 20 MiB, plus OSM PBF files up to the configured
