@@ -405,18 +405,6 @@ export class ActivityWorkRepository {
       await this.finishAdifImport(client, record, 0, 0, 1, [message], 'FAILED');
       return;
     }
-    if (!rows.length) {
-      await this.finishAdifImport(
-        client,
-        record,
-        0,
-        0,
-        1,
-        ['ADIF file contains no valid QSO records'],
-        'FAILED',
-      );
-      return;
-    }
     let accepted = 0;
     let rejected = 0;
     const errors: string[] = [];
