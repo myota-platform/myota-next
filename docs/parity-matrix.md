@@ -57,6 +57,9 @@ the Activity cascade with a stable idempotency key, and transactionally removes
 Geodata references and the entity. The Geodata worker polls deletion jobs with
 fair rotation alongside existing queues; NATS delivery, lease heartbeats, and
 explicit redrive remain outstanding.
+Tagged load-test cleanup now requires explicit environment opt-in, global
+operator authorization, exact confirmation, terminal work, safe object scope,
+and a no-Activity-impact check before deletion.
 Geodata provides PostGIS-backed public
 entity list/detail reads with filters and bounds, the import adapter catalogue,
 provider-derived location options, and authorized import-run list/status reads;

@@ -92,7 +92,9 @@
   promotion queue can be resubmitted through the promotion API; queue-level
   redrive and NATS delivery remain outstanding. Community proposals now enter
   the same validated import pipeline and automatically queue promotion to the
-  CANDIDATE lifecycle state.
+  CANDIDATE lifecycle state. Tagged load-test cleanup is opt-in, confirmation
+  protected, restricted to terminal runs and owned object storage, and refuses
+  to remove entities with Activity impact.
   Owner-scoped resumable S3 multipart uploads now support idempotent session
   creation, bounded binary parts, progress reads, completion, checksum and
   malware scanning, abort, and transactional import-run/outbox creation. This

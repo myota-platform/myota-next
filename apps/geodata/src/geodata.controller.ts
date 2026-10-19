@@ -24,6 +24,7 @@ import { GeodataUploadService } from './geodata-upload.service.js';
 import { GeodataDeletionService } from './geodata-deletion.service.js';
 import { GeodataScheduleService } from './geodata-schedule.service.js';
 import { GeodataProposalService } from './geodata-proposal.service.js';
+import { GeodataLoadTestCleanupService } from './geodata-load-test-cleanup.service.js';
 
 @Controller('geodata')
 export class GeodataController {
@@ -36,6 +37,7 @@ export class GeodataController {
     private readonly deletions: GeodataDeletionService,
     private readonly schedules: GeodataScheduleService,
     private readonly proposals: GeodataProposalService,
+    private readonly loadTestCleanup: GeodataLoadTestCleanupService,
   ) {}
 
   @Post('entity-deletion-jobs')
@@ -108,6 +110,15 @@ export class GeodataController {
   ) {
     const claims = verifyAccessToken(authorization);
     return this.proposals.create(key, claims.sub, body);
+  }
+
+  @Delete('load-test-runs/:testRunId')
+  cleanLoadTestRun(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('testRunId') testRunId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.loadTestCleanup.clean(authorization, testRunId, body);
   }
 
   @Post('import-uploads')
