@@ -1,10 +1,15 @@
 import {
+  Allow,
   IsArray,
   IsBoolean,
+  IsDateString,
+  IsIn,
   IsInt,
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
+  MinLength,
   Min,
 } from 'class-validator';
 
@@ -67,6 +72,171 @@ export class EntityTypeDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+}
+
+export class SaveProgrammeContentDto {
+  @IsOptional()
+  @IsUUID()
+  contentId?: string;
+
+  @IsString()
+  @MinLength(1)
+  key!: string;
+
+  @IsString()
+  @MinLength(1)
+  locale!: string;
+
+  @Allow()
+  value!: unknown;
+
+  @IsOptional()
+  @IsString()
+  fallbackLocale?: string | null;
+}
+
+export class ReviewProgrammeContentDto {
+  @IsIn(['APPROVED', 'CHANGES_REQUESTED'])
+  decision!: 'APPROVED' | 'CHANGES_REQUESTED';
+
+  @IsString()
+  @MinLength(1)
+  reviewerId!: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string | null;
+}
+
+export class PublishProgrammeContentDto {
+  @IsDateString()
+  effectiveFrom!: string;
+
+  @IsString()
+  @MinLength(1)
+  publisherId!: string;
+}
+
+export class PatchProgrammeContentDto {
+  @IsOptional()
+  @IsIn(['DRAFT', 'CHANGES_REQUESTED', 'UNDER_REVIEW', 'APPROVED', 'PUBLISHED'])
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  key?: string;
+
+  @IsOptional()
+  @IsString()
+  locale?: string;
+
+  @IsOptional()
+  @Allow()
+  value?: unknown;
+
+  @IsOptional()
+  @IsString()
+  fallbackLocale?: string | null;
+
+  @IsOptional()
+  @IsIn(['APPROVED', 'CHANGES_REQUESTED'])
+  decision?: 'APPROVED' | 'CHANGES_REQUESTED';
+
+  @IsOptional()
+  @IsString()
+  reviewerId?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string | null;
+
+  @IsOptional()
+  @IsDateString()
+  effectiveFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  publisherId?: string;
+}
+
+export class SaveProgrammePolicyDraftDto {
+  @IsOptional()
+  @IsUUID()
+  draftId?: string;
+
+  @IsIn(['RULES', 'AWARD'])
+  type!: 'RULES' | 'AWARD';
+
+  @IsString()
+  @MinLength(1)
+  name!: string;
+
+  @IsObject()
+  schema!: Record<string, unknown>;
+
+  @IsOptional()
+  @IsDateString()
+  effectiveFrom?: string | null;
+}
+
+export class ReviewProgrammePolicyDraftDto {
+  @IsIn(['APPROVED', 'CHANGES_REQUESTED'])
+  decision!: 'APPROVED' | 'CHANGES_REQUESTED';
+
+  @IsString()
+  @MinLength(1)
+  reviewerId!: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string | null;
+}
+
+export class PublishProgrammePolicyDraftDto {
+  @IsDateString()
+  effectiveFrom!: string;
+
+  @IsString()
+  @MinLength(1)
+  publisherId!: string;
+}
+
+export class PatchProgrammePolicyDraftDto {
+  @IsOptional()
+  @IsIn(['DRAFT', 'CHANGES_REQUESTED', 'UNDER_REVIEW', 'APPROVED', 'PUBLISHED'])
+  status?: string;
+
+  @IsOptional()
+  @IsIn(['RULES', 'AWARD'])
+  type?: 'RULES' | 'AWARD';
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsObject()
+  schema?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsDateString()
+  effectiveFrom?: string | null;
+
+  @IsOptional()
+  @IsIn(['APPROVED', 'CHANGES_REQUESTED'])
+  decision?: 'APPROVED' | 'CHANGES_REQUESTED';
+
+  @IsOptional()
+  @IsString()
+  reviewerId?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string | null;
+
+  @IsOptional()
+  @IsString()
+  publisherId?: string;
 }
 
 export class UpdateProgrammeDto {

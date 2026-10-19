@@ -1,52 +1,31 @@
 import {
   BadRequestException,
   ForbiddenException,
-  Inject,
   Injectable,
   NotFoundException,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { Pool, PoolClient } from 'pg';
-import {
-  DATABASE_HEALTH_POOL,
-  verifyAccessToken,
-} from '@app/platform/index.js';
+import type { PoolClient } from 'pg';
+import { verifyAccessToken } from '@app/platform/access-token.js';
+import { ProgrammeStateRepository } from './programme-state.repository.js';
+import type {
+  ProgrammeRecord,
+  ProgrammeState,
+} from './programme-state.repository.js';
 import type {
   CreateProgrammeDto,
   EntityTypeDto,
   UpdateProgrammeDto,
 } from './programmes.dto.js';
 
-interface ProgrammeRecord {
-  id: string;
-  slug: string;
-  name: string;
-  description?: string;
-  entityTypeCodes?: string[];
-  rules: unknown;
-  entityTypes: unknown[];
-  policyVersion?: number;
-  updatedAt?: string;
-  [key: string]: unknown;
-}
-
-interface ProgrammeState {
-  items?: Record<string, ProgrammeRecord>;
-  events?: Record<string, unknown>[];
-  data?: Record<string, unknown>;
-}
-
 @Injectable()
 export class ProgrammesService {
-  constructor(
-    @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
-  ) {}
+  constructor(private readonly state: ProgrammeStateRepository) {}
 
   async list(query: { page?: string; pageSize?: string }) {
     const page = parsePage(query.page, 1);
     const pageSize = Math.min(100, parsePage(query.pageSize, 50));
-    const state = await this.loadState();
+    const state = await this.state.load();
     const records = Object.values(state.items ?? {});
     const total = records.length;
     const start = (page - 1) * pageSize;
@@ -60,7 +39,7 @@ export class ProgrammesService {
   }
 
   async get(slug: string): Promise<ProgrammeRecord> {
-    const state = await this.loadState();
+    const state = await this.state.load();
     const programme = state.items?.[slug];
     if (!programme) throw new NotFoundException('programme not found');
     return programme;
@@ -85,7 +64,7 @@ export class ProgrammesService {
     const slug = body.slug.toLowerCase();
     if (!slug) throw new BadRequestException('programme slug is required');
     this.authorizeAdmin(authorization, slug);
-    return this.mutateState(idempotencyKey, async (client, state) => {
+    return this.state.mutate(idempotencyKey, async (client, state) => {
       if (state.items?.[slug]) {
         throw new BadRequestException('programme slug already exists');
       }
@@ -119,7 +98,7 @@ export class ProgrammesService {
         updatedAt: now,
       };
       state.items[slug] = programme;
-      await this.recordEvent(
+      await this.state.recordEvent(
         client,
         state,
         'programme.created.v1',
@@ -142,7 +121,7 @@ export class ProgrammesService {
     if (status !== undefined && status !== 'ACTIVE' && status !== 'ARCHIVED') {
       throw new BadRequestException('status must be ACTIVE or ARCHIVED');
     }
-    return this.mutateState(idempotencyKey, async (client, state) => {
+    return this.state.mutate(idempotencyKey, async (client, state) => {
       const programme = state.items?.[slug];
       if (!programme) throw new NotFoundException('programme not found');
       if (body.name !== undefined) programme.name = body.name;
@@ -171,7 +150,7 @@ export class ProgrammesService {
       }
       if (status === 'ARCHIVED') programme.status = 'ARCHIVED';
       programme.updatedAt = new Date().toISOString();
-      await this.recordEvent(
+      await this.state.recordEvent(
         client,
         state,
         status === 'ARCHIVED'
@@ -187,7 +166,7 @@ export class ProgrammesService {
 
   async listEntityTypeCatalog(authorization?: string) {
     this.authorizeAdmin(authorization);
-    const state = await this.loadState();
+    const state = await this.state.load();
     const catalog = backfillEntityTypeCatalog(state);
     return { items: this.catalogWithAssignments(state, catalog) };
   }
@@ -197,7 +176,7 @@ export class ProgrammesService {
     slug: string,
   ) {
     this.authorizeAdmin(authorization, slug);
-    const state = await this.loadState();
+    const state = await this.state.load();
     const programme = state.items?.[slug];
     if (!programme) throw new NotFoundException('programme not found');
     backfillEntityTypeCatalog(state);
@@ -210,14 +189,14 @@ export class ProgrammesService {
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization);
-    return this.mutateState(idempotencyKey, async (client, state) => {
+    return this.state.mutate(idempotencyKey, async (client, state) => {
       const catalog = backfillEntityTypeCatalog(state);
       const code = body.code.trim().toUpperCase();
       const previous = catalog[code];
       const entityType = normalizeEntityType(body, previous);
       catalog[code] = entityType;
       this.refreshAssignedEntityTypes(state, catalog, code);
-      await this.recordEvent(
+      await this.state.recordEvent(
         client,
         state,
         'programme.entity-type.catalog-saved.v1',
@@ -240,7 +219,7 @@ export class ProgrammesService {
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
-    return this.mutateState(idempotencyKey, async (client, state) => {
+    return this.state.mutate(idempotencyKey, async (client, state) => {
       const programme = state.items?.[slug];
       if (!programme) throw new NotFoundException('programme not found');
       const catalog = backfillEntityTypeCatalog(state);
@@ -249,7 +228,7 @@ export class ProgrammesService {
       const entityType = normalizeEntityType(body, previous);
       catalog[code] = entityType;
       this.refreshAssignedEntityTypes(state, catalog, code);
-      await this.recordEvent(
+      await this.state.recordEvent(
         client,
         state,
         'programme.entity-type.catalog-saved.v1',
@@ -284,7 +263,7 @@ export class ProgrammesService {
   ) {
     this.authorizeAdmin(authorization, slug);
     const code = codeValue.trim().toUpperCase();
-    return this.mutateState(idempotencyKey, async (client, state) => {
+    return this.state.mutate(idempotencyKey, async (client, state) => {
       const programme = state.items?.[slug];
       if (!programme) throw new NotFoundException('programme not found');
       const catalog = backfillEntityTypeCatalog(state);
@@ -307,7 +286,7 @@ export class ProgrammesService {
   ) {
     this.authorizeAdmin(authorization, slug);
     const code = codeValue.trim().toUpperCase();
-    return this.mutateState(idempotencyKey, async (client, state) => {
+    return this.state.mutate(idempotencyKey, async (client, state) => {
       const programme = state.items?.[slug];
       if (!programme) throw new NotFoundException('programme not found');
       const catalog = backfillEntityTypeCatalog(state);
@@ -374,7 +353,7 @@ export class ProgrammesService {
     programme.entityTypes = nextCodes.map((current) => catalog[current]);
     programme.policyVersion = (programme.policyVersion ?? 1) + 1;
     programme.updatedAt = new Date().toISOString();
-    await this.recordEvent(
+    await this.state.recordEvent(
       client,
       state,
       assign
@@ -384,18 +363,6 @@ export class ProgrammesService {
       programme.id,
       { programmeSlug: programme.slug, code },
     );
-  }
-
-  private async loadState(): Promise<ProgrammeState> {
-    const client = await this.connect();
-    try {
-      const result = await client.query<{ state: ProgrammeState }>(
-        "SELECT state FROM public.service_state WHERE service = 'programmes'",
-      );
-      return result.rows[0]?.state ?? { items: {} };
-    } finally {
-      client.release();
-    }
   }
 
   private authorizeAdmin(authorization: string | undefined, slug?: string) {
@@ -409,113 +376,6 @@ export class ProgrammesService {
       return;
     }
     throw new ForbiddenException('programme administration scope is required');
-  }
-
-  private async mutateState<T>(
-    idempotencyKey: string | undefined,
-    mutate: (client: PoolClient, state: ProgrammeState) => Promise<T>,
-  ): Promise<T> {
-    const client = await this.connect();
-    try {
-      await client.query('BEGIN');
-      if (idempotencyKey) {
-        await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('programmes:' || $1, 0))",
-          [idempotencyKey],
-        );
-        const previous = await client.query<{ response: T }>(
-          `SELECT response FROM public.idempotency_record
-            WHERE service = 'programmes' AND key = $1`,
-          [idempotencyKey],
-        );
-        if (previous.rows[0]) {
-          await client.query('COMMIT');
-          return previous.rows[0].response;
-        }
-      }
-      const initialState = { items: {}, events: [], data: {} };
-      await client.query(
-        `INSERT INTO public.service_state (service, state)
-         VALUES ('programmes', $1::jsonb)
-         ON CONFLICT (service) DO NOTHING`,
-        [JSON.stringify(initialState)],
-      );
-      const result = await client.query<{ state: ProgrammeState }>(
-        "SELECT state FROM public.service_state WHERE service = 'programmes' FOR UPDATE",
-      );
-      const state = result.rows[0]?.state ?? initialState;
-      const response = await mutate(client, state);
-      await client.query(
-        `UPDATE public.service_state SET state = $1::jsonb, updated_at = now()
-          WHERE service = 'programmes'`,
-        [JSON.stringify(state)],
-      );
-      if (idempotencyKey) {
-        await client.query(
-          `INSERT INTO public.idempotency_record (service, key, response)
-           VALUES ('programmes', $1, $2::jsonb)`,
-          [idempotencyKey, JSON.stringify(response)],
-        );
-      }
-      await client.query('COMMIT');
-      return response;
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  private async recordEvent(
-    client: PoolClient,
-    state: ProgrammeState,
-    eventType: string,
-    aggregateType: string,
-    aggregateId: string,
-    payload: Record<string, unknown>,
-  ) {
-    const event = {
-      eventId: randomUUID(),
-      eventType,
-      occurredAt: new Date().toISOString(),
-      producer: 'programmes',
-      aggregate: { type: aggregateType, id: aggregateId },
-      correlationId: randomUUID(),
-      payload,
-    };
-    state.events ??= [];
-    state.events.push(event);
-    await client.query(
-      `INSERT INTO public.outbox_event
-         (event_id, event_type, producer, aggregate_type, aggregate_id,
-          payload, occurred_at, correlation_id)
-       VALUES ($1, $2, 'programmes', $3, $4, $5::jsonb, $6, $7)`,
-      [
-        event.eventId,
-        event.eventType,
-        aggregateType,
-        aggregateId,
-        JSON.stringify(payload),
-        event.occurredAt,
-        event.correlationId,
-      ],
-    );
-  }
-
-  private async connect(): Promise<PoolClient> {
-    if (!this.pool) {
-      throw new ServiceUnavailableException(
-        'Programme database is not configured',
-      );
-    }
-    try {
-      return await this.pool.connect();
-    } catch {
-      throw new ServiceUnavailableException(
-        'Programme database is unavailable',
-      );
-    }
   }
 }
 

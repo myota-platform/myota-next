@@ -33,15 +33,18 @@
   update and archive transitions, now load and persist snapshots in Core with
   transactional outbox writes. Global entity-type catalogue management and
   per-programme entity-type reads, assignments and removals use the same state
-  transaction and outbox boundary.
+  transaction and outbox boundary. Programme content supports draft editing,
+  review submission and decisions, publication, paginated filtering, and locale
+  coverage reporting. Programme policy drafts support scoped authoring,
+  submission, review, publishing, and effective policy updates. These operations
+  share a dedicated Core snapshot repository and transactional outbox boundary.
 
 ## Not implemented yet
 
 - Remaining Identity APIs include OIDC mapping updates and account deactivation
   as its dedicated operation. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
-- Programme content and policy review workflows remain unimplemented. Activity,
-  Geodata, and Gateway handlers,
+- Activity, Geodata, and Gateway handlers,
   authorization rules, persistence repositories, and event/outbox behavior also
   remain unimplemented.
 - Activity and Geodata consumers, leases, recovery, retries, and redrive.
