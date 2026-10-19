@@ -152,6 +152,28 @@ export class GeodataRepository {
     }
   }
 
+  async getEntityAudit(id: string) {
+    const entity = await this.getEntity(id);
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT event FROM geodata_audit_event
+         WHERE aggregate_type='entity' AND aggregate_id=$1
+         ORDER BY occurred_at,event_id`,
+        [id],
+      );
+      return {
+        entityId: entity.id,
+        status: entity.status,
+        reviewHistory: entity.reviewHistory ?? [],
+        geometryHistory: entity.geometryHistory ?? [],
+        events: result.rows.map((row) => row.event),
+      };
+    } finally {
+      client.release();
+    }
+  }
+
   private async connect() {
     if (!this.pool)
       throw new ServiceUnavailableException(

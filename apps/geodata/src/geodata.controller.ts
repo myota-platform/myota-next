@@ -36,6 +36,15 @@ export class GeodataController {
     return this.repository.listEntities(query);
   }
 
+  @Get('entities/:entityId/audit')
+  getEntityAudit(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('entityId') id: string,
+  ) {
+    authorizeBearer(authorization);
+    return this.repository.getEntityAudit(id);
+  }
+
   @Get('adapters')
   adapters(@Headers('authorization') authorization: string | undefined) {
     authorizeBearer(authorization);

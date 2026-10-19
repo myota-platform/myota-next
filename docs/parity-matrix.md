@@ -49,7 +49,8 @@ implemented. The ADIF import status read is implemented; import creation and
 file processing still need completion. Geodata provides PostGIS-backed public
 entity list/detail reads with filters and bounds, the import adapter catalogue,
 provider-derived location options, and authorized import-run list/status reads;
-import creation, edit, review, and worker operations remain to be implemented.
+authenticated audit reads are also implemented. Import creation, edit, review,
+and worker operations remain to be implemented.
 
 ## User applications
 

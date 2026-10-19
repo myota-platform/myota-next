@@ -59,7 +59,8 @@
   paging, status/category/location filters, and bounding-box queries. Import,
   edit, review, and worker operations remain outstanding. The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
-  paged import-run status reads are also exposed.
+  paged import-run status reads are also exposed. Authenticated entity audit
+  reads combine the entity's review histories with durable audit events.
 - Award definitions now support public published-only reads, administrative
   draft create/edit, review submission and decisions, print-readiness
   validation, publication, and retirement. Saved and published facts commit to
