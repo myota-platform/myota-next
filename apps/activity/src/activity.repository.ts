@@ -973,6 +973,78 @@ export class ActivityRepository {
     }
   }
 
+  async redriveFailedWorkJob(
+    id: string,
+    actor: string,
+    reasonValue: unknown,
+    key?: string,
+  ): Promise<JsonRecord> {
+    const reason = typeof reasonValue === 'string' ? reasonValue.trim() : '';
+    if (!actor || actor.length > 120 || !reason || reason.length > 500)
+      throw new BadRequestException(
+        'actor and reason must be present and within the audit limits',
+      );
+    return this.mutate(key, async (client) => {
+      const selected = await client.query(
+        'SELECT id,kind,status,attempts FROM activity_job WHERE id=$1 FOR UPDATE',
+        [id],
+      );
+      const job = selected.rows[0];
+      if (!job) throw new NotFoundException('activity job not found');
+      if (!['FAILED', 'QUEUED'].includes(job.status))
+        throw new BadRequestException(
+          'only failed or recoverable queued work may be redriven',
+        );
+      const registeredKinds = new Set([
+        'QSO_INGESTION',
+        'ADIF_IMPORT',
+        'AWARD_EVALUATION',
+        'AWARD_RECALCULATE',
+        'PDF_RENDER',
+        'STATISTICS_REBUILD',
+      ]);
+      if (!registeredKinds.has(job.kind))
+        throw new BadRequestException(
+          'job kind is not registered for Activity work delivery',
+        );
+      const outboxEventId = randomUUID();
+      if (job.status === 'FAILED')
+        await client.query(
+          `UPDATE activity_job SET status='QUEUED',attempts=0,available_at=now(),
+           started_at=NULL,completed_at=NULL,lease_expires_at=NULL,lease_token=NULL,last_error=NULL
+           WHERE id=$1`,
+          [id],
+        );
+      await client.query(
+        `INSERT INTO outbox_event
+         (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at)
+         VALUES ($1,$2,'activity-service','activity_job',$3,$4::jsonb,now(),now())`,
+        [
+          outboxEventId,
+          workEventType(job.kind),
+          id,
+          JSON.stringify({ jobId: id }),
+        ],
+      );
+      await client.query(
+        `INSERT INTO activity_work_redrive_audit(id,job_id,outbox_event_id,actor,reason)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [randomUUID(), id, outboxEventId, actor, reason],
+      );
+      await client.query(
+        'UPDATE activity_work_dead_letter SET resolved_at=now() WHERE work_id=$1 AND resolved_at IS NULL',
+        [id],
+      );
+      return {
+        jobId: id,
+        status: 'QUEUED',
+        redrivenBy: actor,
+        reason,
+        outboxEventId,
+      };
+    });
+  }
+
   private async getWithClient(
     client: PoolClient,
     id: string,

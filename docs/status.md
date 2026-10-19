@@ -146,8 +146,9 @@
   ingestion worker. The Gateway now routes public API requests to their owning
   services and protects the Grafana identity callback. Geodata remaining worker
   operations are outstanding.
-- Activity NATS delivery, redrive, and remaining job consumers. The Activity
-  worker now extends active job leases while long batches run. Geodata NATS delivery, lease heartbeats for large
+- Activity NATS delivery and remaining job consumers. Activity job redrive is
+  audited and available to administrators; the Activity worker now extends
+  active job leases while long batches run. Geodata NATS delivery, lease heartbeats for large
   jobs, and remaining enrichment and retention consumers.
 - Admin and Participant web applications.
 - Database migration runner, data transfer tooling, deployment images, and

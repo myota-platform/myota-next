@@ -236,6 +236,16 @@ export class ActivityService {
     return job;
   }
 
+  async redriveWorkJob(
+    authorization: string | undefined,
+    key: string | undefined,
+    id: string,
+    reason: unknown,
+  ) {
+    const claims = this.authorize(authorization, ['activity.admin']);
+    return this.repository.redriveFailedWorkJob(id, claims.sub, reason, key);
+  }
+
   async getAdifImport(authorization: string | undefined, id: string) {
     const claims = verifyAccessToken(authorization);
     const record = await this.repository.getAdifImport(id);

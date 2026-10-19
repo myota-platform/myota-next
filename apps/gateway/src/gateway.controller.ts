@@ -14,6 +14,7 @@ const ROUTES: Array<[string, string]> = [
   ['/v1/entity-types', 'PROGRAMMES'],
   ['/v1/programmes', 'PROGRAMMES'],
   ['/v1/geodata/', 'GEODATA'],
+  ['/v1/activity/work-jobs', 'ACTIVITY'],
   ['/v1/activations', 'ACTIVITY'],
   ['/v1/awards', 'ACTIVITY'],
   ['/v1/qso-ingestions', 'ACTIVITY'],

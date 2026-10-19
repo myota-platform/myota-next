@@ -1404,6 +1404,23 @@ paths:
       operationId: getQsoIngestion
       parameters: [{ in: path, name: ingestionId, required: true, schema: { type: string, format: uuid } }]
       responses: { '200': { description: Ingestion job state and retry information } }
+  /v1/activity/work-jobs/{jobId}/redrive:
+    post:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Redrive a failed or recoverable Activity work job
+      description: Requires activity.admin. Resets failed jobs, creates a fresh work outbox event, records the actor and reason, and resolves related unresolved work dead letters in one transaction.
+      parameters:
+        - { in: path, name: jobId, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ActivityWorkRedriveRequest' } } }
+      responses:
+        '202': { description: Work job requeued for delivery }
+        '400': { description: Job state or kind cannot be redriven }
+        '403': { description: activity.admin scope required }
+        '404': { description: Activity job not found }
   /v1/adif/imports/{importId}:
     get:
       tags: [Activity]
@@ -2331,6 +2348,11 @@ components:
         activationId: { type: string, format: uuid }
         sourceFormat: { type: string, enum: [JSON, CSV, ADIF] }
         qsos: { type: array, minItems: 1, items: { $ref: '#/components/schemas/Qso' } }
+    ActivityWorkRedriveRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
     CsvQsoIngestionRequest:
       type: object
       required: [activationId, filename, contentBase64]

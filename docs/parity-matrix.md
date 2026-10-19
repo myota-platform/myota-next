@@ -46,8 +46,9 @@ authorization, malware checks, and object storage before durable queueing; the
 Activity worker parses records, records successes and rejects, updates
 aggregates, and reports import status. CSV file uploads now validate bounded
 UTF-8 input and queue normalized rows through the same ingestion job. Remaining
-Activity work includes notification production beyond qualification, NATS delivery, and
-worker recovery. Long-running Activity jobs now extend their 120-second leases
+Activity work includes notification production beyond qualification and NATS
+delivery. Failed or queued Activity jobs can be redriven by administrators with
+an audited reason; long-running Activity jobs now extend their 120-second leases
 from a separate database connection while processing. Statistics listing and rebuild-job APIs,
 transactional snapshot rebuilds, and owner-scoped notification reads are
 implemented. ADIF import creation, processing, and status reads are implemented.

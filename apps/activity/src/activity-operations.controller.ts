@@ -47,4 +47,15 @@ export class ActivityOperationsController {
   ) {
     return this.activity.listNotifications(authorization, recipientId);
   }
+
+  @Post('activity/work-jobs/:jobId/redrive')
+  @HttpCode(202)
+  redriveWorkJob(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Param('jobId') jobId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.activity.redriveWorkJob(authorization, key, jobId, body.reason);
+  }
 }
