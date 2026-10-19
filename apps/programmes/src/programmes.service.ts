@@ -62,8 +62,18 @@ export class ProgrammesService {
     body: CreateProgrammeDto,
     idempotencyKey?: string,
   ): Promise<Record<string, unknown>> {
+    const missing = [
+      ...(!body.slug ? ['slug'] : []),
+      ...(!body.name ? ['name'] : []),
+      ...(body.entityTypes?.length ? [] : ['entityTypes']),
+      ...(body.rules && Object.keys(body.rules).length > 0 ? [] : ['rules']),
+    ];
+    if (missing.length) {
+      throw new BadRequestException(
+        `missing required fields: ${missing.join(', ')}`,
+      );
+    }
     const slug = body.slug.toLowerCase();
-    if (!slug) throw new BadRequestException('programme slug is required');
     this.authorizeAdmin(authorization, slug);
     return this.state.mutate(idempotencyKey, async (client, state) => {
       if (state.items?.[slug]) {

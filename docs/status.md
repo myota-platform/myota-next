@@ -35,7 +35,8 @@
   security events to both the security-event table and outbox.
 - Programme listing, detail and effective-policy reads, plus scoped creation,
   update and archive transitions, now load and persist snapshots in Core with
-  transactional outbox writes. Global entity-type catalogue management and
+  transactional outbox writes. Creation requires non-empty slug, name, entity
+  types, and rules, matching the Python reference. Global entity-type catalogue management and
   per-programme entity-type reads, assignments and removals use the same state
   transaction and outbox boundary. Programme content supports draft editing,
   review submission and decisions, publication, paginated filtering, and locale
