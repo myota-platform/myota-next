@@ -75,7 +75,11 @@
   queued transactionally; the Activity worker decodes and normalizes the ADIF
   file before row processing, so parser failures fail the import. Later
   per-record failures are reported alongside persisted QSOs and aggregate
-  updates.
+  updates. Timestamp parsing preserves the Python reference's compact ISO date
+  and time forms and hour-only UTC offsets; imports with no parsed QSO records
+  retain the reference's successful zero-record outcome. Retention interval
+  configuration rejects malformed values instead of silently producing a
+  rapid retry loop.
   Completion notices include the full final import result, matching the Python
   worker's notification payload. Successful imports also recalculate award
   progress for the operator and hunters in successfully persisted or duplicate
