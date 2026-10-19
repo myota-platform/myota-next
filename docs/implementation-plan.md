@@ -26,7 +26,8 @@ current reference.
 The Node 24/NestJS workspace, separate service and worker entry points,
 database-aware readiness, copied contracts and migrations, formatting, lint,
 typecheck, build gates, an owner-scoped migration runner, and a per-application
-Docker recipe are in place. CI workflows, image publication, data transfer, and
+Docker recipe are in place, with GitHub Actions running the static and build
+gates on pushes and pull requests. Image publication, data transfer, and
 deployment qualification remain open. Identity, Programmes, Activity, and
 Geodata each have working vertical slices. See the [implementation status](status.md)
 and [parity matrix](parity-matrix.md) for current coverage.

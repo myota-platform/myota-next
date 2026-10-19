@@ -6,6 +6,8 @@
 ## In place
 
 - User-selected Node.js/NestJS runtime with Node 24 and NestJS 12.
+- GitHub Actions CI runs formatting, lint, typecheck, and all API/worker builds
+  on pushes and pull requests using Node 24.
 - Nest CLI monorepo projects for Gateway, Identity, Programmes, Activity,
   Geodata, and the separate worker process slots.
 - Shared `/healthz` liveness and `/readyz` readiness handlers. Identity and
