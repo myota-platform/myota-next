@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { ActivityRepository } from './activity.repository.js';
-import { validateAwardDraft } from './award-domain.js';
+import { evaluateAward, validateAwardDraft } from './award-domain.js';
 import type { JsonRecord } from './activity-domain.js';
 
 @Injectable()
@@ -201,6 +201,125 @@ export class AwardsService {
       retiredBy: body.retiredBy,
     });
     return this.repository.saveAwardDefinition(award, key);
+  }
+
+  async createEvaluationJob(
+    authorization: string | undefined,
+    key: string | undefined,
+    body: JsonRecord,
+  ) {
+    const claims = verifyAccessToken(authorization);
+    if (!body.awardId || !body.subjectId)
+      throw new BadRequestException('awardId and subjectId are required');
+    let facts = body.facts;
+    if (claims.sub !== body.subjectId) {
+      this.authorize(claims.scp, [
+        'awards.read',
+        'awards.request',
+        'awards.admin',
+      ]);
+    } else {
+      // Participant self-evaluations always read service-owned aggregates.
+      facts = null;
+    }
+    const award = await this.getAwardDefinitionOrThrow(body.awardId);
+    const payload = {
+      awardId: award.id,
+      subjectId: body.subjectId,
+      facts: facts ?? null,
+    };
+    const job = await this.repository.enqueueJob(
+      'AWARD_EVALUATION',
+      payload,
+      key,
+    );
+    return { evaluationId: job.id, ...job };
+  }
+
+  async getAwardJob(authorization: string | undefined, id: string) {
+    const claims = verifyAccessToken(authorization);
+    this.authorize(claims.scp, [
+      'awards.read',
+      'awards.request',
+      'awards.admin',
+    ]);
+    const job = await this.repository.getJob(id);
+    const subjectId = job.payload?.subjectId;
+    if (subjectId && claims.sub !== subjectId)
+      this.authorize(claims.scp, ['awards.read', 'awards.admin']);
+    else if (
+      !subjectId &&
+      !claims.scp.some((scope) => ['*', 'awards.admin'].includes(scope))
+    )
+      throw new ForbiddenException('awards.admin scope is required');
+    return job;
+  }
+
+  async progress(
+    authorization: string | undefined,
+    awardId: string,
+    participantId: string,
+  ) {
+    const claims = verifyAccessToken(authorization);
+    if (claims.sub !== participantId)
+      this.authorize(claims.scp, ['awards.read', 'awards.admin']);
+    else
+      this.authorize(claims.scp, [
+        'awards.read',
+        'awards.request',
+        'awards.admin',
+        'identity.me',
+      ]);
+    if (!awardId || !participantId)
+      throw new BadRequestException('awardId and participantId are required');
+    const award = await this.getAwardDefinitionOrThrow(awardId);
+    const facts = await this.repository.subjectFacts(
+      award.programmeSlug,
+      participantId,
+      award.category ?? 'HUNTER',
+    );
+    const result = evaluateAward(award, participantId, facts);
+    await this.repository.saveAwardProgress(
+      award,
+      participantId,
+      facts,
+      result,
+    );
+    return result;
+  }
+
+  async recalculate(
+    authorization: string | undefined,
+    key: string | undefined,
+    awardId: string,
+    body: JsonRecord,
+  ) {
+    this.authorizeHeader(authorization, ['awards.admin']);
+    const award = await this.getAwardDefinitionOrThrow(awardId);
+    const subjects = body.subjectIds ?? [];
+    if (!Array.isArray(subjects))
+      throw new BadRequestException('subjectIds must be an array');
+    const sorted = subjects.map(String).sort();
+    const jobKey =
+      key ??
+      `award-recalculate:${award.id}:${award.version ?? 1}:${sorted.join(',')}`;
+    const payload = {
+      programmeSlug: award.programmeSlug,
+      subjectIds: sorted,
+      awardId: award.id,
+      ruleVersion: award.version ?? 1,
+    };
+    const job = await this.repository.enqueueJob(
+      'AWARD_RECALCULATE',
+      payload,
+      jobKey,
+    );
+    return {
+      awardId: award.id,
+      ruleVersion: award.version ?? 1,
+      jobId: job.id,
+      ...job,
+    };
   }
 
   private async getAwardDefinitionOrThrow(id: string) {

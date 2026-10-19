@@ -132,6 +132,97 @@ export function validateTemplate(elements: unknown) {
     );
 }
 
+export function evaluateAwardCondition(
+  condition: JsonRecord,
+  facts: JsonRecord,
+): boolean {
+  const kind = String(condition.kind ?? '').toUpperCase();
+  if (kind === 'AND' || kind === 'ALL') {
+    const children = condition.conditions;
+    return (
+      Array.isArray(children) &&
+      children.length > 0 &&
+      children.every((child) => evaluateAwardCondition(child, facts))
+    );
+  }
+  if (kind === 'OR' || kind === 'ANY') {
+    const children = condition.conditions;
+    return (
+      Array.isArray(children) &&
+      children.some((child) => evaluateAwardCondition(child, facts))
+    );
+  }
+  if (kind === 'NOT')
+    return !evaluateAwardCondition(condition.condition ?? {}, facts);
+  if (kind === 'ENTITY_TYPE')
+    return (condition.values ?? [])
+      .map(String)
+      .includes(String(facts.entityType ?? ''));
+  const field =
+    kind === 'FIELD'
+      ? String(condition.field ?? '')
+      : {
+          QSO_COUNT: 'qsoCount',
+          ACTIVATION_COUNT: 'activationCount',
+          UNIQUE_CALLSIGNS: 'uniqueCallsignCount',
+          UNIQUE_ENTITIES: 'uniqueEntityCount',
+        }[kind];
+  if (!field)
+    throw new BadRequestException(
+      `unsupported award condition kind: ${kind || 'missing'}`,
+    );
+  const actual = Number(facts[field] ?? 0);
+  const expected = Number(condition.value ?? 0);
+  if (!Number.isFinite(actual) || !Number.isFinite(expected))
+    throw new BadRequestException('award condition values must be numeric');
+  switch (String(condition.operator ?? 'GTE').toUpperCase()) {
+    case 'GTE':
+      return actual >= expected;
+    case 'GT':
+      return actual > expected;
+    case 'EQ':
+      return actual === expected;
+    case 'LTE':
+      return actual <= expected;
+    case 'LT':
+      return actual < expected;
+    default:
+      return false;
+  }
+}
+
+export function evaluateAward(
+  award: JsonRecord,
+  subjectId: string,
+  facts: JsonRecord,
+) {
+  const conditionMet = evaluateAwardCondition(award.condition, facts);
+  const metric = String(award.achievementMetric ?? 'QSO_COUNT');
+  const metricField: Record<string, string> = {
+    QSO_COUNT: 'qsoCount',
+    ACTIVATION_COUNT: 'activationCount',
+    UNIQUE_CALLSIGNS: 'uniqueCallsignCount',
+    UNIQUE_ENTITIES: 'uniqueEntityCount',
+  };
+  const field = metricField[metric] ?? metric;
+  const progress = Number(facts[field] ?? 0);
+  if (!Number.isFinite(progress))
+    throw new BadRequestException(`${field} must be numeric`);
+  const levels = (award.levels ?? []).map((level: JsonRecord) => ({
+    ...level,
+    eligible: conditionMet && progress >= Number(level.threshold),
+  }));
+  return {
+    awardId: award.id,
+    subjectId,
+    category: award.category,
+    conditionMet,
+    metric,
+    progress,
+    levels,
+  };
+}
+
 function calculatePrintReadiness(
   background: JsonRecord,
   spec: JsonRecord,

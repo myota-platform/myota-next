@@ -187,6 +187,81 @@ export class ActivityRepository {
     }
   }
 
+  async subjectFacts(
+    programme: string,
+    subjectId: string,
+    category: string,
+  ): Promise<JsonRecord> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT qso_count,activation_count,unique_callsign_count,unique_entity_count,last_entity_type
+         FROM activity_subject_aggregate WHERE programme_slug=$1 AND subject_id=$2 AND category=$3`,
+        [programme, subjectId, category],
+      );
+      const row = result.rows[0];
+      return row
+        ? {
+            qsoCount: Number(row.qso_count),
+            activationCount: Number(row.activation_count),
+            uniqueCallsignCount: Number(row.unique_callsign_count),
+            uniqueEntityCount: Number(row.unique_entity_count),
+            entityType: row.last_entity_type,
+          }
+        : {
+            qsoCount: 0,
+            activationCount: 0,
+            uniqueCallsignCount: 0,
+            uniqueEntityCount: 0,
+            entityType: null,
+          };
+    } finally {
+      client.release();
+    }
+  }
+
+  async saveAwardProgress(
+    award: JsonRecord,
+    subjectId: string,
+    facts: JsonRecord,
+    evaluation: JsonRecord,
+  ) {
+    const client = await this.connect();
+    try {
+      await client.query(
+        `INSERT INTO activity_award_progress(award_id,award_version,subject_id,category,facts,evaluation)
+         VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb)
+         ON CONFLICT (award_id,award_version,subject_id) DO UPDATE SET facts=EXCLUDED.facts,evaluation=EXCLUDED.evaluation,computed_at=now()`,
+        [
+          award.id,
+          Number(award.version ?? 1),
+          subjectId,
+          award.category,
+          JSON.stringify(facts),
+          JSON.stringify(evaluation),
+        ],
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  async listSubjectIds(
+    programme: string,
+    category?: string,
+  ): Promise<string[]> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT DISTINCT subject_id FROM activity_subject_aggregate WHERE programme_slug=$1${category ? ' AND category=$2' : ''} ORDER BY subject_id`,
+        category ? [programme, category] : [programme],
+      );
+      return result.rows.map((row) => String(row.subject_id));
+    } finally {
+      client.release();
+    }
+  }
+
   async createCorrection(
     qsoId: string,
     body: JsonRecord,

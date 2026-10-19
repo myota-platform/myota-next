@@ -55,16 +55,19 @@
 - Award definitions now support public published-only reads, administrative
   draft create/edit, review submission and decisions, print-readiness
   validation, publication, and retirement. Saved and published facts commit to
-  the Activity outbox with their definition updates.
+  the Activity outbox with their definition updates. Award evaluation and
+  historical recalculation jobs use service-owned facts, persist versioned
+  progress, and create deduplicated qualification notifications. Participant
+  progress reads evaluate and persist the current aggregate snapshot.
 
 ## Not implemented yet
 
 - Remaining Identity APIs include OIDC mapping updates and account deactivation
   as its dedicated operation. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
-- Remaining Activity APIs include file-based QSO import, award evaluation,
-  assets, requests, issuance/rendering, and operational workflows. The statistics rebuild job still needs its worker
-  consumer. Geodata and Gateway handlers,
+- Remaining Activity APIs include file-based QSO import, award assets, requests,
+  issuance/rendering, and operational workflows. The statistics rebuild job
+  still needs its worker consumer. Geodata and Gateway handlers,
   authorization rules, persistence repositories, and event/outbox behavior
   remain unimplemented.
 - Activity NATS delivery, lease heartbeats during large batches, redrive, and
