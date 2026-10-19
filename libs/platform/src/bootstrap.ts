@@ -8,6 +8,7 @@ export async function bootstrapHttpService(
   defaultPort: number,
   jsonLimit = '100kb',
   rawBodyRoutes: string[] = [],
+  globalPrefixExclusions: { path: string; method: RequestMethod }[] = [],
 ): Promise<INestApplication> {
   const app = await NestFactory.create(rootModule, { bodyParser: false });
   for (const route of rawBodyRoutes)
@@ -21,6 +22,7 @@ export async function bootstrapHttpService(
     exclude: [
       { path: 'healthz', method: RequestMethod.GET },
       { path: 'readyz', method: RequestMethod.GET },
+      ...globalPrefixExclusions,
     ],
   });
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));

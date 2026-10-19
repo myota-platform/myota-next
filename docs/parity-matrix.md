@@ -108,8 +108,10 @@ workflows remain outstanding.
   and retention/recovery tasks.
 - Geodata workers: import preprocessing and promotion, confirmed entity
   deletion, location enrichment, retention, and recovery tasks.
-- Gateway: preserve routing, upload limits/timeouts, authentication context,
-  and protected observability proxy behavior.
+- Gateway: routes public API requests to their owning services, protects
+  Identity internal endpoints, streams request and response bodies, enforces
+  configured proxy timeouts, and resolves Grafana identity and permissions from
+  the live Identity service. Gateway request counters are exposed at `/metrics`.
 - Runtime: preserve migrations, health/readiness, metrics, logs, traces,
   backups, restore paths, NATS topology, object storage buckets, and separate
   service/worker deployment units.

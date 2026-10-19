@@ -143,9 +143,9 @@
   first Identity slice are still outstanding.
 - Remaining Activity operational workflows are outstanding. CSV file import
   validates bounded UTF-8 logs and queues normalized QSO rows for the existing
-  ingestion worker. Geodata remaining worker operations are
-  outstanding, along with Gateway routing and protected
-  observability proxy behavior.
+  ingestion worker. The Gateway now routes public API requests to their owning
+  services and protects the Grafana identity callback. Geodata remaining worker
+  operations are outstanding.
 - Activity NATS delivery, redrive, and remaining job consumers. The Activity
   worker now extends active job leases while long batches run. Geodata NATS delivery, lease heartbeats for large
   jobs, and remaining enrichment and retention consumers.
