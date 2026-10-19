@@ -38,14 +38,20 @@
   coverage reporting. Programme policy drafts support scoped authoring,
   submission, review, publishing, and effective policy updates. These operations
   share a dedicated Core snapshot repository and transactional outbox boundary.
+- Activity now has an initial API slice for activation listing, creation,
+  retrieval, closure, and single-QSO recording. It persists normalized
+  activations and QSOs in Activity PostgreSQL, writes domain events and
+  idempotency responses transactionally, updates subject aggregates, and
+  queues award recalculation work through the Activity outbox.
 
 ## Not implemented yet
 
 - Remaining Identity APIs include OIDC mapping updates and account deactivation
   as its dedicated operation. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
-- Activity, Geodata, and Gateway handlers,
-  authorization rules, persistence repositories, and event/outbox behavior also
+- Remaining Activity APIs include batch/import QSO paths, corrections, public
+  views, awards, and operational workflows. Geodata and Gateway handlers,
+  authorization rules, persistence repositories, and event/outbox behavior
   remain unimplemented.
 - Activity and Geodata consumers, leases, recovery, retries, and redrive.
 - Admin and Participant web applications.
