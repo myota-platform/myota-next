@@ -140,8 +140,8 @@
   JetStream durable, inserts recipient notices with event deduplication and
   consumer checkpoints in one Activity database transaction, retries transient
   failures, and stores redacted poison envelopes with stream coordinates before
-  terminating them. Audited notification redrive and worker recovery evidence
-  remain outstanding.
+  terminating them. An audited CLI redrive reuses pending audit records and a
+  stable JetStream message ID. Worker recovery evidence remains outstanding.
 
 ## Not implemented yet
 
