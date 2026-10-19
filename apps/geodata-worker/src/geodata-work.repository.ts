@@ -530,7 +530,6 @@ export class GeodataWorkRepository {
           record = {
             ordinal,
             skipped: {
-              ordinal,
               sourceRef,
               reason: normalized.skipReason,
             },
@@ -539,7 +538,6 @@ export class GeodataWorkRepository {
           record = {
             ordinal,
             skipped: {
-              ordinal,
               sourceRef,
               reason: 'MISSING_GEOMETRY',
             },
