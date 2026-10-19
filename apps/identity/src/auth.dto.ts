@@ -3,8 +3,11 @@ import {
   IsEmail,
   IsOptional,
   IsString,
+  IsIn,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class LoginDto {
   @IsEmail()
@@ -79,4 +82,53 @@ export class AdminRoleDefinitionDto {
   @IsArray()
   @IsString({ each: true })
   scopes?: string[];
+}
+
+export class RoleGrantDto {
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
+  @IsString()
+  programmeSlug?: string;
+
+  @IsOptional()
+  @IsString()
+  jurisdiction?: string;
+
+  @IsOptional()
+  @IsString()
+  entityType?: string;
+}
+
+export class CreateAccountDto {
+  @IsString()
+  @MinLength(1)
+  displayName!: string;
+
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @IsIn(['OPERATOR', 'SWL'])
+  participationType!: 'OPERATOR' | 'SWL';
+
+  @IsOptional()
+  @IsString()
+  callsign?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RoleGrantDto)
+  roles?: RoleGrantDto[];
+
+  @IsOptional()
+  @IsString()
+  password?: string;
 }

@@ -7,9 +7,9 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { writeSecurityEvent } from '@app/platform/outbox.js';
 import { IdentityAuthService } from './auth.service.js';
 import type { AdminRoleDefinitionDto } from './auth.dto.js';
 import {
@@ -268,11 +268,7 @@ export class IdentityRoleService {
     eventType: string,
     role: RoleDefinition,
   ) {
-    await client.query(
-      `INSERT INTO public.audit_event (aggregate_type, aggregate_id, event_type, payload)
-       VALUES ('role_definition', $1, $2, $3::jsonb)`,
-      [randomUUID(), eventType, JSON.stringify(role)],
-    );
+    await writeSecurityEvent(client, eventType, { ...role });
   }
 }
 

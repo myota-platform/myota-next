@@ -19,6 +19,7 @@ import {
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { DEFAULT_ROLE_SCOPES } from './role-catalog.js';
+import { writeSecurityEvent } from '@app/platform/outbox.js';
 
 const ACCESS_SECONDS = Number(process.env.MYOTA_ACCESS_TOKEN_SECONDS ?? 600);
 const REFRESH_SECONDS = Number(
@@ -760,8 +761,10 @@ export class IdentityAuthService {
     const result = await client.query<RoleAssignmentRow>(
       `SELECT ar.account_id AS "accountId", ar.id,
               ar.role_code AS role, ar.programme_id AS "programmeId",
-              p.slug AS "programmeSlug", ar.jurisdiction_id AS "jurisdictionId",
-              j.code AS "jurisdiction", ar.entity_type_code AS "entityType",
+              coalesce(ar.programme_slug, p.slug) AS "programmeSlug",
+              ar.jurisdiction_id AS "jurisdictionId",
+              coalesce(ar.jurisdiction_code, j.code) AS "jurisdiction",
+              ar.entity_type_code AS "entityType",
               coalesce(rd.scopes, ARRAY(SELECT jsonb_array_elements_text(ar.scopes))) AS scopes,
               ar.created_at AS "createdAt", ar.valid_to AS "validTo"
          FROM public.account_role ar
@@ -832,11 +835,7 @@ export class IdentityAuthService {
     eventType: string,
     payload: Record<string, unknown>,
   ) {
-    await client.query(
-      `INSERT INTO public.audit_event (aggregate_type, aggregate_id, event_type, payload)
-       VALUES ('account', $1, $2, $3::jsonb)`,
-      [payload.accountId ?? randomUUID(), eventType, JSON.stringify(payload)],
-    );
+    await writeSecurityEvent(client, eventType, payload);
   }
 
   private async connect(): Promise<PoolClient> {

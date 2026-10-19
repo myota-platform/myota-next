@@ -16,14 +16,17 @@
 - First Identity slice: disabled public registration, password login, refresh
   rotation, logout revocation, recovery request/reset, current account and
   scope reads, owner-only profile updates, and paginated administrator account
-  listing plus role-catalogue reads, role creation, and role updates. Login uses the
-  existing scrypt hash format, HS256 token contract, persisted session,
-  revocation, lockout, rate-limit, and audit tables.
+  listing, account creation, role-catalogue reads, role creation, and role
+  updates. Authentication uses the existing scrypt hash format, HS256 token
+  contract, persisted session, revocation, lockout and rate-limit tables.
+- Transactional event helpers write domain events to the Core outbox and
+  security events to both the security-event table and outbox.
 
 ## Not implemented yet
 
-- Remaining Identity APIs, including account/role administration, callsigns,
-  profile images, OIDC and service credentials. Automated
+- Remaining Identity APIs, including account get/update and role assignment,
+  callsign lifecycle and evidence, profile images, OIDC, service credentials,
+  security-event reads and export. Automated
   compatibility coverage for the first auth slice is also outstanding.
 - Programme, Activity, Geodata, and Gateway handlers, authorization rules,
   persistence repositories, and event/outbox behavior.

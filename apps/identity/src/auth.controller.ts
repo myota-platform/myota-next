@@ -15,6 +15,7 @@ import {
 import type { Request } from 'express';
 import {
   LoginDto,
+  CreateAccountDto,
   AdminAccountsQueryDto,
   AdminRoleDefinitionDto,
   RecoveryRequestDto,
@@ -24,12 +25,14 @@ import {
 } from './auth.dto.js';
 import { IdentityAuthService } from './auth.service.js';
 import { IdentityRoleService } from './identity-role.service.js';
+import { IdentityAccountService } from './identity-account.service.js';
 
 @Controller('identity')
 export class AuthController {
   constructor(
     private readonly auth: IdentityAuthService,
     private readonly roles: IdentityRoleService,
+    private readonly accounts: IdentityAccountService,
   ) {}
 
   @Post('auth/register')
@@ -135,6 +138,18 @@ export class AuthController {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
     return this.roles.updateAdminRole(authorization, roleCode, body);
+  }
+
+  @Post('accounts')
+  @HttpCode(201)
+  createAccount(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() body: CreateAccountDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.create(authorization, body, idempotencyKey);
   }
 
   private requestContext(request: Request) {
