@@ -365,7 +365,7 @@ paths:
         - { in: query, name: minLat, schema: { type: number, format: double } }
         - { in: query, name: maxLon, schema: { type: number, format: double } }
         - { in: query, name: maxLat, schema: { type: number, format: double } }
-        - { in: query, name: bbox, description: Preferred map filter as minLon,minLat,maxLon,maxLat. Takes precedence over legacy individual bounds when supplied., schema: { type: string, pattern: '^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$' } }
+        - { in: query, name: bbox, description: Map filter as minLon,minLat,maxLon,maxLat. Used when no legacy individual bounds are supplied; if any individual bound is supplied, the individual bounds take precedence., schema: { type: string, pattern: '^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$' } }
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:

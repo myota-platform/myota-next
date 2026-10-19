@@ -396,26 +396,48 @@ function listValues(value: unknown) {
 }
 
 function parseBounds(query: Record<string, unknown>) {
+  const names = ['minLon', 'minLat', 'maxLon', 'maxLat'] as const;
+  const legacyValues = names.map((name) => firstQueryString(query[name]));
+  const hasLegacyBounds = legacyValues.some(
+    (value) => value !== undefined && value !== '',
+  );
+  const bbox = firstQueryString(query.bbox) ?? '';
   let raw: number[];
-  if (typeof query.bbox === 'string' && query.bbox) {
-    raw = query.bbox.split(',').map(Number);
+  if (bbox && !hasLegacyBounds) {
+    const values = bbox.split(',').map((value) => value.trim());
+    if (values.length !== 4)
+      throw new BadRequestException(
+        'bbox must contain minLon,minLat,maxLon,maxLat',
+      );
+    raw = values.map(Number);
+    if (
+      values.some((value) => !value) ||
+      raw.some((value) => !Number.isFinite(value))
+    )
+      throw new BadRequestException('bbox must contain numeric coordinates');
+  } else if (hasLegacyBounds) {
+    const values = legacyValues.map((value) => value?.trim() ?? '');
+    raw = values.map(Number);
+    if (
+      values.some((value) => !value) ||
+      raw.some((value) => !Number.isFinite(value))
+    )
+      throw new BadRequestException(
+        'minLon, minLat, maxLon and maxLat must be numbers',
+      );
   } else {
-    const names = ['minLon', 'minLat', 'maxLon', 'maxLat'];
-    if (!names.some((name) => query[name] !== undefined)) return null;
-    raw = names.map((name) => Number(query[name]));
+    return null;
   }
-  if (
-    raw.length !== 4 ||
-    raw.some((value) => !Number.isFinite(value)) ||
-    raw[0] < -180 ||
-    raw[0] >= raw[2] ||
-    raw[2] > 180 ||
-    raw[1] < -90 ||
-    raw[1] >= raw[3] ||
-    raw[3] > 90
-  )
+  if (raw[0] >= raw[2] || raw[1] >= raw[3])
     throw new BadRequestException(
       'map bounds must have minimum values below maximum values',
     );
   return raw;
+}
+
+function firstQueryString(value: unknown) {
+  const values = Array.isArray(value) ? value : [value];
+  return values.find(
+    (item): item is string => typeof item === 'string' && item !== '',
+  );
 }
