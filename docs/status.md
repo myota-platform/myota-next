@@ -61,15 +61,21 @@
   progress reads evaluate and persist the current aggregate snapshot. Award
   assets support registration, owner/admin listing, bounded PNG/JPEG uploads,
   S3-compatible storage, metadata validation, and authenticated content reads.
+  Award requests validate published-award eligibility from Activity aggregates,
+  deduplicate by award/level/participant, and write request events transactionally.
+  Administrator issuance commits the immutable record, request transition, and
+  issuance event together. Certificate render jobs create PDF artifacts from
+  registered PNG/JPEG artwork in S3-compatible storage; authorized participants
+  receive short-lived artifact download URLs.
 
 ## Not implemented yet
 
 - Remaining Identity APIs include OIDC mapping updates and account deactivation
   as its dedicated operation. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
-- Remaining Activity APIs include file-based QSO import, award requests,
-  issuance/rendering, and operational workflows. The statistics rebuild job
-  still needs its worker consumer. Geodata and Gateway handlers,
+- Remaining Activity APIs include file-based QSO import and operational
+  workflows. The statistics rebuild job still needs its worker consumer.
+  Geodata and Gateway handlers,
   authorization rules, persistence repositories, and event/outbox behavior
   remain unimplemented.
 - Activity NATS delivery, lease heartbeats during large batches, redrive, and

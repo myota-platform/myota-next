@@ -68,6 +68,68 @@ export class AwardsController {
     return this.awards.progress(authorization, awardId, participantId);
   }
 
+  @Get('requests')
+  listRequests(
+    @Headers('authorization') authorization: string | undefined,
+    @Query()
+    query: { subjectId?: string; page?: string; pageSize?: string },
+  ) {
+    return this.awards.listRequests(authorization, query);
+  }
+
+  @Post('requests')
+  requestAward(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: Record<string, any>,
+  ) {
+    return this.awards.requestAward(authorization, body);
+  }
+
+  @Post('requests/:requestId/issuances')
+  issueRequest(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Param('requestId') requestId: string,
+    @Body() body: Record<string, any>,
+  ) {
+    return this.awards.issueRequest(authorization, key, requestId, body);
+  }
+
+  @Get('issuances')
+  listIssuances(
+    @Headers('authorization') authorization: string | undefined,
+    @Query() query: { page?: string; pageSize?: string },
+  ) {
+    return this.awards.listIssuances(authorization, query);
+  }
+
+  @Post('issuances/:issuanceId/render-jobs')
+  @HttpCode(202)
+  createRenderJob(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Param('issuanceId') issuanceId: string,
+  ) {
+    return this.awards.createRenderJob(authorization, key, issuanceId);
+  }
+
+  @Get('issuances/:issuanceId/render-jobs/:jobId')
+  getRenderJob(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('issuanceId') issuanceId: string,
+    @Param('jobId') jobId: string,
+  ) {
+    return this.awards.getRenderJob(authorization, issuanceId, jobId);
+  }
+
+  @Get('issuances/:issuanceId/artifact')
+  getArtifact(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('issuanceId') issuanceId: string,
+  ) {
+    return this.awards.getArtifact(authorization, issuanceId);
+  }
+
   @Get('assets')
   listAssets(
     @Headers('authorization') authorization: string | undefined,

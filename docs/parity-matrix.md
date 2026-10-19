@@ -38,11 +38,14 @@ remain outstanding. QSO correction requests and administrator review are also
 implemented, with applied changes queuing recalculation. Award definition draft,
 review, publish, and retire APIs are implemented. Award progress reads and
 evaluation/recalculation job APIs persist versioned progress and qualification
-notifications through the Activity worker. Remaining Activity work includes
-ADIF/CSV file imports, requests, issuance/rendering, notification production,
-statistics rebuild processing, and worker recovery. Registered award assets
-and bounded content storage are implemented. Statistics listing/rebuild job
-APIs and owner-scoped notification reads are implemented.
+notifications through the Activity worker. Award requests validate eligibility,
+issuance is transactional and permanent, and PDF render jobs store artifacts in
+S3-compatible storage with authorized presigned download URLs. Registered award
+assets and bounded content storage are implemented. Remaining Activity work
+includes ADIF/CSV file imports, notification production beyond qualification,
+statistics rebuild processing, NATS delivery, and worker recovery.
+Statistics listing/rebuild job APIs and owner-scoped notification reads are
+implemented.
 
 ## User applications
 

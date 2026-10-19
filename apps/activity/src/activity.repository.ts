@@ -225,6 +225,142 @@ export class ActivityRepository {
     }
   }
 
+  async createAwardRequest(record: JsonRecord): Promise<JsonRecord> {
+    return this.mutate(undefined, async (client) => {
+      const result = await client.query(
+        `INSERT INTO activity_award_request(id,award_id,programme_slug,level_id,subject_id,category,callsign,person_name,facts,status,requested_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,'REQUESTED',$10)
+         ON CONFLICT (award_id,level_id,subject_id) DO NOTHING RETURNING id`,
+        [
+          record.id,
+          record.awardId,
+          record.programmeSlug,
+          record.levelId,
+          record.subjectId,
+          record.category,
+          record.callsign,
+          record.personName,
+          JSON.stringify(record.facts ?? {}),
+          new Date(String(record.requestedAt)),
+        ],
+      );
+      const saved = await client.query(
+        'SELECT * FROM activity_award_request WHERE award_id=$1 AND level_id=$2 AND subject_id=$3',
+        [record.awardId, record.levelId, record.subjectId],
+      );
+      const request = awardRequestRecord(saved.rows[0]);
+      if (result.rows[0])
+        await this.event(
+          client,
+          'awards.request.created.v1',
+          'award_request',
+          request.id,
+          request,
+          'awards-service',
+        );
+      return request;
+    });
+  }
+
+  async listAwardRequests(subjectId?: string): Promise<JsonRecord[]> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT * FROM activity_award_request${subjectId ? ' WHERE subject_id=$1' : ''} ORDER BY requested_at DESC`,
+        subjectId ? [subjectId] : [],
+      );
+      return result.rows.map(awardRequestRecord);
+    } finally {
+      client.release();
+    }
+  }
+
+  async getAwardRequest(id: string): Promise<JsonRecord> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM activity_award_request WHERE id=$1',
+        [id],
+      );
+      if (!result.rows[0])
+        throw new NotFoundException('award request not found');
+      return awardRequestRecord(result.rows[0]);
+    } finally {
+      client.release();
+    }
+  }
+
+  async issueAwardRequest(
+    requestId: string,
+    issuance: JsonRecord,
+    key?: string,
+  ): Promise<JsonRecord> {
+    return this.mutate(key, async (client) => {
+      const locked = await client.query(
+        'SELECT * FROM activity_award_request WHERE id=$1 FOR UPDATE',
+        [requestId],
+      );
+      if (!locked.rows[0])
+        throw new NotFoundException('award request not found');
+      const request = awardRequestRecord(locked.rows[0]);
+      if (request.status !== 'REQUESTED')
+        throw new BadRequestException('only requested awards can be issued');
+      await client.query(
+        `INSERT INTO activity_award_issuance(id,request_id,award_id,programme_slug,level_id,subject_id,issuance)
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)`,
+        [
+          issuance.id,
+          requestId,
+          issuance.awardId,
+          issuance.programmeSlug,
+          issuance.levelId,
+          issuance.subjectId,
+          JSON.stringify(issuance),
+        ],
+      );
+      await client.query(
+        "UPDATE activity_award_request SET status='ISSUED',issued_award_id=$2,issued_at=$3 WHERE id=$1",
+        [requestId, issuance.id, issuance.issuedAt],
+      );
+      await this.event(
+        client,
+        'awards.issued.v1',
+        'award_issuance',
+        issuance.id,
+        issuance,
+        'awards-service',
+      );
+      return issuance;
+    });
+  }
+
+  async listAwardIssuances(): Promise<JsonRecord[]> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        'SELECT issuance FROM activity_award_issuance ORDER BY created_at DESC',
+      );
+      return result.rows.map((row) => row.issuance);
+    } finally {
+      client.release();
+    }
+  }
+
+  async getAwardIssuance(id: string): Promise<JsonRecord> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        'SELECT issuance FROM activity_award_issuance WHERE id=$1',
+        [id],
+      );
+      if (!result.rows[0])
+        throw new NotFoundException('award issuance not found');
+      return result.rows[0].issuance;
+    } finally {
+      client.release();
+    }
+  }
+
   async subjectFacts(
     programme: string,
     subjectId: string,
@@ -870,5 +1006,24 @@ function correctionRecord(row: any) {
     reviewNote: row.review_note,
     createdAt: date(row.created_at),
     reviewedAt: date(row.reviewed_at),
+  };
+}
+
+function awardRequestRecord(row: any): JsonRecord {
+  if (!row) throw new NotFoundException('award request not found');
+  return {
+    id: String(row.id),
+    awardId: String(row.award_id),
+    programmeSlug: row.programme_slug,
+    levelId: row.level_id,
+    subjectId: row.subject_id,
+    category: row.category,
+    callsign: row.callsign,
+    personName: row.person_name,
+    facts: row.facts,
+    status: row.status,
+    issuedAwardId: row.issued_award_id ? String(row.issued_award_id) : null,
+    requestedAt: date(row.requested_at),
+    issuedAt: date(row.issued_at),
   };
 }

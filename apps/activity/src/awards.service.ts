@@ -10,6 +10,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { verifyAccessToken } from '@app/platform/access-token.js';
@@ -20,6 +21,7 @@ import type { JsonRecord } from './activity-domain.js';
 @Injectable()
 export class AwardsService {
   private s3Client: S3Client | undefined;
+  private publicS3Client: S3Client | undefined;
 
   constructor(private readonly repository: ActivityRepository) {}
 
@@ -332,6 +334,214 @@ export class AwardsService {
     };
   }
 
+  async requestAward(authorization: string | undefined, body: JsonRecord) {
+    const claims = verifyAccessToken(authorization);
+    for (const field of [
+      'awardId',
+      'levelId',
+      'subjectId',
+      'callsign',
+      'personName',
+    ])
+      if (
+        body[field] === undefined ||
+        body[field] === null ||
+        body[field] === ''
+      )
+        throw new BadRequestException(`${field} is required`);
+    if (claims.sub === body.subjectId && !claims.scp.includes('awards.request'))
+      this.authorize(claims.scp, ['identity.me']);
+    else this.authorize(claims.scp, ['awards.request', 'awards.admin']);
+
+    const award = await this.getAwardDefinitionOrThrow(String(body.awardId));
+    if (award.status !== 'PUBLISHED')
+      throw new BadRequestException('only published awards can be requested');
+    const facts = await this.repository.subjectFacts(
+      String(award.programmeSlug),
+      String(body.subjectId),
+      String(award.category ?? 'HUNTER'),
+    );
+    const evaluation = evaluateAward(award, String(body.subjectId), facts);
+    const level = evaluation.levels.find(
+      (item: JsonRecord) => item.id === body.levelId,
+    );
+    if (!level?.eligible)
+      throw new BadRequestException(
+        'the requested award level is not currently eligible',
+      );
+    const now = new Date().toISOString();
+    return this.repository.createAwardRequest({
+      id: randomUUID(),
+      awardId: award.id,
+      programmeSlug: award.programmeSlug,
+      levelId: body.levelId,
+      subjectId: body.subjectId,
+      category: award.category,
+      callsign: body.callsign,
+      personName: body.personName,
+      facts,
+      status: 'REQUESTED',
+      requestedAt: now,
+    });
+  }
+
+  async listRequests(
+    authorization: string | undefined,
+    query: { subjectId?: string; page?: string; pageSize?: string },
+  ) {
+    this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
+    let items = await this.repository.listAwardRequests(query.subjectId);
+    const page = positiveInt(query.page, 1);
+    const pageSize = Math.min(100, positiveInt(query.pageSize, 50));
+    const start = (page - 1) * pageSize;
+    return {
+      items: items.slice(start, start + pageSize),
+      page,
+      pageSize,
+      total: items.length,
+      nextPage: start + pageSize < items.length ? page + 1 : null,
+    };
+  }
+
+  async issueRequest(
+    authorization: string | undefined,
+    key: string | undefined,
+    requestId: string,
+    body: JsonRecord,
+  ) {
+    this.authorizeHeader(authorization, ['awards.admin']);
+    for (const field of ['managerName', 'signatureAssetId'])
+      if (
+        body[field] === undefined ||
+        body[field] === null ||
+        body[field] === ''
+      )
+        throw new BadRequestException(`${field} is required`);
+    const request = await this.repository.getAwardRequest(requestId);
+    if (request.status !== 'REQUESTED')
+      throw new BadRequestException('only requested awards can be issued');
+    const award = await this.getAwardDefinitionOrThrow(String(request.awardId));
+    const signature = await this.repository.getAwardAsset(
+      String(body.signatureAssetId),
+    );
+    if (signature.kind !== 'SIGNATURE')
+      throw new BadRequestException('a registered signature asset is required');
+    const issuedAt = new Date().toISOString();
+    const dateObtained = body.dateObtained ?? issuedAt;
+    if (!Number.isFinite(new Date(String(dateObtained)).getTime()))
+      throw new BadRequestException('dateObtained must be a valid timestamp');
+    const issuance: JsonRecord = {
+      id: randomUUID(),
+      requestId: request.id,
+      awardId: award.id,
+      programmeSlug: award.programmeSlug,
+      levelId: request.levelId,
+      category: request.category,
+      subjectId: request.subjectId,
+      callsign: request.callsign,
+      personName: request.personName,
+      awardName: award.name,
+      dateObtained: new Date(String(dateObtained)).toISOString(),
+      managerName: body.managerName,
+      signatureAssetId: signature.id,
+      issuedAt,
+      artifact: {
+        storage: 'S3',
+        bucket: process.env.MYOTA_CERTIFICATE_BUCKET ?? 'myota-certificates',
+        objectKey: `${award.programmeSlug}/${request.subjectId}/${award.code}-${request.levelId}-${request.id}.pdf`,
+        mediaType: 'application/pdf',
+        downloadReady: false,
+        renderStatus: 'WAITING_FOR_ASSETS',
+      },
+      renderSpec: {
+        backgroundAsset: award.backgroundAsset,
+        printSpec: award.printSpec,
+        elements: (award.template as JsonRecord).elements,
+        signatureAsset: signature,
+      },
+    };
+    return this.repository.issueAwardRequest(requestId, issuance, key);
+  }
+
+  async listIssuances(
+    authorization: string | undefined,
+    query: { page?: string; pageSize?: string },
+  ) {
+    this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
+    const items = await this.repository.listAwardIssuances();
+    const page = positiveInt(query.page, 1);
+    const pageSize = Math.min(100, positiveInt(query.pageSize, 50));
+    const start = (page - 1) * pageSize;
+    return {
+      items: items.slice(start, start + pageSize),
+      page,
+      pageSize,
+      total: items.length,
+      nextPage: start + pageSize < items.length ? page + 1 : null,
+    };
+  }
+
+  async createRenderJob(
+    authorization: string | undefined,
+    key: string | undefined,
+    issuanceId: string,
+  ) {
+    this.authorizeHeader(authorization, ['awards.admin']);
+    const issuance = await this.repository.getAwardIssuance(issuanceId);
+    const job = await this.repository.enqueueJob(
+      'PDF_RENDER',
+      { issuanceId: issuance.id },
+      key,
+    );
+    return { renderJobId: job.id, issuanceId: issuance.id, ...job };
+  }
+
+  async getRenderJob(
+    authorization: string | undefined,
+    issuanceId: string,
+    jobId: string,
+  ) {
+    const issuance = await this.repository.getAwardIssuance(issuanceId);
+    const job = await this.getAwardJob(authorization, jobId);
+    if (job.kind !== 'PDF_RENDER' || job.payload?.issuanceId !== issuance.id)
+      throw new NotFoundException('certificate render job not found');
+    return job;
+  }
+
+  async getArtifact(authorization: string | undefined, issuanceId: string) {
+    const claims = verifyAccessToken(authorization);
+    this.authorize(claims.scp, [
+      'awards.read',
+      'awards.request',
+      'awards.admin',
+    ]);
+    const issuance = await this.repository.getAwardIssuance(issuanceId);
+    if (
+      claims.sub !== issuance.subjectId &&
+      !claims.scp.some((scope) =>
+        ['*', 'awards.read', 'awards.admin'].includes(scope),
+      )
+    )
+      throw new ForbiddenException('issuance belongs to another participant');
+    const artifact = issuance.artifact as JsonRecord;
+    if (!artifact.downloadReady)
+      throw new BadRequestException('certificate is not ready for download');
+    const downloadUrl = await getSignedUrl(
+      this.publicS3(),
+      new GetObjectCommand({
+        Bucket: String(artifact.bucket),
+        Key: String(artifact.objectKey),
+      }),
+      { expiresIn: 900 },
+    );
+    return {
+      issuanceId: issuance.id,
+      downloadUrl,
+      objectKey: artifact.objectKey,
+      expiresInSeconds: 900,
+    };
+  }
+
   async listAssets(
     authorization: string | undefined,
     query: { page?: string; pageSize?: string },
@@ -474,22 +684,36 @@ export class AwardsService {
 
   private s3() {
     if (!this.s3Client) {
-      this.s3Client = new S3Client({
-        endpoint:
-          process.env.MYOTA_OBJECT_STORAGE_ENDPOINT ?? 'http://seaweedfs:8333',
-        region: process.env.MYOTA_OBJECT_STORAGE_REGION ?? 'us-east-1',
-        forcePathStyle:
-          (process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE ?? 'path') ===
-          'path',
-        credentials: {
-          accessKeyId:
-            process.env.MYOTA_OBJECT_STORAGE_ACCESS_KEY ?? 'myota-s3',
-          secretAccessKey:
-            process.env.MYOTA_OBJECT_STORAGE_SECRET_KEY ?? 'myota-s3-dev-only',
-        },
-      });
+      this.s3Client = this.createS3Client(
+        process.env.MYOTA_OBJECT_STORAGE_ENDPOINT ?? 'http://seaweedfs:8333',
+      );
     }
     return this.s3Client;
+  }
+
+  private publicS3() {
+    if (!this.publicS3Client)
+      this.publicS3Client = this.createS3Client(
+        process.env.MYOTA_OBJECT_STORAGE_PUBLIC_ENDPOINT ??
+          process.env.MYOTA_OBJECT_STORAGE_ENDPOINT ??
+          'http://seaweedfs:8333',
+      );
+    return this.publicS3Client;
+  }
+
+  private createS3Client(endpoint: string) {
+    return new S3Client({
+      endpoint,
+      region: process.env.MYOTA_OBJECT_STORAGE_REGION ?? 'us-east-1',
+      forcePathStyle:
+        (process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE ?? 'path') ===
+        'path',
+      credentials: {
+        accessKeyId: process.env.MYOTA_OBJECT_STORAGE_ACCESS_KEY ?? 'myota-s3',
+        secretAccessKey:
+          process.env.MYOTA_OBJECT_STORAGE_SECRET_KEY ?? 'myota-s3-dev-only',
+      },
+    });
   }
 
   private async getAwardDefinitionOrThrow(id: string) {

@@ -4,7 +4,14 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import {
   normalizeQso,
@@ -34,7 +41,14 @@ export class ActivityWorkRepository {
         `SELECT id FROM activity_job WHERE kind=ANY($1::text[]) AND available_at<=now()
          AND (status='QUEUED' OR (status='RUNNING' AND lease_expires_at<now()))
          ORDER BY available_at,created_at FOR UPDATE SKIP LOCKED LIMIT 1`,
-        [['QSO_INGESTION', 'AWARD_EVALUATION', 'AWARD_RECALCULATE']],
+        [
+          [
+            'QSO_INGESTION',
+            'AWARD_EVALUATION',
+            'AWARD_RECALCULATE',
+            'PDF_RENDER',
+          ],
+        ],
       );
       if (!selected.rows[0]) {
         await client.query('COMMIT');
@@ -192,6 +206,8 @@ export class ActivityWorkRepository {
         await this.processAwardEvaluation(client, job.payload);
       } else if (job.kind === 'AWARD_RECALCULATE') {
         await this.processAwardRecalculation(client, job.payload);
+      } else if (job.kind === 'PDF_RENDER') {
+        await this.processPdfRender(client, job.payload);
       } else {
         throw new Error(`unsupported Activity job kind: ${job.kind}`);
       }
@@ -209,6 +225,56 @@ export class ActivityWorkRepository {
     } finally {
       client.release();
     }
+  }
+
+  private async processPdfRender(client: PoolClient, payload: JsonRecord) {
+    const selected = await client.query(
+      'SELECT issuance FROM activity_award_issuance WHERE id=$1 FOR UPDATE',
+      [payload.issuanceId],
+    );
+    const issuance = selected.rows[0]?.issuance as JsonRecord | undefined;
+    if (!issuance) throw new Error('award issuance not found');
+    const spec = issuance.renderSpec as JsonRecord;
+    const backgroundAsset = spec.backgroundAsset as JsonRecord;
+    const signatureAsset = spec.signatureAsset as JsonRecord;
+    const s3 = objectStoreClient();
+    const background = await readObject(
+      s3,
+      String(backgroundAsset.bucket),
+      String(backgroundAsset.objectKey),
+    );
+    const signature = await readObject(
+      s3,
+      String(signatureAsset.bucket),
+      String(signatureAsset.objectKey),
+    );
+    const pdfBytes = await renderCertificate(issuance, background, signature);
+    const artifact = issuance.artifact as JsonRecord;
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: String(artifact.bucket),
+        Key: String(artifact.objectKey),
+        Body: pdfBytes,
+        ContentType: 'application/pdf',
+      }),
+    );
+    Object.assign(artifact, {
+      downloadReady: true,
+      renderStatus: 'READY',
+      contentSha256: createHash('sha256').update(pdfBytes).digest('hex'),
+      byteSize: pdfBytes.length,
+      renderedAt: new Date().toISOString(),
+    });
+    const updated = await client.query(
+      'UPDATE activity_award_issuance SET issuance=$2::jsonb WHERE id=$1',
+      [issuance.id, JSON.stringify(issuance)],
+    );
+    if (!updated.rowCount) throw new Error('award issuance disappeared');
+    await client.query(
+      `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+       VALUES ($1,'awards.rendered.v1','awards-service','award_issuance',$2,$3::jsonb,now(),$4)`,
+      [randomUUID(), issuance.id, JSON.stringify(issuance), randomUUID()],
+    );
   }
 
   private async processAwardEvaluation(
@@ -480,4 +546,109 @@ function qsoRecord(row: any) {
     deduplicationKey: row.deduplication_key,
     createdAt: new Date(row.created_at).toISOString(),
   };
+}
+
+function objectStoreClient() {
+  return new S3Client({
+    endpoint:
+      process.env.MYOTA_OBJECT_STORAGE_ENDPOINT ?? 'http://seaweedfs:8333',
+    region: process.env.MYOTA_OBJECT_STORAGE_REGION ?? 'us-east-1',
+    forcePathStyle:
+      (process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE ?? 'path') === 'path',
+    credentials: {
+      accessKeyId: process.env.MYOTA_OBJECT_STORAGE_ACCESS_KEY ?? 'myota-s3',
+      secretAccessKey:
+        process.env.MYOTA_OBJECT_STORAGE_SECRET_KEY ?? 'myota-s3-dev-only',
+    },
+  });
+}
+
+async function readObject(client: S3Client, bucket: string, key: string) {
+  const response = await client.send(
+    new GetObjectCommand({ Bucket: bucket, Key: key }),
+  );
+  if (!response.Body) throw new Error(`award asset is missing: ${key}`);
+  return Buffer.from(await response.Body.transformToByteArray());
+}
+
+async function renderCertificate(
+  issuance: JsonRecord,
+  background: Buffer,
+  signature: Buffer,
+) {
+  const spec = issuance.renderSpec as JsonRecord;
+  const printSpec = spec.printSpec as JsonRecord;
+  const page = String(printSpec.page ?? 'A4').toUpperCase();
+  const orientation = String(printSpec.orientation ?? 'PORTRAIT').toUpperCase();
+  let [widthMm, heightMm] = page === 'LETTER' ? [215.9, 279.4] : [210, 297];
+  if (orientation === 'LANDSCAPE') [widthMm, heightMm] = [heightMm, widthMm];
+  const width = (widthMm / 25.4) * 72;
+  const height = (heightMm / 25.4) * 72;
+  const document = await PDFDocument.create();
+  const sheet = document.addPage([width, height]);
+  const backgroundImage = await embedImage(document, background);
+  sheet.drawImage(backgroundImage, { x: 0, y: 0, width, height });
+  const signatureImage = await embedImage(document, signature);
+  const font = await document.embedFont(StandardFonts.Helvetica);
+  const values: Record<string, string> = {
+    AWARD_NAME: String(issuance.awardName ?? ''),
+    CALLSIGN: String(issuance.callsign ?? ''),
+    PERSON_NAME: String(issuance.personName ?? ''),
+    DATE_OBTAINED: String(issuance.dateObtained ?? ''),
+    MANAGER_NAME: String(issuance.managerName ?? ''),
+  };
+  const elements = Array.isArray(spec.elements) ? spec.elements : [];
+  for (const item of elements as JsonRecord[]) {
+    const x = Number(item.x) * width;
+    const boxWidth = Number(item.width) * width;
+    const boxHeight = Number(item.height) * height;
+    const top = Number(item.y) * height;
+    const y = height - top - boxHeight;
+    if (item.kind === 'MANAGER_SIGNATURE') {
+      const scale = Math.min(
+        boxWidth / signatureImage.width,
+        boxHeight / signatureImage.height,
+      );
+      const imageWidth = signatureImage.width * scale;
+      const imageHeight = signatureImage.height * scale;
+      sheet.drawImage(signatureImage, {
+        x: x + (boxWidth - imageWidth) / 2,
+        y: y + (boxHeight - imageHeight) / 2,
+        width: imageWidth,
+        height: imageHeight,
+      });
+      continue;
+    }
+    const text = (values[String(item.kind)] ?? String(item.label ?? '')).slice(
+      0,
+      200,
+    );
+    if (!text) continue;
+    let fontSize = Math.max(8, boxHeight * 0.55);
+    const textWidth = font.widthOfTextAtSize(text, fontSize);
+    if (textWidth > boxWidth)
+      fontSize = Math.max(7, (fontSize * boxWidth) / textWidth);
+    const drawnWidth = font.widthOfTextAtSize(text, fontSize);
+    sheet.drawText(text, {
+      x: x + Math.max(0, (boxWidth - drawnWidth) / 2),
+      y: y + Math.max(0, (boxHeight - fontSize) / 2),
+      size: fontSize,
+      font,
+      color: rgb(0, 0, 0),
+      maxWidth: boxWidth,
+    });
+  }
+  return Buffer.from(await document.save());
+}
+
+async function embedImage(document: PDFDocument, content: Buffer) {
+  if (
+    content
+      .subarray(0, 8)
+      .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  )
+    return document.embedPng(content);
+  if (content[0] === 0xff && content[1] === 0xd8)
+    return document.embedJpg(content);
+  throw new Error('certificate asset must be PNG or JPEG');
 }
