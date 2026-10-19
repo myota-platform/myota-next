@@ -53,6 +53,113 @@ export class ActivityRepository {
     }
   }
 
+  async getQso(id: string): Promise<JsonRecord> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM activity_qso WHERE id=$1',
+        [id],
+      );
+      if (!result.rows[0]) throw new NotFoundException('QSO not found');
+      return qsoRecord(result.rows[0]);
+    } finally {
+      client.release();
+    }
+  }
+
+  async createCorrection(
+    qsoId: string,
+    body: JsonRecord,
+    key?: string,
+  ): Promise<JsonRecord> {
+    return this.mutate(key, async (client) => {
+      const qso = await client.query(
+        'SELECT id FROM activity_qso WHERE id=$1',
+        [qsoId],
+      );
+      if (!qso.rows[0]) throw new NotFoundException('QSO not found');
+      const result = await client.query(
+        `INSERT INTO activity_qso_correction(id,qso_id,requested_by,reason,proposed_values)
+         VALUES ($1,$2,$3,$4,$5::jsonb) RETURNING *`,
+        [
+          randomUUID(),
+          qsoId,
+          body.requestedBy,
+          body.reason,
+          JSON.stringify(body.proposedValues),
+        ],
+      );
+      return correctionRecord(result.rows[0]);
+    });
+  }
+
+  async reviewCorrection(
+    qsoId: string,
+    correctionId: string,
+    body: JsonRecord,
+    key?: string,
+  ): Promise<JsonRecord> {
+    return this.mutate(key, async (client) => {
+      const correctionResult = await client.query(
+        'SELECT * FROM activity_qso_correction WHERE id=$1 FOR UPDATE',
+        [correctionId],
+      );
+      const correction = correctionResult.rows[0];
+      if (!correction || String(correction.qso_id) !== qsoId)
+        throw new NotFoundException('QSO correction not found');
+      if (correction.status !== 'PENDING')
+        throw new BadRequestException('correction is no longer pending');
+      const qsoResult = await client.query(
+        'SELECT * FROM activity_qso WHERE id=$1 FOR UPDATE',
+        [qsoId],
+      );
+      const qso = qsoResult.rows[0];
+      if (!qso) throw new NotFoundException('QSO not found');
+      if (body.decision === 'APPLIED') {
+        const columns: Record<string, string> = {
+          workedCallsign: 'worked_callsign',
+          workedStationKey: 'worked_station_key',
+          workedEntityId: 'worked_entity_id',
+          occurredAt: 'occurred_at',
+          band: 'band',
+          mode: 'mode',
+          rst: 'rst',
+          hunterId: 'hunter_id',
+          hunterCallsign: 'hunter_callsign',
+        };
+        const values = correction.proposed_values as JsonRecord;
+        const assignments = ["status='CORRECTED'", 'corrected_at=now()'];
+        const parameters: unknown[] = [];
+        for (const [field, column] of Object.entries(columns)) {
+          if (values[field] === undefined) continue;
+          assignments.push(`${column}=$${parameters.length + 1}`);
+          parameters.push(
+            field === 'occurredAt' ? new Date(values[field]) : values[field],
+          );
+        }
+        parameters.push(qsoId);
+        await client.query(
+          `UPDATE activity_qso SET ${assignments.join(',')} WHERE id=$${parameters.length}`,
+          parameters,
+        );
+        await this.job(
+          client,
+          'AWARD_RECALCULATE',
+          {
+            programmeSlug: qso.programme_slug,
+            subjectIds: [qso.operator_id, qso.hunter_id].filter(Boolean),
+          },
+          `correction:${correctionId}`,
+        );
+      }
+      const result = await client.query(
+        `UPDATE activity_qso_correction SET status=$1,reviewed_by=$2,review_note=$3,reviewed_at=now() WHERE id=$4 RETURNING *`,
+        [body.decision, body.reviewedBy, body.reviewNote ?? null, correctionId],
+      );
+      return correctionRecord(result.rows[0]);
+    });
+  }
+
   async create(data: JsonRecord, key?: string): Promise<JsonRecord> {
     return this.mutate(key, async (client) => {
       const id = randomUUID();
@@ -513,5 +620,20 @@ function jobRecord(row: any) {
     completedAt: date(row.completed_at),
     lastError: row.last_error,
     createdAt: date(row.created_at),
+  };
+}
+
+function correctionRecord(row: any) {
+  return {
+    id: String(row.id),
+    qsoId: String(row.qso_id),
+    requestedBy: row.requested_by,
+    reason: row.reason,
+    proposedValues: row.proposed_values,
+    status: row.status,
+    reviewedBy: row.reviewed_by,
+    reviewNote: row.review_note,
+    createdAt: date(row.created_at),
+    reviewedAt: date(row.reviewed_at),
   };
 }

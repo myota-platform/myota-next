@@ -5,6 +5,7 @@ import { ActivityRepository } from './activity.repository.js';
 import { ActivityService } from './activity.service.js';
 import { QsoIngestionController } from './qso-ingestion.controller.js';
 import { PublicActivityController } from './public-activity.controller.js';
+import { QsoCorrectionController } from './qso-correction.controller.js';
 
 @Module({
   imports: [DatabaseHealthModule.forEnvironment('ACTIVITY_DATABASE_URL')],
@@ -13,6 +14,7 @@ import { PublicActivityController } from './public-activity.controller.js';
     ActivityController,
     QsoIngestionController,
     PublicActivityController,
+    QsoCorrectionController,
   ],
   providers: [ActivityRepository, ActivityService],
 })

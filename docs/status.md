@@ -48,14 +48,16 @@
   processes these ingestion jobs transactionally with database leases, bounded
   retries, and dead-letter records. Public activation history masks operator
   callsigns, leaderboards use subject aggregates, and result exports support
-  JSON and CSV.
+  JSON and CSV. QSO correction requests and administrator review now use
+  transactional Activity persistence; applying a correction queues award
+  recalculation.
 
 ## Not implemented yet
 
 - Remaining Identity APIs include OIDC mapping updates and account deactivation
   as its dedicated operation. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
-- Remaining Activity APIs include file-based QSO import, corrections, awards,
+- Remaining Activity APIs include file-based QSO import, awards,
   and operational workflows. Geodata and Gateway handlers,
   authorization rules, persistence repositories, and event/outbox behavior
   remain unimplemented.

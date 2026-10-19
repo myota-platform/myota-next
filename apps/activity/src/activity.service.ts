@@ -230,6 +230,49 @@ export class ActivityService {
     };
   }
 
+  async requestCorrection(
+    authorization: string | undefined,
+    key: string | undefined,
+    qsoId: string,
+    body: JsonRecord,
+  ) {
+    const claims = verifyAccessToken(authorization);
+    if (
+      !body.requestedBy ||
+      !body.reason ||
+      !body.proposedValues ||
+      typeof body.proposedValues !== 'object' ||
+      Array.isArray(body.proposedValues)
+    )
+      throw new BadRequestException(
+        'requestedBy, reason, and proposedValues are required',
+      );
+    if (
+      claims.sub !== body.requestedBy &&
+      !claims.scp.some((scope) => ['*', 'activity.admin'].includes(scope))
+    )
+      throw new ForbiddenException(
+        'the correction requester or activity.admin scope is required',
+      );
+    await this.repository.getQso(qsoId);
+    return this.repository.createCorrection(qsoId, body, key);
+  }
+
+  async reviewCorrection(
+    authorization: string | undefined,
+    key: string | undefined,
+    qsoId: string,
+    correctionId: string,
+    body: JsonRecord,
+  ) {
+    this.authorize(authorization, ['activity.admin']);
+    if (!['APPLIED', 'REJECTED'].includes(body.decision) || !body.reviewedBy)
+      throw new BadRequestException(
+        'decision must be APPLIED or REJECTED and reviewedBy is required',
+      );
+    return this.repository.reviewCorrection(qsoId, correctionId, body, key);
+  }
+
   private authorize(authorization: string | undefined, scopes: string[]) {
     const claims = verifyAccessToken(authorization);
     if (!claims.scp.some((scope) => scope === '*' || scopes.includes(scope)))
