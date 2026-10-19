@@ -54,14 +54,14 @@ JSON GeoJSON import creation stores source documents in S3-compatible storage
 and queues idempotent import runs transactionally. The worker validates feature
 names and WGS84 geometries, stages candidates with provenance and 50 m duplicate
 warnings, records errors, and emits the preprocessing fact. Multipart/resumable
-and external object-reference imports, location metadata edits,
+and external object-reference imports, automatic enrichment triggers,
 remaining review workflows, failed-queue redrive, NATS delivery, and remaining worker operations are
 outstanding. Pending candidates can be paged; administrators can confirm or
 reject selected rows transactionally. Selected candidates can also be queued
 for CANDIDATE or scope-gated APPROVED promotion; the worker persists entities,
 category and source links, audit/outbox events, and queue outcomes. Lifecycle
 review and If-Match protected name, website, description, geometry, and
-category edits are also implemented; location editing and other review
+category and location edits are also implemented; other review
 workflows remain outstanding.
 
 ## User applications

@@ -72,8 +72,11 @@
   and description edits are transactional and audited. If-Match protected
   geometry, category, and manual location edits are also audited. Location
   names are checked against the provider catalogue, provider codes cannot be
-  manually set, and location edits require `geodata.location.manage`. Failed
-  queue redrive and asynchronous location enrichment remain outstanding.
+  manually set, and location edits require `geodata.location.manage`. An
+  authorized, idempotent request can queue BigDataCloud reverse geocoding; the
+  Geodata worker applies results only to the matching geometry and protects
+  manual fields. Automatic enrichment triggers on promotion and geometry edits,
+  failed-queue redrive, and NATS delivery remain outstanding.
   The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
   paged import-run status reads are also exposed. Authenticated entity audit
@@ -101,7 +104,7 @@
   first Identity slice are still outstanding.
 - Remaining Activity APIs include file-based QSO import and operational
   workflows. Geodata multipart/resumable and external object-reference imports,
-  location metadata mutations, failed-queue redrive, and remaining
+  automatic location enrichment triggers, failed-queue redrive, and remaining
   worker operations are outstanding, along with Gateway routing and protected
   observability proxy behavior.
 - Activity NATS delivery, lease heartbeats during large batches, redrive, and

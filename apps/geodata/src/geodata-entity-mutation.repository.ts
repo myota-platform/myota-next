@@ -6,7 +6,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { entityProjection } from './geodata.repository.js';
@@ -468,6 +468,153 @@ export class GeodataEntityMutationRepository {
         );
       await client.query('COMMIT');
       return response;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async requestLocationEnrichment(
+    id: string,
+    key: string | undefined,
+    ifMatch: string | undefined,
+    body: Record<string, unknown>,
+  ) {
+    const editorId =
+      typeof body.editorId === 'string' ? body.editorId.trim() : '';
+    if (!editorId) throw new BadRequestException('editorId is required');
+    const expectedVersion = parseIfMatch(ifMatch);
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      if (key) {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-location-enrichment:' || $1,0))",
+          [key],
+        );
+        const previous = await client.query(
+          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          ['geodata-location-enrichment', key],
+        );
+        if (previous.rows[0]) {
+          await client.query('COMMIT');
+          return previous.rows[0].response;
+        }
+      }
+      const selected = await client.query(
+        `SELECT id,revision,geom,ST_AsGeoJSON(geom)::jsonb AS geometry,
+          continent,continent_code,country,country_code,region,region_code,subdivision,subdivision_code,
+          city,municipality,manual_location_fields,public_properties
+         FROM geodata_entity WHERE id=$1 FOR UPDATE`,
+        [id],
+      );
+      const row = selected.rows[0];
+      if (!row) throw new NotFoundException('geodata entity not found');
+      if (expectedVersion !== null && Number(row.revision) !== expectedVersion)
+        throw new ConflictException('entity version is stale');
+      if (!row.geometry)
+        throw new ConflictException(
+          'location enrichment requires entity geometry',
+        );
+      const properties = isRecord(row.public_properties)
+        ? row.public_properties
+        : {};
+      const manual = Array.isArray(row.manual_location_fields)
+        ? row.manual_location_fields.filter(
+            (field: unknown): field is string => typeof field === 'string',
+          )
+        : [];
+      const location = {
+        continent: row.continent,
+        continentCode: row.continent_code,
+        country: row.country,
+        countryCode: row.country_code,
+        region: row.region,
+        regionCode: row.region_code,
+        subdivision: row.subdivision,
+        subdivisionCode: row.subdivision_code,
+        city: row.city,
+        municipality: row.municipality,
+      };
+      const missing = missingLocationFields(location, manual);
+      if (!missing.length)
+        throw new ConflictException('location metadata is already complete');
+      const geometryHash = createHash('sha256')
+        .update(JSON.stringify(row.geometry))
+        .digest('hex');
+      if (
+        properties.locationEnrichmentStatus === 'QUEUED' &&
+        properties.locationEnrichmentGeometryHash === geometryHash
+      ) {
+        const receipt = {
+          entityId: id,
+          requestId: properties.locationEnrichmentRequestId,
+          status: 'QUEUED',
+          missingFields: missing,
+          queued: true,
+        };
+        if (key)
+          await this.saveIdempotentResponse(
+            client,
+            'geodata-location-enrichment',
+            key,
+            receipt,
+          );
+        await client.query('COMMIT');
+        return receipt;
+      }
+      const requestId = randomUUID();
+      const requestedAt = new Date();
+      const nextProperties = {
+        ...properties,
+        locationEnrichmentRequestId: requestId,
+        locationEnrichmentGeometryHash: geometryHash,
+        locationEnrichmentStatus: 'QUEUED',
+        locationEnrichmentOnlyMissing: true,
+        locationEnrichmentReason: 'ADMIN_REQUESTED_MISSING_METADATA',
+        locationEnrichmentRequestedAt: requestedAt.toISOString(),
+        locationEnrichmentRequestedBy: editorId,
+      };
+      delete nextProperties.locationEnrichmentError;
+      await client.query(
+        `UPDATE geodata_entity SET public_properties=$2::jsonb,
+          location_work_dispatched_at=now(),updated_at=$3 WHERE id=$1`,
+        [id, JSON.stringify(nextProperties), requestedAt],
+      );
+      const event = {
+        entityId: id,
+        requestId,
+        geometryHash,
+        onlyMissing: true,
+        reason: 'ADMIN_REQUESTED_MISSING_METADATA',
+        requestedBy: editorId,
+        natsSubject: 'myota.geodata.entity.location-enrichment.v1',
+      };
+      await this.writeEntityEvent(
+        client,
+        id,
+        'geodata.entity.location-enrichment-requested.v1',
+        event,
+        requestedAt,
+      );
+      const receipt = {
+        entityId: id,
+        requestId,
+        status: 'QUEUED',
+        missingFields: missing,
+        queued: true,
+      };
+      if (key)
+        await this.saveIdempotentResponse(
+          client,
+          'geodata-location-enrichment',
+          key,
+          receipt,
+        );
+      await client.query('COMMIT');
+      return receipt;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
@@ -948,6 +1095,29 @@ function sameText(left: unknown, right: unknown) {
   return (
     textValue(left).toLocaleLowerCase() === textValue(right).toLocaleLowerCase()
   );
+}
+
+function missingLocationFields(
+  location: Record<string, unknown>,
+  manual: string[],
+) {
+  const groups = [
+    ['continent'],
+    ['continentCode'],
+    ['country'],
+    ['countryCode'],
+    ['region', 'subdivision'],
+    ['regionCode', 'subdivisionCode'],
+    ['city', 'municipality'],
+  ];
+  return groups
+    .filter(
+      (group) =>
+        !group.some(
+          (field) => location[field] !== null && location[field] !== '',
+        ) && !group.some((field) => manual.includes(field)),
+    )
+    .map((group) => group[0]);
 }
 
 function parseIfMatch(value: string | undefined) {

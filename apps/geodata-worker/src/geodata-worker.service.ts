@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
 import { GeodataPromotionRepository } from './geodata-promotion.repository.js';
+import { GeodataEnrichmentRepository } from './geodata-enrichment.repository.js';
 
 @Injectable()
 export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
@@ -16,6 +17,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly repository: GeodataWorkRepository,
     private readonly promotion: GeodataPromotionRepository,
+    private readonly enrichment: GeodataEnrichmentRepository,
   ) {}
 
   onModuleInit() {
@@ -37,8 +39,12 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
       try {
         this.promotionFirst = !this.promotionFirst;
         const worked = this.promotionFirst
-          ? (await this.processPromotion()) || (await this.processImport())
-          : (await this.processImport()) || (await this.processPromotion());
+          ? (await this.processPromotion()) ||
+            (await this.processImport()) ||
+            (await this.processEnrichment())
+          : (await this.processImport()) ||
+            (await this.processEnrichment()) ||
+            (await this.processPromotion());
         if (!worked) await delay(pollMs);
       } catch (error) {
         this.logger.error(
@@ -78,6 +84,21 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
         error instanceof Error ? error.stack : undefined,
       );
       await this.promotion.retryPromotion(queue, error);
+    }
+    return true;
+  }
+
+  private async processEnrichment() {
+    const job = await this.enrichment.claim();
+    if (!job) return false;
+    try {
+      await this.enrichment.process(job);
+      this.logger.log(`Enriched geodata entity ${job.id}`);
+    } catch (error) {
+      this.logger.error(
+        `Geodata location enrichment ${job.id} failed`,
+        error instanceof Error ? error.stack : undefined,
+      );
     }
     return true;
   }

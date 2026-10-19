@@ -228,6 +228,30 @@ export class GeodataController {
     return this.entityMutations.patchEntityMetadata(id, key, ifMatch, body);
   }
 
+  @Post('entities/:entityId/location-enrichment-requests')
+  @HttpCode(202)
+  requestLocationEnrichment(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Param('entityId') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const claims = verifyAccessToken(authorization);
+    if (
+      !claims.scp.some(
+        (scope) => scope === '*' || scope === 'geodata.location.manage',
+      )
+    )
+      throw new ForbiddenException('geodata.location.manage scope is required');
+    return this.entityMutations.requestLocationEnrichment(
+      id,
+      key,
+      ifMatch,
+      body,
+    );
+  }
+
   @Post('entities/:entityId/reviews')
   reviewEntity(
     @Headers('authorization') authorization: string | undefined,
