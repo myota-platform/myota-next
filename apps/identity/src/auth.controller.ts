@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Param,
+  ParseUUIDPipe,
   Get,
   ForbiddenException,
   Headers,
@@ -150,6 +151,26 @@ export class AuthController {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
     return this.accounts.create(authorization, body, idempotencyKey);
+  }
+
+  @Get('accounts/:accountId')
+  getAccount(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.getAccount(authorization, accountId);
+  }
+
+  @Get('accounts/:accountId/roles')
+  listAccountRoles(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.listAccountRoles(authorization, accountId);
   }
 
   private requestContext(request: Request) {

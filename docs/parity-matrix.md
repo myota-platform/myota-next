@@ -18,7 +18,7 @@ baseline. Current implementation reference:
 Identity currently implements disabled public registration, password login,
 refresh rotation, logout revocation, recovery request/reset, current-account
 reads, owner-only profile updates, account creation, and administrator account
-listing in NestJS. The role catalogue endpoint returns built-in and persisted
+listing, owner/global account reads and account role reads in NestJS. The role catalogue endpoint returns built-in and persisted
 custom roles under the existing authorized scopes; custom role creation and
 partial updates are backed by Core transactions and security/outbox events.
 These are the first implemented slices; they still need automated

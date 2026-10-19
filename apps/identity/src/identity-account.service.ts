@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -13,6 +14,7 @@ import { IdentityAuthService } from './auth.service.js';
 import { IdentityRoleService } from './identity-role.service.js';
 import type { CreateAccountDto, RoleGrantDto } from './auth.dto.js';
 import type { RoleDefinition } from './role-catalog.js';
+import { DEFAULT_ROLE_SCOPES } from './role-catalog.js';
 
 interface RoleGrant {
   code: string;
@@ -20,6 +22,22 @@ interface RoleGrant {
   jurisdiction: string | null;
   entityType: string | null;
   scopes: string[];
+}
+
+interface AccountRecord {
+  id: string;
+  display_name: string;
+  email: string | null;
+  participation_type: string;
+  status: string;
+  website_url: string | null;
+  biography_markdown: string | null;
+  profile_image_id: string | null;
+  profile_image_media_type: string | null;
+  profile_image_updated_at: Date | null;
+  primary_callsign_id: string | null;
+  created_at: Date;
+  updated_at: Date;
 }
 
 @Injectable()
@@ -224,6 +242,126 @@ export class IdentityAccountService {
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  async getAccount(
+    authorization: string,
+    accountId: string,
+  ): Promise<Record<string, unknown>> {
+    await this.authorizeAccountTarget(authorization, accountId);
+    const client = await this.connect();
+    try {
+      const result = await client.query<AccountRecord>(
+        `SELECT a.id, a.display_name, a.email::text AS email,
+                a.participation_type, a.status, a.created_at, a.updated_at,
+                p.website_url, p.biography_markdown, p.profile_image_id,
+                p.profile_image_media_type, p.profile_image_updated_at,
+                primary_call.callsign_id AS primary_callsign_id
+           FROM public.account a
+           LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
+           LEFT JOIN public.account_primary_callsign primary_call
+             ON primary_call.account_id = a.id
+          WHERE a.id = $1`,
+        [accountId],
+      );
+      const account = result.rows[0];
+      if (!account) throw new NotFoundException('account not found');
+      const callsigns = await client.query(
+        `SELECT c.id, c.value, c.lifecycle_status AS status,
+                c.verification_source AS source,
+                c.verification_source AS "verificationSource",
+                c.verified_at AS "verifiedAt", c.valid_from AS "validFrom",
+                c.valid_to AS "validTo",
+                coalesce(array_agg(e.id) FILTER (WHERE e.id IS NOT NULL), '{}')
+                  AS "evidenceIds"
+           FROM public.callsign c
+           LEFT JOIN public.callsign_evidence e ON e.callsign_id = c.id
+          WHERE c.account_id = $1
+          GROUP BY c.id
+          ORDER BY c.valid_from NULLS FIRST, c.value`,
+        [accountId],
+      );
+      return {
+        id: account.id,
+        displayName: account.display_name,
+        email: account.email,
+        participationType: account.participation_type,
+        status: account.status,
+        websiteUrl: account.website_url,
+        biographyMarkdown: account.biography_markdown,
+        profileImage: account.profile_image_id
+          ? {
+              id: account.profile_image_id,
+              contentType: account.profile_image_media_type,
+              width: 512,
+              height: 512,
+              updatedAt: account.profile_image_updated_at,
+            }
+          : null,
+        callsigns: callsigns.rows,
+        primaryCallsignId: account.primary_callsign_id,
+        createdAt: account.created_at,
+        updatedAt: account.updated_at,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async listAccountRoles(
+    authorization: string,
+    accountId: string,
+  ): Promise<Record<string, unknown>[]> {
+    await this.authorizeAccountTarget(authorization, accountId);
+    const client = await this.connect();
+    try {
+      const result = await client.query<{
+        accountId: string;
+        id: string;
+        role: string;
+        programmeId: string | null;
+        programmeSlug: string | null;
+        jurisdictionId: string | null;
+        jurisdiction: string | null;
+        entityType: string | null;
+        scopes: string[];
+        createdAt: Date;
+        validTo: Date | null;
+      }>(
+        `SELECT ar.account_id AS "accountId", ar.id, ar.role_code AS role,
+                ar.programme_id AS "programmeId",
+                coalesce(ar.programme_slug, p.slug) AS "programmeSlug",
+                ar.jurisdiction_id AS "jurisdictionId",
+                coalesce(ar.jurisdiction_code, j.code) AS jurisdiction,
+                ar.entity_type_code AS "entityType",
+                coalesce(rd.scopes, ARRAY(SELECT jsonb_array_elements_text(ar.scopes))) AS scopes,
+                ar.created_at AS "createdAt", ar.valid_to AS "validTo"
+           FROM public.account_role ar
+           LEFT JOIN public.identity_role_definition rd ON rd.role_code = ar.role_code
+           LEFT JOIN public.programme p ON p.id = ar.programme_id
+           LEFT JOIN public.jurisdiction j ON j.id = ar.jurisdiction_id
+          WHERE ar.account_id = $1 AND (ar.valid_to IS NULL OR ar.valid_to > now())
+          ORDER BY ar.created_at, ar.id`,
+        [accountId],
+      );
+      return result.rows.map((role) => ({
+        ...role,
+        scopes: DEFAULT_ROLE_SCOPES[role.role] ?? role.scopes,
+      }));
+    } finally {
+      client.release();
+    }
+  }
+
+  private async authorizeAccountTarget(
+    authorization: string,
+    accountId: string,
+  ) {
+    const caller = await this.auth.currentAccount(authorization);
+    const scopes = new Set(caller.scopes as string[]);
+    if (caller.id !== accountId && !scopes.has('*')) {
+      throw new ForbiddenException('account scope is missing');
     }
   }
 
