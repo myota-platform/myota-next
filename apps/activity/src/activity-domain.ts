@@ -121,6 +121,30 @@ export function normalizeQso(
   data: JsonRecord,
   activationId: string,
 ): JsonRecord {
+  const normalized = normalizeQsoFields(data);
+  const { workedCallsign, timestamp, band, mode, workedStationKey } =
+    normalized;
+  const canonical = [
+    activationId,
+    workedCallsign,
+    timestamp.replace(/Z$/, '+00:00'),
+    band ?? '',
+    mode ?? '',
+    data.hunterId ?? '',
+    data.workedEntityId ?? '',
+  ].join('|');
+  const deduplicationKey = createHash('sha256').update(canonical).digest('hex');
+  return {
+    ...normalized,
+    id: randomUUID(),
+    activationId,
+    source: data.source ?? 'manual',
+    workedStationKey,
+    deduplicationKey,
+  };
+}
+
+function normalizeQsoFields(data: JsonRecord): JsonRecord {
   const workedCallsign = normalizeCallsign(data.workedCallsign);
   const timestamp = normalizeTimestamp(data.timestamp || data.timeOn);
   const band = normalizeBand(data.band);
@@ -173,27 +197,13 @@ export function normalizeQso(
   const workedStationKey = `${workedCallsign}|${String(data.workedLocator || '')
     .toUpperCase()
     .trim()}`;
-  const canonical = [
-    activationId,
-    workedCallsign,
-    timestamp.replace(/Z$/, '+00:00'),
-    band ?? '',
-    mode ?? '',
-    data.hunterId ?? '',
-    data.workedEntityId ?? '',
-  ].join('|');
-  const deduplicationKey = createHash('sha256').update(canonical).digest('hex');
   return {
     ...data,
-    id: randomUUID(),
-    activationId,
     workedCallsign,
     timestamp,
     band,
     mode,
-    source: data.source ?? 'manual',
     workedStationKey,
-    deduplicationKey,
   };
 }
 
@@ -259,7 +269,9 @@ export function parseAdif(text: string): JsonRecord[] {
         timestamp = `${date}T${time}Z`;
       }
     }
-    return record.workedCallsign && timestamp ? [{ ...record, timestamp }] : [];
+    return record.workedCallsign && timestamp
+      ? [normalizeQsoFields({ ...record, timestamp })]
+      : [];
   });
 }
 

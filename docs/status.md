@@ -67,8 +67,10 @@
   processed into versioned programme/category/entity/jurisdiction snapshots,
   and inspected; recipient notifications can be read with owner/admin checks.
   ADIF uploads are ownership-checked, size-limited, scanned, stored in S3, and
-  queued transactionally; the Activity worker parses the source, persists QSOs,
-  updates aggregates, records per-record errors, and updates the import status.
+  queued transactionally; the Activity worker decodes and normalizes the ADIF
+  file before row processing, so parser failures fail the import. Later
+  per-record failures are reported alongside persisted QSOs and aggregate
+  updates.
   Completion notices include the full final import result, matching the Python
   worker's notification payload. Successful imports also recalculate award
   progress for the operator and hunters in successfully persisted or duplicate
