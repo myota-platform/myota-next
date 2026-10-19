@@ -152,6 +152,192 @@ export class GeodataWorkRepository {
     }
   }
 
+  async recoverExpiredWorkDispatches(
+    ageSeconds = Math.max(
+      300,
+      Number(process.env.GEODATA_WORK_RECOVERY_AGE_SECONDS ?? 300),
+    ),
+    batchSize = 50,
+  ): Promise<
+    Record<'preprocessing' | 'promotion' | 'deletion' | 'location', number>
+  > {
+    const client = await this.connect();
+    const recovered = {
+      preprocessing: 0,
+      promotion: 0,
+      deletion: 0,
+      location: 0,
+    };
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      const runs = await client.query(
+        `SELECT id::text,status FROM import_run WHERE status IN ('QUEUED','PROCESSING')
+           AND work_dispatched_at<=now()-make_interval(secs=>$1)
+           AND (status='QUEUED' OR lease_until IS NULL OR lease_until<=now())
+         ORDER BY work_dispatched_at,id FOR UPDATE SKIP LOCKED LIMIT $2`,
+        [ageSeconds, batchSize],
+      );
+      for (const row of runs.rows) {
+        if (row.status === 'PROCESSING') {
+          await client.query(
+            `UPDATE import_run SET status='QUEUED',heartbeat_at=NULL,lease_until=NULL,
+               last_error='Expired lease re-dispatched through JetStream',work_dispatched_at=now()
+             WHERE id=$1`,
+            [row.id],
+          );
+        } else {
+          await client.query(
+            'UPDATE import_run SET work_dispatched_at=now() WHERE id=$1',
+            [row.id],
+          );
+        }
+        await this.insertRecoveryEvent(
+          client,
+          'geodata.import.recovered.v1',
+          'import_run',
+          row.id,
+          {
+            importRunId: row.id,
+            natsSubject: 'myota.geodata.import.preprocess.v1',
+          },
+        );
+        recovered.preprocessing++;
+      }
+
+      const queues = await client.query(
+        `SELECT id::text,status FROM geodata_import_processing_queue
+         WHERE status IN ('QUEUED','PROCESSING')
+           AND work_dispatched_at<=now()-make_interval(secs=>$1)
+           AND (status='QUEUED' OR lease_until IS NULL OR lease_until<=now())
+         ORDER BY work_dispatched_at,id FOR UPDATE SKIP LOCKED LIMIT $2`,
+        [ageSeconds, batchSize],
+      );
+      for (const row of queues.rows) {
+        if (row.status === 'PROCESSING') {
+          await client.query(
+            `UPDATE geodata_import_processing_queue SET status='QUEUED',heartbeat_at=NULL,
+               lease_until=NULL,error='Expired lease re-dispatched through JetStream',work_dispatched_at=now()
+             WHERE id=$1`,
+            [row.id],
+          );
+        } else {
+          await client.query(
+            'UPDATE geodata_import_processing_queue SET work_dispatched_at=now() WHERE id=$1',
+            [row.id],
+          );
+        }
+        await this.insertRecoveryEvent(
+          client,
+          'geodata.import.processing.recovered.v1',
+          'import_processing_queue',
+          row.id,
+          { queueId: row.id, natsSubject: 'myota.geodata.import.process.v1' },
+        );
+        recovered.promotion++;
+      }
+
+      const deletionJobs = await client.query(
+        `SELECT id::text,payload FROM geodata_control_record WHERE kind='entityDeletionJobs'
+           AND ((payload->>'status'='QUEUED' AND updated_at<=now()-make_interval(secs=>$1))
+             OR (payload->>'status'='PROCESSING'
+               AND (NULLIF(payload->>'leaseUntil','') IS NULL
+                 OR (payload->>'leaseUntil')::timestamptz<=now())
+               AND updated_at<=now()-make_interval(secs=>$1)))
+         ORDER BY updated_at,id FOR UPDATE SKIP LOCKED LIMIT $2`,
+        [ageSeconds, batchSize],
+      );
+      for (const row of deletionJobs.rows) {
+        const payload = isRecord(row.payload) ? row.payload : {};
+        if (payload.status === 'PROCESSING') {
+          await client.query(
+            `UPDATE geodata_control_record SET payload=payload ||
+               jsonb_build_object('status','QUEUED','leaseUntil',NULL),updated_at=now()
+             WHERE kind='entityDeletionJobs' AND id=$1`,
+            [row.id],
+          );
+        } else {
+          await client.query(
+            `UPDATE geodata_control_record SET updated_at=now()
+             WHERE kind='entityDeletionJobs' AND id=$1`,
+            [row.id],
+          );
+        }
+        await this.insertRecoveryEvent(
+          client,
+          'geodata.entity-deletion-job.queued.v1',
+          'entity_deletion_job',
+          row.id,
+          { jobId: row.id, natsSubject: 'myota.geodata.entity.delete.v1' },
+        );
+        recovered.deletion++;
+      }
+
+      const locations = await client.query(
+        `SELECT id::text,public_properties->>'locationEnrichmentRequestId' AS request_id,
+           public_properties->>'locationEnrichmentGeometryHash' AS geometry_hash,
+           coalesce((public_properties->>'locationEnrichmentOnlyMissing')::boolean,false) AS only_missing,
+           public_properties->>'locationEnrichmentReason' AS reason
+         FROM geodata_entity WHERE public_properties->>'locationEnrichmentStatus'='QUEUED'
+           AND public_properties ? 'locationEnrichmentReason'
+           AND location_work_dispatched_at<=now()-make_interval(secs=>$1)
+         ORDER BY location_work_dispatched_at,id FOR UPDATE SKIP LOCKED LIMIT $2`,
+        [ageSeconds, batchSize],
+      );
+      for (const row of locations.rows) {
+        if (!row.request_id || !row.geometry_hash || !row.reason) continue;
+        await client.query(
+          'UPDATE geodata_entity SET location_work_dispatched_at=now() WHERE id=$1',
+          [row.id],
+        );
+        await this.insertRecoveryEvent(
+          client,
+          'geodata.entity.location-enrichment-requested.v1',
+          'entity',
+          row.id,
+          {
+            entityId: row.id,
+            requestId: row.request_id,
+            geometryHash: row.geometry_hash,
+            onlyMissing: row.only_missing,
+            reason: row.reason,
+            natsSubject: 'myota.geodata.entity.location-enrichment.v1',
+          },
+        );
+        recovered.location++;
+      }
+      await client.query('COMMIT');
+      return recovered;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async insertRecoveryEvent(
+    client: PoolClient,
+    eventType: string,
+    aggregateType: string,
+    aggregateId: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    await client.query(
+      `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at)
+       VALUES ($1,$2,'geodata-worker',$3,$4,$5::jsonb,now())`,
+      [
+        randomUUID(),
+        eventType,
+        aggregateType,
+        aggregateId,
+        JSON.stringify(payload),
+      ],
+    );
+  }
+
   async recordWorkDeadLetter(
     eventId: string,
     workType: string,

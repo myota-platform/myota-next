@@ -19,6 +19,10 @@ const MAX_DELIVERIES = Math.max(
   Number(process.env.GEODATA_WORKER_MAX_DELIVERIES ?? 100),
 );
 const MAX_WORK_WAIT_SECONDS = 30;
+const WORK_RECONCILE_SECONDS = Math.max(
+  5,
+  Number(process.env.GEODATA_WORK_RECONCILE_SECONDS ?? 60),
+);
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -106,6 +110,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
       this.loops = [
         ...definitions.map((definition) => this.consume(definition)),
         this.reconcileCancellations(),
+        this.reconcileExpiredWork(),
       ];
     } catch (error) {
       await this.connection.drain();
@@ -416,6 +421,21 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
         );
       }
       await pause(30_000);
+    }
+  }
+
+  private async reconcileExpiredWork(): Promise<void> {
+    while (!this.stopping) {
+      try {
+        const recovered = await this.repository.recoverExpiredWorkDispatches();
+        if (Object.values(recovered).some((count) => count > 0))
+          this.logger.warn(
+            `Re-enqueued stale Geodata work: ${JSON.stringify(recovered)}`,
+          );
+      } catch (error) {
+        this.logger.error(`Geodata work recovery failed: ${safeError(error)}`);
+      }
+      await pause(WORK_RECONCILE_SECONDS * 1000);
     }
   }
 }
