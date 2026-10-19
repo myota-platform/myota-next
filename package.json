@@ -50,15 +50,15 @@
     "@streamparser/json": "^0.0.26",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
-    "fflate": "^0.8.3",
     "nodemailer": "^10.1.7",
     "pdf-lib": "^1.17.1",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "sax": "^1.6.1",
+    "shapefile": "^0.6.6",
     "sharp": "^0.35.5",
-    "shpjs": "^6.2.0"
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "@nestjs/cli": "12.0.8",
@@ -71,7 +71,9 @@
     "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.15.5",
     "@types/sax": "^1.2.7",
+    "@types/shapefile": "^0.6.4",
     "@types/supertest": "^7.0.0",
+    "@types/yauzl": "^3.4.0",
     "@vitest/coverage-v8": "^4.1.2",
     "oxlint": "^1.58.0",
     "oxlint-tsgolint": "^7.0.2001",

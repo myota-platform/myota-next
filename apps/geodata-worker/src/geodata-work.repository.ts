@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import { decodeShapefileArchive } from './geodata-shapefile.js';
+import { streamShapefileFeatures } from './geodata-shapefile-stream.js';
 import { streamGeoJsonFeatures } from './geodata-geojson-stream.js';
 import { decodeOsmPbfStream } from './geodata-osm-pbf.js';
 import { inferFeatureName } from './geodata-feature-name.js';
@@ -450,6 +450,14 @@ export class GeodataWorkRepository {
         featureLimit,
         () => this.heartbeat(run),
       );
+    } else if (format === 'SHAPEFILE' || format === 'SHP') {
+      features = streamShapefileFeatures(
+        object.Body as AsyncIterable<Uint8Array>,
+        filename,
+        run.source_hash,
+        featureLimit,
+        () => this.heartbeat(run),
+      );
     } else {
       const raw = Buffer.from(await object.Body.transformToByteArray());
       if (raw.length > 20 * 1024 * 1024)
@@ -461,10 +469,7 @@ export class GeodataWorkRepository {
         throw new Error(
           'geodata import source hash does not match its queued record',
         );
-      const document: unknown =
-        format === 'SHAPEFILE' || format === 'SHP'
-          ? await decodeShapefileArchive(raw, filename)
-          : JSON.parse(raw.toString('utf8'));
+      const document: unknown = JSON.parse(raw.toString('utf8'));
       if (
         !isRecord(document) ||
         document.type !== 'FeatureCollection' ||

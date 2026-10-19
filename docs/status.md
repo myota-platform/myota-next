@@ -121,8 +121,11 @@
   malware scanning, abort, and transactional import-run/outbox creation. This
   path streams GeoJSON sources and decoded features; its upload default is 256
   MiB and can be raised to 512 MiB with `MYOTA_GEOJSON_MAX_UPLOAD_BYTES`.
-  Shapefile ZIP uploads remain limited to 20 MiB. They require matching .shp,
-  .shx, and .dbf sidecars, and are capped at 100 members and 64 MiB expanded.
+  Shapefile ZIP uploads stream to temporary disk, then decode one shape/DBF
+  record at a time. Their default upload cap is 256 MiB and can be raised to
+  512 MiB with `MYOTA_SHAPEFILE_MAX_UPLOAD_BYTES`; archives are capped at 100
+  members and 1 GiB expanded. Matching .shp, .shx, and .dbf sidecars are
+  required.
   Pasted-import creation also decodes bounded KML and GPX to GeoJSON. OSM PBF
   uploads now decode in the Geodata worker with osmium-tool. The converter
   preserves OSM tags and stable type/id source references, filters the current
@@ -132,17 +135,20 @@
   is 256 MiB and can be raised to 512 MiB with
   `MYOTA_OSM_PBF_MAX_UPLOAD_BYTES`. Decoded output is capped at 128 MiB, with
   16 MiB and 250,000 vertices per feature, plus the configured feature cap.
-  GeoJSON upload parsing enforces 16 MiB and 250,000 vertices per feature and
-  retains the bounded prepared-candidate and outbox summaries for final commit.
+  GeoJSON and Shapefile upload parsing enforce 16 MiB and 250,000 vertices per
+  feature and retain the bounded prepared-candidate and outbox summaries for
+  final commit.
   The separate JSON import-creation path still caps input at 20 MiB and
-  materializes the normalized collection. Shapefile decoding still materializes
-  its archive and FeatureCollection, with a 20 MiB source and 64 MiB expansion
-  cap. The reference streams GeoJSON features and Shapefile records and defaults
-  to a 1 GiB expanded Shapefile cap; these remaining paths are open.
+  materializes the normalized collection. Shapefile source bytes and decoded
+  records now stream via bounded temporary files, matching the reference's 1
+  GiB expanded-size default. Candidate summaries still accumulate until the
+  final transaction. The streaming parser's less common geometry types and
+  projection metadata still need parity qualification before broad Shapefile
+  parity can be claimed.
   The adapter catalogue and admin selector now expose only import formats the
   current boundary can decode. The admin file picker accepts GeoJSON and OSM
-  PBF files up to their configured caps (256 MiB by default, 512 MiB maximum),
-  plus Shapefile ZIP files up to 20 MiB.
+  PBF and Shapefile ZIP files up to their configured caps (256 MiB by default,
+  512 MiB maximum).
   Durable object references from the configured import bucket are also
   bounded, hash-checked, validated as GeoJSON, and staged in the worker's
   normalized source format.

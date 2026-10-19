@@ -95,10 +95,13 @@ feature at a time, with a 256 MiB default upload cap (512 MiB maximum), 16 MiB
 per-feature size, 250,000 vertices, and the configured feature count. Prepared
 candidate and outbox summaries remain in memory until the final import
 transaction. The separate JSON import-creation path still caps source documents
-at 20 MiB and materializes the normalized collection. Shapefile upload remains
-limited to a 20 MiB archive, a 64 MiB expansion, and full in-memory decoding.
-The reference streams Shapefile records and defaults to a 1 GiB expanded-size
-cap; this remains an import-parity gap.
+at 20 MiB and materializes the normalized collection. Shapefile multipart
+uploads stream to temporary disk and decode records one at a time, with a 256
+MiB default upload cap (512 MiB maximum), 1 GiB expanded-size cap, 16 MiB
+per-feature size, 250,000 vertices, and the configured feature count. Prepared
+candidate and outbox summaries remain in memory until the final transaction.
+Less common geometry types and projection metadata still need compatibility
+qualification against the reference parser.
 Import adapters infer feature names from
 the reference alias catalogue before validation. The worker validates WGS84
 geometries, stages candidates with provenance and 50 m duplicate
@@ -106,9 +109,8 @@ warnings, records errors, and emits the preprocessing fact. Community proposals
 join this pipeline and automatically queue promotion to CANDIDATE. Multipart/resumable
 uploads are implemented with owner-scoped durable sessions, bounded binary
 parts, checksum and malware scanning, and transactional completion up to the
-worker's 20 MiB source limit for GeoJSON and Shapefile or the larger PBF limit.
-GeoJSON multipart uploads use their larger configurable limit. Shapefile
-expansion is bounded. Durable object references from the configured
+worker's configured source limits. GeoJSON, Shapefile, and PBF multipart
+uploads use their larger configurable limits. Durable object references from the configured
 import bucket are bounded, hash-checked, validated, and staged as normalized
 worker inputs. Refresh schedules can be listed and created, and manual complete-
 snapshot runs queue GeoJSON imports, promote validated candidates, record
