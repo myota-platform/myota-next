@@ -32,10 +32,12 @@ import {
   ProfileUpdateDto,
   ReplaceAccountRolesDto,
   SecurityEventsQueryDto,
+  OidcProviderMappingDto,
 } from './auth.dto.js';
 import { IdentityAuthService } from './auth.service.js';
 import { IdentityRoleService } from './identity-role.service.js';
 import { IdentityAccountService } from './identity-account.service.js';
+import { IdentityIntegrationService } from './identity-integration.service.js';
 
 @Controller('identity')
 export class AuthController {
@@ -43,6 +45,7 @@ export class AuthController {
     private readonly auth: IdentityAuthService,
     private readonly roles: IdentityRoleService,
     private readonly accounts: IdentityAccountService,
+    private readonly integrations: IdentityIntegrationService,
   ) {}
 
   @Post('auth/register')
@@ -72,6 +75,22 @@ export class AuthController {
   @HttpCode(200)
   resetRecovery(@Body() body: RecoveryResetDto) {
     return this.auth.resetRecovery(body.token, body.newPassword);
+  }
+
+  @Post('oidc/providers')
+  @HttpCode(201)
+  saveOidcMapping(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() body: OidcProviderMappingDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.integrations.saveOidcMapping(
+      authorization,
+      body,
+      idempotencyKey,
+    );
   }
 
   @Post('auth/logout')

@@ -79,6 +79,29 @@ export class SecurityEventsQueryDto {
   pageSize?: string;
 }
 
+export class OidcProviderMappingDto {
+  @IsString()
+  @MinLength(1)
+  programmeSlug!: string;
+
+  @IsString()
+  @MinLength(1)
+  issuer!: string;
+
+  @IsString()
+  @MinLength(1)
+  clientId!: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  scopes?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+}
+
 export class AdminRoleDefinitionDto {
   @IsOptional()
   @IsString()

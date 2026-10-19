@@ -90,7 +90,7 @@ OpenAPI 3.1.0; 135 operations across 113 paths.
 | PUT    | /v1/identity/accounts/{accountId}/role-assignments                | replaceAccountRoleAssignments              | Replace an account's active administrative role assignments                        |
 | PUT    | /v1/identity/accounts/{accountId}/primary-callsign                | setPrimaryCallsign                         | Replace an account's primary callsign                                              |
 | POST   | /v1/identity/accounts/{accountId}/callsigns/{callsignId}/retire   |                                            | Retire a callsign association                                                      |
-| POST   | /v1/identity/oidc/providers                                       |                                            | Register or update programme-scoped OIDC provider mapping                          |
+| POST   | /v1/identity/oidc/providers                                       | saveOidcMapping                            | Register a programme-scoped OIDC provider mapping                                  |
 | GET    | /v1/programmes/{slug}                                             |                                            | Get a programme configuration                                                      |
 | PATCH  | /v1/programmes/{slug}                                             | patchProgramme                             | Partially update a programme configuration or archive it                           |
 | PUT    | /v1/programmes/{slug}/entity-types/{categoryCode}                 | assignProgrammeEntityCategory              | Idempotently assign an entity category to a programme                              |
