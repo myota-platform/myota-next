@@ -344,7 +344,7 @@ export class GeodataController {
         },
         {
           code: 'OSM',
-          formats: ['GEOJSON', 'KML', 'GPX'],
+          formats: ['GEOJSON', 'KML', 'GPX', 'OSM_PBF'],
           requiredTags: [
             'leisure=park',
             'leisure=nature_reserve',

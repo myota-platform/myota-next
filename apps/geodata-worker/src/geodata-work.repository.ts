@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { decodeShapefileArchive } from './geodata-shapefile.js';
+import { decodeOsmPbf } from './geodata-osm-pbf.js';
 import { inferFeatureName } from './geodata-feature-name.js';
 
 interface ImportRun {
@@ -438,19 +439,23 @@ export class GeodataWorkRepository {
       typeof run.source_metadata.filename === 'string'
         ? run.source_metadata.filename
         : '';
+    const featureLimit = boundedFeatureLimit(
+      process.env.GEODATA_MAX_IMPORT_FEATURES,
+    );
     const document: unknown =
       format === 'SHAPEFILE' || format === 'SHP'
         ? await decodeShapefileArchive(raw, filename)
-        : JSON.parse(raw.toString('utf8'));
+        : format === 'OSM_PBF'
+          ? await decodeOsmPbf(raw, filename, featureLimit, () =>
+              this.heartbeat(run),
+            )
+          : JSON.parse(raw.toString('utf8'));
     if (
       !isRecord(document) ||
       document.type !== 'FeatureCollection' ||
       !Array.isArray(document.features)
     )
       throw new Error('stored source is not a supported FeatureCollection');
-    const featureLimit = boundedFeatureLimit(
-      process.env.GEODATA_MAX_IMPORT_FEATURES,
-    );
     if (document.features.length > featureLimit)
       throw new Error(
         `geodata import contains more than ${featureLimit} features`,

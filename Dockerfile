@@ -19,6 +19,11 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
+RUN if [ "$APP_NAME" = "geodata-worker" ]; then \
+      apt-get update \
+      && apt-get install -y --no-install-recommends osmium-tool \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
 COPY --from=build /workspace/dist/apps/${APP_NAME}/ ./dist/apps/${APP_NAME}/
 COPY --from=build /workspace/contracts ./contracts
 

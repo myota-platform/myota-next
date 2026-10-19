@@ -86,6 +86,7 @@ const uploadProgress = ref<UploadProgress | null>(null);
 const formats = [
   'GEOJSON',
   'OSM_GEOJSON',
+  'OSM_PBF',
   'KML',
   'GPX',
   'WFS',
@@ -167,7 +168,10 @@ function readApi<T>(path: string): Promise<T> {
 }
 function metadata(): UploadMetadata {
   return {
-    adapter: format.value === 'OSM_GEOJSON' ? 'OSM' : adapter.value,
+    adapter:
+      format.value === 'OSM_GEOJSON' || format.value === 'OSM_PBF'
+        ? 'OSM'
+        : adapter.value,
     format: format.value === 'OSM_GEOJSON' ? 'GEOJSON' : format.value,
     entityTypes: [entityType.value],
     source: {
@@ -531,11 +535,15 @@ async function queueImport(): Promise<void> {
     error.value = 'Choose a ZIP containing the Shapefile and its sidecars.';
     return;
   }
+  if (format.value === 'OSM_PBF' && !file.value) {
+    error.value = 'Choose an OSM PBF file to upload.';
+    return;
+  }
   if (
     file.value &&
-    !['GEOJSON', 'OSM_GEOJSON', 'SHAPEFILE'].includes(format.value)
+    !['GEOJSON', 'OSM_GEOJSON', 'OSM_PBF', 'SHAPEFILE'].includes(format.value)
   ) {
-    error.value = `${format.value} file uploads are not available yet. Paste its supported source data or choose GeoJSON or Shapefile ZIP.`;
+    error.value = `${format.value} file uploads are not available yet. Paste its supported source data or choose GeoJSON, OSM PBF, or Shapefile ZIP.`;
     return;
   }
   busy.value = true;
@@ -899,12 +907,16 @@ onBeforeUnmount(() => {
             </option>
           </select>
           <small class="field-help"
-            >OSM GeoJSON uses the OpenStreetMap adapter automatically.</small
+            >OSM GeoJSON and OSM PBF use the OpenStreetMap adapter
+            automatically.</small
           >
         </label>
         <label
           >Adapter
-          <select v-model="adapter" :disabled="format === 'OSM_GEOJSON'">
+          <select
+            v-model="adapter"
+            :disabled="format === 'OSM_GEOJSON' || format === 'OSM_PBF'"
+          >
             <option value="MANUAL">Manual upload</option>
             <option value="OSM">OpenStreetMap</option>
             <option value="PARKSERVE_US">ParkServe US</option>
@@ -965,14 +977,16 @@ onBeforeUnmount(() => {
           <input
             ref="fileInput"
             type="file"
-            accept=".json,.geojson,.zip"
+            accept=".json,.geojson,.zip,.pbf"
             @change="chooseFile"
           />
           <small class="field-help"
-            >GeoJSON or Shapefile ZIP files up to 20 MiB. Shapefile ZIP archives
-            may expand to 64 MiB and must include matching .shp, .shx, and .dbf
-            files. To resume an interrupted upload, choose the original file and
-            the same import settings.</small
+            >GeoJSON, OSM PBF, or Shapefile ZIP files up to 20 MiB. OSM PBF
+            decoding is limited to 128 MiB of output, 16 MiB and 250,000
+            vertices per feature, and the configured feature cap. Shapefile ZIP
+            archives may expand to 64 MiB and must include matching .shp, .shx,
+            and .dbf files. To resume an interrupted upload, choose the original
+            file and the same import settings.</small
           >
           <small v-if="file" class="field-help"
             >Selected: {{ file.name }} ({{

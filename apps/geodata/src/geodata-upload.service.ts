@@ -621,11 +621,13 @@ function validateCreate(body: Record<string, unknown>) {
     typeof body.format === 'string'
       ? body.format.trim().toUpperCase()
       : 'GEOJSON';
-  if (!['GEOJSON', 'SHAPEFILE', 'SHP'].includes(format))
+  if (!['GEOJSON', 'SHAPEFILE', 'SHP', 'OSM_PBF'].includes(format))
     throw new BadRequestException(
-      'this import path accepts GEOJSON or SHAPEFILE ZIP archives',
+      'this import path accepts GeoJSON, Shapefile ZIP archives, or OSM PBF files',
     );
   const normalizedFormat = format === 'SHP' ? 'SHAPEFILE' : format;
+  if (normalizedFormat === 'OSM_PBF' && adapter !== 'OSM')
+    throw new BadRequestException('OSM PBF imports require the OSM adapter');
   if (
     normalizedFormat === 'SHAPEFILE' &&
     !filename.toLowerCase().endsWith('.zip')
@@ -633,10 +635,31 @@ function validateCreate(body: Record<string, unknown>) {
     throw new BadRequestException(
       'Shapefile uploads must be ZIP archives containing .shp, .shx, and .dbf files',
     );
+  if (
+    normalizedFormat === 'OSM_PBF' &&
+    !filename.toLowerCase().endsWith('.pbf')
+  )
+    throw new BadRequestException('OSM PBF uploads must use a .pbf filename');
   if (filename.length > 255)
     throw new BadRequestException('filename must be at most 255 characters');
+  const source =
+    body.source &&
+    typeof body.source === 'object' &&
+    !Array.isArray(body.source)
+      ? { ...(body.source as Record<string, unknown>) }
+      : body.source;
+  if (
+    normalizedFormat === 'OSM_PBF' &&
+    source &&
+    typeof source === 'object' &&
+    !Array.isArray(source) &&
+    typeof (source as Record<string, unknown>).attribution !== 'string'
+  )
+    (source as Record<string, unknown>).attribution =
+      '© OpenStreetMap contributors';
   const metadata = {
     ...body,
+    source,
     adapter,
     format: normalizedFormat,
     filename,

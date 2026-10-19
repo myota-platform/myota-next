@@ -123,10 +123,15 @@
   archives require matching .shp, .shx, and .dbf sidecars, are capped at 100
   members and 64 MiB expanded, and are limited by the configured feature cap.
   Pasted-import creation also decodes bounded KML and GPX to GeoJSON. OSM PBF
-  and larger streaming imports remain outstanding.
+  uploads now decode in the Geodata worker with osmium-tool. The converter
+  preserves OSM tags and stable type/id source references, filters the current
+  hiking-path and protected-area tag catalogue, and assembles closed-way and
+  multipolygon areas. Decoded output is capped at 128 MiB, with 16 MiB and
+  250,000 vertices per feature, plus the configured feature cap. Larger
+  streaming imports remain outstanding.
   The adapter catalogue and admin selector now expose only import formats the
-  current boundary can decode. The admin file picker accepts GeoJSON and
-  Shapefile ZIP files within the API's 20 MiB cap.
+  current boundary can decode. The admin file picker accepts GeoJSON, OSM PBF,
+  and Shapefile ZIP files within the API's 20 MiB cap.
   Durable object references from the configured import bucket are also
   bounded, hash-checked, validated as GeoJSON, and staged in the worker's
   normalized source format.
