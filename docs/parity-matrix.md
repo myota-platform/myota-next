@@ -98,8 +98,8 @@ per-feature size, 250,000 vertices, and the configured feature count. Prepared
 candidates and validation errors are staged by import attempt in Geodata
 PostgreSQL; candidate creation, import status, processing queue, and the
 compatible outbox event are finalized atomically, with event arrays assembled
-in the database. The separate JSON import-creation path still caps source documents
-at 20 MiB and materializes the normalized collection. Shapefile multipart
+in the database. The direct JSON import path materializes the normalized
+collection, while multipart GeoJSON streams source features. Shapefile multipart
 uploads stream to temporary disk and decode records one at a time, with a 256
 MiB default upload cap (512 MiB maximum), 1 GiB expanded-size cap, 16 MiB
 per-feature size, 250,000 vertices, and the configured feature count. Less

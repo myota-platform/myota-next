@@ -14,6 +14,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { integerSetting } from '@app/platform/integer-setting.js';
 import { parseXmlImport } from './geodata-xml-import.js';
 
 const adapters = new Set(['PARKSERVE_US', 'OSM', 'GOVERNMENT_GIS', 'MANUAL']);
@@ -180,6 +181,10 @@ export class GeodataImportService {
   private async resolveObjectReference(body: Record<string, unknown>) {
     if (!isRecord(body.source) || typeof body.source.objectKey !== 'string')
       return body;
+    const maximumBytes = integerSetting(
+      process.env.MYOTA_UPLOAD_MAX_BYTES,
+      1024 * 1024 * 1024,
+    );
     const bucket =
       process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports';
     const requestedBucket =
@@ -208,9 +213,9 @@ export class GeodataImportService {
         throw new BadRequestException(
           'source object is empty or has an invalid size',
         );
-      if (head.ContentLength! > 20 * 1024 * 1024)
+      if (head.ContentLength! > maximumBytes)
         throw new BadRequestException(
-          'source object exceeds the 20 MiB import limit',
+          'source object exceeds the configured upload limit',
         );
       const result = await this.s3().send(
         new GetObjectCommand({ Bucket: bucket, Key: objectKey }),
@@ -222,9 +227,9 @@ export class GeodataImportService {
       for await (const chunk of result.Body as AsyncIterable<Uint8Array>) {
         const bytes = Buffer.from(chunk);
         size += bytes.length;
-        if (size > 20 * 1024 * 1024)
+        if (size > maximumBytes)
           throw new BadRequestException(
-            'source object exceeds the 20 MiB import limit',
+            'source object exceeds the configured upload limit',
           );
         chunks.push(bytes);
       }

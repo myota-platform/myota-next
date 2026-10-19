@@ -108,8 +108,9 @@
   FeatureServer JSON imports; ArcGIS features are normalized to WGS84 GeoJSON
   before storage, and the source format is retained in import metadata. Import
   creation stores the normalized source document in S3-compatible object
-  storage and creates an idempotent queued import run (20 MiB request limit
-  and 5,000 feature default, adjustable with
+  storage and creates an idempotent queued import run (configurable
+  `MYOTA_MAX_BODY_BYTES` request limit, 1 GiB default, and 5,000 feature
+  default, adjustable with
   `GEODATA_MAX_IMPORT_FEATURES`) with a transactional outbox event. The
   Geodata worker consumes registered preprocessing work and claims the named run,
   normalizes adapter-specific feature fields, source identifiers, and supported
@@ -178,9 +179,10 @@
   alongside final candidate creation, queue creation, status, and outbox events
   in one transaction. The final event is assembled in PostgreSQL to avoid
   retaining every feature summary in the worker heap.
-  The separate JSON import-creation path still caps input at 20 MiB and
-  materializes the normalized collection, below the Python service's
-  configurable request-body limit. Shapefile source bytes and decoded
+  Direct JSON imports and durable source-object references honor the configured
+  body and upload limits. The direct JSON import path still materializes the
+  normalized collection; multipart GeoJSON remains the streaming path. Shapefile
+  source bytes and decoded
   records now stream via bounded temporary files, matching the reference's 1
   GiB expanded-size default and reproject coordinates using `.prj` metadata.
   The streaming parser's less common geometry types and uncommon CRS
