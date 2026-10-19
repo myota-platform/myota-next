@@ -157,7 +157,9 @@
   preprocessing, promotion, deletion, and enrichment now consume registered
   JetStream durables and claim the referenced owner-database job. A periodic
   reconciler republishes stale queued work and expired leases transactionally
-  through the outbox; retention and outage/recovery evidence remain outstanding.
+  through the outbox. Scheduled retention removes finalized or inactive import
+  history and owned source objects, expires stale multipart uploads, and keeps
+  materialized entities; outage/recovery evidence remains outstanding.
 - The NestJS outbox relay now publishes contract-routed facts and work from one
   configured owner database per process, with stable JetStream message IDs,
   bounded retries, dead-letter persistence, and read-only validation of the
@@ -167,8 +169,8 @@
   job redrive is audited and available to
   administrators; the Activity worker now extends active job leases while
   long batches run. Geodata import, promotion, and deletion work extends owner
-  leases during long jobs, and stale dispatch recovery is implemented; recovery
-  evidence and retention remain outstanding.
+  leases during long jobs, and stale dispatch recovery and Geodata retention are
+  implemented; outage/recovery evidence remains outstanding.
 - Admin and Participant web applications.
 - Database migration runner, data transfer tooling, deployment images, and
   production observability configuration.

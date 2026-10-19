@@ -12,6 +12,7 @@ import { GeodataWorkRepository } from './geodata-work.repository.js';
 import { GeodataPromotionRepository } from './geodata-promotion.repository.js';
 import { GeodataEnrichmentRepository } from './geodata-enrichment.repository.js';
 import { GeodataDeletionRepository } from './geodata-deletion.repository.js';
+import { GeodataRetentionRepository } from './geodata-retention.repository.js';
 
 const STREAM = 'MYOTA_GEODATA_WORK';
 const MAX_DELIVERIES = Math.max(
@@ -22,6 +23,10 @@ const MAX_WORK_WAIT_SECONDS = 30;
 const WORK_RECONCILE_SECONDS = Math.max(
   5,
   Number(process.env.GEODATA_WORK_RECONCILE_SECONDS ?? 60),
+);
+const RETENTION_INTERVAL_SECONDS = Math.max(
+  60,
+  Number(process.env.GEODATA_IMPORT_RETENTION_INTERVAL_SECONDS ?? 86400),
 );
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -53,15 +58,32 @@ type WorkDefinition = {
 export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GeodataWorkerService.name);
   private stopping = false;
+  private readonly stopSignal: Promise<void>;
+  private resolveStop!: () => void;
   private connection?: Awaited<ReturnType<typeof connect>>;
   private loops: Promise<void>[] = [];
+  private readonly repository: GeodataWorkRepository;
+  private readonly promotion: GeodataPromotionRepository;
+  private readonly enrichment: GeodataEnrichmentRepository;
+  private readonly deletions: GeodataDeletionRepository;
+  private readonly retention: GeodataRetentionRepository;
 
   constructor(
-    private readonly repository: GeodataWorkRepository,
-    private readonly promotion: GeodataPromotionRepository,
-    private readonly enrichment: GeodataEnrichmentRepository,
-    private readonly deletions: GeodataDeletionRepository,
-  ) {}
+    repository: GeodataWorkRepository,
+    promotion: GeodataPromotionRepository,
+    enrichment: GeodataEnrichmentRepository,
+    deletions: GeodataDeletionRepository,
+    retention: GeodataRetentionRepository,
+  ) {
+    this.repository = repository;
+    this.promotion = promotion;
+    this.enrichment = enrichment;
+    this.deletions = deletions;
+    this.retention = retention;
+    this.stopSignal = new Promise((resolve) => {
+      this.resolveStop = resolve;
+    });
+  }
 
   async onModuleInit(): Promise<void> {
     if (!process.env.GEO_DATABASE_URL)
@@ -111,6 +133,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
         ...definitions.map((definition) => this.consume(definition)),
         this.reconcileCancellations(),
         this.reconcileExpiredWork(),
+        this.runRetention(),
       ];
     } catch (error) {
       await this.connection.drain();
@@ -120,6 +143,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     this.stopping = true;
+    this.resolveStop();
     await Promise.allSettled(this.loops);
     await this.connection?.drain();
   }
@@ -285,7 +309,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
         MAX_WORK_WAIT_SECONDS,
       );
       message.working();
-      await pause(waitSeconds * 1000);
+      await this.wait(waitSeconds * 1000);
     }
     message.nak(1000);
     return null;
@@ -420,7 +444,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
           `Geodata cancellation reconciliation failed: ${safeError(error)}`,
         );
       }
-      await pause(30_000);
+      await this.wait(30_000);
     }
   }
 
@@ -435,8 +459,29 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
       } catch (error) {
         this.logger.error(`Geodata work recovery failed: ${safeError(error)}`);
       }
-      await pause(WORK_RECONCILE_SECONDS * 1000);
+      await this.wait(WORK_RECONCILE_SECONDS * 1000);
     }
+  }
+
+  private async runRetention(): Promise<void> {
+    while (!this.stopping) {
+      try {
+        const result = await this.retention.purgeSweep();
+        if (result.eligible || result.uploadsExpired)
+          this.logger.log(
+            `Geodata retention sweep completed: ${JSON.stringify(result)}`,
+          );
+      } catch (error) {
+        this.logger.error(
+          `Geodata retention sweep failed: ${safeError(error)}`,
+        );
+      }
+      await this.wait(RETENTION_INTERVAL_SECONDS * 1000);
+    }
+  }
+
+  private async wait(milliseconds: number): Promise<void> {
+    await Promise.race([pause(milliseconds), this.stopSignal]);
   }
 }
 

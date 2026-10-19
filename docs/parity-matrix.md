@@ -62,8 +62,10 @@ and location enrichment now consume their registered JetStream durables and
 claim only the referenced Geodata job. Long-running import, promotion, and
 deletion work extends owner-database leases and JetStream acknowledgements. A
 bounded reconciler republishes stale queued work and expired leases through the
-transactional outbox. Retention and outage/recovery evidence remain outstanding.
-Activity lease extension is supported for long-running jobs.
+transactional outbox. Scheduled retention removes eligible import history and
+owned source objects, expires stale multipart uploads, and preserves materialized
+entities. Outage/recovery evidence remains outstanding. Activity lease extension
+is supported for long-running jobs.
 Tagged load-test cleanup now requires explicit environment opt-in, global
 operator authorization, exact confirmation, terminal work, safe object scope,
 and a no-Activity-impact check before deletion.
@@ -120,7 +122,8 @@ workflows remain outstanding.
 - Geodata workers: registered JetStream consumers for import preprocessing and
   promotion, confirmed entity deletion, and location enrichment are implemented.
   Stale queued and expired work is re-enqueued through the owner outbox.
-  Retention and outage/recovery evidence remain open.
+  Scheduled import and upload-session retention is implemented; outage/recovery
+  evidence remains open.
 - Gateway: routes public API requests to their owning services, protects
   Identity internal endpoints, streams request and response bodies, enforces
   configured proxy timeouts, and resolves Grafana identity and permissions from
