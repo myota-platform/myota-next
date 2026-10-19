@@ -31,10 +31,7 @@ export function validateAwardDraft(body: JsonRecord, existing?: JsonRecord) {
   if (!Array.isArray(body.levels) || body.levels.length === 0)
     throw new BadRequestException('levels must contain positive thresholds');
   for (const level of body.levels) {
-    if (
-      !Number.isFinite(Number(level?.threshold)) ||
-      Number(level.threshold) <= 0
-    )
+    if (numericValue(level?.threshold, 'level.threshold') <= 0)
       throw new BadRequestException('levels must contain positive thresholds');
   }
   const backgroundAsset = body.backgroundAsset as JsonRecord;
@@ -55,6 +52,9 @@ export function validateAwardDraft(body: JsonRecord, existing?: JsonRecord) {
   };
   const printReadiness = calculatePrintReadiness(backgroundAsset, printSpec);
   const now = new Date().toISOString();
+  const versionValue = Object.hasOwn(body, 'version')
+    ? body.version
+    : (existing?.version ?? 1);
   const record: JsonRecord = {
     ...existing,
     id: body.awardId ?? existing?.id ?? randomUUID(),
@@ -63,10 +63,7 @@ export function validateAwardDraft(body: JsonRecord, existing?: JsonRecord) {
     name: body.name,
     description: body.description ?? '',
     category,
-    version: Number.parseInt(
-      String(body.version ?? existing?.version ?? 1),
-      10,
-    ),
+    version: integerValue(versionValue, 'version'),
     achievementMetric: body.achievementMetric ?? 'QSO_COUNT',
     condition: body.condition,
     levels: body.levels,
@@ -250,6 +247,15 @@ function numericValue(value: unknown, field: string) {
   if (!Number.isFinite(numeric))
     throw new BadRequestException(`${field} must be numeric`);
   return numeric;
+}
+
+function integerValue(value: unknown, field: string) {
+  if (typeof value === 'number' && Number.isFinite(value))
+    return Math.trunc(value);
+  if (typeof value === 'boolean') return Number(value);
+  if (typeof value === 'string' && /^[+-]?\d(?:_?\d)*$/.test(value.trim()))
+    return Number(value.trim().replaceAll('_', ''));
+  throw new BadRequestException(`${field} must be an integer`);
 }
 
 function calculatePrintReadiness(
