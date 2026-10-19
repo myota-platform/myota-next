@@ -172,9 +172,20 @@ export class GeodataImportMutationRepository {
         }
       }
       const selected = await client.query(
-        `SELECT id,validation_status,processing_queue_id
-         FROM geodata_import_candidate WHERE import_run_id=$1 AND id=ANY($2::uuid[])
-         FOR UPDATE`,
+        `SELECT c.id,c.validation_status,c.processing_queue_id,
+          previous_queue.status AS previous_queue_status,
+          EXISTS (
+            SELECT 1 FROM jsonb_array_elements(
+              CASE WHEN jsonb_typeof(previous_queue.result->'errors')='array'
+                THEN previous_queue.result->'errors' ELSE '[]'::jsonb END
+            ) AS failed(error)
+            WHERE failed.error->>'candidateId'=c.id::text
+          ) AS failed_in_previous_queue
+         FROM geodata_import_candidate c
+         LEFT JOIN geodata_import_processing_queue previous_queue
+           ON previous_queue.id=c.processing_queue_id
+         WHERE c.import_run_id=$1 AND c.id=ANY($2::uuid[])
+         FOR UPDATE OF c`,
         [runId, rawIds],
       );
       if (selected.rows.length !== rawIds.length)
@@ -184,11 +195,17 @@ export class GeodataImportMutationRepository {
       if (
         selected.rows.some(
           (row) =>
-            row.validation_status === 'PROCESSED' || row.processing_queue_id,
+            row.validation_status === 'PROCESSED' ||
+            (row.processing_queue_id &&
+              !(
+                row.validation_status === 'CONFIRMED' &&
+                row.previous_queue_status === 'FAILED' &&
+                row.failed_in_previous_queue === true
+              )),
         )
       )
         throw new BadRequestException(
-          'one or more candidates are already processed or queued',
+          'candidates must be unqueued or listed as failed in a prior failed queue',
         );
 
       await client.query(
