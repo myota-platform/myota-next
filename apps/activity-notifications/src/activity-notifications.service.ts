@@ -74,6 +74,7 @@ export class ActivityNotificationsService
   private connection?: Awaited<ReturnType<typeof connect>>;
   private messages?: Consumer;
   private metricsServer?: Server;
+  private natsUp = false;
   private outcomes = new Map<string, number>();
   private unresolvedDeadLetters = 0;
 
@@ -95,6 +96,8 @@ export class ActivityNotificationsService
     const consumerInfo = await manager.consumers.info(STREAM, DURABLE);
     this.validateConsumer(consumerInfo.config);
     this.messages = await js.consumers.get(STREAM, DURABLE);
+    this.natsUp = true;
+    void this.monitorNats();
     await this.refreshDeadLetterGauge();
     this.startMetricsServer();
     void this.consume();
@@ -156,7 +159,7 @@ export class ActivityNotificationsService
         this.stopping ||
         !this.pool ||
         !this.connection ||
-        this.connection.isClosed() ||
+        !this.natsUp ||
         !this.messages
       ) {
         response.writeHead(503, {
@@ -185,6 +188,24 @@ export class ActivityNotificationsService
 
   private countOutcome(outcome: string): void {
     this.outcomes.set(outcome, (this.outcomes.get(outcome) ?? 0) + 1);
+  }
+
+  private async monitorNats(): Promise<void> {
+    try {
+      for await (const status of this.connection!.status()) {
+        if (status.type === 'disconnect' || status.type === 'reconnecting') {
+          this.natsUp = false;
+        } else if (status.type === 'reconnect') {
+          this.natsUp = true;
+        } else if (status.type === 'close') {
+          this.natsUp = false;
+          return;
+        }
+      }
+    } catch (error) {
+      this.natsUp = false;
+      this.logger.warn(`NATS status monitor stopped: ${this.safeError(error)}`);
+    }
   }
 
   private async refreshDeadLetterGauge(): Promise<void> {
