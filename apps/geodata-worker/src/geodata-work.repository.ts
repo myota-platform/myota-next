@@ -1,0 +1,406 @@
+import {
+  Inject,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import type { Pool, PoolClient } from 'pg';
+import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+
+interface ImportRun {
+  id: string;
+  adapter_code: string;
+  source_metadata: Record<string, unknown>;
+  source_key: string;
+  source_hash: string;
+  attempt_count: number;
+}
+
+interface PreparedCandidate {
+  ordinal: number;
+  name: string;
+  geometry: string;
+  properties: Record<string, unknown>;
+  sourceRef: string | null;
+  possibleDuplicates: Record<string, unknown>[];
+}
+
+@Injectable()
+export class GeodataWorkRepository {
+  private storage: S3Client | undefined;
+
+  constructor(
+    @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
+  ) {}
+
+  async claim(): Promise<ImportRun | null> {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      const found = await client.query(
+        `SELECT id,adapter_code,source_metadata,source_key,source_hash,attempt_count
+         FROM import_run
+         WHERE source_key IS NOT NULL AND
+           (status='QUEUED' OR (status='PROCESSING' AND lease_until < now()))
+         ORDER BY started_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,
+      );
+      const row = found.rows[0] as ImportRun | undefined;
+      if (!row) {
+        await client.query('COMMIT');
+        return null;
+      }
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await client.query(
+        `UPDATE import_run SET status='PROCESSING',attempt_count=attempt_count+1,
+         heartbeat_at=now(),lease_until=now()+interval '5 minutes',last_error=NULL
+         WHERE id=$1`,
+        [row.id],
+      );
+      await client.query('COMMIT');
+      return { ...row, attempt_count: Number(row.attempt_count) + 1 };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async preprocess(run: ImportRun) {
+    const bucket = String(
+      process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports',
+    );
+    const object = await this.storageClient().send(
+      new GetObjectCommand({ Bucket: bucket, Key: run.source_key }),
+    );
+    if (!object.Body)
+      throw new Error('geodata import source object has no content');
+    const raw = Buffer.from(await object.Body.transformToByteArray());
+    if (raw.length > 20 * 1024 * 1024)
+      throw new Error('geodata import exceeds the 20 MiB limit');
+    if (
+      run.source_hash &&
+      createHash('sha256').update(raw).digest('hex') !== run.source_hash
+    )
+      throw new Error(
+        'geodata import source hash does not match its queued record',
+      );
+    const document: unknown = JSON.parse(raw.toString('utf8'));
+    if (
+      !isRecord(document) ||
+      document.type !== 'FeatureCollection' ||
+      !Array.isArray(document.features)
+    )
+      throw new Error('stored source is not a GeoJSON FeatureCollection');
+
+    const errors: Record<string, unknown>[] = [];
+    const prepared: PreparedCandidate[] = [];
+    for (let index = 0; index < document.features.length; index++) {
+      if (index > 0 && index % 100 === 0) await this.heartbeat(run);
+      const feature = document.features[index];
+      if (!isRecord(feature) || feature.type !== 'Feature') {
+        errors.push({
+          ordinal: index,
+          message: 'feature must be a GeoJSON Feature',
+        });
+        continue;
+      }
+      const properties = isRecord(feature.properties) ? feature.properties : {};
+      const name =
+        typeof properties.name === 'string' ? properties.name.trim() : '';
+      if (!name || name.length > 300) {
+        errors.push({
+          ordinal: index,
+          message:
+            'feature properties.name is required and must be at most 300 characters',
+        });
+        continue;
+      }
+      if (
+        !isRecord(feature.geometry) ||
+        typeof feature.geometry.type !== 'string'
+      ) {
+        errors.push({
+          ordinal: index,
+          message: 'feature geometry is required',
+        });
+        continue;
+      }
+      const geometry = JSON.stringify(feature.geometry);
+      const client = await this.connect();
+      try {
+        const checked = await client.query(
+          `SELECT ST_IsValid(g) AS valid,ST_IsEmpty(g) AS empty,
+             ST_XMin(Box3D(g)) AS min_x,ST_XMax(Box3D(g)) AS max_x,
+             ST_YMin(Box3D(g)) AS min_y,ST_YMax(Box3D(g)) AS max_y
+           FROM (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1),4326) AS g) parsed`,
+          [geometry],
+        );
+        const row = checked.rows[0];
+        if (
+          !row?.valid ||
+          row.empty ||
+          Number(row.min_x) < -180 ||
+          Number(row.max_x) > 180 ||
+          Number(row.min_y) < -90 ||
+          Number(row.max_y) > 90
+        ) {
+          errors.push({
+            ordinal: index,
+            message: 'geometry is empty, invalid, or outside WGS84 bounds',
+          });
+          continue;
+        }
+        const duplicates = await client.query(
+          `WITH candidate AS (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1),4326)::geography AS geom)
+           SELECT e.id::text AS id,e.name,round(ST_Distance(e.geom::geography,candidate.geom)::numeric,1) AS distance_meters
+           FROM geodata_entity e CROSS JOIN candidate
+           WHERE e.lifecycle_status IN ('APPROVED','CANDIDATE')
+             AND ST_DWithin(e.geom::geography,candidate.geom,50)
+           ORDER BY ST_Distance(e.geom::geography,candidate.geom) LIMIT 10`,
+          [geometry],
+        );
+        prepared.push({
+          ordinal: index,
+          name,
+          geometry,
+          properties,
+          sourceRef:
+            typeof properties.sourceRef === 'string'
+              ? properties.sourceRef
+              : null,
+          possibleDuplicates: duplicates.rows.map((duplicate) => ({
+            entityId: duplicate.id,
+            name: duplicate.name,
+            distanceMeters: Number(duplicate.distance_meters),
+          })),
+        });
+      } finally {
+        client.release();
+      }
+    }
+    await this.saveCandidates(run, prepared, errors, document.features.length);
+  }
+
+  async fail(run: ImportRun, error: unknown) {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      const exhausted = run.attempt_count >= 3;
+      await client.query(
+        `UPDATE import_run SET status=$2,last_error=$3,heartbeat_at=now(),
+         lease_until=NULL,completed_at=CASE WHEN $2='FAILED' THEN now() ELSE NULL END
+         WHERE id=$1 AND status='PROCESSING' AND attempt_count=$4`,
+        [
+          run.id,
+          exhausted ? 'FAILED' : 'QUEUED',
+          errorMessage(error).slice(0, 2000),
+          run.attempt_count,
+        ],
+      );
+      await client.query('COMMIT');
+    } catch (failure) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw failure;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async saveCandidates(
+    run: ImportRun,
+    candidates: PreparedCandidate[],
+    errors: Record<string, unknown>[],
+    featureCount: number,
+  ) {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      const lockedRun = await client.query(
+        'SELECT status,attempt_count FROM import_run WHERE id=$1 FOR UPDATE',
+        [run.id],
+      );
+      if (
+        lockedRun.rows[0]?.status !== 'PROCESSING' ||
+        Number(lockedRun.rows[0]?.attempt_count) !== run.attempt_count
+      )
+        throw new Error('geodata import lease was superseded');
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      const entityTypes = Array.isArray(run.source_metadata.entityTypes)
+        ? run.source_metadata.entityTypes
+        : [];
+      const programmeSlug =
+        typeof run.source_metadata.programmeSlug === 'string'
+          ? run.source_metadata.programmeSlug
+          : null;
+      const created: Record<string, unknown>[] = [];
+      const preprocessed: Record<string, unknown>[] = [];
+      for (const candidate of candidates) {
+        const id = randomUUID();
+        const entityPayload = {
+          ...candidate.properties,
+          entityType: entityTypes[0] ?? null,
+          entityTypes,
+          entityTypeCodes: entityTypes,
+          geometry: JSON.parse(candidate.geometry),
+          possibleDuplicates: candidate.possibleDuplicates,
+        };
+        await client.query(
+          `INSERT INTO geodata_import_candidate
+            (id,import_run_id,ordinal,programme_slug,entity_type_codes,name,geom,
+             candidate_source,source_ref,source_hash,provenance,entity_payload)
+           VALUES ($1,$2,$3,$4,$5::jsonb,$6,ST_SetSRID(ST_GeomFromGeoJSON($7),4326),
+             $8::jsonb,$9,$10,$11::jsonb,$12::jsonb)`,
+          [
+            id,
+            run.id,
+            candidate.ordinal,
+            programmeSlug,
+            JSON.stringify(entityTypes),
+            candidate.name,
+            candidate.geometry,
+            JSON.stringify(run.source_metadata.source ?? {}),
+            candidate.sourceRef,
+            run.source_hash,
+            JSON.stringify({
+              adapter: run.adapter_code,
+              sourceHash: run.source_hash,
+            }),
+            JSON.stringify(entityPayload),
+          ],
+        );
+        const summary = {
+          candidateId: id,
+          ordinal: candidate.ordinal,
+          name: candidate.name,
+          possibleDuplicates: candidate.possibleDuplicates,
+        };
+        created.push(summary);
+        preprocessed.push(summary);
+      }
+      const status = errors.length
+        ? 'PREPROCESSED_WITH_ERRORS'
+        : 'PREPROCESSED';
+      const stats = {
+        featureCount,
+        preprocessed: candidates.length,
+        created: candidates.length,
+        updated: 0,
+        skipped: 0,
+        errors: errors.length,
+        disappeared: 0,
+        conflationCandidates: candidates.filter(
+          (item) => item.possibleDuplicates.length,
+        ).length,
+      };
+      await client.query(
+        `UPDATE import_run SET status=$2,stats=$3::jsonb,completed_at=now(),
+         heartbeat_at=now(),lease_until=NULL,last_error=NULL WHERE id=$1`,
+        [run.id, status, JSON.stringify(stats)],
+      );
+      await client.query(
+        `INSERT INTO outbox_event
+          (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+         VALUES ($1,'geodata.import.preprocessed.v1','geodata-worker','import_run',$2,$3::jsonb,now(),$4)`,
+        [
+          randomUUID(),
+          run.id,
+          JSON.stringify({
+            importRunId: run.id,
+            adapter: run.adapter_code,
+            preprocessed,
+            created,
+            updated: [],
+            skipped: [],
+            errors,
+            disappeared: [],
+            conflationCandidates: candidates
+              .filter((item) => item.possibleDuplicates.length)
+              .map((item) => ({
+                ordinal: item.ordinal,
+                name: item.name,
+                matches: item.possibleDuplicates,
+              })),
+            manifest: { sourceHash: run.source_hash, featureCount, stats },
+          }),
+          randomUUID(),
+        ],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async connect(): Promise<PoolClient> {
+    if (!this.pool)
+      throw new ServiceUnavailableException(
+        'Geodata database is not configured',
+      );
+    try {
+      return await this.pool.connect();
+    } catch {
+      throw new ServiceUnavailableException('Geodata database is unavailable');
+    }
+  }
+
+  private async heartbeat(run: ImportRun) {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await client.query(
+        `UPDATE import_run SET heartbeat_at=now(),lease_until=now()+interval '5 minutes'
+         WHERE id=$1 AND status='PROCESSING' AND attempt_count=$2`,
+        [run.id, run.attempt_count],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private storageClient() {
+    if (!this.storage)
+      this.storage = new S3Client({
+        endpoint:
+          process.env.MYOTA_OBJECT_STORAGE_ENDPOINT ?? 'http://seaweedfs:8333',
+        region: process.env.MYOTA_OBJECT_STORAGE_REGION ?? 'us-east-1',
+        forcePathStyle:
+          (process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE ?? 'path') ===
+          'path',
+        credentials: {
+          accessKeyId:
+            process.env.MYOTA_OBJECT_STORAGE_ACCESS_KEY ?? 'myota-s3',
+          secretAccessKey:
+            process.env.MYOTA_OBJECT_STORAGE_SECRET_KEY ?? 'myota-s3-dev-only',
+        },
+      });
+    return this.storage;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}

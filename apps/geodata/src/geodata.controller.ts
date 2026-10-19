@@ -1,19 +1,37 @@
 import {
   Controller,
+  Body,
   ForbiddenException,
   Get,
   Headers,
+  HttpCode,
   Param,
+  Post,
   Query,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { GeodataRepository } from './geodata.repository.js';
+import { GeodataImportService } from './geodata-import.service.js';
 
 @Controller('geodata')
 export class GeodataController {
-  constructor(private readonly repository: GeodataRepository) {}
+  constructor(
+    private readonly repository: GeodataRepository,
+    private readonly imports: GeodataImportService,
+  ) {}
+
+  @Post('imports')
+  @HttpCode(202)
+  createImport(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() body: Record<string, unknown>,
+  ) {
+    authorizeImport(authorization);
+    return this.imports.create(key, body);
+  }
 
   @Get('imports')
   listImports(

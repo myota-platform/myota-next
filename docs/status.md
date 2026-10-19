@@ -55,9 +55,17 @@
   and inspected; recipient notifications can be read with owner/admin checks.
   ADIF import status reads now return persisted counters and errors after
   checking access through the owning activation.
-- Geodata now has PostGIS-backed public entity list/detail reads with bounded
-  paging, status/category/location filters, and bounding-box queries. Import,
-  edit, review, and worker operations remain outstanding. The supported import
+- Geodata now accepts bounded JSON GeoJSON imports, stores the source document
+  in S3-compatible object storage, and creates an idempotent queued import run
+  (20 MiB request limit and 5,000 feature default, adjustable with
+  `GEODATA_MAX_IMPORT_FEATURES`) with a transactional outbox event. The
+  Geodata worker leases queued runs,
+  validates feature names and WGS84 geometries, stages candidates with
+  provenance and 50 m duplicate warnings, records errors, and emits the
+  preprocessing fact. The service also has PostGIS-backed public entity
+  list/detail reads with bounded paging, status/category/location filters, and
+  bounding-box queries. Edit, review, and promotion operations remain
+  outstanding. The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
   paged import-run status reads are also exposed. Authenticated entity audit
   reads combine the entity's review histories with durable audit events. Vector
@@ -80,17 +88,16 @@
 
 ## Not implemented yet
 
-- Administrative account updates revoke active sessions and emit the
-  deactivation security event when an account transitions to DEACTIVATED, with
-  optional anonymization. Profile-image orphan cleanup and automated
-  compatibility coverage for the first auth slice are still outstanding.
+- Profile-image orphan cleanup and automated compatibility coverage for the
+  first Identity slice are still outstanding.
 - Remaining Activity APIs include file-based QSO import and operational
-  workflows. Remaining Geodata mutations, import handlers and worker
-  operations, plus Gateway routing and protected observability proxy behavior,
-  remain unimplemented.
+  workflows. Geodata multipart/resumable and external object-reference imports,
+  mutations, promotion, and remaining worker operations are outstanding, along
+  with Gateway routing and protected observability proxy behavior.
 - Activity NATS delivery, lease heartbeats during large batches, redrive, and
-  remaining job consumers. Geodata consumers, leases, recovery, retries, and
-  redrive.
+  remaining job consumers. Geodata NATS delivery, lease heartbeats for large
+  jobs, explicit redrive, and remaining promotion, deletion, enrichment, and
+  retention consumers.
 - Admin and Participant web applications.
 - Database migration runner, data transfer tooling, deployment images, and
   production observability configuration.
@@ -98,6 +105,6 @@
   producer/runtime is gated and its separate database conflicts with the
   requested three-database target until its ownership is resolved.
 
-The remaining empty worker entry points fail explicitly rather than pretending
-to process work. Contract presence and successful builds do not count as
-function parity. Track completion against the [parity matrix](parity-matrix.md).
+The Activity notification and email worker entry points remain explicit stubs.
+Contract presence and successful builds do not count as function parity. Track
+completion against the [parity matrix](parity-matrix.md).

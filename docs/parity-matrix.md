@@ -50,7 +50,12 @@ file processing still need completion. Geodata provides PostGIS-backed public
 entity list/detail reads with filters and bounds, the import adapter catalogue,
 provider-derived location options, and authorized import-run list/status reads;
 authenticated audit reads and approved-entity vector tiles are also implemented.
-Import creation, edit, review, and worker operations remain to be implemented.
+JSON GeoJSON import creation stores source documents in S3-compatible storage
+and queues idempotent import runs transactionally. The worker validates feature
+names and WGS84 geometries, stages candidates with provenance and 50 m duplicate
+warnings, records errors, and emits the preprocessing fact. Multipart/resumable
+and external object-reference imports, edits, review, promotion, NATS delivery,
+and remaining worker operations are outstanding.
 
 ## User applications
 
