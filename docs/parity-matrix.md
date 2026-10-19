@@ -101,7 +101,7 @@ at 20 MiB and materializes the normalized collection. Shapefile multipart
 uploads stream to temporary disk and decode records one at a time, with a 256
 MiB default upload cap (512 MiB maximum), 1 GiB expanded-size cap, 16 MiB
 per-feature size, 250,000 vertices, and the configured feature count. Less
-common geometry types and projection metadata still need compatibility
+common geometry types and uncommon CRS definitions still need compatibility
 qualification against the reference parser.
 Import adapters infer feature names from
 the reference alias catalogue before validation. The worker validates WGS84

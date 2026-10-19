@@ -143,9 +143,10 @@
   The separate JSON import-creation path still caps input at 20 MiB and
   materializes the normalized collection. Shapefile source bytes and decoded
   records now stream via bounded temporary files, matching the reference's 1
-  GiB expanded-size default. The streaming parser's less common geometry types
-  and projection metadata still need parity qualification before broad
-  Shapefile parity can be claimed.
+  GiB expanded-size default and reproject coordinates using `.prj` metadata.
+  The streaming parser's less common geometry types and uncommon CRS
+  definitions still need parity qualification before broad Shapefile parity can
+  be claimed.
   The adapter catalogue and admin selector now expose only import formats the
   current boundary can decode. The admin file picker accepts GeoJSON and OSM
   PBF and Shapefile ZIP files up to their configured caps (256 MiB by default,

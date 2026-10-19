@@ -4,6 +4,7 @@ import { mkdtemp, open, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
+import proj4, { type Converter } from 'proj4';
 import yauzl from 'yauzl';
 import { open as openShapefile } from 'shapefile';
 
@@ -109,7 +110,7 @@ export async function* streamShapefileFeatures(
         name.endsWith('/') ||
         normalizedName.includes('__macosx/') ||
         leafName.startsWith('._') ||
-        !/\.(shp|shx|dbf|cpg)$/i.test(leafName)
+        !/\.(shp|shx|dbf|prj|cpg)$/i.test(leafName)
       )
         continue;
 
@@ -142,6 +143,10 @@ export async function* streamShapefileFeatures(
     const encoding = cpg
       ? (await readFile(cpg.path, 'utf8')).trim() || 'windows-1252'
       : 'windows-1252';
+    const prj = members.get(`${stem}.prj`);
+    const projection = prj
+      ? createWgs84Projection((await readFile(prj.path, 'utf8')).trim())
+      : undefined;
     const reader = await openShapefile(shape.path, dbf.path, {
       encoding,
       highWaterMark: 64 * 1024,
@@ -156,15 +161,18 @@ export async function* streamShapefileFeatures(
           throw new Error(
             `geodata import contains more than ${featureLimit} features`,
           );
-        const encodedBytes = Buffer.byteLength(JSON.stringify(result.value));
+        const feature = projection
+          ? reprojectFeature(result.value, projection)
+          : result.value;
+        const encodedBytes = Buffer.byteLength(JSON.stringify(feature));
         if (encodedBytes > MAX_RECORD_BYTES)
           throw new Error('a Shapefile feature exceeds the 16 MiB size limit');
-        if (countVertices(result.value) > MAX_FEATURE_VERTICES)
+        if (countVertices(feature) > MAX_FEATURE_VERTICES)
           throw new Error(
             `a source geometry exceeds the configured vertex limit (${MAX_FEATURE_VERTICES})`,
           );
         if (featureCount % 100 === 0) await heartbeat();
-        yield result.value;
+        yield feature;
       }
     } finally {
       await reader.cancel().catch(() => undefined);
@@ -175,6 +183,55 @@ export async function* streamShapefileFeatures(
     zip?.close();
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+function createWgs84Projection(wkt: string): Converter {
+  if (!wkt) throw new Error('Shapefile projection metadata is empty');
+  try {
+    return proj4(wkt, 'EPSG:4326');
+  } catch (error) {
+    throw new Error('Shapefile projection metadata is not supported', {
+      cause: error,
+    });
+  }
+}
+
+function reprojectFeature(value: unknown, projection: Converter) {
+  if (!isRecord(value) || !isRecord(value.geometry)) return value;
+  reprojectGeometry(value.geometry, projection);
+  return value;
+}
+
+function reprojectGeometry(
+  geometry: Record<string, unknown>,
+  projection: Converter,
+) {
+  if (geometry.type === 'GeometryCollection') {
+    if (Array.isArray(geometry.geometries))
+      for (const child of geometry.geometries)
+        if (isRecord(child)) reprojectGeometry(child, projection);
+    return;
+  }
+  if (Array.isArray(geometry.coordinates))
+    geometry.coordinates = transformCoordinates(
+      geometry.coordinates,
+      projection,
+    );
+}
+
+function transformCoordinates(
+  value: unknown[],
+  projection: Converter,
+): unknown[] {
+  if (
+    value.length >= 2 &&
+    typeof value[0] === 'number' &&
+    typeof value[1] === 'number'
+  )
+    return projection.forward(value as number[]);
+  return value.map((item) =>
+    Array.isArray(item) ? transformCoordinates(item, projection) : item,
+  );
 }
 
 async function validateShapeRecords(path: string, fileBytes: number) {
