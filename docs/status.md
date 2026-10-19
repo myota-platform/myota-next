@@ -176,10 +176,12 @@
   leases during long jobs, and stale dispatch recovery and Geodata retention are
   implemented; outage/recovery evidence remains outstanding.
 - Admin and Participant web applications.
-- Data transfer tooling, deployment images, and production observability
-  configuration. An owner-scoped database migration runner now applies the
-  checked-in SQL baseline and forward migrations with checksums and per-file
-  transactions; production cutover and rollback rehearsals remain outstanding.
+- Data transfer tooling, image publication, deployment manifests, and
+  production observability configuration. A reusable Docker recipe now builds
+  one unprivileged runtime image per Nest application. An owner-scoped database
+  migration runner applies the checked-in SQL baseline and forward migrations
+  with checksums and per-file transactions; production cutover and rollback
+  rehearsals remain outstanding.
 - Email delivery. Its source contract is recorded, but the current Identity
   producer/runtime is gated and its separate database conflicts with the
   requested three-database target until its ownership is resolved.

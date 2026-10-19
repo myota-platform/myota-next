@@ -1,0 +1,14 @@
+.git
+.github
+.env
+.env.*
+node_modules
+dist
+coverage
+.turbo
+.cache
+*.log
+npm-debug.log*
+vitest.config.ts
+**/*.spec.ts
+**/*.test.ts

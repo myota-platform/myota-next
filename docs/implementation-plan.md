@@ -24,10 +24,12 @@ current reference.
 - Start each process independently while retaining the three database targets.
 
 The Node 24/NestJS workspace, separate service and worker entry points,
-database-aware readiness, copied contracts and migrations, and formatting,
-lint, typecheck, and build gates are in place. Identity, Programmes, Activity,
-and Geodata each have working vertical slices. See the [implementation
-status](status.md) and [parity matrix](parity-matrix.md) for current coverage.
+database-aware readiness, copied contracts and migrations, formatting, lint,
+typecheck, build gates, an owner-scoped migration runner, and a per-application
+Docker recipe are in place. CI workflows, image publication, data transfer, and
+deployment qualification remain open. Identity, Programmes, Activity, and
+Geodata each have working vertical slices. See the [implementation status](status.md)
+and [parity matrix](parity-matrix.md) for current coverage.
 
 ## 2. Implement contract-shaped synchronous behavior
 
