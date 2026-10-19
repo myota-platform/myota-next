@@ -52,14 +52,18 @@
   transactional Activity persistence; applying a correction queues award
   recalculation. Activity statistics can be listed and rebuild jobs queued and
   inspected; recipient notifications can be read with owner/admin checks.
+- Award definitions now support public published-only reads, administrative
+  draft create/edit, review submission and decisions, print-readiness
+  validation, publication, and retirement. Saved and published facts commit to
+  the Activity outbox with their definition updates.
 
 ## Not implemented yet
 
 - Remaining Identity APIs include OIDC mapping updates and account deactivation
   as its dedicated operation. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
-- Remaining Activity APIs include file-based QSO import, awards,
-  and operational workflows. The statistics rebuild job still needs its worker
+- Remaining Activity APIs include file-based QSO import, award evaluation,
+  assets, requests, issuance/rendering, and operational workflows. The statistics rebuild job still needs its worker
   consumer. Geodata and Gateway handlers,
   authorization rules, persistence repositories, and event/outbox behavior
   remain unimplemented.

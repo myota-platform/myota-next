@@ -111,6 +111,82 @@ export class ActivityRepository {
     }
   }
 
+  async saveAwardDefinition(
+    record: JsonRecord,
+    key?: string,
+    eventType?: string,
+  ): Promise<JsonRecord> {
+    return this.mutate(key, async (client) => {
+      await client.query(
+        `INSERT INTO activity_award_definition(id,programme_slug,code,version,status,effective_from,retired_at,definition)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+         ON CONFLICT (id) DO UPDATE SET programme_slug=EXCLUDED.programme_slug,code=EXCLUDED.code,
+         version=EXCLUDED.version,status=EXCLUDED.status,effective_from=EXCLUDED.effective_from,
+         retired_at=EXCLUDED.retired_at,definition=EXCLUDED.definition,updated_at=now()`,
+        [
+          record.id,
+          record.programmeSlug,
+          record.code,
+          Number(record.version ?? 1),
+          record.status ?? 'DRAFT',
+          record.effectiveFrom ? new Date(record.effectiveFrom) : null,
+          record.retiredAt ? new Date(record.retiredAt) : null,
+          JSON.stringify(record),
+        ],
+      );
+      if (eventType)
+        await this.event(
+          client,
+          eventType,
+          'award',
+          String(record.id),
+          record,
+          'awards-service',
+        );
+      return record;
+    });
+  }
+
+  async listAwardDefinitions(): Promise<JsonRecord[]> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        'SELECT definition FROM activity_award_definition ORDER BY programme_slug,code,version',
+      );
+      return result.rows.map((row) => row.definition);
+    } finally {
+      client.release();
+    }
+  }
+
+  async getAwardDefinition(id: string): Promise<JsonRecord> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        'SELECT definition FROM activity_award_definition WHERE id=$1',
+        [id],
+      );
+      if (!result.rows[0]) throw new NotFoundException('award not found');
+      return result.rows[0].definition;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getAwardAsset(id: string): Promise<JsonRecord> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        'SELECT metadata FROM activity_asset WHERE id=$1',
+        [id],
+      );
+      if (!result.rows[0]) throw new NotFoundException('award asset not found');
+      return result.rows[0].metadata;
+    } finally {
+      client.release();
+    }
+  }
+
   async createCorrection(
     qsoId: string,
     body: JsonRecord,
@@ -510,10 +586,11 @@ export class ActivityRepository {
     aggregate: string,
     id: string,
     payload: JsonRecord,
+    producer = 'activity-service',
   ) {
     await client.query(
       `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
-      VALUES ($1,$2,'activity-service',$3,$4,$5::jsonb,now(),$6)`,
+      VALUES ($1,$2,$7,$3,$4,$5::jsonb,now(),$6)`,
       [
         randomUUID(),
         type,
@@ -521,6 +598,7 @@ export class ActivityRepository {
         id,
         JSON.stringify(payload),
         randomUUID(),
+        producer,
       ],
     );
   }

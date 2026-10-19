@@ -35,10 +35,12 @@ jobs. QSO ingestion requests also persist bounded, owner-scoped jobs with a stat
 read path, and the separate Activity worker processes those jobs with database
 leases, retries, and dead-letter state. NATS delivery and other Activity consumers
 remain outstanding. QSO correction requests and administrator review are also
-implemented, with applied changes queuing recalculation. Remaining Activity
-work includes ADIF/CSV file imports, awards, notification production, statistics
-rebuild processing, and worker recovery. Statistics listing/rebuild job APIs and
-owner-scoped notification reads are implemented.
+implemented, with applied changes queuing recalculation. Award definition draft,
+review, publish, and retire APIs are implemented. Remaining Activity work
+includes ADIF/CSV file imports, award evaluation/progress, assets, requests,
+issuance/rendering, notification production, statistics rebuild processing, and
+worker recovery. Statistics listing/rebuild job APIs and owner-scoped
+notification reads are implemented.
 
 ## User applications
 

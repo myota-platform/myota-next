@@ -7,6 +7,8 @@ import { QsoIngestionController } from './qso-ingestion.controller.js';
 import { PublicActivityController } from './public-activity.controller.js';
 import { QsoCorrectionController } from './qso-correction.controller.js';
 import { ActivityOperationsController } from './activity-operations.controller.js';
+import { AwardsController } from './awards.controller.js';
+import { AwardsService } from './awards.service.js';
 
 @Module({
   imports: [DatabaseHealthModule.forEnvironment('ACTIVITY_DATABASE_URL')],
@@ -17,7 +19,8 @@ import { ActivityOperationsController } from './activity-operations.controller.j
     PublicActivityController,
     QsoCorrectionController,
     ActivityOperationsController,
+    AwardsController,
   ],
-  providers: [ActivityRepository, ActivityService],
+  providers: [ActivityRepository, ActivityService, AwardsService],
 })
 export class ActivityModule {}

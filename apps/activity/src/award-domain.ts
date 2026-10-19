@@ -1,0 +1,179 @@
+import { BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { parseTimestamp, type JsonRecord } from './activity-domain.js';
+
+const REQUIRED_ELEMENTS = [
+  'AWARD_NAME',
+  'CALLSIGN',
+  'PERSON_NAME',
+  'DATE_OBTAINED',
+  'MANAGER_NAME',
+  'MANAGER_SIGNATURE',
+];
+
+export function validateAwardDraft(body: JsonRecord, existing?: JsonRecord) {
+  for (const field of [
+    'programmeSlug',
+    'code',
+    'name',
+    'category',
+    'condition',
+    'levels',
+    'backgroundAsset',
+    'template',
+  ]) {
+    if (body[field] === undefined || body[field] === null)
+      throw new BadRequestException(`${field} is required`);
+  }
+  const category = String(body.category).toUpperCase();
+  if (!['HUNTER', 'ACTIVATOR'].includes(category))
+    throw new BadRequestException('category must be HUNTER or ACTIVATOR');
+  if (!Array.isArray(body.levels) || body.levels.length === 0)
+    throw new BadRequestException('levels must contain positive thresholds');
+  for (const level of body.levels) {
+    if (
+      !Number.isFinite(Number(level?.threshold)) ||
+      Number(level.threshold) <= 0
+    )
+      throw new BadRequestException('levels must contain positive thresholds');
+  }
+  const backgroundAsset = body.backgroundAsset as JsonRecord;
+  if (
+    !backgroundAsset ||
+    typeof backgroundAsset !== 'object' ||
+    Array.isArray(backgroundAsset)
+  )
+    throw new BadRequestException('backgroundAsset must be an object');
+  if ((backgroundAsset.kind ?? 'BACKGROUND') !== 'BACKGROUND')
+    throw new BadRequestException('backgroundAsset.kind must be BACKGROUND');
+  const template = body.template as JsonRecord;
+  validateTemplate(template?.elements);
+  const printSpec = body.printSpec ?? {
+    page: 'A4',
+    orientation: 'PORTRAIT',
+    dpi: 300,
+  };
+  const printReadiness = calculatePrintReadiness(backgroundAsset, printSpec);
+  const now = new Date().toISOString();
+  const record: JsonRecord = {
+    ...existing,
+    id: body.awardId ?? existing?.id ?? randomUUID(),
+    programmeSlug: body.programmeSlug,
+    code: body.code,
+    name: body.name,
+    description: body.description ?? '',
+    category,
+    version: Number.parseInt(
+      String(body.version ?? existing?.version ?? 1),
+      10,
+    ),
+    achievementMetric: body.achievementMetric ?? 'QSO_COUNT',
+    condition: body.condition,
+    levels: body.levels,
+    backgroundAsset,
+    printSpec,
+    template,
+    status: existing?.status ?? 'DRAFT',
+    updatedAt: now,
+    createdAt: existing?.createdAt ?? now,
+    printReadiness,
+  };
+  for (const field of ['signatureAssetId', 'managerName', 'effectiveFrom']) {
+    if (body[field] !== undefined) {
+      record[field] =
+        field === 'effectiveFrom' && body[field]
+          ? parseTimestamp(body[field]).toISOString()
+          : body[field];
+    }
+  }
+  return record;
+}
+
+export function validateTemplate(elements: unknown) {
+  if (!Array.isArray(elements))
+    throw new BadRequestException('template elements must be an array');
+  const allowed = new Set([...REQUIRED_ELEMENTS, 'CUSTOM_TEXT']);
+  const seen = new Set<string>();
+  for (const item of elements) {
+    if (!item || typeof item !== 'object' || Array.isArray(item))
+      throw new BadRequestException('template elements must be objects');
+    const element = item as JsonRecord;
+    const kind = String(element.kind ?? '');
+    if (!allowed.has(kind))
+      throw new BadRequestException(
+        `unsupported certificate element: ${kind || 'missing'}`,
+      );
+    seen.add(kind);
+    if (kind === 'CUSTOM_TEXT' && !String(element.label ?? '').trim())
+      throw new BadRequestException('custom text requires a label');
+    for (const field of ['x', 'y', 'width', 'height']) {
+      const value = Number(element[field]);
+      if (!Number.isFinite(value) || value < 0 || value > 1)
+        throw new BadRequestException(
+          `template.${kind}.${field} must be between 0 and 1`,
+        );
+    }
+    if (Number(element.width) <= 0 || Number(element.height) <= 0)
+      throw new BadRequestException(
+        `template.${kind} must have positive dimensions`,
+      );
+    if (
+      Number(element.x) + Number(element.width) > 1.000001 ||
+      Number(element.y) + Number(element.height) > 1.000001
+    )
+      throw new BadRequestException(
+        `template.${kind} must fit inside the page`,
+      );
+  }
+  const missing = REQUIRED_ELEMENTS.filter((kind) => !seen.has(kind));
+  if (missing.length)
+    throw new BadRequestException(
+      `certificate template is missing: ${missing.join(', ')}`,
+    );
+}
+
+function calculatePrintReadiness(
+  background: JsonRecord,
+  spec: JsonRecord,
+): JsonRecord {
+  const page = String(spec.page ?? 'A4').toUpperCase();
+  const orientation = String(spec.orientation ?? 'PORTRAIT').toUpperCase();
+  if (
+    !['A4', 'LETTER'].includes(page) ||
+    !['PORTRAIT', 'LANDSCAPE'].includes(orientation)
+  )
+    throw new BadRequestException(
+      'print page must be A4 or LETTER and orientation must be PORTRAIT or LANDSCAPE',
+    );
+  let [widthMm, heightMm] = page === 'A4' ? [210, 297] : [215.9, 279.4];
+  if (orientation === 'LANDSCAPE') [widthMm, heightMm] = [heightMm, widthMm];
+  const dpi = Number(spec.dpi ?? 300);
+  if (!Number.isFinite(dpi) || dpi < 150)
+    throw new BadRequestException(
+      'print.dpi must be at least 150 for a printable certificate',
+    );
+  const recommended = {
+    widthPx: Math.ceil((widthMm / 25.4) * dpi),
+    heightPx: Math.ceil((heightMm / 25.4) * dpi),
+  };
+  const widthPx = Number(background.widthPx ?? 0);
+  const heightPx = Number(background.heightPx ?? 0);
+  if (widthPx <= 0 || heightPx <= 0)
+    throw new BadRequestException(
+      'background image dimensions are required for print readiness',
+    );
+  const expectedRatio = recommended.widthPx / recommended.heightPx;
+  const actualRatio = widthPx / heightPx;
+  const ratioDelta = Math.abs(actualRatio - expectedRatio) / expectedRatio;
+  return {
+    page,
+    orientation,
+    dpi,
+    pageWidthMm: widthMm,
+    pageHeightMm: heightMm,
+    recommended,
+    actual: { widthPx, heightPx },
+    aspectRatioDelta: Number(ratioDelta.toFixed(5)),
+    printReady: ratioDelta <= 0.03 && widthPx >= recommended.widthPx * 0.9,
+  };
+}
