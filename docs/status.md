@@ -98,9 +98,10 @@
   and 5,000 feature default, adjustable with
   `GEODATA_MAX_IMPORT_FEATURES`) with a transactional outbox event. The
   Geodata worker consumes registered preprocessing work and claims the named run,
-  validates feature names and WGS84 geometries, stages candidates with
-  provenance and 50 m duplicate warnings, records errors, and emits the
-  preprocessing fact. `/healthz` and `/readyz` expose worker liveness and
+  normalizes adapter-specific feature fields, source identifiers, and supported
+  coordinate reference systems, filters nonmatching OSM tags as skipped records,
+  stages candidates with provenance and 50 m duplicate warnings, records errors,
+  and emits preprocessing results with skipped reasons. `/healthz` and `/readyz` expose worker liveness and
   GeoData PostgreSQL/NATS readiness on `GEODATA_WORKER_HEALTH_PORT`. The service
   also has PostGIS-backed public entity
   list/detail reads with bounded paging, status/category/location filters, and

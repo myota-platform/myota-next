@@ -15,7 +15,7 @@ import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { streamShapefileFeatures } from './geodata-shapefile-stream.js';
 import { streamGeoJsonFeatures } from './geodata-geojson-stream.js';
 import { decodeOsmPbfStream } from './geodata-osm-pbf.js';
-import { inferFeatureName } from './geodata-feature-name.js';
+import { normalizeAdapterFeature } from './geodata-adapter.js';
 
 interface ImportRun {
   id: string;
@@ -39,7 +39,8 @@ interface PreparedCandidate {
 
 type StagedImportRecord =
   | { ordinal: number; candidate: PreparedCandidate }
-  | { ordinal: number; error: Record<string, unknown> };
+  | { ordinal: number; error: Record<string, unknown> }
+  | { ordinal: number; skipped: Record<string, unknown> };
 
 @Injectable()
 export class GeodataWorkRepository {
@@ -514,36 +515,43 @@ export class GeodataWorkRepository {
       if (ordinal > 0 && ordinal % 100 === 0) await this.heartbeat(run);
 
       let record: StagedImportRecord;
-      if (!isRecord(feature) || feature.type !== 'Feature') {
-        record = {
-          ordinal,
-          error: { ordinal, message: 'feature must be a GeoJSON Feature' },
-        };
-      } else {
-        const properties = isRecord(feature.properties)
-          ? { ...feature.properties }
-          : {};
-        const name = inferFeatureName(properties);
-        if (!name || name.length > 300) {
+      try {
+        if (!isRecord(feature)) throw new Error('feature must be an object');
+        const normalized = normalizeAdapterFeature(run.adapter_code, feature);
+        const properties = normalized.properties;
+        const sourceRef =
+          textValue(
+            properties.sourceRef ||
+              properties.id ||
+              properties['@id'] ||
+              feature.id,
+          ) ?? `${sourceKey}:import-${run.id}:record-${ordinal}`;
+        if (normalized.skipReason) {
           record = {
             ordinal,
-            error: {
+            skipped: {
               ordinal,
-              message:
-                'feature properties.name is required and must be at most 300 characters',
+              sourceRef,
+              reason: normalized.skipReason,
             },
           };
-        } else if (
-          !isRecord(feature.geometry) ||
-          typeof feature.geometry.type !== 'string'
-        ) {
+        } else if (!normalized.geometry) {
           record = {
             ordinal,
-            error: { ordinal, message: 'feature geometry is required' },
+            skipped: {
+              ordinal,
+              sourceRef,
+              reason: 'MISSING_GEOMETRY',
+            },
           };
         } else {
-          properties.name = name;
-          const geometry = JSON.stringify(feature.geometry);
+          const name =
+            typeof properties.name === 'string'
+              ? properties.name
+              : 'Unnamed candidate';
+          if (name.length > 300)
+            throw new Error('feature name exceeds 300 characters');
+          const geometry = JSON.stringify(normalized.geometry);
           const client = await this.connect();
           try {
             const checked = await client.query(
@@ -591,13 +599,7 @@ export class GeodataWorkRepository {
                   name,
                   geometry,
                   properties,
-                  sourceRef:
-                    textValue(
-                      properties.sourceRef ??
-                        properties.id ??
-                        properties['@id'] ??
-                        feature.id,
-                    ) ?? `${sourceKey}:import-${run.id}:record-${ordinal}`,
+                  sourceRef,
                   possibleDuplicates: duplicates.rows.map((duplicate) => ({
                     entityId: duplicate.id,
                     name: duplicate.name,
@@ -616,6 +618,14 @@ export class GeodataWorkRepository {
             client.release();
           }
         }
+      } catch (error) {
+        record = {
+          ordinal,
+          error: {
+            ordinal,
+            message: error instanceof Error ? error.message : String(error),
+          },
+        };
       }
       staged.push(record);
       if (staged.length >= 4) {
@@ -802,6 +812,18 @@ export class GeodataWorkRepository {
               JSON.stringify(record.candidate),
             ],
           );
+        } else if ('skipped' in record) {
+          await client.query(
+            `INSERT INTO geodata_import_candidate_stage
+              (import_run_id,attempt_count,ordinal,skipped_payload)
+             VALUES ($1,$2,$3,$4::jsonb)`,
+            [
+              run.id,
+              run.attempt_count,
+              record.ordinal,
+              JSON.stringify(record.skipped),
+            ],
+          );
         } else {
           await client.query(
             `INSERT INTO geodata_import_candidate_stage
@@ -858,17 +880,22 @@ export class GeodataWorkRepository {
         textValue(proposal?.proposerId) ?? textValue(autoPromote?.requestedBy);
       const stagedCounts = await client.query(
         `SELECT count(*) FILTER (WHERE candidate_id IS NOT NULL)::integer AS candidates,
-                count(*) FILTER (WHERE error_payload IS NOT NULL)::integer AS errors
+                count(*) FILTER (WHERE error_payload IS NOT NULL)::integer AS errors,
+                count(*) FILTER (WHERE skipped_payload IS NOT NULL)::integer AS skipped
          FROM geodata_import_candidate_stage
          WHERE import_run_id=$1 AND attempt_count=$2`,
         [run.id, run.attempt_count],
       );
       const candidateCount = Number(stagedCounts.rows[0]?.candidates ?? 0);
       const errorCount = Number(stagedCounts.rows[0]?.errors ?? 0);
+      const skippedCount = Number(stagedCounts.rows[0]?.skipped ?? 0);
       const promotionQueueId =
         promotionActor &&
         (candidateCount > 0 ||
-          (run.complete_snapshot && featureCount === 0 && errorCount === 0))
+          (run.complete_snapshot &&
+            featureCount === 0 &&
+            errorCount === 0 &&
+            skippedCount === 0))
           ? randomUUID()
           : null;
 
@@ -951,6 +978,7 @@ export class GeodataWorkRepository {
       const stats = await client.query(
         `SELECT count(*) FILTER (WHERE candidate_id IS NOT NULL)::integer AS preprocessed,
                 count(*) FILTER (WHERE error_payload IS NOT NULL)::integer AS errors,
+                count(*) FILTER (WHERE skipped_payload IS NOT NULL)::integer AS skipped,
                 count(*) FILTER (WHERE candidate_id IS NOT NULL
                   AND candidate_payload->'possibleDuplicates' <> '[]'::jsonb)::integer AS conflation
          FROM geodata_import_candidate_stage
@@ -959,6 +987,7 @@ export class GeodataWorkRepository {
       );
       const preprocessedCount = Number(stats.rows[0]?.preprocessed ?? 0);
       const errorsCount = Number(stats.rows[0]?.errors ?? 0);
+      const skippedFeatures = Number(stats.rows[0]?.skipped ?? 0);
       const conflationCount = Number(stats.rows[0]?.conflation ?? 0);
       const status = errorsCount ? 'PREPROCESSED_WITH_ERRORS' : 'PREPROCESSED';
       const statsPayload = {
@@ -966,7 +995,7 @@ export class GeodataWorkRepository {
         preprocessed: preprocessedCount,
         created: preprocessedCount,
         updated: 0,
-        skipped: 0,
+        skipped: skippedFeatures,
         errors: errorsCount,
         disappeared: 0,
         conflationCandidates: conflationCount,
@@ -986,6 +1015,9 @@ export class GeodataWorkRepository {
       const errorSummaries = `COALESCE((SELECT jsonb_agg(error_payload ORDER BY ordinal)
         FROM geodata_import_candidate_stage
         WHERE import_run_id=$2 AND attempt_count=$3 AND error_payload IS NOT NULL),'[]'::jsonb)`;
+      const skippedSummaries = `COALESCE((SELECT jsonb_agg(skipped_payload ORDER BY ordinal)
+        FROM geodata_import_candidate_stage
+        WHERE import_run_id=$2 AND attempt_count=$3 AND skipped_payload IS NOT NULL),'[]'::jsonb)`;
       const conflationSummaries = `COALESCE((SELECT jsonb_agg(
         jsonb_build_object('ordinal',ordinal,'name',candidate_payload->>'name',
           'matches',candidate_payload->'possibleDuplicates') ORDER BY ordinal)
@@ -998,7 +1030,7 @@ export class GeodataWorkRepository {
          VALUES ($1,'geodata.import.preprocessed.v1','geodata-worker','import_run',$2,
            jsonb_build_object('importRunId',$2::text,'adapter',$4,
              'preprocessed',${candidateSummaries},'created',${candidateSummaries},
-             'updated','[]'::jsonb,'skipped','[]'::jsonb,
+             'updated','[]'::jsonb,'skipped',${skippedSummaries},
              'errors',${errorSummaries},'disappeared','[]'::jsonb,
              'conflationCandidates',${conflationSummaries},
              'manifest',jsonb_build_object('sourceHash',$5,'featureCount',$6,
