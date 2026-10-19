@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsEmail,
   IsOptional,
   IsString,
@@ -131,4 +132,51 @@ export class CreateAccountDto {
   @IsOptional()
   @IsString()
   password?: string;
+}
+
+export class UpdateAccountDto {
+  @IsOptional()
+  @IsString()
+  displayName?: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['OPERATOR', 'SWL'])
+  participationType?: 'OPERATOR' | 'SWL';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['ACTIVE', 'DEACTIVATED'])
+  status?: 'ACTIVE' | 'DEACTIVATED';
+
+  @IsOptional()
+  @IsString()
+  websiteUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  biographyMarkdown?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  anonymize?: boolean;
+
+  @IsOptional()
+  @IsString()
+  password?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RoleGrantDto)
+  roles?: RoleGrantDto[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  roleCodes?: string[];
 }

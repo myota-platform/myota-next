@@ -10,9 +10,17 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { writeOutboxEvent, writeSecurityEvent } from '@app/platform/outbox.js';
-import { IdentityAuthService } from './auth.service.js';
+import {
+  IdentityAuthService,
+  hashPassword,
+  validateWebsiteUrl,
+} from './auth.service.js';
 import { IdentityRoleService } from './identity-role.service.js';
-import type { CreateAccountDto, RoleGrantDto } from './auth.dto.js';
+import type {
+  CreateAccountDto,
+  RoleGrantDto,
+  UpdateAccountDto,
+} from './auth.dto.js';
 import type { RoleDefinition } from './role-catalog.js';
 import { DEFAULT_ROLE_SCOPES } from './role-catalog.js';
 
@@ -309,6 +317,234 @@ export class IdentityAccountService {
     }
   }
 
+  async updateAccount(
+    authorization: string,
+    accountId: string,
+    body: UpdateAccountDto,
+  ): Promise<Record<string, unknown>> {
+    const actor = await this.auth.currentAccount(authorization);
+    const actorScopes = new Set(actor.scopes as string[]);
+    if (!actorScopes.has('*') && !actorScopes.has('identity.admin')) {
+      throw new ForbiddenException('identity.admin scope is required');
+    }
+    const hasRoleUpdate =
+      body.roles !== undefined || body.roleCodes !== undefined;
+    const requestedRoles = body.roles?.length
+      ? body.roles
+      : (body.roleCodes ?? []).map((code) => ({ code }));
+    let definitions: RoleDefinition[] = [];
+    if (
+      hasRoleUpdate &&
+      !actorScopes.has('*') &&
+      !actorScopes.has('identity.roles.assign')
+    ) {
+      throw new ForbiddenException('identity.roles.assign scope is required');
+    }
+    if (hasRoleUpdate && requestedRoles.length > 0) {
+      const catalogue = await this.roleService.listAdminRoles(authorization);
+      definitions = catalogue.items as RoleDefinition[];
+    }
+
+    const profile = this.normalizeProfile(body);
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query<AccountRecord>(
+        `SELECT a.id, a.display_name, a.email::text AS email,
+                a.participation_type, a.status, a.created_at, a.updated_at,
+                p.website_url, p.biography_markdown, p.profile_image_id,
+                p.profile_image_media_type, p.profile_image_updated_at,
+                primary_call.callsign_id AS primary_callsign_id
+           FROM public.account a
+           LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
+           LEFT JOIN public.account_primary_callsign primary_call
+             ON primary_call.account_id = a.id
+          WHERE a.id = $1 FOR UPDATE OF a`,
+        [accountId],
+      );
+      const account = result.rows[0];
+      if (!account) throw new NotFoundException('account not found');
+
+      const anonymize = Boolean(
+        body.anonymize && (body.status ?? account.status) === 'DEACTIVATED',
+      );
+      let email: string | null | undefined;
+      if ('email' in body) {
+        email = body.email?.trim().toLowerCase() || null;
+        if (email && !email.includes('@')) {
+          throw new BadRequestException('email must be a valid address');
+        }
+        if (email) {
+          const duplicate = await client.query(
+            `SELECT 1 FROM public.account
+              WHERE lower(btrim(email::text)) = $1 AND id <> $2`,
+            [email, accountId],
+          );
+          if (duplicate.rowCount) {
+            throw new BadRequestException('email already exists');
+          }
+        }
+      }
+
+      const nextDisplayName = anonymize
+        ? 'Deactivated account'
+        : body.displayName;
+      const nextEmail = anonymize ? null : email;
+      const updates: string[] = [];
+      const values: unknown[] = [accountId];
+      const set = (column: string, value: unknown) => {
+        values.push(value);
+        updates.push(`${column} = $${values.length}`);
+      };
+      if (nextDisplayName !== undefined) set('display_name', nextDisplayName);
+      if ('email' in body || anonymize) {
+        set('email', nextEmail ?? null);
+        set('identity_email_key', nextEmail ?? null);
+      }
+      if (body.participationType !== undefined) {
+        set('participation_type', body.participationType);
+      }
+      if (body.status !== undefined) set('status', body.status);
+      updates.push('updated_at = now()');
+      await client.query(
+        `UPDATE public.account SET ${updates.join(', ')} WHERE id = $1`,
+        values,
+      );
+
+      const updateWebsite = 'websiteUrl' in body || anonymize;
+      const updateBiography = 'biographyMarkdown' in body || anonymize;
+      if (updateWebsite || updateBiography || anonymize) {
+        await client.query(
+          `INSERT INTO public.identity_account_profile
+             (account_id, website_url, biography_markdown,
+              profile_image_id, profile_image_media_type, profile_image_updated_at)
+           VALUES ($1, $2, $3, NULL, NULL, NULL)
+           ON CONFLICT (account_id) DO UPDATE SET
+             website_url = CASE WHEN $4 THEN EXCLUDED.website_url
+                                ELSE identity_account_profile.website_url END,
+             biography_markdown = CASE WHEN $5 THEN EXCLUDED.biography_markdown
+                                       ELSE identity_account_profile.biography_markdown END,
+             profile_image_id = CASE WHEN $6 THEN NULL
+                                     ELSE identity_account_profile.profile_image_id END,
+             profile_image_media_type = CASE WHEN $6 THEN NULL
+                                             ELSE identity_account_profile.profile_image_media_type END,
+             profile_image_updated_at = CASE WHEN $6 THEN NULL
+                                             ELSE identity_account_profile.profile_image_updated_at END`,
+          [
+            accountId,
+            anonymize ? null : (profile.websiteUrl ?? null),
+            anonymize ? null : (profile.biographyMarkdown ?? null),
+            updateWebsite,
+            updateBiography,
+            anonymize,
+          ],
+        );
+      }
+
+      if (body.password) {
+        if (Array.from(body.password).length < 12) {
+          throw new BadRequestException(
+            'password must contain at least 12 characters',
+          );
+        }
+        await client.query(
+          `INSERT INTO public.account_credential
+             (account_id, password_hash, password_changed_at, failed_attempts, locked_until)
+           VALUES ($1, $2, now(), 0, NULL)
+           ON CONFLICT (account_id) DO UPDATE SET
+             password_hash = EXCLUDED.password_hash,
+             password_changed_at = EXCLUDED.password_changed_at,
+             failed_attempts = 0,
+             locked_until = NULL`,
+          [accountId, await hashPassword(body.password)],
+        );
+        await client.query(
+          `UPDATE public.auth_session SET revoked_at = coalesce(revoked_at, now())
+            WHERE account_id = $1`,
+          [accountId],
+        );
+      }
+
+      if (anonymize) {
+        await client.query(
+          `UPDATE public.auth_session SET revoked_at = coalesce(revoked_at, now())
+            WHERE account_id = $1`,
+          [accountId],
+        );
+        await writeSecurityEvent(client, 'identity.account.deactivated.v1', {
+          accountId,
+          anonymized: true,
+        });
+      }
+      await writeSecurityEvent(client, 'identity.account.admin-updated.v1', {
+        accountId,
+        fields: Object.keys(body).sort(),
+      });
+
+      let roles: Record<string, unknown>[];
+      if (hasRoleUpdate) {
+        if (actor.id === accountId) {
+          throw new ForbiddenException(
+            'actors cannot change their own role assignments',
+          );
+        }
+        roles = await this.replaceRoles(
+          client,
+          accountId,
+          requestedRoles,
+          actorScopes,
+          actor.id as string,
+          definitions,
+        );
+      } else {
+        roles = await this.readRolesForAccount(client, accountId);
+      }
+
+      const updated = await client.query<AccountRecord>(
+        `SELECT a.id, a.display_name, a.email::text AS email,
+                a.participation_type, a.status, a.created_at, a.updated_at,
+                p.website_url, p.biography_markdown, p.profile_image_id,
+                p.profile_image_media_type, p.profile_image_updated_at,
+                primary_call.callsign_id AS primary_callsign_id
+           FROM public.account a
+           LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
+           LEFT JOIN public.account_primary_callsign primary_call
+             ON primary_call.account_id = a.id
+          WHERE a.id = $1`,
+        [accountId],
+      );
+      const callsigns = await client.query(
+        `SELECT c.id, c.value, c.lifecycle_status AS status,
+                c.verification_source AS source,
+                c.verification_source AS "verificationSource",
+                c.verified_at AS "verifiedAt", c.valid_from AS "validFrom",
+                c.valid_to AS "validTo",
+                coalesce(array_agg(e.id) FILTER (WHERE e.id IS NOT NULL), '{}')
+                  AS "evidenceIds"
+           FROM public.callsign c
+           LEFT JOIN public.callsign_evidence e ON e.callsign_id = c.id
+          WHERE c.account_id = $1
+          GROUP BY c.id
+          ORDER BY c.valid_from NULLS FIRST, c.value`,
+        [accountId],
+      );
+      await client.query('COMMIT');
+      return {
+        ...this.accountView(updated.rows[0]),
+        callsigns: callsigns.rows,
+        roles,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      if (isUniqueViolation(error)) {
+        throw new BadRequestException('email already exists');
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async listAccountRoles(
     authorization: string,
     accountId: string,
@@ -316,42 +552,205 @@ export class IdentityAccountService {
     await this.authorizeAccountTarget(authorization, accountId);
     const client = await this.connect();
     try {
-      const result = await client.query<{
-        accountId: string;
-        id: string;
-        role: string;
-        programmeId: string | null;
-        programmeSlug: string | null;
-        jurisdictionId: string | null;
-        jurisdiction: string | null;
-        entityType: string | null;
-        scopes: string[];
-        createdAt: Date;
-        validTo: Date | null;
-      }>(
-        `SELECT ar.account_id AS "accountId", ar.id, ar.role_code AS role,
-                ar.programme_id AS "programmeId",
-                coalesce(ar.programme_slug, p.slug) AS "programmeSlug",
-                ar.jurisdiction_id AS "jurisdictionId",
-                coalesce(ar.jurisdiction_code, j.code) AS jurisdiction,
-                ar.entity_type_code AS "entityType",
-                coalesce(rd.scopes, ARRAY(SELECT jsonb_array_elements_text(ar.scopes))) AS scopes,
-                ar.created_at AS "createdAt", ar.valid_to AS "validTo"
-           FROM public.account_role ar
-           LEFT JOIN public.identity_role_definition rd ON rd.role_code = ar.role_code
-           LEFT JOIN public.programme p ON p.id = ar.programme_id
-           LEFT JOIN public.jurisdiction j ON j.id = ar.jurisdiction_id
-          WHERE ar.account_id = $1 AND (ar.valid_to IS NULL OR ar.valid_to > now())
-          ORDER BY ar.created_at, ar.id`,
-        [accountId],
-      );
-      return result.rows.map((role) => ({
-        ...role,
-        scopes: DEFAULT_ROLE_SCOPES[role.role] ?? role.scopes,
-      }));
+      return await this.readRolesForAccount(client, accountId);
     } finally {
       client.release();
     }
+  }
+
+  private normalizeProfile(body: UpdateAccountDto) {
+    const profile: {
+      websiteUrl?: string | null;
+      biographyMarkdown?: string | null;
+    } = {};
+    if ('websiteUrl' in body) {
+      profile.websiteUrl = validateWebsiteUrl(body.websiteUrl);
+    }
+    if ('biographyMarkdown' in body) {
+      const value = body.biographyMarkdown;
+      if (value !== null && typeof value !== 'string') {
+        throw new BadRequestException(
+          'biographyMarkdown must be a string or null',
+        );
+      }
+      if (typeof value === 'string' && Array.from(value).length > 2000) {
+        throw new BadRequestException(
+          'biographyMarkdown exceeds 2000 characters',
+        );
+      }
+      profile.biographyMarkdown = value === '' ? null : value;
+    }
+    return profile;
+  }
+
+  private async replaceRoles(
+    client: PoolClient,
+    accountId: string,
+    requested: RoleGrantDto[],
+    actorScopes: Set<string>,
+    actorId: string,
+    definitions: RoleDefinition[],
+  ) {
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended('identity-global-role-assignments', 0))",
+    );
+    const current = await client.query<{
+      role: string;
+      programmeSlug: string | null;
+      jurisdiction: string | null;
+      entityType: string | null;
+    }>(
+      `SELECT role_code AS role, programme_slug AS "programmeSlug",
+              jurisdiction_code AS jurisdiction, entity_type_code AS "entityType"
+         FROM public.account_role
+        WHERE account_id = $1 AND valid_to IS NULL`,
+      [accountId],
+    );
+    const remaining = new Map<string, number>();
+    const assignmentKey = (
+      role: string,
+      programmeSlug: string | null,
+      jurisdiction: string | null,
+      entityType: string | null,
+    ) => JSON.stringify([role, programmeSlug, jurisdiction, entityType]);
+    for (const role of current.rows) {
+      const key = assignmentKey(
+        role.role,
+        role.programmeSlug,
+        role.jurisdiction,
+        role.entityType,
+      );
+      remaining.set(key, (remaining.get(key) ?? 0) + 1);
+    }
+
+    const actorPrivileges = new Set(actorScopes);
+    actorPrivileges.delete('identity.me');
+    const normalized: RoleGrant[] = requested.map((assignment) => {
+      const code = (assignment.code || assignment.role || '').toUpperCase();
+      const definition = definitions.find((item) => item.code === code);
+      if (!definition) throw new BadRequestException(`unknown role: ${code}`);
+      const grant: RoleGrant = {
+        code,
+        programmeSlug: assignment.programmeSlug ?? null,
+        jurisdiction: assignment.jurisdiction ?? null,
+        entityType: assignment.entityType ?? null,
+        scopes: definition.scopes,
+      };
+      const targetScopes = definition.scopes;
+      const mayGrant =
+        !targetScopes.includes('*') &&
+        (actorPrivileges.has('*') ||
+          (targetScopes.every((scope) => actorPrivileges.has(scope)) &&
+            targetScopes.length < actorPrivileges.size));
+      if (!mayGrant) {
+        const key = assignmentKey(
+          code,
+          grant.programmeSlug,
+          grant.jurisdiction,
+          grant.entityType,
+        );
+        const count = remaining.get(key) ?? 0;
+        if (count < 1) {
+          throw new ForbiddenException(
+            'actors may grant only roles strictly below their authority',
+          );
+        }
+        remaining.set(key, count - 1);
+      }
+      return grant;
+    });
+
+    const currentGlobal = current.rows.some(
+      (assignment) => assignment.role === 'GLOBAL_OPERATOR',
+    );
+    const nextGlobal = normalized.some(
+      (assignment) => assignment.code === 'GLOBAL_OPERATOR',
+    );
+    if (currentGlobal && !nextGlobal) {
+      const count = await client.query<{ count: string }>(
+        `SELECT count(DISTINCT account_id)::text AS count
+           FROM public.account_role
+          WHERE role_code = 'GLOBAL_OPERATOR' AND valid_to IS NULL`,
+      );
+      if (Number(count.rows[0]?.count ?? 0) <= 1) {
+        throw new BadRequestException(
+          'the last global administrator cannot lose the global administrator role',
+        );
+      }
+    }
+
+    await client.query(
+      `UPDATE public.account_role SET valid_to = now()
+        WHERE account_id = $1 AND valid_to IS NULL`,
+      [accountId],
+    );
+    const roles = await this.assignRoles(client, accountId, normalized);
+    await writeSecurityEvent(client, 'identity.roles.replaced.v1', {
+      accountId,
+      roles,
+      actorId,
+    });
+    return roles;
+  }
+
+  private async readRolesForAccount(client: PoolClient, accountId: string) {
+    const result = await client.query<{
+      accountId: string;
+      id: string;
+      role: string;
+      programmeId: string | null;
+      programmeSlug: string | null;
+      jurisdictionId: string | null;
+      jurisdiction: string | null;
+      entityType: string | null;
+      scopes: string[];
+      createdAt: Date;
+      validTo: Date | null;
+    }>(
+      `SELECT ar.account_id AS "accountId", ar.id, ar.role_code AS role,
+              ar.programme_id AS "programmeId",
+              coalesce(ar.programme_slug, p.slug) AS "programmeSlug",
+              ar.jurisdiction_id AS "jurisdictionId",
+              coalesce(ar.jurisdiction_code, j.code) AS jurisdiction,
+              ar.entity_type_code AS "entityType",
+              coalesce(rd.scopes, ARRAY(SELECT jsonb_array_elements_text(ar.scopes))) AS scopes,
+              ar.created_at AS "createdAt", ar.valid_to AS "validTo"
+         FROM public.account_role ar
+         LEFT JOIN public.identity_role_definition rd ON rd.role_code = ar.role_code
+         LEFT JOIN public.programme p ON p.id = ar.programme_id
+         LEFT JOIN public.jurisdiction j ON j.id = ar.jurisdiction_id
+        WHERE ar.account_id = $1 AND ar.valid_to IS NULL
+        ORDER BY ar.created_at, ar.id`,
+      [accountId],
+    );
+    return result.rows.map((role) => ({
+      ...role,
+      scopes: DEFAULT_ROLE_SCOPES[role.role] ?? role.scopes,
+    }));
+  }
+
+  private accountView(account: AccountRecord) {
+    return {
+      id: account.id,
+      displayName: account.display_name,
+      email: account.email,
+      participationType: account.participation_type,
+      status: account.status,
+      websiteUrl: account.website_url,
+      biographyMarkdown: account.biography_markdown,
+      profileImage: account.profile_image_id
+        ? {
+            id: account.profile_image_id,
+            contentType: account.profile_image_media_type,
+            width: 512,
+            height: 512,
+            updatedAt: account.profile_image_updated_at,
+          }
+        : null,
+      primaryCallsignId: account.primary_callsign_id,
+      createdAt: account.created_at,
+      updatedAt: account.updated_at,
+    };
   }
 
   private async authorizeAccountTarget(

@@ -772,7 +772,7 @@ export class IdentityAuthService {
          LEFT JOIN public.programme p ON p.id = ar.programme_id
          LEFT JOIN public.jurisdiction j ON j.id = ar.jurisdiction_id
         WHERE ar.account_id = ANY($1::uuid[])
-          AND (ar.valid_to IS NULL OR ar.valid_to > now())
+          AND ar.valid_to IS NULL
         ORDER BY ar.created_at, ar.id`,
       [accountIds],
     );
@@ -824,7 +824,7 @@ export class IdentityAuthService {
     const result = await client.query(
       `SELECT 1 FROM public.account_role
         WHERE account_id = $1 AND role_code = 'GLOBAL_OPERATOR'
-          AND (valid_to IS NULL OR valid_to > now()) LIMIT 1`,
+          AND valid_to IS NULL LIMIT 1`,
       [accountId],
     );
     return Boolean(result.rowCount);
@@ -876,7 +876,9 @@ function profileImageFor(account: AccountRow) {
     : null;
 }
 
-function validateWebsiteUrl(value: string | null | undefined): string | null {
+export function validateWebsiteUrl(
+  value: string | null | undefined,
+): string | null {
   if (value === null || value === '') return null;
   if (typeof value !== 'string') {
     throw new BadRequestException('websiteUrl must be a string or null');
@@ -939,7 +941,7 @@ async function verifyPassword(
   }
 }
 
-async function hashPassword(password: string): Promise<string> {
+export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
   const derived = await new Promise<Buffer>((resolve, reject) => {
     scrypt(

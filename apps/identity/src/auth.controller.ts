@@ -17,6 +17,7 @@ import type { Request } from 'express';
 import {
   LoginDto,
   CreateAccountDto,
+  UpdateAccountDto,
   AdminAccountsQueryDto,
   AdminRoleDefinitionDto,
   RecoveryRequestDto,
@@ -171,6 +172,17 @@ export class AuthController {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
     return this.accounts.listAccountRoles(authorization, accountId);
+  }
+
+  @Patch('accounts/:accountId')
+  updateAccount(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Body() body: UpdateAccountDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.updateAccount(authorization, accountId, body);
   }
 
   private requestContext(request: Request) {
