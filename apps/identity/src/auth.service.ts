@@ -98,11 +98,32 @@ interface TokenClaims {
   tokenType: 'access' | 'refresh';
 }
 
+interface ServiceTokenClaims {
+  sub: string;
+  jti: string;
+  scp: string[];
+  iat: number;
+  exp: number;
+  tokenType: 'service';
+  aud?: string;
+}
+
 @Injectable()
 export class IdentityAuthService {
   constructor(
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {}
+
+  signServiceToken(claims: Omit<ServiceTokenClaims, 'tokenType'>): string {
+    return signToken({ ...claims, tokenType: 'service' }, 'service');
+  }
+
+  verifyServiceToken(authorization: string): ServiceTokenClaims {
+    if (!authorization.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Bearer authentication is required');
+    }
+    return verifyToken(authorization.slice(7), 'service');
+  }
 
   async login(
     input: { email: string; password: string },
@@ -965,8 +986,8 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 function signToken(
-  claims: TokenClaims | Record<string, unknown>,
-  tokenType: 'access' | 'refresh',
+  claims: TokenClaims | ServiceTokenClaims | Record<string, unknown>,
+  tokenType: 'access' | 'refresh' | 'service',
 ) {
   const key = authSigningKey();
   const header = Buffer.from(
@@ -982,7 +1003,29 @@ function signToken(
 function verifyToken(
   token: string,
   expectedType: 'access' | 'refresh',
-): TokenClaims {
+): TokenClaims;
+function verifyToken(
+  token: string,
+  expectedType: 'service',
+): ServiceTokenClaims;
+function verifyToken(
+  token: string,
+  expectedType: 'access' | 'refresh' | 'service',
+): TokenClaims | ServiceTokenClaims;
+function verifyToken(
+  token: string,
+  expectedType: 'access' | 'refresh' | 'service',
+): TokenClaims | ServiceTokenClaims {
+  return verifyTypedToken<TokenClaims | ServiceTokenClaims>(
+    token,
+    expectedType,
+  );
+}
+
+function verifyTypedToken<T extends TokenClaims | ServiceTokenClaims>(
+  token: string,
+  expectedType: 'access' | 'refresh' | 'service',
+): T {
   try {
     const [headerPart, bodyPart, signaturePart, ...extra] = token.split('.');
     if (!headerPart || !bodyPart || !signaturePart || extra.length)
@@ -992,7 +1035,7 @@ function verifyToken(
     ) as Record<string, unknown>;
     const claims = JSON.parse(
       Buffer.from(bodyPart, 'base64url').toString('utf8'),
-    ) as TokenClaims;
+    ) as T;
     const expected = createHmac('sha256', authSigningKey())
       .update(`${headerPart}.${bodyPart}`)
       .digest();
@@ -1004,8 +1047,10 @@ function verifyToken(
       !timingSafeEqual(received, expected) ||
       claims.tokenType !== expectedType ||
       !claims.sub ||
-      !claims.sid ||
       !claims.jti ||
+      (expectedType !== 'service' && !('sid' in claims && claims.sid)) ||
+      (expectedType === 'service' &&
+        (!('scp' in claims) || !Array.isArray(claims.scp))) ||
       !Number.isFinite(claims.exp) ||
       claims.exp <= Math.floor(Date.now() / 1000)
     )

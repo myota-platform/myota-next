@@ -102,6 +102,22 @@ export class OidcProviderMappingDto {
   enabled?: boolean;
 }
 
+export class ServiceTokenRequestDto {
+  @IsString()
+  @MinLength(1)
+  service!: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(32)
+  clientSecret?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  scopes?: string[];
+}
+
 export class AdminRoleDefinitionDto {
   @IsOptional()
   @IsString()

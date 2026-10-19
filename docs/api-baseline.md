@@ -82,7 +82,7 @@ OpenAPI 3.1.0; 135 operations across 113 paths.
 | POST   | /v1/awards/issuances/{issuanceId}/render-jobs                     | createCertificateRenderJob                 | Queue certificate rendering                                                        |
 | GET    | /v1/awards/issuances/{issuanceId}/render-jobs/{jobId}             | getCertificateRenderJob                    | Get certificate render job status                                                  |
 | GET    | /v1/awards/issuances/{issuanceId}/artifact                        | getAwardArtifact                           | Get the issued certificate artifact                                                |
-| POST   | /v1/identity/auth/service-token                                   |                                            | Issue a service token for an authorised service integration                        |
+| POST   | /v1/identity/auth/service-token                                   | issueServiceToken                          | Issue a short-lived service token for an authorised integration                    |
 | GET    | /v1/identity/internal/email-recipients/{accountId}                | getEmailRecipientAddress                   | Resolve a deliverable email address for the email service                          |
 | GET    | /v1/identity/accounts/{accountId}                                 |                                            | Get an account by identifier                                                       |
 | PATCH  | /v1/identity/accounts/{accountId}                                 | patchIdentityAccount                       | Partially update an account and optionally replace its active administrative roles |

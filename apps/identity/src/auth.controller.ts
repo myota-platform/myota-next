@@ -4,6 +4,7 @@ import {
   Param,
   ParseUUIDPipe,
   Get,
+  Header,
   ForbiddenException,
   Headers,
   HttpCode,
@@ -33,11 +34,13 @@ import {
   ReplaceAccountRolesDto,
   SecurityEventsQueryDto,
   OidcProviderMappingDto,
+  ServiceTokenRequestDto,
 } from './auth.dto.js';
 import { IdentityAuthService } from './auth.service.js';
 import { IdentityRoleService } from './identity-role.service.js';
 import { IdentityAccountService } from './identity-account.service.js';
 import { IdentityIntegrationService } from './identity-integration.service.js';
+import { IdentityCredentialService } from './identity-credential.service.js';
 
 @Controller('identity')
 export class AuthController {
@@ -46,6 +49,7 @@ export class AuthController {
     private readonly roles: IdentityRoleService,
     private readonly accounts: IdentityAccountService,
     private readonly integrations: IdentityIntegrationService,
+    private readonly credentials: IdentityCredentialService,
   ) {}
 
   @Post('auth/register')
@@ -91,6 +95,27 @@ export class AuthController {
       body,
       idempotencyKey,
     );
+  }
+
+  @Post('auth/service-token')
+  @HttpCode(200)
+  @Header('Cache-Control', 'private, no-store')
+  issueServiceToken(
+    @Body() body: ServiceTokenRequestDto,
+    @Headers('authorization') authorization?: string,
+  ) {
+    return this.credentials.issueServiceToken(body, authorization);
+  }
+
+  @Get('internal/email-recipients/:accountId')
+  @Header('Cache-Control', 'private, no-store')
+  resolveEmailRecipient(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.credentials.resolveEmailRecipient(authorization, accountId);
   }
 
   @Post('auth/logout')

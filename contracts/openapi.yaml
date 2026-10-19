@@ -883,6 +883,7 @@ paths:
       tags: [Identity]
       security: [{ bearerAuth: [] }, {}]
       summary: Issue a service token for an authorised service integration
+      operationId: issueServiceToken
       requestBody:
         required: true
         content:
