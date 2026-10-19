@@ -65,7 +65,8 @@
   queued transactionally; the Activity worker parses the source, persists QSOs,
   updates aggregates, records per-record errors, and updates the import status.
   Completion notices include the full final import result, matching the Python
-  worker's notification payload.
+  worker's notification payload. Successful imports also recalculate award
+  progress for the operator and every normalized hunter in the batch.
   Scheduled retention removes completed or failed ADIF source objects after the
   configured window and records successful deletion in Activity PostgreSQL.
   A periodic repair loop recreates missing outbox commands for queued Activity
