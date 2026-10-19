@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -25,7 +27,7 @@ export class GeodataImportService {
   ) {}
 
   async create(key: string | undefined, body: Record<string, unknown>) {
-    const prepared = prepareImport(body);
+    const prepared = prepareImport(await this.resolveObjectReference(body));
     const bucket =
       process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports';
     const id = randomUUID();
@@ -138,6 +140,79 @@ export class GeodataImportService {
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  private async resolveObjectReference(body: Record<string, unknown>) {
+    if (!isRecord(body.source) || typeof body.source.objectKey !== 'string')
+      return body;
+    const bucket =
+      process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports';
+    const requestedBucket =
+      typeof body.source.bucket === 'string' ? body.source.bucket : bucket;
+    const objectKey = body.source.objectKey;
+    if (
+      requestedBucket !== bucket ||
+      !objectKey.trim() ||
+      objectKey.includes('..') ||
+      objectKey.includes('\\')
+    )
+      throw new BadRequestException(
+        'source object must belong to the configured Geodata import bucket',
+      );
+    const filename =
+      typeof body.filename === 'string' ? body.filename.slice(0, 255) : '';
+    if (!filename)
+      throw new BadRequestException(
+        'filename is required for an object reference',
+      );
+    try {
+      const head = await this.s3().send(
+        new HeadObjectCommand({ Bucket: bucket, Key: objectKey }),
+      );
+      if (!Number.isSafeInteger(head.ContentLength) || head.ContentLength! < 1)
+        throw new BadRequestException(
+          'source object is empty or has an invalid size',
+        );
+      if (head.ContentLength! > 20 * 1024 * 1024)
+        throw new BadRequestException(
+          'source object exceeds the 20 MiB import limit',
+        );
+      const result = await this.s3().send(
+        new GetObjectCommand({ Bucket: bucket, Key: objectKey }),
+      );
+      if (!result.Body)
+        throw new BadRequestException('source object has no content');
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of result.Body as AsyncIterable<Uint8Array>) {
+        const bytes = Buffer.from(chunk);
+        size += bytes.length;
+        if (size > 20 * 1024 * 1024)
+          throw new BadRequestException(
+            'source object exceeds the 20 MiB import limit',
+          );
+        chunks.push(bytes);
+      }
+      const content = Buffer.concat(chunks);
+      if (size !== head.ContentLength)
+        throw new BadRequestException(
+          'source object changed while it was being read',
+        );
+      const sha256 = createHash('sha256').update(content).digest('hex');
+      if (
+        typeof body.source.sha256 === 'string' &&
+        body.source.sha256.toLowerCase() !== sha256
+      )
+        throw new BadRequestException(
+          'source object checksum does not match sha256',
+        );
+      return { ...body, content: content.toString('utf8') };
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException(
+        'source object was not found or could not be read',
+      );
     }
   }
 
