@@ -23,6 +23,7 @@ import { GeodataEntityMutationRepository } from './geodata-entity-mutation.repos
 import { GeodataUploadService } from './geodata-upload.service.js';
 import { GeodataDeletionService } from './geodata-deletion.service.js';
 import { GeodataScheduleService } from './geodata-schedule.service.js';
+import { GeodataProposalService } from './geodata-proposal.service.js';
 
 @Controller('geodata')
 export class GeodataController {
@@ -34,6 +35,7 @@ export class GeodataController {
     private readonly uploads: GeodataUploadService,
     private readonly deletions: GeodataDeletionService,
     private readonly schedules: GeodataScheduleService,
+    private readonly proposals: GeodataProposalService,
   ) {}
 
   @Post('entity-deletion-jobs')
@@ -95,6 +97,17 @@ export class GeodataController {
   ) {
     authorizeImport(authorization);
     return this.schedules.run(key, scheduleId, body);
+  }
+
+  @Post('proposals')
+  @HttpCode(201)
+  createProposal(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const claims = verifyAccessToken(authorization);
+    return this.proposals.create(key, claims.sub, body);
   }
 
   @Post('import-uploads')

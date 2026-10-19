@@ -26,7 +26,11 @@ export class GeodataImportService {
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {}
 
-  async create(key: string | undefined, body: Record<string, unknown>) {
+  async create(
+    key: string | undefined,
+    body: Record<string, unknown>,
+    communityProposal?: { proposalId: string; proposerId: string },
+  ) {
     const prepared = prepareImport(await this.resolveObjectReference(body));
     const bucket =
       process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports';
@@ -76,6 +80,7 @@ export class GeodataImportService {
         disappearancePolicy: prepared.disappearancePolicy,
         sourceObject: { bucket, key: objectKey },
         featureCount: prepared.features.length,
+        ...(communityProposal ? { communityProposal } : {}),
       };
       await client.query(
         `INSERT INTO import_run
@@ -95,6 +100,9 @@ export class GeodataImportService {
       );
       const response = {
         ...metadata,
+        ...(communityProposal
+          ? { proposalId: communityProposal.proposalId }
+          : {}),
         id,
         adapter: prepared.adapter,
         format: 'GEOJSON',

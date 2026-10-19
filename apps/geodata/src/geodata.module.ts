@@ -8,6 +8,7 @@ import { GeodataEntityMutationRepository } from './geodata-entity-mutation.repos
 import { GeodataUploadService } from './geodata-upload.service.js';
 import { GeodataDeletionService } from './geodata-deletion.service.js';
 import { GeodataScheduleService } from './geodata-schedule.service.js';
+import { GeodataProposalService } from './geodata-proposal.service.js';
 
 @Module({
   imports: [DatabaseHealthModule.forEnvironment('GEO_DATABASE_URL')],
@@ -20,6 +21,7 @@ import { GeodataScheduleService } from './geodata-schedule.service.js';
     GeodataUploadService,
     GeodataDeletionService,
     GeodataScheduleService,
+    GeodataProposalService,
   ],
 })
 export class GeodataModule {}

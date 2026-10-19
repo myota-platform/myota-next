@@ -347,6 +347,11 @@ export class GeodataWorkRepository {
         typeof run.source_metadata.programmeSlug === 'string'
           ? run.source_metadata.programmeSlug
           : null;
+      const proposal = isRecord(run.source_metadata.communityProposal)
+        ? run.source_metadata.communityProposal
+        : undefined;
+      const proposalQueueId =
+        proposal && candidates.length ? randomUUID() : null;
       const created: Record<string, unknown>[] = [];
       const preprocessed: Record<string, unknown>[] = [];
       for (const candidate of candidates) {
@@ -383,6 +388,13 @@ export class GeodataWorkRepository {
             JSON.stringify(entityPayload),
           ],
         );
+        if (proposal && proposalQueueId)
+          await client.query(
+            `UPDATE geodata_import_candidate SET validation_status='CONFIRMED',
+             validated_by=$2,validated_at=now(),target_status='CANDIDATE',
+             processing_queue_id=$3 WHERE id=$1`,
+            [id, proposal.proposerId, proposalQueueId],
+          );
         const summary = {
           candidateId: id,
           ordinal: candidate.ordinal,
@@ -391,6 +403,42 @@ export class GeodataWorkRepository {
         };
         created.push(summary);
         preprocessed.push(summary);
+      }
+      if (proposal && proposalQueueId) {
+        await client.query(
+          `INSERT INTO geodata_import_processing_queue
+            (id,import_run_id,candidate_ids,target_status,requested_by,status,job_metadata)
+           VALUES ($1,$2,$3::jsonb,'CANDIDATE',$4,'QUEUED',$5::jsonb)`,
+          [
+            proposalQueueId,
+            run.id,
+            JSON.stringify(
+              preprocessed.map((candidate) => candidate.candidateId),
+            ),
+            proposal.proposerId,
+            JSON.stringify({ note: 'Community proposal' }),
+          ],
+        );
+        await client.query(
+          `INSERT INTO outbox_event
+            (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+           VALUES ($1,'geodata.import.processing.queued.v1','geodata-worker','import_processing_queue',$2,$3::jsonb,now(),$4)`,
+          [
+            randomUUID(),
+            proposalQueueId,
+            JSON.stringify({
+              queueId: proposalQueueId,
+              importRunId: run.id,
+              candidateIds: preprocessed.map(
+                (candidate) => candidate.candidateId,
+              ),
+              targetStatus: 'CANDIDATE',
+              requestedBy: proposal.proposerId,
+              natsSubject: 'myota.geodata.import.process.v1',
+            }),
+            randomUUID(),
+          ],
+        );
       }
       const status = errors.length
         ? 'PREPROCESSED_WITH_ERRORS'

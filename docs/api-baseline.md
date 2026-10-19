@@ -117,9 +117,9 @@ OpenAPI 3.1.0; 135 operations across 113 paths.
 | GET    | /v1/geodata/refresh-schedules                                     |                                            | List geodata refresh schedules                                                     |
 | POST   | /v1/geodata/refresh-schedules                                     |                                            | Create a geodata refresh schedule                                                  |
 | POST   | /v1/geodata/refresh-schedules/{scheduleId}/run                    |                                            | Run a geodata refresh schedule                                                     |
+| POST   | /v1/geodata/proposals                                             | postGeodataProposal                        | Submit a community proposal for candidate promotion                                |
 | GET    | /v1/geodata/conflation                                            |                                            | List open geodata conflation candidates                                            |
 | POST   | /v1/geodata/conflation/{candidateId}/resolve                      |                                            | Resolve a geodata conflation candidate                                             |
-| POST   | /v1/geodata/proposals                                             | postGeodataProposal                        | Create a candidate proposal                                                        |
 | PUT    | /v1/geodata/entities/{entityId}/geometry                          | putGeodataEntityGeometry                   | Replace an entity geometry with validated GeoJSON                                  |
 | PUT    | /v1/geodata/entities/{entityId}/categories                        | putGeodataEntityCategories                 | Replace an entity's shared category assignments                                    |
 | POST   | /v1/geodata/entities/{entityId}/reviews                           | postGeodataEntityReview                    | Record an entity lifecycle review decision                                         |

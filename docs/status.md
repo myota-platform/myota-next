@@ -90,7 +90,9 @@
   reconciliation and automatic scheduled execution remain outstanding.
   Candidate-level failures from a FAILED
   promotion queue can be resubmitted through the promotion API; queue-level
-  redrive and NATS delivery remain outstanding.
+  redrive and NATS delivery remain outstanding. Community proposals now enter
+  the same validated import pipeline and automatically queue promotion to the
+  CANDIDATE lifecycle state.
   Owner-scoped resumable S3 multipart uploads now support idempotent session
   creation, bounded binary parts, progress reads, completion, checksum and
   malware scanning, abort, and transactional import-run/outbox creation. This

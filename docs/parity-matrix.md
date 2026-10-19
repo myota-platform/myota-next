@@ -64,7 +64,8 @@ authenticated audit reads and approved-entity vector tiles are also implemented.
 JSON GeoJSON import creation stores source documents in S3-compatible storage
 and queues idempotent import runs transactionally. The worker validates feature
 names and WGS84 geometries, stages candidates with provenance and 50 m duplicate
-warnings, records errors, and emits the preprocessing fact. Multipart/resumable
+warnings, records errors, and emits the preprocessing fact. Community proposals
+join this pipeline and automatically queue promotion to CANDIDATE. Multipart/resumable
 uploads are implemented with owner-scoped durable sessions, bounded binary
 parts, checksum and malware scanning, and transactional completion up to the
 worker's 20 MiB GeoJSON limit. Durable object references from the configured
