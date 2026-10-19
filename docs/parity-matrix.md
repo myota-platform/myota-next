@@ -32,9 +32,10 @@ Activity has an initial activation and single-QSO slice: activation list/create/
 normalized QSO writes, validity checks, ownership checks, subject aggregates,
 transactional event outbox records, idempotency responses, and award recalculation
 jobs. QSO ingestion requests also persist bounded, owner-scoped jobs with a status
-read path, and the separate Activity worker processes those jobs with database
-leases, retries, and dead-letter state. NATS delivery and other Activity consumers
-remain outstanding. QSO correction requests and administrator review are also
+read path, and the separate Activity worker consumes its six registered JetStream
+durables with database leases, progress acknowledgements, retries, and dead-letter
+state. Activity notification events use a separate durable consumer. Recovery
+evidence remains open. QSO correction requests and administrator review are also
 implemented, with applied changes queuing recalculation. Award definition draft,
 review, publish, and retire APIs are implemented. Award progress reads and
 evaluation/recalculation job APIs persist versioned progress and qualification
@@ -89,7 +90,7 @@ Import promotion generates deduplicated conflation candidates from overlapping
 PostGIS bounding boxes using the baseline 0.55 scoring threshold. Failed
 promotion queues can be redriven with a required reason recorded in queue
 metadata and the outbox. Automatic scheduled execution, remaining review
-workflows, NATS delivery, and remaining worker operations are outstanding.
+workflows, and outage/recovery evidence are outstanding.
 Finalization removes staged candidates and queues transactionally
 while preserving the import summary and materialized entities. Pending
 candidates can be paged; administrators can confirm or

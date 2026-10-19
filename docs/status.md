@@ -71,12 +71,13 @@
   recalculation jobs. Geodata now provides scoped impact and confirmation jobs
   and a retryable worker that applies the Activity cascade before transactionally
   deleting Geodata references and the entity. Both services persist outbox
-  events; NATS delivery, explicit redrive, and lease heartbeats remain open.
+  events. Geodata deletion now runs through its registered durable and extends
+  the owner lease; explicit redrive and outage/recovery evidence remain open.
 - Geodata now accepts bounded JSON GeoJSON imports, stores the source document
   in S3-compatible object storage, and creates an idempotent queued import run
   (20 MiB request limit and 5,000 feature default, adjustable with
   `GEODATA_MAX_IMPORT_FEATURES`) with a transactional outbox event. The
-  Geodata worker leases queued runs,
+  Geodata worker consumes registered preprocessing work and claims the named run,
   validates feature names and WGS84 geometries, stages candidates with
   provenance and 50 m duplicate warnings, records errors, and emits the
   preprocessing fact. The service also has PostGIS-backed public entity
@@ -101,7 +102,7 @@
   execution remains outstanding.
   Candidate-level failures from a FAILED promotion queue can be resubmitted
   through the promotion API, and failed queues can now be redriven as a whole
-  with a recorded reason. NATS delivery remains outstanding. Community proposals now enter
+  with a recorded reason. Community proposals now enter
   the same validated import pipeline and automatically queue promotion to the
   CANDIDATE lifecycle state. Tagged load-test cleanup is opt-in, confirmation
   protected, restricted to terminal runs and owned object storage, and refuses
@@ -158,9 +159,9 @@
 
 - Automated compatibility coverage for the first Identity slice remains
   outstanding.
-- Remaining Activity operational workflows are outstanding. CSV file import
-  validates bounded UTF-8 logs and queues normalized QSO rows for the existing
-  ingestion worker. The Gateway now routes public API requests to their owning
+- Remaining Activity parity and recovery evidence are outstanding. CSV file
+  import validates bounded UTF-8 logs and queues normalized QSO rows for the
+  existing ingestion worker. The Gateway now routes public API requests to their owning
   services and protects the Grafana identity callback. Geodata import
   preprocessing, promotion, deletion, and enrichment now consume registered
   JetStream durables and claim the referenced owner-database job. A periodic
