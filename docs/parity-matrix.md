@@ -107,6 +107,10 @@ workflows remain outstanding.
 - Activity workers: QSO ingestion, ADIF processing, award evaluation and
   recalculation, certificate rendering, statistics rebuild, notifications,
   and retention/recovery tasks.
+- Activity notification consumption: exact durable validation, transactional
+  processed-event/checkpoint and notification writes, deduplication, bounded
+  retry, and redacted poison-event dead-lettering are implemented. Audited
+  notification redrive and recovery evidence remain open.
 - Geodata workers: import preprocessing and promotion, confirmed entity
   deletion, location enrichment, retention, and recovery tasks.
 - Gateway: routes public API requests to their owning services, protects

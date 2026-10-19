@@ -136,6 +136,12 @@
   issuance event together. Certificate render jobs create PDF artifacts from
   registered PNG/JPEG artwork in S3-compatible storage; authorized participants
   receive short-lived artifact download URLs.
+- The Activity notification worker validates and consumes the registered
+  JetStream durable, inserts recipient notices with event deduplication and
+  consumer checkpoints in one Activity database transaction, retries transient
+  failures, and stores redacted poison envelopes with stream coordinates before
+  terminating them. Audited notification redrive and worker recovery evidence
+  remain outstanding.
 
 ## Not implemented yet
 
@@ -163,6 +169,6 @@
   producer/runtime is gated and its separate database conflicts with the
   requested three-database target until its ownership is resolved.
 
-The Activity notification and email worker entry points remain explicit stubs.
-Contract presence and successful builds do not count as function parity. Track
-completion against the [parity matrix](parity-matrix.md).
+The email worker remains an explicit stub. Contract presence and successful
+builds do not count as function parity. Track completion against the
+[parity matrix](parity-matrix.md).
