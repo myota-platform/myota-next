@@ -6,7 +6,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
-import { createServer, type Server } from 'node:http';
+import { createServer, type Server, type ServerResponse } from 'node:http';
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import type { Consumer, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
@@ -115,6 +115,18 @@ export class ActivityNotificationsService
   private startMetricsServer(): void {
     if (METRICS_PORT === 0) return;
     this.metricsServer = createServer((request, response) => {
+      if (request.method === 'GET' && request.url === '/healthz') {
+        response.writeHead(this.stopping ? 503 : 200, {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-store',
+        });
+        response.end(this.stopping ? 'stopping\n' : 'ok\n');
+        return;
+      }
+      if (request.method === 'GET' && request.url === '/readyz') {
+        void this.respondReadiness(response);
+        return;
+      }
       if (request.method !== 'GET' || request.url !== '/metrics') {
         response.writeHead(404).end();
         return;
@@ -136,6 +148,39 @@ export class ActivityNotificationsService
       response.end(`${lines.join('\n')}\n`);
     });
     this.metricsServer.listen(METRICS_PORT, '0.0.0.0');
+  }
+
+  private async respondReadiness(response: ServerResponse): Promise<void> {
+    try {
+      if (
+        this.stopping ||
+        !this.pool ||
+        !this.connection ||
+        this.connection.isClosed() ||
+        !this.messages
+      ) {
+        response.writeHead(503, {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-store',
+        });
+        response.end('not ready\n');
+        return;
+      }
+      await this.pool.query('SELECT 1');
+      response.writeHead(200, {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
+      response.end('ready\n');
+    } catch {
+      if (!response.headersSent) {
+        response.writeHead(503, {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-store',
+        });
+      }
+      response.end('not ready\n');
+    }
   }
 
   private countOutcome(outcome: string): void {
