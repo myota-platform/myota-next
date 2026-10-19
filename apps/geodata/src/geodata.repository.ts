@@ -94,6 +94,24 @@ export class GeodataRepository {
     }
   }
 
+  async getLocationRows() {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT DISTINCT jsonb_build_object(
+          'continent',continent,'continentCode',continent_code,'country',country,
+          'countryCode',country_code,'region',region,'regionCode',region_code,
+          'province',province,'provinceCode',province_code,'county',county,
+          'city',city,'municipality',municipality) AS location FROM geodata_entity`,
+      );
+      return result.rows.map(
+        (row) => row.location as Record<string, string | null>,
+      );
+    } finally {
+      client.release();
+    }
+  }
+
   private async connect() {
     if (!this.pool)
       throw new ServiceUnavailableException(
