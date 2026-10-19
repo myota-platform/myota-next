@@ -32,10 +32,14 @@ export function normalizeTimestamp(value: string | Date): string {
 }
 
 export function normalizeCallsign(value: unknown): string {
-  if (typeof value !== 'string') {
+  if (
+    typeof value !== 'string' &&
+    typeof value !== 'number' &&
+    typeof value !== 'boolean'
+  ) {
     throw new BadRequestException('callsign is invalid');
   }
-  const normalized = value.toUpperCase().trim().replace(/\s+/g, ' ');
+  const normalized = String(value).toUpperCase().trim().replace(/\s+/g, ' ');
   if (
     !normalized ||
     normalized.length > 32 ||
