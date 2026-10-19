@@ -447,10 +447,17 @@ function normalizeEntityType(
 ): Record<string, unknown> & { code: string } {
   const code =
     typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
-  const originalCode =
-    typeof body.originalCode === 'string'
-      ? body.originalCode.trim().toUpperCase()
-      : code;
+  const originalCodeValue = body.originalCode || code;
+  const originalCode = (
+    typeof originalCodeValue === 'string'
+      ? originalCodeValue
+      : typeof originalCodeValue === 'number' ||
+          typeof originalCodeValue === 'boolean'
+        ? String(originalCodeValue)
+        : ''
+  )
+    .trim()
+    .toUpperCase();
   if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(code)) {
     throw new BadRequestException(
       'category code must start with a letter and contain only A-Z, 0-9, and underscores',
@@ -487,6 +494,11 @@ function normalizeEntityType(
   const label = typeof body.label === 'string' ? body.label.trim() : '';
   if (!label) throw new BadRequestException('category label must not be empty');
   const now = new Date().toISOString();
+  const activeValue = Object.hasOwn(body, 'active')
+    ? body.active
+    : existing && Object.hasOwn(existing, 'active')
+      ? existing.active
+      : true;
   return {
     ...(existing ?? { createdAt: now }),
     code,
@@ -495,10 +507,7 @@ function normalizeEntityType(
     geometryTypes,
     description:
       typeof body.description === 'string' ? body.description.trim() : '',
-    active:
-      typeof body.active === 'boolean'
-        ? body.active
-        : (existing?.active ?? true),
+    active: Boolean(activeValue),
     updatedAt: now,
   };
 }
