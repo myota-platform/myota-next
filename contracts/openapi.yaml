@@ -2092,14 +2092,14 @@ components:
       type: object
       required: [editorId]
       minProperties: 2
-      description: Omitted fields are unchanged. Website and description accept null or empty string to clear their stored value.
+      description: Omitted fields are unchanged. Website and description accept null or empty string to clear their stored value. Location fields are edited under geodata.location.manage; manualFields identifies the values protected from provider refreshes, while catalogue codes remain provider-derived.
       properties:
         editorId: { type: string }
         name: { type: string, minLength: 1, maxLength: 240 }
         website: { type: [string, 'null'], maxLength: 2048, format: uri, pattern: '^https?://', description: Send null or an empty string to clear. Omission preserves the stored value. }
         description: { type: [string, 'null'], maxLength: 2000, description: Plain text only; send null or an empty string to clear. Omission preserves the stored value. }
         location: { $ref: '#/components/schemas/LocationMetadata' }
-        manualFields: { type: array, items: { type: string } }
+        manualFields: { type: array, uniqueItems: true, items: { type: string, enum: [continent, country, region, subdivision, province, county, city, municipality, locality] } }
         note: { type: string }
     LocationEnrichmentRequest:
       type: object

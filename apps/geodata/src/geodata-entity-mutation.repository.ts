@@ -11,6 +11,27 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { entityProjection } from './geodata.repository.js';
 
+const locationColumns: Record<string, string> = {
+  continent: 'continent',
+  continentCode: 'continent_code',
+  country: 'country',
+  countryCode: 'country_code',
+  region: 'region',
+  regionCode: 'region_code',
+  subdivision: 'subdivision',
+  subdivisionCode: 'subdivision_code',
+  province: 'province',
+  provinceCode: 'province_code',
+  county: 'county',
+  countyCode: 'county_code',
+  city: 'city',
+  municipality: 'municipality',
+  locality: 'locality',
+};
+const manualLocationFields = new Set(
+  Object.keys(locationColumns).filter((field) => !field.endsWith('Code')),
+);
+
 @Injectable()
 export class GeodataEntityMutationRepository {
   constructor(
@@ -173,6 +194,8 @@ export class GeodataEntityMutationRepository {
       'name',
       'website',
       'description',
+      'location',
+      'manualFields',
       'note',
     ]);
     const unknown = Object.keys(body).filter((field) => !supported.has(field));
@@ -180,7 +203,11 @@ export class GeodataEntityMutationRepository {
       throw new BadRequestException(
         `unsupported entity metadata fields: ${unknown.sort().join(', ')}`,
       );
-    if (!['name', 'website', 'description'].some((field) => field in body))
+    if (
+      !['name', 'website', 'description', 'location', 'manualFields'].some(
+        (field) => field in body,
+      )
+    )
       throw new BadRequestException(
         'at least one editable metadata field is required',
       );
@@ -202,6 +229,34 @@ export class GeodataEntityMutationRepository {
       'description' in body
         ? normalizeDescription(body.description)
         : undefined;
+    let locationInput: Record<string, unknown> | undefined;
+    let requestedManual: string[] | undefined;
+    if ('location' in body) {
+      if (!isRecord(body.location))
+        throw new BadRequestException('location must be an object');
+      const unknownLocation = Object.keys(body.location).filter(
+        (field) => !(field in locationColumns),
+      );
+      if (unknownLocation.length)
+        throw new BadRequestException(
+          `unsupported location fields: ${unknownLocation.sort().join(', ')}`,
+        );
+      locationInput = body.location;
+      const manual = body.manualFields ?? Object.keys(locationInput);
+      if (
+        !Array.isArray(manual) ||
+        manual.some(
+          (field) =>
+            typeof field !== 'string' || !manualLocationFields.has(field),
+        )
+      )
+        throw new BadRequestException(
+          'manualFields must contain supported location fields',
+        );
+      requestedManual = [...new Set(manual as string[])].sort();
+    } else if ('manualFields' in body) {
+      throw new BadRequestException('manualFields requires a location object');
+    }
     const expectedVersion = parseIfMatch(ifMatch);
     const client = await this.connect();
     try {
@@ -221,7 +276,10 @@ export class GeodataEntityMutationRepository {
         }
       }
       const result = await client.query(
-        `SELECT id,revision,name,website,description,lifecycle_status,public_properties
+        `SELECT id,revision,name,website,description,lifecycle_status,public_properties,
+          continent,continent_code,country,country_code,region,region_code,
+          subdivision,subdivision_code,province,province_code,county,county_code,
+          city,municipality,locality,manual_location_fields
          FROM geodata_entity WHERE id=$1 FOR UPDATE`,
         [id],
       );
@@ -238,7 +296,48 @@ export class GeodataEntityMutationRepository {
         if (value !== undefined && value !== row[field])
           changed[field] = { previous: row[field], value };
       }
-      if (Object.keys(changed).length) {
+      let locationChanged = false;
+      let nextLocation: Record<string, unknown> = {};
+      let nextManual: string[] = [];
+      let previousLocation: Record<string, unknown> = {};
+      if (locationInput && requestedManual) {
+        const previousManual = Array.isArray(row.manual_location_fields)
+          ? row.manual_location_fields.filter(
+              (field: unknown): field is string => typeof field === 'string',
+            )
+          : [];
+        nextManual = requestedManual;
+        const released = previousManual.filter(
+          (field: string) => !nextManual.includes(field),
+        );
+        const fieldNames = Object.keys(locationColumns);
+        previousLocation = Object.fromEntries(
+          fieldNames.map((field) => [field, row[locationColumns[field]]]),
+        );
+        nextLocation = { ...previousLocation };
+        for (const field of nextManual) {
+          if (field in locationInput)
+            nextLocation[field] = normalizeManualLocationValue(
+              field,
+              locationInput[field],
+            );
+        }
+        const catalogue = await client.query(
+          `SELECT DISTINCT continent,continent_code,country,country_code,region,region_code,
+            subdivision,subdivision_code,province,province_code FROM geodata_entity`,
+        );
+        const codes = deriveManualLocationCodes(
+          nextLocation,
+          new Set(nextManual),
+          catalogue.rows,
+        );
+        Object.assign(nextLocation, codes);
+        for (const field of released) nextLocation[field] = null;
+        locationChanged =
+          JSON.stringify(previousLocation) !== JSON.stringify(nextLocation) ||
+          JSON.stringify(previousManual) !== JSON.stringify(nextManual);
+      }
+      if (Object.keys(changed).length || locationChanged) {
         await client.query(
           "SELECT set_config('myota.geodata_writer','row-v1',true)",
         );
@@ -249,6 +348,9 @@ export class GeodataEntityMutationRepository {
         const reviewHistory = Array.isArray(properties.reviewHistory)
           ? [...properties.reviewHistory]
           : [];
+        const provenance = isRecord(properties.provenance)
+          ? { ...properties.provenance }
+          : {};
         if (changed.name)
           reviewHistory.push({
             action: 'ENTITY_NAME_CHANGED',
@@ -269,24 +371,60 @@ export class GeodataEntityMutationRepository {
             note,
             occurredAt: changedAt.toISOString(),
           });
-        await client.query(
-          `UPDATE geodata_entity SET name=COALESCE($2,name),website=CASE WHEN $3 THEN $4 ELSE website END,
-           description=CASE WHEN $5 THEN $6 ELSE description END,
-           public_properties=public_properties || $7::jsonb,updated_at=$8 WHERE id=$1`,
-          [
+        if (locationChanged)
+          reviewHistory.push({
+            action: 'LOCATION_UPDATED',
+            editorId,
+            manualFields: nextManual,
+            previous: previousLocation,
+            location: nextLocation,
+            note,
+            occurredAt: changedAt.toISOString(),
+          });
+        if (locationChanged)
+          provenance.manualLocation = {
+            fields: nextManual,
+            editorId,
+            note,
+            updatedAt: changedAt.toISOString(),
+          };
+        const updateParams: unknown[] = [
+          id,
+          name ?? null,
+          'website' in body,
+          website ?? null,
+          'description' in body,
+          description ?? null,
+          JSON.stringify({
+            reviewHistory,
+            ...(locationChanged ? { provenance } : {}),
+            updatedAt: changedAt.toISOString(),
+          }),
+          changedAt,
+        ];
+        let updateSql = `UPDATE geodata_entity SET name=COALESCE($2,name),website=CASE WHEN $3 THEN $4 ELSE website END,
+          description=CASE WHEN $5 THEN $6 ELSE description END,
+          public_properties=public_properties || $7::jsonb,updated_at=$8`;
+        if (locationChanged) {
+          for (const [field, value] of Object.entries(nextLocation)) {
+            if (!(field in locationColumns)) continue;
+            updateParams.push(value);
+            updateSql += `,${locationColumns[field]}=$${updateParams.length}`;
+          }
+          updateParams.push(JSON.stringify(nextManual), changedAt);
+          updateSql += `,manual_location_fields=$${updateParams.length - 1}::jsonb,manual_location_updated_at=$${updateParams.length}`;
+        }
+        updateSql += ' WHERE id=$1';
+        await client.query(updateSql, updateParams);
+        if (locationChanged) {
+          await this.writeEntityEvent(
+            client,
             id,
-            name ?? null,
-            'website' in body,
-            website ?? null,
-            'description' in body,
-            description ?? null,
-            JSON.stringify({
-              reviewHistory,
-              updatedAt: changedAt.toISOString(),
-            }),
+            'geodata.entity.location-updated.v1',
+            { entityId: id, editorId, manualFields: nextManual, note },
             changedAt,
-          ],
-        );
+          );
+        }
         if (changed.name)
           await this.writeEntityEvent(
             client,
@@ -714,6 +852,102 @@ export class GeodataEntityMutationRepository {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeManualLocationValue(field: string, value: unknown) {
+  if (value === null) return null;
+  if (
+    typeof value !== 'string' &&
+    typeof value !== 'number' &&
+    typeof value !== 'boolean'
+  )
+    throw new BadRequestException(
+      `location field ${field} must be scalar or null`,
+    );
+  const normalized = String(value).trim();
+  return field.endsWith('Code') ? normalized.toUpperCase() : normalized || null;
+}
+
+function deriveManualLocationCodes(
+  location: Record<string, unknown>,
+  manual: Set<string>,
+  rows: Record<string, unknown>[],
+) {
+  const matches = (field: string, value: unknown) =>
+    rows.filter(
+      (row) =>
+        textValue(row[field]).toLocaleLowerCase() ===
+        textValue(value).toLocaleLowerCase(),
+    );
+  const result: Record<string, unknown> = {};
+  const continentRows = matches('continent', location.continent);
+  if (manual.has('continent')) {
+    if (!textValue(location.continent) || !continentRows.length)
+      throw new BadRequestException(
+        'continent must match the location catalogue',
+      );
+    result.continentCode = continentRows[0].continent_code ?? null;
+  }
+  const countryRows = rows.filter(
+    (row) =>
+      textValue(row.country).toLocaleLowerCase() ===
+        textValue(location.country).toLocaleLowerCase() &&
+      (!location.continent || sameText(row.continent, location.continent)),
+  );
+  if (manual.has('country')) {
+    if (!textValue(location.country) || !countryRows.length)
+      throw new BadRequestException(
+        'country must match the location catalogue',
+      );
+    result.countryCode = countryRows[0].country_code ?? null;
+  }
+  const subdivisionValue = location.region || location.subdivision;
+  const subdivisionRows = rows.filter(
+    (row) =>
+      textValue(row.region || row.subdivision).toLocaleLowerCase() ===
+        textValue(subdivisionValue).toLocaleLowerCase() &&
+      (!location.country || sameText(row.country, location.country)),
+  );
+  if (manual.has('region') || manual.has('subdivision')) {
+    if (!subdivisionRows.length)
+      throw new BadRequestException(
+        'region or subdivision must match the location catalogue',
+      );
+    result.regionCode =
+      subdivisionRows[0].region_code ??
+      subdivisionRows[0].subdivision_code ??
+      null;
+    result.subdivisionCode =
+      subdivisionRows[0].subdivision_code ??
+      subdivisionRows[0].region_code ??
+      null;
+  }
+  const provinceRows = rows.filter(
+    (row) =>
+      textValue(row.province).toLocaleLowerCase() ===
+        textValue(location.province).toLocaleLowerCase() &&
+      (!location.country || sameText(row.country, location.country)) &&
+      (!subdivisionValue ||
+        sameText(row.region || row.subdivision, subdivisionValue)),
+  );
+  if (manual.has('province')) {
+    if (!textValue(location.province) || !provinceRows.length)
+      throw new BadRequestException(
+        'province must match the location catalogue',
+      );
+    result.provinceCode = provinceRows[0].province_code ?? null;
+  }
+  return result;
+}
+
+function textValue(value: unknown) {
+  return typeof value === 'string' ? value : '';
+}
+
+function sameText(left: unknown, right: unknown) {
+  return (
+    textValue(left).toLocaleLowerCase() === textValue(right).toLocaleLowerCase()
+  );
 }
 
 function parseIfMatch(value: string | undefined) {

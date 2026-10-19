@@ -209,7 +209,22 @@ export class GeodataController {
     @Param('entityId') id: string,
     @Body() body: Record<string, unknown>,
   ) {
-    authorizeReview(authorization);
+    const claims = verifyAccessToken(authorization);
+    if ('location' in body || 'manualFields' in body) {
+      if (
+        !claims.scp.some(
+          (scope) => scope === '*' || scope === 'geodata.location.manage',
+        )
+      )
+        throw new ForbiddenException(
+          'geodata.location.manage scope is required',
+        );
+    }
+    if (
+      ['name', 'website', 'description'].some((field) => field in body) &&
+      !claims.scp.some((scope) => scope === '*' || scope === 'geodata.review')
+    )
+      throw new ForbiddenException('geodata.review scope is required');
     return this.entityMutations.patchEntityMetadata(id, key, ifMatch, body);
   }
 

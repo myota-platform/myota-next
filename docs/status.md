@@ -70,8 +70,10 @@
   entities, category and source links, audit/outbox events, and per-candidate
   queue outcomes. Entity lifecycle review and If-Match protected name, website,
   and description edits are transactional and audited. If-Match protected
-  geometry and category edits are also audited. Location edits and failed-queue
-  redrive remain outstanding.
+  geometry, category, and manual location edits are also audited. Location
+  names are checked against the provider catalogue, provider codes cannot be
+  manually set, and location edits require `geodata.location.manage`. Failed
+  queue redrive and asynchronous location enrichment remain outstanding.
   The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
   paged import-run status reads are also exposed. Authenticated entity audit
