@@ -15,7 +15,10 @@ import type {
   ReviewProgrammeContentDto,
   SaveProgrammeContentDto,
 } from './programmes.dto.js';
-import { normalizeUtcTimestamp } from './programme-domain.js';
+import {
+  isTruthyJsonValue,
+  normalizeUtcTimestamp,
+} from './programme-domain.js';
 
 type ContentRecord = Record<string, unknown> & {
   id: string;
@@ -322,7 +325,7 @@ export class ProgrammeContentService {
   }
 
   private requireContent(key: string, locale: string, value: unknown) {
-    if (!key || !locale || !value) {
+    if (!key || !locale || !isTruthyJsonValue(value)) {
       throw new BadRequestException('key, locale, and value are required');
     }
   }

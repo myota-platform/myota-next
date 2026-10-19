@@ -1,5 +1,14 @@
 import { BadRequestException } from '@nestjs/common';
 
+export function isTruthyJsonValue(value: unknown): boolean {
+  if (value == null || value === false || value === '' || value === 0) {
+    return false;
+  }
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'object') return Object.keys(value).length > 0;
+  return true;
+}
+
 export function normalizeUtcTimestamp(value: string): string {
   let normalized = value.replace(/([Tt ]\d{2}:\d{2}:\d{2}),(?=\d)/, '$1.');
   normalized = normalized.replace(/[t ]/, 'T');

@@ -40,7 +40,8 @@
   per-programme entity-type reads, assignments and removals use the same state
   transaction and outbox boundary. Programme content supports draft editing,
   review submission and decisions, publication, paginated filtering, and locale
-  coverage reporting. Programme policy drafts support scoped authoring,
+  coverage reporting; content values and policy schemas follow the reference's
+  non-empty JSON checks. Programme policy drafts support scoped authoring,
   submission, review, publishing, and effective policy updates. Effective
   publication timestamps accept Python-compatible date-only, space-separated,
   and comma-fraction forms, then normalize to UTC with microsecond precision.

@@ -15,7 +15,10 @@ import type {
   ReviewProgrammePolicyDraftDto,
   SaveProgrammePolicyDraftDto,
 } from './programmes.dto.js';
-import { normalizeUtcTimestamp } from './programme-domain.js';
+import {
+  isTruthyJsonValue,
+  normalizeUtcTimestamp,
+} from './programme-domain.js';
 
 type PolicyDraft = Record<string, unknown> & {
   id: string;
@@ -68,7 +71,7 @@ export class ProgrammePolicyService {
     if (
       !body.type ||
       !body.name ||
-      !body.schema ||
+      !isTruthyJsonValue(body.schema) ||
       typeof body.schema !== 'object'
     ) {
       throw new BadRequestException(
