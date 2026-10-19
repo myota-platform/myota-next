@@ -552,7 +552,7 @@ function buildLocationTree(rows: Record<string, string | null>[]) {
       String(code ?? '')
         .trim()
         .toUpperCase() || null;
-    const key = `${normalizedCode ?? ''}:${label.toLocaleLowerCase()}`;
+    const key = `${normalizedCode ?? ''}:${label.toLowerCase()}`;
     let value = map.get(key);
     if (!value) {
       value = { name: label, code: normalizedCode };
@@ -636,11 +636,19 @@ function buildLocationTree(rows: Record<string, string | null>[]) {
           );
         return result;
       })
-      .sort((a, b) =>
-        String(a.name).localeCompare(String(b.name), undefined, {
-          sensitivity: 'base',
-        }),
-      );
+      .sort((a, b) => {
+        const nameOrder = compareText(
+          String(a.name).toLowerCase(),
+          String(b.name).toLowerCase(),
+        );
+        return (
+          nameOrder ||
+          compareText(
+            typeof a.code === 'string' ? a.code : '',
+            typeof b.code === 'string' ? b.code : '',
+          )
+        );
+      });
   return {
     provider: 'BIGDATACLOUD',
     codeStandards: {
@@ -650,4 +658,8 @@ function buildLocationTree(rows: Record<string, string | null>[]) {
     },
     continents: sorted(continents, 'continent'),
   };
+}
+
+function compareText(left: string, right: string) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }

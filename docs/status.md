@@ -108,6 +108,8 @@
   names are checked against the provider catalogue, provider codes cannot be
   manually set, and location edits require `geodata.location.manage`. An
   authorized, idempotent request can queue BigDataCloud reverse geocoding; the
+  provider-derived location hierarchy sorts case-insensitively with codes as
+  tie-breakers. The
   Geodata worker applies results only to the matching geometry and protects
   manual fields. Missing metadata now queues enrichment automatically on
   lifecycle promotion; geometry changes queue refreshes, and releasing manual
