@@ -18,6 +18,12 @@ const GOVERNMENT_GIS_FORMATS = new Set([
   'SHAPEFILE',
   'ARCGIS_FEATURESERVER',
 ]);
+const ADAPTER_CODES = new Set([
+  'PARKSERVE_US',
+  'OSM',
+  'GOVERNMENT_GIS',
+  'MANUAL',
+]);
 
 export interface NormalizedAdapterFeature {
   properties: Record<string, unknown>;
@@ -29,6 +35,8 @@ export function normalizeAdapterFeature(
   adapter: string,
   feature: Record<string, unknown>,
 ): NormalizedAdapterFeature {
+  if (!ADAPTER_CODES.has(adapter))
+    throw new Error(`unsupported adapter: ${adapter}`);
   if (adapter === 'GOVERNMENT_GIS') return normalizeGovernmentFeature(feature);
 
   const way =
