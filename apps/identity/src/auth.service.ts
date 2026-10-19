@@ -18,6 +18,7 @@ import {
 } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { DEFAULT_ROLE_SCOPES } from './role-catalog.js';
 
 const ACCESS_SECONDS = Number(process.env.MYOTA_ACCESS_TOKEN_SECONDS ?? 600);
 const REFRESH_SECONDS = Number(
@@ -863,32 +864,6 @@ function effectiveScopes(roles: RoleAssignmentRow[]) {
   }
   return [...result].sort();
 }
-
-const DEFAULT_ROLE_SCOPES: Record<string, string[]> = {
-  PARTICIPANT: [],
-  GLOBAL_OPERATOR: ['*'],
-  IDENTITY_ADMIN: [
-    'identity.accounts.create',
-    'identity.admin',
-    'identity.roles.assign',
-    'identity.audit.read',
-    'callsign.verify',
-  ],
-  GIS_ADMIN: [
-    'geodata.review',
-    'geodata.import',
-    'geodata.geometry.manage',
-    'geodata.delete',
-  ],
-  GEO_APPROVER: ['geodata.review'],
-  PROGRAMME_ADMIN: [
-    'programme.admin',
-    'programme.policy.manage',
-    'programme.content.manage',
-  ],
-  ACTIVITY_ADMIN: ['activity.read', 'activity.admin'],
-  AUDITOR: ['audit.read', 'identity.audit.read'],
-};
 
 function profileImageFor(account: AccountRow) {
   return account.profile_image_id

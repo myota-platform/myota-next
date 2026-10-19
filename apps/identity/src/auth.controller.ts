@@ -21,10 +21,14 @@ import {
   ProfileUpdateDto,
 } from './auth.dto.js';
 import { IdentityAuthService } from './auth.service.js';
+import { IdentityRoleService } from './identity-role.service.js';
 
 @Controller('identity')
 export class AuthController {
-  constructor(private readonly auth: IdentityAuthService) {}
+  constructor(
+    private readonly auth: IdentityAuthService,
+    private readonly roles: IdentityRoleService,
+  ) {}
 
   @Post('auth/register')
   register(): never {
@@ -89,6 +93,13 @@ export class AuthController {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
     return this.auth.listAdminAccounts(authorization, query);
+  }
+
+  @Get('admin/roles')
+  listAdminRoles(@Headers('authorization') authorization?: string) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.roles.listAdminRoles(authorization);
   }
 
   private requestContext(request: Request) {
