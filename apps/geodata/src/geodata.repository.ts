@@ -174,6 +174,43 @@ export class GeodataRepository {
     }
   }
 
+  async getTile(zoom: number, x: number, y: number) {
+    if (
+      !Number.isInteger(zoom) ||
+      !Number.isInteger(x) ||
+      !Number.isInteger(y) ||
+      zoom < 0 ||
+      zoom > 22 ||
+      x < 0 ||
+      y < 0 ||
+      x >= 2 ** zoom ||
+      y >= 2 ** zoom
+    )
+      throw new BadRequestException(
+        'tile coordinates are outside the valid range',
+      );
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `WITH bounds AS (SELECT ST_TileEnvelope($1,$2,$3) AS geom),
+         tile_features AS (
+           SELECT e.id,e.name,e.lifecycle_status AS status,e.programme_slug,
+             e.entity_type_code,ST_AsMVTGeom(ST_Transform(e.geom,3857),bounds.geom) AS geom
+           FROM geodata_entity e CROSS JOIN bounds
+           WHERE e.lifecycle_status='APPROVED'
+             AND ST_Transform(e.geom,3857) && bounds.geom
+         )
+         SELECT ST_AsMVT(tile_features,'geodata',4096,'geom') AS tile FROM tile_features`,
+        [zoom, x, y],
+      );
+      return result.rows[0]?.tile
+        ? Buffer.from(result.rows[0].tile)
+        : Buffer.alloc(0);
+    } finally {
+      client.release();
+    }
+  }
+
   private async connect() {
     if (!this.pool)
       throw new ServiceUnavailableException(

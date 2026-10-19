@@ -5,7 +5,9 @@ import {
   Headers,
   Param,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { GeodataRepository } from './geodata.repository.js';
 
@@ -99,6 +101,23 @@ export class GeodataController {
   ) {
     authorizeBearer(authorization);
     return buildLocationTree(await this.repository.getLocationRows());
+  }
+
+  @Get('tiles/:z/:x/:y')
+  async tile(
+    @Param('z') zoom: string,
+    @Param('x') x: string,
+    @Param('y') y: string,
+    @Res() response: Response,
+  ) {
+    const tile = await this.repository.getTile(
+      Number(zoom),
+      Number(x),
+      Number(y),
+    );
+    response.setHeader('content-type', 'application/vnd.mapbox-vector-tile');
+    response.setHeader('cache-control', 'public, max-age=60');
+    response.status(200).send(tile);
   }
 
   @Get('entities/:entityId')

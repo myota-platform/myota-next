@@ -60,7 +60,8 @@
   edit, review, and worker operations remain outstanding. The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
   paged import-run status reads are also exposed. Authenticated entity audit
-  reads combine the entity's review histories with durable audit events.
+  reads combine the entity's review histories with durable audit events. Vector
+  tile reads serve approved entity geometry as Mapbox vector tiles.
 - Award definitions now support public published-only reads, administrative
   draft create/edit, review submission and decisions, print-readiness
   validation, publication, and retirement. Saved and published facts commit to
