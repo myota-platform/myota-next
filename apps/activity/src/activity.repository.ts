@@ -187,6 +187,44 @@ export class ActivityRepository {
     }
   }
 
+  async listAwardAssets(): Promise<JsonRecord[]> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        'SELECT metadata FROM activity_asset ORDER BY created_at',
+      );
+      return result.rows.map((row) => row.metadata);
+    } finally {
+      client.release();
+    }
+  }
+
+  async saveAwardAsset(asset: JsonRecord): Promise<JsonRecord> {
+    const client = await this.connect();
+    try {
+      await client.query(
+        `INSERT INTO activity_asset(id,kind,object_key,bucket,media_type,width_px,height_px,content_status,metadata)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
+         ON CONFLICT (id) DO UPDATE SET media_type=EXCLUDED.media_type,width_px=EXCLUDED.width_px,
+         height_px=EXCLUDED.height_px,content_status=EXCLUDED.content_status,metadata=EXCLUDED.metadata,updated_at=now()`,
+        [
+          asset.id,
+          asset.kind,
+          asset.objectKey,
+          asset.bucket,
+          asset.mediaType,
+          Number(asset.widthPx),
+          Number(asset.heightPx),
+          asset.contentStatus ?? 'MISSING',
+          JSON.stringify(asset),
+        ],
+      );
+      return asset;
+    } finally {
+      client.release();
+    }
+  }
+
   async subjectFacts(
     programme: string,
     subjectId: string,

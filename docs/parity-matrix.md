@@ -39,10 +39,10 @@ implemented, with applied changes queuing recalculation. Award definition draft,
 review, publish, and retire APIs are implemented. Award progress reads and
 evaluation/recalculation job APIs persist versioned progress and qualification
 notifications through the Activity worker. Remaining Activity work includes
-ADIF/CSV file imports, assets, requests,
-issuance/rendering, notification production, statistics rebuild processing, and
-worker recovery. Statistics listing/rebuild job APIs and owner-scoped
-notification reads are implemented.
+ADIF/CSV file imports, requests, issuance/rendering, notification production,
+statistics rebuild processing, and worker recovery. Registered award assets
+and bounded content storage are implemented. Statistics listing/rebuild job
+APIs and owner-scoped notification reads are implemented.
 
 ## User applications
 

@@ -1,7 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ActivityService } from './activity.service.js';
 
-@Controller('v1/public')
+@Controller('public')
 export class PublicActivityController {
   constructor(private readonly activity: ActivityService) {}
 

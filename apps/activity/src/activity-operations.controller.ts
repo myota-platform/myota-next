@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ActivityService } from './activity.service.js';
 
-@Controller('v1')
+@Controller()
 export class ActivityOperationsController {
   constructor(private readonly activity: ActivityService) {}
 

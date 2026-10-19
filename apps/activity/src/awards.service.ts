@@ -3,7 +3,15 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { createHash, randomUUID } from 'node:crypto';
+import sharp from 'sharp';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { ActivityRepository } from './activity.repository.js';
 import { evaluateAward, validateAwardDraft } from './award-domain.js';
@@ -11,6 +19,8 @@ import type { JsonRecord } from './activity-domain.js';
 
 @Injectable()
 export class AwardsService {
+  private s3Client: S3Client | undefined;
+
   constructor(private readonly repository: ActivityRepository) {}
 
   async list(
@@ -322,6 +332,166 @@ export class AwardsService {
     };
   }
 
+  async listAssets(
+    authorization: string | undefined,
+    query: { page?: string; pageSize?: string },
+  ) {
+    this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
+    const items = await this.repository.listAwardAssets();
+    const page = positiveInt(query.page, 1);
+    const pageSize = Math.min(100, positiveInt(query.pageSize, 50));
+    const start = (page - 1) * pageSize;
+    return {
+      items: items.slice(start, start + pageSize),
+      page,
+      pageSize,
+      total: items.length,
+      nextPage: start + pageSize < items.length ? page + 1 : null,
+    };
+  }
+
+  async registerAsset(authorization: string | undefined, body: JsonRecord) {
+    this.authorizeHeader(authorization, ['awards.admin']);
+    for (const field of [
+      'kind',
+      'name',
+      'objectKey',
+      'mediaType',
+      'widthPx',
+      'heightPx',
+    ])
+      if (
+        body[field] === undefined ||
+        body[field] === null ||
+        body[field] === ''
+      )
+        throw new BadRequestException(`${field} is required`);
+    if (
+      !['BACKGROUND', 'SIGNATURE'].includes(body.kind) ||
+      !String(body.mediaType).startsWith('image/')
+    )
+      throw new BadRequestException(
+        'asset kind must be BACKGROUND or SIGNATURE and mediaType must be an image',
+      );
+    const widthPx = positiveInt(String(body.widthPx), 0);
+    const heightPx = positiveInt(String(body.heightPx), 0);
+    if (!widthPx || !heightPx)
+      throw new BadRequestException(
+        'asset dimensions must be positive integers',
+      );
+    const isBackground = body.kind === 'BACKGROUND';
+    const asset = {
+      id: body.assetId ?? randomUUID(),
+      kind: body.kind,
+      name: body.name,
+      objectKey: body.objectKey,
+      mediaType: body.mediaType,
+      widthPx,
+      heightPx,
+      sha256: body.sha256,
+      storage: 'S3',
+      bucket:
+        process.env[
+          isBackground
+            ? 'MYOTA_AWARD_ASSET_BUCKET'
+            : 'MYOTA_AWARD_SIGNATURE_BUCKET'
+        ] ?? (isBackground ? 'myota-award-assets' : 'myota-award-signatures'),
+      objectStorageEndpoint:
+        process.env.MYOTA_OBJECT_STORAGE_PUBLIC_ENDPOINT ??
+        process.env.MYOTA_OBJECT_STORAGE_ENDPOINT ??
+        'http://seaweedfs:8333',
+      contentStatus: 'MISSING',
+      createdAt: new Date().toISOString(),
+    };
+    return this.repository.saveAwardAsset(asset);
+  }
+
+  async putAssetContent(
+    authorization: string | undefined,
+    id: string,
+    declaredType: string | undefined,
+    content: Buffer,
+  ) {
+    this.authorizeHeader(authorization, ['awards.admin']);
+    const asset = await this.repository.getAwardAsset(id);
+    const metadata = await imageMetadata(content);
+    if (metadata.mediaType !== declaredType)
+      throw new BadRequestException(
+        'declared media type does not match image content',
+      );
+    const eicar = Buffer.from(
+      'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*',
+    );
+    if (content.includes(eicar))
+      throw new BadRequestException('malware scan rejected the upload');
+    await scanWithClamav(content, asset.objectKey);
+    const sha256 = createHash('sha256').update(content).digest('hex');
+    try {
+      await this.s3().send(
+        new PutObjectCommand({
+          Bucket: asset.bucket,
+          Key: asset.objectKey,
+          Body: content,
+          ContentType: metadata.mediaType,
+        }),
+      );
+    } catch {
+      throw new ServiceUnavailableException('object storage upload failed');
+    }
+    Object.assign(asset, {
+      ...metadata,
+      contentStatus: 'STORED',
+      contentSha256: sha256,
+      contentSize: content.length,
+      storedAt: new Date().toISOString(),
+    });
+    return this.repository.saveAwardAsset(asset);
+  }
+
+  async getAssetContent(authorization: string | undefined, id: string) {
+    this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
+    const asset = await this.repository.getAwardAsset(id);
+    try {
+      const response = await this.s3().send(
+        new GetObjectCommand({ Bucket: asset.bucket, Key: asset.objectKey }),
+      );
+      if (!response.Body)
+        throw new BadRequestException(
+          'registered image has no uploaded content',
+        );
+      const content = Buffer.from(await response.Body.transformToByteArray());
+      const metadata = await imageMetadata(content);
+      return {
+        asset,
+        mediaType: metadata.mediaType,
+        contentBase64: content.toString('base64'),
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException('registered image has no uploaded content');
+    }
+  }
+
+  private s3() {
+    if (!this.s3Client) {
+      this.s3Client = new S3Client({
+        endpoint:
+          process.env.MYOTA_OBJECT_STORAGE_ENDPOINT ?? 'http://seaweedfs:8333',
+        region: process.env.MYOTA_OBJECT_STORAGE_REGION ?? 'us-east-1',
+        forcePathStyle:
+          (process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE ?? 'path') ===
+          'path',
+        credentials: {
+          accessKeyId:
+            process.env.MYOTA_OBJECT_STORAGE_ACCESS_KEY ?? 'myota-s3',
+          secretAccessKey:
+            process.env.MYOTA_OBJECT_STORAGE_SECRET_KEY ?? 'myota-s3-dev-only',
+        },
+      });
+    }
+    return this.s3Client;
+  }
+
   private async getAwardDefinitionOrThrow(id: string) {
     return this.repository.getAwardDefinition(id);
   }
@@ -340,4 +510,73 @@ export class AwardsService {
 function positiveInt(value: string | undefined, fallback: number) {
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+async function imageMetadata(content: Buffer) {
+  const maxBytes = boundedEnv(
+    'MYOTA_UPLOAD_MAX_BYTES',
+    20 * 1024 * 1024,
+    1,
+    20 * 1024 * 1024,
+  );
+  if (content.length > maxBytes)
+    throw new BadRequestException('image exceeds the configured upload limit');
+  try {
+    const metadata = await sharp(content, {
+      limitInputPixels: 16_000_000,
+      failOn: 'error',
+    }).metadata();
+    if (
+      !['png', 'jpeg'].includes(metadata.format ?? '') ||
+      !metadata.width ||
+      !metadata.height
+    )
+      throw new BadRequestException(
+        'only valid PNG and JPEG images are supported',
+      );
+    if (metadata.width * metadata.height > 16_000_000)
+      throw new BadRequestException('image exceeds the configured pixel limit');
+    return {
+      mediaType: metadata.format === 'jpeg' ? 'image/jpeg' : 'image/png',
+      widthPx: metadata.width,
+      heightPx: metadata.height,
+    };
+  } catch (error) {
+    if (error instanceof BadRequestException) throw error;
+    throw new BadRequestException('image content is invalid');
+  }
+}
+
+function boundedEnv(
+  name: string,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+) {
+  const parsed = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum
+    ? parsed
+    : fallback;
+}
+
+async function scanWithClamav(content: Buffer, filename: string) {
+  const endpoint = process.env.MYOTA_CLAMAV_URL?.trim();
+  if (!endpoint) return;
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/octet-stream',
+        'x-upload-name': filename,
+      },
+      body: new Uint8Array(content),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok)
+      throw new ServiceUnavailableException('malware scanner rejected upload');
+  } catch {
+    throw new ServiceUnavailableException(
+      'malware scanner is unavailable; upload was not stored',
+    );
+  }
 }

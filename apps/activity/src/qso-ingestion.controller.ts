@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ActivityService } from './activity.service.js';
 
-@Controller('v1/qso-ingestions')
+@Controller('qso-ingestions')
 export class QsoIngestionController {
   constructor(private readonly activity: ActivityService) {}
 

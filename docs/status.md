@@ -58,14 +58,16 @@
   the Activity outbox with their definition updates. Award evaluation and
   historical recalculation jobs use service-owned facts, persist versioned
   progress, and create deduplicated qualification notifications. Participant
-  progress reads evaluate and persist the current aggregate snapshot.
+  progress reads evaluate and persist the current aggregate snapshot. Award
+  assets support registration, owner/admin listing, bounded PNG/JPEG uploads,
+  S3-compatible storage, metadata validation, and authenticated content reads.
 
 ## Not implemented yet
 
 - Remaining Identity APIs include OIDC mapping updates and account deactivation
   as its dedicated operation. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
-- Remaining Activity APIs include file-based QSO import, award assets, requests,
+- Remaining Activity APIs include file-based QSO import, award requests,
   issuance/rendering, and operational workflows. The statistics rebuild job
   still needs its worker consumer. Geodata and Gateway handlers,
   authorization rules, persistence repositories, and event/outbox behavior

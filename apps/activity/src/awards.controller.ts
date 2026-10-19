@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -7,11 +8,14 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { AwardsService } from './awards.service.js';
 
-@Controller('v1/awards')
+@Controller('awards')
 export class AwardsController {
   constructor(private readonly awards: AwardsService) {}
 
@@ -62,6 +66,46 @@ export class AwardsController {
     @Query('participantId') participantId = '',
   ) {
     return this.awards.progress(authorization, awardId, participantId);
+  }
+
+  @Get('assets')
+  listAssets(
+    @Headers('authorization') authorization: string | undefined,
+    @Query() query: { page?: string; pageSize?: string },
+  ) {
+    return this.awards.listAssets(authorization, query);
+  }
+
+  @Post('assets')
+  registerAsset(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: Record<string, any>,
+  ) {
+    return this.awards.registerAsset(authorization, body);
+  }
+
+  @Get('assets/:assetId/content')
+  getAssetContent(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('assetId') assetId: string,
+  ) {
+    return this.awards.getAssetContent(authorization, assetId);
+  }
+
+  @Put('assets/:assetId/content')
+  async putAssetContent(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('content-type') contentType: string | undefined,
+    @Param('assetId') assetId: string,
+    @Req() request: Request,
+  ) {
+    const content = await readBoundedBody(request, 20 * 1024 * 1024);
+    return this.awards.putAssetContent(
+      authorization,
+      assetId,
+      contentType?.split(';')[0]?.trim(),
+      content,
+    );
   }
 
   @Get(':awardId')
@@ -143,4 +187,22 @@ export class AwardsController {
   ) {
     return this.awards.getAwardJob(authorization, jobId);
   }
+}
+
+async function readBoundedBody(request: Request, maximumBytes: number) {
+  const declaredLength = Number(request.headers['content-length'] ?? 0);
+  if (declaredLength > maximumBytes)
+    throw new BadRequestException('image exceeds the configured upload limit');
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of request) {
+    const part = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += part.length;
+    if (total > maximumBytes)
+      throw new BadRequestException(
+        'image exceeds the configured upload limit',
+      );
+    chunks.push(part);
+  }
+  return Buffer.concat(chunks, total);
 }
