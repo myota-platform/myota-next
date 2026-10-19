@@ -45,7 +45,8 @@ assets and bounded content storage are implemented. Remaining Activity work
 includes ADIF/CSV file imports, notification production beyond qualification,
 NATS delivery, and worker recovery. Statistics listing and rebuild-job APIs,
 transactional snapshot rebuilds, and owner-scoped notification reads are
-implemented.
+implemented. The ADIF import status read is implemented; import creation and
+file processing still need completion.
 
 ## User applications
 

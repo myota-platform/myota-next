@@ -157,6 +157,14 @@ export class ActivityService {
     return job;
   }
 
+  async getAdifImport(authorization: string | undefined, id: string) {
+    const claims = verifyAccessToken(authorization);
+    const record = await this.repository.getAdifImport(id);
+    const activation = await this.repository.get(record.activationId);
+    this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
+    return record;
+  }
+
   async publicHistory(programme?: string, page?: string, pageSize?: string) {
     const items = await this.repository.list(programme);
     const publicItems = items.map((item) => ({

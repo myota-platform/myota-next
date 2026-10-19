@@ -361,6 +361,38 @@ export class ActivityRepository {
     }
   }
 
+  async getAdifImport(id: string): Promise<JsonRecord> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM activity_import WHERE id=$1',
+        [id],
+      );
+      const row = result.rows[0];
+      if (!row) throw new NotFoundException('ADIF import not found');
+      return {
+        id: String(row.id),
+        activationId: String(row.activation_id),
+        filename: row.filename,
+        objectKey: row.object_key,
+        bucket: row.bucket,
+        sha256: row.sha256,
+        contentSize: Number(row.content_size),
+        malwareStatus: row.malware_status,
+        status: row.status,
+        recordsSeen: row.records_seen,
+        recordsAccepted: row.records_accepted,
+        recordsRejected: row.records_rejected,
+        errors: row.errors,
+        createdAt: date(row.created_at),
+        startedAt: date(row.started_at),
+        completedAt: date(row.completed_at),
+      };
+    } finally {
+      client.release();
+    }
+  }
+
   async subjectFacts(
     programme: string,
     subjectId: string,

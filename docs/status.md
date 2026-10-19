@@ -53,6 +53,8 @@
   recalculation. Activity statistics can be listed and rebuild jobs queued,
   processed into versioned programme/category/entity/jurisdiction snapshots,
   and inspected; recipient notifications can be read with owner/admin checks.
+  ADIF import status reads now return persisted counters and errors after
+  checking access through the owning activation.
 - Award definitions now support public published-only reads, administrative
   draft create/edit, review submission and decisions, print-readiness
   validation, publication, and retirement. Saved and published facts commit to
