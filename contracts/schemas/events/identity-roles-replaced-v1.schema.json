@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/myota-platform/myota/contracts/schemas/events/identity-roles-replaced-v1.schema.json",
+  "title": "identity.roles.replaced.v1 envelope v1",
+  "allOf": [
+    {
+      "$ref": "../event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "identity.roles.replaced.v1"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "accountId": {
+              "type": "string"
+            },
+            "roles": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "accountId": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string"
+                  },
+                  "programmeSlug": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "jurisdiction": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "entityType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "createdAt": {
+                    "type": "string"
+                  },
+                  "validTo": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "accountId",
+                  "role",
+                  "programmeSlug",
+                  "jurisdiction",
+                  "entityType",
+                  "scopes",
+                  "createdAt",
+                  "validTo"
+                ],
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": [
+            "accountId",
+            "roles"
+          ],
+          "additionalProperties": true
+        }
+      }
+    }
+  ],
+  "x-payload-evidence": "source-derived-identity-callsite",
+  "x-data-classification": "personal-and-security"
+}

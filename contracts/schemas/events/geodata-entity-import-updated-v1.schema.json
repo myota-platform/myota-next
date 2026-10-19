@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/myota-platform/myota/contracts/schemas/events/geodata-entity-import-updated-v1.schema.json",
+  "title": "geodata.entity.import-updated.v1 envelope v1",
+  "allOf": [
+    {
+      "$ref": "../event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "geodata.entity.import-updated.v1"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "entityId": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "importRunId": {
+              "type": "string"
+            },
+            "actor": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entityId",
+            "status",
+            "importRunId",
+            "actor"
+          ],
+          "additionalProperties": true
+        }
+      }
+    }
+  ],
+  "x-payload-evidence": "source-derived-geodata-callsite",
+  "x-data-classification": "geospatial-and-operational-data"
+}

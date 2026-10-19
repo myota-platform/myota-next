@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/myota-platform/myota/contracts/schemas/events/geodata-entity-source-disappeared-v1.schema.json",
+  "title": "geodata.entity.source-disappeared.v1 envelope v1",
+  "allOf": [
+    {
+      "$ref": "../event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "geodata.entity.source-disappeared.v1"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "entityId": {
+              "type": "string"
+            },
+            "policy": {
+              "type": "string"
+            },
+            "previousStatus": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entityId",
+            "policy",
+            "previousStatus"
+          ],
+          "additionalProperties": true
+        }
+      }
+    }
+  ],
+  "x-payload-evidence": "source-derived-geodata-callsite",
+  "x-data-classification": "geospatial-and-operational-data"
+}
