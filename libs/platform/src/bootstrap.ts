@@ -2,11 +2,15 @@ import { INestApplication, Type, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { RequestMethod } from '@nestjs/common';
 import express from 'express';
+import { integerSetting } from './integer-setting.js';
 
 export async function bootstrapHttpService(
   rootModule: Type<unknown>,
   defaultPort: number,
-  jsonLimit = '100kb',
+  jsonLimit: string | number = integerSetting(
+    process.env.MYOTA_MAX_BODY_BYTES,
+    1024 * 1024,
+  ),
   rawBodyRoutes: string[] = [],
   globalPrefixExclusions: { path: string; method: RequestMethod }[] = [],
 ): Promise<INestApplication> {

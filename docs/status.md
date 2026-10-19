@@ -13,6 +13,10 @@
 - Shared `/healthz` liveness and `/readyz` readiness handlers. Identity and
   Programmes probe Core PostgreSQL, Activity probes Activity PostgreSQL, and
   Geodata probes PostGIS. Gateway readiness does not depend on a database.
+- The shared HTTP bootstrap honors `MYOTA_MAX_BODY_BYTES` as a strict integer.
+  Identity and Programmes default to 1 MiB, Geodata to 1 GiB as in the Python
+  reference, and Activity/Gateway to 35 MiB for encoded upload paths. Individual
+  import and upload handlers may enforce smaller limits.
 - Current OpenAPI, event schemas, and three database migration baselines copied
   as compatibility references.
 - First Identity slice: disabled public registration, password login, refresh
@@ -175,7 +179,8 @@
   in one transaction. The final event is assembled in PostgreSQL to avoid
   retaining every feature summary in the worker heap.
   The separate JSON import-creation path still caps input at 20 MiB and
-  materializes the normalized collection. Shapefile source bytes and decoded
+  materializes the normalized collection, below the Python service's
+  configurable request-body limit. Shapefile source bytes and decoded
   records now stream via bounded temporary files, matching the reference's 1
   GiB expanded-size default and reproject coordinates using `.prj` metadata.
   The streaming parser's less common geometry types and uncommon CRS
