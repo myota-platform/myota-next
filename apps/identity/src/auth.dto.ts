@@ -1,9 +1,12 @@
 import {
   IsArray,
   IsBoolean,
+  IsDateString,
   IsEmail,
   IsOptional,
   IsString,
+  IsObject,
+  IsUUID,
   IsIn,
   MinLength,
   ValidateNested,
@@ -179,4 +182,66 @@ export class UpdateAccountDto {
   @IsArray()
   @IsString({ each: true })
   roleCodes?: string[];
+}
+
+export class AddCallsignDto {
+  @IsString()
+  @MinLength(1)
+  callsign!: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['UNVERIFIED', 'VERIFIED', 'RETIRED'])
+  status?: 'UNVERIFIED' | 'VERIFIED' | 'RETIRED';
+
+  @IsOptional()
+  @IsString()
+  source?: string;
+
+  @IsOptional()
+  @IsDateString()
+  validFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  validTo?: string;
+}
+
+export class CallsignEvidenceDto {
+  @IsString()
+  @MinLength(1)
+  evidenceType!: string;
+
+  @IsString()
+  @MinLength(1)
+  source!: string;
+
+  @IsOptional()
+  @IsString()
+  checksum?: string;
+
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, unknown>;
+}
+
+export class VerifyCallsignDto {
+  @IsOptional()
+  @IsString()
+  source?: string;
+}
+
+export class SetPrimaryCallsignDto {
+  @IsUUID()
+  callsignId!: string;
+}
+
+export class RetireCallsignDto {
+  @IsOptional()
+  @IsUUID()
+  newPrimaryCallsignId?: string;
+
+  @IsOptional()
+  @IsDateString()
+  validTo?: string;
 }

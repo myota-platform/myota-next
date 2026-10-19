@@ -79,10 +79,14 @@ interface CallsignRow {
   value: string;
   status: string;
   verificationSource: string | null;
+  source: string | null;
   verifiedAt: Date | null;
   validFrom: Date | null;
   validTo: Date | null;
   primary: boolean | null;
+  createdAt: Date;
+  updatedAt: Date;
+  evidenceIds: string[];
 }
 
 interface TokenClaims {
@@ -800,14 +804,19 @@ export class IdentityAuthService {
     if (accountIds.length === 0) return resultMap;
     const result = await client.query<CallsignRow>(
       `SELECT c.account_id AS "accountId", c.id, c.value,
-              c.lifecycle_status AS status, c.verification_source AS "verificationSource",
+              c.lifecycle_status AS status, c.source,
+              c.verification_source AS "verificationSource",
               c.verified_at AS "verifiedAt", c.valid_from AS "validFrom",
-              c.valid_to AS "validTo", (primary_call.callsign_id = c.id) AS "primary"
+              c.valid_to AS "validTo", c.created_at AS "createdAt",
+              c.updated_at AS "updatedAt",
+              coalesce(array_agg(e.id) FILTER (WHERE e.id IS NOT NULL), '{}') AS "evidenceIds",
+              (primary_call.callsign_id = c.id) AS "primary"
          FROM public.callsign c
          LEFT JOIN public.account_primary_callsign primary_call
            ON primary_call.account_id = c.account_id
+         LEFT JOIN public.callsign_evidence e ON e.callsign_id = c.id
         WHERE c.account_id = ANY($1::uuid[])
-          AND (c.valid_to IS NULL OR c.valid_to > now())
+        GROUP BY c.id, primary_call.callsign_id
         ORDER BY c.valid_from NULLS FIRST, c.value`,
       [accountIds],
     );

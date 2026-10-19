@@ -22,7 +22,9 @@ listing, owner/global account reads and account role reads in NestJS. The role c
 custom roles under the existing authorized scopes; custom role creation and
 partial updates are backed by Core transactions and security/outbox events.
 Administrative account updates now preserve profile, password, status,
-anonymization, and role replacement behavior in Core transactions.
+anonymization, and role replacement behavior in Core transactions. Callsign
+creation, evidence, verification, primary selection, and retirement also write
+to the relational Core model and outbox.
 These are the first implemented slices; they still need automated
 compatibility coverage before they count as parity complete.
 

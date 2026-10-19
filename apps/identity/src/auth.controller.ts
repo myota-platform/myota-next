@@ -10,6 +10,7 @@ import {
   Post,
   Patch,
   Query,
+  Put,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -17,7 +18,12 @@ import type { Request } from 'express';
 import {
   LoginDto,
   CreateAccountDto,
+  AddCallsignDto,
+  CallsignEvidenceDto,
+  RetireCallsignDto,
+  SetPrimaryCallsignDto,
   UpdateAccountDto,
+  VerifyCallsignDto,
   AdminAccountsQueryDto,
   AdminRoleDefinitionDto,
   RecoveryRequestDto,
@@ -183,6 +189,95 @@ export class AuthController {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
     return this.accounts.updateAccount(authorization, accountId, body);
+  }
+
+  @Post('accounts/:accountId/callsigns')
+  @HttpCode(201)
+  addCallsign(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Body() body: AddCallsignDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.addCallsign(
+      authorization,
+      accountId,
+      body,
+      idempotencyKey,
+    );
+  }
+
+  @Post('accounts/:accountId/callsigns/:callsignId/evidence')
+  @HttpCode(201)
+  submitCallsignEvidence(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('callsignId', new ParseUUIDPipe()) callsignId: string,
+    @Body() body: CallsignEvidenceDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.submitCallsignEvidence(
+      authorization,
+      accountId,
+      callsignId,
+      body,
+    );
+  }
+
+  @Post('accounts/:accountId/callsigns/:callsignId/verify')
+  @HttpCode(200)
+  verifyCallsign(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('callsignId', new ParseUUIDPipe()) callsignId: string,
+    @Body() body: VerifyCallsignDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.verifyCallsign(
+      authorization,
+      accountId,
+      callsignId,
+      body,
+    );
+  }
+
+  @Put('accounts/:accountId/primary-callsign')
+  setPrimaryCallsign(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Body() body: SetPrimaryCallsignDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.setPrimaryCallsign(
+      authorization,
+      accountId,
+      body,
+      idempotencyKey,
+    );
+  }
+
+  @Post('accounts/:accountId/callsigns/:callsignId/retire')
+  @HttpCode(200)
+  retireCallsign(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('callsignId', new ParseUUIDPipe()) callsignId: string,
+    @Body() body: RetireCallsignDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.retireCallsign(
+      authorization,
+      accountId,
+      callsignId,
+      body,
+    );
   }
 
   private requestContext(request: Request) {
