@@ -32,7 +32,9 @@ Activity has an initial activation and single-QSO slice: activation list/create/
 normalized QSO writes, validity checks, ownership checks, subject aggregates,
 transactional event outbox records, idempotency responses, and award recalculation
 jobs. QSO ingestion requests also persist bounded, owner-scoped jobs with a status
-read path; the processing consumer remains outstanding. The rest of Activity remains outstanding, including batch ingestion,
+read path, and the separate Activity worker processes those jobs with database
+leases, retries, and dead-letter state. NATS delivery and other Activity consumers
+remain outstanding. The rest of Activity remains outstanding, including batch ingestion,
 corrections, public views, awards, notifications, and worker recovery.
 
 ## User applications

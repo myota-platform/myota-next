@@ -44,8 +44,9 @@
   idempotency responses transactionally, updates subject aggregates, and
   queues award recalculation work through the Activity outbox. High-volume QSO
   ingestion requests are authorized, bounded, persisted as Activity jobs, and
-  exposed through an owner-scoped status API; processing still belongs to the
-  outstanding worker slice.
+  exposed through an owner-scoped status API. The separate Activity worker
+  processes these ingestion jobs transactionally with database leases, bounded
+  retries, and dead-letter records.
 
 ## Not implemented yet
 
@@ -56,7 +57,9 @@
   views, awards, and operational workflows. Geodata and Gateway handlers,
   authorization rules, persistence repositories, and event/outbox behavior
   remain unimplemented.
-- Activity and Geodata consumers, leases, recovery, retries, and redrive.
+- Activity NATS delivery, lease heartbeats during large batches, redrive, and
+  remaining job consumers. Geodata consumers, leases, recovery, retries, and
+  redrive.
 - Admin and Participant web applications.
 - Database migration runner, data transfer tooling, deployment images, and
   production observability configuration.
@@ -64,6 +67,6 @@
   producer/runtime is gated and its separate database conflicts with the
   requested three-database target until its ownership is resolved.
 
-The empty worker entry points fail explicitly rather than pretending to
-process work. Contract presence and successful builds do not count as function
-parity. Track completion against the [parity matrix](parity-matrix.md).
+The remaining empty worker entry points fail explicitly rather than pretending
+to process work. Contract presence and successful builds do not count as
+function parity. Track completion against the [parity matrix](parity-matrix.md).
