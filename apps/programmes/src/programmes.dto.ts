@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsInt,
   IsObject,
   IsOptional,
@@ -37,6 +38,35 @@ export class CreateProgrammeDto {
   @IsInt()
   @Min(1)
   policyVersion?: number;
+}
+
+export class EntityTypeDto {
+  @IsString()
+  code!: string;
+
+  @IsOptional()
+  @IsString()
+  originalCode?: string;
+
+  @IsString()
+  label!: string;
+
+  @IsOptional()
+  @IsString()
+  geometry?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  geometryTypes?: string[];
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
 }
 
 export class UpdateProgrammeDto {

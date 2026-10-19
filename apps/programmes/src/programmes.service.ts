@@ -14,6 +14,7 @@ import {
 } from '@app/platform/index.js';
 import type {
   CreateProgrammeDto,
+  EntityTypeDto,
   UpdateProgrammeDto,
 } from './programmes.dto.js';
 
@@ -184,6 +185,207 @@ export class ProgrammesService {
     });
   }
 
+  async listEntityTypeCatalog(authorization?: string) {
+    this.authorizeAdmin(authorization);
+    const state = await this.loadState();
+    const catalog = backfillEntityTypeCatalog(state);
+    return { items: this.catalogWithAssignments(state, catalog) };
+  }
+
+  async listProgrammeEntityTypes(
+    authorization: string | undefined,
+    slug: string,
+  ) {
+    this.authorizeAdmin(authorization, slug);
+    const state = await this.loadState();
+    const programme = state.items?.[slug];
+    if (!programme) throw new NotFoundException('programme not found');
+    backfillEntityTypeCatalog(state);
+    return { programmeSlug: slug, items: programme.entityTypes ?? [] };
+  }
+
+  async saveEntityTypeCatalog(
+    authorization: string | undefined,
+    body: EntityTypeDto,
+    idempotencyKey?: string,
+  ) {
+    this.authorizeAdmin(authorization);
+    return this.mutateState(idempotencyKey, async (client, state) => {
+      const catalog = backfillEntityTypeCatalog(state);
+      const code = body.code.trim().toUpperCase();
+      const previous = catalog[code];
+      const entityType = normalizeEntityType(body, previous);
+      catalog[code] = entityType;
+      this.refreshAssignedEntityTypes(state, catalog, code);
+      await this.recordEvent(
+        client,
+        state,
+        'programme.entity-type.catalog-saved.v1',
+        'entity_type',
+        code,
+        { entityType, previous: previous ?? null },
+      );
+      return {
+        statusCode: previous ? 200 : 201,
+        entityType,
+        items: this.catalogWithAssignments(state, catalog),
+      };
+    });
+  }
+
+  async saveAndAssignEntityType(
+    authorization: string | undefined,
+    slug: string,
+    body: EntityTypeDto,
+    idempotencyKey?: string,
+  ) {
+    this.authorizeAdmin(authorization, slug);
+    return this.mutateState(idempotencyKey, async (client, state) => {
+      const programme = state.items?.[slug];
+      if (!programme) throw new NotFoundException('programme not found');
+      const catalog = backfillEntityTypeCatalog(state);
+      const code = body.code.trim().toUpperCase();
+      const previous = catalog[code];
+      const entityType = normalizeEntityType(body, previous);
+      catalog[code] = entityType;
+      this.refreshAssignedEntityTypes(state, catalog, code);
+      await this.recordEvent(
+        client,
+        state,
+        'programme.entity-type.catalog-saved.v1',
+        'entity_type',
+        code,
+        { entityType, previous: previous ?? null },
+      );
+      if (!(programme.entityTypeCodes ?? []).includes(code)) {
+        await this.applyAssignment(
+          client,
+          state,
+          programme,
+          code,
+          catalog,
+          true,
+        );
+      }
+      return {
+        statusCode: previous ? 200 : 201,
+        programmeSlug: slug,
+        entityType,
+        items: programme.entityTypes ?? [],
+      };
+    });
+  }
+
+  async assignEntityType(
+    authorization: string | undefined,
+    slug: string,
+    codeValue: string,
+    idempotencyKey?: string,
+  ) {
+    this.authorizeAdmin(authorization, slug);
+    const code = codeValue.trim().toUpperCase();
+    return this.mutateState(idempotencyKey, async (client, state) => {
+      const programme = state.items?.[slug];
+      if (!programme) throw new NotFoundException('programme not found');
+      const catalog = backfillEntityTypeCatalog(state);
+      if (!catalog[code])
+        throw new BadRequestException('unknown entity category');
+      await this.applyAssignment(client, state, programme, code, catalog, true);
+      return {
+        programmeSlug: slug,
+        items: programme.entityTypes ?? [],
+        assigned: catalog[code],
+      };
+    });
+  }
+
+  async unassignEntityType(
+    authorization: string | undefined,
+    slug: string,
+    codeValue: string,
+    idempotencyKey?: string,
+  ) {
+    this.authorizeAdmin(authorization, slug);
+    const code = codeValue.trim().toUpperCase();
+    return this.mutateState(idempotencyKey, async (client, state) => {
+      const programme = state.items?.[slug];
+      if (!programme) throw new NotFoundException('programme not found');
+      const catalog = backfillEntityTypeCatalog(state);
+      await this.applyAssignment(
+        client,
+        state,
+        programme,
+        code,
+        catalog,
+        false,
+      );
+      return { programmeSlug: slug, items: programme.entityTypes ?? [] };
+    });
+  }
+
+  private catalogWithAssignments(
+    state: ProgrammeState,
+    catalog: Record<string, Record<string, unknown>>,
+  ): Record<string, unknown>[] {
+    const items: Record<string, unknown>[] = Object.values(catalog).map(
+      (entityType): Record<string, unknown> => ({
+        ...entityType,
+        assignedProgrammes: Object.values(state.items ?? {})
+          .filter((programme) =>
+            programme.entityTypeCodes?.includes(String(entityType.code)),
+          )
+          .map((programme) => programme.slug),
+      }),
+    );
+    return items.sort((left, right) =>
+      String(left.code).localeCompare(String(right.code)),
+    );
+  }
+
+  private refreshAssignedEntityTypes(
+    state: ProgrammeState,
+    catalog: Record<string, Record<string, unknown>>,
+    code: string,
+  ) {
+    for (const programme of Object.values(state.items ?? {})) {
+      if (programme.entityTypeCodes?.includes(code)) {
+        programme.entityTypes = programme.entityTypeCodes.map(
+          (assignedCode) => catalog[assignedCode],
+        );
+        programme.updatedAt = new Date().toISOString();
+      }
+    }
+  }
+
+  private async applyAssignment(
+    client: PoolClient,
+    state: ProgrammeState,
+    programme: ProgrammeRecord,
+    code: string,
+    catalog: Record<string, Record<string, unknown>>,
+    assign: boolean,
+  ) {
+    const currentCodes = programme.entityTypeCodes ?? [];
+    const nextCodes = assign
+      ? [...new Set([...currentCodes, code])]
+      : currentCodes.filter((current) => current !== code);
+    if (nextCodes.length === currentCodes.length) return;
+    programme.entityTypeCodes = nextCodes;
+    programme.entityTypes = nextCodes.map((current) => catalog[current]);
+    programme.policyVersion = (programme.policyVersion ?? 1) + 1;
+    programme.updatedAt = new Date().toISOString();
+    await this.recordEvent(
+      client,
+      state,
+      assign
+        ? 'programme.entity-type.assigned.v1'
+        : 'programme.entity-type.unassigned.v1',
+      'programme',
+      programme.id,
+      { programmeSlug: programme.slug, code },
+    );
+  }
+
   private async loadState(): Promise<ProgrammeState> {
     const client = await this.connect();
     try {
@@ -330,6 +532,47 @@ function entityCatalog(
   return catalog;
 }
 
+function backfillEntityTypeCatalog(
+  state: ProgrammeState,
+): Record<string, Record<string, unknown>> {
+  const catalog = entityCatalog(state);
+  for (const programme of Object.values(state.items ?? {})) {
+    const legacyTypes = Array.isArray(programme.entityTypes)
+      ? programme.entityTypes
+      : [];
+    for (const value of legacyTypes) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+      const item = value as Record<string, unknown>;
+      const code =
+        typeof item.code === 'string' ? item.code.trim().toUpperCase() : '';
+      if (!code) continue;
+      if (!catalog[code]) catalog[code] = { ...item, code };
+      if (!Array.isArray(catalog[code].geometryTypes)) {
+        const geometry =
+          typeof catalog[code].geometry === 'string'
+            ? catalog[code].geometry
+            : 'MULTIPOLYGON';
+        catalog[code].geometryTypes = [geometry];
+      }
+    }
+    const codes =
+      programme.entityTypeCodes ??
+      legacyTypes.flatMap((value) => {
+        if (!value || typeof value !== 'object' || Array.isArray(value))
+          return [];
+        const code = (value as Record<string, unknown>).code;
+        return typeof code === 'string' && code.trim()
+          ? [code.trim().toUpperCase()]
+          : [];
+      });
+    programme.entityTypeCodes = [...new Set(codes)];
+    programme.entityTypes = programme.entityTypeCodes.flatMap((code) =>
+      catalog[code] ? [catalog[code]] : [],
+    );
+  }
+  return catalog;
+}
+
 const GEOMETRY_TYPES = new Set([
   'POINT',
   'LINESTRING',
@@ -339,7 +582,7 @@ const GEOMETRY_TYPES = new Set([
 ]);
 
 function normalizeEntityType(
-  body: Record<string, unknown>,
+  body: EntityTypeDto | Record<string, unknown>,
   existing?: Record<string, unknown>,
 ): Record<string, unknown> & { code: string } {
   const code =
