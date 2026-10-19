@@ -126,7 +126,8 @@
   uploads now decode in the Geodata worker with osmium-tool. The converter
   preserves OSM tags and stable type/id source references, filters the current
   hiking-path and protected-area tag catalogue, and assembles closed-way and
-  multipolygon areas. Decoded output is capped at 128 MiB, with 16 MiB and
+  multipolygon areas using a temporary disk-backed node-location index. Decoded
+  output is capped at 128 MiB, with 16 MiB and
   250,000 vertices per feature, plus the configured feature cap. Larger
   streaming imports remain outstanding.
   The adapter catalogue and admin selector now expose only import formats the

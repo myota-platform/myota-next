@@ -86,7 +86,8 @@ Shapefile ZIP archives with matching sidecars; Shapefile coordinates are
 reprojected from the supplied `.prj` to WGS84. OSM PBF uploads are decoded by
 `osmium-tool` in the Geodata worker image, preserve OSM tags and type/id source
 references, and emit the configured hiking, protected-area, point, path, and
-multipolygon features. Decoded PBF output is capped at 128 MiB, with per-feature
+multipolygon features using a temporary disk-backed node-location index.
+Decoded PBF output is capped at 128 MiB, with per-feature
 16 MiB and 250,000 vertex limits and the configured feature cap. Larger
 streaming imports remain outstanding. Import adapters infer feature names from
 the reference alias catalogue before validation. The worker validates WGS84

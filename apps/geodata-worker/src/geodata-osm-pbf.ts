@@ -51,6 +51,7 @@ export async function decodeOsmPbf(
   const directory = await mkdtemp(join(tmpdir(), 'myota-osm-'));
   const sourcePath = join(directory, 'source.osm.pbf');
   const configPath = join(directory, 'export.json');
+  const locationIndexPath = join(directory, 'node-locations.store');
   try {
     await writeFile(sourcePath, pbf, { mode: 0o600 });
     await writeFile(
@@ -62,7 +63,12 @@ export async function decodeOsmPbf(
       }),
       { mode: 0o600 },
     );
-    const output = await runOsmium(sourcePath, configPath, heartbeat);
+    const output = await runOsmium(
+      sourcePath,
+      configPath,
+      locationIndexPath,
+      heartbeat,
+    );
     const features: GeoJsonFeature[] = [];
     for (const record of output
       .toString('utf8')
@@ -135,6 +141,7 @@ export async function decodeOsmPbf(
 function runOsmium(
   sourcePath: string,
   configPath: string,
+  locationIndexPath: string,
   heartbeat: () => Promise<void>,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -143,6 +150,7 @@ function runOsmium(
       [
         'export',
         `--config=${configPath}`,
+        `--index-type=sparse_file_array,${locationIndexPath}`,
         '--output-format=geojsonseq',
         '--format-option=print_record_separator=false',
         sourcePath,
