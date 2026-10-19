@@ -16,7 +16,7 @@
 - First Identity slice: disabled public registration, password login, refresh
   rotation, logout revocation, recovery request/reset, current account and
   scope reads, owner-only profile updates, and paginated administrator account
-  and role-catalogue listings. Login uses the
+  listing plus role-catalogue reads, role creation, and role updates. Login uses the
   existing scrypt hash format, HS256 token contract, persisted session,
   revocation, lockout, rate-limit, and audit tables.
 

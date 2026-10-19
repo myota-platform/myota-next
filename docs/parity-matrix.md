@@ -19,9 +19,10 @@ Identity currently implements disabled public registration, password login,
 refresh rotation, logout revocation, recovery request/reset, current-account
 reads, owner-only profile updates, and administrator account listing in NestJS.
 The role catalogue endpoint now returns built-in and persisted custom roles to
-the same authorized administrator scopes as the current service. These are the
-first implemented slices; they still need automated compatibility coverage
-before they count as parity complete.
+the same authorized administrator scopes as the current service. Custom role
+creation and partial updates are also backed by Core transactions and audit
+events. These are the first implemented slices; they still need automated
+compatibility coverage before they count as parity complete.
 
 ## User applications
 

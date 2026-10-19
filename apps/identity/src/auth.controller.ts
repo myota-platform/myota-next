@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Param,
   Get,
   ForbiddenException,
   Headers,
@@ -15,6 +16,7 @@ import type { Request } from 'express';
 import {
   LoginDto,
   AdminAccountsQueryDto,
+  AdminRoleDefinitionDto,
   RecoveryRequestDto,
   RecoveryResetDto,
   RefreshTokenDto,
@@ -100,6 +102,39 @@ export class AuthController {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
     return this.roles.listAdminRoles(authorization);
+  }
+
+  @Post('admin/roles')
+  @HttpCode(201)
+  createAdminRole(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: AdminRoleDefinitionDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.roles.createAdminRole(authorization, body);
+  }
+
+  @Post('roles')
+  @HttpCode(201)
+  createRole(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: AdminRoleDefinitionDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.roles.createAdminRole(authorization, body);
+  }
+
+  @Patch('roles/:roleCode')
+  updateRole(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('roleCode') roleCode: string,
+    @Body() body: AdminRoleDefinitionDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.roles.updateAdminRole(authorization, roleCode, body);
   }
 
   private requestContext(request: Request) {
