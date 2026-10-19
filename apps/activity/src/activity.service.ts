@@ -15,6 +15,7 @@ import {
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { ActivityRepository } from './activity.repository.js';
+import { integerSetting } from './activity-config.js';
 import { parseQsoCsv } from './qso-csv.js';
 import {
   normalizeActivation,
@@ -544,18 +545,6 @@ export class ActivityService {
     )
       throw new ForbiddenException('activation belongs to another operator');
   }
-}
-
-function integerSetting(value: string | undefined, fallback: number) {
-  if (value === undefined) return fallback;
-  const normalized = value.trim();
-  if (!/^[+-]?\d(?:_?\d)*$/.test(normalized))
-    throw new Error('Activity limit settings must be integers');
-  const parsed = BigInt(normalized.replaceAll('_', ''));
-  const maximum = BigInt(Number.MAX_SAFE_INTEGER);
-  if (parsed > maximum) return Number.MAX_SAFE_INTEGER;
-  if (parsed < -maximum) return -Number.MAX_SAFE_INTEGER;
-  return Number(parsed);
 }
 
 function decodeBase64(value: string) {

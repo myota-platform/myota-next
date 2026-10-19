@@ -7,6 +7,7 @@ import {
 import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { integerSetting } from '../../activity/src/activity-config.js';
 
 @Injectable()
 export class ActivityRetentionRepository {
@@ -19,11 +20,13 @@ export class ActivityRetentionRepository {
 
   async runSweep(): Promise<number> {
     const bucket = process.env.MYOTA_ADIF_BUCKET ?? 'myota-adif';
-    const days = positiveInteger(process.env.MYOTA_ADIF_RETENTION_DAYS, 15);
-    const batchSize = positiveInteger(
+    const days = integerSetting(process.env.MYOTA_ADIF_RETENTION_DAYS, 15);
+    const batchSize = integerSetting(
       process.env.MYOTA_ADIF_RETENTION_BATCH_SIZE,
       500,
     );
+    if (days < 1 || batchSize < 1)
+      throw new Error('ADIF retention settings must be positive integers');
     let deleted = 0;
     while (true) {
       const client = await this.connect();
@@ -108,13 +111,6 @@ export class ActivityRetentionRepository {
     }
     return this.storage;
   }
-}
-
-function positiveInteger(raw: string | undefined, fallback: number): number {
-  const value = raw === undefined ? fallback : Number(raw);
-  if (!Number.isInteger(value) || value < 1)
-    throw new Error('ADIF retention settings must be positive integers');
-  return value;
 }
 
 function safeObjectKey(value: string): boolean {

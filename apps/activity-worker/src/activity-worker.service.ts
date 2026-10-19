@@ -15,6 +15,7 @@ import {
   workerProbePort,
 } from '@app/platform/worker-probes.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
+import { integerSetting } from '../../activity/src/activity-config.js';
 import {
   ActivityWorkRepository,
   type ClaimedJob,
@@ -25,8 +26,9 @@ const STREAM = 'MYOTA_ACTIVITY_WORK';
 const MAX_DELIVERIES = 8;
 const LEASE_SECONDS = 120;
 const MAX_WORK_WAIT_SECONDS = 30;
-const RETENTION_INTERVAL_SECONDS = retentionIntervalSeconds(
-  process.env.MYOTA_ADIF_RETENTION_INTERVAL_SECONDS,
+const RETENTION_INTERVAL_SECONDS = Math.max(
+  60,
+  integerSetting(process.env.MYOTA_ADIF_RETENTION_INTERVAL_SECONDS, 86400),
 );
 const WORK_RECONCILE_SECONDS = Math.max(
   5,
@@ -34,21 +36,6 @@ const WORK_RECONCILE_SECONDS = Math.max(
 );
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-
-function retentionIntervalSeconds(raw: string | undefined): number {
-  if (raw === undefined) return 86400;
-  const normalized = raw.trim();
-  if (!/^[+-]?\d+$/.test(normalized))
-    throw new Error(
-      'MYOTA_ADIF_RETENTION_INTERVAL_SECONDS must be an integer',
-    );
-  const value = Number(normalized);
-  if (!Number.isSafeInteger(value))
-    throw new Error(
-      'MYOTA_ADIF_RETENTION_INTERVAL_SECONDS must be a safe integer',
-    );
-  return Math.max(60, value);
-}
 
 type WorkDefinition = {
   kind: string;

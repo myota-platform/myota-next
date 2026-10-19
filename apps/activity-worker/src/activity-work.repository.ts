@@ -13,6 +13,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
+import { integerSetting } from '../../activity/src/activity-config.js';
 import {
   compareTimestamps,
   normalizeTimestamp,
@@ -1070,13 +1071,11 @@ async function readObject(client: S3Client, bucket: string, key: string) {
 }
 
 async function scanAdifContent(content: Buffer, filename: string) {
-  const maxBytes = Number.parseInt(
-    process.env.MYOTA_UPLOAD_MAX_BYTES ?? `${25 * 1024 * 1024}`,
-    10,
+  const maxBytes = integerSetting(
+    process.env.MYOTA_UPLOAD_MAX_BYTES,
+    25 * 1024 * 1024,
   );
-  if (
-    content.length > (Number.isFinite(maxBytes) ? maxBytes : 25 * 1024 * 1024)
-  )
+  if (content.length > maxBytes)
     throw new Error(`${filename} exceeds the configured upload limit`);
   const eicar = Buffer.from(
     'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*',

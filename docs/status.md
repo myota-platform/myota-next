@@ -78,10 +78,10 @@
   updates. Timestamp parsing preserves the Python reference's compact ISO date
   and time forms, slash-separated QSO dates with compact times, and hour-only
   UTC offsets; imports with no parsed QSO records retain the reference's
-  successful zero-record outcome. Retention interval
-  configuration rejects malformed values instead of silently producing a
-  rapid retry loop. Upload-size and QSO-batch limits use strict integer parsing
-  consistent with the Python environment settings.
+  successful zero-record outcome. Upload-size, QSO-batch, and ADIF retention
+  settings use one strict integer parser across Activity API and worker paths,
+  consistent with the Python environment settings. Retention intervals retain
+  their 60-second minimum.
   Completion notices include the full final import result, matching the Python
   worker's notification payload. Successful imports also recalculate award
   progress for the operator and hunters in successfully persisted or duplicate
