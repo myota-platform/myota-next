@@ -908,11 +908,16 @@ export class GeodataWorkRepository {
       await client.query(
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
       );
-      await client.query(
+      const renewed = await client.query(
         `UPDATE import_run SET heartbeat_at=now(),lease_until=now()+interval '5 minutes'
-         WHERE id=$1 AND status='PROCESSING' AND attempt_count=$2`,
+         WHERE id=$1 AND status='PROCESSING' AND attempt_count=$2
+         RETURNING id`,
         [run.id, run.attempt_count],
       );
+      if (!renewed.rowCount)
+        throw new Error(
+          'geodata import lease was superseded or cancellation was requested',
+        );
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
