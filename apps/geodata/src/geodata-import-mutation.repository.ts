@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -13,6 +14,115 @@ export class GeodataImportMutationRepository {
   constructor(
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {}
+
+  async resolveConflation(
+    candidateId: string,
+    key: string | undefined,
+    body: Record<string, unknown>,
+  ) {
+    const decision =
+      typeof body.decision === 'string' ? body.decision.toUpperCase() : '';
+    if (!['MERGED', 'KEPT_SEPARATE', 'IGNORED', 'OPEN'].includes(decision))
+      throw new BadRequestException(
+        'decision must be MERGED, KEPT_SEPARATE, IGNORED, or OPEN',
+      );
+    const reviewerId =
+      typeof body.reviewerId === 'string' ? body.reviewerId.trim() : '';
+    if (!reviewerId) throw new BadRequestException('reviewerId is required');
+    if (
+      body.survivorEntityId !== undefined &&
+      (typeof body.survivorEntityId !== 'string' ||
+        !isUuid(body.survivorEntityId))
+    )
+      throw new BadRequestException('survivorEntityId must be a UUID');
+    const note =
+      typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      if (key) {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-conflation:' || $1,0))",
+          [key],
+        );
+        const prior = await client.query(
+          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          ['geodata-conflation', key],
+        );
+        if (prior.rows[0]) {
+          await client.query('COMMIT');
+          return prior.rows[0].response;
+        }
+      }
+      const selected = await client.query(
+        'SELECT * FROM conflation_candidate WHERE id=$1 FOR UPDATE',
+        [candidateId],
+      );
+      const previous = selected.rows[0];
+      if (!previous)
+        throw new NotFoundException('conflation candidate not found');
+      const occurredAt = new Date().toISOString();
+      const history = Array.isArray(previous.resolution_history)
+        ? [...previous.resolution_history]
+        : [];
+      const entry = {
+        decision,
+        previousDecision: previous.resolution,
+        reviewerId,
+        note,
+        occurredAt,
+      };
+      history.push(entry);
+      await client.query(
+        `UPDATE conflation_candidate SET resolution=$2,survivor_entity_id=$3,
+         resolution_history=$4::jsonb,resolved_by=$5,resolved_at=now()
+         WHERE id=$1`,
+        [
+          candidateId,
+          decision,
+          typeof body.survivorEntityId === 'string'
+            ? body.survivorEntityId
+            : null,
+          JSON.stringify(history),
+          isUuid(reviewerId) ? reviewerId : null,
+        ],
+      );
+      const item = {
+        id: candidateId,
+        leftEntityId: String(previous.left_entity_id),
+        rightEntityId: String(previous.right_entity_id),
+        score: Number(previous.similarity),
+        signals: previous.reason,
+        resolution: decision,
+        resolutionHistory: history,
+        survivorEntityId:
+          typeof body.survivorEntityId === 'string'
+            ? body.survivorEntityId
+            : null,
+        reviewerId,
+        resolvedAt: occurredAt,
+        updatedAt: occurredAt,
+      };
+      await client.query(
+        `INSERT INTO outbox_event
+         (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+         VALUES ($1,'geodata.conflation.resolved.v1','geodata-service','conflation_candidate',$2,$3::jsonb,now(),$4)`,
+        [randomUUID(), candidateId, JSON.stringify(item), randomUUID()],
+      );
+      if (key)
+        await client.query(
+          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+          ['geodata-conflation', key, JSON.stringify(item)],
+        );
+      await client.query('COMMIT');
+      return item;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 
   async finalizeImport(
     runId: string,

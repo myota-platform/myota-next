@@ -152,6 +152,53 @@ export class GeodataRepository {
     }
   }
 
+  async listConflation(query: Record<string, unknown>) {
+    const page = positiveInteger(query.page, 1);
+    const pageSize = Math.min(100, positiveInteger(query.pageSize, 50));
+    const resolution =
+      typeof query.resolution === 'string' && query.resolution.trim()
+        ? query.resolution.trim().toUpperCase()
+        : null;
+    const client = await this.connect();
+    try {
+      const count = await client.query(
+        'SELECT count(*)::integer AS total FROM conflation_candidate WHERE ($1::text IS NULL OR resolution=$1)',
+        [resolution],
+      );
+      const rows = await client.query(
+        `SELECT jsonb_build_object(
+          'id',c.id::text,'leftEntityId',c.left_entity_id::text,
+          'rightEntityId',c.right_entity_id::text,'score',c.similarity,
+          'signals',c.reason,'resolution',c.resolution,
+          'resolutionHistory',c.resolution_history,
+          'survivorEntityId',c.survivor_entity_id::text,
+          'reviewerId',c.resolved_by::text,'resolvedAt',c.resolved_at,
+          'leftEntity',jsonb_build_object('id',l.id::text,'name',l.name,
+             'status',l.lifecycle_status,'geometry',ST_AsGeoJSON(l.geom)::jsonb),
+          'rightEntity',jsonb_build_object('id',r.id::text,'name',r.name,
+             'status',r.lifecycle_status,'geometry',ST_AsGeoJSON(r.geom)::jsonb)
+        ) AS candidate
+         FROM conflation_candidate c
+         JOIN geodata_entity l ON l.id=c.left_entity_id
+         JOIN geodata_entity r ON r.id=c.right_entity_id
+         WHERE ($1::text IS NULL OR c.resolution=$1)
+         ORDER BY c.resolution,c.similarity DESC,c.id
+         LIMIT $2 OFFSET $3`,
+        [resolution, pageSize, (page - 1) * pageSize],
+      );
+      const total = Number(count.rows[0]?.total ?? 0);
+      return {
+        items: rows.rows.map((row) => row.candidate),
+        page,
+        pageSize,
+        total,
+        nextPage: page * pageSize < total ? page + 1 : null,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
   async listImportCandidates(runId: string, query: Record<string, unknown>) {
     const page = positiveInteger(query.page, 1);
     const pageSize = Math.min(100, positiveInteger(query.pageSize, 50));

@@ -93,6 +93,9 @@
   queued sources are discarded immediately, while workers honor active
   requests at the candidate staging checkpoint and clear temporary source data.
   A worker restart recovers runs left in the CANCELLING state.
+  Persisted conflation candidates can be paged by resolution and resolved with
+  reviewer history, idempotency, and a transactional outbox fact; automated
+  candidate generation remains outstanding.
   The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
   paged import-run status reads are also exposed. Import finalization now

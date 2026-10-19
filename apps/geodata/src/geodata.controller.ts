@@ -272,6 +272,26 @@ export class GeodataController {
     };
   }
 
+  @Get('conflation')
+  listConflation(
+    @Headers('authorization') authorization: string | undefined,
+    @Query() query: Record<string, unknown>,
+  ) {
+    authorizeBearer(authorization);
+    return this.repository.listConflation(query);
+  }
+
+  @Post('conflation/:candidateId/resolve')
+  resolveConflation(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Param('candidateId') candidateId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    authorizeBearer(authorization);
+    return this.importMutations.resolveConflation(candidateId, key, body);
+  }
+
   @Get('location-options')
   async locationOptions(
     @Headers('authorization') authorization: string | undefined,
