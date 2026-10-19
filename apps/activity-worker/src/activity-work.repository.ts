@@ -526,7 +526,7 @@ export class ActivityWorkRepository {
         [`adif:${importId}:award-recalculate`, randomUUID()],
       );
     }
-    await this.finishAdifImport(
+    const result = await this.finishAdifImport(
       client,
       record,
       rows.length,
@@ -546,13 +546,7 @@ export class ActivityWorkRepository {
         randomUUID(),
         record.operator_id,
         notificationType,
-        JSON.stringify({
-          importId,
-          recordsSeen: rows.length,
-          recordsAccepted: accepted,
-          recordsRejected: rejected,
-          errors,
-        }),
+        JSON.stringify({ importId, result }),
         `adif:${importId}:completed`,
       ],
     );
@@ -566,11 +560,13 @@ export class ActivityWorkRepository {
     rejected: number,
     errors: string[],
     status: string,
-  ) {
-    await client.query(
-      'UPDATE activity_import SET status=$2,records_seen=$3,records_accepted=$4,records_rejected=$5,errors=$6::jsonb,completed_at=now() WHERE id=$1',
+  ): Promise<JsonRecord> {
+    const updated = await client.query(
+      'UPDATE activity_import SET status=$2,records_seen=$3,records_accepted=$4,records_rejected=$5,errors=$6::jsonb,completed_at=now() WHERE id=$1 RETURNING *',
       [record.id, status, seen, accepted, rejected, JSON.stringify(errors)],
     );
+    const row = updated.rows[0];
+    if (!row) throw new Error(`ADIF import ${String(record.id)} disappeared`);
     if (status === 'FAILED')
       await client.query(
         `INSERT INTO activity_notification(id,recipient_id,notification_type,payload,status,delivered_at,deduplication_key)
@@ -585,6 +581,24 @@ export class ActivityWorkRepository {
           `adif:${record.id}:failed`,
         ],
       );
+    return {
+      id: String(row.id),
+      activationId: String(row.activation_id),
+      filename: row.filename,
+      objectKey: row.object_key,
+      bucket: row.bucket,
+      sha256: row.sha256,
+      contentSize: Number(row.content_size),
+      malwareStatus: row.malware_status,
+      status: row.status,
+      recordsSeen: row.records_seen,
+      recordsAccepted: row.records_accepted,
+      recordsRejected: row.records_rejected,
+      errors: row.errors,
+      createdAt: date(row.created_at),
+      startedAt: date(row.started_at),
+      completedAt: date(row.completed_at),
+    };
   }
 
   private async processPdfRender(client: PoolClient, payload: JsonRecord) {
@@ -1030,6 +1044,12 @@ function objectStoreClient() {
         process.env.MYOTA_OBJECT_STORAGE_SECRET_KEY ?? 'myota-s3-dev-only',
     },
   });
+}
+
+function date(value: unknown) {
+  return value == null
+    ? null
+    : new Date(value as string | number | Date).toISOString();
 }
 
 async function readObject(client: S3Client, bucket: string, key: string) {
