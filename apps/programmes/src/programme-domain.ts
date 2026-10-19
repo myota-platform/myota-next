@@ -17,8 +17,19 @@ export function normalizeUtcTimestamp(value: string): string {
     (_match, time: string, hours: string, minutes?: string) =>
       `${time}${hours}:${minutes ?? '00'}`,
   );
+  if (/^\d{8}$/.test(normalized))
+    normalized = `${normalized.slice(0, 4)}-${normalized.slice(4, 6)}-${normalized.slice(6, 8)}`;
   if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
     normalized += 'T00:00:00';
+  }
+  const dateParts = /^(\d{4})-(\d{2})-(\d{2})/.exec(normalized);
+  if (dateParts) {
+    const year = Number(dateParts[1]);
+    const month = Number(dateParts[2]);
+    const day = Number(dateParts[3]);
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth)
+      throw new BadRequestException('effectiveFrom must be a valid timestamp');
   }
   const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(normalized);
   const timestamp = hasTimezone ? normalized : `${normalized}Z`;
