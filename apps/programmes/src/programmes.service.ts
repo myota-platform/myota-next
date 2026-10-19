@@ -468,7 +468,9 @@ function normalizeEntityType(
       'category codes are stable identifiers and cannot be renamed',
     );
   }
-  const rawGeometry = body.geometryTypes ?? body.geometry;
+  const rawGeometry = Object.hasOwn(body, 'geometryTypes')
+    ? body.geometryTypes
+    : body.geometry;
   const geometryList = Array.isArray(rawGeometry)
     ? rawGeometry
     : typeof rawGeometry === 'string'
