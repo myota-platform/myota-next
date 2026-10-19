@@ -34,6 +34,7 @@ interface PreparedCandidate {
   geometry: string;
   properties: Record<string, unknown>;
   sourceRef: string | null;
+  sourceHash: string;
   possibleDuplicates: Record<string, unknown>[];
 }
 
@@ -517,6 +518,7 @@ export class GeodataWorkRepository {
       let record: StagedImportRecord;
       try {
         if (!isRecord(feature)) throw new Error('feature must be an object');
+        const sourceHash = hashCanonicalJson(feature);
         const normalized = normalizeAdapterFeature(run.adapter_code, feature);
         const properties = normalized.properties;
         const sourceRefCandidate = firstPythonTruthy([
@@ -607,6 +609,7 @@ export class GeodataWorkRepository {
                   geometry,
                   properties,
                   sourceRef,
+                  sourceHash,
                   possibleDuplicates: duplicates.rows.map((duplicate) => ({
                     entityId: duplicate.id,
                     name: duplicate.name,
@@ -913,8 +916,9 @@ export class GeodataWorkRepository {
          SELECT s.candidate_id,$1,s.ordinal,$3,$4::jsonb,
            s.candidate_payload->>'name',
            ST_SetSRID(ST_GeomFromGeoJSON(s.candidate_payload->>'geometry'),4326),
-           $5::jsonb,s.candidate_payload->>'sourceRef',$6,
-           jsonb_build_object('adapter',$7,'sourceHash',$6),
+           $5::jsonb,s.candidate_payload->>'sourceRef',
+           s.candidate_payload->>'sourceHash',
+           jsonb_build_object('adapter',$6,'sourceHash',s.candidate_payload->>'sourceHash'),
            (s.candidate_payload->'properties') || jsonb_build_object(
              'entityType',$4::jsonb->0,'entityTypes',$4::jsonb,
              'entityTypeCodes',$4::jsonb,
@@ -929,7 +933,6 @@ export class GeodataWorkRepository {
           programmeSlug,
           JSON.stringify(entityTypes),
           JSON.stringify(run.source_metadata.source ?? {}),
-          run.source_hash,
           run.adapter_code,
         ],
       );
@@ -1184,6 +1187,19 @@ function pythonTruthy(value: unknown): boolean {
 
 function firstPythonTruthy(values: unknown[]): unknown {
   return values.find(pythonTruthy);
+}
+
+function hashCanonicalJson(value: unknown): string {
+  const canonical = (item: unknown): string => {
+    if (Array.isArray(item)) return `[${item.map(canonical).join(',')}]`;
+    if (isRecord(item))
+      return `{${Object.keys(item)
+        .sort()
+        .map((key) => `${JSON.stringify(key)}:${canonical(item[key])}`)
+        .join(',')}}`;
+    return JSON.stringify(item) ?? 'null';
+  };
+  return createHash('sha256').update(canonical(value), 'utf8').digest('hex');
 }
 
 function boundedFeatureLimit(value: string | undefined): number {
