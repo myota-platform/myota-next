@@ -181,6 +181,16 @@ export class AuthController {
     return this.accounts.getAccount(authorization, accountId);
   }
 
+  @Get('accounts/:accountId/export')
+  exportAccount(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.exportAccount(authorization, accountId);
+  }
+
   @Get('accounts/:accountId/roles')
   listAccountRoles(
     @Headers('authorization') authorization: string | undefined,

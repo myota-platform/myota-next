@@ -21,7 +21,8 @@
   operator, and administrative account updates including profile, credentials,
   lifecycle, anonymization and role replacement. Callsign add, primary
   selection, evidence submission, verification, and retirement, plus paginated
-  security-event reads for global administrators, are also implemented.
+  security-event reads for global administrators and owner-scoped account data
+  export, are also implemented.
   Authentication uses the existing scrypt hash format, HS256 token contract,
   persisted session, revocation, lockout and rate-limit tables.
 - Transactional event helpers write domain events to the Core outbox and
@@ -30,7 +31,7 @@
 ## Not implemented yet
 
 - Remaining Identity APIs, including profile images, OIDC, service credentials,
-  and export. Automated
+  and account deactivation as its dedicated operation. Automated
   compatibility coverage for the first auth slice is also outstanding.
 - Programme, Activity, Geodata, and Gateway handlers, authorization rules,
   persistence repositories, and event/outbox behavior.

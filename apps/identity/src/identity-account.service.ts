@@ -1009,6 +1009,50 @@ export class IdentityAccountService {
     }
   }
 
+  async exportAccount(
+    authorization: string,
+    accountId: string,
+  ): Promise<Record<string, unknown>> {
+    await this.authorizeAccountTarget(authorization, accountId);
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const account = await this.readAccountView(client, accountId);
+      const roles = await this.readRolesForAccount(client, accountId);
+      const evidence = await client.query(
+        `SELECT e.id, e.callsign_id AS "callsignId", c.account_id AS "accountId",
+                e.evidence_type AS "evidenceType", e.source, e.checksum,
+                e.metadata, e.status, e.submitted_at AS "submittedAt",
+                e.reviewed_at AS "reviewedAt"
+           FROM public.callsign_evidence e
+           JOIN public.callsign c ON c.id = e.callsign_id
+          WHERE c.account_id = $1
+          ORDER BY e.submitted_at, e.id`,
+        [accountId],
+      );
+      const securityEvents = await client.query(
+        `SELECT id, event_type AS "eventType", occurred_at AS "occurredAt",
+                payload
+           FROM public.security_event
+          WHERE payload ->> 'accountId' = $1
+          ORDER BY occurred_at, id`,
+        [accountId],
+      );
+      await client.query('COMMIT');
+      return {
+        account,
+        roles,
+        callsignEvidence: evidence.rows,
+        securityEvents: securityEvents.rows,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async listAccountRoles(
     authorization: string,
     accountId: string,

@@ -28,7 +28,7 @@ OpenAPI 3.1.0; 135 operations across 113 paths.
 | POST   | /v1/identity/accounts/{accountId}/callsigns/{callsignId}/evidence |                                            | Submit callsign verification evidence                                              |
 | POST   | /v1/identity/accounts/{accountId}/callsigns/{callsignId}/verify   |                                            | Verify callsign evidence using the callsign.verify scope                           |
 | GET    | /v1/identity/accounts/{accountId}/roles                           |                                            |                                                                                    |
-| GET    | /v1/identity/accounts/{accountId}/export                          |                                            |                                                                                    |
+| GET    | /v1/identity/accounts/{accountId}/export                          | exportAccount                              | Export an account's personal data                                                  |
 | GET    | /v1/programmes                                                    |                                            | List configured programmes                                                         |
 | POST   | /v1/programmes                                                    |                                            | Create a programme configuration                                                   |
 | GET    | /v1/programmes/{slug}/policy                                      |                                            | Get the effective programme policy version                                         |
