@@ -418,7 +418,6 @@ export class ActivityWorkRepository {
           { ...rows[index], source: 'adif', sourceImportId: importId },
           String(record.activation_id),
         );
-        if (qso.hunterId) awardSubjects.add(String(qso.hunterId));
         const occurred = new Date(qso.timestamp);
         if (
           occurred < new Date(record.started_at) ||
@@ -455,6 +454,7 @@ export class ActivityWorkRepository {
           ],
         );
         const row = inserted.rows[0];
+        if (qso.hunterId) awardSubjects.add(String(qso.hunterId));
         if (!row) {
           rejected++;
           await client.query(`RELEASE SAVEPOINT ${savepoint}`);

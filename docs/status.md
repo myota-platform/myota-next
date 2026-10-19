@@ -66,7 +66,8 @@
   updates aggregates, records per-record errors, and updates the import status.
   Completion notices include the full final import result, matching the Python
   worker's notification payload. Successful imports also recalculate award
-  progress for the operator and every normalized hunter in the batch.
+  progress for the operator and hunters in successfully persisted or duplicate
+  QSOs.
   Scheduled retention removes completed or failed ADIF source objects after the
   configured window and records successful deletion in Activity PostgreSQL.
   A periodic repair loop recreates missing outbox commands for queued Activity
