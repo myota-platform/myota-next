@@ -1,0 +1,31 @@
+# Implementation status
+
+**Baseline reference:** MyOTA monorepo commit
+`7f904a5130e59006765cf882956a4adbfecb17ec`.
+
+## In place
+
+- User-selected Node.js/NestJS runtime with Node 24 and NestJS 12.
+- Nest CLI monorepo projects for Gateway, Identity, Programmes, Activity,
+  Geodata, and the separate worker process slots.
+- Shared `/healthz` liveness and `/readyz` readiness handlers. Identity and
+  Programmes probe Core PostgreSQL, Activity probes Activity PostgreSQL, and
+  Geodata probes PostGIS. Gateway readiness does not depend on a database.
+- Current OpenAPI, event schemas, and three database migration baselines copied
+  as compatibility references.
+
+## Not implemented yet
+
+- Domain API handlers, authorization rules, persistence repositories, and
+  event/outbox behavior.
+- Activity and Geodata consumers, leases, recovery, retries, and redrive.
+- Admin and Participant web applications.
+- Database migration runner, data transfer tooling, deployment images, and
+  production observability configuration.
+- Email delivery. Its source contract is recorded, but the current Identity
+  producer/runtime is gated and its separate database conflicts with the
+  requested three-database target until its ownership is resolved.
+
+The empty worker entry points fail explicitly rather than pretending to
+process work. Contract presence and successful builds do not count as function
+parity. Track completion against the [parity matrix](parity-matrix.md).

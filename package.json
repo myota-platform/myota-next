@@ -1,0 +1,62 @@
+{
+  "name": "@myota-platform/myota-next",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "npm run build:apis && npm run build:workers",
+    "build:apis": "nest build gateway && nest build identity && nest build programmes && nest build activity && nest build geodata",
+    "build:workers": "nest build activity-worker && nest build activity-notifications && nest build geodata-worker && nest build email-worker",
+    "start:gateway": "nest start gateway",
+    "start:identity": "nest start identity",
+    "start:programmes": "nest start programmes",
+    "start:activity": "nest start activity",
+    "start:geodata": "nest start geodata",
+    "start:gateway:dev": "nest start gateway --watch",
+    "start:identity:dev": "nest start identity --watch",
+    "start:programmes:dev": "nest start programmes --watch",
+    "start:activity:dev": "nest start activity --watch",
+    "start:geodata:dev": "nest start geodata --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "lint": "oxlint --type-aware apps libs",
+    "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"docs/**/*.md\" README.md",
+    "format:check": "prettier --check \"apps/**/*.ts\" \"libs/**/*.ts\" \"docs/**/*.md\" README.md",
+    "typecheck": "tsc --build --pretty false"
+  },
+  "dependencies": {
+    "@nestjs/common": "12.2.0",
+    "@nestjs/core": "12.2.0",
+    "@nestjs/platform-express": "12.2.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "12.0.8",
+    "@nestjs/mau": "^0.2.6",
+    "@nestjs/schematics": "12.0.7",
+    "@nestjs/testing": "12.2.0",
+    "@rspack/core": "^2.2.9",
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.5",
+    "@types/supertest": "^7.0.0",
+    "@vitest/coverage-v8": "^4.1.2",
+    "oxlint": "^1.58.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "prettier": "^3.4.2",
+    "supertest": "^7.0.0",
+    "tsconfig-paths-webpack-plugin": "^4.2.0",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.2",
+    "webpack-node-externals": "^3.0.0"
+  }
+}

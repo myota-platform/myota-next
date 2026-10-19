@@ -11,14 +11,17 @@ anchors; the initial API inventory is in [`docs/api-baseline.md`](docs/api-basel
 The reference implementation is MyOTA monorepo commit
 `7f904a5130e59006765cf882956a4adbfecb17ec`.
 
-## Decisions still open
+## Selected baseline
 
 - Implementation language: TypeScript on Node.js.
 - Framework: NestJS.
-- Workspace tooling: npm workspaces; Node 24 LTS and NestJS 12.2.0 are the initial
-  baseline versions.
+- Workspace tooling: Nest CLI monorepo managed with npm; Node 24 LTS and
+  NestJS 12.2.0 are the initial baseline versions.
 - Keep three independent database targets: Core PostgreSQL, Activity
   PostgreSQL, and Geodata PostgreSQL with PostGIS.
+
+The persistence library and the treatment of the currently gated email worker
+remain open. See [implementation status](docs/status.md).
 
 ## Repository map
 

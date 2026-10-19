@@ -23,6 +23,10 @@ current reference.
   structured logs, metrics, tracing, and graceful shutdown.
 - Start each process independently while retaining the three database targets.
 
+The initial Nest workspace, database-aware readiness, Node version pin, and
+build tooling are in place. Domain behavior and all worker logic remain open;
+see [implementation status](status.md).
+
 ## 2. Implement contract-shaped synchronous behavior
 
 - Implement Identity and Programme APIs against the copied OpenAPI contract.
