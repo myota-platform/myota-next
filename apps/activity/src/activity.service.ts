@@ -157,6 +157,79 @@ export class ActivityService {
     return job;
   }
 
+  async publicHistory(programme?: string, page?: string, pageSize?: string) {
+    const items = await this.repository.list(programme);
+    const publicItems = items.map((item) => ({
+      ...item,
+      operatorCallsign: item.operatorCallsign
+        ? maskCallsign(item.operatorCallsign)
+        : null,
+    }));
+    const pageNumber = positiveInt(page, 1);
+    const size = Math.min(100, positiveInt(pageSize, 50));
+    const start = (pageNumber - 1) * size;
+    return {
+      items: publicItems.slice(start, start + size),
+      page: pageNumber,
+      pageSize: size,
+      total: publicItems.length,
+      nextPage: start + size < publicItems.length ? pageNumber + 1 : null,
+    };
+  }
+
+  async leaderboard(programme: string, category = 'HUNTER') {
+    if (!programme) throw new BadRequestException('programme is required');
+    const normalizedCategory = category.toUpperCase();
+    if (!['ACTIVATOR', 'HUNTER'].includes(normalizedCategory))
+      throw new BadRequestException('category must be ACTIVATOR or HUNTER');
+    return {
+      programme,
+      category: normalizedCategory,
+      items: await this.repository.leaderboard(programme, normalizedCategory),
+    };
+  }
+
+  async publicResults(programme?: string, format = 'json') {
+    const items = await this.repository.list(programme);
+    const rows = items.map((item) => ({
+      activationId: item.id,
+      programme: item.programmeSlug,
+      entityId: item.entityId,
+      status: item.status,
+      startedAt: item.startedAt,
+      qsoCount: item.qsoCount,
+    }));
+    if (format.toLowerCase() === 'csv') {
+      const fields = [
+        'activationId',
+        'programme',
+        'entityId',
+        'status',
+        'startedAt',
+        'qsoCount',
+      ] as const;
+      const content = [
+        fields.join(','),
+        ...rows.map((row) =>
+          fields
+            .map((field) => String(row[field]).replaceAll(',', ' '))
+            .join(','),
+        ),
+      ].join('\n');
+      return {
+        format: 'csv',
+        contentType: 'text/csv',
+        content,
+        downloadName: `myota-results-${programme ?? 'all'}.csv`,
+      };
+    }
+    return {
+      format: 'json',
+      items: rows,
+      downloadName: `myota-results-${programme ?? 'all'}.json`,
+    };
+  }
+
   private authorize(authorization: string | undefined, scopes: string[]) {
     const claims = verifyAccessToken(authorization);
     if (!claims.scp.some((scope) => scope === '*' || scopes.includes(scope)))
@@ -180,4 +253,9 @@ export class ActivityService {
 function positiveInt(value: string | undefined, fallback: number) {
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function maskCallsign(value: string) {
+  if (value.length <= 3) return '***';
+  return `${value.slice(0, 2)}***${value.slice(-1)}`;
 }

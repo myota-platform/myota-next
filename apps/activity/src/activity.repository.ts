@@ -29,6 +29,21 @@ export class ActivityRepository {
     }
   }
 
+  async leaderboard(programme: string, category: string, limit = 50) {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT subject_id,qso_count,activation_count,unique_callsign_count,unique_entity_count
+         FROM activity_subject_aggregate WHERE programme_slug=$1 AND category=$2
+         ORDER BY qso_count DESC,subject_id LIMIT $3`,
+        [programme, category, limit],
+      );
+      return result.rows;
+    } finally {
+      client.release();
+    }
+  }
+
   async get(id: string): Promise<JsonRecord> {
     const client = await this.connect();
     try {

@@ -46,15 +46,17 @@
   ingestion requests are authorized, bounded, persisted as Activity jobs, and
   exposed through an owner-scoped status API. The separate Activity worker
   processes these ingestion jobs transactionally with database leases, bounded
-  retries, and dead-letter records.
+  retries, and dead-letter records. Public activation history masks operator
+  callsigns, leaderboards use subject aggregates, and result exports support
+  JSON and CSV.
 
 ## Not implemented yet
 
 - Remaining Identity APIs include OIDC mapping updates and account deactivation
   as its dedicated operation. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
-- Remaining Activity APIs include batch/import QSO paths, corrections, public
-  views, awards, and operational workflows. Geodata and Gateway handlers,
+- Remaining Activity APIs include file-based QSO import, corrections, awards,
+  and operational workflows. Geodata and Gateway handlers,
   authorization rules, persistence repositories, and event/outbox behavior
   remain unimplemented.
 - Activity NATS delivery, lease heartbeats during large batches, redrive, and
