@@ -238,15 +238,12 @@ function numericValue(value: unknown, field: string) {
   const text = typeof value === 'string' ? value.trim() : undefined;
   if (
     text !== undefined &&
-    !/^[+-]?(?:(?:\d(?:_?\d)*(?:\.(?:\d(?:_?\d)*)?)?)|(?:\.\d(?:_?\d)*))(?:[eE][+-]?\d(?:_?\d)*)?$/.test(
+    !/^[+-]?(?:(?:(?:\d(?:_?\d)*)(?:\.(?:\d(?:_?\d)*)?)?|\.(?:\d(?:_?\d)*))(?:[eE][+-]?\d(?:_?\d)*)?|inf(?:inity)?|nan)$/i.test(
       text,
     )
   )
     throw new BadRequestException(`${field} must be numeric`);
-  const numeric = Number(text?.replaceAll('_', '') ?? value);
-  if (!Number.isFinite(numeric))
-    throw new BadRequestException(`${field} must be numeric`);
-  return numeric;
+  return Number(text?.replaceAll('_', '') ?? value);
 }
 
 function integerValue(value: unknown, field: string) {
