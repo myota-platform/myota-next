@@ -26,6 +26,10 @@ const maxUploadBytes = Math.min(
   positiveEnv('MYOTA_UPLOAD_MAX_BYTES', 20 * 1024 * 1024),
   20 * 1024 * 1024,
 );
+const maxOsmPbfUploadBytes = Math.min(
+  positiveEnv('MYOTA_OSM_PBF_MAX_UPLOAD_BYTES', 256 * 1024 * 1024),
+  512 * 1024 * 1024,
+);
 const maxPartBytes = Math.min(
   16 * 1024 * 1024,
   Math.max(
@@ -590,14 +594,20 @@ function validateCreate(body: Record<string, unknown>) {
       ? body.filename.split(/[\\/]/).pop()?.trim()
       : '';
   if (!filename) throw new BadRequestException('filename must not be empty');
+  const format =
+    typeof body.format === 'string'
+      ? body.format.trim().toUpperCase()
+      : 'GEOJSON';
+  const sourceLimit =
+    format === 'OSM_PBF' ? maxOsmPbfUploadBytes : maxUploadBytes;
   const expectedSize = Number(body.expectedSize);
   if (
     !Number.isSafeInteger(expectedSize) ||
     expectedSize < 1 ||
-    expectedSize > maxUploadBytes
+    expectedSize > sourceLimit
   )
     throw new BadRequestException(
-      `upload size must be between 1 and ${maxUploadBytes} bytes`,
+      `upload size must be between 1 and ${sourceLimit} bytes`,
     );
   const entityTypes = Array.isArray(body.entityTypes) ? body.entityTypes : [];
   if (
@@ -617,10 +627,6 @@ function validateCreate(body: Record<string, unknown>) {
     throw new BadRequestException(
       'sha256 must be a 64-character hexadecimal digest',
     );
-  const format =
-    typeof body.format === 'string'
-      ? body.format.trim().toUpperCase()
-      : 'GEOJSON';
   if (!['GEOJSON', 'SHAPEFILE', 'SHP', 'OSM_PBF'].includes(format))
     throw new BadRequestException(
       'this import path accepts GeoJSON, Shapefile ZIP archives, or OSM PBF files',

@@ -1,8 +1,13 @@
 import { spawn } from 'node:child_process';
+import { createWriteStream } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable, Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
+const MAX_SOURCE_BYTES = 512 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 128 * 1024 * 1024;
 const MAX_FEATURE_BYTES = 16 * 1024 * 1024;
 const MAX_FEATURE_VERTICES = 250_000;
@@ -38,22 +43,54 @@ type GeoJsonFeature = {
   geometry: Record<string, unknown>;
 };
 
-export async function decodeOsmPbf(
-  pbf: Uint8Array,
+export async function decodeOsmPbfStream(
+  source: AsyncIterable<Uint8Array>,
   filename: string,
   featureLimit: number,
+  sourceHash: string,
   heartbeat: () => Promise<void>,
 ): Promise<{ type: 'FeatureCollection'; features: GeoJsonFeature[] }> {
   const normalizedFilename = filename.toLowerCase();
-  if (!normalizedFilename.endsWith('.pbf') || pbf.length < 4)
-    throw new Error('OSM PBF imports must be non-empty .pbf files');
+  if (!normalizedFilename.endsWith('.pbf'))
+    throw new Error('OSM PBF imports must use a .pbf filename');
 
   const directory = await mkdtemp(join(tmpdir(), 'myota-osm-'));
   const sourcePath = join(directory, 'source.osm.pbf');
   const configPath = join(directory, 'export.json');
   const locationIndexPath = join(directory, 'node-locations.store');
   try {
-    await writeFile(sourcePath, pbf, { mode: 0o600 });
+    const digest = createHash('sha256');
+    let sourceBytes = 0;
+    const sourceLimit = Math.min(
+      positiveEnv(
+        process.env.MYOTA_OSM_PBF_MAX_UPLOAD_BYTES,
+        256 * 1024 * 1024,
+      ),
+      MAX_SOURCE_BYTES,
+    );
+    const sourceGuard = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        sourceBytes += chunk.length;
+        if (sourceBytes > sourceLimit) {
+          callback(
+            new Error('OSM PBF source exceeds the configured size limit'),
+          );
+          return;
+        }
+        digest.update(chunk);
+        callback(null, chunk);
+      },
+    });
+    await pipeline(
+      Readable.from(source),
+      sourceGuard,
+      createWriteStream(sourcePath, { flags: 'wx', mode: 0o600 }),
+    );
+    if (!sourceBytes) throw new Error('OSM PBF source object is empty');
+    if (sourceHash && digest.digest('hex') !== sourceHash)
+      throw new Error(
+        'geodata import source hash does not match its queued record',
+      );
     await writeFile(
       configPath,
       JSON.stringify({
@@ -136,6 +173,11 @@ export async function decodeOsmPbf(
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+function positiveEnv(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function runOsmium(

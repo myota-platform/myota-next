@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { decodeShapefileArchive } from './geodata-shapefile.js';
-import { decodeOsmPbf } from './geodata-osm-pbf.js';
+import { decodeOsmPbfStream } from './geodata-osm-pbf.js';
 import { inferFeatureName } from './geodata-feature-name.js';
 
 interface ImportRun {
@@ -421,16 +421,6 @@ export class GeodataWorkRepository {
     );
     if (!object.Body)
       throw new Error('geodata import source object has no content');
-    const raw = Buffer.from(await object.Body.transformToByteArray());
-    if (raw.length > 20 * 1024 * 1024)
-      throw new Error('geodata import exceeds the 20 MiB limit');
-    if (
-      run.source_hash &&
-      createHash('sha256').update(raw).digest('hex') !== run.source_hash
-    )
-      throw new Error(
-        'geodata import source hash does not match its queued record',
-      );
     const format =
       typeof run.source_metadata.format === 'string'
         ? run.source_metadata.format.toUpperCase()
@@ -442,14 +432,31 @@ export class GeodataWorkRepository {
     const featureLimit = boundedFeatureLimit(
       process.env.GEODATA_MAX_IMPORT_FEATURES,
     );
-    const document: unknown =
-      format === 'SHAPEFILE' || format === 'SHP'
-        ? await decodeShapefileArchive(raw, filename)
-        : format === 'OSM_PBF'
-          ? await decodeOsmPbf(raw, filename, featureLimit, () =>
-              this.heartbeat(run),
-            )
+    let document: unknown;
+    if (format === 'OSM_PBF') {
+      document = await decodeOsmPbfStream(
+        object.Body as AsyncIterable<Uint8Array>,
+        filename,
+        featureLimit,
+        run.source_hash,
+        () => this.heartbeat(run),
+      );
+    } else {
+      const raw = Buffer.from(await object.Body.transformToByteArray());
+      if (raw.length > 20 * 1024 * 1024)
+        throw new Error('geodata import exceeds the 20 MiB limit');
+      if (
+        run.source_hash &&
+        createHash('sha256').update(raw).digest('hex') !== run.source_hash
+      )
+        throw new Error(
+          'geodata import source hash does not match its queued record',
+        );
+      document =
+        format === 'SHAPEFILE' || format === 'SHP'
+          ? await decodeShapefileArchive(raw, filename)
           : JSON.parse(raw.toString('utf8'));
+    }
     if (
       !isRecord(document) ||
       document.type !== 'FeatureCollection' ||

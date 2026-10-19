@@ -126,13 +126,16 @@
   uploads now decode in the Geodata worker with osmium-tool. The converter
   preserves OSM tags and stable type/id source references, filters the current
   hiking-path and protected-area tag catalogue, and assembles closed-way and
-  multipolygon areas using a temporary disk-backed node-location index. Decoded
-  output is capped at 128 MiB, with 16 MiB and
+  multipolygon areas using a temporary disk-backed node-location index. PBF
+  source bytes stream to disk with checksum verification; the upload default is
+  256 MiB and can be raised to 512 MiB with
+  `MYOTA_OSM_PBF_MAX_UPLOAD_BYTES`. Decoded output is capped at 128 MiB, with 16 MiB and
   250,000 vertices per feature, plus the configured feature cap. Larger
   streaming imports remain outstanding.
   The adapter catalogue and admin selector now expose only import formats the
   current boundary can decode. The admin file picker accepts GeoJSON, OSM PBF,
-  and Shapefile ZIP files within the API's 20 MiB cap.
+  and Shapefile ZIP files up to 20 MiB, plus OSM PBF files up to the configured
+  PBF cap.
   Durable object references from the configured import bucket are also
   bounded, hash-checked, validated as GeoJSON, and staged in the worker's
   normalized source format.

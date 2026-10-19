@@ -87,16 +87,19 @@ reprojected from the supplied `.prj` to WGS84. OSM PBF uploads are decoded by
 `osmium-tool` in the Geodata worker image, preserve OSM tags and type/id source
 references, and emit the configured hiking, protected-area, point, path, and
 multipolygon features using a temporary disk-backed node-location index.
-Decoded PBF output is capped at 128 MiB, with per-feature
-16 MiB and 250,000 vertex limits and the configured feature cap. Larger
-streaming imports remain outstanding. Import adapters infer feature names from
+PBF source bytes stream to disk with checksum verification; the default upload
+limit is 256 MiB and can be raised to 512 MiB. Decoded PBF output is capped at
+128 MiB, with per-feature 16 MiB and 250,000 vertex limits and the configured
+feature cap. Larger streaming GeoJSON and Shapefile imports remain outstanding.
+Import adapters infer feature names from
 the reference alias catalogue before validation. The worker validates WGS84
 geometries, stages candidates with provenance and 50 m duplicate
 warnings, records errors, and emits the preprocessing fact. Community proposals
 join this pipeline and automatically queue promotion to CANDIDATE. Multipart/resumable
 uploads are implemented with owner-scoped durable sessions, bounded binary
 parts, checksum and malware scanning, and transactional completion up to the
-worker's 20 MiB source limit and bounded Shapefile expansion. Durable object references from the configured
+worker's 20 MiB source limit for GeoJSON and Shapefile or the larger PBF limit.
+Shapefile expansion is bounded. Durable object references from the configured
 import bucket are bounded, hash-checked, validated, and staged as normalized
 worker inputs. Refresh schedules can be listed and created, and manual complete-
 snapshot runs queue GeoJSON imports, promote validated candidates, record
