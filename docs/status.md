@@ -176,8 +176,10 @@
   leases during long jobs, and stale dispatch recovery and Geodata retention are
   implemented; outage/recovery evidence remains outstanding.
 - Admin and Participant web applications.
-- Database migration runner, data transfer tooling, deployment images, and
-  production observability configuration.
+- Data transfer tooling, deployment images, and production observability
+  configuration. An owner-scoped database migration runner now applies the
+  checked-in SQL baseline and forward migrations with checksums and per-file
+  transactions; production cutover and rollback rehearsals remain outstanding.
 - Email delivery. Its source contract is recorded, but the current Identity
   producer/runtime is gated and its separate database conflicts with the
   requested three-database target until its ownership is resolved.

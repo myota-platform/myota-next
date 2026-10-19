@@ -22,14 +22,15 @@
     "start:geodata:dev": "nest start geodata --watch",
     "start:outbox-worker": "nest start outbox-worker",
     "start:outbox-worker:dev": "nest start outbox-worker --watch",
+    "migrate:db": "node --experimental-strip-types tools/db-migrate.ts",
     "redrive:activity-notification": "node --experimental-strip-types apps/activity-notifications/src/redrive-notification.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "lint": "oxlint --type-aware apps libs",
-    "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"docs/**/*.md\" README.md",
-    "format:check": "prettier --check \"apps/**/*.ts\" \"libs/**/*.ts\" \"docs/**/*.md\" README.md",
-    "typecheck": "tsc --build --pretty false"
+    "lint": "oxlint --type-aware apps libs tools",
+    "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.ts\" \"docs/**/*.md\" README.md",
+    "format:check": "prettier --check \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.ts\" \"docs/**/*.md\" README.md",
+    "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-migrate.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",
