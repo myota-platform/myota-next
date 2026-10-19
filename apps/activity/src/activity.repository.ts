@@ -97,6 +97,125 @@ export class ActivityRepository {
     }
   }
 
+  async entityDeletionImpact(entityId: string): Promise<JsonRecord> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT
+          (SELECT count(*)::integer FROM activity_qso q
+           JOIN activity_activation a ON a.id=q.activation_id
+           WHERE q.status<>'VOID' AND (q.worked_entity_id=$1 OR a.entity_id=$1)) AS qso_count,
+          (SELECT count(*)::integer FROM activity_activation WHERE entity_id=$1) AS activation_count,
+          (SELECT count(*)::integer FROM activity_award_progress p
+           JOIN activity_award_definition d ON d.id=p.award_id
+           WHERE p.subject_id IN (SELECT DISTINCT operator_id FROM activity_activation WHERE entity_id=$1)
+              OR p.subject_id IN (SELECT DISTINCT hunter_id FROM activity_qso WHERE worked_entity_id=$1 AND hunter_id IS NOT NULL)) AS award_progress_count`,
+        [entityId],
+      );
+      const row = result.rows[0];
+      return {
+        entityId,
+        qsoCount: Number(row.qso_count),
+        activationCount: Number(row.activation_count),
+        awardProgressCount: Number(row.award_progress_count),
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async cascadeDeleteEntity(
+    entityId: string,
+    deletedBy: string,
+    key?: string,
+  ): Promise<JsonRecord> {
+    return this.mutate(key, async (client) => {
+      const qsos = await client.query(
+        `SELECT q.id,q.activation_id,q.operator_id,q.hunter_id,q.programme_slug
+         FROM activity_qso q JOIN activity_activation a ON a.id=q.activation_id
+         WHERE q.status<>'VOID' AND (q.worked_entity_id=$1 OR a.entity_id=$1)
+         FOR UPDATE OF q`,
+        [entityId],
+      );
+      const activations = await client.query(
+        'SELECT id,operator_id,programme_slug FROM activity_activation WHERE entity_id=$1 FOR UPDATE',
+        [entityId],
+      );
+      const subjectIds = new Set<string>();
+      const programmes = new Set<string>();
+      const affectedActivationIds = new Set<string>();
+      for (const row of activations.rows) {
+        subjectIds.add(String(row.operator_id));
+        programmes.add(String(row.programme_slug));
+        affectedActivationIds.add(String(row.id));
+      }
+      for (const row of qsos.rows) {
+        subjectIds.add(String(row.operator_id));
+        if (row.hunter_id) subjectIds.add(String(row.hunter_id));
+        programmes.add(String(row.programme_slug));
+        affectedActivationIds.add(String(row.activation_id));
+      }
+      const qsoIds = qsos.rows.map((row) => String(row.id));
+      if (qsoIds.length) {
+        await client.query(
+          'DELETE FROM activity_qso_correction WHERE qso_id=ANY($1::uuid[])',
+          [qsoIds],
+        );
+        await client.query(
+          'DELETE FROM activity_qso WHERE id=ANY($1::uuid[])',
+          [qsoIds],
+        );
+      }
+      await client.query(
+        `UPDATE activity_activation SET
+         status=CASE WHEN entity_id=$1 THEN 'CLOSED_INVALID' ELSE status END,
+         qso_count=(SELECT count(*) FROM activity_qso q WHERE q.activation_id=activity_activation.id AND q.status<>'VOID'),
+         unique_callsign_count=(SELECT count(DISTINCT q.worked_callsign) FROM activity_qso q WHERE q.activation_id=activity_activation.id AND q.status<>'VOID'),
+         unique_entity_count=(SELECT count(DISTINCT q.worked_entity_id) FROM activity_qso q WHERE q.activation_id=activity_activation.id AND q.status<>'VOID'),
+         updated_at=now()
+         WHERE entity_id=$1 OR id=ANY($2::uuid[])`,
+        [entityId, [...affectedActivationIds]],
+      );
+      await this.rebuildSubjectAggregates(client, [...subjectIds]);
+      const awardRecalculationJobs: string[] = [];
+      for (const programmeSlug of programmes) {
+        if (!programmeSlug) continue;
+        const jobIdempotencyKey = `entity-delete-awards:${entityId}:${programmeSlug}`;
+        await this.job(
+          client,
+          'AWARD_RECALCULATE',
+          {
+            programmeSlug,
+            subjectIds: [...subjectIds].sort(),
+            reason: 'ENTITY_DELETED',
+            entityId,
+          },
+          jobIdempotencyKey,
+        );
+        const job = await client.query(
+          'SELECT id FROM activity_job WHERE idempotency_key=$1',
+          [jobIdempotencyKey],
+        );
+        if (job.rows[0]) awardRecalculationJobs.push(String(job.rows[0].id));
+      }
+      const result = {
+        entityId,
+        deletedBy,
+        qsoCount: qsoIds.length,
+        activationCount: activations.rows.length,
+        awardRecalculationJobs,
+      };
+      await this.event(
+        client,
+        'activity.entity.cascade-deleted.v1',
+        'entity',
+        entityId,
+        result,
+      );
+      return result;
+    });
+  }
+
   async getQso(id: string): Promise<JsonRecord> {
     const client = await this.connect();
     try {
@@ -946,6 +1065,63 @@ export class ActivityRepository {
         `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at,correlation_id) VALUES ($1,$3,'activity-service','activity_job',$1,$4::jsonb,now(),now(),$2) ON CONFLICT DO NOTHING`,
         [id, randomUUID(), workEventType(kind), JSON.stringify({ jobId: id })],
       );
+  }
+
+  private async rebuildSubjectAggregates(
+    client: PoolClient,
+    subjectIds: string[],
+  ) {
+    for (const subjectId of subjectIds) {
+      await client.query(
+        'DELETE FROM activity_subject_callsign WHERE subject_id=$1',
+        [subjectId],
+      );
+      await client.query(
+        'DELETE FROM activity_subject_entity WHERE subject_id=$1',
+        [subjectId],
+      );
+      await client.query(
+        'DELETE FROM activity_subject_aggregate WHERE subject_id=$1',
+        [subjectId],
+      );
+      await client.query(
+        `INSERT INTO activity_subject_aggregate
+         (programme_slug,subject_id,category,qso_count,activation_count,unique_callsign_count,unique_entity_count,last_entity_type)
+         SELECT a.programme_slug,a.operator_id,'ACTIVATOR',count(q.id),count(DISTINCT a.id),
+          count(DISTINCT q.worked_callsign),count(DISTINCT a.entity_id),max(a.entity_type)
+         FROM activity_activation a LEFT JOIN activity_qso q
+          ON q.activation_id=a.id AND q.status<>'VOID'
+         WHERE a.operator_id=$1 GROUP BY a.programme_slug,a.operator_id`,
+        [subjectId],
+      );
+      await client.query(
+        `INSERT INTO activity_subject_aggregate
+         (programme_slug,subject_id,category,qso_count,activation_count,unique_callsign_count,unique_entity_count,last_entity_type)
+         SELECT q.programme_slug,q.hunter_id,'HUNTER',count(*),0,
+          count(DISTINCT q.worked_callsign),count(DISTINCT q.worked_entity_id),max(a.entity_type)
+         FROM activity_qso q JOIN activity_activation a ON a.id=q.activation_id
+         WHERE q.hunter_id=$1 AND q.status<>'VOID' GROUP BY q.programme_slug,q.hunter_id`,
+        [subjectId],
+      );
+      await client.query(
+        `INSERT INTO activity_subject_callsign(programme_slug,subject_id,category,callsign)
+         SELECT DISTINCT a.programme_slug,a.operator_id,'ACTIVATOR',q.worked_callsign
+          FROM activity_qso q JOIN activity_activation a ON a.id=q.activation_id
+          WHERE a.operator_id=$1 AND q.status<>'VOID'
+         UNION SELECT DISTINCT q.programme_slug,q.hunter_id,'HUNTER',q.worked_callsign
+          FROM activity_qso q WHERE q.hunter_id=$2 AND q.status<>'VOID'`,
+        [subjectId, subjectId],
+      );
+      await client.query(
+        `INSERT INTO activity_subject_entity(programme_slug,subject_id,category,entity_id)
+         SELECT DISTINCT a.programme_slug,a.operator_id,'ACTIVATOR',a.entity_id
+          FROM activity_qso q JOIN activity_activation a ON a.id=q.activation_id
+          WHERE a.operator_id=$1 AND q.status<>'VOID'
+         UNION SELECT DISTINCT q.programme_slug,q.hunter_id,'HUNTER',q.worked_entity_id
+          FROM activity_qso q WHERE q.hunter_id=$2 AND q.worked_entity_id IS NOT NULL AND q.status<>'VOID'`,
+        [subjectId, subjectId],
+      );
+    }
   }
 
   private async upsertSubject(

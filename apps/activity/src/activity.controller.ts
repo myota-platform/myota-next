@@ -15,6 +15,23 @@ import { ActivityService } from './activity.service.js';
 export class ActivityController {
   constructor(private readonly activity: ActivityService) {}
 
+  @Get('entity-deletion-impacts/:entityId')
+  entityDeletionImpact(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('entityId') entityId: string,
+  ) {
+    return this.activity.entityDeletionImpact(authorization, entityId);
+  }
+
+  @Post('entity-deletion-cascades')
+  cascadeDeleteEntity(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.activity.cascadeDeleteEntity(authorization, key, body);
+  }
+
   @Get()
   list(
     @Headers('authorization') authorization: string | undefined,

@@ -83,6 +83,28 @@ export class ActivityService {
     return this.repository.get(id);
   }
 
+  async entityDeletionImpact(
+    authorization: string | undefined,
+    entityId: string,
+  ) {
+    this.authorize(authorization, ['activity.admin']);
+    return this.repository.entityDeletionImpact(entityId);
+  }
+
+  async cascadeDeleteEntity(
+    authorization: string | undefined,
+    key: string | undefined,
+    body: JsonRecord,
+  ) {
+    const claims = this.authorize(authorization, ['activity.admin']);
+    const entityId = typeof body.entityId === 'string' ? body.entityId : '';
+    if (!entityId) throw new BadRequestException('entityId is required');
+    const deletedBy =
+      claims.sub ||
+      (typeof body.deletedBy === 'string' ? body.deletedBy : 'administrator');
+    return this.repository.cascadeDeleteEntity(entityId, deletedBy, key);
+  }
+
   async addQso(
     authorization: string | undefined,
     key: string | undefined,

@@ -56,6 +56,10 @@
   ADIF uploads are ownership-checked, size-limited, scanned, stored in S3, and
   queued transactionally; the Activity worker parses the source, persists QSOs,
   updates aggregates, records per-record errors, and updates the import status.
+  Entity-deletion impact reads and idempotent cascades are implemented: the
+  Activity service removes linked valid QSOs and corrections, invalidates
+  affected activations, rebuilds subject aggregates, and queues award
+  recalculation jobs. Geodata deletion-job orchestration remains outstanding.
 - Geodata now accepts bounded JSON GeoJSON imports, stores the source document
   in S3-compatible object storage, and creates an idempotent queued import run
   (20 MiB request limit and 5,000 feature default, adjustable with

@@ -49,6 +49,9 @@ file imports, notification production beyond qualification, NATS delivery, and
 worker recovery. Statistics listing and rebuild-job APIs,
 transactional snapshot rebuilds, and owner-scoped notification reads are
 implemented. ADIF import creation, processing, and status reads are implemented.
+Activity entity-deletion impact reads and idempotent cascades also remove
+linked QSOs and correction rows, rebuild subject aggregates, invalidate affected
+activations, and enqueue award recalculation jobs.
 Geodata provides PostGIS-backed public
 entity list/detail reads with filters and bounds, the import adapter catalogue,
 provider-derived location options, and authorized import-run list/status reads;
