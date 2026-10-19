@@ -47,7 +47,11 @@ export function normalizeCallsign(value: unknown): string {
 }
 
 export function normalizeActivation(data: JsonRecord): JsonRecord {
-  const rules = data.programmeRules ?? data.rules ?? {};
+  const programmeRules = data.programmeRules;
+  const rules =
+    programmeRules && Object.keys(programmeRules).length > 0
+      ? programmeRules
+      : (data.rules ?? {});
   const location = data.location ?? {};
   if (
     rules.requireLocation &&
@@ -76,7 +80,7 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
   }
   if (
     callsign &&
-    data.callsignLifecycleStatus &&
+    data.callsignLifecycleStatus != null &&
     data.callsignLifecycleStatus !== 'VERIFIED' &&
     !rules.allowUnverifiedCallsign
   ) {
