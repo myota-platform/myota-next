@@ -15,6 +15,7 @@ type Registry = {
     workType: string;
     subject: string;
     stream: string;
+    durable: string;
     owner: string;
   }>;
   producerNamesByOwner: Record<string, string[]>;

@@ -148,9 +148,9 @@
   operations are outstanding.
 - The NestJS outbox relay now publishes contract-routed facts and work from one
   configured owner database per process, with stable JetStream message IDs,
-  bounded retries, and dead-letter persistence. Deployment-owned stream and
-  consumer topology validation, relay metrics, and outage/recovery evidence
-  remain outstanding. Activity job redrive is audited and available to
+  bounded retries, dead-letter persistence, and read-only validation of the
+  deployment-owned fact/work streams and registered durable policies. Relay
+  metrics and outage/recovery evidence remain outstanding. Activity job redrive is audited and available to
   administrators; the Activity worker now extends active job leases while
   long batches run. Geodata lease heartbeats for large jobs and remaining
   enrichment and retention consumers remain outstanding.

@@ -115,8 +115,9 @@ workflows remain outstanding.
   the live Identity service. Gateway request counters are exposed at `/metrics`.
 - Outbox relay: independently configured Core, Activity, and Geodata relay
   processes claim only their own database's events and publish registered fact
-  or work envelopes to JetStream with stable event IDs. Relay topology checks,
-  metrics, and operational recovery evidence are not complete yet.
+  or work envelopes to JetStream with stable event IDs and validates existing
+  stream and durable settings at startup. Relay metrics and operational
+  recovery evidence are not complete yet.
 - Runtime: preserve migrations, health/readiness, metrics, logs, traces,
   backups, restore paths, NATS topology, object storage buckets, and separate
   service/worker deployment units.

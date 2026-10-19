@@ -5,7 +5,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { jetstream } from '@nats-io/jetstream';
+import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
@@ -51,6 +51,7 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
       maxReconnectAttempts: -1,
     });
     this.relay = jetstream(this.connection);
+    await this.validateTopology(registry);
     void this.run(registry);
   }
 
@@ -78,6 +79,186 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
         dbRetryMs = Math.min(dbRetryMs * 2, 30_000);
       }
     }
+  }
+
+  private async validateTopology(
+    registry: Awaited<ReturnType<typeof loadOutboxRegistry>>,
+  ): Promise<void> {
+    const manager = await jetstreamManager(this.connection!);
+    const required: Array<{
+      name: string;
+      subject: string;
+      retention: string;
+    }> = [
+      { name: 'MYOTA_EVENTS', subject: 'myota.events.>', retention: 'limits' },
+    ];
+    const ownedWork = registry.work.filter((work) =>
+      OWNER === 'activity'
+        ? work.owner === 'activity-service'
+        : OWNER === 'geodata' && work.owner === 'geodata-service',
+    );
+    if (OWNER === 'activity' && ownedWork.length) {
+      required.push({
+        name: 'MYOTA_ACTIVITY_WORK',
+        subject: 'myota.work.activity.>',
+        retention: 'workqueue',
+      });
+    }
+    if (OWNER === 'geodata' && ownedWork.length) {
+      required.push({
+        name: 'MYOTA_GEODATA_WORK',
+        subject: 'myota.work.geodata.>',
+        retention: 'workqueue',
+      });
+    }
+
+    for (const expected of required) {
+      const info = await manager.streams.info(expected.name);
+      const config = info.config;
+      if (
+        config.subjects.length !== 1 ||
+        config.subjects[0] !== expected.subject ||
+        String(config.retention).toLowerCase() !== expected.retention ||
+        String(config.storage).toLowerCase() !== 'file' ||
+        config.num_replicas !== 1 ||
+        String(config.discard).toLowerCase() !== 'new' ||
+        Math.min(
+          config.max_age,
+          config.max_bytes,
+          config.max_msgs,
+          config.max_msg_size,
+        ) <= 0
+      ) {
+        throw new Error(
+          `JetStream stream ${expected.name} does not match bounded topology`,
+        );
+      }
+    }
+
+    const notificationSubjects = [
+      'myota.events.geodata.entity.reviewed.v1',
+      'myota.events.geodata.entity.status-changed.v1',
+      'myota.events.identity.account.admin-updated.v1',
+      'myota.events.identity.account.created.v1',
+      'myota.events.identity.account.deactivated.v1',
+      'myota.events.identity.bootstrap-admin.created.v1',
+      'myota.events.identity.callsign.added.v1',
+      'myota.events.identity.callsign.evidence-submitted.v1',
+      'myota.events.identity.callsign.primary-changed.v1',
+      'myota.events.identity.callsign.retired.v1',
+      'myota.events.identity.callsign.verified.v1',
+      'myota.events.identity.login.failed.v1',
+      'myota.events.identity.login.succeeded.v1',
+      'myota.events.identity.oidc.mapping.updated.v1',
+      'myota.events.identity.recovery.completed.v1',
+      'myota.events.identity.recovery.requested.v1',
+      'myota.events.identity.role-definition.created.v1',
+      'myota.events.identity.role-definition.updated.v1',
+      'myota.events.identity.role.assigned.v1',
+      'myota.events.identity.roles.replaced.v1',
+      'myota.events.identity.service-token.issued.v1',
+    ];
+    const notificationInfo = await manager.consumers.info(
+      'MYOTA_EVENTS',
+      'activity-notifications-v1',
+    );
+    const notification = notificationInfo.config;
+    const backoff = [60, 120, 300, 300, 300, 300, 300, 300].map(
+      (seconds) => seconds * 1_000_000_000,
+    );
+    if (
+      JSON.stringify(notification.filter_subjects ?? []) !==
+        JSON.stringify(notificationSubjects) ||
+      String(notification.ack_policy).toLowerCase() !== 'explicit' ||
+      Number(notification.ack_wait) !== 60_000_000_000 ||
+      notification.max_deliver !== 8 ||
+      notification.max_ack_pending !== 64 ||
+      notification.max_waiting !== 32 ||
+      String(notification.deliver_policy).toLowerCase() !== 'all' ||
+      String(notification.replay_policy).toLowerCase() !== 'instant' ||
+      notification.deliver_subject != null ||
+      JSON.stringify(notification.backoff ?? []) !== JSON.stringify(backoff)
+    ) {
+      throw new Error(
+        'MYOTA_EVENTS/activity-notifications-v1 does not match required topology',
+      );
+    }
+
+    if (OWNER === 'activity' || OWNER === 'geodata') {
+      const stream =
+        OWNER === 'activity' ? 'MYOTA_ACTIVITY_WORK' : 'MYOTA_GEODATA_WORK';
+      const expectedCount = OWNER === 'activity' ? 6 : 4;
+      if (ownedWork.length !== expectedCount) {
+        throw new Error(
+          `${stream} work routes are incomplete in the event registry`,
+        );
+      }
+      for (const work of ownedWork) {
+        const info = await manager.consumers.info(stream, work.durable);
+        const config = info.config;
+        if (
+          config.filter_subject !== work.subject ||
+          String(config.ack_policy).toLowerCase() !== 'explicit' ||
+          Number(config.ack_wait) !== this.expectedAckWait(work.durable) ||
+          config.max_deliver !==
+            (OWNER === 'activity'
+              ? 8
+              : work.durable === 'geodata-entity-deletion-v1'
+                ? 100
+                : work.durable === 'geodata-preprocessing-v1' ||
+                    work.durable === 'geodata-import-promotion-v1'
+                  ? 100
+                  : 8) ||
+          config.max_ack_pending !== this.expectedPending(work.durable) ||
+          config.max_waiting !== this.expectedPending(work.durable) ||
+          String(config.deliver_policy).toLowerCase() !== 'all' ||
+          String(config.replay_policy).toLowerCase() !== 'instant' ||
+          config.deliver_subject != null
+        ) {
+          throw new Error(
+            `JetStream durable ${stream}/${work.durable} does not match its registered policy`,
+          );
+        }
+      }
+    }
+  }
+
+  private expectedAckWait(durable: string): number {
+    const seconds: Record<string, number> = {
+      'activity-qso-ingestion-v1': 120,
+      'activity-adif-import-v1': 300,
+      'activity-award-recalculate-v1': 120,
+      'activity-award-evaluation-v1': 120,
+      'activity-pdf-render-v1': 300,
+      'activity-statistics-rebuild-v1': 300,
+      'geodata-preprocessing-v1': 300,
+      'geodata-import-promotion-v1': 300,
+      'geodata-entity-deletion-v1': 120,
+      'geodata-location-enrichment-v1': 120,
+    };
+    const value = seconds[durable];
+    if (!value)
+      throw new Error(`No acknowledgement policy is registered for ${durable}`);
+    return value * 1_000_000_000;
+  }
+
+  private expectedPending(durable: string): number {
+    const values: Record<string, number> = {
+      'activity-qso-ingestion-v1': 4,
+      'activity-adif-import-v1': 1,
+      'activity-award-recalculate-v1': 2,
+      'activity-award-evaluation-v1': 2,
+      'activity-pdf-render-v1': 1,
+      'activity-statistics-rebuild-v1': 1,
+      'geodata-preprocessing-v1': 1,
+      'geodata-import-promotion-v1': 1,
+      'geodata-entity-deletion-v1': 1,
+      'geodata-location-enrichment-v1': 4,
+    };
+    const value = values[durable];
+    if (!value)
+      throw new Error(`No pending policy is registered for ${durable}`);
+    return value;
   }
 
   private async claim(): Promise<ClaimedOutboxEvent | null> {
