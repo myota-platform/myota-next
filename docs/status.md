@@ -80,7 +80,8 @@
   UTC offsets; imports with no parsed QSO records retain the reference's
   successful zero-record outcome. Retention interval
   configuration rejects malformed values instead of silently producing a
-  rapid retry loop.
+  rapid retry loop. Upload-size and QSO-batch limits use strict integer parsing
+  consistent with the Python environment settings.
   Completion notices include the full final import result, matching the Python
   worker's notification payload. Successful imports also recalculate award
   progress for the operator and hunters in successfully persisted or duplicate

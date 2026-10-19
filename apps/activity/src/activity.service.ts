@@ -154,10 +154,7 @@ export class ActivityService {
       throw new BadRequestException(
         'activationId and a non-empty qsos array are required',
       );
-    const maximum = Number.parseInt(
-      process.env.MYOTA_MAX_BATCH_QSOS ?? '5000',
-      10,
-    );
+    const maximum = integerSetting(process.env.MYOTA_MAX_BATCH_QSOS, 5000);
     if (body.qsos.length > maximum)
       throw new BadRequestException(
         'QSO ingestion exceeds the configured limit',
@@ -197,7 +194,7 @@ export class ActivityService {
       throw new BadRequestException(
         'filename must be a CSV filename of 255 characters or fewer',
       );
-    const maxBytes = positiveInt(
+    const maxBytes = integerSetting(
       process.env.MYOTA_UPLOAD_MAX_BYTES,
       25 * 1024 * 1024,
     );
@@ -213,7 +210,7 @@ export class ActivityService {
     } catch {
       throw new BadRequestException('CSV file must use UTF-8 encoding');
     }
-    const maximum = positiveInt(process.env.MYOTA_MAX_BATCH_QSOS, 5000);
+    const maximum = integerSetting(process.env.MYOTA_MAX_BATCH_QSOS, 5000);
     const qsos = parseQsoCsv(text, maximum);
     return this.enqueueQsoIngestion(authorization, key, {
       activationId,
@@ -276,7 +273,7 @@ export class ActivityService {
     const activation = await this.repository.get(activationId);
     this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
     const content = decodeBase64(body.contentBase64);
-    const maxBytes = positiveInt(
+    const maxBytes = integerSetting(
       process.env.MYOTA_UPLOAD_MAX_BYTES,
       25 * 1024 * 1024,
     );
@@ -549,9 +546,16 @@ export class ActivityService {
   }
 }
 
-function positiveInt(value: string | undefined, fallback: number) {
-  const parsed = Number.parseInt(value ?? '', 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+function integerSetting(value: string | undefined, fallback: number) {
+  if (value === undefined) return fallback;
+  const normalized = value.trim();
+  if (!/^[+-]?\d(?:_?\d)*$/.test(normalized))
+    throw new Error('Activity limit settings must be integers');
+  const parsed = BigInt(normalized.replaceAll('_', ''));
+  const maximum = BigInt(Number.MAX_SAFE_INTEGER);
+  if (parsed > maximum) return Number.MAX_SAFE_INTEGER;
+  if (parsed < -maximum) return -Number.MAX_SAFE_INTEGER;
+  return Number(parsed);
 }
 
 function decodeBase64(value: string) {
