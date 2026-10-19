@@ -9,6 +9,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parsePageInteger } from '@app/platform/pagination.js';
 import { writeOutboxEvent, writeSecurityEvent } from '@app/platform/outbox.js';
 import {
   IdentityAuthService,
@@ -268,8 +269,8 @@ export class IdentityAccountService {
     if (!scopes.has('*') && !scopes.has('identity.admin')) {
       throw new ForbiddenException('identity.admin scope is required');
     }
-    const page = parsePage(query.page, 1);
-    const pageSize = Math.min(100, parsePage(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const client = await this.connect();
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
@@ -1434,13 +1435,4 @@ function isUniqueViolation(error: unknown): boolean {
     'code' in error &&
     error.code === '23505'
   );
-}
-
-function parsePage(value: string | undefined, fallback: number): number {
-  if (value === undefined || value.trim() === '') return fallback;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) {
-    throw new BadRequestException('page and pageSize must be integers');
-  }
-  return Math.max(1, parsed);
 }

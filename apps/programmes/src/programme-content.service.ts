@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { verifyAccessToken } from '@app/platform/access-token.js';
+import { parsePageInteger } from '@app/platform/pagination.js';
 import { ProgrammeStateRepository } from './programme-state.repository.js';
 import type { ProgrammeState } from './programme-state.repository.js';
 import type {
@@ -41,8 +42,8 @@ export class ProgrammeContentService {
     },
   ) {
     this.authorizeAdmin(authorization, slug);
-    const page = parsePage(query.page, 1);
-    const pageSize = Math.min(100, parsePage(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const state = await this.state.load();
     const items = Object.values(contentBucket(state)).filter(
       (item) =>
@@ -358,13 +359,4 @@ function requireContentRecord(
   if (!content) throw new NotFoundException('content not found');
   content.reviewHistory ??= [];
   return content;
-}
-
-function parsePage(value: string | undefined, fallback: number): number {
-  if (value === undefined || value.trim() === '') return fallback;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) {
-    throw new BadRequestException('page and pageSize must be integers');
-  }
-  return Math.max(1, parsed);
 }

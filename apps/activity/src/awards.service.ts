@@ -16,6 +16,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
+import { parsePageInteger } from '@app/platform/pagination.js';
 import { ActivityRepository } from './activity.repository.js';
 import {
   evaluateAward,
@@ -51,8 +52,8 @@ export class AwardsService {
       items = items.filter(
         (award) => award.category === query.category?.toUpperCase(),
       );
-    const page = positiveInt(query.page, 1);
-    const pageSize = Math.min(100, positiveInt(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const start = (page - 1) * pageSize;
     return {
       items: items.slice(start, start + pageSize),
@@ -398,8 +399,8 @@ export class AwardsService {
   ) {
     this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
     let items = await this.repository.listAwardRequests(query.subjectId);
-    const page = positiveInt(query.page, 1);
-    const pageSize = Math.min(100, positiveInt(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const start = (page - 1) * pageSize;
     return {
       items: items.slice(start, start + pageSize),
@@ -476,8 +477,8 @@ export class AwardsService {
   ) {
     this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
     const items = await this.repository.listAwardIssuances();
-    const page = positiveInt(query.page, 1);
-    const pageSize = Math.min(100, positiveInt(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const start = (page - 1) * pageSize;
     return {
       items: items.slice(start, start + pageSize),
@@ -555,8 +556,8 @@ export class AwardsService {
   ) {
     this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
     const items = await this.repository.listAwardAssets();
-    const page = positiveInt(query.page, 1);
-    const pageSize = Math.min(100, positiveInt(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const start = (page - 1) * pageSize;
     return {
       items: items.slice(start, start + pageSize),

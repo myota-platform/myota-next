@@ -7,6 +7,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { verifyAccessToken } from '@app/platform/access-token.js';
+import { parsePageInteger } from '@app/platform/pagination.js';
 import { ProgrammeStateRepository } from './programme-state.repository.js';
 import type {
   ProgrammeRecord,
@@ -23,8 +24,8 @@ export class ProgrammesService {
   constructor(private readonly state: ProgrammeStateRepository) {}
 
   async list(query: { page?: string; pageSize?: string }) {
-    const page = parsePage(query.page, 1);
-    const pageSize = Math.min(100, parsePage(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const state = await this.state.load();
     const records = Object.values(state.items ?? {});
     const total = records.length;
@@ -512,16 +513,4 @@ function normalizeEntityType(
     active: Boolean(activeValue),
     updatedAt: now,
   };
-}
-
-function parsePage(value: string | undefined, fallback: number): number {
-  if (value === undefined || value.trim() === '') return fallback;
-  const normalized = value.trim();
-  if (!/^[+-]?\d(?:_?\d)*$/.test(normalized)) {
-    throw new BadRequestException('page and pageSize must be integers');
-  }
-  const parsed = Number(normalized.replaceAll('_', ''));
-  if (!Number.isSafeInteger(parsed))
-    throw new BadRequestException('page and pageSize must be integers');
-  return Math.max(1, parsed);
 }

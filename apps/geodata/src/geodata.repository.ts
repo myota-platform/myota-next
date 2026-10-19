@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parsePageInteger } from '@app/platform/pagination.js';
 
 @Injectable()
 export class GeodataRepository {
@@ -52,8 +53,8 @@ export class GeodataRepository {
       );
     }
     const where = filters.length ? filters.join(' AND ') : 'true';
-    const page = positiveInteger(query.page, 1);
-    const pageSize = Math.min(100, positiveInteger(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const client = await this.connect();
     try {
       const counted = await client.query(
@@ -113,8 +114,8 @@ export class GeodataRepository {
   }
 
   async listImports(query: Record<string, unknown>) {
-    const page = positiveInteger(query.page, 1);
-    const pageSize = Math.min(100, positiveInteger(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const client = await this.connect();
     try {
       const counted = await client.query(
@@ -153,8 +154,8 @@ export class GeodataRepository {
   }
 
   async listConflation(query: Record<string, unknown>) {
-    const page = positiveInteger(query.page, 1);
-    const pageSize = Math.min(100, positiveInteger(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const resolution =
       typeof query.resolution === 'string' && query.resolution.trim()
         ? query.resolution.trim().toUpperCase()
@@ -200,8 +201,8 @@ export class GeodataRepository {
   }
 
   async listImportCandidates(runId: string, query: Record<string, unknown>) {
-    const page = positiveInteger(query.page, 1);
-    const pageSize = Math.min(100, positiveInteger(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const client = await this.connect();
     try {
       const counted = await client.query(
@@ -392,11 +393,6 @@ function listValues(value: unknown) {
     : typeof value === 'string'
       ? [value]
       : [];
-}
-
-function positiveInteger(value: unknown, fallback: number) {
-  const number = Number.parseInt(typeof value === 'string' ? value : '', 10);
-  return Number.isInteger(number) && number > 0 ? number : fallback;
 }
 
 function parseBounds(query: Record<string, unknown>) {

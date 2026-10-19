@@ -13,6 +13,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { verifyAccessToken } from '@app/platform/access-token.js';
+import { parsePageInteger } from '@app/platform/pagination.js';
 import { ActivityRepository } from './activity.repository.js';
 import { parseQsoCsv } from './qso-csv.js';
 import {
@@ -44,8 +45,8 @@ export class ActivityService {
         ? query.operatorId
         : claims.sub;
     const items = await this.repository.list(query.programme, operatorId);
-    const page = parsePageInt(query.page, 1);
-    const pageSize = Math.min(100, parsePageInt(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const start = (page - 1) * pageSize;
     return {
       items: items.slice(start, start + pageSize),
@@ -366,8 +367,8 @@ export class ActivityService {
         ? maskCallsign(item.operatorCallsign)
         : null,
     }));
-    const pageNumber = parsePageInt(page, 1);
-    const size = Math.min(100, parsePageInt(pageSize, 50));
+    const pageNumber = parsePageInteger(page, 1);
+    const size = Math.min(100, parsePageInteger(pageSize, 50));
     const start = (pageNumber - 1) * size;
     return {
       items: publicItems.slice(start, start + size),
@@ -481,8 +482,8 @@ export class ActivityService {
   ) {
     this.authorize(authorization, ['activity.read', 'activity.admin']);
     const items = await this.repository.listStatistics(query.programme);
-    const page = parsePageInt(query.page, 1);
-    const pageSize = Math.min(100, parsePageInt(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const start = (page - 1) * pageSize;
     return {
       items: items.slice(start, start + pageSize),
@@ -551,17 +552,6 @@ export class ActivityService {
 function positiveInt(value: string | undefined, fallback: number) {
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function parsePageInt(value: string | undefined, fallback: number) {
-  if (value === undefined || value.trim() === '') return fallback;
-  const normalized = value.trim();
-  if (!/^[+-]?\d+$/.test(normalized))
-    throw new BadRequestException('page and pageSize must be integers');
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed))
-    throw new BadRequestException('page and pageSize must be integers');
-  return Math.max(1, parsed);
 }
 
 function decodeBase64(value: string) {

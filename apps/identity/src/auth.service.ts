@@ -18,6 +18,7 @@ import {
 } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parsePageInteger } from '@app/platform/pagination.js';
 import { DEFAULT_ROLE_SCOPES } from './role-catalog.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
 
@@ -527,8 +528,8 @@ export class IdentityAuthService {
     if (!scopes.has('*') && !scopes.has('identity.admin')) {
       throw new ForbiddenException('identity.admin scope is required');
     }
-    const page = parsePage(query.page, 1);
-    const pageSize = Math.min(100, parsePage(query.pageSize, 50));
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const search = (query.q ?? '').trim().toLowerCase();
     const status = query.status?.trim() || null;
     const client = await this.connect();
@@ -1076,13 +1077,4 @@ function isIpAddress(value: string | null): boolean {
   return (
     value !== null && /^(?:\d{1,3}\.){3}\d{1,3}$|^[0-9a-f:]+$/i.test(value)
   );
-}
-
-function parsePage(value: string | undefined, fallback: number): number {
-  if (value === undefined || value.trim() === '') return fallback;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) {
-    throw new BadRequestException('page and pageSize must be integers');
-  }
-  return Math.max(1, parsed);
 }
