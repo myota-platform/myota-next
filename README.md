@@ -32,7 +32,7 @@ remain open. See [implementation status](docs/status.md).
 - `apps/email` — email delivery worker, subject to the current delivery gate.
 - `web/admin` and `web/participant` — separate browser applications.
 - `contracts` — HTTP and event compatibility contracts.
-- `deploy` — local stack, database setup, and runtime configuration.
+- `deploy` — owner-scoped database migrations and image build guidance.
 - `docs` — architecture, behavior parity, and implementation gates.
 
 See [`docs/architecture.md`](docs/architecture.md) for target boundaries and

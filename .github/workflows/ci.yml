@@ -27,3 +27,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
+      - run: npm ci --prefix web/admin
+      - run: npm run lint --prefix web/admin
+      - run: npm run typecheck --prefix web/admin
+      - run: npm run build --prefix web/admin

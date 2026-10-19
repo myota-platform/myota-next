@@ -107,6 +107,11 @@ workflows remain outstanding.
 | Admin web       | Login and role-aware navigation; account and role management; programme/category/content/policy administration; Geodata catalogue, import, preprocessing, review, entity editing, maps and deletion; Activity/QSO and award administration; observability access. Preserve accessible keyboard workflows, confirmation of destructive actions, conflict handling, bounded paging, resumable upload behavior, and accurate loading/error states. |
 | Participant web | Programme selection, public programme content and rules, approved/candidate entity table and map, candidate proposal, authenticated profile editing and cropped profile-image upload, published award/level display, award login and award request. The current static app does not expose activation or QSO entry workflows. Keep programme policy and eligibility decisions on owning services.                                               |
 
+The baseline Admin and Participant applications are carried forward under
+`web/` with separate deployment artifacts. The Admin build is checked in CI;
+remaining work is route-level API reconciliation, accessibility/visual review,
+and deployment integration.
+
 ## Workers and operations
 
 - Activity workers: QSO ingestion, ADIF processing, award evaluation and

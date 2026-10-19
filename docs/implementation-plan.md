@@ -47,10 +47,10 @@ and [parity matrix](parity-matrix.md) for current coverage.
 - Port remaining file formats, uploads, rendering, and domain rules with
   compatibility coverage.
 
-## 4. Rebuild browser applications
+## 4. Carry forward and reconcile browser applications
 
-- Preserve separate Admin and Participant applications and their workflow
-  boundaries.
+- Keep the baseline Admin and Participant applications as separate deployable
+  artifacts while reconciling their API dependencies to the Nest services.
 - Implement all baseline routes and permission states against the new APIs.
 - Cover destructive, conflict, upload, async progress, accessibility, and
   responsive behaviors with browser tests.

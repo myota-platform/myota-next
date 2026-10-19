@@ -17,3 +17,13 @@ process.
 
 Publishing, immutable registry tags, image scanning, deployment manifests, and
 rollout verification remain separate release gates.
+
+The browser applications have separate image contexts:
+
+```sh
+docker build -t myota/admin:dev web/admin
+docker build -t myota/participant:dev web/participant
+```
+
+Admin is built with Vite and served by Nginx. Participant is a static site
+served by the unprivileged Nginx image.

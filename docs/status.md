@@ -179,7 +179,10 @@
   long batches run and repairs missing queued-job outbox commands. Geodata import, promotion, and deletion work extends owner
   leases during long jobs, and stale dispatch recovery and Geodata retention are
   implemented; outage/recovery evidence remains outstanding.
-- Admin and Participant web applications.
+- Baseline Admin Vue application and static Participant application now live
+  under `web/` as separate deployable artifacts. Admin local checks/build are
+  part of CI; route-by-route API parity, visual/accessibility review, and
+  deployment integration remain outstanding.
 - Data transfer tooling, image publication, deployment manifests, and
   production observability configuration. A reusable Docker recipe now builds
   one unprivileged runtime image per Nest application. An owner-scoped database

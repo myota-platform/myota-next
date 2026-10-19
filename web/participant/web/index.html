@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MyOTA · Outdoor Activation Platform</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <span class="eyebrow">MYOTA PLATFORM</span>
+        <h1 id="programme-name">Outdoor Activation</h1>
+      </div>
+      <label
+        >Programme
+        <select id="programme-select"></select
+      ></label>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">UNIVERSAL PROGRAMME VIEW</p>
+          <h2 id="programme-description">
+            Discover places where radio meets the outdoors.
+          </h2>
+          <p>
+            Verified entities are green. Imported candidates are amber until a
+            community member proposes and an approver reviews them.
+          </p>
+        </div>
+        <div class="stat">
+          <strong id="entity-count">–</strong
+          ><span>entities on this programme</span>
+        </div>
+      </section>
+      <section class="layout">
+        <div class="panel map-panel">
+          <div class="panel-head">
+            <h3>Entity map</h3>
+            <div class="legend">
+              <span class="dot verified"></span> Approved
+              <span class="dot candidate"></span> Candidate
+            </div>
+          </div>
+          <div id="map" class="map">
+            <div class="map-grid"></div>
+            <div id="markers"></div>
+            <div class="map-note">
+              OpenStreetMap-compatible map surface · geometry is served by the
+              geodata API
+            </div>
+          </div>
+        </div>
+        <aside class="panel">
+          <div class="panel-head"><h3>Programme rules</h3></div>
+          <dl id="rules"></dl>
+          <button id="refresh">Refresh map</button>
+        </aside>
+      </section>
+      <section class="panel">
+        <div class="panel-head">
+          <h3>Entities</h3>
+          <span id="loading">Loading…</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Source</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="entities"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="panel profile-panel">
+        <div class="panel-head">
+          <div>
+            <h3>Your profile</h3>
+            <p class="small">
+              Sign in to edit the private profile on your Identity account.
+            </p>
+          </div>
+          <span
+            id="profile-status"
+            class="small"
+            role="status"
+            aria-live="polite"
+          ></span>
+        </div>
+        <form id="profile-form" class="profile-form" hidden>
+          <label
+            >Personal website
+            <input
+              id="profile-website"
+              type="url"
+              maxlength="2048"
+              autocomplete="url"
+              placeholder="https://example.org"
+            />
+          </label>
+          <label
+            >Short biography (Markdown, 2,000 characters maximum)
+            <textarea
+              id="profile-biography"
+              maxlength="2000"
+              rows="5"
+            ></textarea>
+          </label>
+          <div>
+            <h4>Biography preview</h4>
+            <div id="profile-biography-preview" class="biography-preview"></div>
+          </div>
+          <button type="submit">Save profile details</button>
+        </form>
+        <div id="profile-image-editor" class="profile-image-editor" hidden>
+          <h4>Profile picture</h4>
+          <img
+            id="profile-image-current"
+            class="profile-image-current"
+            alt="Current profile picture"
+            hidden
+          />
+          <label
+            >Choose a JPEG, PNG, or WebP image (5 MiB maximum)
+            <input
+              id="profile-image-file"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+            />
+          </label>
+          <div id="profile-crop-tools" hidden>
+            <p class="small">
+              Adjust the square crop. The saved picture is resized to 512 × 512
+              WebP.
+            </p>
+            <canvas
+              id="profile-crop-canvas"
+              width="240"
+              height="240"
+              role="img"
+              aria-label="Square profile picture crop preview"
+            ></canvas>
+            <label
+              >Zoom
+              <input
+                id="profile-crop-zoom"
+                type="range"
+                min="100"
+                max="300"
+                value="100"
+              />
+            </label>
+            <div class="crop-controls" aria-label="Move crop position">
+              <button
+                type="button"
+                data-crop-pan="up"
+                aria-label="Move crop up"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                data-crop-pan="left"
+                aria-label="Move crop left"
+              >
+                ←
+              </button>
+              <button
+                type="button"
+                data-crop-pan="down"
+                aria-label="Move crop down"
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                data-crop-pan="right"
+                aria-label="Move crop right"
+              >
+                →
+              </button>
+            </div>
+            <button id="profile-image-upload" type="button">
+              Save cropped picture
+            </button>
+          </div>
+          <button
+            id="profile-image-delete"
+            type="button"
+            class="secondary"
+            hidden
+          >
+            Remove profile picture
+          </button>
+        </div>
+      </section>
+      <section class="panel awards-panel">
+        <div class="panel-head">
+          <div>
+            <h3>Programme awards</h3>
+            <p class="small">
+              Awards and levels are defined by this programme. Sign in to
+              request a level you have achieved.
+            </p>
+          </div>
+          <span
+            id="award-status"
+            class="small"
+            role="status"
+            aria-live="polite"
+          ></span>
+        </div>
+        <div id="public-awards"></div>
+        <form id="award-login" class="award-login">
+          <label
+            >Email<input
+              id="award-email"
+              type="email"
+              autocomplete="username"
+              required /></label
+          ><label
+            >Password<input
+              id="award-password"
+              type="password"
+              autocomplete="current-password"
+              required /></label
+          ><button type="submit">Sign in</button>
+        </form>
+        <div id="award-request-status" class="small"></div>
+      </section>
+    </main>
+    <script src="/profile-utils.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

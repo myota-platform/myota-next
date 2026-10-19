@@ -1,0 +1,8 @@
+.git
+.github
+__pycache__
+tests
+README.md
+node_modules
+package.json
+package-lock.json
