@@ -143,6 +143,18 @@ export class GeodataImportService {
     }
   }
 
+  async discardSourceObject(metadata: unknown) {
+    if (!isRecord(metadata) || !isRecord(metadata.sourceObject)) return;
+    const bucket =
+      process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports';
+    const sourceBucket = metadata.sourceObject.bucket;
+    const key = metadata.sourceObject.key;
+    if (sourceBucket === bucket && typeof key === 'string' && key)
+      await this.s3().send(
+        new DeleteObjectCommand({ Bucket: bucket, Key: key }),
+      );
+  }
+
   private async resolveObjectReference(body: Record<string, unknown>) {
     if (!isRecord(body.source) || typeof body.source.objectKey !== 'string')
       return body;

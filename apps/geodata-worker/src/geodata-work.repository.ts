@@ -3,7 +3,11 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
@@ -39,6 +43,42 @@ export class GeodataWorkRepository {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
+      const cancellation = await client.query(
+        `SELECT id,adapter_code,source_metadata,source_key,source_hash,attempt_count
+         FROM import_run WHERE status='CANCELLING'
+         ORDER BY cancellation_requested_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,
+      );
+      const pendingCancellation = cancellation.rows[0] as ImportRun | undefined;
+      if (pendingCancellation) {
+        await client.query(
+          "SELECT set_config('myota.geodata_writer','row-v1',true)",
+        );
+        await client.query(
+          'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+          [pendingCancellation.id],
+        );
+        await client.query(
+          `UPDATE import_run SET status='CANCELLED',completed_at=now(),heartbeat_at=NULL,
+           lease_until=NULL,last_error=NULL,
+           stats='{"preprocessed":0,"created":0,"updated":0,"skipped":0,"errors":0,"disappeared":0}'::jsonb
+           WHERE id=$1`,
+          [pendingCancellation.id],
+        );
+        await client.query(
+          `INSERT INTO outbox_event
+           (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+           VALUES ($1,'geodata.import.cancelled.v1','geodata-worker','import_run',$2,$3::jsonb,now(),$4)`,
+          [
+            randomUUID(),
+            pendingCancellation.id,
+            JSON.stringify({ importRunId: pendingCancellation.id }),
+            randomUUID(),
+          ],
+        );
+        await client.query('COMMIT');
+        await this.deleteSource(pendingCancellation);
+        return null;
+      }
       const found = await client.query(
         `SELECT id,adapter_code,source_metadata,source_key,source_hash,attempt_count
          FROM import_run
@@ -195,10 +235,44 @@ export class GeodataWorkRepository {
     await this.saveCandidates(run, prepared, errors, document.features.length);
   }
 
-  async fail(run: ImportRun, error: unknown) {
+  async fail(run: ImportRun, error: unknown): Promise<boolean> {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
+      const current = await client.query(
+        'SELECT status FROM import_run WHERE id=$1 FOR UPDATE',
+        [run.id],
+      );
+      if (current.rows[0]?.status === 'CANCELLING') {
+        await client.query(
+          "SELECT set_config('myota.geodata_writer','row-v1',true)",
+        );
+        await client.query(
+          'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+          [run.id],
+        );
+        await client.query(
+          `UPDATE import_run SET status='CANCELLED',completed_at=now(),heartbeat_at=NULL,
+           lease_until=NULL,last_error=NULL,
+           stats='{"preprocessed":0,"created":0,"updated":0,"skipped":0,"errors":0,"disappeared":0}'::jsonb
+           WHERE id=$1`,
+          [run.id],
+        );
+        await client.query(
+          `INSERT INTO outbox_event
+           (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+           VALUES ($1,'geodata.import.cancelled.v1','geodata-worker','import_run',$2,$3::jsonb,now(),$4)`,
+          [
+            randomUUID(),
+            run.id,
+            JSON.stringify({ importRunId: run.id }),
+            randomUUID(),
+          ],
+        );
+        await client.query('COMMIT');
+        await this.deleteSource(run);
+        return true;
+      }
       await client.query(
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
       );
@@ -215,12 +289,34 @@ export class GeodataWorkRepository {
         ],
       );
       await client.query('COMMIT');
+      return false;
     } catch (failure) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw failure;
     } finally {
       client.release();
     }
+  }
+
+  private async deleteSource(run: ImportRun) {
+    const sourceObject = isRecord(run.source_metadata.sourceObject)
+      ? run.source_metadata.sourceObject
+      : {};
+    const bucket =
+      typeof sourceObject.bucket === 'string'
+        ? sourceObject.bucket
+        : (process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports');
+    const key =
+      typeof sourceObject.key === 'string' ? sourceObject.key : run.source_key;
+    if (
+      bucket !==
+        (process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports') ||
+      !key
+    )
+      return;
+    await this.storageClient()
+      .send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))
+      .catch(() => undefined);
   }
 
   private async saveCandidates(

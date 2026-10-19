@@ -89,6 +89,10 @@
   Durable object references from the configured import bucket are also
   bounded, hash-checked, validated as GeoJSON, and staged in the worker's
   normalized source format.
+  Import cancellation is available for queued and active preprocessing runs:
+  queued sources are discarded immediately, while workers honor active
+  requests at the candidate staging checkpoint and clear temporary source data.
+  A worker restart recovers runs left in the CANCELLING state.
   The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
   paged import-run status reads are also exposed. Import finalization now

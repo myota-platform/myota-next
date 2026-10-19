@@ -119,6 +119,84 @@ export class GeodataImportMutationRepository {
     }
   }
 
+  async cancelImport(runId: string, actor: string) {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `SELECT status,source_metadata,cancellation_requested_at,cancellation_requested_by
+         FROM import_run WHERE id=$1 FOR UPDATE`,
+        [runId],
+      );
+      const run = result.rows[0];
+      if (!run) throw new BadRequestException('geodata import not found');
+      if (run.status === 'CANCELLED' || run.status === 'CANCELLING') {
+        await client.query('COMMIT');
+        return {
+          status: run.status,
+          httpStatus: run.status === 'CANCELLING' ? 202 : 200,
+          sourceMetadata: run.source_metadata,
+        };
+      }
+      if (!['UPLOAD_PENDING', 'QUEUED', 'PROCESSING'].includes(run.status))
+        throw new BadRequestException(
+          run.status.startsWith('PREPROCESSED')
+            ? 'preprocessing has finished; reviewed imports cannot be cancelled'
+            : `an import in ${run.status.toLowerCase()} state cannot be cancelled`,
+        );
+      const active = run.status === 'PROCESSING';
+      const nextStatus = active ? 'CANCELLING' : 'CANCELLED';
+      const eventType = active
+        ? 'geodata.import.cancellation-requested.v1'
+        : 'geodata.import.cancelled.v1';
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await client.query(
+        `UPDATE import_run SET status=$2,cancellation_requested_at=now(),
+         cancellation_requested_by=$3,
+         completed_at=CASE WHEN $2='CANCELLED' THEN now() ELSE completed_at END,
+         heartbeat_at=CASE WHEN $2='CANCELLED' THEN NULL ELSE heartbeat_at END,
+         lease_until=CASE WHEN $2='CANCELLED' THEN NULL ELSE lease_until END,
+         last_error=CASE WHEN $2='CANCELLED' THEN NULL ELSE last_error END,
+         stats=CASE WHEN $2='CANCELLED' THEN '{"preprocessed":0,"created":0,"updated":0,"skipped":0,"errors":0,"disappeared":0}'::jsonb ELSE stats END
+         WHERE id=$1`,
+        [runId, nextStatus, actor],
+      );
+      if (!active)
+        await client.query(
+          'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+          [runId],
+        );
+      await client.query(
+        `INSERT INTO outbox_event
+         (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+         VALUES ($1,$2,'geodata-service','import_run',$3,$4::jsonb,now(),$5)`,
+        [
+          randomUUID(),
+          eventType,
+          runId,
+          JSON.stringify({
+            importRunId: runId,
+            ...(active ? { requestedBy: actor } : {}),
+          }),
+          randomUUID(),
+        ],
+      );
+      await client.query('COMMIT');
+      return {
+        status: nextStatus,
+        httpStatus: active ? 202 : 200,
+        sourceMetadata: run.source_metadata,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async validateImportCandidates(
     runId: string,
     key: string | undefined,

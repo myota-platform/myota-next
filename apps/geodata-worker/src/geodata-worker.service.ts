@@ -63,11 +63,13 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
       await this.repository.preprocess(run);
       this.logger.log(`Preprocessed geodata import ${run.id}`);
     } catch (error) {
-      this.logger.error(
-        `Geodata import ${run.id} failed`,
-        error instanceof Error ? error.stack : undefined,
-      );
-      await this.repository.fail(run, error);
+      if (await this.repository.fail(run, error))
+        this.logger.log(`Cancelled geodata import ${run.id}`);
+      else
+        this.logger.error(
+          `Geodata import ${run.id} failed`,
+          error instanceof Error ? error.stack : undefined,
+        );
     }
     return true;
   }

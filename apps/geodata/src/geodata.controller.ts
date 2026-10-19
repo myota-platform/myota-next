@@ -159,6 +159,26 @@ export class GeodataController {
     };
   }
 
+  @Put('imports/:runId/cancellation')
+  async cancelImport(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('runId') runId: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const claims = authorizeImport(authorization);
+    const cancellation = await this.importMutations.cancelImport(
+      runId,
+      claims.sub,
+    );
+    response.status(cancellation.httpStatus);
+    if (cancellation.status === 'CANCELLED')
+      await this.imports.discardSourceObject(cancellation.sourceMetadata);
+    return {
+      ...(await this.repository.getImport(runId)),
+      status: cancellation.status,
+    };
+  }
+
   @Get('imports/:runId/processing-queues/:queueId')
   getImportProcessingQueue(
     @Headers('authorization') authorization: string | undefined,
