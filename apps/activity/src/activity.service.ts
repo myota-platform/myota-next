@@ -44,8 +44,8 @@ export class ActivityService {
         ? query.operatorId
         : claims.sub;
     const items = await this.repository.list(query.programme, operatorId);
-    const page = positiveInt(query.page, 1);
-    const pageSize = Math.min(100, positiveInt(query.pageSize, 50));
+    const page = parsePageInt(query.page, 1);
+    const pageSize = Math.min(100, parsePageInt(query.pageSize, 50));
     const start = (page - 1) * pageSize;
     return {
       items: items.slice(start, start + pageSize),
@@ -366,8 +366,8 @@ export class ActivityService {
         ? maskCallsign(item.operatorCallsign)
         : null,
     }));
-    const pageNumber = positiveInt(page, 1);
-    const size = Math.min(100, positiveInt(pageSize, 50));
+    const pageNumber = parsePageInt(page, 1);
+    const size = Math.min(100, parsePageInt(pageSize, 50));
     const start = (pageNumber - 1) * size;
     return {
       items: publicItems.slice(start, start + size),
@@ -391,7 +391,8 @@ export class ActivityService {
   }
 
   async publicResults(programme?: string, format = 'json') {
-    const items = await this.repository.list(programme);
+    const selectedProgramme = programme || undefined;
+    const items = await this.repository.list(selectedProgramme);
     const rows = items.map((item) => ({
       activationId: item.id,
       programme: item.programmeSlug,
@@ -421,13 +422,13 @@ export class ActivityService {
         format: 'csv',
         contentType: 'text/csv',
         content,
-        downloadName: `myota-results-${programme ?? 'all'}.csv`,
+        downloadName: `myota-results-${selectedProgramme ?? 'all'}.csv`,
       };
     }
     return {
       format: 'json',
       items: rows,
-      downloadName: `myota-results-${programme ?? 'all'}.json`,
+      downloadName: `myota-results-${selectedProgramme ?? 'all'}.json`,
     };
   }
 
@@ -480,8 +481,8 @@ export class ActivityService {
   ) {
     this.authorize(authorization, ['activity.read', 'activity.admin']);
     const items = await this.repository.listStatistics(query.programme);
-    const page = positiveInt(query.page, 1);
-    const pageSize = Math.min(100, positiveInt(query.pageSize, 50));
+    const page = parsePageInt(query.page, 1);
+    const pageSize = Math.min(100, parsePageInt(query.pageSize, 50));
     const start = (page - 1) * pageSize;
     return {
       items: items.slice(start, start + pageSize),
@@ -550,6 +551,17 @@ export class ActivityService {
 function positiveInt(value: string | undefined, fallback: number) {
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parsePageInt(value: string | undefined, fallback: number) {
+  if (value === undefined || value.trim() === '') return fallback;
+  const normalized = value.trim();
+  if (!/^[+-]?\d+$/.test(normalized))
+    throw new BadRequestException('page and pageSize must be integers');
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed))
+    throw new BadRequestException('page and pageSize must be integers');
+  return Math.max(1, parsed);
 }
 
 function decodeBase64(value: string) {
