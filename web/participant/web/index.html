@@ -234,6 +234,44 @@
         </form>
         <div id="award-request-status" class="small"></div>
       </section>
+      <section class="panel activation-panel">
+        <div class="panel-head">
+          <div>
+            <h3>Field activations</h3>
+            <p class="small">
+              Sign in above to start an activation and record contacts.
+            </p>
+          </div>
+          <span
+            id="activation-status"
+            class="small"
+            role="status"
+            aria-live="polite"
+          ></span>
+        </div>
+        <form id="activation-start-form" class="profile-form" hidden>
+          <label>Entity<select id="activation-entity" required></select></label>
+          <label
+            >Operator callsign<select id="activation-callsign" required></select
+          ></label>
+          <button type="submit">Start activation</button>
+        </form>
+        <div id="activations-list"></div>
+        <form id="qso-form" class="profile-form" hidden>
+          <label
+            >Open activation<select id="qso-activation" required></select
+          ></label>
+          <label
+            >Worked callsign<input id="qso-callsign" maxlength="32" required
+          /></label>
+          <label>Band<input id="qso-band" placeholder="20M" /></label>
+          <label>Mode<input id="qso-mode" placeholder="SSB" /></label>
+          <button type="submit">Record contact</button>
+          <button id="activation-close" class="secondary" type="button">
+            Close activation
+          </button>
+        </form>
+      </section>
     </main>
     <script src="/profile-utils.js"></script>
     <script src="/app.js"></script>

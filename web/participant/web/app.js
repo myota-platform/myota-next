@@ -63,8 +63,16 @@ async function loadProgramme(slug) {
   $('entity-count').textContent = entities.length;
   $('loading').textContent = `${entities.length} loaded`;
   renderEntities();
+  $('activation-entity').innerHTML = entities
+    .filter((entity) => ['ACTIVE', 'APPROVED'].includes(entity.status))
+    .map(
+      (entity) =>
+        `<option value="${escapeHtml(entity.id)}">${escapeHtml(entity.name)} · ${escapeHtml(entity.entityType)}</option>`,
+    )
+    .join('');
   renderMarkers();
   await loadPublicAwards(slug);
+  await loadActivations();
 }
 function renderEntities() {
   $('entities').innerHTML = entities
@@ -101,16 +109,6 @@ function renderEntities() {
         await loadProgramme($('programme-select').value);
       }),
   );
-}
-function renderMarkers() {
-  $('markers').innerHTML = entities
-    .map((e, i) => {
-      const c = e.centroid || { lat: 40.41 + i * 0.006, lon: -3.72 + i * 0.01 };
-      const left = `${35 + (((c.lon + 3.72) * 1200) % 55)}%`;
-      const top = `${30 + (((c.lat - 40.4) * 900) % 45)}%`;
-      return `<div class="marker ${e.status.toLowerCase()}" title="${e.name} · ${e.status}" style="left:${left};top:${top}"></div>`;
-    })
-    .join('');
 }
 $('programme-select').onchange = async (e) => {
   location.hash = e.target.value;
@@ -304,6 +302,154 @@ function renderPublicAwards() {
           requestPublicAward(button.dataset.awardId, button.dataset.levelId)),
     );
 }
+let activations = [];
+async function loadActivations() {
+  const signedIn = Boolean(awardAccessToken && awardAccount);
+  $('activation-start-form').hidden = !signedIn;
+  $('qso-form').hidden = !signedIn;
+  if (!signedIn) {
+    $('activations-list').innerHTML = '';
+    return;
+  }
+  try {
+    const result = await awardApi(
+      `/v1/activations?programme=${encodeURIComponent($('programme-select').value)}&page=1&pageSize=100`,
+    );
+    activations = result.items || [];
+    const open = activations.filter(
+      (activation) => activation.status === 'OPEN',
+    );
+    $('qso-activation').innerHTML = open
+      .map(
+        (activation) =>
+          `<option value="${escapeHtml(activation.id)}">${escapeHtml(activation.operatorCallsign || 'Activation')} · ${escapeHtml(activation.startedAt)}</option>`,
+      )
+      .join('');
+    $('qso-form').hidden = !open.length;
+    $('activations-list').innerHTML = activations.length
+      ? `<ul>${activations
+          .slice(0, 20)
+          .map(
+            (activation) =>
+              `<li>${escapeHtml(activation.operatorCallsign || 'Activation')} · ${escapeHtml(activation.status)} · ${Number(activation.qsoCount || 0)} QSOs · ${escapeHtml(activation.startedAt)}</li>`,
+          )
+          .join('')}</ul>`
+      : '<p class="small">No activations recorded for this programme yet.</p>';
+  } catch (error) {
+    $('activation-status').textContent = error.message;
+  }
+}
+function renderOperatorCallsigns() {
+  const callsigns = awardAccount?.callsigns || [];
+  $('activation-callsign').innerHTML = callsigns
+    .filter((callsign) => callsign.status !== 'RETIRED')
+    .map(
+      (callsign) =>
+        `<option value="${escapeHtml(callsign.id)}">${escapeHtml(callsign.value)} · ${escapeHtml(callsign.status)}</option>`,
+    )
+    .join('');
+  const primary = callsigns.find(
+    (callsign) => callsign.id === awardAccount?.primaryCallsignId,
+  );
+  if (primary) $('activation-callsign').value = primary.id;
+}
+async function startActivation(event) {
+  event.preventDefault();
+  const programme = programmes.find(
+    (item) => item.slug === $('programme-select').value,
+  );
+  const entity = entities.find(
+    (item) => item.id === $('activation-entity').value,
+  );
+  const callsign = (awardAccount?.callsigns || []).find(
+    (item) => item.id === $('activation-callsign').value,
+  );
+  if (!programme || !entity || !callsign) {
+    $('activation-status').textContent =
+      'Choose an active entity and an account callsign.';
+    return;
+  }
+  const point = entity.centroid || entity.location || {};
+  if (
+    programme.rules?.requireLocation &&
+    (!Number.isFinite(Number(point.lat ?? point.latitude)) ||
+      !Number.isFinite(Number(point.lon ?? point.longitude)))
+  ) {
+    $('activation-status').textContent =
+      'This entity does not have a location required by the programme.';
+    return;
+  }
+  $('activation-status').textContent = 'Starting activation…';
+  try {
+    await awardApi('/v1/activations', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      body: JSON.stringify({
+        programmeSlug: programme.slug,
+        entityId: entity.id,
+        operatorId: awardAccount.id,
+        operatorCallsign: callsign.value,
+        callsignLifecycleStatus: callsign.status,
+        authorizedCallsigns: (awardAccount.callsigns || []).map(
+          (item) => item.value,
+        ),
+        startedAt: new Date().toISOString(),
+        programmeRules: programme.rules,
+        location: {
+          latitude: point.lat ?? point.latitude ?? null,
+          longitude: point.lon ?? point.longitude ?? null,
+        },
+      }),
+    });
+    $('activation-status').textContent = 'Activation started.';
+    await loadActivations();
+  } catch (error) {
+    $('activation-status').textContent = error.message;
+  }
+}
+async function recordQso(event) {
+  event.preventDefault();
+  const activationId = $('qso-activation').value;
+  $('activation-status').textContent = 'Recording contact…';
+  try {
+    await awardApi(`/v1/activations/${encodeURIComponent(activationId)}/qsos`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      body: JSON.stringify({
+        workedCallsign: $('qso-callsign').value,
+        timestamp: new Date().toISOString(),
+        band: $('qso-band').value || null,
+        mode: $('qso-mode').value || null,
+      }),
+    });
+    $('qso-callsign').value = '';
+    $('activation-status').textContent = 'Contact recorded.';
+    await loadActivations();
+  } catch (error) {
+    $('activation-status').textContent = error.message;
+  }
+}
+async function closeActivation() {
+  const activationId = $('qso-activation').value;
+  if (!activationId || !confirm('Close this activation?')) return;
+  try {
+    await awardApi(`/v1/activations/${encodeURIComponent(activationId)}`, {
+      method: 'PATCH',
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      body: JSON.stringify({
+        status: 'CLOSED',
+        endedAt: new Date().toISOString(),
+      }),
+    });
+    $('activation-status').textContent = 'Activation closed.';
+    await loadActivations();
+  } catch (error) {
+    $('activation-status').textContent = error.message;
+  }
+}
+$('activation-start-form').onsubmit = startActivation;
+$('qso-form').onsubmit = recordQso;
+$('activation-close').onclick = closeActivation;
 async function signInForAward() {
   if (awardAccount && awardAccessToken) return awardAccount;
   const data = await api('/v1/identity/auth/login', {
@@ -317,6 +463,8 @@ async function signInForAward() {
   awardAccessToken = data.accessToken;
   awardAccount = data.account;
   localStorage.setItem('myota_public_access', awardAccessToken);
+  renderOperatorCallsigns();
+  await loadActivations();
   return awardAccount;
 }
 async function requestPublicAward(awardId, levelId) {
@@ -424,6 +572,8 @@ async function loadProfile() {
   try {
     const account = await profileApi('/v1/identity/me');
     awardAccount = account;
+    renderOperatorCallsigns();
+    await loadActivations();
     $('profile-form').hidden = false;
     $('profile-image-editor').hidden = false;
     $('profile-website').value = account.websiteUrl || '';
