@@ -31,7 +31,8 @@ compatibility coverage before they count as parity complete.
 Activity has an initial activation and single-QSO slice: activation list/create/read/close,
 normalized QSO writes, validity checks, ownership checks, subject aggregates,
 transactional event outbox records, idempotency responses, and award recalculation
-jobs. The rest of Activity remains outstanding, including batch ingestion,
+jobs. QSO ingestion requests also persist bounded, owner-scoped jobs with a status
+read path; the processing consumer remains outstanding. The rest of Activity remains outstanding, including batch ingestion,
 corrections, public views, awards, notifications, and worker recovery.
 
 ## User applications

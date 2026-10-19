@@ -42,7 +42,10 @@
   retrieval, closure, and single-QSO recording. It persists normalized
   activations and QSOs in Activity PostgreSQL, writes domain events and
   idempotency responses transactionally, updates subject aggregates, and
-  queues award recalculation work through the Activity outbox.
+  queues award recalculation work through the Activity outbox. High-volume QSO
+  ingestion requests are authorized, bounded, persisted as Activity jobs, and
+  exposed through an owner-scoped status API; processing still belongs to the
+  outstanding worker slice.
 
 ## Not implemented yet
 

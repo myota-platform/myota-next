@@ -106,6 +106,57 @@ export class ActivityService {
     return this.repository.close(activationId, endedAt, key);
   }
 
+  async enqueueQsoIngestion(
+    authorization: string | undefined,
+    key: string | undefined,
+    body: JsonRecord,
+  ) {
+    const claims = verifyAccessToken(authorization);
+    if (
+      !body.activationId ||
+      !Array.isArray(body.qsos) ||
+      body.qsos.length === 0
+    )
+      throw new BadRequestException(
+        'activationId and a non-empty qsos array are required',
+      );
+    const maximum = Number.parseInt(
+      process.env.MYOTA_MAX_BATCH_QSOS ?? '5000',
+      10,
+    );
+    if (body.qsos.length > maximum)
+      throw new BadRequestException(
+        'QSO ingestion exceeds the configured limit',
+      );
+    const sourceFormat = body.sourceFormat ?? 'JSON';
+    if (!['JSON', 'CSV', 'ADIF'].includes(sourceFormat))
+      throw new BadRequestException('sourceFormat must be JSON, CSV, or ADIF');
+    const activation = await this.repository.get(body.activationId);
+    this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
+    const payload = {
+      activationId: body.activationId,
+      records: body.qsos,
+      sourceFormat,
+    };
+    const job = await this.repository.enqueueJob('QSO_INGESTION', payload, key);
+    return { ingestionId: job.id, ...job };
+  }
+
+  async getJob(authorization: string | undefined, id: string) {
+    const claims = verifyAccessToken(authorization);
+    const job = await this.repository.getJob(id);
+    const activationId = job.payload?.activationId;
+    if (activationId) {
+      const activation = await this.repository.get(activationId);
+      this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
+    } else if (
+      !claims.scp.some((scope) => ['*', 'activity.admin'].includes(scope))
+    ) {
+      throw new ForbiddenException('activity.admin scope is required');
+    }
+    return job;
+  }
+
   private authorize(authorization: string | undefined, scopes: string[]) {
     const claims = verifyAccessToken(authorization);
     if (!claims.scp.some((scope) => scope === '*' || scopes.includes(scope)))

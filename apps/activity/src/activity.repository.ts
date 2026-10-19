@@ -243,6 +243,48 @@ export class ActivityRepository {
     });
   }
 
+  async enqueueJob(
+    kind: string,
+    payload: JsonRecord,
+    key?: string,
+  ): Promise<JsonRecord> {
+    return this.mutate(key, async (client) => {
+      const id = randomUUID();
+      const result = await client.query(
+        'INSERT INTO activity_job(id,kind,payload,idempotency_key) VALUES ($1,$2,$3::jsonb,$4) RETURNING id,kind,payload,status,attempts,available_at,started_at,completed_at,last_error,created_at',
+        [id, kind, JSON.stringify(payload), key ?? null],
+      );
+      await client.query(
+        `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at,correlation_id)
+         VALUES ($1,$2,'activity-service','activity_job',$1,$3::jsonb,now(),now(),$4)`,
+        [id, workEventType(kind), JSON.stringify({ jobId: id }), randomUUID()],
+      );
+      return jobRecord(result.rows[0]);
+    });
+  }
+
+  async getJob(id: string): Promise<JsonRecord> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT id,kind,payload,status,attempts,available_at,started_at,completed_at,last_error,created_at,
+         GREATEST(0,EXTRACT(EPOCH FROM (available_at-now()))) AS retry_after_seconds,
+         GREATEST(0,EXTRACT(EPOCH FROM (lease_expires_at-now()))) AS lease_remaining_seconds
+         FROM activity_job WHERE id=$1`,
+        [id],
+      );
+      if (!result.rows[0])
+        throw new NotFoundException('activity job not found');
+      return {
+        ...jobRecord(result.rows[0]),
+        retryAfterSeconds: Number(result.rows[0].retry_after_seconds),
+        leaseRemainingSeconds: Number(result.rows[0].lease_remaining_seconds),
+      };
+    } finally {
+      client.release();
+    }
+  }
+
   private async getWithClient(
     client: PoolClient,
     id: string,
@@ -330,8 +372,8 @@ export class ActivityRepository {
     );
     if (created.rows[0])
       await client.query(
-        `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at,correlation_id) VALUES ($1,'activity.award-recalculate.v1','activity-service','activity_job',$1,$3::jsonb,now(),now(),$2) ON CONFLICT DO NOTHING`,
-        [id, randomUUID(), JSON.stringify({ jobId: id })],
+        `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at,correlation_id) VALUES ($1,$3,'activity-service','activity_job',$1,$4::jsonb,now(),now(),$2) ON CONFLICT DO NOTHING`,
+        [id, randomUUID(), workEventType(kind), JSON.stringify({ jobId: id })],
       );
   }
 
@@ -432,4 +474,29 @@ function date(value: unknown) {
   return value == null
     ? null
     : new Date(value as string | number | Date).toISOString();
+}
+
+function workEventType(kind: string) {
+  const byKind: Record<string, string> = {
+    AWARD_RECALCULATE: 'activity.award-recalculate.v1',
+    QSO_INGESTION: 'activity.qso-ingestion.v1',
+  };
+  return (
+    byKind[kind] ?? `activity.${kind.toLowerCase().replaceAll('_', '-')}.v1`
+  );
+}
+
+function jobRecord(row: any) {
+  return {
+    id: String(row.id),
+    kind: row.kind,
+    payload: row.payload,
+    status: row.status,
+    attempts: row.attempts,
+    availableAt: date(row.available_at),
+    startedAt: date(row.started_at),
+    completedAt: date(row.completed_at),
+    lastError: row.last_error,
+    createdAt: date(row.created_at),
+  };
 }
