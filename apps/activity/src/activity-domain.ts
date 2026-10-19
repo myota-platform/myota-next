@@ -95,7 +95,7 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
   const startedAt = normalizeTimestamp(data.startedAt);
   if (
     rules.maxActivationHours != null &&
-    Number(rules.maxActivationHours) <= 0
+    pythonFloat(rules.maxActivationHours, 'maxActivationHours') <= 0
   ) {
     throw new BadRequestException('maxActivationHours must be positive');
   }
@@ -115,14 +115,27 @@ function pointInBounds(
   if (!bounds || Object.keys(bounds).length === 0) return true;
   if (!location || location.latitude == null || location.longitude == null)
     return false;
-  const latitude = Number(location.latitude);
-  const longitude = Number(location.longitude);
+  const latitude = pythonFloat(location.latitude, 'latitude');
+  const longitude = pythonFloat(location.longitude, 'longitude');
   return (
-    Number(bounds.minLatitude) <= latitude &&
-    latitude <= Number(bounds.maxLatitude) &&
-    Number(bounds.minLongitude) <= longitude &&
-    longitude <= Number(bounds.maxLongitude)
+    pythonFloat(bounds.minLatitude, 'minLatitude') <= latitude &&
+    latitude <= pythonFloat(bounds.maxLatitude, 'maxLatitude') &&
+    pythonFloat(bounds.minLongitude, 'minLongitude') <= longitude &&
+    longitude <= pythonFloat(bounds.maxLongitude, 'maxLongitude')
   );
+}
+
+function pythonFloat(value: unknown, field: string): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  if (
+    typeof value !== 'string' ||
+    !/^[+-]?(?:(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|inf(?:inity)?|nan)$/i.test(
+      value.trim(),
+    )
+  )
+    throw new BadRequestException(`${field} must be numeric`);
+  return Number(value);
 }
 
 export function normalizeQso(
