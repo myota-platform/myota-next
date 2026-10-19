@@ -20,6 +20,7 @@ interface ImportRun {
   source_key: string;
   source_hash: string;
   attempt_count: number;
+  complete_snapshot: boolean;
 }
 
 interface PreparedCandidate {
@@ -44,7 +45,7 @@ export class GeodataWorkRepository {
     try {
       await client.query('BEGIN');
       const cancellation = await client.query(
-        `SELECT id,adapter_code,source_metadata,source_key,source_hash,attempt_count
+        `SELECT id,adapter_code,source_metadata,source_key,source_hash,attempt_count,complete_snapshot
          FROM import_run WHERE status='CANCELLING'
          ORDER BY cancellation_requested_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,
       );
@@ -80,7 +81,7 @@ export class GeodataWorkRepository {
         return null;
       }
       const found = await client.query(
-        `SELECT id,adapter_code,source_metadata,source_key,source_hash,attempt_count
+        `SELECT id,adapter_code,source_metadata,source_key,source_hash,attempt_count,complete_snapshot
          FROM import_run
          WHERE source_key IS NOT NULL AND
            (status='QUEUED' OR (status='PROCESSING' AND lease_until < now()))
@@ -139,6 +140,12 @@ export class GeodataWorkRepository {
 
     const errors: Record<string, unknown>[] = [];
     const prepared: PreparedCandidate[] = [];
+    const source = isRecord(run.source_metadata.source)
+      ? run.source_metadata.source
+      : {};
+    const sourceKey =
+      textValue(source.sourceKey ?? source.url ?? source.name) ??
+      'unknown-source';
     for (let index = 0; index < document.features.length; index++) {
       if (index > 0 && index % 100 === 0) await this.heartbeat(run);
       const feature = document.features[index];
@@ -212,12 +219,13 @@ export class GeodataWorkRepository {
           name,
           geometry,
           properties,
-          sourceRef: textValue(
-            properties.sourceRef ??
-              properties.id ??
-              properties['@id'] ??
-              feature.id,
-          ),
+          sourceRef:
+            textValue(
+              properties.sourceRef ??
+                properties.id ??
+                properties['@id'] ??
+                feature.id,
+            ) ?? `${sourceKey}:import-${run.id}:record-${index}`,
           possibleDuplicates: duplicates.rows.map((duplicate) => ({
             entityId: duplicate.id,
             name: duplicate.name,
@@ -350,8 +358,17 @@ export class GeodataWorkRepository {
       const proposal = isRecord(run.source_metadata.communityProposal)
         ? run.source_metadata.communityProposal
         : undefined;
-      const proposalQueueId =
-        proposal && candidates.length ? randomUUID() : null;
+      const autoPromote = isRecord(run.source_metadata.autoPromote)
+        ? run.source_metadata.autoPromote
+        : undefined;
+      const promotionActor =
+        textValue(proposal?.proposerId) ?? textValue(autoPromote?.requestedBy);
+      const promotionQueueId =
+        promotionActor &&
+        (candidates.length > 0 ||
+          (run.complete_snapshot && featureCount === 0 && errors.length === 0))
+          ? randomUUID()
+          : null;
       const created: Record<string, unknown>[] = [];
       const preprocessed: Record<string, unknown>[] = [];
       for (const candidate of candidates) {
@@ -388,12 +405,12 @@ export class GeodataWorkRepository {
             JSON.stringify(entityPayload),
           ],
         );
-        if (proposal && proposalQueueId)
+        if (promotionActor && promotionQueueId)
           await client.query(
             `UPDATE geodata_import_candidate SET validation_status='CONFIRMED',
              validated_by=$2,validated_at=now(),target_status='CANDIDATE',
              processing_queue_id=$3 WHERE id=$1`,
-            [id, proposal.proposerId, proposalQueueId],
+            [id, promotionActor, promotionQueueId],
           );
         const summary = {
           candidateId: id,
@@ -404,19 +421,21 @@ export class GeodataWorkRepository {
         created.push(summary);
         preprocessed.push(summary);
       }
-      if (proposal && proposalQueueId) {
+      if (promotionActor && promotionQueueId) {
         await client.query(
           `INSERT INTO geodata_import_processing_queue
             (id,import_run_id,candidate_ids,target_status,requested_by,status,job_metadata)
            VALUES ($1,$2,$3::jsonb,'CANDIDATE',$4,'QUEUED',$5::jsonb)`,
           [
-            proposalQueueId,
+            promotionQueueId,
             run.id,
             JSON.stringify(
               preprocessed.map((candidate) => candidate.candidateId),
             ),
-            proposal.proposerId,
-            JSON.stringify({ note: 'Community proposal' }),
+            promotionActor,
+            JSON.stringify({
+              note: textValue(autoPromote?.note) ?? 'Community proposal',
+            }),
           ],
         );
         await client.query(
@@ -425,15 +444,15 @@ export class GeodataWorkRepository {
            VALUES ($1,'geodata.import.processing.queued.v1','geodata-worker','import_processing_queue',$2,$3::jsonb,now(),$4)`,
           [
             randomUUID(),
-            proposalQueueId,
+            promotionQueueId,
             JSON.stringify({
-              queueId: proposalQueueId,
+              queueId: promotionQueueId,
               importRunId: run.id,
               candidateIds: preprocessed.map(
                 (candidate) => candidate.candidateId,
               ),
               targetStatus: 'CANDIDATE',
-              requestedBy: proposal.proposerId,
+              requestedBy: promotionActor,
               natsSubject: 'myota.geodata.import.process.v1',
             }),
             randomUUID(),

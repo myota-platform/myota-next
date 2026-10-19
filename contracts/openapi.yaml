@@ -1242,7 +1242,26 @@ paths:
       tags: [Geodata]
       security: [{ bearerAuth: [] }]
       summary: Run a geodata refresh schedule
+      description: Submit a complete GeoJSON snapshot for the schedule. Valid records are staged and promoted to CANDIDATE; the configured disappearance policy applies only after the full snapshot is promoted successfully.
       parameters: [{ in: path, name: scheduleId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [features]
+              properties:
+                features:
+                  type: array
+                  items:
+                    type: object
+                    required: [type, geometry, properties]
+                    properties:
+                      type: { const: Feature }
+                      id: { type: [string, number] }
+                      geometry: { type: object }
+                      properties: { type: object, additionalProperties: true }
       responses: { '202': { description: Refresh run queued } }
   /v1/geodata/conflation:
     get:

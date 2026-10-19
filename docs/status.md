@@ -86,8 +86,10 @@
   manual fields. Missing metadata now queues enrichment automatically on
   lifecycle promotion; geometry changes queue refreshes, and releasing manual
   fields queues only missing values. Refresh schedules can be created, listed,
-  and run into the durable import pipeline; complete-snapshot disappearance
-  reconciliation and automatic scheduled execution remain outstanding.
+  and manually run as complete snapshots. Snapshot runs stage and promote the
+  full validated candidate set, record source manifests, and apply configured
+  disappearance policies only after successful promotion. Automatic scheduled
+  execution remains outstanding.
   Candidate-level failures from a FAILED
   promotion queue can be resubmitted through the promotion API; queue-level
   redrive and NATS delivery remain outstanding. Community proposals now enter

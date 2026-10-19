@@ -47,7 +47,7 @@ export class GeodataProposalService {
         },
         features: [feature],
       },
-      { proposalId, proposerId },
+      { communityProposal: { proposalId, proposerId } },
     );
   }
 }

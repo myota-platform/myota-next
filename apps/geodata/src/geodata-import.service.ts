@@ -18,6 +18,12 @@ import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 const adapters = new Set(['PARKSERVE_US', 'OSM', 'GOVERNMENT_GIS', 'MANUAL']);
 const entityTypePattern = /^[A-Z][A-Z0-9_]{1,63}$/;
 
+type ImportOptions = {
+  communityProposal?: { proposalId: string; proposerId: string };
+  allowCompleteSnapshot?: boolean;
+  autoPromote?: { requestedBy: string; note: string };
+};
+
 @Injectable()
 export class GeodataImportService {
   private storage: S3Client | undefined;
@@ -29,9 +35,12 @@ export class GeodataImportService {
   async create(
     key: string | undefined,
     body: Record<string, unknown>,
-    communityProposal?: { proposalId: string; proposerId: string },
+    options: ImportOptions = {},
   ) {
-    const prepared = prepareImport(await this.resolveObjectReference(body));
+    const prepared = prepareImport(
+      await this.resolveObjectReference(body),
+      options.allowCompleteSnapshot === true,
+    );
     const bucket =
       process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports';
     const id = randomUUID();
@@ -80,7 +89,10 @@ export class GeodataImportService {
         disappearancePolicy: prepared.disappearancePolicy,
         sourceObject: { bucket, key: objectKey },
         featureCount: prepared.features.length,
-        ...(communityProposal ? { communityProposal } : {}),
+        ...(options.communityProposal
+          ? { communityProposal: options.communityProposal }
+          : {}),
+        ...(options.autoPromote ? { autoPromote: options.autoPromote } : {}),
       };
       await client.query(
         `INSERT INTO import_run
@@ -100,8 +112,8 @@ export class GeodataImportService {
       );
       const response = {
         ...metadata,
-        ...(communityProposal
-          ? { proposalId: communityProposal.proposalId }
+        ...(options.communityProposal
+          ? { proposalId: options.communityProposal.proposalId }
           : {}),
         id,
         adapter: prepared.adapter,
@@ -268,7 +280,10 @@ export class GeodataImportService {
   }
 }
 
-function prepareImport(body: Record<string, unknown>) {
+function prepareImport(
+  body: Record<string, unknown>,
+  allowCompleteSnapshot = false,
+) {
   const adapter = (typeof body.adapter === 'string' ? body.adapter : '')
     .trim()
     .toUpperCase();
@@ -310,7 +325,7 @@ function prepareImport(body: Record<string, unknown>) {
     )
   )
     throw new BadRequestException('unsupported disappearancePolicy');
-  if (body.completeSnapshot === true)
+  if (body.completeSnapshot === true && !allowCompleteSnapshot)
     throw new BadRequestException(
       'complete snapshot reconciliation is not available for this import path yet',
     );
@@ -344,7 +359,7 @@ function prepareImport(body: Record<string, unknown>) {
     );
   }
   if (
-    !features.length ||
+    (!features.length && body.completeSnapshot !== true) ||
     features.some((feature) => !isRecord(feature) || feature.type !== 'Feature')
   )
     throw new BadRequestException(

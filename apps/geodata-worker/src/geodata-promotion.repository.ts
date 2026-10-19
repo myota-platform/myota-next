@@ -32,10 +32,29 @@ export class GeodataPromotionRepository {
     try {
       await client.query('BEGIN');
       const result = await client.query(
-        `SELECT id,import_run_id,candidate_ids,target_status,requested_by,job_metadata,attempt_count
-         FROM geodata_import_processing_queue
-         WHERE status='QUEUED' OR (status='PROCESSING' AND lease_until < now())
-         ORDER BY requested_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,
+        `SELECT q.id,q.import_run_id,q.candidate_ids,q.target_status,q.requested_by,q.job_metadata,q.attempt_count
+         FROM geodata_import_processing_queue q
+         JOIN import_run candidate_run ON candidate_run.id=q.import_run_id
+         WHERE (q.status='QUEUED' OR (q.status='PROCESSING' AND q.lease_until < now()))
+           AND NOT EXISTS (
+             SELECT 1 FROM geodata_import_processing_queue active
+             JOIN import_run active_run ON active_run.id=active.import_run_id
+             WHERE active.status='PROCESSING'
+               AND (active.requested_at,active.id)<(q.requested_at,q.id)
+               AND active_run.adapter_code=candidate_run.adapter_code
+               AND COALESCE(
+                 NULLIF(active_run.source_metadata->'source'->>'sourceKey',''),
+                 NULLIF(active_run.source_metadata->'source'->>'url',''),
+                 NULLIF(active_run.source_metadata->'source'->>'name',''),
+                 'unknown-source'
+               )=COALESCE(
+                 NULLIF(candidate_run.source_metadata->'source'->>'sourceKey',''),
+                 NULLIF(candidate_run.source_metadata->'source'->>'url',''),
+                 NULLIF(candidate_run.source_metadata->'source'->>'name',''),
+                 'unknown-source'
+               )
+           )
+         ORDER BY q.requested_at,q.id FOR UPDATE OF q SKIP LOCKED LIMIT 1`,
       );
       const row = result.rows[0] as PromotionQueue | undefined;
       if (!row) {
@@ -115,6 +134,35 @@ export class GeodataPromotionRepository {
         [queue.import_run_id],
       );
       const counts = totals.rows[0];
+      const importRun = await client.query(
+        `SELECT status,complete_snapshot,adapter_code,source_hash,
+          disappearance_policy,source_metadata
+         FROM import_run WHERE id=$1 FOR UPDATE`,
+        [queue.import_run_id],
+      );
+      const run = importRun.rows[0] as
+        | {
+            status: string;
+            complete_snapshot: boolean;
+            adapter_code: string;
+            source_hash: string;
+            disappearance_policy: string;
+            source_metadata: Record<string, unknown>;
+          }
+        | undefined;
+      let disappeared = 0;
+      if (
+        run?.complete_snapshot &&
+        run.status === 'PREPROCESSED' &&
+        Number(counts.remaining) === 0 &&
+        errors.length === 0 &&
+        !run.source_metadata.snapshotReconciledAt
+      )
+        disappeared = await this.reconcileSnapshot(
+          client,
+          queue.import_run_id,
+          run,
+        );
       await client.query(
         `UPDATE import_run SET stats=stats || $2::jsonb,
          status=CASE WHEN $3=0 AND $4=0 THEN 'COMPLETED' ELSE status END,
@@ -127,6 +175,7 @@ export class GeodataPromotionRepository {
             updated: counts.updated,
             processed: Number(counts.created) + Number(counts.updated),
             processingErrors: errors.length,
+            disappeared,
           }),
           counts.remaining,
           errors.length,
@@ -155,6 +204,119 @@ export class GeodataPromotionRepository {
     } finally {
       client.release();
     }
+  }
+
+  private async reconcileSnapshot(
+    client: PoolClient,
+    runId: string,
+    run: {
+      adapter_code: string;
+      source_hash: string;
+      disappearance_policy: string;
+      source_metadata: Record<string, unknown>;
+    },
+  ) {
+    const metadata = run.source_metadata;
+    const source = isRecord(metadata.source) ? metadata.source : {};
+    const sourceKey =
+      textValue(source.sourceKey ?? source.url ?? source.name) ??
+      'unknown-source';
+    const programmeSlug = textValue(metadata.programmeSlug);
+    const manifestId = randomUUID();
+    await client.query(
+      `INSERT INTO source_snapshot_manifest
+        (id,import_run_id,source_key,adapter_code,source_hash,record_count,source_metadata,retrieved_at)
+       SELECT $1,$2,$3,$4,$5,count(*)::integer,$6::jsonb,now()
+       FROM geodata_import_candidate WHERE import_run_id=$2`,
+      [
+        manifestId,
+        runId,
+        sourceKey,
+        run.adapter_code,
+        run.source_hash,
+        JSON.stringify(source),
+      ],
+    );
+    await client.query(
+      `INSERT INTO source_snapshot_record(manifest_id,source_record_id,record_hash)
+       SELECT DISTINCT $1,source_ref,COALESCE(source_hash,'')
+       FROM geodata_import_candidate
+       WHERE import_run_id=$2 AND source_ref IS NOT NULL
+       ON CONFLICT (manifest_id,source_record_id) DO NOTHING`,
+      [manifestId, runId],
+    );
+    let disappeared = 0;
+    if (run.disappearance_policy !== 'UNCHANGED') {
+      const missing = await client.query(
+        `SELECT e.id::text,e.lifecycle_status,e.public_properties
+         FROM geodata_entity e
+         WHERE e.programme_slug IS NOT DISTINCT FROM $1
+           AND e.source_key=$3 AND e.source_state='CURRENT'
+           AND EXISTS (
+             SELECT 1 FROM source_reference r
+             WHERE r.entity_id=e.id AND r.adapter_code=$2
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM source_reference r
+             JOIN source_snapshot_record sr ON sr.source_record_id=r.source_record_id
+             WHERE r.entity_id=e.id AND r.adapter_code=$2 AND sr.manifest_id=$4
+           )
+         FOR UPDATE OF e`,
+        [programmeSlug, run.adapter_code, sourceKey, manifestId],
+      );
+      for (const row of missing.rows as Array<{
+        id: string;
+        lifecycle_status: string;
+        public_properties: Record<string, unknown>;
+      }>) {
+        const occurredAt = new Date().toISOString();
+        const policy = run.disappearance_policy;
+        const sourceState =
+          policy === 'STALE'
+            ? 'STALE'
+            : policy === 'RETIRED'
+              ? 'RETIRED'
+              : 'REVIEW_REQUIRED';
+        const event = {
+          action: 'SOURCE_DISAPPEARED',
+          policy,
+          previousStatus: row.lifecycle_status,
+          occurredAt,
+        };
+        await client.query(
+          `UPDATE geodata_entity SET source_state=$2,
+           lifecycle_status=CASE WHEN $2='RETIRED' THEN 'RETIRED' ELSE lifecycle_status END,
+           public_properties=jsonb_set(
+             COALESCE(public_properties,'{}'::jsonb),'{reviewHistory}',
+             (CASE WHEN jsonb_typeof(public_properties->'reviewHistory')='array'
+               THEN public_properties->'reviewHistory' ELSE '[]'::jsonb END) || jsonb_build_array($3::jsonb),true
+           ) || jsonb_build_object('updatedAt',$4::text),
+           updated_at=$4,revision=revision+1 WHERE id=$1`,
+          [row.id, sourceState, JSON.stringify(event), occurredAt],
+        );
+        await this.writeFact(
+          client,
+          'geodata.entity.source-disappeared.v1',
+          'entity',
+          row.id,
+          {
+            entityId: row.id,
+            policy,
+            previousStatus: row.lifecycle_status,
+          },
+          new Date(occurredAt),
+        );
+        disappeared += 1;
+      }
+    }
+    const reconciledAt = new Date().toISOString();
+    await client.query(
+      `UPDATE import_run SET source_metadata=source_metadata || jsonb_build_object(
+        'snapshotReconciledAt',$2::text,'sourceSnapshotManifestId',$3::text
+       ) WHERE id=$1`,
+      [runId, reconciledAt, manifestId],
+    );
+    return disappeared;
   }
 
   async retryPromotion(queue: PromotionQueue, error: unknown) {

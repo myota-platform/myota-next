@@ -112,10 +112,11 @@ export class GeodataScheduleService {
   async run(
     key: string | undefined,
     scheduleId: string,
+    requestedBy: string,
     body: Record<string, unknown>,
   ) {
-    if (!Array.isArray(body.features) || body.features.length === 0)
-      throw new BadRequestException('features must be a non-empty array');
+    if (!Array.isArray(body.features))
+      throw new BadRequestException('features must be an array');
     const client = await this.connect();
     let schedule: RefreshSchedule;
     try {
@@ -135,14 +136,22 @@ export class GeodataScheduleService {
     const importKey = key
       ? `schedule:${scheduleId}:${key}`
       : `schedule:${scheduleId}:${randomUUID()}`;
-    const run = await this.imports.create(importKey, {
-      ...body,
-      programmeSlug: schedule.programmeSlug,
-      adapter: schedule.adapter,
-      source: schedule.source,
-      entityTypes: schedule.entityTypes,
-      disappearancePolicy: schedule.disappearancePolicy,
-    });
+    const run = await this.imports.create(
+      importKey,
+      {
+        ...body,
+        programmeSlug: schedule.programmeSlug,
+        adapter: schedule.adapter,
+        source: schedule.source,
+        entityTypes: schedule.entityTypes,
+        disappearancePolicy: schedule.disappearancePolicy,
+        completeSnapshot: true,
+      },
+      {
+        allowCompleteSnapshot: true,
+        autoPromote: { requestedBy, note: 'Scheduled source refresh' },
+      },
+    );
     const now = new Date();
     const runAt = now.toISOString();
     const nextRunAt = new Date(

@@ -97,8 +97,8 @@ export class GeodataController {
     @Param('scheduleId') scheduleId: string,
     @Body() body: Record<string, unknown>,
   ) {
-    authorizeImport(authorization);
-    return this.schedules.run(key, scheduleId, body);
+    const claims = authorizeImport(authorization);
+    return this.schedules.run(key, scheduleId, claims.sub, body);
   }
 
   @Post('proposals')
