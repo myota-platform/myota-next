@@ -1,6 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { parseTimestamp, type JsonRecord } from './activity-domain.js';
+import {
+  parseTimestamp,
+  pythonFloat,
+  type JsonRecord,
+} from './activity-domain.js';
 
 const REQUIRED_ELEMENTS = [
   'AWARD_NAME',
@@ -228,22 +232,7 @@ export function evaluateAward(
 }
 
 function numericValue(value: unknown, field: string) {
-  if (
-    (typeof value !== 'number' &&
-      typeof value !== 'string' &&
-      typeof value !== 'boolean') ||
-    (typeof value === 'string' && value.trim() === '')
-  )
-    throw new BadRequestException(`${field} must be numeric`);
-  const text = typeof value === 'string' ? value.trim() : undefined;
-  if (
-    text !== undefined &&
-    !/^[+-]?(?:(?:(?:\d(?:_?\d)*)(?:\.(?:\d(?:_?\d)*)?)?|\.(?:\d(?:_?\d)*))(?:[eE][+-]?\d(?:_?\d)*)?|inf(?:inity)?|nan)$/i.test(
-      text,
-    )
-  )
-    throw new BadRequestException(`${field} must be numeric`);
-  return Number(text?.replaceAll('_', '') ?? value);
+  return pythonFloat(value, field);
 }
 
 function integerValue(value: unknown, field: string) {

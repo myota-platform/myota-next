@@ -125,17 +125,25 @@ function pointInBounds(
   );
 }
 
-function pythonFloat(value: unknown, field: string): number {
+export function pythonFloat(value: unknown, field: string): number {
   if (typeof value === 'number') return value;
   if (typeof value === 'boolean') return value ? 1 : 0;
+  const text = typeof value === 'string' ? value.trim() : '';
   if (
     typeof value !== 'string' ||
-    !/^[+-]?(?:(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|inf(?:inity)?|nan)$/i.test(
-      value.trim(),
+    !/^[+-]?(?:(?:\d(?:_?\d)*(?:\.(?:\d(?:_?\d)*)?)?|\.\d(?:_?\d)*)(?:e[+-]?\d(?:_?\d)*)?|inf(?:inity)?|nan)$/i.test(
+      text,
     )
   )
     throw new BadRequestException(`${field} must be numeric`);
-  return Number(value);
+  const normalized = text.replaceAll('_', '');
+  const token = normalized.replace(/^[+-]/, '').toLowerCase();
+  if (token === 'nan') return Number.NaN;
+  if (token === 'inf' || token === 'infinity')
+    return normalized.startsWith('-')
+      ? Number.NEGATIVE_INFINITY
+      : Number.POSITIVE_INFINITY;
+  return Number(normalized);
 }
 
 export function normalizeQso(
