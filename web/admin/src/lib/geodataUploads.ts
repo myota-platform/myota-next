@@ -49,7 +49,7 @@ interface UploadOptions {
 }
 
 const DEFAULT_PART_SIZE = 16 * 1024 * 1024;
-export const MAX_UPLOAD_BYTES = 1024 ** 3;
+export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 function httpStatus(error: unknown): number | undefined {
   return error instanceof Error && 'status' in error
@@ -158,7 +158,7 @@ export async function uploadGeodataFile(
   options: UploadOptions,
 ): Promise<{ importRunId?: string; resumed: boolean }> {
   if (!file.size || file.size > MAX_UPLOAD_BYTES)
-    throw new Error('Choose a non-empty file up to 1 GiB.');
+    throw new Error('Choose a non-empty GeoJSON file up to 20 MiB.');
   const { request, storage, signal } = options;
   const { key, legacyKey } = await storageKeys(file, metadata, options.ownerId);
   let saved = readSaved(storage, key);

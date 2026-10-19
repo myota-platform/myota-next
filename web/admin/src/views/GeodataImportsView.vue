@@ -88,9 +88,6 @@ const formats = [
   'OSM_GEOJSON',
   'KML',
   'GPX',
-  'SHAPEFILE',
-  'OSM_PBF',
-  'PARKSERVE_US',
   'WFS',
   'ARCGIS_FEATURESERVER',
 ];
@@ -529,11 +526,8 @@ async function queueImport(): Promise<void> {
     error.value = 'Choose a file or paste source data.';
     return;
   }
-  if (
-    !file.value &&
-    ['SHAPEFILE', 'OSM_PBF', 'PARKSERVE_US'].includes(format.value)
-  ) {
-    error.value = `${format.value} must be uploaded as a file.`;
+  if (file.value && !['GEOJSON', 'OSM_GEOJSON'].includes(format.value)) {
+    error.value = `${format.value} file uploads are not available yet. Paste its supported source data or choose GeoJSON.`;
     return;
   }
   busy.value = true;
@@ -954,8 +948,8 @@ onBeforeUnmount(() => {
             "
           ></textarea>
           <small class="field-help"
-            >Optional when a file is selected. Shapefile, OSM PBF and ParkServe
-            files must be uploaded.</small
+            >KML, GPX, WFS GeoJSON, and ArcGIS JSON can be pasted. Multipart
+            file uploads currently accept GeoJSON only.</small
           >
         </label>
         <label class="wide"
@@ -963,13 +957,12 @@ onBeforeUnmount(() => {
           <input
             ref="fileInput"
             type="file"
-            accept=".json,.geojson,.kml,.gpx,.xml,.zip,.pbf,.csv"
+            accept=".json,.geojson"
             @change="chooseFile"
           />
           <small class="field-help"
-            >Up to 1 GiB. Shapefiles must be ZIP archives containing the .shp,
-            .shx and .dbf files. To resume an interrupted upload, choose the
-            original file and the same import settings.</small
+            >GeoJSON files up to 20 MiB. To resume an interrupted upload, choose
+            the original file and the same import settings.</small
           >
           <small v-if="file" class="field-help"
             >Selected: {{ file.name }} ({{

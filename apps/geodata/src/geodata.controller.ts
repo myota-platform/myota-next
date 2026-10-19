@@ -339,12 +339,12 @@ export class GeodataController {
       adapters: [
         {
           code: 'PARKSERVE_US',
-          formats: ['PARKSERVE_US', 'GEOJSON', 'KML', 'GPX'],
+          formats: ['GEOJSON', 'KML', 'GPX'],
           requires: ['license', 'retrievedAt', 'sourceRef'],
         },
         {
           code: 'OSM',
-          formats: ['OSM_PBF', 'GEOJSON', 'KML', 'GPX'],
+          formats: ['GEOJSON', 'KML', 'GPX'],
           requiredTags: [
             'leisure=park',
             'leisure=nature_reserve',
@@ -360,20 +360,12 @@ export class GeodataController {
         },
         {
           code: 'GOVERNMENT_GIS',
-          formats: [
-            'WFS',
-            'GEOJSON',
-            'KML',
-            'GPX',
-            'SHAPEFILE',
-            'SHP',
-            'ARCGIS_FEATURESERVER',
-          ],
+          formats: ['WFS', 'GEOJSON', 'KML', 'GPX', 'ARCGIS_FEATURESERVER'],
           requires: ['license', 'attribution', 'sourceFormat'],
         },
         {
           code: 'MANUAL',
-          formats: ['GEOJSON', 'KML', 'GPX', 'SHAPEFILE', 'SHP'],
+          formats: ['GEOJSON', 'KML', 'GPX'],
           requires: ['feature', 'entityTypes'],
         },
       ],

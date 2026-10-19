@@ -117,6 +117,9 @@
   path currently accepts GeoJSON up to the worker's 20 MiB in-memory limit;
   Pasted-import creation now also decodes bounded KML and GPX to GeoJSON;
   Shapefile, OSM PBF, and larger streaming imports remain outstanding.
+  The adapter catalogue and admin selector now expose only import formats the
+  current boundary can decode. The admin file picker is limited to GeoJSON and
+  matches the API's 20 MiB cap.
   Durable object references from the configured import bucket are also
   bounded, hash-checked, validated as GeoJSON, and staged in the worker's
   normalized source format.
