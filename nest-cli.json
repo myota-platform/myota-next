@@ -24,6 +24,15 @@
       "sourceRoot": "apps/identity/src",
       "compilerOptions": { "tsConfigPath": "apps/identity/tsconfig.app.json" }
     },
+    "identity-maintenance": {
+      "type": "application",
+      "root": "apps/identity-maintenance",
+      "entryFile": "main",
+      "sourceRoot": "apps/identity-maintenance/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/identity-maintenance/tsconfig.app.json"
+      }
+    },
     "programmes": {
       "type": "application",
       "root": "apps/programmes",
@@ -50,35 +59,45 @@
       "root": "apps/activity-worker",
       "entryFile": "main",
       "sourceRoot": "apps/activity-worker/src",
-      "compilerOptions": { "tsConfigPath": "apps/activity-worker/tsconfig.app.json" }
+      "compilerOptions": {
+        "tsConfigPath": "apps/activity-worker/tsconfig.app.json"
+      }
     },
     "activity-notifications": {
       "type": "application",
       "root": "apps/activity-notifications",
       "entryFile": "main",
       "sourceRoot": "apps/activity-notifications/src",
-      "compilerOptions": { "tsConfigPath": "apps/activity-notifications/tsconfig.app.json" }
+      "compilerOptions": {
+        "tsConfigPath": "apps/activity-notifications/tsconfig.app.json"
+      }
     },
     "geodata-worker": {
       "type": "application",
       "root": "apps/geodata-worker",
       "entryFile": "main",
       "sourceRoot": "apps/geodata-worker/src",
-      "compilerOptions": { "tsConfigPath": "apps/geodata-worker/tsconfig.app.json" }
+      "compilerOptions": {
+        "tsConfigPath": "apps/geodata-worker/tsconfig.app.json"
+      }
     },
     "email-worker": {
       "type": "application",
       "root": "apps/email-worker",
       "entryFile": "main",
       "sourceRoot": "apps/email-worker/src",
-      "compilerOptions": { "tsConfigPath": "apps/email-worker/tsconfig.app.json" }
+      "compilerOptions": {
+        "tsConfigPath": "apps/email-worker/tsconfig.app.json"
+      }
     },
     "outbox-worker": {
       "type": "application",
       "root": "apps/outbox-worker",
       "entryFile": "main",
       "sourceRoot": "apps/outbox-worker/src",
-      "compilerOptions": { "tsConfigPath": "apps/outbox-worker/tsconfig.app.json" }
+      "compilerOptions": {
+        "tsConfigPath": "apps/outbox-worker/tsconfig.app.json"
+      }
     },
     "platform": {
       "type": "library",

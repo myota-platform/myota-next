@@ -26,7 +26,9 @@
   issuance with the restricted email-recipient lookup, and normalized private
   profile-image upload/read/delete are also implemented.
   Authentication uses the existing scrypt hash format, HS256 token contract,
-  persisted session, revocation, lockout and rate-limit tables.
+  persisted session, revocation, lockout and rate-limit tables. A separate
+  Core-owned maintenance process expires Identity records and removes aged,
+  unreferenced profile-image objects.
 - Transactional event helpers write domain events to the Core outbox and
   security events to both the security-event table and outbox.
 - Programme listing, detail and effective-policy reads, plus scoped creation,
@@ -152,8 +154,8 @@
 
 ## Not implemented yet
 
-- Profile-image orphan cleanup and automated compatibility coverage for the
-  first Identity slice are still outstanding.
+- Automated compatibility coverage for the first Identity slice remains
+  outstanding.
 - Remaining Activity operational workflows are outstanding. CSV file import
   validates bounded UTF-8 logs and queues normalized QSO rows for the existing
   ingestion worker. The Gateway now routes public API requests to their owning

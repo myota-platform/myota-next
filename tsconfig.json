@@ -28,6 +28,7 @@
   "references": [
     { "path": "./apps/gateway/tsconfig.app.json" },
     { "path": "./apps/identity/tsconfig.app.json" },
+    { "path": "./apps/identity-maintenance/tsconfig.app.json" },
     { "path": "./apps/programmes/tsconfig.app.json" },
     { "path": "./apps/activity/tsconfig.app.json" },
     { "path": "./apps/geodata/tsconfig.app.json" },

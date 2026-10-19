@@ -9,7 +9,7 @@
   "scripts": {
     "build": "npm run build:apis && npm run build:workers",
     "build:apis": "nest build gateway && nest build identity && nest build programmes && nest build activity && nest build geodata",
-    "build:workers": "nest build activity-worker && nest build activity-notifications && nest build geodata-worker && nest build email-worker && nest build outbox-worker",
+    "build:workers": "nest build identity-maintenance && nest build activity-worker && nest build activity-notifications && nest build geodata-worker && nest build email-worker && nest build outbox-worker",
     "start:gateway": "nest start gateway",
     "start:identity": "nest start identity",
     "start:programmes": "nest start programmes",
@@ -17,6 +17,7 @@
     "start:geodata": "nest start geodata",
     "start:gateway:dev": "nest start gateway --watch",
     "start:identity:dev": "nest start identity --watch",
+    "start:identity-maintenance": "nest start identity-maintenance",
     "start:programmes:dev": "nest start programmes --watch",
     "start:activity:dev": "nest start activity --watch",
     "start:geodata:dev": "nest start geodata --watch",

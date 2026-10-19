@@ -116,6 +116,9 @@ workflows remain outstanding.
   the separate consumer described below. ADIF source-object retention is
   scheduled, and queued jobs missing an outbox command are repaired periodically;
   other retention and recovery evidence remain open.
+- Identity maintenance: expired recovery tokens, revoked sessions, expired
+  revocations, rate-limit windows, old security events, and aged orphan profile
+  images are cleaned by a separate Core-owned worker.
 - Activity notification consumption: exact durable validation, transactional
   processed-event/checkpoint and notification writes, deduplication, bounded
   retry, redacted poison-event dead-lettering, and audited CLI redrive are
