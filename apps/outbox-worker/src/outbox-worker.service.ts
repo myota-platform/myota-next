@@ -5,6 +5,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { createServer, type Server } from 'node:http';
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
@@ -27,12 +28,28 @@ const PUBLISH_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.OUTBOX_PUBLISH_TIMEOUT_MS ?? 10_000),
 );
+const METRICS_PORT = Math.max(
+  0,
+  Number(process.env.OUTBOX_METRICS_PORT ?? 9108),
+);
 @Injectable()
 export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OutboxWorkerService.name);
   private stopping = false;
   private relay?: ReturnType<typeof jetstream>;
   private connection?: Awaited<ReturnType<typeof connect>>;
+  private metricsServer?: Server;
+  private published = 0;
+  private retries = new Map<string, number>();
+  private deadLetters = new Map<string, number>();
+  private publishCount = 0;
+  private publishDurationSum = 0;
+  private publishDurationBuckets = [0, 0, 0, 0, 0, 0, 0];
+  private pendingEvents = 0;
+  private oldestPendingAge = 0;
+  private unresolvedDeadLetters = 0;
+  private databaseUp = 0;
+  private natsUp = 0;
 
   constructor(
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
@@ -52,11 +69,21 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
     });
     this.relay = jetstream(this.connection);
     await this.validateTopology(registry);
+    void this.monitorNats();
+    this.startMetricsServer();
+    this.natsUp = 1;
     void this.run(registry);
   }
 
   async onModuleDestroy(): Promise<void> {
     this.stopping = true;
+    if (this.metricsServer) {
+      await new Promise<void>((resolve, reject) => {
+        this.metricsServer!.close((error) =>
+          error ? reject(error) : resolve(),
+        );
+      });
+    }
     await this.connection?.drain();
   }
 
@@ -64,9 +91,15 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
     registry: Awaited<ReturnType<typeof loadOutboxRegistry>>,
   ): Promise<void> {
     let dbRetryMs = 1000;
+    let metricsAt = 0;
     while (!this.stopping) {
       try {
+        if (Date.now() >= metricsAt) {
+          await this.refreshMetrics();
+          metricsAt = Date.now() + 15_000;
+        }
         const event = await this.claim();
+        this.databaseUp = 1;
         dbRetryMs = 1000;
         if (!event) {
           await this.pause(1000);
@@ -74,11 +107,133 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
         }
         await this.publish(event, registry);
       } catch (error) {
+        this.databaseUp = 0;
         this.logger.error(`Outbox polling failed: ${this.safeError(error)}`);
         await this.pause(dbRetryMs);
         dbRetryMs = Math.min(dbRetryMs * 2, 30_000);
       }
     }
+  }
+
+  private startMetricsServer(): void {
+    if (METRICS_PORT === 0) return;
+    this.metricsServer = createServer((request, response) => {
+      if (request.method !== 'GET' || request.url !== '/metrics') {
+        response.writeHead(404).end();
+        return;
+      }
+      response.writeHead(200, {
+        'Content-Type': 'text/plain; version=0.0.4; charset=utf-8',
+      });
+      response.end(this.renderMetrics());
+    });
+    this.metricsServer.listen(METRICS_PORT, '0.0.0.0');
+  }
+
+  private async monitorNats(): Promise<void> {
+    try {
+      for await (const status of this.connection!.status()) {
+        if (status.type === 'disconnect' || status.type === 'reconnecting') {
+          this.natsUp = 0;
+        } else if (status.type === 'reconnect') {
+          this.natsUp = 1;
+        } else if (status.type === 'close') {
+          this.natsUp = 0;
+          return;
+        }
+      }
+    } catch (error) {
+      this.natsUp = 0;
+      this.logger.warn(`NATS status monitor stopped: ${this.safeError(error)}`);
+    }
+  }
+
+  private renderMetrics(): string {
+    const worker = this.escapeMetricLabel(WORKER);
+    const lines = [
+      '# HELP myota_outbox_published_events_total Outbox events acknowledged by JetStream.',
+      '# TYPE myota_outbox_published_events_total counter',
+      `myota_outbox_published_events_total{worker="${worker}"} ${this.published}`,
+      '# HELP myota_outbox_retries_total Outbox events scheduled for retry.',
+      '# TYPE myota_outbox_retries_total counter',
+      ...this.renderFailureCounters('myota_outbox_retries_total', this.retries),
+      '# HELP myota_outbox_dead_lettered_events_total Outbox events persisted as dead letters.',
+      '# TYPE myota_outbox_dead_lettered_events_total counter',
+      ...this.renderFailureCounters(
+        'myota_outbox_dead_lettered_events_total',
+        this.deadLetters,
+      ),
+      '# HELP myota_outbox_publish_duration_seconds Time spent awaiting JetStream publish acknowledgements.',
+      '# TYPE myota_outbox_publish_duration_seconds histogram',
+      ...this.publishDurationBuckets.map(
+        (count, index) =>
+          `myota_outbox_publish_duration_seconds_bucket{worker="${worker}",le="${[0.1, 0.25, 0.5, 1, 2.5, 5, 10][index]}"} ${count}`,
+      ),
+      `myota_outbox_publish_duration_seconds_bucket{worker="${worker}",le="+Inf"} ${this.publishCount}`,
+      `myota_outbox_publish_duration_seconds_sum{worker="${worker}"} ${this.publishDurationSum}`,
+      `myota_outbox_publish_duration_seconds_count{worker="${worker}"} ${this.publishCount}`,
+      '# HELP myota_outbox_pending_events Unpublished outbox events in this database.',
+      '# TYPE myota_outbox_pending_events gauge',
+      `myota_outbox_pending_events{worker="${worker}"} ${this.pendingEvents}`,
+      '# HELP myota_outbox_oldest_pending_age_seconds Age of the oldest unpublished event.',
+      '# TYPE myota_outbox_oldest_pending_age_seconds gauge',
+      `myota_outbox_oldest_pending_age_seconds{worker="${worker}"} ${this.oldestPendingAge}`,
+      '# HELP myota_outbox_unresolved_dead_letters Unresolved outbox dead letters.',
+      '# TYPE myota_outbox_unresolved_dead_letters gauge',
+      `myota_outbox_unresolved_dead_letters{worker="${worker}"} ${this.unresolvedDeadLetters}`,
+      '# HELP myota_outbox_database_up Whether the last outbox database operation succeeded.',
+      '# TYPE myota_outbox_database_up gauge',
+      `myota_outbox_database_up{worker="${worker}"} ${this.databaseUp}`,
+      '# HELP myota_outbox_nats_up Whether the relay is connected to NATS.',
+      '# TYPE myota_outbox_nats_up gauge',
+      `myota_outbox_nats_up{worker="${worker}"} ${this.natsUp}`,
+    ];
+    return `${lines.join('\n')}\n`;
+  }
+
+  private renderFailureCounters(
+    name: string,
+    counters: Map<string, number>,
+  ): string[] {
+    const worker = this.escapeMetricLabel(WORKER);
+    return [...counters.entries()].map(
+      ([failureClass, count]) =>
+        `${name}{worker="${worker}",failure_class="${failureClass}"} ${count}`,
+    );
+  }
+
+  private escapeMetricLabel(value: string): string {
+    return value
+      .replaceAll('\\', '\\\\')
+      .replaceAll('"', '\\"')
+      .replaceAll('\n', '\\n');
+  }
+
+  private async refreshMetrics(): Promise<void> {
+    const result = await this.pool!.query<{
+      pending: string;
+      oldest_age: string;
+      dead_letters: string;
+    }>(
+      `SELECT (SELECT count(*) FROM public.outbox_event WHERE published_at IS NULL)::text AS pending,
+        (SELECT COALESCE(max(EXTRACT(EPOCH FROM (now() - occurred_at))), 0)
+          FROM public.outbox_event WHERE published_at IS NULL)::text AS oldest_age,
+        (SELECT count(*) FROM public.dead_letter_event WHERE resolved_at IS NULL)::text AS dead_letters`,
+    );
+    const row = result.rows[0];
+    this.pendingEvents = Number(row?.pending ?? 0);
+    this.oldestPendingAge = Math.max(0, Number(row?.oldest_age ?? 0));
+    this.unresolvedDeadLetters = Number(row?.dead_letters ?? 0);
+    this.databaseUp = 1;
+  }
+
+  private observePublish(seconds: number): void {
+    const bounds = [0.1, 0.25, 0.5, 1, 2.5, 5, 10];
+    this.publishCount += 1;
+    this.publishDurationSum += seconds;
+    bounds.forEach((bound, index) => {
+      if (seconds <= bound) this.publishDurationBuckets[index] += 1;
+    });
   }
 
   private async validateTopology(
@@ -297,13 +452,21 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    const started = performance.now();
+    let brokerAcknowledged = false;
+    let publishObserved = false;
     try {
       const ack = await this.relay!.publish(routed.subject, body, {
         msgID: event.eventId,
         timeout: PUBLISH_TIMEOUT_MS,
       });
+      brokerAcknowledged = true;
+      this.natsUp = 1;
+      this.observePublish((performance.now() - started) / 1000);
+      publishObserved = true;
       if (ack.stream !== routed.stream)
         throw new Error('JetStream acknowledged an unexpected stream');
+      this.published += 1;
       const client = await this.pool!.connect();
       try {
         await client.query('BEGIN');
@@ -323,6 +486,9 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
         client.release();
       }
     } catch (error) {
+      if (!brokerAcknowledged) this.natsUp = 0;
+      if (!publishObserved)
+        this.observePublish((performance.now() - started) / 1000);
       if (error instanceof OutboxContractError)
         await this.markFailed(event, error, true);
       else await this.markFailed(event, error, false);
@@ -359,6 +525,10 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
           [`dead-lettered: ${message}`, event.eventId],
         );
         await client.query('COMMIT');
+        const failureClass =
+          error instanceof OutboxContractError ? 'contract' : 'publish';
+        const counters = dead ? this.deadLetters : this.retries;
+        counters.set(failureClass, (counters.get(failureClass) ?? 0) + 1);
         this.logger.error(
           `Dead-lettered event ${event.eventId} (${event.eventType}): ${message}`,
         );
@@ -374,6 +544,9 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
         [delay, message, event.eventId],
       );
       await client.query('COMMIT');
+      const failureClass =
+        error instanceof OutboxContractError ? 'contract' : 'publish';
+      this.retries.set(failureClass, (this.retries.get(failureClass) ?? 0) + 1);
       this.logger.warn(
         `Scheduled retry for event ${event.eventId}: ${message}`,
       );

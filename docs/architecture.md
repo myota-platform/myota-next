@@ -52,6 +52,8 @@ registry. The relay uses `Nats-Msg-Id` from the durable outbox event ID so a
 broker acknowledgement followed by a database update failure can be retried
 safely. It retries transient publish failures with bounded backoff and stores
 permanent or exhausted failures in the owning database's dead-letter table.
+Each process exposes Prometheus metrics at `/metrics` on port 9108 by default;
+set `OUTBOX_METRICS_PORT=0` to disable the listener.
 Do not point one relay at multiple databases or combine their transactions.
 
 ## Shared runtime dependencies

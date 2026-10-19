@@ -116,8 +116,8 @@ workflows remain outstanding.
 - Outbox relay: independently configured Core, Activity, and Geodata relay
   processes claim only their own database's events and publish registered fact
   or work envelopes to JetStream with stable event IDs and validates existing
-  stream and durable settings at startup. Relay metrics and operational
-  recovery evidence are not complete yet.
+  stream and durable settings at startup, and exposes Prometheus metrics.
+  Operational recovery evidence is not complete yet.
 - Runtime: preserve migrations, health/readiness, metrics, logs, traces,
   backups, restore paths, NATS topology, object storage buckets, and separate
   service/worker deployment units.
