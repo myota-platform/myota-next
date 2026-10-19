@@ -171,10 +171,14 @@ export function evaluateAwardCondition(
     throw new BadRequestException(
       `unsupported award condition kind: ${kind || 'missing'}`,
     );
-  const actual = Number(facts[field] ?? 0);
-  const expected = Number(condition.value ?? 0);
-  if (!Number.isFinite(actual) || !Number.isFinite(expected))
-    throw new BadRequestException('award condition values must be numeric');
+  const actual = numericValue(
+    Object.hasOwn(facts, field) ? facts[field] : 0,
+    field,
+  );
+  const expected = numericValue(
+    Object.hasOwn(condition, 'value') ? condition.value : 0,
+    'condition.value',
+  );
   switch (String(condition.operator ?? 'GTE').toUpperCase()) {
     case 'GTE':
       return actual >= expected;
@@ -205,12 +209,15 @@ export function evaluateAward(
     UNIQUE_ENTITIES: 'uniqueEntityCount',
   };
   const field = metricField[metric] ?? metric;
-  const progress = Number(facts[field] ?? 0);
-  if (!Number.isFinite(progress))
-    throw new BadRequestException(`${field} must be numeric`);
+  const progress = numericValue(
+    Object.hasOwn(facts, field) ? facts[field] : 0,
+    field,
+  );
   const levels = (award.levels ?? []).map((level: JsonRecord) => ({
     ...level,
-    eligible: conditionMet && progress >= Number(level.threshold),
+    eligible:
+      conditionMet &&
+      progress >= numericValue(level.threshold, 'level.threshold'),
   }));
   return {
     awardId: award.id,
@@ -221,6 +228,28 @@ export function evaluateAward(
     progress,
     levels,
   };
+}
+
+function numericValue(value: unknown, field: string) {
+  if (
+    (typeof value !== 'number' &&
+      typeof value !== 'string' &&
+      typeof value !== 'boolean') ||
+    (typeof value === 'string' && value.trim() === '')
+  )
+    throw new BadRequestException(`${field} must be numeric`);
+  const text = typeof value === 'string' ? value.trim() : undefined;
+  if (
+    text !== undefined &&
+    !/^[+-]?(?:(?:\d(?:_?\d)*(?:\.(?:\d(?:_?\d)*)?)?)|(?:\.\d(?:_?\d)*))(?:[eE][+-]?\d(?:_?\d)*)?$/.test(
+      text,
+    )
+  )
+    throw new BadRequestException(`${field} must be numeric`);
+  const numeric = Number(text?.replaceAll('_', '') ?? value);
+  if (!Number.isFinite(numeric))
+    throw new BadRequestException(`${field} must be numeric`);
+  return numeric;
 }
 
 function calculatePrintReadiness(
