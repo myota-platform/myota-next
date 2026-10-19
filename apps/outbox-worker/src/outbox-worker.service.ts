@@ -69,9 +69,9 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
     });
     this.relay = jetstream(this.connection);
     await this.validateTopology(registry);
+    this.natsUp = 1;
     void this.monitorNats();
     this.startMetricsServer();
-    this.natsUp = 1;
     void this.run(registry);
   }
 
@@ -118,6 +118,24 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
   private startMetricsServer(): void {
     if (METRICS_PORT === 0) return;
     this.metricsServer = createServer((request, response) => {
+      if (request.method === 'GET' && request.url === '/healthz') {
+        response.writeHead(this.stopping ? 503 : 200, {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-store',
+        });
+        response.end(this.stopping ? 'stopping\n' : 'ok\n');
+        return;
+      }
+      if (request.method === 'GET' && request.url === '/readyz') {
+        const ready =
+          !this.stopping && this.databaseUp === 1 && this.natsUp === 1;
+        response.writeHead(ready ? 200 : 503, {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-store',
+        });
+        response.end(ready ? 'ready\n' : 'not ready\n');
+        return;
+      }
       if (request.method !== 'GET' || request.url !== '/metrics') {
         response.writeHead(404).end();
         return;
