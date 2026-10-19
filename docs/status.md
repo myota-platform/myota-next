@@ -22,7 +22,7 @@
   lifecycle, anonymization and role replacement. Callsign add, primary
   selection, evidence submission, verification, and retirement, plus paginated
   security-event reads for global administrators and owner-scoped account data
-  export, scoped OIDC provider mapping creation, and five-minute service token
+  export, scoped OIDC provider mapping creation/update, and five-minute service token
   issuance with the restricted email-recipient lookup, and normalized private
   profile-image upload/read/delete are also implemented.
   Authentication uses the existing scrypt hash format, HS256 token contract,
@@ -80,8 +80,8 @@
 
 ## Not implemented yet
 
-- Remaining Identity APIs include OIDC mapping updates and account deactivation
-  as its dedicated operation. Profile-image orphan cleanup and automated
+- Remaining Identity APIs include account deactivation as its dedicated
+  operation. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
 - Remaining Activity APIs include file-based QSO import and operational
   workflows. Remaining Geodata mutations, import handlers and worker

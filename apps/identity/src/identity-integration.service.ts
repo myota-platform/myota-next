@@ -2,6 +2,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -50,33 +51,59 @@ export class IdentityIntegrationService {
         }
       }
 
-      const id = randomUUID();
+      const id = body.mappingId ?? randomUUID();
       const scopes = body.scopes ?? ['openid', 'profile', 'email'];
-      const result = await client.query<{
-        id: string;
-        programme_slug: string;
-        issuer: string;
-        client_id: string;
-        scopes: string[];
-        enabled: boolean;
-        created_at: Date;
-        updated_at: Date;
-      }>(
-        `INSERT INTO public.identity_oidc_provider_mapping
-           (id, programme_slug, issuer, client_id, scopes, enabled)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, programme_slug, issuer, client_id, scopes, enabled,
-                   created_at, updated_at`,
-        [
-          id,
-          body.programmeSlug.trim(),
-          body.issuer.trim(),
-          body.clientId.trim(),
-          scopes,
-          body.enabled ?? true,
-        ],
-      );
-      const row = result.rows[0];
+      const mappingResult = body.mappingId
+        ? await client.query<{
+            id: string;
+            programme_slug: string;
+            issuer: string;
+            client_id: string;
+            scopes: string[];
+            enabled: boolean;
+            created_at: Date;
+            updated_at: Date;
+          }>(
+            `UPDATE public.identity_oidc_provider_mapping
+                SET programme_slug=$2,issuer=$3,client_id=$4,scopes=$5,enabled=$6,updated_at=now()
+              WHERE id=$1
+              RETURNING id,programme_slug,issuer,client_id,scopes,enabled,created_at,updated_at`,
+            [
+              id,
+              body.programmeSlug.trim(),
+              body.issuer.trim(),
+              body.clientId.trim(),
+              scopes,
+              body.enabled ?? true,
+            ],
+          )
+        : await client.query<{
+            id: string;
+            programme_slug: string;
+            issuer: string;
+            client_id: string;
+            scopes: string[];
+            enabled: boolean;
+            created_at: Date;
+            updated_at: Date;
+          }>(
+            `INSERT INTO public.identity_oidc_provider_mapping
+               (id, programme_slug, issuer, client_id, scopes, enabled)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, programme_slug, issuer, client_id, scopes, enabled,
+                       created_at, updated_at`,
+            [
+              id,
+              body.programmeSlug.trim(),
+              body.issuer.trim(),
+              body.clientId.trim(),
+              scopes,
+              body.enabled ?? true,
+            ],
+          );
+      if (body.mappingId && !mappingResult.rows[0])
+        throw new NotFoundException('OIDC provider mapping not found');
+      const row = mappingResult.rows[0];
       const mapping = {
         id: row.id,
         programmeSlug: row.programme_slug,

@@ -80,6 +80,10 @@ export class SecurityEventsQueryDto {
 }
 
 export class OidcProviderMappingDto {
+  @IsOptional()
+  @IsUUID()
+  mappingId?: string;
+
   @IsString()
   @MinLength(1)
   programmeSlug!: string;
