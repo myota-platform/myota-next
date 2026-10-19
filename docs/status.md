@@ -91,7 +91,9 @@
   normalized source format.
   The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
-  paged import-run status reads are also exposed. Authenticated entity audit
+  paged import-run status reads are also exposed. Import finalization now
+  discards staged candidates and queues, marks terminal runs processed, and
+  records a transactional outbox fact. Authenticated entity audit
   reads combine the entity's review histories with durable audit events. Vector
   tile reads serve approved entity geometry as Mapbox vector tiles.
 - Award definitions now support public published-only reads, administrative

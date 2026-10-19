@@ -63,7 +63,9 @@ worker's 20 MiB GeoJSON limit. Durable object references from the configured
 import bucket are bounded, hash-checked, validated, and staged as normalized
 worker inputs. Refresh schedules and conflation,
 remaining review workflows, queue-level redrive, NATS delivery, and remaining worker operations are
-outstanding. Pending candidates can be paged; administrators can confirm or
+outstanding. Finalization removes staged candidates and queues transactionally
+while preserving the import summary and materialized entities. Pending
+candidates can be paged; administrators can confirm or
 reject selected rows transactionally. Selected candidates can also be queued
 for CANDIDATE or scope-gated APPROVED promotion; the worker persists entities,
 category and source links, audit/outbox events, and queue outcomes. Lifecycle

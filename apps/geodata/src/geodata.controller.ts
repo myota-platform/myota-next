@@ -139,6 +139,26 @@ export class GeodataController {
     return this.importMutations.queueImportProcessing(runId, key, body);
   }
 
+  @Post('imports/:runId/processed')
+  async finalizeImport(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Param('runId') runId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    authorizeImport(authorization);
+    const finalization = await this.importMutations.finalizeImport(
+      runId,
+      key,
+      body,
+    );
+    return {
+      ...(await this.repository.getImport(runId)),
+      ...finalization,
+      finalized: true,
+    };
+  }
+
   @Get('imports/:runId/processing-queues/:queueId')
   getImportProcessingQueue(
     @Headers('authorization') authorization: string | undefined,

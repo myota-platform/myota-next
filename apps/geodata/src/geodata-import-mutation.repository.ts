@@ -14,6 +14,111 @@ export class GeodataImportMutationRepository {
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {}
 
+  async finalizeImport(
+    runId: string,
+    key: string | undefined,
+    body: Record<string, unknown>,
+  ) {
+    const processedBy =
+      typeof body.processedBy === 'string'
+        ? body.processedBy.trim()
+        : typeof body.actor === 'string'
+          ? body.actor.trim()
+          : '';
+    if (!processedBy) throw new BadRequestException('processedBy is required');
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      if (key) {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-import-finalize:' || $1,0))",
+          [key],
+        );
+        const previous = await client.query(
+          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          ['geodata-import-finalize', key],
+        );
+        if (previous.rows[0]) {
+          await client.query('COMMIT');
+          return previous.rows[0].response;
+        }
+      }
+      const found = await client.query(
+        'SELECT status,processed_by FROM import_run WHERE id=$1 FOR UPDATE',
+        [runId],
+      );
+      const run = found.rows[0];
+      if (!run) throw new BadRequestException('geodata import not found');
+      if (['QUEUED', 'PROCESSING'].includes(run.status))
+        throw new BadRequestException(
+          'an import cannot be finalized while it is still processing',
+        );
+      let stagedRecordsDiscarded = 0;
+      let processingQueuesDiscarded = 0;
+      if (run.status !== 'PROCESSED') {
+        const counts = await client.query(
+          `SELECT (SELECT count(*)::integer FROM geodata_import_candidate WHERE import_run_id=$1) AS candidates,
+                  (SELECT count(*)::integer FROM geodata_import_processing_queue WHERE import_run_id=$1) AS queues`,
+          [runId],
+        );
+        stagedRecordsDiscarded = Number(counts.rows[0].candidates);
+        processingQueuesDiscarded = Number(counts.rows[0].queues);
+        await client.query(
+          "SELECT set_config('myota.geodata_writer','row-v1',true)",
+        );
+        await client.query(
+          'DELETE FROM geodata_import_processing_queue WHERE import_run_id=$1',
+          [runId],
+        );
+        await client.query(
+          'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+          [runId],
+        );
+        await client.query(
+          `UPDATE import_run SET status='PROCESSED',processed_at=now(),processed_by=$2,
+           last_error=NULL,heartbeat_at=NULL,lease_until=NULL WHERE id=$1`,
+          [runId, processedBy],
+        );
+        await client.query(
+          `INSERT INTO outbox_event
+           (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+           VALUES ($1,'geodata.import.processed.v1','geodata-service','import_run',$2,$3::jsonb,now(),$4)`,
+          [
+            randomUUID(),
+            runId,
+            JSON.stringify({
+              importRunId: runId,
+              processedBy,
+              stagedRecordsDiscarded,
+              processingQueuesDiscarded,
+            }),
+            randomUUID(),
+          ],
+        );
+      }
+      const response = {
+        importRunId: runId,
+        processedBy:
+          run.status === 'PROCESSED' ? run.processed_by : processedBy,
+        stagedRecordsDiscarded,
+        processingQueuesDiscarded,
+        finalized: true,
+      };
+      if (key)
+        await client.query(
+          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+          ['geodata-import-finalize', key, JSON.stringify(response)],
+        );
+      await client.query('COMMIT');
+      return response;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async validateImportCandidates(
     runId: string,
     key: string | undefined,
