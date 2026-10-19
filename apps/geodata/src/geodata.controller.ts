@@ -22,6 +22,7 @@ import { GeodataImportMutationRepository } from './geodata-import-mutation.repos
 import { GeodataEntityMutationRepository } from './geodata-entity-mutation.repository.js';
 import { GeodataUploadService } from './geodata-upload.service.js';
 import { GeodataDeletionService } from './geodata-deletion.service.js';
+import { GeodataScheduleService } from './geodata-schedule.service.js';
 
 @Controller('geodata')
 export class GeodataController {
@@ -32,6 +33,7 @@ export class GeodataController {
     private readonly entityMutations: GeodataEntityMutationRepository,
     private readonly uploads: GeodataUploadService,
     private readonly deletions: GeodataDeletionService,
+    private readonly schedules: GeodataScheduleService,
   ) {}
 
   @Post('entity-deletion-jobs')
@@ -61,6 +63,38 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
   ) {
     return this.deletions.confirm(authorization, key, jobId, body);
+  }
+
+  @Get('refresh-schedules')
+  listRefreshSchedules(
+    @Headers('authorization') authorization: string | undefined,
+    @Query() query: Record<string, unknown>,
+  ) {
+    authorizeImport(authorization);
+    return this.schedules.list(query);
+  }
+
+  @Post('refresh-schedules')
+  @HttpCode(201)
+  createRefreshSchedule(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() body: Record<string, unknown>,
+  ) {
+    authorizeImport(authorization);
+    return this.schedules.create(key, body);
+  }
+
+  @Post('refresh-schedules/:scheduleId/run')
+  @HttpCode(202)
+  runRefreshSchedule(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Param('scheduleId') scheduleId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    authorizeImport(authorization);
+    return this.schedules.run(key, scheduleId, body);
   }
 
   @Post('import-uploads')

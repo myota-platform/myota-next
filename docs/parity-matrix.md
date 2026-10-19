@@ -69,9 +69,11 @@ uploads are implemented with owner-scoped durable sessions, bounded binary
 parts, checksum and malware scanning, and transactional completion up to the
 worker's 20 MiB GeoJSON limit. Durable object references from the configured
 import bucket are bounded, hash-checked, validated, and staged as normalized
-worker inputs. Refresh schedules and conflation,
-remaining review workflows, queue-level redrive, NATS delivery, and remaining worker operations are
-outstanding. Finalization removes staged candidates and queues transactionally
+worker inputs. Refresh schedules can be listed and created, and manual runs
+queue GeoJSON imports through the durable pipeline. Automatic scheduled
+execution, complete-snapshot disappearance reconciliation, conflation candidate
+generation, remaining review workflows, queue-level redrive, NATS delivery, and
+remaining worker operations are outstanding. Finalization removes staged candidates and queues transactionally
 while preserving the import summary and materialized entities. Pending
 candidates can be paged; administrators can confirm or
 reject selected rows transactionally. Selected candidates can also be queued
