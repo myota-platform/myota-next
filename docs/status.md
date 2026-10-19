@@ -44,8 +44,8 @@
   non-empty JSON checks. Programme policy drafts support scoped authoring,
   submission, review, publishing, and effective policy updates. Effective
   publication timestamps accept Python-compatible basic and extended date-only,
-  space-separated, and comma-fraction forms, reject impossible calendar dates,
-  then normalize to UTC with microsecond precision.
+  space-separated, comma-fraction, and compact timezone-offset forms, reject
+  impossible calendar dates, then normalize to UTC with microsecond precision.
   These operations
   share a dedicated Core snapshot repository and transactional outbox boundary.
 - Activity now has an initial API slice for activation listing, creation,

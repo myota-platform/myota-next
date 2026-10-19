@@ -12,11 +12,12 @@ export function isTruthyJsonValue(value: unknown): boolean {
 export function normalizeUtcTimestamp(value: string): string {
   let normalized = value.replace(/([Tt ]\d{2}:\d{2}:\d{2}),(?=\d)/, '$1.');
   normalized = normalized.replace(/[t ]/, 'T');
-  normalized = normalized.replace(
-    /(\d{2}:\d{2}:\d{2}(?:\.\d+)?)([+-]\d{2})(\d{2})?$/,
-    (_match, time: string, hours: string, minutes?: string) =>
-      `${time}${hours}:${minutes ?? '00'}`,
-  );
+  if (normalized.includes('T'))
+    normalized = normalized.replace(
+      /([+-])(\d{2})(?::?(\d{2}))$/,
+      (_match, sign: string, hours: string, minutes?: string) =>
+        `${sign}${hours}:${minutes ?? '00'}`,
+    );
   if (/^\d{8}$/.test(normalized))
     normalized = `${normalized.slice(0, 4)}-${normalized.slice(4, 6)}-${normalized.slice(6, 8)}`;
   if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
