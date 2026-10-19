@@ -29,14 +29,19 @@
   persisted session, revocation, lockout and rate-limit tables.
 - Transactional event helpers write domain events to the Core outbox and
   security events to both the security-event table and outbox.
+- Programme listing, detail and effective-policy reads, plus scoped creation,
+  update and archive transitions, now load and persist snapshots in Core with
+  transactional outbox writes.
 
 ## Not implemented yet
 
 - Remaining Identity APIs include OIDC mapping updates and account deactivation
   as its dedicated operation. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
-- Programme, Activity, Geodata, and Gateway handlers, authorization rules,
-  persistence repositories, and event/outbox behavior.
+- Programme entity-type assignment, content and policy review workflows remain
+  unimplemented. Activity, Geodata, and Gateway handlers,
+  authorization rules, persistence repositories, and event/outbox behavior also
+  remain unimplemented.
 - Activity and Geodata consumers, leases, recovery, retries, and redrive.
 - Admin and Participant web applications.
 - Database migration runner, data transfer tooling, deployment images, and
