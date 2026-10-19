@@ -24,6 +24,13 @@ const ADAPTER_CODES = new Set([
   'GOVERNMENT_GIS',
   'MANUAL',
 ]);
+const configuredCoordinateLimit = Number.parseInt(
+  process.env.GEODATA_MAX_COORDINATES ?? '50000',
+  10,
+);
+const MAX_COORDINATES = Number.isFinite(configuredCoordinateLimit)
+  ? configuredCoordinateLimit
+  : 50_000;
 
 export interface NormalizedAdapterFeature {
   properties: Record<string, unknown>;
@@ -183,7 +190,91 @@ function normalizeGeometry(value: unknown, crs: unknown) {
     );
   }
   const coordinates = normalizeCoordinates(value.coordinates, sourceCrs(crs));
+  const coordinatePairs = collectCoordinatePairs(coordinates);
+  if (coordinatePairs.length === 0 || coordinatePairs.length > MAX_COORDINATES)
+    throw new Error(
+      `geometry must contain between 1 and ${MAX_COORDINATES} coordinates`,
+    );
+  if (
+    type === 'Point' &&
+    (!Array.isArray(coordinates) || coordinates.length < 2)
+  )
+    throw new Error('Point geometry must contain longitude and latitude');
+  if (type === 'LineString' && !isLine(coordinates))
+    throw new Error(
+      'LineString (way) geometry must contain at least two coordinates',
+    );
+  if (type === 'MultiLineString' && !isMultiLine(coordinates))
+    throw new Error(
+      'MultiLineString geometry must contain one or more lines with at least two coordinates',
+    );
+  if (type === 'Polygon' && !isPolygon(coordinates))
+    throw new Error(
+      'Polygon geometry must contain closed rings with at least four points',
+    );
+  if (type === 'MultiPolygon' && !isMultiPolygon(coordinates))
+    throw new Error('MultiPolygon geometry must contain closed polygon rings');
+  if (
+    coordinatePairs.some(
+      ([longitude, latitude]) =>
+        longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90,
+    )
+  )
+    throw new Error(
+      'geometry coordinates must use WGS84 longitude/latitude ranges',
+    );
   return { type, coordinates };
+}
+
+function collectCoordinatePairs(value: unknown): [number, number][] {
+  if (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    typeof value[0] === 'number' &&
+    typeof value[1] === 'number'
+  )
+    return [[value[0], value[1]]];
+  if (!Array.isArray(value)) return [];
+  return value.flatMap(collectCoordinatePairs);
+}
+
+function isLine(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    value.every((point) => Array.isArray(point) && point.length >= 2)
+  );
+}
+
+function isMultiLine(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length >= 1 &&
+    value.every((line) => isLine(line))
+  );
+}
+
+function isRing(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length >= 4 &&
+    JSON.stringify(value[0]) === JSON.stringify(value[value.length - 1]) &&
+    value.every((point) => Array.isArray(point) && point.length >= 2)
+  );
+}
+
+function isPolygon(value: unknown): boolean {
+  return Array.isArray(value) && value.every((ring) => isRing(ring));
+}
+
+function isMultiPolygon(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (polygon) =>
+        Array.isArray(polygon) && polygon.every((ring) => isRing(ring)),
+    )
+  );
 }
 
 function normalizeCoordinates(value: unknown, source: string): unknown {
