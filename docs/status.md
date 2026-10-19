@@ -15,14 +15,14 @@
   as compatibility references.
 - First Identity slice: disabled public registration, password login, refresh
   rotation, logout revocation, recovery request/reset, current account and
-  scope reads. Login uses the
+  scope reads, and owner-only profile updates. Login uses the
   existing scrypt hash format, HS256 token contract, persisted session,
   revocation, lockout, rate-limit, and audit tables.
 
 ## Not implemented yet
 
 - Remaining Identity APIs, including account/role administration, callsigns,
-  profile updates/images, OIDC and service credentials. Automated
+  profile images, OIDC and service credentials. Automated
   compatibility coverage for the first auth slice is also outstanding.
 - Programme, Activity, Geodata, and Gateway handlers, authorization rules,
   persistence repositories, and event/outbox behavior.

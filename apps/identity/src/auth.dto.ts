@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class LoginDto {
   @IsEmail()
@@ -25,6 +25,15 @@ export class RecoveryResetDto {
   token!: string;
 
   @IsString()
-  @MinLength(12)
   newPassword!: string;
+}
+
+export class ProfileUpdateDto {
+  @IsOptional()
+  @IsString()
+  websiteUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  biographyMarkdown?: string | null;
 }

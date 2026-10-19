@@ -6,6 +6,7 @@ import {
   Headers,
   HttpCode,
   Post,
+  Patch,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import {
   RecoveryRequestDto,
   RecoveryResetDto,
   RefreshTokenDto,
+  ProfileUpdateDto,
 } from './auth.dto.js';
 import { IdentityAuthService } from './auth.service.js';
 
@@ -65,6 +67,16 @@ export class AuthController {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
     return this.auth.currentAccount(authorization);
+  }
+
+  @Patch('me/profile')
+  updateProfile(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: ProfileUpdateDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.auth.updateOwnProfile(authorization, body);
   }
 
   private requestContext(request: Request) {

@@ -39,6 +39,7 @@ interface AccountRow {
   email: string | null;
   participation_type: string;
   status: string;
+  updated_at?: Date;
   password_hash: string | null;
   failed_attempts: number;
   locked_until: Date | null;
@@ -74,7 +75,7 @@ export class IdentityAuthService {
       await client.query('BEGIN');
       const normalizedEmail = input.email.trim().toLowerCase();
       const accountResult = await client.query<AccountRow>(
-        `SELECT a.id, a.display_name, a.email::text AS email,
+        `SELECT a.id, a.display_name, a.email::text AS email, a.updated_at,
                 a.participation_type, a.status, c.password_hash,
                 coalesce(c.failed_attempts, 0) AS failed_attempts, c.locked_until,
                 p.website_url, p.biography_markdown, p.profile_image_id,
@@ -209,7 +210,7 @@ export class IdentityAuthService {
           'refresh session is invalid or revoked',
         );
       const accountResult = await client.query<AccountRow>(
-        `SELECT a.id, a.display_name, a.email::text AS email,
+        `SELECT a.id, a.display_name, a.email::text AS email, a.updated_at,
                 a.participation_type, a.status, NULL::text AS password_hash,
                 0 AS failed_attempts, NULL::timestamptz AS locked_until,
                 p.website_url, p.biography_markdown, p.profile_image_id,
@@ -292,7 +293,7 @@ export class IdentityAuthService {
     token: string,
     newPassword: string,
   ): Promise<{ status: string }> {
-    if (newPassword.length < 12) {
+    if (Array.from(newPassword).length < 12) {
       throw new BadRequestException(
         'password must contain at least 12 characters',
       );
@@ -411,7 +412,7 @@ export class IdentityAuthService {
       if (revoked.rowCount)
         throw new UnauthorizedException('token has been revoked');
       const accountResult = await client.query<AccountRow>(
-        `SELECT a.id, a.display_name, a.email::text AS email,
+        `SELECT a.id, a.display_name, a.email::text AS email, a.updated_at,
                 a.participation_type, a.status, NULL::text AS password_hash,
                 0 AS failed_attempts, NULL::timestamptz AS locked_until,
                 p.website_url, p.biography_markdown,
@@ -436,6 +437,7 @@ export class IdentityAuthService {
         email: account.email,
         participationType: account.participation_type,
         status: account.status,
+        updatedAt: account.updated_at,
         websiteUrl: account.website_url ?? null,
         biographyMarkdown: account.biography_markdown ?? null,
         profileImage: account.profile_image_id
@@ -451,6 +453,112 @@ export class IdentityAuthService {
         roles,
         scopes,
       };
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateOwnProfile(
+    authorization: string,
+    body: { websiteUrl?: string | null; biographyMarkdown?: string | null },
+  ): Promise<Record<string, unknown>> {
+    if (!authorization.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Bearer authentication is required');
+    }
+    if (Object.keys(body).length === 0) {
+      throw new BadRequestException('profile update must include a field');
+    }
+    const values = { ...body };
+    if ('websiteUrl' in values) {
+      values.websiteUrl = validateWebsiteUrl(values.websiteUrl);
+    }
+    if ('biographyMarkdown' in values) {
+      const biography = values.biographyMarkdown;
+      if (biography !== null && typeof biography !== 'string') {
+        throw new BadRequestException(
+          'biographyMarkdown must be a string or null',
+        );
+      }
+      if (
+        typeof biography === 'string' &&
+        Array.from(biography).length > 2000
+      ) {
+        throw new BadRequestException(
+          'biographyMarkdown exceeds 2000 characters',
+        );
+      }
+      values.biographyMarkdown = biography === '' ? null : biography;
+    }
+
+    const claims = verifyToken(authorization.slice(7), 'access');
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      const accountResult = await client.query<AccountRow>(
+        `SELECT a.id, a.display_name, a.email::text AS email, a.updated_at,
+                a.participation_type, a.status, NULL::text AS password_hash,
+                0 AS failed_attempts, NULL::timestamptz AS locked_until,
+                p.website_url, p.biography_markdown, p.profile_image_id,
+                p.profile_image_media_type, p.profile_image_updated_at
+           FROM public.account a
+           LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
+          WHERE a.id = $1 AND a.status = 'ACTIVE'
+          FOR UPDATE OF a`,
+        [claims.sub],
+      );
+      const account = accountResult.rows[0];
+      if (!account)
+        throw new UnauthorizedException('account is inactive or unavailable');
+      const revoked = await client.query(
+        'SELECT 1 FROM public.auth_revocation WHERE jti = $1 AND expires_at > now()',
+        [claims.jti],
+      );
+      if (revoked.rowCount)
+        throw new UnauthorizedException('token has been revoked');
+
+      await client.query(
+        `INSERT INTO public.identity_account_profile
+           (account_id, website_url, biography_markdown)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (account_id) DO UPDATE SET
+           website_url = CASE WHEN $4 THEN EXCLUDED.website_url
+                              ELSE identity_account_profile.website_url END,
+           biography_markdown = CASE WHEN $5 THEN EXCLUDED.biography_markdown
+                                     ELSE identity_account_profile.biography_markdown END`,
+        [
+          claims.sub,
+          values.websiteUrl ?? null,
+          values.biographyMarkdown ?? null,
+          'websiteUrl' in values,
+          'biographyMarkdown' in values,
+        ],
+      );
+      await client.query(
+        'UPDATE public.account SET updated_at = now() WHERE id = $1',
+        [claims.sub],
+      );
+      const updated = await client.query(
+        `SELECT p.website_url, p.biography_markdown, a.updated_at
+           FROM public.account a
+           LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
+          WHERE a.id = $1`,
+        [claims.sub],
+      );
+      await client.query('COMMIT');
+      return {
+        id: account.id,
+        displayName: account.display_name,
+        email: account.email,
+        participationType: account.participation_type,
+        status: account.status,
+        updatedAt: updated.rows[0]?.updated_at,
+        websiteUrl: updated.rows[0]?.website_url ?? null,
+        biographyMarkdown: updated.rows[0]?.biography_markdown ?? null,
+        profileImage: profileImageFor(account),
+      };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
     } finally {
       client.release();
     }
@@ -515,6 +623,7 @@ export class IdentityAuthService {
         email: account.email,
         participationType: account.participation_type,
         status: account.status,
+        updatedAt: account.updated_at,
         websiteUrl: account.website_url ?? null,
         biographyMarkdown: account.biography_markdown ?? null,
         profileImage: profileImageFor(account),
@@ -648,6 +757,42 @@ function profileImageFor(account: AccountRow) {
         updatedAt: account.profile_image_updated_at,
       }
     : null;
+}
+
+function validateWebsiteUrl(value: string | null | undefined): string | null {
+  if (value === null || value === '') return null;
+  if (typeof value !== 'string') {
+    throw new BadRequestException('websiteUrl must be a string or null');
+  }
+  const website = value.trim();
+  if (Array.from(website).length > 2048) {
+    throw new BadRequestException('websiteUrl is invalid or too long');
+  }
+  for (const character of website) {
+    if (
+      character.charCodeAt(0) < 0x20 ||
+      character.charCodeAt(0) === 0x7f ||
+      /\s/u.test(character)
+    ) {
+      throw new BadRequestException('websiteUrl is invalid or too long');
+    }
+  }
+  try {
+    const parsed = new URL(website);
+    if (
+      !['http:', 'https:'].includes(parsed.protocol.toLowerCase()) ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password
+    ) {
+      throw new Error('unsupported URL');
+    }
+    return website.replace(/^[^:]+:/, parsed.protocol);
+  } catch {
+    throw new BadRequestException(
+      'websiteUrl must be an HTTP or HTTPS URL without credentials',
+    );
+  }
 }
 
 async function verifyPassword(
