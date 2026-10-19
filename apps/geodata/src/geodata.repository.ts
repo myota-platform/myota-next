@@ -6,6 +6,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Pool } from 'pg';
+import { randomUUID } from 'node:crypto';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 
 @Injectable()
@@ -152,6 +153,145 @@ export class GeodataRepository {
     }
   }
 
+  async listImportCandidates(runId: string, query: Record<string, unknown>) {
+    const page = positiveInteger(query.page, 1);
+    const pageSize = Math.min(100, positiveInteger(query.pageSize, 50));
+    const client = await this.connect();
+    try {
+      const counted = await client.query(
+        "SELECT count(*)::integer AS total FROM geodata_import_candidate WHERE import_run_id=$1 AND validation_status='PENDING'",
+        [runId],
+      );
+      const result = await client.query(
+        `SELECT ${candidateProjection} AS candidate
+         FROM geodata_import_candidate WHERE import_run_id=$1 AND validation_status='PENDING'
+         ORDER BY ordinal,id LIMIT $2 OFFSET $3`,
+        [runId, pageSize, (page - 1) * pageSize],
+      );
+      const total = Number(counted.rows[0]?.total ?? 0);
+      return {
+        items: result.rows.map((row) => row.candidate),
+        page,
+        pageSize,
+        total,
+        nextPage: page * pageSize < total ? page + 1 : null,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async validateImportCandidates(
+    runId: string,
+    key: string | undefined,
+    body: Record<string, unknown>,
+  ) {
+    const candidateIds = body.candidateIds;
+    const reviewerId =
+      typeof body.reviewerId === 'string' ? body.reviewerId.trim() : '';
+    if (
+      !Array.isArray(candidateIds) ||
+      !candidateIds.length ||
+      candidateIds.some((id) => typeof id !== 'string' || !isUuid(id))
+    )
+      throw new BadRequestException(
+        'candidateIds must be a non-empty list of UUIDs',
+      );
+    if (new Set(candidateIds).size !== candidateIds.length)
+      throw new BadRequestException('candidateIds must be unique');
+    if (!reviewerId) throw new BadRequestException('reviewerId is required');
+    const requested =
+      typeof body.validationStatus === 'string'
+        ? body.validationStatus.toUpperCase()
+        : 'VALID';
+    if (!['VALID', 'CONFIRMED', 'REJECTED', 'INVALID'].includes(requested))
+      throw new BadRequestException(
+        'validationStatus must be VALID or REJECTED',
+      );
+    const rejected = requested === 'REJECTED' || requested === 'INVALID';
+    const note =
+      typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      if (key) {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-candidate-validation:' || $1,0))",
+          [key],
+        );
+        const previous = await client.query(
+          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          ['geodata-candidate-validation', key],
+        );
+        if (previous.rows[0]) {
+          await client.query('COMMIT');
+          return previous.rows[0].response;
+        }
+      }
+      const selected = await client.query(
+        `SELECT id,validation_status,processing_queue_id
+         FROM geodata_import_candidate WHERE import_run_id=$1 AND id=ANY($2::uuid[])
+         FOR UPDATE`,
+        [runId, candidateIds],
+      );
+      if (selected.rows.length !== candidateIds.length)
+        throw new BadRequestException(
+          'one or more candidates do not belong to this import run',
+        );
+      if (rejected && selected.rows.some((row) => row.processing_queue_id))
+        throw new BadRequestException('queued candidates cannot be rejected');
+
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      if (rejected) {
+        await client.query(
+          'DELETE FROM geodata_import_candidate WHERE import_run_id=$1 AND id=ANY($2::uuid[])',
+          [runId, candidateIds],
+        );
+      } else {
+        await client.query(
+          `UPDATE geodata_import_candidate SET validation_status='CONFIRMED',
+           validation_note=$3,validated_by=$4,validated_at=now(),updated_at=now()
+           WHERE import_run_id=$1 AND id=ANY($2::uuid[]) AND validation_status<>'PROCESSED'`,
+          [runId, candidateIds, note, reviewerId],
+        );
+      }
+      const eventType = rejected
+        ? 'geodata.import.candidates.rejected.v1'
+        : 'geodata.import.candidates.validated.v1';
+      await client.query(
+        `INSERT INTO outbox_event
+         (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+         VALUES ($1,$2,'geodata-service','import_run',$3,$4::jsonb,now(),$5)`,
+        [
+          randomUUID(),
+          eventType,
+          runId,
+          JSON.stringify({ importRunId: runId, candidateIds, reviewerId }),
+          randomUUID(),
+        ],
+      );
+      const response = {
+        importRunId: runId,
+        candidateIds,
+        validationStatus: rejected ? 'REJECTED' : 'CONFIRMED',
+      };
+      if (key)
+        await client.query(
+          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+          ['geodata-candidate-validation', key, JSON.stringify(response)],
+        );
+      await client.query('COMMIT');
+      return response;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async getEntityAudit(id: string) {
     const entity = await this.getEntity(id);
     const client = await this.connect();
@@ -251,6 +391,23 @@ const importProjection = `source_metadata || jsonb_build_object(
     FROM geodata_import_candidate c WHERE c.import_run_id=import_run.id)
 )`;
 
+const candidateProjection = `jsonb_build_object(
+  'id',id::text,'importRunId',import_run_id::text,'ordinal',ordinal,
+  'existingEntityId',existing_entity_id,'name',name,'entityTypes',entity_type_codes,
+  'geometry',ST_AsGeoJSON(geom)::jsonb,
+  'centroid',jsonb_build_object('lon',ST_X(ST_Centroid(geom)),'lat',ST_Y(ST_Centroid(geom))),
+  'sourceRef',source_ref,'candidateSource',candidate_source,
+  'dedupeWarning',CASE WHEN jsonb_array_length(COALESCE(entity_payload->'possibleDuplicates','[]'::jsonb))>0 THEN 'POSSIBLE_DUPLICATE' ELSE NULL END,
+  'possibleDuplicates',COALESCE(entity_payload->'possibleDuplicates','[]'::jsonb),
+  'validationStatus',validation_status,'validationNote',validation_note,
+  'validatedBy',validated_by,'validatedAt',validated_at,'targetStatus',target_status,
+  'processedEntityId',processed_entity_id,'processedAt',processed_at,
+  'location',jsonb_build_object(
+    'continent',entity_payload->'continent','country',entity_payload->'country',
+    'region',entity_payload->'region','province',entity_payload->'province',
+    'county',entity_payload->'county','city',entity_payload->'city',
+    'municipality',entity_payload->'municipality','locality',entity_payload->'locality'))`;
+
 function listValues(value: unknown) {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
@@ -287,4 +444,10 @@ function parseBounds(query: Record<string, unknown>) {
       'map bounds must have minimum values below maximum values',
     );
   return raw;
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }

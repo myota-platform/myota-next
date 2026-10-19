@@ -64,8 +64,9 @@
   provenance and 50 m duplicate warnings, records errors, and emits the
   preprocessing fact. The service also has PostGIS-backed public entity
   list/detail reads with bounded paging, status/category/location filters, and
-  bounding-box queries. Edit, review, and promotion operations remain
-  outstanding. The supported import
+  bounding-box queries. Pending candidates can be paged, confirmed, or rejected
+  through authorized, idempotent review writes. Entity edits and promotion
+  remain outstanding. The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
   paged import-run status reads are also exposed. Authenticated entity audit
   reads combine the entity's review histories with durable audit events. Vector
@@ -92,8 +93,8 @@
   first Identity slice are still outstanding.
 - Remaining Activity APIs include file-based QSO import and operational
   workflows. Geodata multipart/resumable and external object-reference imports,
-  mutations, promotion, and remaining worker operations are outstanding, along
-  with Gateway routing and protected observability proxy behavior.
+  entity mutations, promotion, and remaining worker operations are outstanding,
+  along with Gateway routing and protected observability proxy behavior.
 - Activity NATS delivery, lease heartbeats during large batches, redrive, and
   remaining job consumers. Geodata NATS delivery, lease heartbeats for large
   jobs, explicit redrive, and remaining promotion, deletion, enrichment, and

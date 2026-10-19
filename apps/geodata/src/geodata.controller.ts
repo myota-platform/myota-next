@@ -51,6 +51,27 @@ export class GeodataController {
     return this.repository.getImport(id);
   }
 
+  @Get('imports/:runId/candidates')
+  listImportCandidates(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('runId') runId: string,
+    @Query() query: Record<string, unknown>,
+  ) {
+    authorizeImport(authorization);
+    return this.repository.listImportCandidates(runId, query);
+  }
+
+  @Post('imports/:runId/candidates/validate')
+  validateImportCandidates(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Param('runId') runId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    authorizeImport(authorization);
+    return this.repository.validateImportCandidates(runId, key, body);
+  }
+
   @Get('entities')
   listEntities(@Query() query: Record<string, unknown>) {
     return this.repository.listEntities(query);
