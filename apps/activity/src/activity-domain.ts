@@ -7,6 +7,19 @@ export function parseTimestamp(value: string): Date {
   if (typeof value !== 'string')
     throw new BadRequestException('timestamp is invalid');
   let normalized = value.replace(/([T ]\d{2}:\d{2}:\d{2}),(\d+)/, '$1.$2');
+  const compact =
+    /^(\d{4})(\d{2})(\d{2})([T ])(\d{2})(\d{2})(\d{2})?([.,]\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?$/i.exec(
+      normalized,
+    );
+  if (compact) {
+    const [, year, month, day, separator, hour, minute, second, fraction, zone] =
+      compact;
+    normalized = `${year}-${month}-${day}${separator}${hour}:${minute}${second ? `:${second}` : ''}${fraction?.replace(',', '.') ?? ''}${zone ?? ''}`;
+  } else {
+    const compactDate = /^(\d{4})(\d{2})(\d{2})$/.exec(normalized);
+    if (compactDate)
+      normalized = `${compactDate[1]}-${compactDate[2]}-${compactDate[3]}`;
+  }
   if (
     /[T ]\d{2}:\d{2}/.test(normalized) &&
     !/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(normalized)
