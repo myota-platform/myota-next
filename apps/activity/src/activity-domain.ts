@@ -4,10 +4,31 @@ import { BadRequestException } from '@nestjs/common';
 export type JsonRecord = Record<string, any>;
 
 export function parseTimestamp(value: string): Date {
-  const date = new Date(value);
+  if (typeof value !== 'string')
+    throw new BadRequestException('timestamp is invalid');
+  let normalized = value.replace(/([T ]\d{2}:\d{2}:\d{2}),(\d+)/, '$1.$2');
+  if (
+    /[T ]\d{2}:\d{2}/.test(normalized) &&
+    !/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(normalized)
+  )
+    normalized += 'Z';
+  const date = new Date(normalized);
   if (!Number.isFinite(date.getTime()))
     throw new BadRequestException('timestamp is invalid');
   return date;
+}
+
+export function normalizeTimestamp(value: string | Date): string {
+  if (!(value instanceof Date) && typeof value !== 'string')
+    throw new BadRequestException('timestamp is invalid');
+  const raw = value instanceof Date ? value.toISOString() : value;
+  const date = parseTimestamp(raw);
+  const fraction = /[T ]\d{2}:\d{2}:\d{2}[.,](\d+)/.exec(raw)?.[1] ?? '';
+  const microseconds = fraction.slice(0, 6).padEnd(6, '0');
+  const seconds = date.toISOString().slice(0, 19);
+  return microseconds === '000000'
+    ? `${seconds}Z`
+    : `${seconds}.${microseconds}Z`;
 }
 
 export function normalizeCallsign(value: unknown): string {
@@ -58,7 +79,7 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
       'a verified callsign is required by this programme',
     );
   }
-  const startedAt = parseTimestamp(data.startedAt).toISOString();
+  const startedAt = normalizeTimestamp(data.startedAt);
   if (
     rules.maxActivationHours != null &&
     Number(rules.maxActivationHours) <= 0
@@ -79,13 +100,9 @@ export function normalizeQso(
   activationId: string,
 ): JsonRecord {
   const workedCallsign = normalizeCallsign(data.workedCallsign);
-  const timestamp = parseTimestamp(data.timestamp ?? data.timeOn).toISOString();
-  const band = data.band
-    ? String(data.band).toUpperCase().replaceAll(' ', '')
-    : null;
-  const mode = data.mode
-    ? String(data.mode).toUpperCase().replaceAll('-', '')
-    : null;
+  const timestamp = normalizeTimestamp(data.timestamp || data.timeOn);
+  const band = normalizeBand(data.band);
+  const mode = normalizeMode(data.mode);
   const validBands = new Set([
     '2190M',
     '630M',
@@ -127,13 +144,17 @@ export function normalizeQso(
     throw new BadRequestException(`unsupported band: ${data.band}`);
   if (mode && !validModes.has(mode))
     throw new BadRequestException(`unsupported mode: ${data.mode}`);
-  const workedStationKey = `${workedCallsign}|${String(data.workedLocator ?? '')
+  if (data.band != null && data.band !== '' && !band)
+    throw new BadRequestException(`unsupported band: ${data.band}`);
+  if (data.mode != null && data.mode !== '' && !mode)
+    throw new BadRequestException(`unsupported mode: ${data.mode}`);
+  const workedStationKey = `${workedCallsign}|${String(data.workedLocator || '')
     .toUpperCase()
     .trim()}`;
   const canonical = [
     activationId,
     workedCallsign,
-    new Date(timestamp).toISOString(),
+    timestamp.replace(/Z$/, '+00:00'),
     band ?? '',
     mode ?? '',
     data.hunterId ?? '',
@@ -152,6 +173,24 @@ export function normalizeQso(
     workedStationKey,
     deduplicationKey,
   };
+}
+
+function normalizeBand(value: unknown): string | null {
+  if (value == null || value === '') return null;
+  return stringValue(value).toUpperCase().replaceAll(' ', '');
+}
+
+function normalizeMode(value: unknown): string | null {
+  if (value == null || value === '') return null;
+  return stringValue(value).toUpperCase().replaceAll('-', '');
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+    ? String(value)
+    : (JSON.stringify(value) ?? '');
 }
 
 export function parseAdif(text: string): JsonRecord[] {
@@ -209,12 +248,12 @@ export function evaluateActivation(
 ): JsonRecord {
   const rules = activation.programmeRules ?? {};
   const violations: string[] = [];
-  const start = parseTimestamp(activation.startedAt);
-  const end = parseTimestamp(endedAt);
-  if (end < start) violations.push('endedAt must be after startedAt');
+  normalizeTimestamp(endedAt);
+  if (compareTimestamps(endedAt, activation.startedAt) < 0)
+    violations.push('endedAt must be after startedAt');
   if (
     activation.validityExpiresAt &&
-    end > parseTimestamp(activation.validityExpiresAt)
+    compareTimestamps(endedAt, activation.validityExpiresAt) > 0
   )
     violations.push('activation exceeded its validity window');
   if (rules.minimumQsos != null && qsos.length < Number(rules.minimumQsos))
@@ -240,4 +279,16 @@ export function evaluateActivation(
     qsoCount: qsos.length,
     ruleVersion: rules.version,
   };
+}
+
+export function compareTimestamps(left: string | Date, right: string | Date) {
+  const orderKey = (value: string | Date) => {
+    const timestamp = normalizeTimestamp(value);
+    return timestamp.includes('.')
+      ? timestamp
+      : timestamp.replace(/Z$/, '.000000Z');
+  };
+  const leftKey = orderKey(left);
+  const rightKey = orderKey(right);
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
 }

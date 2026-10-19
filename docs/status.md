@@ -46,7 +46,9 @@
   share a dedicated Core snapshot repository and transactional outbox boundary.
 - Activity now has an initial API slice for activation listing, creation,
   retrieval, closure, and single-QSO recording. It persists normalized
-  activations and QSOs in Activity PostgreSQL, writes domain events and
+  activations and QSOs in Activity PostgreSQL with UTC microsecond timestamp
+  precision preserved through normalization, validity checks, persistence,
+  deduplication, and reads. It writes domain events and
   idempotency responses transactionally, updates subject aggregates, and
   queues award recalculation work through the Activity outbox. High-volume QSO
   ingestion requests are authorized, bounded, persisted as Activity jobs, and

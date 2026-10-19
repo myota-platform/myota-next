@@ -14,11 +14,15 @@ import {
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
 import {
+  compareTimestamps,
+  normalizeTimestamp,
   parseAdif,
   normalizeQso,
   type JsonRecord,
 } from '../../activity/src/activity-domain.js';
 import { evaluateAward } from '../../activity/src/award-domain.js';
+
+const qsoTimestampProjection = `to_char(occurred_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at_iso`;
 
 export interface ClaimedJob {
   id: string;
@@ -196,7 +200,10 @@ export class ActivityWorkRepository {
         await this.processAdifImport(client, job.payload);
       } else if (job.kind === 'QSO_INGESTION') {
         const activationResult = await client.query(
-          'SELECT * FROM activity_activation WHERE id=$1 FOR UPDATE',
+          `SELECT *,
+            to_char(started_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS started_at_iso,
+            to_char(validity_expires_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS validity_expires_at_iso
+           FROM activity_activation WHERE id=$1 FOR UPDATE`,
           [job.payload.activationId],
         );
         const activation = activationResult.rows[0];
@@ -212,18 +219,20 @@ export class ActivityWorkRepository {
             { ...input, source: job.payload.sourceFormat ?? 'JSON' },
             job.payload.activationId,
           );
-          const occurred = new Date(qso.timestamp);
           if (
-            occurred < new Date(activation.started_at) ||
-            (activation.validity_expires_at &&
-              occurred > new Date(activation.validity_expires_at))
+            compareTimestamps(qso.timestamp, activation.started_at_iso) < 0 ||
+            (activation.validity_expires_at_iso &&
+              compareTimestamps(
+                qso.timestamp,
+                activation.validity_expires_at_iso,
+              ) > 0)
           )
             throw new Error('QSO is outside the activation validity window');
           const id = randomUUID();
           const inserted = await client.query(
             `INSERT INTO activity_qso(id,activation_id,programme_slug,operator_id,operator_callsign,hunter_id,hunter_callsign,worked_callsign,worked_station_key,worked_entity_id,occurred_at,band,mode,rst,source,deduplication_key,raw_payload)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)
-           ON CONFLICT (deduplication_key) DO NOTHING RETURNING *`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz,$12,$13,$14,$15,$16,$17::jsonb)
+           ON CONFLICT (deduplication_key) DO NOTHING RETURNING *, ${qsoTimestampProjection}`,
             [
               id,
               job.payload.activationId,
@@ -235,7 +244,7 @@ export class ActivityWorkRepository {
               qso.workedCallsign,
               qso.workedStationKey,
               qso.workedEntityId ?? null,
-              occurred,
+              qso.timestamp,
               qso.band,
               qso.mode,
               qso.rst ?? null,
@@ -340,7 +349,9 @@ export class ActivityWorkRepository {
     if (!importId) throw new Error('ADIF import id is required');
     const selected = await client.query(
       `SELECT i.*,a.programme_slug,a.operator_id,a.operator_callsign,a.entity_id,
-        a.entity_type,a.status AS activation_status,a.started_at,a.validity_expires_at
+        a.entity_type,a.status AS activation_status,a.started_at,a.validity_expires_at,
+        to_char(a.started_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS activation_started_at_iso,
+        to_char(a.validity_expires_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS activation_validity_expires_at_iso
        FROM activity_import i JOIN activity_activation a ON a.id=i.activation_id
        WHERE i.id=$1 FOR UPDATE OF i,a`,
       [importId],
@@ -418,11 +429,14 @@ export class ActivityWorkRepository {
           { ...rows[index], source: 'adif', sourceImportId: importId },
           String(record.activation_id),
         );
-        const occurred = new Date(qso.timestamp);
         if (
-          occurred < new Date(record.started_at) ||
-          (record.validity_expires_at &&
-            occurred > new Date(record.validity_expires_at))
+          compareTimestamps(qso.timestamp, record.activation_started_at_iso) <
+            0 ||
+          (record.activation_validity_expires_at_iso &&
+            compareTimestamps(
+              qso.timestamp,
+              record.activation_validity_expires_at_iso,
+            ) > 0)
         )
           throw new Error('QSO is outside the activation validity window');
         const inserted = await client.query(
@@ -430,8 +444,8 @@ export class ActivityWorkRepository {
            (id,activation_id,programme_slug,operator_id,operator_callsign,hunter_id,hunter_callsign,
             worked_callsign,worked_station_key,worked_entity_id,occurred_at,band,mode,rst,source,
             source_import_id,deduplication_key,raw_payload)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb)
-           ON CONFLICT (deduplication_key) DO NOTHING RETURNING *`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz,$12,$13,$14,$15,$16,$17,$18::jsonb)
+           ON CONFLICT (deduplication_key) DO NOTHING RETURNING *, ${qsoTimestampProjection}`,
           [
             qso.id,
             record.activation_id,
@@ -443,7 +457,7 @@ export class ActivityWorkRepository {
             qso.workedCallsign,
             qso.workedStationKey,
             qso.workedEntityId ?? null,
-            occurred,
+            qso.timestamp,
             qso.band,
             qso.mode,
             qso.rst ?? null,
@@ -1027,7 +1041,7 @@ function qsoRecord(row: any) {
     workedCallsign: row.worked_callsign,
     workedStationKey: row.worked_station_key,
     workedEntityId: row.worked_entity_id,
-    timestamp: new Date(row.occurred_at).toISOString(),
+    timestamp: normalizeTimestamp(row.occurred_at_iso ?? row.occurred_at),
     band: row.band,
     mode: row.mode,
     rst: row.rst,

@@ -8,7 +8,16 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import { evaluateActivation, type JsonRecord } from './activity-domain.js';
+import {
+  evaluateActivation,
+  normalizeTimestamp,
+  type JsonRecord,
+} from './activity-domain.js';
+
+const activationTimestampProjection = `to_char(started_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS started_at_iso,
+  to_char(ended_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS ended_at_iso,
+  to_char(validity_expires_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS validity_expires_at_iso`;
+const qsoTimestampProjection = `to_char(occurred_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at_iso`;
 
 @Injectable()
 export class ActivityRepository {
@@ -20,7 +29,7 @@ export class ActivityRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        `SELECT * FROM activity_activation${programme || operatorId ? ' WHERE ' : ''}${programme ? 'programme_slug=$1' : ''}${programme && operatorId ? ' AND ' : ''}${operatorId ? `operator_id=$${programme ? 2 : 1}` : ''} ORDER BY started_at DESC`,
+        `SELECT *, ${activationTimestampProjection} FROM activity_activation${programme || operatorId ? ' WHERE ' : ''}${programme ? 'programme_slug=$1' : ''}${programme && operatorId ? ' AND ' : ''}${operatorId ? `operator_id=$${programme ? 2 : 1}` : ''} ORDER BY started_at DESC`,
         [programme, operatorId].filter((v) => v !== undefined),
       );
       return result.rows.map((row) => activationRecord(row));
@@ -220,7 +229,7 @@ export class ActivityRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        'SELECT * FROM activity_qso WHERE id=$1',
+        `SELECT *, ${qsoTimestampProjection} FROM activity_qso WHERE id=$1`,
         [id],
       );
       if (!result.rows[0]) throw new NotFoundException('QSO not found');
@@ -729,17 +738,20 @@ export class ActivityRepository {
   async create(data: JsonRecord, key?: string): Promise<JsonRecord> {
     return this.mutate(key, async (client) => {
       const id = randomUUID();
-      const started = new Date(data.startedAt);
       const validity =
         data.validityDays ?? data.programmeRules?.activationValidityDays;
-      const expires =
+      const validityDays =
         validity == null || ['', 'unlimited', 'UNLIMITED'].includes(validity)
           ? null
-          : new Date(started.getTime() + Number(validity) * 86400000);
+          : Number(validity);
       const inserted = await client.query(
         `INSERT INTO activity_activation
         (id,programme_slug,entity_id,entity_type,jurisdiction_code,operator_id,operator_callsign,started_at,validity_expires_at,location,programme_rules)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb) RETURNING *`,
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8::timestamptz,
+          CASE WHEN $9::double precision IS NULL THEN NULL
+            ELSE $8::timestamptz + ($9 * interval '1 day') END,
+          $10::jsonb,$11::jsonb)
+        RETURNING *, ${activationTimestampProjection}`,
         [
           id,
           data.programmeSlug,
@@ -748,8 +760,8 @@ export class ActivityRepository {
           data.jurisdiction ?? null,
           data.operatorId,
           data.operatorCallsign ?? null,
-          started,
-          expires,
+          data.startedAt,
+          validityDays,
           JSON.stringify(data.location ?? {}),
           JSON.stringify(data.programmeRules ?? {}),
         ],
@@ -784,27 +796,25 @@ export class ActivityRepository {
   ): Promise<JsonRecord> {
     return this.mutate(key, async (client) => {
       const activationResult = await client.query(
-        'SELECT * FROM activity_activation WHERE id=$1 FOR UPDATE',
-        [activationId],
+        `SELECT *, $2::timestamptz < started_at AS qso_before_start,
+          (validity_expires_at IS NOT NULL AND $2::timestamptz > validity_expires_at) AS qso_after_expiry
+         FROM activity_activation WHERE id=$1 FOR UPDATE`,
+        [activationId, qso.timestamp],
       );
       const activationRow = activationResult.rows[0];
       if (!activationRow) throw new NotFoundException('activation not found');
       if (activationRow.status !== 'OPEN')
         throw new BadRequestException('activation is not open');
-      const occurredAt = new Date(qso.timestamp);
-      if (
-        occurredAt < new Date(activationRow.started_at) ||
-        (activationRow.validity_expires_at &&
-          occurredAt > new Date(activationRow.validity_expires_at))
-      )
+      if (activationRow.qso_before_start || activationRow.qso_after_expiry)
         throw new BadRequestException(
           'QSO is outside the activation validity window',
         );
       const inserted = await client.query(
         `INSERT INTO activity_qso
         (id,activation_id,programme_slug,operator_id,operator_callsign,hunter_id,hunter_callsign,worked_callsign,worked_station_key,worked_entity_id,occurred_at,band,mode,rst,source,deduplication_key,raw_payload)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)
-        ON CONFLICT (deduplication_key) DO NOTHING RETURNING *`,
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz,$12,$13,$14,$15,$16,$17::jsonb)
+        ON CONFLICT (deduplication_key) DO NOTHING RETURNING *,
+        ${qsoTimestampProjection}`,
         [
           qso.id,
           activationId,
@@ -816,7 +826,7 @@ export class ActivityRepository {
           qso.workedCallsign,
           qso.workedStationKey,
           qso.workedEntityId ?? null,
-          occurredAt,
+          qso.timestamp,
           qso.band,
           qso.mode,
           qso.rst ?? null,
@@ -829,7 +839,8 @@ export class ActivityRepository {
       const row = duplicate
         ? (
             await client.query(
-              'SELECT * FROM activity_qso WHERE deduplication_key=$1',
+              `SELECT *, ${qsoTimestampProjection}
+               FROM activity_qso WHERE deduplication_key=$1`,
               [qso.deduplicationKey],
             )
           ).rows[0]
@@ -899,14 +910,15 @@ export class ActivityRepository {
   async close(id: string, endedAt: string, key?: string): Promise<JsonRecord> {
     return this.mutate(key, async (client) => {
       const found = await client.query(
-        'SELECT * FROM activity_activation WHERE id=$1 FOR UPDATE',
+        `SELECT *, ${activationTimestampProjection} FROM activity_activation WHERE id=$1 FOR UPDATE`,
         [id],
       );
       if (!found.rows[0]) throw new NotFoundException('activation not found');
       if (found.rows[0].status !== 'OPEN')
         throw new BadRequestException('activation is not open');
       const qsos = await client.query(
-        "SELECT * FROM activity_qso WHERE activation_id=$1 AND status<>'VOID' ORDER BY occurred_at",
+        `SELECT *, ${qsoTimestampProjection}
+         FROM activity_qso WHERE activation_id=$1 AND status<>'VOID' ORDER BY occurred_at`,
         [id],
       );
       const evaluation = evaluateActivation(
@@ -916,8 +928,8 @@ export class ActivityRepository {
       );
       const status = evaluation.valid ? 'CLOSED' : 'CLOSED_INVALID';
       const updated = await client.query(
-        'UPDATE activity_activation SET status=$1,ended_at=$2,rule_evaluation=$3::jsonb,updated_at=now() WHERE id=$4 RETURNING *',
-        [status, new Date(endedAt), JSON.stringify(evaluation), id],
+        `UPDATE activity_activation SET status=$1,ended_at=$2::timestamptz,rule_evaluation=$3::jsonb,updated_at=now() WHERE id=$4 RETURNING *, ${activationTimestampProjection}`,
+        [status, endedAt, JSON.stringify(evaluation), id],
       );
       const record = activationRecord(updated.rows[0], qsos.rows);
       await this.event(
@@ -1050,12 +1062,13 @@ export class ActivityRepository {
     id: string,
   ): Promise<JsonRecord> {
     const result = await client.query(
-      'SELECT * FROM activity_activation WHERE id=$1',
+      `SELECT *, ${activationTimestampProjection} FROM activity_activation WHERE id=$1`,
       [id],
     );
     if (!result.rows[0]) throw new NotFoundException('activation not found');
     const qsos = await client.query(
-      "SELECT * FROM activity_qso WHERE activation_id=$1 AND status<>'VOID' ORDER BY occurred_at",
+      `SELECT *, ${qsoTimestampProjection}
+       FROM activity_qso WHERE activation_id=$1 AND status<>'VOID' ORDER BY occurred_at`,
       [id],
     );
     return activationRecord(result.rows[0], qsos.rows);
@@ -1250,9 +1263,10 @@ function activationRecord(row: any, qsos?: any[]) {
     jurisdiction: row.jurisdiction_code,
     operatorId: row.operator_id,
     operatorCallsign: row.operator_callsign,
-    startedAt: date(row.started_at),
-    endedAt: date(row.ended_at),
-    validityExpiresAt: date(row.validity_expires_at),
+    startedAt: row.started_at_iso ?? date(row.started_at),
+    endedAt: row.ended_at_iso ?? date(row.ended_at),
+    validityExpiresAt:
+      row.validity_expires_at_iso ?? date(row.validity_expires_at),
     status: row.status,
     location: row.location ?? {},
     programmeRules: row.programme_rules ?? {},
@@ -1278,7 +1292,7 @@ function qsoRecord(row: any) {
     workedCallsign: row.worked_callsign,
     workedStationKey: row.worked_station_key,
     workedEntityId: row.worked_entity_id,
-    timestamp: date(row.occurred_at),
+    timestamp: normalizeTimestamp(row.occurred_at_iso ?? row.occurred_at),
     band: row.band,
     mode: row.mode,
     rst: row.rst,
