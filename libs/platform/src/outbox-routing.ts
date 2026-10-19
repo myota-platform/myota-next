@@ -9,6 +9,21 @@ type Route = {
   payloadFields?: string[];
 };
 
+type JsonSchema = {
+  type?: string | string[];
+  required?: string[];
+  properties?: Record<string, JsonSchema>;
+  items?: JsonSchema;
+  additionalProperties?: boolean;
+  format?: string;
+  enum?: unknown[];
+  pattern?: string;
+  minLength?: number;
+  maxLength?: number;
+  minItems?: number;
+  maxItems?: number;
+};
+
 type Registry = {
   events: Array<{ eventType: string; owner: string; subject: string }>;
   work: Array<{
@@ -17,6 +32,7 @@ type Registry = {
     stream: string;
     durable: string;
     owner: string;
+    payloadSchema: JsonSchema;
   }>;
   producerNamesByOwner: Record<string, string[]>;
   legacyWorkRoutes: Record<string, Route>;
@@ -146,6 +162,14 @@ export function routeOutboxEvent(
     } else {
       Object.assign(payload, row.payload);
     }
+    const targetWork = registry.work.find(
+      (item) => item.workType === targetType,
+    );
+    if (!targetWork)
+      throw new OutboxContractError(
+        'registered work payload schema is missing',
+      );
+    validateJsonSchema(payload, targetWork.payloadSchema, 'payload');
     const idField =
       legacy?.workIdField ??
       ['jobId', 'importRunId', 'queueId', 'requestId'].find(
@@ -197,6 +221,82 @@ export function routeOutboxEvent(
       ...(correlation ? { correlationId: correlation } : {}),
     },
   };
+}
+
+function validateJsonSchema(
+  value: unknown,
+  schema: JsonSchema,
+  path: string,
+): void {
+  const expected = schema.type;
+  const expectedTypes = Array.isArray(expected)
+    ? expected
+    : expected
+      ? [expected]
+      : [];
+  if (
+    expectedTypes.length &&
+    !expectedTypes.some((type) => matchesType(value, type))
+  ) {
+    throw new OutboxContractError(`${path} does not match its registered type`);
+  }
+  if (value === null) return;
+  if (schema.enum && !schema.enum.some((candidate) => candidate === value))
+    throw new OutboxContractError(`${path} is outside its registered values`);
+  if (typeof value === 'string') {
+    if (schema.format === 'uuid' && !UUID.test(value))
+      throw new OutboxContractError(`${path} must be a UUID`);
+    if (schema.minLength !== undefined && value.length < schema.minLength)
+      throw new OutboxContractError(
+        `${path} is shorter than its registered minimum`,
+      );
+    if (schema.maxLength !== undefined && value.length > schema.maxLength)
+      throw new OutboxContractError(
+        `${path} exceeds its registered maximum length`,
+      );
+    if (schema.pattern && !new RegExp(schema.pattern).test(value))
+      throw new OutboxContractError(
+        `${path} does not match its registered pattern`,
+      );
+  }
+  if (Array.isArray(value)) {
+    if (schema.minItems !== undefined && value.length < schema.minItems)
+      throw new OutboxContractError(`${path} has too few items`);
+    if (schema.maxItems !== undefined && value.length > schema.maxItems)
+      throw new OutboxContractError(`${path} has too many items`);
+    if (schema.items)
+      value.forEach((item, index) =>
+        validateJsonSchema(item, schema.items!, `${path}[${index}]`),
+      );
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const object = value as Record<string, unknown>;
+    for (const required of schema.required ?? []) {
+      if (object[required] === undefined)
+        throw new OutboxContractError(`${path}.${required} is required`);
+    }
+    for (const [key, propertyValue] of Object.entries(object)) {
+      const propertySchema = schema.properties?.[key];
+      if (!propertySchema && schema.additionalProperties === false)
+        throw new OutboxContractError(
+          `${path}.${key} is not a registered property`,
+        );
+      if (propertySchema)
+        validateJsonSchema(propertyValue, propertySchema, `${path}.${key}`);
+    }
+  }
+}
+
+function matchesType(value: unknown, type: string): boolean {
+  if (type === 'null') return value === null;
+  if (type === 'object')
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (type === 'array') return Array.isArray(value);
+  if (type === 'integer')
+    return typeof value === 'number' && Number.isInteger(value);
+  if (type === 'number')
+    return typeof value === 'number' && Number.isFinite(value);
+  return typeof value === type;
 }
 
 export class OutboxContractError extends Error {}

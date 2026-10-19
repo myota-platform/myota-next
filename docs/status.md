@@ -150,7 +150,8 @@
   configured owner database per process, with stable JetStream message IDs,
   bounded retries, dead-letter persistence, and read-only validation of the
   deployment-owned fact/work streams and registered durable policies. Relay
-  metrics are exposed; outage/recovery evidence remains outstanding. Activity
+  metrics are exposed, and registered work payload schemas are validated;
+  outage/recovery evidence remains outstanding. Activity
   job redrive is audited and available to
   administrators; the Activity worker now extends active job leases while
   long batches run. Geodata lease heartbeats for large jobs and remaining
