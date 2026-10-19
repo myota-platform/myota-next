@@ -30,6 +30,7 @@ import {
   RecoveryResetDto,
   RefreshTokenDto,
   ProfileUpdateDto,
+  SecurityEventsQueryDto,
 } from './auth.dto.js';
 import { IdentityAuthService } from './auth.service.js';
 import { IdentityRoleService } from './identity-role.service.js';
@@ -106,6 +107,16 @@ export class AuthController {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
     return this.auth.listAdminAccounts(authorization, query);
+  }
+
+  @Get('admin/security-events')
+  listSecurityEvents(
+    @Headers('authorization') authorization: string | undefined,
+    @Query() query: SecurityEventsQueryDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.listSecurityEvents(authorization, query);
   }
 
   @Get('admin/roles')

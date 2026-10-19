@@ -199,6 +199,7 @@ paths:
       tags: [Identity]
       security: [{ bearerAuth: [] }]
       summary: List security events for global identity administrators
+      operationId: listSecurityEvents
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'

@@ -22,7 +22,7 @@ OpenAPI 3.1.0; 135 operations across 113 paths.
 | GET    | /v1/identity/admin/roles                                          |                                            | List built-in and custom administrative roles and permissions                      |
 | POST   | /v1/identity/admin/roles                                          |                                            | Create a custom administrative role                                                |
 | POST   | /v1/identity/roles                                                | createIdentityRole                         | Create a custom administrative role                                                |
-| GET    | /v1/identity/admin/security-events                                |                                            | List security events for global identity administrators                            |
+| GET    | /v1/identity/admin/security-events                                | listSecurityEvents                         | List security events for global identity administrators                            |
 | POST   | /v1/identity/accounts                                             | createAccount                              | Create a participant account; role grants require separate authority               |
 | POST   | /v1/identity/accounts/{accountId}/callsigns                       |                                            | Add and optionally verify a callsign                                               |
 | POST   | /v1/identity/accounts/{accountId}/callsigns/{callsignId}/evidence |                                            | Submit callsign verification evidence                                              |

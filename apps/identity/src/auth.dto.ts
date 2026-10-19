@@ -69,6 +69,16 @@ export class AdminAccountsQueryDto {
   pageSize?: string;
 }
 
+export class SecurityEventsQueryDto {
+  @IsOptional()
+  @IsString()
+  page?: string;
+
+  @IsOptional()
+  @IsString()
+  pageSize?: string;
+}
+
 export class AdminRoleDefinitionDto {
   @IsOptional()
   @IsString()
