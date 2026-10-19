@@ -22,6 +22,10 @@ const RETENTION_INTERVAL_SECONDS = Math.max(
   60,
   Number(process.env.MYOTA_ADIF_RETENTION_INTERVAL_SECONDS ?? 86400),
 );
+const WORK_RECONCILE_SECONDS = Math.max(
+  5,
+  Number(process.env.ACTIVITY_WORK_RECONCILE_SECONDS ?? 60),
+);
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -87,6 +91,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
       }
       this.loops = [
         ...definitions.map((definition) => this.consume(definition)),
+        this.reconcileQueuedOutbox(),
         this.runRetention(),
       ];
     } catch (error) {
@@ -304,6 +309,21 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
         this.logger.error(`ADIF retention sweep failed: ${safeError(error)}`);
       }
       await this.wait(RETENTION_INTERVAL_SECONDS * 1000);
+    }
+  }
+
+  private async reconcileQueuedOutbox(): Promise<void> {
+    while (!this.stopping) {
+      try {
+        const repaired = await this.repository.reconcileQueuedWorkOutbox();
+        if (repaired)
+          this.logger.warn(
+            `Repaired ${repaired} queued Activity work outbox rows`,
+          );
+      } catch (error) {
+        this.logger.error(`Activity work recovery failed: ${safeError(error)}`);
+      }
+      await this.wait(WORK_RECONCILE_SECONDS * 1000);
     }
   }
 

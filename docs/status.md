@@ -59,6 +59,8 @@
   updates aggregates, records per-record errors, and updates the import status.
   Scheduled retention removes completed or failed ADIF source objects after the
   configured window and records successful deletion in Activity PostgreSQL.
+  A periodic repair loop recreates missing outbox commands for queued Activity
+  jobs, including rows preserved from the prior runtime.
   Entity-deletion impact reads and idempotent cascades are implemented: the
   Activity service removes linked valid QSOs and corrections, invalidates
   affected activations, rebuilds subject aggregates, and queues award
@@ -170,7 +172,7 @@
   outage/recovery evidence remains outstanding. Activity
   job redrive is audited and available to
   administrators; the Activity worker now extends active job leases while
-  long batches run. Geodata import, promotion, and deletion work extends owner
+  long batches run and repairs missing queued-job outbox commands. Geodata import, promotion, and deletion work extends owner
   leases during long jobs, and stale dispatch recovery and Geodata retention are
   implemented; outage/recovery evidence remains outstanding.
 - Admin and Participant web applications.

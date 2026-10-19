@@ -36,6 +36,15 @@ export interface WorkJobState {
   leaseRemainingSeconds: number;
 }
 
+const WORK_TYPE_BY_KIND: Record<string, string> = {
+  QSO_INGESTION: 'activity.qso-ingestion.v1',
+  ADIF_IMPORT: 'activity.adif-import.v1',
+  AWARD_RECALCULATE: 'activity.award-recalculate.v1',
+  AWARD_EVALUATION: 'activity.award-evaluation.v1',
+  PDF_RENDER: 'activity.pdf-render.v1',
+  STATISTICS_REBUILD: 'activity.statistics-rebuild.v1',
+};
+
 @Injectable()
 export class ActivityWorkRepository {
   constructor(
@@ -90,6 +99,43 @@ export class ActivityWorkRepository {
             leaseRemainingSeconds: Number(row.leaseRemainingSeconds ?? 0),
           }
         : null;
+    } finally {
+      client.release();
+    }
+  }
+
+  async reconcileQueuedWorkOutbox(limit = 100): Promise<number> {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      const jobs = await client.query(
+        `SELECT id,kind,created_at,available_at FROM activity_job
+         WHERE status='QUEUED' AND kind=ANY($1::text[])
+         ORDER BY available_at,id FOR UPDATE SKIP LOCKED LIMIT $2`,
+        [Object.keys(WORK_TYPE_BY_KIND), limit],
+      );
+      let repaired = 0;
+      for (const job of jobs.rows) {
+        const inserted = await client.query(
+          `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,
+             payload,occurred_at,available_at)
+           VALUES ($1,$2,'activity-service','activity_job',$1,$3::jsonb,$4,$5)
+           ON CONFLICT (event_id) DO NOTHING RETURNING event_id`,
+          [
+            job.id,
+            WORK_TYPE_BY_KIND[job.kind],
+            JSON.stringify({ jobId: String(job.id) }),
+            job.created_at,
+            job.available_at,
+          ],
+        );
+        repaired += inserted.rowCount ?? 0;
+      }
+      await client.query('COMMIT');
+      return repaired;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
     } finally {
       client.release();
     }
