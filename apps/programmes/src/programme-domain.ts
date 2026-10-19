@@ -10,14 +10,38 @@ export function isTruthyJsonValue(value: unknown): boolean {
 }
 
 export function normalizeUtcTimestamp(value: string): string {
-  let normalized = value.replace(/([Tt ]\d{2}:\d{2}:\d{2}),(?=\d)/, '$1.');
+  let normalized = value.replace(
+    /((?:[Tt ]\d{2}:\d{2}:\d{2})|(?:[Tt ]\d{6})),(?=\d)/,
+    '$1.',
+  );
   normalized = normalized.replace(/[t ]/, 'T');
+  const compactDateTime =
+    /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})?(\d{2})?(.*)$/.exec(normalized);
+  if (compactDateTime) {
+    const [, year, month, day, hour, minute, second, suffix] = compactDateTime;
+    normalized = `${year}-${month}-${day}T${hour}${minute ? `:${minute}` : ''}${second ? `:${second}` : ''}${suffix}`;
+  } else {
+    const compactTime =
+      /^(\d{4}-\d{2}-\d{2})T(\d{2})(\d{2})?(\d{2})?(.*)$/.exec(normalized);
+    if (compactTime) {
+      const [, date, hour, minute, second, suffix] = compactTime;
+      normalized = `${date}T${hour}${minute ? `:${minute}` : ''}${second ? `:${second}` : ''}${suffix}`;
+    }
+  }
   if (normalized.includes('T'))
     normalized = normalized.replace(
       /([+-])(\d{2})(?::?(\d{2}))$/,
       (_match, sign: string, hours: string, minutes?: string) =>
         `${sign}${hours}:${minutes ?? '00'}`,
     );
+  normalized = normalized.replace(
+    /T(\d{2}:\d{2})(?=(?:Z|[+-]\d{2}:\d{2})?$)/i,
+    '$1:00',
+  );
+  normalized = normalized.replace(
+    /T(\d{2})(?=(?:Z|[+-]\d{2}:\d{2})?$)/i,
+    '$1:00:00',
+  );
   if (/^\d{8}$/.test(normalized))
     normalized = `${normalized.slice(0, 4)}-${normalized.slice(4, 6)}-${normalized.slice(6, 8)}`;
   if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
