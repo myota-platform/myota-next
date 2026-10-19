@@ -136,15 +136,16 @@
   `MYOTA_OSM_PBF_MAX_UPLOAD_BYTES`. Decoded output is capped at 128 MiB, with
   16 MiB and 250,000 vertices per feature, plus the configured feature cap.
   GeoJSON and Shapefile upload parsing enforce 16 MiB and 250,000 vertices per
-  feature and retain the bounded prepared-candidate and outbox summaries for
-  final commit.
+  feature. Prepared candidates and validation errors are attempt-scoped in the
+  Geodata database; final candidate creation, queue creation, status, and outbox
+  events remain one transaction. The final event is assembled in PostgreSQL to
+  avoid retaining every feature summary in the worker heap.
   The separate JSON import-creation path still caps input at 20 MiB and
   materializes the normalized collection. Shapefile source bytes and decoded
   records now stream via bounded temporary files, matching the reference's 1
-  GiB expanded-size default. Candidate summaries still accumulate until the
-  final transaction. The streaming parser's less common geometry types and
-  projection metadata still need parity qualification before broad Shapefile
-  parity can be claimed.
+  GiB expanded-size default. The streaming parser's less common geometry types
+  and projection metadata still need parity qualification before broad
+  Shapefile parity can be claimed.
   The adapter catalogue and admin selector now expose only import formats the
   current boundary can decode. The admin file picker accepts GeoJSON and OSM
   PBF and Shapefile ZIP files up to their configured caps (256 MiB by default,

@@ -40,3 +40,8 @@ callsign projection after the initial Core baseline. `core/005` adds the
 redacted email delivery ledger to the Core owner, so email delivery does not
 introduce a fourth database. The JSONB Identity snapshot remains intact;
 runtime cutover is a separate gated change.
+
+`geo/002` adds attempt-scoped import feature staging so workers can process
+large inputs without retaining all prepared candidates and validation errors
+in application memory. Final candidate writes and their compatible outbox
+events still commit atomically.

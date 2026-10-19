@@ -168,10 +168,12 @@ export class GeodataImportMutationRepository {
       if (run.status !== 'PROCESSED') {
         const counts = await client.query(
           `SELECT (SELECT count(*)::integer FROM geodata_import_candidate WHERE import_run_id=$1) AS candidates,
+                  (SELECT count(*)::integer FROM geodata_import_candidate_stage WHERE import_run_id=$1) AS staged,
                   (SELECT count(*)::integer FROM geodata_import_processing_queue WHERE import_run_id=$1) AS queues`,
           [runId],
         );
-        stagedRecordsDiscarded = Number(counts.rows[0].candidates);
+        stagedRecordsDiscarded =
+          Number(counts.rows[0].candidates) + Number(counts.rows[0].staged);
         processingQueuesDiscarded = Number(counts.rows[0].queues);
         await client.query(
           "SELECT set_config('myota.geodata_writer','row-v1',true)",
@@ -182,6 +184,10 @@ export class GeodataImportMutationRepository {
         );
         await client.query(
           'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+          [runId],
+        );
+        await client.query(
+          'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1',
           [runId],
         );
         await client.query(
@@ -276,6 +282,11 @@ export class GeodataImportMutationRepository {
       if (!active)
         await client.query(
           'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+          [runId],
+        );
+      if (!active)
+        await client.query(
+          'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1',
           [runId],
         );
       await client.query(

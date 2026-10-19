@@ -28,6 +28,7 @@ interface ImportRun {
 }
 
 interface PreparedCandidate {
+  candidateId: string;
   ordinal: number;
   name: string;
   geometry: string;
@@ -35,6 +36,10 @@ interface PreparedCandidate {
   sourceRef: string | null;
   possibleDuplicates: Record<string, unknown>[];
 }
+
+type StagedImportRecord =
+  | { ordinal: number; candidate: PreparedCandidate }
+  | { ordinal: number; error: Record<string, unknown> };
 
 @Injectable()
 export class GeodataWorkRepository {
@@ -62,6 +67,10 @@ export class GeodataWorkRepository {
         );
         await client.query(
           'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+          [pendingCancellation.id],
+        );
+        await client.query(
+          'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1',
           [pendingCancellation.id],
         );
         await client.query(
@@ -101,6 +110,10 @@ export class GeodataWorkRepository {
       }
       await client.query(
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await client.query(
+        'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1',
+        [row.id],
       );
       await client.query(
         `UPDATE import_run SET status='PROCESSING',attempt_count=attempt_count+1,
@@ -483,8 +496,7 @@ export class GeodataWorkRepository {
       features = document.features;
     }
 
-    const errors: Record<string, unknown>[] = [];
-    const prepared: PreparedCandidate[] = [];
+    const staged: StagedImportRecord[] = [];
     const source = isRecord(run.source_metadata.source)
       ? run.source_metadata.source
       : {};
@@ -493,107 +505,126 @@ export class GeodataWorkRepository {
       'unknown-source';
     let featureCount = 0;
     for await (const feature of features) {
-      const index = featureCount;
+      const ordinal = featureCount;
       featureCount += 1;
       if (featureCount > featureLimit)
         throw new Error(
           `geodata import contains more than ${featureLimit} features`,
         );
-      if (index > 0 && index % 100 === 0) await this.heartbeat(run);
+      if (ordinal > 0 && ordinal % 100 === 0) await this.heartbeat(run);
+
+      let record: StagedImportRecord;
       if (!isRecord(feature) || feature.type !== 'Feature') {
-        errors.push({
-          ordinal: index,
-          message: 'feature must be a GeoJSON Feature',
-        });
-        continue;
-      }
-      const properties = isRecord(feature.properties)
-        ? { ...feature.properties }
-        : {};
-      const name = inferFeatureName(properties);
-      if (!name || name.length > 300) {
-        errors.push({
-          ordinal: index,
-          message:
-            'feature properties.name is required and must be at most 300 characters',
-        });
-        continue;
-      }
-      properties.name = name;
-      if (
-        !isRecord(feature.geometry) ||
-        typeof feature.geometry.type !== 'string'
-      ) {
-        errors.push({
-          ordinal: index,
-          message: 'feature geometry is required',
-        });
-        continue;
-      }
-      const geometry = JSON.stringify(feature.geometry);
-      const client = await this.connect();
-      try {
-        const checked = await client.query(
-          `SELECT ST_IsValid(g) AS valid,ST_IsEmpty(g) AS empty,
-             ST_XMin(Box3D(g)) AS min_x,ST_XMax(Box3D(g)) AS max_x,
-             ST_YMin(Box3D(g)) AS min_y,ST_YMax(Box3D(g)) AS max_y
-           FROM (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1),4326) AS g) parsed`,
-          [geometry],
-        );
-        const row = checked.rows[0];
-        if (
-          !row?.valid ||
-          row.empty ||
-          Number(row.min_x) < -180 ||
-          Number(row.max_x) > 180 ||
-          Number(row.min_y) < -90 ||
-          Number(row.max_y) > 90
+        record = {
+          ordinal,
+          error: { ordinal, message: 'feature must be a GeoJSON Feature' },
+        };
+      } else {
+        const properties = isRecord(feature.properties)
+          ? { ...feature.properties }
+          : {};
+        const name = inferFeatureName(properties);
+        if (!name || name.length > 300) {
+          record = {
+            ordinal,
+            error: {
+              ordinal,
+              message:
+                'feature properties.name is required and must be at most 300 characters',
+            },
+          };
+        } else if (
+          !isRecord(feature.geometry) ||
+          typeof feature.geometry.type !== 'string'
         ) {
-          errors.push({
-            ordinal: index,
-            message: 'geometry is empty, invalid, or outside WGS84 bounds',
-          });
-          continue;
+          record = {
+            ordinal,
+            error: { ordinal, message: 'feature geometry is required' },
+          };
+        } else {
+          properties.name = name;
+          const geometry = JSON.stringify(feature.geometry);
+          const client = await this.connect();
+          try {
+            const checked = await client.query(
+              `SELECT ST_IsValid(g) AS valid,ST_IsEmpty(g) AS empty,
+                 ST_XMin(Box3D(g)) AS min_x,ST_XMax(Box3D(g)) AS max_x,
+                 ST_YMin(Box3D(g)) AS min_y,ST_YMax(Box3D(g)) AS max_y
+               FROM (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1),4326) AS g) parsed`,
+              [geometry],
+            );
+            const row = checked.rows[0];
+            if (
+              !row?.valid ||
+              row.empty ||
+              Number(row.min_x) < -180 ||
+              Number(row.max_x) > 180 ||
+              Number(row.min_y) < -90 ||
+              Number(row.max_y) > 90
+            ) {
+              record = {
+                ordinal,
+                error: {
+                  ordinal,
+                  message:
+                    'geometry is empty, invalid, or outside WGS84 bounds',
+                },
+              };
+            } else {
+              const duplicates = await client.query(
+                `WITH candidate AS (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1),4326) AS geometry)
+                 SELECT e.id::text AS id,e.name,e.lifecycle_status AS status,e.entity_type_code AS entity_type,
+                   ST_AsGeoJSON(e.geom)::jsonb AS geometry,
+                   CASE WHEN ST_Equals(e.geom,candidate.geometry) THEN 'IDENTICAL_GEOMETRY' ELSE 'WITHIN_50_METERS' END AS match_type,
+                   round(ST_Distance(e.geom::geography,candidate.geometry::geography)::numeric,1) AS distance_meters
+                 FROM geodata_entity e CROSS JOIN candidate
+                 WHERE e.lifecycle_status IN ('APPROVED','CANDIDATE')
+                   AND ST_DWithin(e.geom::geography,candidate.geometry::geography,50)
+                 ORDER BY ST_Distance(e.geom::geography,candidate.geometry::geography) LIMIT 10`,
+                [geometry],
+              );
+              record = {
+                ordinal,
+                candidate: {
+                  candidateId: randomUUID(),
+                  ordinal,
+                  name,
+                  geometry,
+                  properties,
+                  sourceRef:
+                    textValue(
+                      properties.sourceRef ??
+                        properties.id ??
+                        properties['@id'] ??
+                        feature.id,
+                    ) ?? `${sourceKey}:import-${run.id}:record-${ordinal}`,
+                  possibleDuplicates: duplicates.rows.map((duplicate) => ({
+                    entityId: duplicate.id,
+                    name: duplicate.name,
+                    status: duplicate.status,
+                    entityTypes: duplicate.entity_type
+                      ? [duplicate.entity_type]
+                      : [],
+                    geometry: duplicate.geometry,
+                    distanceMeters: Number(duplicate.distance_meters),
+                    matchType: duplicate.match_type,
+                  })),
+                },
+              };
+            }
+          } finally {
+            client.release();
+          }
         }
-        const duplicates = await client.query(
-          `WITH candidate AS (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1),4326) AS geometry)
-           SELECT e.id::text AS id,e.name,e.lifecycle_status AS status,e.entity_type_code AS entity_type,
-             ST_AsGeoJSON(e.geom)::jsonb AS geometry,
-             CASE WHEN ST_Equals(e.geom,candidate.geometry) THEN 'IDENTICAL_GEOMETRY' ELSE 'WITHIN_50_METERS' END AS match_type,
-             round(ST_Distance(e.geom::geography,candidate.geometry::geography)::numeric,1) AS distance_meters
-           FROM geodata_entity e CROSS JOIN candidate
-           WHERE e.lifecycle_status IN ('APPROVED','CANDIDATE')
-             AND ST_DWithin(e.geom::geography,candidate.geometry::geography,50)
-           ORDER BY ST_Distance(e.geom::geography,candidate.geometry::geography) LIMIT 10`,
-          [geometry],
-        );
-        prepared.push({
-          ordinal: index,
-          name,
-          geometry,
-          properties,
-          sourceRef:
-            textValue(
-              properties.sourceRef ??
-                properties.id ??
-                properties['@id'] ??
-                feature.id,
-            ) ?? `${sourceKey}:import-${run.id}:record-${index}`,
-          possibleDuplicates: duplicates.rows.map((duplicate) => ({
-            entityId: duplicate.id,
-            name: duplicate.name,
-            status: duplicate.status,
-            entityTypes: duplicate.entity_type ? [duplicate.entity_type] : [],
-            geometry: duplicate.geometry,
-            distanceMeters: Number(duplicate.distance_meters),
-            matchType: duplicate.match_type,
-          })),
-        });
-      } finally {
-        client.release();
+      }
+      staged.push(record);
+      if (staged.length >= 4) {
+        await this.stageFeatures(run, staged);
+        staged.length = 0;
       }
     }
-    await this.saveCandidates(run, prepared, errors, featureCount);
+    if (staged.length) await this.stageFeatures(run, staged);
+    await this.saveCandidates(run, featureCount);
   }
 
   async fail(run: ImportRun, error: unknown): Promise<boolean> {
@@ -610,6 +641,10 @@ export class GeodataWorkRepository {
         );
         await client.query(
           'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+          [run.id],
+        );
+        await client.query(
+          'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1',
           [run.id],
         );
         await client.query(
@@ -638,6 +673,11 @@ export class GeodataWorkRepository {
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
       );
       const exhausted = run.attempt_count >= 3;
+      if (exhausted)
+        await client.query(
+          'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1',
+          [run.id],
+        );
       await client.query(
         `UPDATE import_run SET status=$2,last_error=$3,heartbeat_at=now(),
          lease_until=NULL,completed_at=CASE WHEN $2='FAILED' THEN now() ELSE NULL END
@@ -679,6 +719,10 @@ export class GeodataWorkRepository {
       );
       await client.query(
         'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+        [run.id],
+      );
+      await client.query(
+        'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1',
         [run.id],
       );
       await client.query(
@@ -728,12 +772,60 @@ export class GeodataWorkRepository {
       .catch(() => undefined);
   }
 
-  private async saveCandidates(
-    run: ImportRun,
-    candidates: PreparedCandidate[],
-    errors: Record<string, unknown>[],
-    featureCount: number,
-  ) {
+  private async stageFeatures(run: ImportRun, records: StagedImportRecord[]) {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      const lockedRun = await client.query(
+        'SELECT status,attempt_count FROM import_run WHERE id=$1 FOR UPDATE',
+        [run.id],
+      );
+      if (
+        lockedRun.rows[0]?.status !== 'PROCESSING' ||
+        Number(lockedRun.rows[0]?.attempt_count) !== run.attempt_count
+      )
+        throw new Error('geodata import lease was superseded');
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      for (const record of records) {
+        if ('candidate' in record) {
+          await client.query(
+            `INSERT INTO geodata_import_candidate_stage
+              (import_run_id,attempt_count,ordinal,candidate_id,candidate_payload)
+             VALUES ($1,$2,$3,$4,$5::jsonb)`,
+            [
+              run.id,
+              run.attempt_count,
+              record.ordinal,
+              record.candidate.candidateId,
+              JSON.stringify(record.candidate),
+            ],
+          );
+        } else {
+          await client.query(
+            `INSERT INTO geodata_import_candidate_stage
+              (import_run_id,attempt_count,ordinal,error_payload)
+             VALUES ($1,$2,$3,$4::jsonb)`,
+            [
+              run.id,
+              run.attempt_count,
+              record.ordinal,
+              JSON.stringify(record.error),
+            ],
+          );
+        }
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async saveCandidates(run: ImportRun, featureCount: number) {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -764,75 +856,71 @@ export class GeodataWorkRepository {
         : undefined;
       const promotionActor =
         textValue(proposal?.proposerId) ?? textValue(autoPromote?.requestedBy);
+      const stagedCounts = await client.query(
+        `SELECT count(*) FILTER (WHERE candidate_id IS NOT NULL)::integer AS candidates,
+                count(*) FILTER (WHERE error_payload IS NOT NULL)::integer AS errors
+         FROM geodata_import_candidate_stage
+         WHERE import_run_id=$1 AND attempt_count=$2`,
+        [run.id, run.attempt_count],
+      );
+      const candidateCount = Number(stagedCounts.rows[0]?.candidates ?? 0);
+      const errorCount = Number(stagedCounts.rows[0]?.errors ?? 0);
       const promotionQueueId =
         promotionActor &&
-        (candidates.length > 0 ||
-          (run.complete_snapshot && featureCount === 0 && errors.length === 0))
+        (candidateCount > 0 ||
+          (run.complete_snapshot && featureCount === 0 && errorCount === 0))
           ? randomUUID()
           : null;
-      const created: Record<string, unknown>[] = [];
-      const preprocessed: Record<string, unknown>[] = [];
-      for (const candidate of candidates) {
-        const id = randomUUID();
-        const entityPayload = {
-          ...candidate.properties,
-          entityType: entityTypes[0] ?? null,
-          entityTypes,
-          entityTypeCodes: entityTypes,
-          geometry: JSON.parse(candidate.geometry),
-          possibleDuplicates: candidate.possibleDuplicates,
-        };
-        await client.query(
-          `INSERT INTO geodata_import_candidate
-            (id,import_run_id,ordinal,programme_slug,entity_type_codes,name,geom,
-             candidate_source,source_ref,source_hash,provenance,entity_payload)
-           VALUES ($1,$2,$3,$4,$5::jsonb,$6,ST_SetSRID(ST_GeomFromGeoJSON($7),4326),
-             $8::jsonb,$9,$10,$11::jsonb,$12::jsonb)`,
-          [
-            id,
-            run.id,
-            candidate.ordinal,
-            programmeSlug,
-            JSON.stringify(entityTypes),
-            candidate.name,
-            candidate.geometry,
-            JSON.stringify(run.source_metadata.source ?? {}),
-            candidate.sourceRef,
-            run.source_hash,
-            JSON.stringify({
-              adapter: run.adapter_code,
-              sourceHash: run.source_hash,
-            }),
-            JSON.stringify(entityPayload),
-          ],
-        );
-        if (promotionActor && promotionQueueId)
-          await client.query(
-            `UPDATE geodata_import_candidate SET validation_status='CONFIRMED',
-             validated_by=$2,validated_at=now(),target_status='CANDIDATE',
-             processing_queue_id=$3 WHERE id=$1`,
-            [id, promotionActor, promotionQueueId],
-          );
-        const summary = {
-          candidateId: id,
-          ordinal: candidate.ordinal,
-          name: candidate.name,
-          possibleDuplicates: candidate.possibleDuplicates,
-        };
-        created.push(summary);
-        preprocessed.push(summary);
-      }
+
+      await client.query(
+        `INSERT INTO geodata_import_candidate
+          (id,import_run_id,ordinal,programme_slug,entity_type_codes,name,geom,
+           candidate_source,source_ref,source_hash,provenance,entity_payload)
+         SELECT s.candidate_id,$1,s.ordinal,$3,$4::jsonb,
+           s.candidate_payload->>'name',
+           ST_SetSRID(ST_GeomFromGeoJSON(s.candidate_payload->>'geometry'),4326),
+           $5::jsonb,s.candidate_payload->>'sourceRef',$6,
+           jsonb_build_object('adapter',$7,'sourceHash',$6),
+           (s.candidate_payload->'properties') || jsonb_build_object(
+             'entityType',$4::jsonb->0,'entityTypes',$4::jsonb,
+             'entityTypeCodes',$4::jsonb,
+             'geometry',(s.candidate_payload->>'geometry')::jsonb,
+             'possibleDuplicates',s.candidate_payload->'possibleDuplicates')
+         FROM geodata_import_candidate_stage s
+         WHERE s.import_run_id=$1 AND s.attempt_count=$2
+           AND s.candidate_id IS NOT NULL ORDER BY s.ordinal`,
+        [
+          run.id,
+          run.attempt_count,
+          programmeSlug,
+          JSON.stringify(entityTypes),
+          JSON.stringify(run.source_metadata.source ?? {}),
+          run.source_hash,
+          run.adapter_code,
+        ],
+      );
       if (promotionActor && promotionQueueId) {
+        await client.query(
+          `UPDATE geodata_import_candidate c SET validation_status='CONFIRMED',
+             validated_by=$2,validated_at=now(),target_status='CANDIDATE',
+             processing_queue_id=$3
+           FROM geodata_import_candidate_stage s
+           WHERE s.import_run_id=$1 AND s.attempt_count=$4
+             AND s.candidate_id=c.id`,
+          [run.id, promotionActor, promotionQueueId, run.attempt_count],
+        );
         await client.query(
           `INSERT INTO geodata_import_processing_queue
             (id,import_run_id,candidate_ids,target_status,requested_by,status,job_metadata)
-           VALUES ($1,$2,$3::jsonb,'CANDIDATE',$4,'QUEUED',$5::jsonb)`,
+           VALUES ($1,$2,
+             COALESCE((SELECT jsonb_agg(candidate_id::text ORDER BY ordinal)
+               FROM geodata_import_candidate_stage
+               WHERE import_run_id=$2 AND attempt_count=$3 AND candidate_id IS NOT NULL),'[]'::jsonb),
+             'CANDIDATE',$4,'QUEUED',$5::jsonb)`,
           [
             promotionQueueId,
             run.id,
-            JSON.stringify(
-              preprocessed.map((candidate) => candidate.candidateId),
-            ),
+            run.attempt_count,
             promotionActor,
             JSON.stringify({
               note: textValue(autoPromote?.note) ?? 'Community proposal',
@@ -842,71 +930,94 @@ export class GeodataWorkRepository {
         await client.query(
           `INSERT INTO outbox_event
             (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
-           VALUES ($1,'geodata.import.processing.queued.v1','geodata-worker','import_processing_queue',$2,$3::jsonb,now(),$4)`,
+           VALUES ($1,'geodata.import.processing.queued.v1','geodata-worker','import_processing_queue',$2,
+             jsonb_build_object('queueId',$2::text,'importRunId',$3::text,
+               'candidateIds',COALESCE((SELECT jsonb_agg(candidate_id::text ORDER BY ordinal)
+                 FROM geodata_import_candidate_stage
+                 WHERE import_run_id=$3 AND attempt_count=$4 AND candidate_id IS NOT NULL),'[]'::jsonb),
+               'targetStatus','CANDIDATE','requestedBy',$5,
+               'natsSubject','myota.geodata.import.process.v1'),now(),$6)`,
           [
             randomUUID(),
             promotionQueueId,
-            JSON.stringify({
-              queueId: promotionQueueId,
-              importRunId: run.id,
-              candidateIds: preprocessed.map(
-                (candidate) => candidate.candidateId,
-              ),
-              targetStatus: 'CANDIDATE',
-              requestedBy: promotionActor,
-              natsSubject: 'myota.geodata.import.process.v1',
-            }),
+            run.id,
+            run.attempt_count,
+            promotionActor,
             randomUUID(),
           ],
         );
       }
-      const status = errors.length
-        ? 'PREPROCESSED_WITH_ERRORS'
-        : 'PREPROCESSED';
-      const stats = {
+
+      const stats = await client.query(
+        `SELECT count(*) FILTER (WHERE candidate_id IS NOT NULL)::integer AS preprocessed,
+                count(*) FILTER (WHERE error_payload IS NOT NULL)::integer AS errors,
+                count(*) FILTER (WHERE candidate_id IS NOT NULL
+                  AND candidate_payload->'possibleDuplicates' <> '[]'::jsonb)::integer AS conflation
+         FROM geodata_import_candidate_stage
+         WHERE import_run_id=$1 AND attempt_count=$2`,
+        [run.id, run.attempt_count],
+      );
+      const preprocessedCount = Number(stats.rows[0]?.preprocessed ?? 0);
+      const errorsCount = Number(stats.rows[0]?.errors ?? 0);
+      const conflationCount = Number(stats.rows[0]?.conflation ?? 0);
+      const status = errorsCount ? 'PREPROCESSED_WITH_ERRORS' : 'PREPROCESSED';
+      const statsPayload = {
         featureCount,
-        preprocessed: candidates.length,
-        created: candidates.length,
+        preprocessed: preprocessedCount,
+        created: preprocessedCount,
         updated: 0,
         skipped: 0,
-        errors: errors.length,
+        errors: errorsCount,
         disappeared: 0,
-        conflationCandidates: candidates.filter(
-          (item) => item.possibleDuplicates.length,
-        ).length,
+        conflationCandidates: conflationCount,
       };
       await client.query(
         `UPDATE import_run SET status=$2,stats=$3::jsonb,completed_at=now(),
          heartbeat_at=now(),lease_until=NULL,last_error=NULL WHERE id=$1`,
-        [run.id, status, JSON.stringify(stats)],
+        [run.id, status, JSON.stringify(statsPayload)],
       );
+
+      const candidateSummaries = `COALESCE((SELECT jsonb_agg(
+        jsonb_build_object('candidateId',candidate_id::text,'ordinal',ordinal,
+          'name',candidate_payload->>'name',
+          'possibleDuplicates',candidate_payload->'possibleDuplicates') ORDER BY ordinal)
+        FROM geodata_import_candidate_stage
+        WHERE import_run_id=$2 AND attempt_count=$3 AND candidate_id IS NOT NULL),'[]'::jsonb)`;
+      const errorSummaries = `COALESCE((SELECT jsonb_agg(error_payload ORDER BY ordinal)
+        FROM geodata_import_candidate_stage
+        WHERE import_run_id=$2 AND attempt_count=$3 AND error_payload IS NOT NULL),'[]'::jsonb)`;
+      const conflationSummaries = `COALESCE((SELECT jsonb_agg(
+        jsonb_build_object('ordinal',ordinal,'name',candidate_payload->>'name',
+          'matches',candidate_payload->'possibleDuplicates') ORDER BY ordinal)
+        FROM geodata_import_candidate_stage
+        WHERE import_run_id=$2 AND attempt_count=$3 AND candidate_id IS NOT NULL
+          AND candidate_payload->'possibleDuplicates' <> '[]'::jsonb),'[]'::jsonb)`;
       await client.query(
         `INSERT INTO outbox_event
           (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
-         VALUES ($1,'geodata.import.preprocessed.v1','geodata-worker','import_run',$2,$3::jsonb,now(),$4)`,
+         VALUES ($1,'geodata.import.preprocessed.v1','geodata-worker','import_run',$2,
+           jsonb_build_object('importRunId',$2::text,'adapter',$4,
+             'preprocessed',${candidateSummaries},'created',${candidateSummaries},
+             'updated','[]'::jsonb,'skipped','[]'::jsonb,
+             'errors',${errorSummaries},'disappeared','[]'::jsonb,
+             'conflationCandidates',${conflationSummaries},
+             'manifest',jsonb_build_object('sourceHash',$5,'featureCount',$6,
+               'stats',$7::jsonb)),now(),$8)`,
         [
           randomUUID(),
           run.id,
-          JSON.stringify({
-            importRunId: run.id,
-            adapter: run.adapter_code,
-            preprocessed,
-            created,
-            updated: [],
-            skipped: [],
-            errors,
-            disappeared: [],
-            conflationCandidates: candidates
-              .filter((item) => item.possibleDuplicates.length)
-              .map((item) => ({
-                ordinal: item.ordinal,
-                name: item.name,
-                matches: item.possibleDuplicates,
-              })),
-            manifest: { sourceHash: run.source_hash, featureCount, stats },
-          }),
+          run.attempt_count,
+          run.adapter_code,
+          run.source_hash,
+          featureCount,
+          JSON.stringify(statsPayload),
           randomUUID(),
         ],
+      );
+      await client.query(
+        `DELETE FROM geodata_import_candidate_stage
+         WHERE import_run_id=$1 AND attempt_count=$2`,
+        [run.id, run.attempt_count],
       );
       await client.query('COMMIT');
     } catch (error) {

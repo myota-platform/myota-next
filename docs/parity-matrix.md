@@ -93,14 +93,15 @@ limit is 256 MiB and can be raised to 512 MiB. Decoded PBF output is capped at
 feature cap. GeoJSON multipart uploads stream their source and yield one parsed
 feature at a time, with a 256 MiB default upload cap (512 MiB maximum), 16 MiB
 per-feature size, 250,000 vertices, and the configured feature count. Prepared
-candidate and outbox summaries remain in memory until the final import
-transaction. The separate JSON import-creation path still caps source documents
+candidates and validation errors are staged by import attempt in Geodata
+PostgreSQL; candidate creation, import status, processing queue, and the
+compatible outbox event are finalized atomically, with event arrays assembled
+in the database. The separate JSON import-creation path still caps source documents
 at 20 MiB and materializes the normalized collection. Shapefile multipart
 uploads stream to temporary disk and decode records one at a time, with a 256
 MiB default upload cap (512 MiB maximum), 1 GiB expanded-size cap, 16 MiB
-per-feature size, 250,000 vertices, and the configured feature count. Prepared
-candidate and outbox summaries remain in memory until the final transaction.
-Less common geometry types and projection metadata still need compatibility
+per-feature size, 250,000 vertices, and the configured feature count. Less
+common geometry types and projection metadata still need compatibility
 qualification against the reference parser.
 Import adapters infer feature names from
 the reference alias catalogue before validation. The worker validates WGS84
