@@ -1,9 +1,35 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  Headers,
+  Param,
+  Query,
+} from '@nestjs/common';
+import { verifyAccessToken } from '@app/platform/access-token.js';
 import { GeodataRepository } from './geodata.repository.js';
 
 @Controller('geodata')
 export class GeodataController {
   constructor(private readonly repository: GeodataRepository) {}
+
+  @Get('imports')
+  listImports(
+    @Headers('authorization') authorization: string | undefined,
+    @Query() query: Record<string, unknown>,
+  ) {
+    authorizeImport(authorization);
+    return this.repository.listImports(query);
+  }
+
+  @Get('imports/:runId')
+  getImport(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('runId') id: string,
+  ) {
+    authorizeImport(authorization);
+    return this.repository.getImport(id);
+  }
 
   @Get('entities')
   listEntities(@Query() query: Record<string, unknown>) {
@@ -11,7 +37,8 @@ export class GeodataController {
   }
 
   @Get('adapters')
-  adapters() {
+  adapters(@Headers('authorization') authorization: string | undefined) {
+    authorizeBearer(authorization);
     return {
       adapters: [
         {
@@ -58,7 +85,10 @@ export class GeodataController {
   }
 
   @Get('location-options')
-  async locationOptions() {
+  async locationOptions(
+    @Headers('authorization') authorization: string | undefined,
+  ) {
+    authorizeBearer(authorization);
     return buildLocationTree(await this.repository.getLocationRows());
   }
 
@@ -66,6 +96,16 @@ export class GeodataController {
   getEntity(@Param('entityId') id: string) {
     return this.repository.getEntity(id);
   }
+}
+
+function authorizeBearer(authorization: string | undefined) {
+  verifyAccessToken(authorization);
+}
+
+function authorizeImport(authorization: string | undefined) {
+  const claims = verifyAccessToken(authorization);
+  if (!claims.scp.some((scope) => scope === '*' || scope === 'geodata.import'))
+    throw new ForbiddenException('geodata.import scope is required');
 }
 
 type LocationNode = { name: string; code: string | null } & Record<string, any>;

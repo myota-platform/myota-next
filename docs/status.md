@@ -58,7 +58,8 @@
 - Geodata now has PostGIS-backed public entity list/detail reads with bounded
   paging, status/category/location filters, and bounding-box queries. Import,
   edit, review, and worker operations remain outstanding. The supported import
-  adapter catalogue and provider-derived location hierarchy are also exposed.
+  adapter catalogue, provider-derived location hierarchy, and authorized
+  paged import-run status reads are also exposed.
 - Award definitions now support public published-only reads, administrative
   draft create/edit, review submission and decisions, print-readiness
   validation, publication, and retirement. Saved and published facts commit to

@@ -112,6 +112,46 @@ export class GeodataRepository {
     }
   }
 
+  async listImports(query: Record<string, unknown>) {
+    const page = positiveInteger(query.page, 1);
+    const pageSize = Math.min(100, positiveInteger(query.pageSize, 50));
+    const client = await this.connect();
+    try {
+      const counted = await client.query(
+        'SELECT count(*)::integer AS total FROM import_run',
+      );
+      const rows = await client.query(
+        `SELECT ${importProjection} AS run FROM import_run ORDER BY started_at DESC,id LIMIT $1 OFFSET $2`,
+        [pageSize, (page - 1) * pageSize],
+      );
+      const total = Number(counted.rows[0]?.total ?? 0);
+      return {
+        items: rows.rows.map((row) => row.run),
+        page,
+        pageSize,
+        total,
+        nextPage: page * pageSize < total ? page + 1 : null,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async getImport(id: string) {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT ${importProjection} AS run FROM import_run WHERE id=$1`,
+        [id],
+      );
+      if (!result.rows[0])
+        throw new NotFoundException('geodata import not found');
+      return result.rows[0].run;
+    } finally {
+      client.release();
+    }
+  }
+
   private async connect() {
     if (!this.pool)
       throw new ServiceUnavailableException(
@@ -134,6 +174,22 @@ const entityProjection = `public_properties || jsonb_build_object(
   'sourceState',source_state,'jurisdiction',jurisdiction,'attachments',attachments,'version',revision,
   'categories',COALESCE((SELECT jsonb_agg(category_code ORDER BY category_code) FROM geodata_entity_category c WHERE c.entity_id=geodata_entity.id),'[]'::jsonb),
   'location',jsonb_build_object('continent',continent,'country',country,'region',region,'province',province,'county',county,'city',city,'municipality',municipality,'locality',locality)
+)`;
+
+const importProjection = `source_metadata || jsonb_build_object(
+  'id',id::text,'adapter',adapter_code,'status',status,'startedAt',started_at,
+  'completedAt',completed_at,'stats',stats,'attemptCount',attempt_count,
+  'heartbeatAt',heartbeat_at,'leaseUntil',lease_until,'lastError',last_error,
+  'processedAt',processed_at,'processedBy',processed_by,
+  'cancellationRequestedAt',cancellation_requested_at,
+  'cancellationRequestedBy',cancellation_requested_by,
+  'candidateCounts',(SELECT jsonb_build_object(
+    'total',count(*),'duplicates',count(*) FILTER (WHERE jsonb_array_length(COALESCE(entity_payload->'possibleDuplicates','[]'::jsonb))>0),
+    'pending',count(*) FILTER (WHERE validation_status='PENDING'),
+    'confirmed',count(*) FILTER (WHERE validation_status='CONFIRMED'),
+    'processed',count(*) FILTER (WHERE validation_status='PROCESSED'),
+    'rejected',count(*) FILTER (WHERE validation_status='REJECTED'))
+    FROM geodata_import_candidate c WHERE c.import_run_id=import_run.id)
 )`;
 
 function listValues(value: unknown) {
