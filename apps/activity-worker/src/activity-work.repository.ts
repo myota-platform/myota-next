@@ -47,6 +47,7 @@ export class ActivityWorkRepository {
             'AWARD_EVALUATION',
             'AWARD_RECALCULATE',
             'PDF_RENDER',
+            'STATISTICS_REBUILD',
           ],
         ],
       );
@@ -208,6 +209,8 @@ export class ActivityWorkRepository {
         await this.processAwardRecalculation(client, job.payload);
       } else if (job.kind === 'PDF_RENDER') {
         await this.processPdfRender(client, job.payload);
+      } else if (job.kind === 'STATISTICS_REBUILD') {
+        await this.processStatisticsRebuild(client, job.payload);
       } else {
         throw new Error(`unsupported Activity job kind: ${job.kind}`);
       }
@@ -275,6 +278,80 @@ export class ActivityWorkRepository {
        VALUES ($1,'awards.rendered.v1','awards-service','award_issuance',$2,$3::jsonb,now(),$4)`,
       [randomUUID(), issuance.id, JSON.stringify(issuance), randomUUID()],
     );
+  }
+
+  private async processStatisticsRebuild(
+    client: PoolClient,
+    payload: JsonRecord,
+  ) {
+    const slugs: string[] = payload.programmeSlug
+      ? [String(payload.programmeSlug)]
+      : (
+          await client.query(
+            'SELECT DISTINCT programme_slug FROM activity_activation ORDER BY programme_slug',
+          )
+        ).rows.map((row) => String(row.programme_slug));
+    const algorithmVersion = 'activity-v2';
+    for (const programme of slugs) {
+      await client.query(
+        'DELETE FROM activity_statistic_snapshot WHERE programme_slug=$1 AND algorithm_version=$2',
+        [programme, algorithmVersion],
+      );
+      for (const category of ['ACTIVATOR', 'HUNTER']) {
+        const aggregate = await client.query(
+          `SELECT count(*) AS participants,coalesce(sum(qso_count),0) AS qsos,
+           coalesce(sum(activation_count),0) AS activations,coalesce(max(qso_count),0) AS max_qsos
+           FROM activity_subject_aggregate WHERE programme_slug=$1 AND category=$2`,
+          [programme, category],
+        );
+        const row = aggregate.rows[0];
+        await client.query(
+          `INSERT INTO activity_statistic_snapshot(id,programme_slug,statistic_type,scope_key,metric_values,algorithm_version)
+           VALUES ($1,$2,'PROGRAMME_SUMMARY',$3,$4::jsonb,$5)`,
+          [
+            randomUUID(),
+            programme,
+            category,
+            JSON.stringify({
+              participants: Number(row.participants),
+              qsos: Number(row.qsos),
+              activations: Number(row.activations),
+              maxQsos: Number(row.max_qsos),
+            }),
+            algorithmVersion,
+          ],
+        );
+      }
+      for (const [statisticType, column] of [
+        ['ENTITY', 'entity_id'],
+        ['JURISDICTION', 'jurisdiction_code'],
+      ]) {
+        const groups = await client.query(
+          `SELECT ${column} AS scope_key,count(DISTINCT operator_id) AS participants,
+           coalesce(sum(qso_count),0) AS qsos,count(*) AS activations
+           FROM activity_activation WHERE programme_slug=$1 AND ${column} IS NOT NULL
+           GROUP BY ${column} ORDER BY ${column}`,
+          [programme],
+        );
+        for (const group of groups.rows)
+          await client.query(
+            `INSERT INTO activity_statistic_snapshot(id,programme_slug,statistic_type,scope_key,metric_values,algorithm_version)
+             VALUES ($1,$2,$3,$4,$5::jsonb,$6)`,
+            [
+              randomUUID(),
+              programme,
+              statisticType,
+              String(group.scope_key),
+              JSON.stringify({
+                participants: Number(group.participants),
+                qsos: Number(group.qsos),
+                activations: Number(group.activations),
+              }),
+              algorithmVersion,
+            ],
+          );
+      }
+    }
   }
 
   private async processAwardEvaluation(

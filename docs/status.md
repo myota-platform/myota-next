@@ -50,8 +50,9 @@
   callsigns, leaderboards use subject aggregates, and result exports support
   JSON and CSV. QSO correction requests and administrator review now use
   transactional Activity persistence; applying a correction queues award
-  recalculation. Activity statistics can be listed and rebuild jobs queued and
-  inspected; recipient notifications can be read with owner/admin checks.
+  recalculation. Activity statistics can be listed and rebuild jobs queued,
+  processed into versioned programme/category/entity/jurisdiction snapshots,
+  and inspected; recipient notifications can be read with owner/admin checks.
 - Award definitions now support public published-only reads, administrative
   draft create/edit, review submission and decisions, print-readiness
   validation, publication, and retirement. Saved and published facts commit to
@@ -74,8 +75,7 @@
   as its dedicated operation. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
 - Remaining Activity APIs include file-based QSO import and operational
-  workflows. The statistics rebuild job still needs its worker consumer.
-  Geodata and Gateway handlers,
+  workflows. Geodata and Gateway handlers,
   authorization rules, persistence repositories, and event/outbox behavior
   remain unimplemented.
 - Activity NATS delivery, lease heartbeats during large batches, redrive, and

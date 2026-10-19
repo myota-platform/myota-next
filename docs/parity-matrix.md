@@ -43,8 +43,8 @@ issuance is transactional and permanent, and PDF render jobs store artifacts in
 S3-compatible storage with authorized presigned download URLs. Registered award
 assets and bounded content storage are implemented. Remaining Activity work
 includes ADIF/CSV file imports, notification production beyond qualification,
-statistics rebuild processing, NATS delivery, and worker recovery.
-Statistics listing/rebuild job APIs and owner-scoped notification reads are
+NATS delivery, and worker recovery. Statistics listing and rebuild-job APIs,
+transactional snapshot rebuilds, and owner-scoped notification reads are
 implemented.
 
 ## User applications
