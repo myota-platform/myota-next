@@ -1,6 +1,7 @@
 import {
   Controller,
   Body,
+  Delete,
   ForbiddenException,
   Get,
   Headers,
@@ -10,14 +11,16 @@ import {
   Post,
   Put,
   Query,
+  Req,
   Res,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { GeodataRepository } from './geodata.repository.js';
 import { GeodataImportService } from './geodata-import.service.js';
 import { GeodataImportMutationRepository } from './geodata-import-mutation.repository.js';
 import { GeodataEntityMutationRepository } from './geodata-entity-mutation.repository.js';
+import { GeodataUploadService } from './geodata-upload.service.js';
 
 @Controller('geodata')
 export class GeodataController {
@@ -26,7 +29,65 @@ export class GeodataController {
     private readonly imports: GeodataImportService,
     private readonly importMutations: GeodataImportMutationRepository,
     private readonly entityMutations: GeodataEntityMutationRepository,
+    private readonly uploads: GeodataUploadService,
   ) {}
+
+  @Post('import-uploads')
+  @HttpCode(201)
+  createImportUpload(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const claims = authorizeImport(authorization);
+    return this.uploads.create(claims.sub, key, body);
+  }
+
+  @Get('import-uploads/:uploadId')
+  getImportUpload(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('uploadId') id: string,
+  ) {
+    const claims = authorizeImport(authorization);
+    return this.uploads.get(claims.sub, id);
+  }
+
+  @Post('import-uploads/:uploadId/parts/:partNumber')
+  uploadImportPart(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('x-part-sha256') checksum: string | undefined,
+    @Param('uploadId') id: string,
+    @Param('partNumber') partNumber: string,
+    @Req() request: Request,
+  ) {
+    const claims = authorizeImport(authorization);
+    return this.uploads.uploadPart(
+      claims.sub,
+      id,
+      Number(partNumber),
+      request.body as Buffer,
+      checksum,
+    );
+  }
+
+  @Post('import-uploads/:uploadId/complete')
+  @HttpCode(202)
+  completeImportUpload(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('uploadId') id: string,
+  ) {
+    const claims = authorizeImport(authorization);
+    return this.uploads.complete(claims.sub, id);
+  }
+
+  @Delete('import-uploads/:uploadId')
+  abortImportUpload(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('uploadId') id: string,
+  ) {
+    const claims = authorizeImport(authorization);
+    return this.uploads.abort(claims.sub, id);
+  }
 
   @Post('imports')
   @HttpCode(202)

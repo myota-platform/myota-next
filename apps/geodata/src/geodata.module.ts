@@ -5,6 +5,7 @@ import { GeodataRepository } from './geodata.repository.js';
 import { GeodataImportService } from './geodata-import.service.js';
 import { GeodataImportMutationRepository } from './geodata-import-mutation.repository.js';
 import { GeodataEntityMutationRepository } from './geodata-entity-mutation.repository.js';
+import { GeodataUploadService } from './geodata-upload.service.js';
 
 @Module({
   imports: [DatabaseHealthModule.forEnvironment('GEO_DATABASE_URL')],
@@ -14,6 +15,7 @@ import { GeodataEntityMutationRepository } from './geodata-entity-mutation.repos
     GeodataImportService,
     GeodataImportMutationRepository,
     GeodataEntityMutationRepository,
+    GeodataUploadService,
   ],
 })
 export class GeodataModule {}

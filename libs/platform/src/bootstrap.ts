@@ -7,8 +7,14 @@ export async function bootstrapHttpService(
   rootModule: Type<unknown>,
   defaultPort: number,
   jsonLimit = '100kb',
+  rawBodyRoutes: string[] = [],
 ): Promise<INestApplication> {
   const app = await NestFactory.create(rootModule, { bodyParser: false });
+  for (const route of rawBodyRoutes)
+    app.use(
+      route,
+      express.raw({ type: 'application/octet-stream', limit: '16mb' }),
+    );
   app.use(express.json({ limit: jsonLimit }));
   app.use(express.urlencoded({ extended: true, limit: jsonLimit }));
   app.setGlobalPrefix('v1', {
