@@ -319,6 +319,78 @@ export class GeodataPromotionRepository {
     return disappeared;
   }
 
+  private async createConflationCandidates(
+    client: PoolClient,
+    entityId: string,
+  ) {
+    const matches = await client.query(
+      `SELECT candidate.id::text AS candidate_id,candidate.name AS candidate_name,
+         candidate.public_properties->>'sourceRef' AS candidate_source_ref,
+         candidate.jurisdiction AS candidate_jurisdiction,
+         ST_XMin(Box3D(candidate.geom)) AS candidate_min_x,
+         ST_YMin(Box3D(candidate.geom)) AS candidate_min_y,
+         ST_XMax(Box3D(candidate.geom)) AS candidate_max_x,
+         ST_YMax(Box3D(candidate.geom)) AS candidate_max_y,
+         existing.id::text AS existing_id,existing.name AS existing_name,
+         existing.public_properties->>'sourceRef' AS existing_source_ref,
+         existing.jurisdiction AS existing_jurisdiction,
+         ST_XMin(Box3D(existing.geom)) AS existing_min_x,
+         ST_YMin(Box3D(existing.geom)) AS existing_min_y,
+         ST_XMax(Box3D(existing.geom)) AS existing_max_x,
+         ST_YMax(Box3D(existing.geom)) AS existing_max_y
+       FROM geodata_entity candidate
+       JOIN geodata_entity existing ON existing.id<>candidate.id
+         AND existing.programme_slug IS NOT DISTINCT FROM candidate.programme_slug
+         AND existing.geom && candidate.geom
+         AND (candidate.public_properties->>'sourceRef' IS NULL
+           OR existing.public_properties->>'sourceRef' IS NULL
+           OR existing.public_properties->>'sourceRef'<>
+             candidate.public_properties->>'sourceRef')
+       WHERE candidate.id=$1`,
+      [entityId],
+    );
+    for (const row of matches.rows as Array<Record<string, unknown>>) {
+      const score = scoreConflation(
+        typeof row.candidate_name === 'string' ? row.candidate_name : '',
+        textValue(row.candidate_source_ref) ?? '',
+        textValue(row.candidate_jurisdiction),
+        boxFromRow(row, 'candidate'),
+        typeof row.existing_name === 'string' ? row.existing_name : '',
+        textValue(row.existing_source_ref) ?? '',
+        textValue(row.existing_jurisdiction),
+        boxFromRow(row, 'existing'),
+      );
+      if (score.score < 0.55) continue;
+      const [leftId, rightId] = [
+        String(row.candidate_id),
+        String(row.existing_id),
+      ].sort();
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('geodata:conflation:' || $1 || ':' || $2,0))",
+        [leftId, rightId],
+      );
+      const prior = await client.query(
+        `SELECT 1 FROM conflation_candidate
+         WHERE (left_entity_id=$1 AND right_entity_id=$2)
+            OR (left_entity_id=$2 AND right_entity_id=$1) LIMIT 1`,
+        [leftId, rightId],
+      );
+      if (prior.rows[0]) continue;
+      await client.query(
+        `INSERT INTO conflation_candidate
+          (id,left_entity_id,right_entity_id,similarity,reason,resolution,resolution_history)
+         VALUES ($1,$2,$3,$4,$5::jsonb,'OPEN','[]'::jsonb)`,
+        [
+          randomUUID(),
+          leftId,
+          rightId,
+          score.score,
+          JSON.stringify(score.signals),
+        ],
+      );
+    }
+  }
+
   async retryPromotion(queue: PromotionQueue, error: unknown) {
     const client = await this.connect();
     try {
@@ -621,6 +693,7 @@ export class GeodataPromotionRepository {
           JSON.stringify({ ...properties, geometry: properties.geometry }),
         ],
       );
+      await this.createConflationCandidates(client, entityId);
       if (['APPROVED', 'CANDIDATE'].includes(queue.target_status)) {
         const state = await client.query(
           `SELECT ST_AsGeoJSON(geom)::jsonb AS geometry,public_properties,
@@ -791,4 +864,156 @@ function errorMessage(error: unknown) {
 
 function textValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+type BoundingBox = [number, number, number, number];
+
+function boxFromRow(row: Record<string, unknown>, prefix: string): BoundingBox {
+  return [
+    Number(row[`${prefix}_min_x`]),
+    Number(row[`${prefix}_min_y`]),
+    Number(row[`${prefix}_max_x`]),
+    Number(row[`${prefix}_max_y`]),
+  ];
+}
+
+function scoreConflation(
+  candidateName: string,
+  candidateRef: string,
+  candidateJurisdiction: string | null,
+  candidateBox: BoundingBox,
+  existingName: string,
+  existingRef: string,
+  existingJurisdiction: string | null,
+  existingBox: BoundingBox,
+) {
+  const normalizedCandidate = candidateName.toLowerCase().trim();
+  const normalizedExisting = existingName.toLowerCase().trim();
+  const nameScore =
+    normalizedCandidate && normalizedExisting
+      ? sequenceMatcherRatio(normalizedCandidate, normalizedExisting)
+      : 0;
+  const sourceIdentifier = candidateRef && candidateRef === existingRef ? 1 : 0;
+  const intersection = boxIntersection(candidateBox, existingBox);
+  const candidateArea = boxArea(candidateBox);
+  const existingArea = boxArea(existingBox);
+  const union = candidateArea + existingArea - intersection;
+  const overlap = union ? intersection / union : 0;
+  const containment =
+    candidateBox[0] >= existingBox[0] &&
+    candidateBox[1] >= existingBox[1] &&
+    candidateBox[2] <= existingBox[2] &&
+    candidateBox[3] <= existingBox[3]
+      ? 1
+      : 0;
+  const distanceKm = haversineKm(
+    boxCenter(candidateBox),
+    boxCenter(existingBox),
+  );
+  const distanceScore = Math.max(0, 1 - distanceKm / 2);
+  const jurisdiction =
+    candidateJurisdiction && candidateJurisdiction === existingJurisdiction
+      ? 1
+      : 0;
+  const score = round6(
+    sourceIdentifier * 0.3 +
+      nameScore * 0.2 +
+      containment * 0.2 +
+      overlap * 0.15 +
+      distanceScore * 0.1 +
+      jurisdiction * 0.05,
+  );
+  return {
+    score,
+    signals: {
+      sourceIdentifier,
+      name: round6(nameScore),
+      containment,
+      overlap: round6(overlap),
+      distanceKm: round6(distanceKm),
+      jurisdiction,
+    },
+  };
+}
+
+function sequenceMatcherRatio(left: string, right: string) {
+  const leftSymbols = Array.from(left);
+  const rightSymbols = Array.from(right);
+  if (!leftSymbols.length && !rightSymbols.length) return 1;
+  const pending: [number, number, number, number][] = [
+    [0, leftSymbols.length, 0, rightSymbols.length],
+  ];
+  let matchingCharacters = 0;
+  while (pending.length) {
+    const [leftStart, leftEnd, rightStart, rightEnd] = pending.pop()!;
+    let previous = new Uint32Array(rightEnd - rightStart + 1);
+    let bestLeft = leftStart;
+    let bestRight = rightStart;
+    let bestSize = 0;
+    for (let leftIndex = leftStart; leftIndex < leftEnd; leftIndex += 1) {
+      const current = new Uint32Array(rightEnd - rightStart + 1);
+      for (
+        let rightIndex = rightStart;
+        rightIndex < rightEnd;
+        rightIndex += 1
+      ) {
+        if (leftSymbols[leftIndex] !== rightSymbols[rightIndex]) continue;
+        const size = previous[rightIndex - rightStart] + 1;
+        current[rightIndex - rightStart + 1] = size;
+        if (size > bestSize) {
+          bestLeft = leftIndex - size + 1;
+          bestRight = rightIndex - size + 1;
+          bestSize = size;
+        }
+      }
+      previous = current;
+    }
+    if (!bestSize) continue;
+    matchingCharacters += bestSize;
+    if (leftStart < bestLeft && rightStart < bestRight)
+      pending.push([leftStart, bestLeft, rightStart, bestRight]);
+    const leftAfter = bestLeft + bestSize;
+    const rightAfter = bestRight + bestSize;
+    if (leftAfter < leftEnd && rightAfter < rightEnd)
+      pending.push([leftAfter, leftEnd, rightAfter, rightEnd]);
+  }
+  return (2 * matchingCharacters) / (leftSymbols.length + rightSymbols.length);
+}
+
+function boxArea(box: BoundingBox) {
+  return Math.max(0, box[2] - box[0]) * Math.max(0, box[3] - box[1]);
+}
+
+function boxIntersection(left: BoundingBox, right: BoundingBox) {
+  const minX = Math.max(left[0], right[0]);
+  const minY = Math.max(left[1], right[1]);
+  const maxX = Math.min(left[2], right[2]);
+  const maxY = Math.min(left[3], right[3]);
+  if (minX >= maxX || minY >= maxY) return 0;
+  return (maxX - minX) * (maxY - minY);
+}
+
+function boxCenter(box: BoundingBox) {
+  return { lon: (box[0] + box[2]) / 2, lat: (box[1] + box[3]) / 2 };
+}
+
+function haversineKm(
+  left: { lon: number; lat: number },
+  right: { lon: number; lat: number },
+) {
+  const radius = 6371.0088;
+  const lat1 = (left.lat * Math.PI) / 180;
+  const lat2 = (right.lat * Math.PI) / 180;
+  const deltaLat = lat2 - lat1;
+  const deltaLon = ((right.lon - left.lon) * Math.PI) / 180;
+  const term =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
+  return (
+    radius * 2 * Math.atan2(Math.sqrt(term), Math.sqrt(Math.max(0, 1 - term)))
+  );
+}
+
+function round6(value: number) {
+  return Math.round(value * 1_000_000) / 1_000_000;
 }

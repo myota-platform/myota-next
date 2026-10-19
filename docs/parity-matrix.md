@@ -76,8 +76,9 @@ import bucket are bounded, hash-checked, validated, and staged as normalized
 worker inputs. Refresh schedules can be listed and created, and manual complete-
 snapshot runs queue GeoJSON imports, promote validated candidates, record
 manifests, and apply disappearance policy after successful promotion.
-Automatic scheduled execution, conflation candidate generation, remaining
-review workflows, queue-level redrive, NATS delivery, and
+Import promotion generates deduplicated conflation candidates from overlapping
+PostGIS bounding boxes using the baseline 0.55 scoring threshold. Automatic
+scheduled execution, remaining review workflows, queue-level redrive, NATS delivery, and
 remaining worker operations are outstanding. Finalization removes staged candidates and queues transactionally
 while preserving the import summary and materialized entities. Pending
 candidates can be paged; administrators can confirm or

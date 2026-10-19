@@ -110,8 +110,10 @@
   requests at the candidate staging checkpoint and clear temporary source data.
   A worker restart recovers runs left in the CANCELLING state.
   Persisted conflation candidates can be paged by resolution and resolved with
-  reviewer history, idempotency, and a transactional outbox fact; automated
-  candidate generation remains outstanding.
+  reviewer history, idempotency, and a transactional outbox fact. Entity import
+  promotion now searches overlapping PostGIS bounding boxes, computes the
+  baseline name/containment/overlap/distance/jurisdiction score, and stores
+  deduplicated candidates at the existing 0.55 threshold.
   The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
   paged import-run status reads are also exposed. Import finalization now
