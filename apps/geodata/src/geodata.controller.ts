@@ -16,14 +16,16 @@ import type { Response } from 'express';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { GeodataRepository } from './geodata.repository.js';
 import { GeodataImportService } from './geodata-import.service.js';
-import { GeodataMutationRepository } from './geodata-mutation.repository.js';
+import { GeodataImportMutationRepository } from './geodata-import-mutation.repository.js';
+import { GeodataEntityMutationRepository } from './geodata-entity-mutation.repository.js';
 
 @Controller('geodata')
 export class GeodataController {
   constructor(
     private readonly repository: GeodataRepository,
     private readonly imports: GeodataImportService,
-    private readonly mutations: GeodataMutationRepository,
+    private readonly importMutations: GeodataImportMutationRepository,
+    private readonly entityMutations: GeodataEntityMutationRepository,
   ) {}
 
   @Post('imports')
@@ -73,7 +75,7 @@ export class GeodataController {
       throw new ForbiddenException(
         'geodata.review scope is required to approve imported entities',
       );
-    return this.mutations.queueImportProcessing(runId, key, body);
+    return this.importMutations.queueImportProcessing(runId, key, body);
   }
 
   @Get('imports/:runId/processing-queues/:queueId')
@@ -104,7 +106,7 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
   ) {
     authorizeImport(authorization);
-    return this.mutations.validateImportCandidates(runId, key, body);
+    return this.importMutations.validateImportCandidates(runId, key, body);
   }
 
   @Get('entities')
@@ -208,7 +210,7 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
   ) {
     authorizeReview(authorization);
-    return this.mutations.patchEntityMetadata(id, key, ifMatch, body);
+    return this.entityMutations.patchEntityMetadata(id, key, ifMatch, body);
   }
 
   @Post('entities/:entityId/reviews')
@@ -220,7 +222,7 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
   ) {
     authorizeReview(authorization);
-    return this.mutations.reviewEntity(id, key, ifMatch, body);
+    return this.entityMutations.reviewEntity(id, key, ifMatch, body);
   }
 
   @Put('entities/:entityId/categories')
@@ -232,7 +234,7 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
   ) {
     authorizeReview(authorization);
-    return this.mutations.replaceEntityCategories(id, key, ifMatch, body);
+    return this.entityMutations.replaceEntityCategories(id, key, ifMatch, body);
   }
 
   @Put('entities/:entityId/geometry')
@@ -244,7 +246,7 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
   ) {
     authorizeReview(authorization);
-    return this.mutations.replaceEntityGeometry(id, key, ifMatch, body);
+    return this.entityMutations.replaceEntityGeometry(id, key, ifMatch, body);
   }
 }
 

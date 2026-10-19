@@ -23,24 +23,26 @@ current reference.
   structured logs, metrics, tracing, and graceful shutdown.
 - Start each process independently while retaining the three database targets.
 
-The initial Nest workspace, database-aware readiness, Node version pin, and
-build tooling are in place. Domain behavior and all worker logic remain open;
-see [implementation status](status.md).
+The Node 24/NestJS workspace, separate service and worker entry points,
+database-aware readiness, copied contracts and migrations, and formatting,
+lint, typecheck, and build gates are in place. Identity, Programmes, Activity,
+and Geodata each have working vertical slices. See the [implementation
+status](status.md) and [parity matrix](parity-matrix.md) for current coverage.
 
 ## 2. Implement contract-shaped synchronous behavior
 
-- Implement Identity and Programme APIs against the copied OpenAPI contract.
-- Implement the gateway and its authentication/authorization forwarding rules.
-- Add migration-based persistence and contract tests before expanding behavior.
+- Finish contract coverage for Identity and Programmes.
+- Implement Gateway routing and authorization forwarding.
+- Add migration-based persistence and compatibility coverage before expanding
+  behavior.
 
 ## 3. Implement Activity and Geodata domains
 
-- Implement relational data models and query behavior, preserving ownership and
-  indexes for high-write QSOs and spatial queries.
-- Add transactional outboxes, idempotency, leases, durable workers, recovery,
-  retries, and audited redrive before enabling asynchronous operations.
-- Port import formats, object storage handling, rendering, and domain rules
-  with fixtures that exercise existing edge cases.
+- Finish Activity and Geodata APIs, workers, recovery, and redrive.
+- Preserve the Core, Activity, and Geodata database boundaries and their
+  high-write and spatial query behavior.
+- Port remaining file formats, uploads, rendering, and domain rules with
+  compatibility coverage.
 
 ## 4. Rebuild browser applications
 
@@ -65,5 +67,6 @@ see [implementation status](status.md).
 No cutover until the function parity matrix is fully traced to code and tests,
 the three databases have verified migration/transfer and restore procedures,
 all worker recovery paths are proven, browser workflows pass, and deployment
-qualification succeeds in an isolated environment. This repository currently
-contains only the baseline contracts and language-neutral planning documents.
+qualification succeeds in an isolated environment. This repository is a
+development baseline, not a production cutover candidate. Use the parity matrix
+for missing behavior and the status document for current implementation.

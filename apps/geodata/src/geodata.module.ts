@@ -3,7 +3,8 @@ import { DatabaseHealthModule, HealthController } from '@app/platform';
 import { GeodataController } from './geodata.controller.js';
 import { GeodataRepository } from './geodata.repository.js';
 import { GeodataImportService } from './geodata-import.service.js';
-import { GeodataMutationRepository } from './geodata-mutation.repository.js';
+import { GeodataImportMutationRepository } from './geodata-import-mutation.repository.js';
+import { GeodataEntityMutationRepository } from './geodata-entity-mutation.repository.js';
 
 @Module({
   imports: [DatabaseHealthModule.forEnvironment('GEO_DATABASE_URL')],
@@ -11,7 +12,8 @@ import { GeodataMutationRepository } from './geodata-mutation.repository.js';
   providers: [
     GeodataRepository,
     GeodataImportService,
-    GeodataMutationRepository,
+    GeodataImportMutationRepository,
+    GeodataEntityMutationRepository,
   ],
 })
 export class GeodataModule {}
