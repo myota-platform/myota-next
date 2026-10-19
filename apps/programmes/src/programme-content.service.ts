@@ -14,6 +14,7 @@ import type {
   ReviewProgrammeContentDto,
   SaveProgrammeContentDto,
 } from './programmes.dto.js';
+import { normalizeUtcTimestamp } from './programme-domain.js';
 
 type ContentRecord = Record<string, unknown> & {
   id: string;
@@ -357,20 +358,6 @@ function requireContentRecord(
   if (!content) throw new NotFoundException('content not found');
   content.reviewHistory ??= [];
   return content;
-}
-
-function normalizeUtcTimestamp(value: string): string {
-  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
-  const normalized = hasTimezone
-    ? value
-    : value.includes('T')
-      ? `${value}Z`
-      : `${value}T00:00:00Z`;
-  const date = new Date(normalized);
-  if (!Number.isFinite(date.getTime())) {
-    throw new BadRequestException('effectiveFrom must be a valid timestamp');
-  }
-  return date.toISOString();
 }
 
 function parsePage(value: string | undefined, fallback: number): number {
