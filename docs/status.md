@@ -76,8 +76,9 @@
   file before row processing, so parser failures fail the import. Later
   per-record failures are reported alongside persisted QSOs and aggregate
   updates. Timestamp parsing preserves the Python reference's compact ISO date
-  and time forms and hour-only UTC offsets; imports with no parsed QSO records
-  retain the reference's successful zero-record outcome. Retention interval
+  and time forms, slash-separated QSO dates with compact times, and hour-only
+  UTC offsets; imports with no parsed QSO records retain the reference's
+  successful zero-record outcome. Retention interval
   configuration rejects malformed values instead of silently producing a
   rapid retry loop.
   Completion notices include the full final import result, matching the Python

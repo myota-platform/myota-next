@@ -12,8 +12,18 @@ export function parseTimestamp(value: string): Date {
       normalized,
     );
   if (compact) {
-    const [, year, month, day, separator, hour, minute, second, fraction, zone] =
-      compact;
+    const [
+      ,
+      year,
+      month,
+      day,
+      separator,
+      hour,
+      minute,
+      second,
+      fraction,
+      zone,
+    ] = compact;
     normalized = `${year}-${month}-${day}${separator}${hour}:${minute}${second ? `:${second}` : ''}${fraction?.replace(',', '.') ?? ''}${zone ?? ''}`;
   } else {
     const compactDate = /^(\d{4})(\d{2})(\d{2})$/.exec(normalized);
@@ -306,9 +316,16 @@ export function parseAdif(text: string): JsonRecord[] {
     if (!timestamp && record.date && record.time) {
       const date = String(record.date).replaceAll('/', '-');
       let time = String(record.time);
-      if (/^\d{8}$/.test(date) && /^\d{4}(?:\d{2})?$/.test(time)) {
+      if (
+        /^(?:\d{8}|\d{4}-\d{2}-\d{2})$/.test(date) &&
+        /^\d{4}(?:\d{2})?$/.test(time)
+      ) {
         if (time.length === 4) time += '00';
-        timestamp = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T${time.slice(0, 2)}:${time.slice(2, 4)}:${time.slice(4, 6)}Z`;
+        const normalizedDate =
+          date.length === 8
+            ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
+            : date;
+        timestamp = `${normalizedDate}T${time.slice(0, 2)}:${time.slice(2, 4)}:${time.slice(4, 6)}Z`;
       } else {
         timestamp = `${date}T${time}Z`;
       }
