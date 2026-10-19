@@ -55,9 +55,11 @@ and queues idempotent import runs transactionally. The worker validates feature
 names and WGS84 geometries, stages candidates with provenance and 50 m duplicate
 warnings, records errors, and emits the preprocessing fact. Multipart/resumable
 and external object-reference imports, entity edits, remaining review workflows,
-promotion, NATS delivery, and remaining worker operations are outstanding.
-Pending candidates can be paged; administrators can confirm or reject selected
-rows transactionally.
+failed-queue redrive, NATS delivery, and remaining worker operations are
+outstanding. Pending candidates can be paged; administrators can confirm or
+reject selected rows transactionally. Selected candidates can also be queued
+for CANDIDATE or scope-gated APPROVED promotion; the worker persists entities,
+category and source links, audit/outbox events, and queue outcomes.
 
 ## User applications
 

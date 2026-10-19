@@ -156,12 +156,15 @@ export class GeodataWorkRepository {
           continue;
         }
         const duplicates = await client.query(
-          `WITH candidate AS (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1),4326)::geography AS geom)
-           SELECT e.id::text AS id,e.name,round(ST_Distance(e.geom::geography,candidate.geom)::numeric,1) AS distance_meters
+          `WITH candidate AS (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1),4326) AS geometry)
+           SELECT e.id::text AS id,e.name,e.lifecycle_status AS status,e.entity_type_code AS entity_type,
+             ST_AsGeoJSON(e.geom)::jsonb AS geometry,
+             CASE WHEN ST_Equals(e.geom,candidate.geometry) THEN 'IDENTICAL_GEOMETRY' ELSE 'WITHIN_50_METERS' END AS match_type,
+             round(ST_Distance(e.geom::geography,candidate.geometry::geography)::numeric,1) AS distance_meters
            FROM geodata_entity e CROSS JOIN candidate
            WHERE e.lifecycle_status IN ('APPROVED','CANDIDATE')
-             AND ST_DWithin(e.geom::geography,candidate.geom,50)
-           ORDER BY ST_Distance(e.geom::geography,candidate.geom) LIMIT 10`,
+             AND ST_DWithin(e.geom::geography,candidate.geometry::geography,50)
+           ORDER BY ST_Distance(e.geom::geography,candidate.geometry::geography) LIMIT 10`,
           [geometry],
         );
         prepared.push({
@@ -169,14 +172,20 @@ export class GeodataWorkRepository {
           name,
           geometry,
           properties,
-          sourceRef:
-            typeof properties.sourceRef === 'string'
-              ? properties.sourceRef
-              : null,
+          sourceRef: textValue(
+            properties.sourceRef ??
+              properties.id ??
+              properties['@id'] ??
+              feature.id,
+          ),
           possibleDuplicates: duplicates.rows.map((duplicate) => ({
             entityId: duplicate.id,
             name: duplicate.name,
+            status: duplicate.status,
+            entityTypes: duplicate.entity_type ? [duplicate.entity_type] : [],
+            geometry: duplicate.geometry,
             distanceMeters: Number(duplicate.distance_meters),
+            matchType: duplicate.match_type,
           })),
         });
       } finally {
@@ -403,4 +412,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function textValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }

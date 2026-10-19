@@ -51,6 +51,37 @@ export class GeodataController {
     return this.repository.getImport(id);
   }
 
+  @Post('imports/:runId/process')
+  @HttpCode(202)
+  queueImportProcessing(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Param('runId') runId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const claims = authorizeImport(authorization);
+    if (
+      (typeof body.targetStatus === 'string'
+        ? body.targetStatus.toUpperCase()
+        : '') === 'APPROVED' &&
+      !claims.scp.some((scope) => scope === '*' || scope === 'geodata.review')
+    )
+      throw new ForbiddenException(
+        'geodata.review scope is required to approve imported entities',
+      );
+    return this.repository.queueImportProcessing(runId, key, body);
+  }
+
+  @Get('imports/:runId/processing-queues/:queueId')
+  getImportProcessingQueue(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('runId') runId: string,
+    @Param('queueId') queueId: string,
+  ) {
+    authorizeImport(authorization);
+    return this.repository.getImportProcessingQueue(runId, queueId);
+  }
+
   @Get('imports/:runId/candidates')
   listImportCandidates(
     @Headers('authorization') authorization: string | undefined,
@@ -173,6 +204,7 @@ function authorizeImport(authorization: string | undefined) {
   const claims = verifyAccessToken(authorization);
   if (!claims.scp.some((scope) => scope === '*' || scope === 'geodata.import'))
     throw new ForbiddenException('geodata.import scope is required');
+  return claims;
 }
 
 type LocationNode = { name: string; code: string | null } & Record<string, any>;

@@ -292,6 +292,166 @@ export class GeodataRepository {
     }
   }
 
+  async queueImportProcessing(
+    runId: string,
+    key: string | undefined,
+    body: Record<string, unknown>,
+  ) {
+    const rawIds = body.candidateIds;
+    if (
+      !Array.isArray(rawIds) ||
+      !rawIds.length ||
+      rawIds.length > 500 ||
+      rawIds.some((id) => typeof id !== 'string' || !isUuid(id))
+    )
+      throw new BadRequestException('candidateIds must contain 1 to 500 UUIDs');
+    if (new Set(rawIds).size !== rawIds.length)
+      throw new BadRequestException('candidateIds must be unique');
+    const targetStatus =
+      typeof body.targetStatus === 'string'
+        ? body.targetStatus.toUpperCase()
+        : '';
+    if (!['CANDIDATE', 'APPROVED'].includes(targetStatus))
+      throw new BadRequestException(
+        'targetStatus must be CANDIDATE or APPROVED',
+      );
+    const requestedBy =
+      typeof body.processorId === 'string' ? body.processorId.trim() : '';
+    if (!requestedBy) throw new BadRequestException('processorId is required');
+    const note =
+      typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
+    const queueId = randomUUID();
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      if (key) {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-import-promotion:' || $1,0))",
+          [key],
+        );
+        const previous = await client.query(
+          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          ['geodata-import-promotion', key],
+        );
+        if (previous.rows[0]) {
+          await client.query('COMMIT');
+          return previous.rows[0].response;
+        }
+      }
+      const selected = await client.query(
+        `SELECT id,validation_status,processing_queue_id
+         FROM geodata_import_candidate WHERE import_run_id=$1 AND id=ANY($2::uuid[])
+         FOR UPDATE`,
+        [runId, rawIds],
+      );
+      if (selected.rows.length !== rawIds.length)
+        throw new BadRequestException(
+          'one or more candidates do not belong to this import run',
+        );
+      if (
+        selected.rows.some(
+          (row) =>
+            row.validation_status === 'PROCESSED' || row.processing_queue_id,
+        )
+      )
+        throw new BadRequestException(
+          'one or more candidates are already processed or queued',
+        );
+
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await client.query(
+        `INSERT INTO geodata_import_processing_queue
+          (id,import_run_id,candidate_ids,target_status,requested_by,status,job_metadata)
+         VALUES ($1,$2,$3::jsonb,$4,$5,'QUEUED',$6::jsonb)`,
+        [
+          queueId,
+          runId,
+          JSON.stringify(rawIds),
+          targetStatus,
+          requestedBy,
+          JSON.stringify({ note }),
+        ],
+      );
+      await client.query(
+        `UPDATE geodata_import_candidate SET validation_status='CONFIRMED',
+         validated_by=$3,validated_at=now(),target_status=$4,processing_queue_id=$5,updated_at=now()
+         WHERE import_run_id=$1 AND id=ANY($2::uuid[])`,
+        [runId, rawIds, requestedBy, targetStatus, queueId],
+      );
+      await client.query(
+        `INSERT INTO outbox_event
+         (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+         VALUES ($1,'geodata.import.processing.queued.v1','geodata-service','import_processing_queue',$2,$3::jsonb,now(),$4)`,
+        [
+          randomUUID(),
+          queueId,
+          JSON.stringify({
+            queueId,
+            importRunId: runId,
+            candidateIds: rawIds,
+            targetStatus,
+            requestedBy,
+            natsSubject: 'myota.geodata.import.process.v1',
+          }),
+          randomUUID(),
+        ],
+      );
+      const response = {
+        id: queueId,
+        importRunId: runId,
+        candidateIds: rawIds,
+        targetStatus,
+        requestedBy,
+        status: 'QUEUED',
+        requestedAt: new Date().toISOString(),
+        queued: true,
+      };
+      if (key)
+        await client.query(
+          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+          ['geodata-import-promotion', key, JSON.stringify(response)],
+        );
+      await client.query('COMMIT');
+      return response;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getImportProcessingQueue(runId: string, queueId: string) {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT id,import_run_id,candidate_ids,target_status,requested_by,status,
+          requested_at,started_at,completed_at,result
+         FROM geodata_import_processing_queue WHERE id=$1 AND import_run_id=$2`,
+        [queueId, runId],
+      );
+      const row = result.rows[0];
+      if (!row)
+        throw new NotFoundException('import processing queue not found');
+      return {
+        id: row.id,
+        importRunId: row.import_run_id,
+        candidateIds: row.candidate_ids,
+        targetStatus: row.target_status,
+        requestedBy: row.requested_by,
+        status: row.status,
+        requestedAt: row.requested_at,
+        startedAt: row.started_at,
+        completedAt: row.completed_at,
+        result: row.result,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
   async getEntityAudit(id: string) {
     const entity = await this.getEntity(id);
     const client = await this.connect();
@@ -372,7 +532,11 @@ const entityProjection = `public_properties || jsonb_build_object(
   'maidenheadGridSquares4',maidenhead_grid_squares_4,'maidenheadLocators6',maidenhead_locators_6,
   'sourceState',source_state,'jurisdiction',jurisdiction,'attachments',attachments,'version',revision,
   'categories',COALESCE((SELECT jsonb_agg(category_code ORDER BY category_code) FROM geodata_entity_category c WHERE c.entity_id=geodata_entity.id),'[]'::jsonb),
-  'location',jsonb_build_object('continent',continent,'country',country,'region',region,'province',province,'county',county,'city',city,'municipality',municipality,'locality',locality)
+  'location',jsonb_build_object('continent',continent,'continentCode',continent_code,
+    'country',country,'countryCode',country_code,'region',region,'regionCode',region_code,
+    'subdivision',subdivision,'subdivisionCode',subdivision_code,'province',province,
+    'provinceCode',province_code,'county',county,'countyCode',county_code,'city',city,
+    'municipality',municipality,'locality',locality)
 )`;
 
 const importProjection = `source_metadata || jsonb_build_object(
@@ -403,10 +567,14 @@ const candidateProjection = `jsonb_build_object(
   'validatedBy',validated_by,'validatedAt',validated_at,'targetStatus',target_status,
   'processedEntityId',processed_entity_id,'processedAt',processed_at,
   'location',jsonb_build_object(
-    'continent',entity_payload->'continent','country',entity_payload->'country',
-    'region',entity_payload->'region','province',entity_payload->'province',
-    'county',entity_payload->'county','city',entity_payload->'city',
-    'municipality',entity_payload->'municipality','locality',entity_payload->'locality'))`;
+    'continent',COALESCE(entity_payload->'continent',entity_payload->'location'->'continent'),
+    'country',COALESCE(entity_payload->'country',entity_payload->'location'->'country'),
+    'region',COALESCE(entity_payload->'region',entity_payload->'location'->'region'),
+    'province',COALESCE(entity_payload->'province',entity_payload->'location'->'province'),
+    'county',COALESCE(entity_payload->'county',entity_payload->'location'->'county'),
+    'city',COALESCE(entity_payload->'city',entity_payload->'location'->'city'),
+    'municipality',COALESCE(entity_payload->'municipality',entity_payload->'location'->'municipality'),
+    'locality',COALESCE(entity_payload->'locality',entity_payload->'location'->'locality'))`;
 
 function listValues(value: unknown) {
   return Array.isArray(value)

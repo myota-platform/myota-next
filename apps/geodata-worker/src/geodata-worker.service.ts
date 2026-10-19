@@ -5,13 +5,18 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
+import { GeodataPromotionRepository } from './geodata-promotion.repository.js';
 
 @Injectable()
 export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GeodataWorkerService.name);
   private stopping = false;
+  private promotionFirst = false;
 
-  constructor(private readonly repository: GeodataWorkRepository) {}
+  constructor(
+    private readonly repository: GeodataWorkRepository,
+    private readonly promotion: GeodataPromotionRepository,
+  ) {}
 
   onModuleInit() {
     void this.run();
@@ -30,21 +35,11 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
     );
     while (!this.stopping) {
       try {
-        const run = await this.repository.claim();
-        if (!run) {
-          await delay(pollMs);
-          continue;
-        }
-        try {
-          await this.repository.preprocess(run);
-          this.logger.log(`Preprocessed geodata import ${run.id}`);
-        } catch (error) {
-          this.logger.error(
-            `Geodata import ${run.id} failed`,
-            error instanceof Error ? error.stack : undefined,
-          );
-          await this.repository.fail(run, error);
-        }
+        this.promotionFirst = !this.promotionFirst;
+        const worked = this.promotionFirst
+          ? (await this.processPromotion()) || (await this.processImport())
+          : (await this.processImport()) || (await this.processPromotion());
+        if (!worked) await delay(pollMs);
       } catch (error) {
         this.logger.error(
           'Geodata worker database poll failed',
@@ -53,6 +48,38 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
         await delay(pollMs);
       }
     }
+  }
+
+  private async processImport() {
+    const run = await this.repository.claim();
+    if (!run) return false;
+    try {
+      await this.repository.preprocess(run);
+      this.logger.log(`Preprocessed geodata import ${run.id}`);
+    } catch (error) {
+      this.logger.error(
+        `Geodata import ${run.id} failed`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      await this.repository.fail(run, error);
+    }
+    return true;
+  }
+
+  private async processPromotion() {
+    const queue = await this.promotion.claimPromotion();
+    if (!queue) return false;
+    try {
+      await this.promotion.processPromotion(queue);
+      this.logger.log(`Processed geodata promotion queue ${queue.id}`);
+    } catch (error) {
+      this.logger.error(
+        `Geodata promotion queue ${queue.id} failed`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      await this.promotion.retryPromotion(queue, error);
+    }
+    return true;
   }
 }
 
