@@ -52,7 +52,7 @@ export class DatabaseHealthModule {
         },
         DatabaseHealthService,
       ],
-      exports: [DatabaseHealthService],
+      exports: [DatabaseHealthService, DATABASE_HEALTH_POOL],
     };
   }
 }

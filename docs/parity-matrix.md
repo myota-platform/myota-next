@@ -1,9 +1,8 @@
 # Function parity matrix
 
-This is the acceptance inventory for the new implementation. It describes the
-current function to preserve; it does not claim any new component is
-implemented. The copied `contracts/openapi.yaml` and event schemas are the
-first compatibility baseline. Current implementation reference:
+This is the acceptance inventory for the new implementation. The copied
+`contracts/openapi.yaml` and event schemas are the first compatibility
+baseline. Current implementation reference:
 [`myota`](https://github.com/myota-platform/myota/tree/7f904a5130e59006765cf882956a4adbfecb17ec).
 
 ## Domain functions
@@ -15,6 +14,11 @@ first compatibility baseline. Current implementation reference:
 | Geodata        | Catalog search, paging, bounding box and tiles; source adapters; pasted imports and resumable multipart uploads; validation/preprocessing queues, duplicate warnings and promotion; provenance, audit, review and lifecycle; metadata, categories, geometry and location edits; asynchronous location enrichment; refresh schedules; conflation; authorized deletion with Activity impact calculation; retention. |
 | Activity       | Activation lifecycle; single and batch QSO writes; ADIF and QSO ingestion; correction requests and review; public history, results, leaderboards and statistics; statistics rebuild; award design and lifecycle; conditions, levels, evaluation and progress; requests, issuance, assets, previews, certificate rendering and artifact retrieval; notification records and authorized operational views.          |
 | Email delivery | Keep the existing email worker behavior and `email.send.v1` contract visible in the parity inventory. The current registry marks the Identity producer and runtime deployment as gated; do not claim or enable end-to-end delivery until its provider, secrets, retry behavior, and deployment are explicitly qualified.                                                                                          |
+
+Identity currently implements disabled public registration, password login,
+refresh rotation, logout revocation, and current-account reads in NestJS. These
+are the first implemented slice; they still need automated compatibility
+coverage before they count as parity complete.
 
 ## User applications
 

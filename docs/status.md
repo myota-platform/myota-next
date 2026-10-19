@@ -13,11 +13,18 @@
   Geodata probes PostGIS. Gateway readiness does not depend on a database.
 - Current OpenAPI, event schemas, and three database migration baselines copied
   as compatibility references.
+- First Identity slice: disabled public registration, password login, refresh
+  rotation, logout revocation, current account and scope reads. Login uses the
+  existing scrypt hash format, HS256 token contract, persisted session,
+  revocation, lockout, rate-limit, and audit tables.
 
 ## Not implemented yet
 
-- Domain API handlers, authorization rules, persistence repositories, and
-  event/outbox behavior.
+- Remaining Identity APIs, including recovery, account/role administration,
+  callsigns, profile updates/images, OIDC and service credentials. Automated
+  compatibility coverage for the first auth slice is also outstanding.
+- Programme, Activity, Geodata, and Gateway handlers, authorization rules,
+  persistence repositories, and event/outbox behavior.
 - Activity and Geodata consumers, leases, recovery, retries, and redrive.
 - Admin and Participant web applications.
 - Database migration runner, data transfer tooling, deployment images, and
