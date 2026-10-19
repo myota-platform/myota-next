@@ -158,7 +158,7 @@ export async function uploadGeodataFile(
   options: UploadOptions,
 ): Promise<{ importRunId?: string; resumed: boolean }> {
   if (!file.size || file.size > MAX_UPLOAD_BYTES)
-    throw new Error('Choose a non-empty GeoJSON file up to 20 MiB.');
+    throw new Error('Choose a non-empty supported import file up to 20 MiB.');
   const { request, storage, signal } = options;
   const { key, legacyKey } = await storageKeys(file, metadata, options.ownerId);
   let saved = readSaved(storage, key);

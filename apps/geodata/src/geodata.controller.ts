@@ -360,7 +360,14 @@ export class GeodataController {
         },
         {
           code: 'GOVERNMENT_GIS',
-          formats: ['WFS', 'GEOJSON', 'KML', 'GPX', 'ARCGIS_FEATURESERVER'],
+          formats: [
+            'WFS',
+            'GEOJSON',
+            'KML',
+            'GPX',
+            'SHAPEFILE',
+            'ARCGIS_FEATURESERVER',
+          ],
           requires: ['license', 'attribution', 'sourceFormat'],
         },
         {

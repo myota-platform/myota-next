@@ -90,6 +90,7 @@ const formats = [
   'GPX',
   'WFS',
   'ARCGIS_FEATURESERVER',
+  'SHAPEFILE',
 ];
 const allSelected = computed(
   () =>
@@ -526,8 +527,15 @@ async function queueImport(): Promise<void> {
     error.value = 'Choose a file or paste source data.';
     return;
   }
-  if (file.value && !['GEOJSON', 'OSM_GEOJSON'].includes(format.value)) {
-    error.value = `${format.value} file uploads are not available yet. Paste its supported source data or choose GeoJSON.`;
+  if (format.value === 'SHAPEFILE' && !file.value) {
+    error.value = 'Choose a ZIP containing the Shapefile and its sidecars.';
+    return;
+  }
+  if (
+    file.value &&
+    !['GEOJSON', 'OSM_GEOJSON', 'SHAPEFILE'].includes(format.value)
+  ) {
+    error.value = `${format.value} file uploads are not available yet. Paste its supported source data or choose GeoJSON or Shapefile ZIP.`;
     return;
   }
   busy.value = true;
@@ -948,8 +956,8 @@ onBeforeUnmount(() => {
             "
           ></textarea>
           <small class="field-help"
-            >KML, GPX, WFS GeoJSON, and ArcGIS JSON can be pasted. Multipart
-            file uploads currently accept GeoJSON only.</small
+            >KML, GPX, WFS GeoJSON, and ArcGIS JSON can be pasted. Shapefiles
+            must be uploaded as ZIP archives.</small
           >
         </label>
         <label class="wide"
@@ -957,12 +965,14 @@ onBeforeUnmount(() => {
           <input
             ref="fileInput"
             type="file"
-            accept=".json,.geojson"
+            accept=".json,.geojson,.zip"
             @change="chooseFile"
           />
           <small class="field-help"
-            >GeoJSON files up to 20 MiB. To resume an interrupted upload, choose
-            the original file and the same import settings.</small
+            >GeoJSON or Shapefile ZIP files up to 20 MiB. Shapefile ZIP archives
+            may expand to 64 MiB and must include matching .shp, .shx, and .dbf
+            files. To resume an interrupted upload, choose the original file and
+            the same import settings.</small
           >
           <small v-if="file" class="field-help"
             >Selected: {{ file.name }} ({{

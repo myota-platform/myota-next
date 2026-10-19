@@ -21,7 +21,7 @@ import { Readable } from 'node:stream';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 
-// Match the current preprocessor's in-memory GeoJSON limit.
+// Bound source uploads; the worker applies tighter format-specific decode caps.
 const maxUploadBytes = Math.min(
   positiveEnv('MYOTA_UPLOAD_MAX_BYTES', 20 * 1024 * 1024),
   20 * 1024 * 1024,
@@ -621,13 +621,27 @@ function validateCreate(body: Record<string, unknown>) {
     typeof body.format === 'string'
       ? body.format.trim().toUpperCase()
       : 'GEOJSON';
-  if (format !== 'GEOJSON')
+  if (!['GEOJSON', 'SHAPEFILE', 'SHP'].includes(format))
     throw new BadRequestException(
-      'this import path currently accepts GEOJSON only',
+      'this import path accepts GEOJSON or SHAPEFILE ZIP archives',
+    );
+  const normalizedFormat = format === 'SHP' ? 'SHAPEFILE' : format;
+  if (
+    normalizedFormat === 'SHAPEFILE' &&
+    !filename.toLowerCase().endsWith('.zip')
+  )
+    throw new BadRequestException(
+      'Shapefile uploads must be ZIP archives containing .shp, .shx, and .dbf files',
     );
   if (filename.length > 255)
     throw new BadRequestException('filename must be at most 255 characters');
-  const metadata = { ...body, adapter, format, filename, entityTypes };
+  const metadata = {
+    ...body,
+    adapter,
+    format: normalizedFormat,
+    filename,
+    entityTypes,
+  };
   delete (metadata as Record<string, unknown>).expectedSize;
   delete (metadata as Record<string, unknown>).sha256;
   return { filename, expectedSize, sha256, metadata };

@@ -81,13 +81,17 @@ normalized GeoJSON source documents in S3-compatible storage and queues
 idempotent import runs transactionally. ArcGIS geometries with WGS84 and
 Web Mercator spatial references are normalized to WGS84. Pasted KML and GPX
 are also converted to GeoJSON with XML document types rejected and bounded
-feature/coordinate counts. Multipart uploads still accept GeoJSON only. The worker validates feature
-names and WGS84 geometries, stages candidates with provenance and 50 m duplicate
+feature/coordinate counts. Multipart uploads accept GeoJSON and bounded
+Shapefile ZIP archives with matching sidecars; Shapefile coordinates are
+reprojected from the supplied `.prj` to WGS84. OSM PBF and larger streaming
+imports remain outstanding. Import adapters infer feature names from the
+reference alias catalogue before validation. The worker validates WGS84
+geometries, stages candidates with provenance and 50 m duplicate
 warnings, records errors, and emits the preprocessing fact. Community proposals
 join this pipeline and automatically queue promotion to CANDIDATE. Multipart/resumable
 uploads are implemented with owner-scoped durable sessions, bounded binary
 parts, checksum and malware scanning, and transactional completion up to the
-worker's 20 MiB GeoJSON limit. Durable object references from the configured
+worker's 20 MiB source limit and bounded Shapefile expansion. Durable object references from the configured
 import bucket are bounded, hash-checked, validated, and staged as normalized
 worker inputs. Refresh schedules can be listed and created, and manual complete-
 snapshot runs queue GeoJSON imports, promote validated candidates, record

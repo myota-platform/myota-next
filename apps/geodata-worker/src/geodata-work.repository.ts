@@ -12,6 +12,8 @@ import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { decodeShapefileArchive } from './geodata-shapefile.js';
+import { inferFeatureName } from './geodata-feature-name.js';
 
 interface ImportRun {
   id: string;
@@ -428,13 +430,31 @@ export class GeodataWorkRepository {
       throw new Error(
         'geodata import source hash does not match its queued record',
       );
-    const document: unknown = JSON.parse(raw.toString('utf8'));
+    const format =
+      typeof run.source_metadata.format === 'string'
+        ? run.source_metadata.format.toUpperCase()
+        : 'GEOJSON';
+    const filename =
+      typeof run.source_metadata.filename === 'string'
+        ? run.source_metadata.filename
+        : '';
+    const document: unknown =
+      format === 'SHAPEFILE' || format === 'SHP'
+        ? await decodeShapefileArchive(raw, filename)
+        : JSON.parse(raw.toString('utf8'));
     if (
       !isRecord(document) ||
       document.type !== 'FeatureCollection' ||
       !Array.isArray(document.features)
     )
-      throw new Error('stored source is not a GeoJSON FeatureCollection');
+      throw new Error('stored source is not a supported FeatureCollection');
+    const featureLimit = boundedFeatureLimit(
+      process.env.GEODATA_MAX_IMPORT_FEATURES,
+    );
+    if (document.features.length > featureLimit)
+      throw new Error(
+        `geodata import contains more than ${featureLimit} features`,
+      );
 
     const errors: Record<string, unknown>[] = [];
     const prepared: PreparedCandidate[] = [];
@@ -454,9 +474,10 @@ export class GeodataWorkRepository {
         });
         continue;
       }
-      const properties = isRecord(feature.properties) ? feature.properties : {};
-      const name =
-        typeof properties.name === 'string' ? properties.name.trim() : '';
+      const properties = isRecord(feature.properties)
+        ? { ...feature.properties }
+        : {};
+      const name = inferFeatureName(properties);
       if (!name || name.length > 300) {
         errors.push({
           ordinal: index,
@@ -465,6 +486,7 @@ export class GeodataWorkRepository {
         });
         continue;
       }
+      properties.name = name;
       if (
         !isRecord(feature.geometry) ||
         typeof feature.geometry.type !== 'string'
@@ -925,4 +947,11 @@ function errorMessage(error: unknown) {
 
 function textValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function boundedFeatureLimit(value: string | undefined): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= 100_000
+    ? parsed
+    : 5000;
 }

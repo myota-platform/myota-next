@@ -119,12 +119,14 @@
   Owner-scoped resumable S3 multipart uploads now support idempotent session
   creation, bounded binary parts, progress reads, completion, checksum and
   malware scanning, abort, and transactional import-run/outbox creation. This
-  path currently accepts GeoJSON up to the worker's 20 MiB in-memory limit;
-  Pasted-import creation now also decodes bounded KML and GPX to GeoJSON;
-  Shapefile, OSM PBF, and larger streaming imports remain outstanding.
+  path accepts GeoJSON and Shapefile ZIP archives up to 20 MiB. Shapefile
+  archives require matching .shp, .shx, and .dbf sidecars, are capped at 100
+  members and 64 MiB expanded, and are limited by the configured feature cap.
+  Pasted-import creation also decodes bounded KML and GPX to GeoJSON. OSM PBF
+  and larger streaming imports remain outstanding.
   The adapter catalogue and admin selector now expose only import formats the
-  current boundary can decode. The admin file picker is limited to GeoJSON and
-  matches the API's 20 MiB cap.
+  current boundary can decode. The admin file picker accepts GeoJSON and
+  Shapefile ZIP files within the API's 20 MiB cap.
   Durable object references from the configured import bucket are also
   bounded, hash-checked, validated as GeoJSON, and staged in the worker's
   normalized source format.
