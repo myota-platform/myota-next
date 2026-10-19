@@ -194,6 +194,16 @@ function normalizeCoordinates(value: unknown, source: string): unknown {
     typeof value[1] === 'number'
   ) {
     if (source === 'EPSG:4326' || source === 'CRS84') return value;
+    if (source === 'EPSG:3857' || source === 'EPSG:900913') {
+      const x = value[0];
+      const y = value[1];
+      const longitude = (x / 20037508.34) * 180;
+      const latitude = (y / 20037508.34) * 180;
+      const mercatorLatitude =
+        (180 / Math.PI) *
+        (2 * Math.atan(Math.exp((latitude * Math.PI) / 180)) - Math.PI / 2);
+      return [longitude, mercatorLatitude];
+    }
     const [longitude, latitude] = proj4(source, 'EPSG:4326', [
       value[0],
       value[1],
