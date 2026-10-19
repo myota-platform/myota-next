@@ -90,12 +90,15 @@ multipolygon features using a temporary disk-backed node-location index.
 PBF source bytes stream to disk with checksum verification; the default upload
 limit is 256 MiB and can be raised to 512 MiB. Decoded PBF output is capped at
 128 MiB, with per-feature 16 MiB and 250,000 vertex limits and the configured
-feature cap. Larger streaming GeoJSON and Shapefile imports remain outstanding.
-The current NestJS worker still caps those formats at 20 MiB and buffers the
-entire source and decoded FeatureCollection. The reference streams GeoJSON
-features and Shapefile records, with a 1 GiB default expanded Shapefile limit;
-implement bounded record processing before treating large-import parity as
-complete.
+feature cap. GeoJSON multipart uploads stream their source and yield one parsed
+feature at a time, with a 256 MiB default upload cap (512 MiB maximum), 16 MiB
+per-feature size, 250,000 vertices, and the configured feature count. Prepared
+candidate and outbox summaries remain in memory until the final import
+transaction. The separate JSON import-creation path still caps source documents
+at 20 MiB and materializes the normalized collection. Shapefile upload remains
+limited to a 20 MiB archive, a 64 MiB expansion, and full in-memory decoding.
+The reference streams Shapefile records and defaults to a 1 GiB expanded-size
+cap; this remains an import-parity gap.
 Import adapters infer feature names from
 the reference alias catalogue before validation. The worker validates WGS84
 geometries, stages candidates with provenance and 50 m duplicate
@@ -104,7 +107,8 @@ join this pipeline and automatically queue promotion to CANDIDATE. Multipart/res
 uploads are implemented with owner-scoped durable sessions, bounded binary
 parts, checksum and malware scanning, and transactional completion up to the
 worker's 20 MiB source limit for GeoJSON and Shapefile or the larger PBF limit.
-Shapefile expansion is bounded. Durable object references from the configured
+GeoJSON multipart uploads use their larger configurable limit. Shapefile
+expansion is bounded. Durable object references from the configured
 import bucket are bounded, hash-checked, validated, and staged as normalized
 worker inputs. Refresh schedules can be listed and created, and manual complete-
 snapshot runs queue GeoJSON imports, promote validated candidates, record

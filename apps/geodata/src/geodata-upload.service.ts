@@ -26,6 +26,10 @@ const maxUploadBytes = Math.min(
   positiveEnv('MYOTA_UPLOAD_MAX_BYTES', 20 * 1024 * 1024),
   20 * 1024 * 1024,
 );
+const maxGeoJsonUploadBytes = Math.min(
+  positiveEnv('MYOTA_GEOJSON_MAX_UPLOAD_BYTES', 256 * 1024 * 1024),
+  512 * 1024 * 1024,
+);
 const maxOsmPbfUploadBytes = Math.min(
   positiveEnv('MYOTA_OSM_PBF_MAX_UPLOAD_BYTES', 256 * 1024 * 1024),
   512 * 1024 * 1024,
@@ -599,7 +603,11 @@ function validateCreate(body: Record<string, unknown>) {
       ? body.format.trim().toUpperCase()
       : 'GEOJSON';
   const sourceLimit =
-    format === 'OSM_PBF' ? maxOsmPbfUploadBytes : maxUploadBytes;
+    format === 'OSM_PBF'
+      ? maxOsmPbfUploadBytes
+      : format === 'GEOJSON'
+        ? maxGeoJsonUploadBytes
+        : maxUploadBytes;
   const expectedSize = Number(body.expectedSize);
   if (
     !Number.isSafeInteger(expectedSize) ||

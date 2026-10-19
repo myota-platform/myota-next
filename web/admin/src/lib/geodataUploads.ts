@@ -50,6 +50,7 @@ interface UploadOptions {
 
 const DEFAULT_PART_SIZE = 16 * 1024 * 1024;
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+export const MAX_GEOJSON_UPLOAD_BYTES = 512 * 1024 * 1024;
 export const MAX_OSM_PBF_UPLOAD_BYTES = 512 * 1024 * 1024;
 
 function httpStatus(error: unknown): number | undefined {
@@ -159,7 +160,11 @@ export async function uploadGeodataFile(
   options: UploadOptions,
 ): Promise<{ importRunId?: string; resumed: boolean }> {
   const maxBytes =
-    metadata.format === 'OSM_PBF' ? MAX_OSM_PBF_UPLOAD_BYTES : MAX_UPLOAD_BYTES;
+    metadata.format === 'OSM_PBF'
+      ? MAX_OSM_PBF_UPLOAD_BYTES
+      : metadata.format === 'GEOJSON'
+        ? MAX_GEOJSON_UPLOAD_BYTES
+        : MAX_UPLOAD_BYTES;
   if (!file.size || file.size > maxBytes)
     throw new Error(
       `Choose a non-empty supported import file up to ${Math.round(maxBytes / 1024 / 1024)} MiB.`,

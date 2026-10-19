@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { decodeShapefileArchive } from './geodata-shapefile.js';
+import { streamGeoJsonFeatures } from './geodata-geojson-stream.js';
 import { decodeOsmPbfStream } from './geodata-osm-pbf.js';
 import { inferFeatureName } from './geodata-feature-name.js';
 
@@ -432,13 +433,21 @@ export class GeodataWorkRepository {
     const featureLimit = boundedFeatureLimit(
       process.env.GEODATA_MAX_IMPORT_FEATURES,
     );
-    let document: unknown;
+    let features: Iterable<unknown> | AsyncIterable<unknown>;
     if (format === 'OSM_PBF') {
-      document = await decodeOsmPbfStream(
+      const document = await decodeOsmPbfStream(
         object.Body as AsyncIterable<Uint8Array>,
         filename,
         featureLimit,
         run.source_hash,
+        () => this.heartbeat(run),
+      );
+      features = document.features;
+    } else if (format === 'GEOJSON') {
+      features = streamGeoJsonFeatures(
+        object.Body as AsyncIterable<Uint8Array>,
+        run.source_hash,
+        featureLimit,
         () => this.heartbeat(run),
       );
     } else {
@@ -452,21 +461,22 @@ export class GeodataWorkRepository {
         throw new Error(
           'geodata import source hash does not match its queued record',
         );
-      document =
+      const document: unknown =
         format === 'SHAPEFILE' || format === 'SHP'
           ? await decodeShapefileArchive(raw, filename)
           : JSON.parse(raw.toString('utf8'));
+      if (
+        !isRecord(document) ||
+        document.type !== 'FeatureCollection' ||
+        !Array.isArray(document.features)
+      )
+        throw new Error('stored source is not a supported FeatureCollection');
+      if (document.features.length > featureLimit)
+        throw new Error(
+          `geodata import contains more than ${featureLimit} features`,
+        );
+      features = document.features;
     }
-    if (
-      !isRecord(document) ||
-      document.type !== 'FeatureCollection' ||
-      !Array.isArray(document.features)
-    )
-      throw new Error('stored source is not a supported FeatureCollection');
-    if (document.features.length > featureLimit)
-      throw new Error(
-        `geodata import contains more than ${featureLimit} features`,
-      );
 
     const errors: Record<string, unknown>[] = [];
     const prepared: PreparedCandidate[] = [];
@@ -476,9 +486,15 @@ export class GeodataWorkRepository {
     const sourceKey =
       textValue(source.sourceKey ?? source.url ?? source.name) ??
       'unknown-source';
-    for (let index = 0; index < document.features.length; index++) {
+    let featureCount = 0;
+    for await (const feature of features) {
+      const index = featureCount;
+      featureCount += 1;
+      if (featureCount > featureLimit)
+        throw new Error(
+          `geodata import contains more than ${featureLimit} features`,
+        );
       if (index > 0 && index % 100 === 0) await this.heartbeat(run);
-      const feature = document.features[index];
       if (!isRecord(feature) || feature.type !== 'Feature') {
         errors.push({
           ordinal: index,
@@ -572,7 +588,7 @@ export class GeodataWorkRepository {
         client.release();
       }
     }
-    await this.saveCandidates(run, prepared, errors, document.features.length);
+    await this.saveCandidates(run, prepared, errors, featureCount);
   }
 
   async fail(run: ImportRun, error: unknown): Promise<boolean> {

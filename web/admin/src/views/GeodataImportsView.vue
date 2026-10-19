@@ -981,12 +981,13 @@ onBeforeUnmount(() => {
             @change="chooseFile"
           />
           <small class="field-help"
-            >GeoJSON and Shapefile ZIP files up to 20 MiB; OSM PBF files up to
-            512 MiB (the server default is 256 MiB). OSM PBF decoding is limited
-            to 128 MiB of output, 16 MiB and 250,000 vertices per feature, and
-            the configured feature cap. Shapefile ZIP archives may expand to 64
-            MiB and must include matching .shp, .shx, and .dbf files. To resume
-            an interrupted upload, choose the original file and the same import
+            >GeoJSON and OSM PBF files support uploads up to 512 MiB; the server
+            default is 256 MiB. Shapefile ZIP files are limited to 20 MiB and
+            may expand to 64 MiB. GeoJSON features are limited to 16 MiB and
+            250,000 vertices; OSM PBF also has a 128 MiB decoded-output cap.
+            Both formats use the configured feature cap. Shapefile ZIP archives
+            must include matching .shp, .shx, and .dbf files. To resume an
+            interrupted upload, choose the original file and the same import
             settings.</small
           >
           <small v-if="file" class="field-help"
