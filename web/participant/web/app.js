@@ -86,27 +86,38 @@ function renderEntities() {
       (b.onclick = async () => {
         const entity = entities.find((item) => item.id === b.dataset.id);
         if (!entity) return;
-        await api('/v1/geodata/proposals', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Idempotency-Key': crypto.randomUUID(),
-          },
-          body: JSON.stringify({
-            proposerId: '00000000-0000-4000-8000-000000000001',
-            entityTypes: [entity.entityType],
-            source: {
-              name: 'Public programme proposal',
-              license: 'programme-supplied',
-            },
-            feature: {
-              type: 'Feature',
-              properties: { name: entity.name },
-              geometry: entity.geometry,
-            },
-          }),
-        });
-        await loadProgramme($('programme-select').value);
+        if (!awardAccessToken || !awardAccount) {
+          $('proposal-status').textContent =
+            'Sign in below before submitting a proposal.';
+          $('award-email').focus();
+          return;
+        }
+        b.disabled = true;
+        $('proposal-status').textContent = 'Submitting proposal…';
+        try {
+          await awardApi('/v1/geodata/proposals', {
+            method: 'POST',
+            headers: { 'Idempotency-Key': crypto.randomUUID() },
+            body: JSON.stringify({
+              proposerId: awardAccount.id,
+              entityTypes: [entity.entityType],
+              source: {
+                name: 'Public programme proposal',
+                license: 'programme-supplied',
+              },
+              feature: {
+                type: 'Feature',
+                properties: { name: entity.name },
+                geometry: entity.geometry,
+              },
+            }),
+          });
+          $('proposal-status').textContent = 'Proposal submitted for review.';
+          await loadProgramme($('programme-select').value);
+        } catch (error) {
+          $('proposal-status').textContent = error.message;
+          b.disabled = false;
+        }
       }),
   );
 }
@@ -573,6 +584,7 @@ async function loadProfile() {
     const account = await profileApi('/v1/identity/me');
     awardAccount = account;
     renderOperatorCallsigns();
+    renderEntities();
     await loadActivations();
     $('profile-form').hidden = false;
     $('profile-image-editor').hidden = false;
