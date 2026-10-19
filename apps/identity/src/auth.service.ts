@@ -530,8 +530,8 @@ export class IdentityAuthService {
     }
     const page = parsePageInteger(query.page, 1);
     const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
-    const search = (query.q ?? '').trim().toLowerCase();
-    const status = query.status?.trim() || null;
+    const search = (query.q ?? '').toLowerCase();
+    const status = query.status || null;
     const client = await this.connect();
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
