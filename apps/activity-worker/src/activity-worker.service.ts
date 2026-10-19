@@ -12,11 +12,16 @@ import {
   ActivityWorkRepository,
   type ClaimedJob,
 } from './activity-work.repository.js';
+import { ActivityRetentionRepository } from './activity-retention.repository.js';
 
 const STREAM = 'MYOTA_ACTIVITY_WORK';
 const MAX_DELIVERIES = 8;
 const LEASE_SECONDS = 120;
 const MAX_WORK_WAIT_SECONDS = 30;
+const RETENTION_INTERVAL_SECONDS = Math.max(
+  60,
+  Number(process.env.MYOTA_ADIF_RETENTION_INTERVAL_SECONDS ?? 86400),
+);
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -32,10 +37,19 @@ type WorkDefinition = {
 export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ActivityWorkerService.name);
   private stopping = false;
+  private readonly stopSignal: Promise<void>;
+  private resolveStop!: () => void;
   private connection?: Awaited<ReturnType<typeof connect>>;
   private loops: Promise<void>[] = [];
 
-  constructor(private readonly repository: ActivityWorkRepository) {}
+  constructor(
+    private readonly repository: ActivityWorkRepository,
+    private readonly retention: ActivityRetentionRepository,
+  ) {
+    this.stopSignal = new Promise((resolve) => {
+      this.resolveStop = resolve;
+    });
+  }
 
   async onModuleInit(): Promise<void> {
     if (!process.env.ACTIVITY_DATABASE_URL)
@@ -71,7 +85,10 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
           consumer: await js.consumers.get(STREAM, item.durable),
         });
       }
-      this.loops = definitions.map((definition) => this.consume(definition));
+      this.loops = [
+        ...definitions.map((definition) => this.consume(definition)),
+        this.runRetention(),
+      ];
     } catch (error) {
       await this.connection.drain();
       throw error;
@@ -80,6 +97,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     this.stopping = true;
+    this.resolveStop();
     await Promise.allSettled(this.loops);
     await this.connection?.drain();
   }
@@ -253,7 +271,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
         MAX_WORK_WAIT_SECONDS,
       );
       message.working();
-      await pause(seconds * 1000);
+      await this.wait(seconds * 1000);
     }
     message.nak(1000);
     return null;
@@ -274,6 +292,23 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
       if (!extended) throw new Error('worker lease was lost while processing');
       message.working();
     }
+  }
+
+  private async runRetention(): Promise<void> {
+    while (!this.stopping) {
+      try {
+        const deleted = await this.retention.runSweep();
+        if (deleted)
+          this.logger.log(`Deleted ${deleted} expired ADIF source objects`);
+      } catch (error) {
+        this.logger.error(`ADIF retention sweep failed: ${safeError(error)}`);
+      }
+      await this.wait(RETENTION_INTERVAL_SECONDS * 1000);
+    }
+  }
+
+  private async wait(milliseconds: number): Promise<void> {
+    await Promise.race([pause(milliseconds), this.stopSignal]);
   }
 }
 

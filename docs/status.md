@@ -57,6 +57,8 @@
   ADIF uploads are ownership-checked, size-limited, scanned, stored in S3, and
   queued transactionally; the Activity worker parses the source, persists QSOs,
   updates aggregates, records per-record errors, and updates the import status.
+  Scheduled retention removes completed or failed ADIF source objects after the
+  configured window and records successful deletion in Activity PostgreSQL.
   Entity-deletion impact reads and idempotent cascades are implemented: the
   Activity service removes linked valid QSOs and corrections, invalidates
   affected activations, rebuilds subject aggregates, and queues award
