@@ -52,6 +52,11 @@ implemented. ADIF import creation, processing, and status reads are implemented.
 Activity entity-deletion impact reads and idempotent cascades also remove
 linked QSOs and correction rows, rebuild subject aggregates, invalidate affected
 activations, and enqueue award recalculation jobs.
+Geodata deletion now calculates impact, requires explicit confirmation, invokes
+the Activity cascade with a stable idempotency key, and transactionally removes
+Geodata references and the entity. The Geodata worker polls deletion jobs with
+fair rotation alongside existing queues; NATS delivery, lease heartbeats, and
+explicit redrive remain outstanding.
 Geodata provides PostGIS-backed public
 entity list/detail reads with filters and bounds, the import adapter catalogue,
 provider-derived location options, and authorized import-run list/status reads;

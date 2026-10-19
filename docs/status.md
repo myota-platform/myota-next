@@ -59,7 +59,10 @@
   Entity-deletion impact reads and idempotent cascades are implemented: the
   Activity service removes linked valid QSOs and corrections, invalidates
   affected activations, rebuilds subject aggregates, and queues award
-  recalculation jobs. Geodata deletion-job orchestration remains outstanding.
+  recalculation jobs. Geodata now provides scoped impact and confirmation jobs
+  and a retryable worker that applies the Activity cascade before transactionally
+  deleting Geodata references and the entity. Both services persist outbox
+  events; NATS delivery, explicit redrive, and lease heartbeats remain open.
 - Geodata now accepts bounded JSON GeoJSON imports, stores the source document
   in S3-compatible object storage, and creates an idempotent queued import run
   (20 MiB request limit and 5,000 feature default, adjustable with
@@ -133,8 +136,7 @@
   observability proxy behavior.
 - Activity NATS delivery, lease heartbeats during large batches, redrive, and
   remaining job consumers. Geodata NATS delivery, lease heartbeats for large
-  jobs, explicit redrive, and remaining deletion, enrichment, and retention
-  consumers.
+  jobs, explicit redrive, and remaining enrichment and retention consumers.
 - Admin and Participant web applications.
 - Database migration runner, data transfer tooling, deployment images, and
   production observability configuration.

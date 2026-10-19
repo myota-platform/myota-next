@@ -21,6 +21,7 @@ import { GeodataImportService } from './geodata-import.service.js';
 import { GeodataImportMutationRepository } from './geodata-import-mutation.repository.js';
 import { GeodataEntityMutationRepository } from './geodata-entity-mutation.repository.js';
 import { GeodataUploadService } from './geodata-upload.service.js';
+import { GeodataDeletionService } from './geodata-deletion.service.js';
 
 @Controller('geodata')
 export class GeodataController {
@@ -30,7 +31,37 @@ export class GeodataController {
     private readonly importMutations: GeodataImportMutationRepository,
     private readonly entityMutations: GeodataEntityMutationRepository,
     private readonly uploads: GeodataUploadService,
+    private readonly deletions: GeodataDeletionService,
   ) {}
+
+  @Post('entity-deletion-jobs')
+  @HttpCode(201)
+  createEntityDeletionJob(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.deletions.create(authorization, key, body);
+  }
+
+  @Get('entity-deletion-jobs/:jobId')
+  getEntityDeletionJob(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('jobId') jobId: string,
+  ) {
+    return this.deletions.get(authorization, jobId);
+  }
+
+  @Post('entity-deletion-jobs/:jobId/confirm')
+  @HttpCode(202)
+  confirmEntityDeletionJob(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Param('jobId') jobId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.deletions.confirm(authorization, key, jobId, body);
+  }
 
   @Post('import-uploads')
   @HttpCode(201)

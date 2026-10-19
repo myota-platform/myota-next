@@ -7,17 +7,19 @@ import {
 import { GeodataWorkRepository } from './geodata-work.repository.js';
 import { GeodataPromotionRepository } from './geodata-promotion.repository.js';
 import { GeodataEnrichmentRepository } from './geodata-enrichment.repository.js';
+import { GeodataDeletionRepository } from './geodata-deletion.repository.js';
 
 @Injectable()
 export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GeodataWorkerService.name);
   private stopping = false;
-  private promotionFirst = false;
+  private queueOffset = 0;
 
   constructor(
     private readonly repository: GeodataWorkRepository,
     private readonly promotion: GeodataPromotionRepository,
     private readonly enrichment: GeodataEnrichmentRepository,
+    private readonly deletions: GeodataDeletionRepository,
   ) {}
 
   onModuleInit() {
@@ -37,14 +39,21 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
     );
     while (!this.stopping) {
       try {
-        this.promotionFirst = !this.promotionFirst;
-        const worked = this.promotionFirst
-          ? (await this.processPromotion()) ||
-            (await this.processImport()) ||
-            (await this.processEnrichment())
-          : (await this.processImport()) ||
-            (await this.processEnrichment()) ||
-            (await this.processPromotion());
+        const processors = [
+          () => this.processImport(),
+          () => this.processPromotion(),
+          () => this.processEnrichment(),
+          () => this.processDeletion(),
+        ];
+        let worked = false;
+        for (let offset = 0; offset < processors.length; offset += 1) {
+          const index = (this.queueOffset + offset) % processors.length;
+          if (await processors[index]()) {
+            this.queueOffset = (index + 1) % processors.length;
+            worked = true;
+            break;
+          }
+        }
         if (!worked) await delay(pollMs);
       } catch (error) {
         this.logger.error(
@@ -102,6 +111,16 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
         error instanceof Error ? error.stack : undefined,
       );
     }
+    return true;
+  }
+
+  private async processDeletion() {
+    const job = await this.deletions.claim();
+    if (!job) return false;
+    if (await this.deletions.execute(job))
+      this.logger.log(`Deleted geodata entity ${job.entityId}`);
+    else
+      this.logger.warn(`Entity deletion ${job.id} failed and will be retried`);
     return true;
   }
 }
