@@ -247,21 +247,29 @@ export class GeodataPromotionRepository {
       textValue(source.sourceKey ?? source.url ?? source.name) ??
       'unknown-source';
     const programmeSlug = textValue(metadata.programmeSlug);
-    const manifestId = randomUUID();
-    await client.query(
-      `INSERT INTO source_snapshot_manifest
-        (id,import_run_id,source_key,adapter_code,source_hash,record_count,source_metadata,retrieved_at)
-       SELECT $1,$2,$3,$4,$5,count(*)::integer,$6::jsonb,now()
-       FROM geodata_import_candidate WHERE import_run_id=$2`,
-      [
-        manifestId,
-        runId,
-        sourceKey,
-        run.adapter_code,
-        run.source_hash,
-        JSON.stringify(source),
-      ],
+    const savedManifest = await client.query(
+      `SELECT id::text FROM source_snapshot_manifest
+       WHERE import_run_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE`,
+      [runId],
     );
+    const manifestId = savedManifest.rows[0]
+      ? String(savedManifest.rows[0].id)
+      : randomUUID();
+    if (!savedManifest.rows[0])
+      await client.query(
+        `INSERT INTO source_snapshot_manifest
+          (id,import_run_id,source_key,adapter_code,source_hash,record_count,source_metadata,retrieved_at)
+         SELECT $1,$2,$3,$4,$5,count(*)::integer,$6::jsonb,now()
+         FROM geodata_import_candidate WHERE import_run_id=$2`,
+        [
+          manifestId,
+          runId,
+          sourceKey,
+          run.adapter_code,
+          run.source_hash,
+          JSON.stringify(source),
+        ],
+      );
     await client.query(
       `INSERT INTO source_snapshot_record(manifest_id,source_record_id,record_hash)
        SELECT DISTINCT $1,source_ref,COALESCE(source_hash,'')

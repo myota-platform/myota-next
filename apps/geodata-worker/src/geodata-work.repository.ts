@@ -999,11 +999,69 @@ export class GeodataWorkRepository {
       const errorsCount = Number(stats.rows[0]?.errors ?? 0);
       const skippedFeatures = Number(stats.rows[0]?.skipped ?? 0);
       const conflationCount = Number(stats.rows[0]?.conflation ?? 0);
+      const manifestSummary = await client.query(
+        `WITH source_records AS (
+           SELECT DISTINCT ON (source_ref COLLATE "C") source_ref,source_hash,ordinal
+           FROM geodata_import_candidate
+           WHERE import_run_id=$1 AND source_ref IS NOT NULL
+           ORDER BY source_ref COLLATE "C",ordinal DESC
+         ), manifest AS (
+           SELECT (SELECT count(*)::integer FROM geodata_import_candidate
+             WHERE import_run_id=$1 AND source_ref IS NOT NULL) AS record_count,
+             encode(public.digest(convert_to('{' || COALESCE(string_agg(
+               to_json(source_ref)::text || ':' || to_json(source_hash)::text,
+               ',' ORDER BY source_ref COLLATE "C"), '') || '}', 'UTF8'), 'sha256'), 'hex') AS source_hash
+           FROM source_records
+         )
+         SELECT manifest.record_count,manifest.source_hash,
+           NOT EXISTS (SELECT 1 FROM source_snapshot_manifest previous
+             WHERE previous.source_key=$2 AND previous.adapter_code=$3
+               AND previous.source_hash=manifest.source_hash) AS source_changed
+         FROM manifest`,
+        [run.id, run.source_key, run.adapter_code],
+      );
+      const manifestRecordCount = Number(
+        manifestSummary.rows[0]?.record_count ?? 0,
+      );
+      const manifestSourceHash = String(
+        manifestSummary.rows[0]?.source_hash ?? '',
+      );
+      const sourceChanged = Boolean(manifestSummary.rows[0]?.source_changed);
+      const manifestId = randomUUID();
+      const source = isRecord(run.source_metadata.source)
+        ? run.source_metadata.source
+        : {};
+      await client.query(
+        `INSERT INTO source_snapshot_manifest
+          (id,import_run_id,source_key,adapter_code,source_hash,record_count,source_metadata)
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)`,
+        [
+          manifestId,
+          run.id,
+          run.source_key,
+          run.adapter_code,
+          manifestSourceHash,
+          manifestRecordCount,
+          JSON.stringify(source),
+        ],
+      );
+      await client.query(
+        `WITH source_records AS (
+           SELECT DISTINCT ON (source_ref COLLATE "C") source_ref,source_hash,ordinal
+           FROM geodata_import_candidate
+           WHERE import_run_id=$1 AND source_ref IS NOT NULL
+           ORDER BY source_ref COLLATE "C",ordinal DESC
+         )
+         INSERT INTO source_snapshot_record(manifest_id,source_record_id,record_hash)
+         SELECT $2,source_ref,COALESCE(source_hash,'') FROM source_records
+         ON CONFLICT (manifest_id,source_record_id) DO NOTHING`,
+        [run.id, manifestId],
+      );
       const status = errorsCount ? 'PREPROCESSED_WITH_ERRORS' : 'PREPROCESSED';
       const statsPayload = {
         featureCount,
         preprocessed: preprocessedCount,
-        created: preprocessedCount,
+        created: 0,
         updated: 0,
         skipped: skippedFeatures,
         errors: errorsCount,
@@ -1016,10 +1074,7 @@ export class GeodataWorkRepository {
         [run.id, status, JSON.stringify(statsPayload)],
       );
 
-      const candidateSummaries = `COALESCE((SELECT jsonb_agg(
-        jsonb_build_object('candidateId',candidate_id::text,'ordinal',ordinal,
-          'name',candidate_payload->>'name',
-          'possibleDuplicates',candidate_payload->'possibleDuplicates') ORDER BY ordinal)
+      const preprocessedCandidates = `COALESCE((SELECT jsonb_agg(candidate_id::text ORDER BY ordinal)
         FROM geodata_import_candidate_stage
         WHERE import_run_id=$2 AND attempt_count=$3 AND candidate_id IS NOT NULL),'[]'::jsonb)`;
       const errorSummaries = `COALESCE((SELECT jsonb_agg(error_payload ORDER BY ordinal)
@@ -1034,23 +1089,35 @@ export class GeodataWorkRepository {
         FROM geodata_import_candidate_stage
         WHERE import_run_id=$2 AND attempt_count=$3 AND candidate_id IS NOT NULL
           AND candidate_payload->'possibleDuplicates' <> '[]'::jsonb),'[]'::jsonb)`;
+      const sourceRecordMap = `COALESCE((SELECT jsonb_object_agg(source_ref,source_hash)
+        FROM (SELECT DISTINCT ON (source_ref COLLATE "C") source_ref,source_hash
+          FROM geodata_import_candidate WHERE import_run_id=$2 AND source_ref IS NOT NULL
+          ORDER BY source_ref COLLATE "C",ordinal DESC) records),'{}'::jsonb)`;
       await client.query(
         `INSERT INTO outbox_event
           (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
          VALUES ($1,'geodata.import.preprocessed.v1','geodata-worker','import_run',$2,
            jsonb_build_object('importRunId',$2::text,'adapter',$4,
-             'preprocessed',${candidateSummaries},'created',${candidateSummaries},
+             'preprocessed',${preprocessedCandidates},'created','[]'::jsonb,
              'updated','[]'::jsonb,'skipped',${skippedSummaries},
              'errors',${errorSummaries},'disappeared','[]'::jsonb,
              'conflationCandidates',${conflationSummaries},
-             'manifest',jsonb_build_object('sourceHash',$5,'featureCount',$6,
-               'stats',$7::jsonb)),now(),$8)`,
+             'manifest',jsonb_build_object('runId',$2::text,'adapter',$4,
+               'source',$5::jsonb,'sourceHash',$6,'recordCount',$7,
+               'records',${sourceRecordMap},
+               'retrievedAt',$5::jsonb->>'retrievedAt',
+               'license',$5::jsonb->>'license',
+               'attribution',$5::jsonb->>'attribution',
+               'sourceChanged',$8,'featureCount',$9,'stats',$10::jsonb)),now(),$11)`,
         [
           randomUUID(),
           run.id,
           run.attempt_count,
           run.adapter_code,
-          run.source_hash,
+          JSON.stringify(source),
+          manifestSourceHash,
+          manifestRecordCount,
+          sourceChanged,
           featureCount,
           JSON.stringify(statsPayload),
           randomUUID(),
