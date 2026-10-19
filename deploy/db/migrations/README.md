@@ -30,6 +30,11 @@ on disposable copies, and document rollback for each database independently.
 Do not introduce cross-database foreign keys or combine the three restore
 boundaries.
 
+The original application and deployment SQL inputs are preserved as a
+non-executable comparison snapshot in
+[`docs/reference/migrations/`](../../../docs/reference/migrations/). The
+snapshot has checksums and must not be used as an additional migration source.
+
 `core/002` through `core/004` add Identity's relational support, backfill, and
 callsign projection after the initial Core baseline. `core/005` adds the
 redacted email delivery ledger to the Core owner, so email delivery does not

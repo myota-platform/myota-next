@@ -8,6 +8,11 @@ current reference.
 
 - Record the exact reference commit and snapshot all language-neutral
   contracts, event registry, schemas, and migration files.
+- The reference OpenAPI, event registry, and 81 JSON schemas are preserved in
+  [`contracts/reference/`](../contracts/reference/), with SHA-256 checksums.
+- The eight original application/deployment migration files are preserved in
+  [`docs/reference/migrations/`](reference/migrations/) for schema-by-schema
+  comparison; active migrations remain under `deploy/db/migrations/`.
 - Inventory API operations, event producers/consumers, worker kinds, UI routes,
   database tables, object storage buckets, environment settings, and runbooks.
 - Map the 135 upstream OpenAPI operations across 113 paths to service handlers
