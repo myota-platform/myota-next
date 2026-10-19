@@ -6,6 +6,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
+import { createServer, type Server } from 'node:http';
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import type { Consumer, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
@@ -17,6 +18,10 @@ const STREAM = 'MYOTA_EVENTS';
 const DURABLE =
   process.env.ACTIVITY_NOTIFICATION_DURABLE ?? 'activity-notifications-v1';
 const MAX_DELIVERIES = 8;
+const METRICS_PORT = Math.max(
+  0,
+  Number(process.env.ACTIVITY_NOTIFICATION_METRICS_PORT ?? 9110),
+);
 const SUBJECTS = [
   'myota.events.geodata.entity.reviewed.v1',
   'myota.events.geodata.entity.status-changed.v1',
@@ -68,6 +73,9 @@ export class ActivityNotificationsService
   private stopping = false;
   private connection?: Awaited<ReturnType<typeof connect>>;
   private messages?: Consumer;
+  private metricsServer?: Server;
+  private outcomes = new Map<string, number>();
+  private unresolvedDeadLetters = 0;
 
   constructor(
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
@@ -87,12 +95,60 @@ export class ActivityNotificationsService
     const consumerInfo = await manager.consumers.info(STREAM, DURABLE);
     this.validateConsumer(consumerInfo.config);
     this.messages = await js.consumers.get(STREAM, DURABLE);
+    await this.refreshDeadLetterGauge();
+    this.startMetricsServer();
     void this.consume();
   }
 
   async onModuleDestroy(): Promise<void> {
     this.stopping = true;
+    if (this.metricsServer) {
+      await new Promise<void>((resolve, reject) => {
+        this.metricsServer!.close((error) =>
+          error ? reject(error) : resolve(),
+        );
+      });
+    }
     await this.connection?.drain();
+  }
+
+  private startMetricsServer(): void {
+    if (METRICS_PORT === 0) return;
+    this.metricsServer = createServer((request, response) => {
+      if (request.method !== 'GET' || request.url !== '/metrics') {
+        response.writeHead(404).end();
+        return;
+      }
+      const lines = [
+        '# HELP myota_activity_notification_outcomes_total Activity notification deliveries by bounded outcome.',
+        '# TYPE myota_activity_notification_outcomes_total counter',
+        ...[...this.outcomes.entries()].map(
+          ([outcome, count]) =>
+            `myota_activity_notification_outcomes_total{outcome="${outcome}"} ${count}`,
+        ),
+        '# HELP myota_activity_notification_unresolved_dead_letters Unresolved Activity notification poison events in PostgreSQL.',
+        '# TYPE myota_activity_notification_unresolved_dead_letters gauge',
+        `myota_activity_notification_unresolved_dead_letters ${this.unresolvedDeadLetters}`,
+      ];
+      response.writeHead(200, {
+        'Content-Type': 'text/plain; version=0.0.4; charset=utf-8',
+      });
+      response.end(`${lines.join('\n')}\n`);
+    });
+    this.metricsServer.listen(METRICS_PORT, '0.0.0.0');
+  }
+
+  private countOutcome(outcome: string): void {
+    this.outcomes.set(outcome, (this.outcomes.get(outcome) ?? 0) + 1);
+  }
+
+  private async refreshDeadLetterGauge(): Promise<void> {
+    const result = await this.pool!.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM public.dead_letter_event
+       WHERE stream_name=$1 AND resolved_at IS NULL`,
+      [STREAM],
+    );
+    this.unresolvedDeadLetters = Number(result.rows[0]?.count ?? 0);
   }
 
   private validateConsumer(config: {
@@ -148,9 +204,13 @@ export class ActivityNotificationsService
     let eventType = 'unknown';
     let permanent = false;
     try {
-      const decoded: unknown = JSON.parse(
-        new TextDecoder().decode(message.data),
-      );
+      let decoded: unknown;
+      try {
+        decoded = JSON.parse(new TextDecoder().decode(message.data));
+      } catch {
+        permanent = true;
+        throw new Error('invalid_envelope');
+      }
       if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) {
         permanent = true;
         throw new Error('invalid_envelope');
@@ -171,8 +231,14 @@ export class ActivityNotificationsService
         permanent = true;
         throw new Error('unsupported_event_version');
       }
-      await this.processEvent(message, envelope, eventType);
+      const processed = await this.processEvent(envelope, eventType);
       message.ack();
+      this.countOutcome(processed ? 'processed' : 'duplicate');
+      void this.refreshDeadLetterGauge().catch((error: unknown) =>
+        this.logger.warn(
+          `Unable to refresh dead-letter metrics: ${this.safeError(error)}`,
+        ),
+      );
     } catch (error) {
       if (permanent || delivered >= MAX_DELIVERIES) {
         await this.persistDeadLetter(
@@ -183,12 +249,19 @@ export class ActivityNotificationsService
           permanent,
         );
         message.term();
+        this.countOutcome('dead_lettered');
+        void this.refreshDeadLetterGauge().catch((gaugeError: unknown) =>
+          this.logger.warn(
+            `Unable to refresh dead-letter metrics: ${this.safeError(gaugeError)}`,
+          ),
+        );
       } else {
         const delay = Math.min(
           300_000,
           5_000 * 3 ** Math.max(delivered - 1, 0),
         );
         message.nak(delay);
+        this.countOutcome('retry');
       }
       this.logger.error(
         `Notification event ${eventType} failed: ${this.safeError(error)}`,
@@ -197,10 +270,9 @@ export class ActivityNotificationsService
   }
 
   private async processEvent(
-    message: JsMsg,
     event: Envelope,
     eventType: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const client = await this.pool!.connect();
     try {
       await client.query('BEGIN');
@@ -211,7 +283,7 @@ export class ActivityNotificationsService
       );
       if (seen.rowCount) {
         await client.query('COMMIT');
-        return;
+        return false;
       }
       const [recipient, kind] = recipientAndKind(event, eventType);
       if (typeof recipient === 'string' && recipient.length > 0 && kind) {
@@ -244,6 +316,7 @@ export class ActivityNotificationsService
         [eventId, STREAM],
       );
       await client.query('COMMIT');
+      return true;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

@@ -140,8 +140,10 @@
   JetStream durable, inserts recipient notices with event deduplication and
   consumer checkpoints in one Activity database transaction, retries transient
   failures, and stores redacted poison envelopes with stream coordinates before
-  terminating them. An audited CLI redrive reuses pending audit records and a
-  stable JetStream message ID. Worker recovery evidence remains outstanding.
+  terminating them. Its Prometheus endpoint reports bounded delivery outcomes
+  and unresolved dead letters. An audited CLI redrive reuses pending audit
+  records and a stable JetStream message ID. Worker recovery evidence remains
+  outstanding.
 
 ## Not implemented yet
 

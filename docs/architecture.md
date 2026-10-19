@@ -55,6 +55,9 @@ permanent or exhausted failures in the owning database's dead-letter table.
 Each process exposes Prometheus metrics at `/metrics` on port 9108 by default;
 set `OUTBOX_METRICS_PORT=0` to disable the listener.
 Do not point one relay at multiple databases or combine their transactions.
+The Activity notification consumer exposes its outcome and unresolved
+dead-letter metrics at `/metrics` on port 9110 by default; set
+`ACTIVITY_NOTIFICATION_METRICS_PORT=0` to disable the listener.
 
 ## Shared runtime dependencies
 
