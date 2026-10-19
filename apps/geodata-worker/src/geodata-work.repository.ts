@@ -519,13 +519,22 @@ export class GeodataWorkRepository {
         if (!isRecord(feature)) throw new Error('feature must be an object');
         const normalized = normalizeAdapterFeature(run.adapter_code, feature);
         const properties = normalized.properties;
-        const sourceRef =
-          textValue(
-            properties.sourceRef ||
-              properties.id ||
-              properties['@id'] ||
-              feature.id,
-          ) ?? `${sourceKey}:import-${run.id}:record-${ordinal}`;
+        const sourceRefCandidate = firstPythonTruthy([
+          properties.sourceRef,
+          properties.id,
+          properties['@id'],
+          feature.id,
+        ]);
+        const sourceRef = resolveLegacyManualSourceRef(
+          !pythonTruthy(sourceRefCandidate)
+            ? `${sourceKey}:import-${run.id}:record-${ordinal}`
+            : pythonSourceRef(sourceRefCandidate),
+          feature,
+          run.adapter_code,
+          sourceKey,
+          run.id,
+          ordinal,
+        );
         if (normalized.skipReason) {
           record = {
             ordinal,
@@ -1126,6 +1135,55 @@ function errorMessage(error: unknown) {
 
 function textValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function pythonSourceRef(value: unknown): string {
+  if (typeof value === 'boolean') return value ? 'True' : 'False';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  return JSON.stringify(value) ?? String(value);
+}
+
+function resolveLegacyManualSourceRef(
+  sourceRef: string,
+  feature: Record<string, unknown>,
+  adapter: string,
+  sourceKey: string,
+  runId: string,
+  ordinal: number,
+): string {
+  const legacyPattern = /^MANUAL:record-\d+$/i;
+  if (adapter !== 'MANUAL' || !legacyPattern.test(sourceRef)) return sourceRef;
+  const properties = isRecord(feature.properties) ? feature.properties : {};
+  for (const value of [
+    properties.sourceRef,
+    properties['@id'],
+    properties.id,
+    feature.id,
+  ]) {
+    if (!pythonTruthy(value)) continue;
+    const stableSourceRef = pythonSourceRef(value);
+    if (!legacyPattern.test(stableSourceRef)) return stableSourceRef;
+  }
+  return `${sourceKey}:import-${runId}:record-${ordinal}`;
+}
+
+function pythonTruthy(value: unknown): boolean {
+  if (
+    value == null ||
+    value === false ||
+    value === '' ||
+    value === 0 ||
+    (typeof value === 'number' && Number.isNaN(value))
+  )
+    return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (isRecord(value)) return Object.keys(value).length > 0;
+  return true;
+}
+
+function firstPythonTruthy(values: unknown[]): unknown {
+  return values.find(pythonTruthy);
 }
 
 function boundedFeatureLimit(value: string | undefined): number {
