@@ -3,12 +3,14 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  BadRequestException,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import {
   createHash,
   createHmac,
+  randomBytes,
   randomUUID,
   scrypt,
   timingSafeEqual,
@@ -228,6 +230,114 @@ export class IdentityAuthService {
       const result = await this.createSession(client, account, context);
       await client.query('COMMIT');
       return result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async requestRecovery(email: string): Promise<Record<string, unknown>> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `DELETE FROM public.account_recovery_token
+          WHERE used_at IS NOT NULL OR expires_at <= now()`,
+      );
+      const accountResult = await client.query<{ id: string }>(
+        `SELECT id FROM public.account
+          WHERE lower(btrim(email::text)) = $1`,
+        [normalizedEmail],
+      );
+      const account = accountResult.rows[0];
+      let devResetToken: string | undefined;
+      if (account) {
+        const token = randomBytes(32).toString('base64url');
+        await client.query(
+          `INSERT INTO public.account_recovery_token (token_hash, account_id, expires_at)
+           VALUES ($1, $2, now() + ($3 * interval '1 second'))`,
+          [
+            createHash('sha256').update(token).digest('hex'),
+            account.id,
+            Number(process.env.MYOTA_RECOVERY_TOKEN_SECONDS ?? 1800),
+          ],
+        );
+        await this.writeAudit(client, 'identity.recovery.requested.v1', {
+          accountId: account.id,
+        });
+        if (
+          process.env.MYOTA_ENV?.toLowerCase() !== 'production' ||
+          process.env.MYOTA_EXPOSE_DEV_TOKENS === '1'
+        ) {
+          devResetToken = token;
+        }
+      }
+      await client.query('COMMIT');
+      return {
+        status: 'accepted',
+        ...(devResetToken ? { devResetToken } : {}),
+      };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async resetRecovery(
+    token: string,
+    newPassword: string,
+  ): Promise<{ status: string }> {
+    if (newPassword.length < 12) {
+      throw new BadRequestException(
+        'password must contain at least 12 characters',
+      );
+    }
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      const tokenHash = createHash('sha256').update(token).digest('hex');
+      const recoveryResult = await client.query<{ account_id: string }>(
+        `SELECT account_id FROM public.account_recovery_token
+          WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+          FOR UPDATE`,
+        [tokenHash],
+      );
+      const recovery = recoveryResult.rows[0];
+      if (!recovery) {
+        throw new BadRequestException('recovery token is invalid or expired');
+      }
+      const passwordHash = await hashPassword(newPassword);
+      await client.query(
+        `INSERT INTO public.account_credential
+           (account_id, password_hash, password_changed_at, failed_attempts, locked_until)
+         VALUES ($1, $2, now(), 0, NULL)
+         ON CONFLICT (account_id) DO UPDATE SET
+           password_hash = EXCLUDED.password_hash,
+           password_changed_at = EXCLUDED.password_changed_at,
+           failed_attempts = 0,
+           locked_until = NULL`,
+        [recovery.account_id, passwordHash],
+      );
+      await client.query(
+        `UPDATE public.account_recovery_token SET used_at = now()
+          WHERE token_hash = $1`,
+        [tokenHash],
+      );
+      await client.query(
+        `UPDATE public.auth_session SET revoked_at = coalesce(revoked_at, now())
+          WHERE account_id = $1 AND revoked_at IS NULL`,
+        [recovery.account_id],
+      );
+      await this.writeAudit(client, 'identity.recovery.completed.v1', {
+        accountId: recovery.account_id,
+      });
+      await client.query('COMMIT');
+      return { status: 'password_reset' };
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
@@ -565,6 +675,20 @@ async function verifyPassword(
   } catch {
     return false;
   }
+}
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16);
+  const derived = await new Promise<Buffer>((resolve, reject) => {
+    scrypt(
+      password,
+      salt,
+      64,
+      { N: 2 ** 14, r: 8, p: 1, maxmem: 64 * 1024 * 1024 },
+      (error, key) => (error ? reject(error) : resolve(key)),
+    );
+  });
+  return `scrypt$${salt.toString('base64url')}$${derived.toString('base64url')}`;
 }
 
 function signToken(

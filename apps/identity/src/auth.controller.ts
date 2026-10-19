@@ -10,7 +10,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { LoginDto, RefreshTokenDto } from './auth.dto.js';
+import {
+  LoginDto,
+  RecoveryRequestDto,
+  RecoveryResetDto,
+  RefreshTokenDto,
+} from './auth.dto.js';
 import { IdentityAuthService } from './auth.service.js';
 
 @Controller('identity')
@@ -32,6 +37,18 @@ export class AuthController {
   @HttpCode(200)
   refresh(@Body() body: RefreshTokenDto, @Req() request: Request) {
     return this.auth.refresh(body.refreshToken, this.requestContext(request));
+  }
+
+  @Post('auth/recovery/request')
+  @HttpCode(200)
+  requestRecovery(@Body() body: RecoveryRequestDto) {
+    return this.auth.requestRecovery(body.email);
+  }
+
+  @Post('auth/recovery/reset')
+  @HttpCode(200)
+  resetRecovery(@Body() body: RecoveryResetDto) {
+    return this.auth.resetRecovery(body.token, body.newPassword);
   }
 
   @Post('auth/logout')

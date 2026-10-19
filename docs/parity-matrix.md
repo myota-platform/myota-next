@@ -16,9 +16,9 @@ baseline. Current implementation reference:
 | Email delivery | Keep the existing email worker behavior and `email.send.v1` contract visible in the parity inventory. The current registry marks the Identity producer and runtime deployment as gated; do not claim or enable end-to-end delivery until its provider, secrets, retry behavior, and deployment are explicitly qualified.                                                                                          |
 
 Identity currently implements disabled public registration, password login,
-refresh rotation, logout revocation, and current-account reads in NestJS. These
-are the first implemented slice; they still need automated compatibility
-coverage before they count as parity complete.
+refresh rotation, logout revocation, recovery request/reset, and current-account
+reads in NestJS. These are the first implemented slice; they still need
+automated compatibility coverage before they count as parity complete.
 
 ## User applications
 
