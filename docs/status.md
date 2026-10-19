@@ -41,8 +41,9 @@
   review submission and decisions, publication, paginated filtering, and locale
   coverage reporting. Programme policy drafts support scoped authoring,
   submission, review, publishing, and effective policy updates. Effective
-  publication timestamps normalize to UTC with Python-compatible microsecond
-  precision. These operations
+  publication timestamps accept Python-compatible date-only, space-separated,
+  and comma-fraction forms, then normalize to UTC with microsecond precision.
+  These operations
   share a dedicated Core snapshot repository and transactional outbox boundary.
 - Activity now has an initial API slice for activation listing, creation,
   retrieval, closure, and single-QSO recording. Activation creation enforces
