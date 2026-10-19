@@ -98,8 +98,9 @@
   fields queues only missing values. Refresh schedules can be created, listed,
   and manually run as complete snapshots. Snapshot runs stage and promote the
   full validated candidate set, record source manifests, and apply configured
-  disappearance policies only after successful promotion. Automatic scheduled
-  execution remains outstanding.
+  disappearance policies only after successful promotion. The opt-in
+  allowlisted importer now executes due schedules through the Geodata API;
+  deployment and live-source qualification remain outstanding.
   Candidate-level failures from a FAILED promotion queue can be resubmitted
   through the promotion API, and failed queues can now be redriven as a whole
   with a recorded reason. Community proposals now enter
@@ -149,7 +150,10 @@
   Administrator issuance commits the immutable record, request transition, and
   issuance event together. Certificate render jobs create PDF artifacts from
   registered PNG/JPEG artwork in S3-compatible storage; authorized participants
-  receive short-lived artifact download URLs.
+  receive short-lived artifact download URLs. Admins can render an unsaved
+  certificate preview with bounded print settings, mock participant data, and
+  registered artwork; preview PDFs are returned in memory without creating an
+  issuance or object. The API and render worker share one PDF renderer.
 - The Activity notification worker validates and consumes the registered
   JetStream durable, inserts recipient notices with event deduplication and
   consumer checkpoints in one Activity database transaction, retries transient

@@ -11,8 +11,8 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
 import {
   parseAdif,
   normalizeQso,
@@ -608,7 +608,22 @@ export class ActivityWorkRepository {
       String(signatureAsset.bucket),
       String(signatureAsset.objectKey),
     );
-    const pdfBytes = await renderCertificate(issuance, background, signature);
+    const values: Record<string, string> = {
+      AWARD_NAME: String(issuance.awardName ?? ''),
+      CALLSIGN: String(issuance.callsign ?? ''),
+      PERSON_NAME: String(issuance.personName ?? ''),
+      DATE_OBTAINED: String(issuance.dateObtained ?? ''),
+      MANAGER_NAME: String(issuance.managerName ?? ''),
+    };
+    const pdfBytes = await renderCertificatePdf({
+      printSpec: spec.printSpec as JsonRecord,
+      elements: (Array.isArray(spec.elements)
+        ? spec.elements
+        : []) as JsonRecord[],
+      values,
+      background,
+      signature,
+    });
     const artifact = issuance.artifact as JsonRecord;
     await s3.send(
       new PutObjectCommand({
@@ -1055,86 +1070,4 @@ async function scanAdifContent(content: Buffer, filename: string) {
   } catch {
     throw new Error('malware scanner is unavailable; import was rejected');
   }
-}
-
-async function renderCertificate(
-  issuance: JsonRecord,
-  background: Buffer,
-  signature: Buffer,
-) {
-  const spec = issuance.renderSpec as JsonRecord;
-  const printSpec = spec.printSpec as JsonRecord;
-  const page = String(printSpec.page ?? 'A4').toUpperCase();
-  const orientation = String(printSpec.orientation ?? 'PORTRAIT').toUpperCase();
-  let [widthMm, heightMm] = page === 'LETTER' ? [215.9, 279.4] : [210, 297];
-  if (orientation === 'LANDSCAPE') [widthMm, heightMm] = [heightMm, widthMm];
-  const width = (widthMm / 25.4) * 72;
-  const height = (heightMm / 25.4) * 72;
-  const document = await PDFDocument.create();
-  const sheet = document.addPage([width, height]);
-  const backgroundImage = await embedImage(document, background);
-  sheet.drawImage(backgroundImage, { x: 0, y: 0, width, height });
-  const signatureImage = await embedImage(document, signature);
-  const font = await document.embedFont(StandardFonts.Helvetica);
-  const values: Record<string, string> = {
-    AWARD_NAME: String(issuance.awardName ?? ''),
-    CALLSIGN: String(issuance.callsign ?? ''),
-    PERSON_NAME: String(issuance.personName ?? ''),
-    DATE_OBTAINED: String(issuance.dateObtained ?? ''),
-    MANAGER_NAME: String(issuance.managerName ?? ''),
-  };
-  const elements = Array.isArray(spec.elements) ? spec.elements : [];
-  for (const item of elements as JsonRecord[]) {
-    const x = Number(item.x) * width;
-    const boxWidth = Number(item.width) * width;
-    const boxHeight = Number(item.height) * height;
-    const top = Number(item.y) * height;
-    const y = height - top - boxHeight;
-    if (item.kind === 'MANAGER_SIGNATURE') {
-      const scale = Math.min(
-        boxWidth / signatureImage.width,
-        boxHeight / signatureImage.height,
-      );
-      const imageWidth = signatureImage.width * scale;
-      const imageHeight = signatureImage.height * scale;
-      sheet.drawImage(signatureImage, {
-        x: x + (boxWidth - imageWidth) / 2,
-        y: y + (boxHeight - imageHeight) / 2,
-        width: imageWidth,
-        height: imageHeight,
-      });
-      continue;
-    }
-    const text = (values[String(item.kind)] ?? String(item.label ?? '')).slice(
-      0,
-      200,
-    );
-    if (!text) continue;
-    let fontSize = Math.max(8, boxHeight * 0.55);
-    const textWidth = font.widthOfTextAtSize(text, fontSize);
-    if (textWidth > boxWidth)
-      fontSize = Math.max(7, (fontSize * boxWidth) / textWidth);
-    const drawnWidth = font.widthOfTextAtSize(text, fontSize);
-    sheet.drawText(text, {
-      x: x + Math.max(0, (boxWidth - drawnWidth) / 2),
-      y: y + Math.max(0, (boxHeight - fontSize) / 2),
-      size: fontSize,
-      font,
-      color: rgb(0, 0, 0),
-      maxWidth: boxWidth,
-    });
-  }
-  return Buffer.from(await document.save());
-}
-
-async function embedImage(document: PDFDocument, content: Buffer) {
-  if (
-    content
-      .subarray(0, 8)
-      .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-  )
-    return document.embedPng(content);
-  if (content[0] === 0xff && content[1] === 0xd8)
-    return document.embedJpg(content);
-  throw new Error('certificate asset must be PNG or JPEG');
 }

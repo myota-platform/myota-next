@@ -2,7 +2,7 @@
 
 Generated from `contracts/openapi.yaml` copied from the reference implementation. Map each operation to a target handler and compatibility test.
 
-OpenAPI 3.1.0; 135 operations across 113 paths.
+OpenAPI 3.1.0; 139 operations across 117 paths.
 
 | Method | Path                                                              | Operation ID                               | Summary                                                                            |
 | ------ | ----------------------------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------- |
@@ -45,6 +45,7 @@ OpenAPI 3.1.0; 135 operations across 113 paths.
 | POST   | /v1/geodata/imports/{runId}/candidates/validate                   |                                            | Confirm or reject selected pre-processed records for promotion                     |
 | POST   | /v1/geodata/imports/{runId}/process                               |                                            | Queue selected records for entity promotion                                        |
 | GET    | /v1/geodata/imports/{runId}/processing-queues/{queueId}           |                                            | Read the outcome of an import promotion queue                                      |
+| POST   | /v1/geodata/imports/{runId}/processing-queues/{queueId}/redrive   |                                            | Redrive a failed import promotion queue                                            |
 | POST   | /v1/geodata/imports/{runId}/processed                             |                                            | Finalize an import and discard staged records                                      |
 | DELETE | /v1/geodata/load-test-runs/{testRunId}                            | deleteGeodataLoadTestRun                   | Clean up a tagged geodata load-test run                                            |
 | POST   | /v1/geodata/import-uploads                                        |                                            | Create a restart-safe resumable geodata upload                                     |
@@ -127,8 +128,11 @@ OpenAPI 3.1.0; 135 operations across 113 paths.
 | GET    | /v1/geodata/entity-deletion-jobs/{jobId}                          | getGeodataEntityDeletionJob                | Get an entity deletion job                                                         |
 | POST   | /v1/geodata/entity-deletion-jobs/{jobId}/confirm                  | confirmGeodataEntityDeletionJob            | Confirm and queue entity deletion                                                  |
 | POST   | /v1/qso-ingestions                                                | createQsoIngestion                         | Queue a high-volume normalized QSO ingestion                                       |
+| POST   | /v1/qso-ingestions/csv                                            | createCsvQsoIngestion                      | Upload and queue a CSV QSO log for an activation                                   |
 | GET    | /v1/qso-ingestions/{ingestionId}                                  | getQsoIngestion                            | Get QSO ingestion job status                                                       |
+| POST   | /v1/adif/imports                                                  | createAdifImport                           | Upload and queue an ADIF log for an activation                                     |
 | GET    | /v1/adif/imports/{importId}                                       |                                            | Get ADIF import status                                                             |
+| POST   | /v1/activity/work-jobs/{jobId}/redrive                            |                                            | Redrive a failed or recoverable Activity work job                                  |
 | POST   | /v1/qsos/{qsoId}/corrections                                      |                                            | Request a QSO correction                                                           |
 | POST   | /v1/qsos/{qsoId}/corrections/{correctionId}/review                | reviewQsoCorrection                        | Review a QSO correction under its QSO resource                                     |
 | GET    | /v1/public/activations                                            |                                            | List public activation history                                                     |

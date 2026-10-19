@@ -41,8 +41,10 @@ review, publish, and retire APIs are implemented. Award progress reads and
 evaluation/recalculation job APIs persist versioned progress and qualification
 notifications through the Activity worker. Award requests validate eligibility,
 issuance is transactional and permanent, and PDF render jobs store artifacts in
-S3-compatible storage with authorized presigned download URLs. Registered award
-assets and bounded content storage are implemented. ADIF uploads now pass
+S3-compatible storage with authorized presigned download URLs. The Admin can
+render transient PDF previews from mock data and registered assets without
+creating an issuance or object; preview and issuance use the same renderer.
+Registered award assets and bounded content storage are implemented. ADIF uploads now pass
 authorization, malware checks, and object storage before durable queueing; the
 Activity worker parses records, records successes and rejects, updates
 aggregates, and reports import status. CSV file uploads now validate bounded

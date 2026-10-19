@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  HttpException,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
@@ -14,14 +15,20 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { verifyAccessToken } from '@app/platform/access-token.js';
+import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
 import { ActivityRepository } from './activity.repository.js';
-import { evaluateAward, validateAwardDraft } from './award-domain.js';
+import {
+  evaluateAward,
+  validateAwardDraft,
+  validateTemplate,
+} from './award-domain.js';
 import type { JsonRecord } from './activity-domain.js';
 
 @Injectable()
 export class AwardsService {
   private s3Client: S3Client | undefined;
   private publicS3Client: S3Client | undefined;
+  private previewBusy = false;
 
   constructor(private readonly repository: ActivityRepository) {}
 
@@ -560,6 +567,99 @@ export class AwardsService {
     };
   }
 
+  async preview(authorization: string | undefined, body: JsonRecord) {
+    this.authorizeHeader(authorization, ['awards.admin']);
+    if (this.previewBusy)
+      throw new HttpException(
+        {
+          status: 429,
+          code: 'preview_busy',
+          detail: 'Preview renderer is busy; please retry shortly.',
+        },
+        429,
+      );
+    this.previewBusy = true;
+    try {
+      const name = typeof body.name === 'string' ? body.name.trim() : '';
+      if (!name || name.length > 200)
+        throw new BadRequestException('name must be 1 to 200 characters');
+      const template = asRecord(body.template, 'template');
+      if (!Array.isArray(template.elements) || template.elements.length > 30)
+        throw new BadRequestException(
+          'a preview requires at most 30 certificate elements',
+        );
+      validateTemplate(template.elements);
+      const printSpec = asRecord(body.printSpec, 'printSpec');
+      const page = String(printSpec.page ?? 'A4').toUpperCase();
+      const orientation = String(
+        printSpec.orientation ?? 'PORTRAIT',
+      ).toUpperCase();
+      const dpi = Number(printSpec.dpi ?? 300);
+      if (
+        !['A4', 'LETTER'].includes(page) ||
+        !['PORTRAIT', 'LANDSCAPE'].includes(orientation) ||
+        !Number.isInteger(dpi) ||
+        dpi < 150 ||
+        dpi > 300
+      )
+        throw new BadRequestException(
+          'preview print settings must use A4 or LETTER, portrait or landscape, and 150 to 300 DPI',
+        );
+
+      let background: Buffer | undefined;
+      if (body.backgroundAsset !== undefined) {
+        const requested = asRecord(body.backgroundAsset, 'backgroundAsset');
+        const objectKey =
+          typeof requested.objectKey === 'string' ? requested.objectKey : '';
+        const asset = (await this.repository.listAwardAssets()).find(
+          (candidate) =>
+            candidate.kind === 'BACKGROUND' &&
+            candidate.objectKey === objectKey,
+        );
+        if (!asset)
+          throw new BadRequestException('choose a registered background');
+        background = await this.readAsset(asset);
+      }
+
+      let signature: Buffer | undefined;
+      if (body.signatureAssetId !== undefined) {
+        const asset = await this.repository.getAwardAsset(
+          String(body.signatureAssetId),
+        );
+        if (asset.kind !== 'SIGNATURE')
+          throw new BadRequestException('choose a registered signature');
+        signature = await this.readAsset(asset);
+      }
+
+      const mockData = {
+        AWARD_NAME: name,
+        CALLSIGN: 'EA7TEST',
+        PERSON_NAME: 'Demo Radio Operator',
+        DATE_OBTAINED: new Date().toISOString().slice(0, 10),
+        MANAGER_NAME:
+          typeof body.managerName === 'string' && body.managerName.trim()
+            ? body.managerName.trim().slice(0, 200)
+            : 'Demo Award Manager',
+      };
+      const pdf = await renderCertificatePdf({
+        printSpec: { page, orientation, dpi },
+        elements: template.elements as JsonRecord[],
+        values: mockData,
+        background,
+        signature,
+      });
+      return {
+        preview: true,
+        mediaType: 'application/pdf',
+        filename: 'myota-award-preview.pdf',
+        mockData,
+        contentBase64: pdf.toString('base64'),
+      };
+    } finally {
+      this.previewBusy = false;
+    }
+  }
+
   async registerAsset(authorization: string | undefined, body: JsonRecord) {
     this.authorizeHeader(authorization, ['awards.admin']);
     for (const field of [
@@ -682,6 +782,29 @@ export class AwardsService {
     }
   }
 
+  private async readAsset(asset: JsonRecord) {
+    if (asset.contentStatus !== 'STORED')
+      throw new BadRequestException('registered image has no uploaded content');
+    try {
+      const response = await this.s3().send(
+        new GetObjectCommand({
+          Bucket: String(asset.bucket),
+          Key: String(asset.objectKey),
+        }),
+      );
+      if (!response.Body)
+        throw new BadRequestException(
+          'registered image has no uploaded content',
+        );
+      const bytes = Buffer.from(await response.Body.transformToByteArray());
+      await imageMetadata(bytes);
+      return bytes;
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException('registered image has no uploaded content');
+    }
+  }
+
   private s3() {
     if (!this.s3Client) {
       this.s3Client = this.createS3Client(
@@ -729,6 +852,12 @@ export class AwardsService {
     if (!granted.some((scope) => scope === '*' || scopes.includes(scope)))
       throw new ForbiddenException('award scope is required');
   }
+}
+
+function asRecord(value: unknown, field: string): JsonRecord {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new BadRequestException(`${field} must be an object`);
+  return value as JsonRecord;
 }
 
 function positiveInt(value: string | undefined, fallback: number) {

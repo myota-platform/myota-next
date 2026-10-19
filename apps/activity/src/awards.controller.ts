@@ -68,6 +68,15 @@ export class AwardsController {
     return this.awards.progress(authorization, awardId, participantId);
   }
 
+  @Post('previews')
+  @HttpCode(200)
+  preview(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: Record<string, any>,
+  ) {
+    return this.awards.preview(authorization, body);
+  }
+
   @Get('requests')
   listRequests(
     @Headers('authorization') authorization: string | undefined,
