@@ -15,7 +15,8 @@
   as compatibility references.
 - First Identity slice: disabled public registration, password login, refresh
   rotation, logout revocation, recovery request/reset, current account and
-  scope reads, and owner-only profile updates. Login uses the
+  scope reads, owner-only profile updates, and paginated administrator account
+  listing. Login uses the
   existing scrypt hash format, HS256 token contract, persisted session,
   revocation, lockout, rate-limit, and audit tables.
 

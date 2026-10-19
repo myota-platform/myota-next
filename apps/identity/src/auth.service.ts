@@ -3,6 +3,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  ForbiddenException,
   BadRequestException,
   ServiceUnavailableException,
   UnauthorizedException,
@@ -48,6 +49,38 @@ interface AccountRow {
   profile_image_id?: string | null;
   profile_image_media_type?: string | null;
   profile_image_updated_at?: Date | null;
+}
+
+interface AdminAccountRow extends AccountRow {
+  created_at: Date;
+  updated_at: Date;
+  primary_callsign_id: string | null;
+}
+
+interface RoleAssignmentRow {
+  accountId: string;
+  id: string;
+  role: string;
+  programmeId: string | null;
+  programmeSlug: string | null;
+  jurisdictionId: string | null;
+  jurisdiction: string | null;
+  entityType: string | null;
+  scopes: string[];
+  createdAt: Date;
+  validTo: Date | null;
+}
+
+interface CallsignRow {
+  accountId: string;
+  id: string;
+  value: string;
+  status: string;
+  verificationSource: string | null;
+  verifiedAt: Date | null;
+  validFrom: Date | null;
+  validTo: Date | null;
+  primary: boolean | null;
 }
 
 interface TokenClaims {
@@ -458,6 +491,88 @@ export class IdentityAuthService {
     }
   }
 
+  async listAdminAccounts(
+    authorization: string,
+    query: { q?: string; status?: string; page?: string; pageSize?: string },
+  ): Promise<Record<string, unknown>> {
+    const caller = await this.currentAccount(authorization);
+    const scopes = new Set(caller.scopes as string[]);
+    if (!scopes.has('*') && !scopes.has('identity.admin')) {
+      throw new ForbiddenException('identity.admin scope is required');
+    }
+    const page = parsePage(query.page, 1);
+    const pageSize = Math.min(100, parsePage(query.pageSize, 50));
+    const search = (query.q ?? '').trim().toLowerCase();
+    const status = query.status?.trim() || null;
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const filter = `($1::text IS NULL OR a.status = $1)
+        AND ($2 = '' OR coalesce(position($2 in lower(a.display_name)), 0) > 0
+          OR coalesce(position($2 in lower(a.email::text)), 0) > 0)`;
+      const params = [status, search];
+      const totalResult = await client.query<{ total: string }>(
+        `SELECT count(*)::text AS total FROM public.account a WHERE ${filter}`,
+        params,
+      );
+      const accountResult = await client.query<AdminAccountRow>(
+        `SELECT a.id, a.display_name, a.email::text AS email,
+                a.participation_type, a.status, a.created_at, a.updated_at,
+                NULL::text AS password_hash, 0 AS failed_attempts,
+                NULL::timestamptz AS locked_until,
+                p.website_url, p.biography_markdown, p.profile_image_id,
+                p.profile_image_media_type, p.profile_image_updated_at,
+                primary_call.callsign_id AS primary_callsign_id
+           FROM public.account a
+           LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
+           LEFT JOIN public.account_primary_callsign primary_call
+             ON primary_call.account_id = a.id
+          WHERE ${filter}
+          ORDER BY a.created_at, a.id
+          LIMIT $3 OFFSET $4`,
+        [...params, pageSize, (page - 1) * pageSize],
+      );
+      const accountIds = accountResult.rows.map((account) => account.id);
+      const [rolesByAccount, callsignsByAccount] = await Promise.all([
+        this.loadRolesForAccounts(client, accountIds),
+        this.loadCallsignsForAccounts(client, accountIds),
+      ]);
+      const items = accountResult.rows.map((account) => {
+        const roles = rolesByAccount.get(account.id) ?? [];
+        return {
+          id: account.id,
+          displayName: account.display_name,
+          email: account.email,
+          participationType: account.participation_type,
+          status: account.status,
+          websiteUrl: account.website_url ?? null,
+          biographyMarkdown: account.biography_markdown ?? null,
+          profileImage: profileImageFor(account),
+          createdAt: account.created_at,
+          updatedAt: account.updated_at,
+          primaryCallsignId: account.primary_callsign_id,
+          callsigns: callsignsByAccount.get(account.id) ?? [],
+          roles,
+          scopes: effectiveScopes(roles),
+        };
+      });
+      await client.query('COMMIT');
+      const total = Number(totalResult.rows[0]?.total ?? 0);
+      return {
+        items,
+        page,
+        pageSize,
+        total,
+        nextPage: page * pageSize < total ? page + 1 : null,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async updateOwnProfile(
     authorization: string,
     body: { websiteUrl?: string | null; biographyMarkdown?: string | null },
@@ -632,8 +747,18 @@ export class IdentityAuthService {
   }
 
   private async loadRoles(client: PoolClient, accountId: string) {
-    const result = await client.query(
-      `SELECT ar.id, ar.role_code AS role, ar.programme_id AS "programmeId",
+    const roles = await this.loadRolesForAccounts(client, [accountId]);
+    return roles.get(accountId) ?? [];
+  }
+
+  private async loadRolesForAccounts(client: PoolClient, accountIds: string[]) {
+    const resultMap = new Map<string, RoleAssignmentRow[]>(
+      accountIds.map((accountId) => [accountId, []]),
+    );
+    if (accountIds.length === 0) return resultMap;
+    const result = await client.query<RoleAssignmentRow>(
+      `SELECT ar.account_id AS "accountId", ar.id,
+              ar.role_code AS role, ar.programme_id AS "programmeId",
               p.slug AS "programmeSlug", ar.jurisdiction_id AS "jurisdictionId",
               j.code AS "jurisdiction", ar.entity_type_code AS "entityType",
               coalesce(rd.scopes, ARRAY(SELECT jsonb_array_elements_text(ar.scopes))) AS scopes,
@@ -642,26 +767,50 @@ export class IdentityAuthService {
          LEFT JOIN public.identity_role_definition rd ON rd.role_code = ar.role_code
          LEFT JOIN public.programme p ON p.id = ar.programme_id
          LEFT JOIN public.jurisdiction j ON j.id = ar.jurisdiction_id
-        WHERE ar.account_id = $1 AND (ar.valid_to IS NULL OR ar.valid_to > now())
+        WHERE ar.account_id = ANY($1::uuid[])
+          AND (ar.valid_to IS NULL OR ar.valid_to > now())
         ORDER BY ar.created_at, ar.id`,
-      [accountId],
+      [accountIds],
     );
-    return result.rows.map((row) => ({
-      ...row,
-      scopes: DEFAULT_ROLE_SCOPES[row.role] ?? row.scopes,
-    }));
+    for (const row of result.rows) {
+      resultMap.get(row.accountId)?.push({
+        ...row,
+        scopes: DEFAULT_ROLE_SCOPES[row.role] ?? row.scopes,
+      });
+    }
+    return resultMap;
   }
 
   private async loadCallsigns(client: PoolClient, accountId: string) {
-    const result = await client.query(
-      `SELECT id, value, lifecycle_status AS status, verification_source AS "verificationSource",
-              verified_at AS "verifiedAt", valid_from AS "validFrom", valid_to AS "validTo"
-         FROM public.callsign
-        WHERE account_id = $1 AND (valid_to IS NULL OR valid_to > now())
-        ORDER BY valid_from NULLS FIRST, value`,
-      [accountId],
+    const callsigns = await this.loadCallsignsForAccounts(client, [accountId]);
+    return callsigns.get(accountId) ?? [];
+  }
+
+  private async loadCallsignsForAccounts(
+    client: PoolClient,
+    accountIds: string[],
+  ) {
+    const resultMap = new Map<string, CallsignRow[]>(
+      accountIds.map((accountId) => [accountId, []]),
     );
-    return result.rows;
+    if (accountIds.length === 0) return resultMap;
+    const result = await client.query<CallsignRow>(
+      `SELECT c.account_id AS "accountId", c.id, c.value,
+              c.lifecycle_status AS status, c.verification_source AS "verificationSource",
+              c.verified_at AS "verifiedAt", c.valid_from AS "validFrom",
+              c.valid_to AS "validTo", (primary_call.callsign_id = c.id) AS "primary"
+         FROM public.callsign c
+         LEFT JOIN public.account_primary_callsign primary_call
+           ON primary_call.account_id = c.account_id
+        WHERE c.account_id = ANY($1::uuid[])
+          AND (c.valid_to IS NULL OR c.valid_to > now())
+        ORDER BY c.valid_from NULLS FIRST, c.value`,
+      [accountIds],
+    );
+    for (const row of result.rows) {
+      resultMap.get(row.accountId)?.push(row);
+    }
+    return resultMap;
   }
 
   private async hasGlobalOperator(
@@ -702,13 +851,7 @@ export class IdentityAuthService {
   }
 }
 
-function effectiveScopes(
-  roles: Array<{
-    role: string;
-    programmeSlug?: string | null;
-    scopes?: string[];
-  }>,
-) {
+function effectiveScopes(roles: RoleAssignmentRow[]) {
   const result = new Set(['identity.me']);
   for (const role of roles) {
     for (const scope of role.scopes ?? []) {
@@ -903,4 +1046,13 @@ function isIpAddress(value: string | null): boolean {
   return (
     value !== null && /^(?:\d{1,3}\.){3}\d{1,3}$|^[0-9a-f:]+$/i.test(value)
   );
+}
+
+function parsePage(value: string | undefined, fallback: number): number {
+  if (value === undefined || value.trim() === '') return fallback;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new BadRequestException('page and pageSize must be integers');
+  }
+  return Math.max(1, parsed);
 }

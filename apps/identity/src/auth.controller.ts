@@ -7,12 +7,14 @@ import {
   HttpCode,
   Post,
   Patch,
+  Query,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
   LoginDto,
+  AdminAccountsQueryDto,
   RecoveryRequestDto,
   RecoveryResetDto,
   RefreshTokenDto,
@@ -77,6 +79,16 @@ export class AuthController {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
     return this.auth.updateOwnProfile(authorization, body);
+  }
+
+  @Get('admin/accounts')
+  listAdminAccounts(
+    @Headers('authorization') authorization: string | undefined,
+    @Query() query: AdminAccountsQueryDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.auth.listAdminAccounts(authorization, query);
   }
 
   private requestContext(request: Request) {

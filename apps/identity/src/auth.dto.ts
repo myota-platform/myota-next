@@ -37,3 +37,21 @@ export class ProfileUpdateDto {
   @IsString()
   biographyMarkdown?: string | null;
 }
+
+export class AdminAccountsQueryDto {
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  page?: string;
+
+  @IsOptional()
+  @IsString()
+  pageSize?: string;
+}

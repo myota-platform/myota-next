@@ -17,9 +17,9 @@ baseline. Current implementation reference:
 
 Identity currently implements disabled public registration, password login,
 refresh rotation, logout revocation, recovery request/reset, current-account
-reads, and owner-only profile updates in NestJS. These are the first implemented
-slice; they still need automated compatibility coverage before they count as
-parity complete.
+reads, owner-only profile updates, and administrator account listing in NestJS.
+These are the first implemented slice; they still need automated compatibility
+coverage before they count as parity complete.
 
 ## User applications
 
