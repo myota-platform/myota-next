@@ -131,6 +131,10 @@
   records a transactional outbox fact. Authenticated entity audit
   reads combine the entity's review histories with durable audit events. Vector
   tile reads serve approved entity geometry as Mapbox vector tiles.
+  A separate scheduled importer can poll due refresh schedules and fetch
+  GeoJSON or ArcGIS FeatureServer data from explicitly allowlisted HTTPS hosts.
+  It remains disabled unless `GEODATA_IMPORTER_ENABLED=true`; deployment and
+  live-source qualification remain outstanding.
 - Award definitions now support public published-only reads, administrative
   draft create/edit, review submission and decisions, print-readiness
   validation, publication, and retirement. Saved and published facts commit to

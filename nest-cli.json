@@ -81,6 +81,15 @@
         "tsConfigPath": "apps/geodata-worker/tsconfig.app.json"
       }
     },
+    "geodata-importer": {
+      "type": "application",
+      "root": "apps/geodata-importer",
+      "entryFile": "main",
+      "sourceRoot": "apps/geodata-importer/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/geodata-importer/tsconfig.app.json"
+      }
+    },
     "email-worker": {
       "type": "application",
       "root": "apps/email-worker",

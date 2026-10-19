@@ -89,8 +89,12 @@ manifests, and apply disappearance policy after successful promotion.
 Import promotion generates deduplicated conflation candidates from overlapping
 PostGIS bounding boxes using the baseline 0.55 scoring threshold. Failed
 promotion queues can be redriven with a required reason recorded in queue
-metadata and the outbox. Automatic scheduled execution, remaining review
-workflows, and outage/recovery evidence are outstanding.
+metadata and the outbox. A separate Node importer polls due schedules and
+fetches GeoJSON or ArcGIS FeatureServer data only from allowlisted HTTPS hosts;
+it rejects redirects and responses above 16 MiB, then submits data through the
+schedule run API. `GEODATA_IMPORTER_ENABLED` keeps it opt-in. Deployment,
+live-source qualification, remaining review workflows, and outage/recovery
+evidence are outstanding.
 Finalization removes staged candidates and queues transactionally
 while preserving the import summary and materialized entities. Pending
 candidates can be paged; administrators can confirm or
