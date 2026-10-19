@@ -20,12 +20,20 @@ import {
 } from '../../activity/src/activity-domain.js';
 import { evaluateAward } from '../../activity/src/award-domain.js';
 
-interface ClaimedJob {
+export interface ClaimedJob {
   id: string;
   kind: string;
   payload: JsonRecord;
   attempts: number;
   leaseToken: string;
+}
+
+export interface WorkJobState {
+  id: string;
+  kind: string;
+  status: string;
+  retryAfterSeconds: number;
+  leaseRemainingSeconds: number;
 }
 
 @Injectable()
@@ -34,38 +42,24 @@ export class ActivityWorkRepository {
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {}
 
-  async claim(): Promise<ClaimedJob | null> {
+  async claimWorkJob(
+    id: string,
+    expectedKind: string,
+    leaseSeconds = 120,
+  ): Promise<ClaimedJob | null> {
     const client = await this.connect();
     try {
-      await client.query('BEGIN');
-      const selected = await client.query(
-        `SELECT id FROM activity_job WHERE kind=ANY($1::text[]) AND available_at<=now()
-         AND (status='QUEUED' OR (status='RUNNING' AND lease_expires_at<now()))
-         ORDER BY available_at,created_at FOR UPDATE SKIP LOCKED LIMIT 1`,
-        [
-          [
-            'QSO_INGESTION',
-            'ADIF_IMPORT',
-            'AWARD_EVALUATION',
-            'AWARD_RECALCULATE',
-            'PDF_RENDER',
-            'STATISTICS_REBUILD',
-          ],
-        ],
-      );
-      if (!selected.rows[0]) {
-        await client.query('COMMIT');
-        return null;
-      }
       const leaseToken = randomUUID();
       const updated = await client.query(
         `UPDATE activity_job SET status='RUNNING',attempts=attempts+1,
-         started_at=COALESCE(started_at,now()),lease_expires_at=now()+interval '120 seconds',lease_token=$2
-         WHERE id=$1 RETURNING id,kind,payload,attempts,lease_token`,
-        [selected.rows[0].id, leaseToken],
+         started_at=COALESCE(started_at,now()),lease_expires_at=now()+make_interval(secs=>$3),lease_token=$4
+         WHERE id=$1 AND kind=$2 AND available_at<=now()
+           AND (status='QUEUED' OR (status='RUNNING' AND lease_expires_at<now()))
+         RETURNING id,kind,payload,attempts,lease_token`,
+        [id, expectedKind, leaseSeconds, leaseToken],
       );
-      await client.query('COMMIT');
       const row = updated.rows[0];
+      if (!row) return null;
       return {
         id: String(row.id),
         kind: row.kind,
@@ -73,9 +67,56 @@ export class ActivityWorkRepository {
         attempts: row.attempts,
         leaseToken: String(row.lease_token),
       };
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getWorkJobState(id: string): Promise<WorkJobState | null> {
+    const client = await this.connect();
+    try {
+      const result = await client.query<WorkJobState>(
+        `SELECT id,kind,status,
+          GREATEST(0,EXTRACT(EPOCH FROM (available_at-now()))) AS "retryAfterSeconds",
+          GREATEST(0,EXTRACT(EPOCH FROM (lease_expires_at-now()))) AS "leaseRemainingSeconds"
+         FROM activity_job WHERE id=$1`,
+        [id],
+      );
+      const row = result.rows[0];
+      return row
+        ? {
+            ...row,
+            retryAfterSeconds: Number(row.retryAfterSeconds ?? 0),
+            leaseRemainingSeconds: Number(row.leaseRemainingSeconds ?? 0),
+          }
+        : null;
+    } finally {
+      client.release();
+    }
+  }
+
+  async recordWorkDeadLetter(
+    subject: string,
+    workId: string | null,
+    workType: string | null,
+    deliveryCount: number,
+    errorCategory: string,
+  ): Promise<void> {
+    const client = await this.connect();
+    try {
+      await client.query(
+        `INSERT INTO activity_work_dead_letter
+          (id,work_id,work_type,subject,delivery_count,error_category)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [
+          randomUUID(),
+          workId,
+          workType,
+          subject.slice(0, 255),
+          Math.max(1, deliveryCount),
+          errorCategory.slice(0, 80),
+        ],
+      );
     } finally {
       client.release();
     }
@@ -718,43 +759,63 @@ export class ActivityWorkRepository {
     }
   }
 
-  async retry(job: ClaimedJob, error: unknown) {
+  async retryWorkJob(job: ClaimedJob, error: unknown, delaySeconds: number) {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
       const message =
         error instanceof Error ? error.name.slice(0, 80) : 'worker error';
-      if (job.attempts >= 8) {
-        const failed = await client.query(
-          `UPDATE activity_job SET status='FAILED',completed_at=now(),lease_expires_at=NULL,lease_token=NULL,last_error=$3 WHERE id=$1 AND lease_token=$2`,
-          [job.id, job.leaseToken, message],
-        );
-        if (!failed.rowCount)
-          throw new Error('worker lease was lost before dead-lettering');
-        await client.query(
-          `INSERT INTO activity_work_dead_letter(id,work_id,work_type,subject,delivery_count,error_category) VALUES ($1,$2,$3,$4,$5,$6)`,
-          [
-            randomUUID(),
-            job.id,
-            `activity.${job.kind.toLowerCase().replaceAll('_', '-')}.v1`,
-            `myota.work.activity.${job.kind.toLowerCase().replaceAll('_', '-')}.v1:${job.id}`,
-            job.attempts,
-            message,
-          ],
-        );
-      } else {
-        const delay = Math.min(300, 2 ** Math.min(job.attempts, 8));
-        const retried = await client.query(
-          `UPDATE activity_job SET status='QUEUED',available_at=now()+make_interval(secs=>$3),lease_expires_at=NULL,lease_token=NULL,last_error=$4 WHERE id=$1 AND lease_token=$2`,
-          [job.id, job.leaseToken, delay, message],
-        );
-        if (!retried.rowCount)
-          throw new Error('worker lease was lost before retry');
-      }
+      const retried = await client.query(
+        `UPDATE activity_job SET status='QUEUED',available_at=now()+make_interval(secs=>$3),lease_expires_at=NULL,lease_token=NULL,last_error=$4 WHERE id=$1 AND status='RUNNING' AND lease_token=$2 RETURNING id`,
+        [job.id, job.leaseToken, delaySeconds, message],
+      );
+      if (!retried.rowCount)
+        throw new Error('worker lease was lost before retry');
       await client.query('COMMIT');
     } catch (failure) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw failure;
+    } finally {
+      client.release();
+    }
+  }
+
+  async failWorkJob(
+    job: ClaimedJob,
+    error: unknown,
+    subject: string,
+    workType: string,
+    deliveryCount: number,
+  ): Promise<void> {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      const message =
+        error instanceof Error ? error.name.slice(0, 80) : 'worker error';
+      const failed = await client.query(
+        `UPDATE activity_job SET status='FAILED',completed_at=now(),lease_expires_at=NULL,lease_token=NULL,last_error=$3
+         WHERE id=$1 AND status='RUNNING' AND lease_token=$2 RETURNING id`,
+        [job.id, job.leaseToken, message],
+      );
+      if (!failed.rowCount)
+        throw new Error('worker lease was lost before dead-lettering');
+      await client.query(
+        `INSERT INTO activity_work_dead_letter
+          (id,work_id,work_type,subject,delivery_count,error_category)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [
+          randomUUID(),
+          job.id,
+          workType,
+          subject.slice(0, 255),
+          Math.max(1, deliveryCount),
+          message || 'worker error',
+        ],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
     } finally {
       client.release();
     }

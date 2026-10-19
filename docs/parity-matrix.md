@@ -105,8 +105,10 @@ workflows remain outstanding.
 ## Workers and operations
 
 - Activity workers: QSO ingestion, ADIF processing, award evaluation and
-  recalculation, certificate rendering, statistics rebuild, notifications,
-  and retention/recovery tasks.
+  recalculation, certificate rendering, and statistics rebuild are consumed
+  from their registered JetStream durables. Database leases and message
+  progress acknowledgements protect long jobs; notifications are handled by
+  the separate consumer described below. Retention/recovery tasks remain open.
 - Activity notification consumption: exact durable validation, transactional
   processed-event/checkpoint and notification writes, deduplication, bounded
   retry, redacted poison-event dead-lettering, and audited CLI redrive are

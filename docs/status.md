@@ -44,9 +44,10 @@
   idempotency responses transactionally, updates subject aggregates, and
   queues award recalculation work through the Activity outbox. High-volume QSO
   ingestion requests are authorized, bounded, persisted as Activity jobs, and
-  exposed through an owner-scoped status API. The separate Activity worker
-  processes these ingestion jobs transactionally with database leases, bounded
-  retries, and dead-letter records. Public activation history masks operator
+  exposed through an owner-scoped status API. The Activity worker consumes the
+  registered JetStream work durables and processes jobs transactionally with
+  database leases, message progress acknowledgements, bounded retries, and
+  dead-letter records. Public activation history masks operator
   callsigns, leaderboards use subject aggregates, and result exports support
   JSON and CSV. QSO correction requests and administrator review now use
   transactional Activity persistence; applying a correction queues award
