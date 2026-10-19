@@ -23,7 +23,8 @@
   selection, evidence submission, verification, and retirement, plus paginated
   security-event reads for global administrators and owner-scoped account data
   export, scoped OIDC provider mapping creation, and five-minute service token
-  issuance with the restricted email-recipient lookup are also implemented.
+  issuance with the restricted email-recipient lookup, and normalized private
+  profile-image upload/read/delete are also implemented.
   Authentication uses the existing scrypt hash format, HS256 token contract,
   persisted session, revocation, lockout and rate-limit tables.
 - Transactional event helpers write domain events to the Core outbox and
@@ -31,9 +32,9 @@
 
 ## Not implemented yet
 
-- Remaining Identity APIs include profile images, OIDC mapping updates, and
-  account deactivation as its dedicated operation. Automated compatibility
-  coverage for the first auth slice is also outstanding.
+- Remaining Identity APIs include OIDC mapping updates and account deactivation
+  as its dedicated operation. Profile-image orphan cleanup and automated
+  compatibility coverage for the first auth slice are still outstanding.
 - Programme, Activity, Geodata, and Gateway handlers, authorization rules,
   persistence repositories, and event/outbox behavior.
 - Activity and Geodata consumers, leases, recovery, retries, and redrive.

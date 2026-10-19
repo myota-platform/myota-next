@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Param,
   ParseUUIDPipe,
   Get,
@@ -41,6 +42,7 @@ import { IdentityRoleService } from './identity-role.service.js';
 import { IdentityAccountService } from './identity-account.service.js';
 import { IdentityIntegrationService } from './identity-integration.service.js';
 import { IdentityCredentialService } from './identity-credential.service.js';
+import { IdentityProfileImageService } from './identity-profile-image.service.js';
 
 @Controller('identity')
 export class AuthController {
@@ -50,6 +52,7 @@ export class AuthController {
     private readonly accounts: IdentityAccountService,
     private readonly integrations: IdentityIntegrationService,
     private readonly credentials: IdentityCredentialService,
+    private readonly profileImages: IdentityProfileImageService,
   ) {}
 
   @Post('auth/register')
@@ -144,6 +147,44 @@ export class AuthController {
     return this.auth.updateOwnProfile(authorization, body);
   }
 
+  @Get('me/profile-image')
+  @Header('Content-Type', 'image/webp')
+  @Header('Cache-Control', 'private, no-store')
+  getOwnProfileImage(
+    @Headers('authorization') authorization: string | undefined,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.profileImages.getOwnProfileImage(authorization);
+  }
+
+  @Put('me/profile-image')
+  @Header('Cache-Control', 'private, no-store')
+  uploadOwnProfileImage(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('content-type') contentType: string | undefined,
+    @Req() request: Request,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.profileImages.uploadOwnProfileImage(
+      authorization,
+      contentType,
+      request,
+    );
+  }
+
+  @Delete('me/profile-image')
+  @HttpCode(200)
+  @Header('Cache-Control', 'private, no-store')
+  deleteOwnProfileImage(
+    @Headers('authorization') authorization: string | undefined,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.profileImages.deleteOwnProfileImage(authorization);
+  }
+
   @Get('admin/accounts')
   listAdminAccounts(
     @Headers('authorization') authorization: string | undefined,
@@ -234,6 +275,18 @@ export class AuthController {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
     return this.accounts.exportAccount(authorization, accountId);
+  }
+
+  @Get('accounts/:accountId/profile-image')
+  @Header('Content-Type', 'image/webp')
+  @Header('Cache-Control', 'private, no-store')
+  getAccountProfileImage(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.profileImages.getAccountProfileImage(authorization, accountId);
   }
 
   @Get('accounts/:accountId/roles')

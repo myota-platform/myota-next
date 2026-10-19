@@ -1,0 +1,405 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { randomUUID } from 'node:crypto';
+import type { Pool, PoolClient } from 'pg';
+import sharp from 'sharp';
+import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { writeSecurityEvent } from '@app/platform/outbox.js';
+import type { IdentityAuthService } from './auth.service.js';
+
+const MAX_INPUT_BYTES = 5 * 1024 * 1024;
+const MAX_INPUT_DIMENSION = 4096;
+const OUTPUT_DIMENSION = 512;
+const MAX_OUTPUT_BYTES = 256 * 1024;
+const INPUT_FORMATS: Record<string, string> = {
+  'image/jpeg': 'jpeg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+interface ProfileImageRecord {
+  profile_image_id: string | null;
+  profile_image_media_type: string | null;
+  profile_image_updated_at: Date | null;
+}
+
+@Injectable()
+export class IdentityProfileImageService {
+  private s3Client: S3Client | undefined;
+
+  constructor(
+    @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
+    private readonly auth: IdentityAuthService,
+  ) {}
+
+  async getOwnProfileImage(authorization: string): Promise<Buffer> {
+    const actor = await this.auth.currentAccount(authorization);
+    return this.getAccountProfileImage(authorization, accountIdOf(actor));
+  }
+
+  async getAccountProfileImage(
+    authorization: string,
+    accountId: string,
+  ): Promise<Buffer> {
+    await this.authorizeTarget(authorization, accountId);
+    const client = await this.connect();
+    let imageId: string | null;
+    try {
+      const result = await client.query<ProfileImageRecord>(
+        `SELECT p.profile_image_id, p.profile_image_media_type,
+                p.profile_image_updated_at
+           FROM public.account a
+           LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
+          WHERE a.id = $1`,
+        [accountId],
+      );
+      if (!result.rowCount)
+        throw new NotFoundException('profile image not found');
+      const image = result.rows[0];
+      imageId = image.profile_image_id;
+      if (!imageId || image.profile_image_media_type !== 'image/webp') {
+        throw new NotFoundException('profile image not found');
+      }
+    } finally {
+      client.release();
+    }
+
+    try {
+      const response = await this.s3().send(
+        new GetObjectCommand({
+          Bucket: this.bucket(),
+          Key: this.objectKey(accountId, imageId),
+        }),
+      );
+      if (!response.Body) throw new Error('profile image body is missing');
+      const chunks: Buffer[] = [];
+      let total = 0;
+      for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
+        total += chunk.byteLength;
+        if (total > MAX_OUTPUT_BYTES) {
+          throw new ServiceUnavailableException(
+            'stored profile image exceeds its size limit',
+          );
+        }
+        chunks.push(Buffer.from(chunk));
+      }
+      return Buffer.concat(chunks, total);
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ServiceUnavailableException
+      ) {
+        throw error;
+      }
+      if (isMissingObject(error)) {
+        throw new NotFoundException('profile image not found');
+      }
+      throw new ServiceUnavailableException(
+        'profile image storage is unavailable',
+      );
+    }
+  }
+
+  async uploadOwnProfileImage(
+    authorization: string,
+    contentType: string | undefined,
+    input: AsyncIterable<Uint8Array>,
+  ): Promise<Record<string, unknown>> {
+    const actor = await this.auth.currentAccount(authorization);
+    const actorId = accountIdOf(actor);
+    const normalized = await this.normalize(contentType, input);
+    const imageId = randomUUID();
+    const client = await this.connect();
+    let previousImageId: string | null = null;
+    let uploaded = false;
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'SELECT id FROM public.account WHERE id = $1 FOR UPDATE',
+        [actorId],
+      );
+      const previous = await client.query<{ profile_image_id: string | null }>(
+        `SELECT profile_image_id FROM public.identity_account_profile
+          WHERE account_id = $1 FOR UPDATE`,
+        [actorId],
+      );
+      previousImageId = previous.rows[0]?.profile_image_id ?? null;
+      await this.s3().send(
+        new PutObjectCommand({
+          Bucket: this.bucket(),
+          Key: this.objectKey(actorId, imageId),
+          Body: normalized,
+          ContentType: 'image/webp',
+          CacheControl: 'private, no-store',
+        }),
+      );
+      uploaded = true;
+      const updatedAt = new Date();
+      await client.query(
+        `INSERT INTO public.identity_account_profile
+           (account_id, profile_image_id, profile_image_media_type,
+            profile_image_updated_at)
+         VALUES ($1, $2, 'image/webp', $3)
+         ON CONFLICT (account_id) DO UPDATE SET
+           profile_image_id = EXCLUDED.profile_image_id,
+           profile_image_media_type = EXCLUDED.profile_image_media_type,
+           profile_image_updated_at = EXCLUDED.profile_image_updated_at`,
+        [actorId, imageId, updatedAt],
+      );
+      await client.query(
+        'UPDATE public.account SET updated_at = $2 WHERE id = $1',
+        [actorId, updatedAt],
+      );
+      const profileImage = {
+        id: imageId,
+        contentType: 'image/webp',
+        width: OUTPUT_DIMENSION,
+        height: OUTPUT_DIMENSION,
+        updatedAt,
+      };
+      await writeSecurityEvent(client, 'identity.profile-image.updated.v1', {
+        accountId: actorId,
+        actorId,
+        profileImage,
+      });
+      await client.query('COMMIT');
+      if (previousImageId)
+        this.deleteObjectBestEffort(actorId, previousImageId);
+      return { profileImage };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      if (uploaded) this.deleteObjectBestEffort(actorId, imageId);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async deleteOwnProfileImage(
+    authorization: string,
+  ): Promise<{ profileImage: null }> {
+    const actor = await this.auth.currentAccount(authorization);
+    const actorId = accountIdOf(actor);
+    const client = await this.connect();
+    let previousImageId: string | null = null;
+    try {
+      await client.query('BEGIN');
+      const account = await client.query(
+        'SELECT id FROM public.account WHERE id = $1 FOR UPDATE',
+        [actorId],
+      );
+      if (!account.rowCount) throw new NotFoundException('account not found');
+      const previous = await client.query<{ profile_image_id: string | null }>(
+        `SELECT profile_image_id FROM public.identity_account_profile
+          WHERE account_id = $1 FOR UPDATE`,
+        [actorId],
+      );
+      previousImageId = previous.rows[0]?.profile_image_id ?? null;
+      await client.query(
+        `INSERT INTO public.identity_account_profile
+           (account_id, profile_image_id, profile_image_media_type,
+            profile_image_updated_at)
+         VALUES ($1, NULL, NULL, NULL)
+         ON CONFLICT (account_id) DO UPDATE SET
+           profile_image_id = NULL,
+           profile_image_media_type = NULL,
+           profile_image_updated_at = NULL`,
+        [actorId],
+      );
+      await client.query(
+        'UPDATE public.account SET updated_at = now() WHERE id = $1',
+        [actorId],
+      );
+      await writeSecurityEvent(client, 'identity.profile-image.deleted.v1', {
+        accountId: actorId,
+        actorId,
+      });
+      await client.query('COMMIT');
+      if (previousImageId)
+        this.deleteObjectBestEffort(actorId, previousImageId);
+      return { profileImage: null };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async authorizeTarget(authorization: string, accountId: string) {
+    const actor = await this.auth.currentAccount(authorization);
+    const actorId = accountIdOf(actor);
+    const scopes = new Set(actor.scopes as string[]);
+    if (
+      actorId !== accountId &&
+      !scopes.has('identity.admin') &&
+      !scopes.has('*')
+    ) {
+      throw new ForbiddenException('profile image access is not permitted');
+    }
+  }
+
+  private async normalize(
+    contentType: string | undefined,
+    input: AsyncIterable<Uint8Array>,
+  ): Promise<Buffer> {
+    const mediaType = (contentType ?? '').split(';', 1)[0].trim().toLowerCase();
+    const format = INPUT_FORMATS[mediaType];
+    if (!format) {
+      throw new BadRequestException('profile image must be JPEG, PNG, or WebP');
+    }
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of input) {
+      size += chunk.byteLength;
+      if (size > MAX_INPUT_BYTES) {
+        throw new BadRequestException(
+          'profile image must be between 1 byte and 5 MiB',
+        );
+      }
+      chunks.push(Buffer.from(chunk));
+    }
+    if (!size) {
+      throw new BadRequestException(
+        'profile image must be between 1 byte and 5 MiB',
+      );
+    }
+    const content = Buffer.concat(chunks, size);
+    try {
+      const image = sharp(content, {
+        limitInputPixels: MAX_INPUT_DIMENSION * MAX_INPUT_DIMENSION,
+        animated: false,
+      });
+      const metadata = await image.metadata();
+      if (metadata.format !== format) {
+        throw new BadRequestException(
+          'profile image content does not match its media type',
+        );
+      }
+      if ((metadata.pages ?? 1) !== 1) {
+        throw new BadRequestException(
+          'animated profile images are not supported',
+        );
+      }
+      if (
+        !metadata.width ||
+        !metadata.height ||
+        metadata.width > MAX_INPUT_DIMENSION ||
+        metadata.height > MAX_INPUT_DIMENSION
+      ) {
+        throw new BadRequestException(
+          'profile image dimensions exceed 4096 pixels',
+        );
+      }
+
+      for (const quality of [85, 75, 65, 55]) {
+        const output = await sharp(content, {
+          limitInputPixels: MAX_INPUT_DIMENSION * MAX_INPUT_DIMENSION,
+          animated: false,
+        })
+          .rotate()
+          .resize(OUTPUT_DIMENSION, OUTPUT_DIMENSION, {
+            fit: 'cover',
+            position: 'centre',
+          })
+          .webp({ quality, effort: 4 })
+          .toBuffer();
+        if (output.byteLength <= MAX_OUTPUT_BYTES) return output;
+      }
+      throw new BadRequestException('normalized profile image exceeds 256 KiB');
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException(
+        'profile image is malformed or unsupported',
+      );
+    }
+  }
+
+  private s3(): S3Client {
+    if (this.s3Client) return this.s3Client;
+    const accessKeyId = process.env.MYOTA_PROFILE_IMAGE_ACCESS_KEY ?? '';
+    const secretAccessKey = process.env.MYOTA_PROFILE_IMAGE_SECRET_KEY ?? '';
+    if (!accessKeyId || !secretAccessKey) {
+      throw new ServiceUnavailableException(
+        'profile image storage credentials are unavailable',
+      );
+    }
+    this.s3Client = new S3Client({
+      endpoint:
+        process.env.MYOTA_OBJECT_STORAGE_ENDPOINT ?? 'http://seaweedfs:8333',
+      region: process.env.MYOTA_OBJECT_STORAGE_REGION ?? 'us-east-1',
+      forcePathStyle: true,
+      credentials: { accessKeyId, secretAccessKey },
+    });
+    return this.s3Client;
+  }
+
+  private bucket(): string {
+    return (
+      process.env.MYOTA_PROFILE_IMAGE_BUCKET ?? 'myota-user-profile-images'
+    );
+  }
+
+  private objectKey(accountId: string, imageId: string): string {
+    return `profiles/${accountId}/${imageId}.webp`;
+  }
+
+  private deleteObjectBestEffort(accountId: string, imageId: string) {
+    try {
+      void this.s3()
+        .send(
+          new DeleteObjectCommand({
+            Bucket: this.bucket(),
+            Key: this.objectKey(accountId, imageId),
+          }),
+        )
+        .catch(() => undefined);
+    } catch {
+      // Storage cleanup is best effort; the source has a later orphan sweep.
+    }
+  }
+
+  private async connect(): Promise<PoolClient> {
+    if (!this.pool) {
+      throw new ServiceUnavailableException(
+        'Identity database is not configured',
+      );
+    }
+    try {
+      return await this.pool.connect();
+    } catch {
+      throw new ServiceUnavailableException('Identity database is unavailable');
+    }
+  }
+}
+
+function isMissingObject(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  if ('$metadata' in error) {
+    const metadata = error.$metadata as { httpStatusCode?: number };
+    if (metadata.httpStatusCode === 404) return true;
+  }
+  return (
+    'name' in error && ['NoSuchKey', 'NotFound'].includes(String(error.name))
+  );
+}
+
+function accountIdOf(actor: Record<string, unknown>): string {
+  if (typeof actor.id !== 'string') {
+    throw new UnauthorizedException('account identity is unavailable');
+  }
+  return actor.id;
+}

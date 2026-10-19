@@ -6,6 +6,7 @@ import { IdentityRoleService } from './identity-role.service.js';
 import { IdentityAccountService } from './identity-account.service.js';
 import { IdentityIntegrationService } from './identity-integration.service.js';
 import { IdentityCredentialService } from './identity-credential.service.js';
+import { IdentityProfileImageService } from './identity-profile-image.service.js';
 
 @Module({
   imports: [DatabaseHealthModule.forEnvironment('CORE_DATABASE_URL')],
@@ -16,6 +17,7 @@ import { IdentityCredentialService } from './identity-credential.service.js';
     IdentityAccountService,
     IdentityIntegrationService,
     IdentityCredentialService,
+    IdentityProfileImageService,
   ],
 })
 export class IdentityModule {}
