@@ -1,5 +1,16 @@
 import { createServer, type Server, type ServerResponse } from 'node:http';
 
+export function workerProbePort(
+  value: string | undefined,
+  fallback: number,
+  variable: string,
+): number {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535)
+    throw new Error(`${variable} must be a valid TCP port`);
+  return parsed;
+}
+
 export class WorkerProbeServer {
   private server?: Server;
   private stopping = false;

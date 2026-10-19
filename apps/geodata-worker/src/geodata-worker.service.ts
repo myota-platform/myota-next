@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   Logger,
   OnModuleDestroy,
@@ -7,7 +8,13 @@ import {
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import type { Consumer, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
+import type { Pool } from 'pg';
+import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
+import {
+  WorkerProbeServer,
+  workerProbePort,
+} from '@app/platform/worker-probes.js';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
 import { GeodataPromotionRepository } from './geodata-promotion.repository.js';
 import { GeodataEnrichmentRepository } from './geodata-enrichment.repository.js';
@@ -62,6 +69,8 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   private resolveStop!: () => void;
   private connection?: Awaited<ReturnType<typeof connect>>;
   private loops: Promise<void>[] = [];
+  private readonly probes = new WorkerProbeServer();
+  private natsUp = false;
   private readonly repository: GeodataWorkRepository;
   private readonly promotion: GeodataPromotionRepository;
   private readonly enrichment: GeodataEnrichmentRepository;
@@ -74,6 +83,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
     enrichment: GeodataEnrichmentRepository,
     deletions: GeodataDeletionRepository,
     retention: GeodataRetentionRepository,
+    @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {
     this.repository = repository;
     this.promotion = promotion;
@@ -129,6 +139,20 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
           ...policy,
         });
       }
+      this.natsUp = true;
+      void this.monitorNats();
+      await this.probes.listen(
+        workerProbePort(
+          process.env.GEODATA_WORKER_HEALTH_PORT,
+          9113,
+          'GEODATA_WORKER_HEALTH_PORT',
+        ),
+        async () => {
+          if (this.stopping || !this.natsUp || !this.pool) return false;
+          await this.pool.query('SELECT 1');
+          return true;
+        },
+      );
       this.loops = [
         ...definitions.map((definition) => this.consume(definition)),
         this.reconcileCancellations(),
@@ -144,8 +168,27 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     this.stopping = true;
     this.resolveStop();
+    await this.probes.close();
     await Promise.allSettled(this.loops);
     await this.connection?.drain();
+  }
+
+  private async monitorNats(): Promise<void> {
+    try {
+      for await (const status of this.connection!.status()) {
+        if (status.type === 'disconnect' || status.type === 'reconnecting') {
+          this.natsUp = false;
+        } else if (status.type === 'reconnect') {
+          this.natsUp = true;
+        } else if (status.type === 'close') {
+          this.natsUp = false;
+          return;
+        }
+      }
+    } catch (error) {
+      this.natsUp = false;
+      this.logger.warn(`NATS status monitor stopped: ${safeError(error)}`);
+    }
   }
 
   private validateConsumer(

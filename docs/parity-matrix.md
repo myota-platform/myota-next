@@ -142,7 +142,8 @@ and deployment integration.
   evidence remains open.
 - Geodata workers: registered JetStream consumers for import preprocessing and
   promotion, confirmed entity deletion, and location enrichment are implemented.
-  Stale queued and expired work is re-enqueued through the owner outbox.
+  `/healthz` and `/readyz` expose liveness and Geodata PostgreSQL/NATS
+  readiness. Stale queued and expired work is re-enqueued through the owner outbox.
   Scheduled import and upload-session retention is implemented; outage/recovery
   evidence remains open.
 - Gateway: routes public API requests to their owning services, protects

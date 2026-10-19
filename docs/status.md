@@ -86,7 +86,9 @@
   Geodata worker consumes registered preprocessing work and claims the named run,
   validates feature names and WGS84 geometries, stages candidates with
   provenance and 50 m duplicate warnings, records errors, and emits the
-  preprocessing fact. The service also has PostGIS-backed public entity
+  preprocessing fact. `/healthz` and `/readyz` expose worker liveness and
+  GeoData PostgreSQL/NATS readiness on `GEODATA_WORKER_HEALTH_PORT`. The service
+  also has PostGIS-backed public entity
   list/detail reads with bounded paging, status/category/location filters, and
   bounding-box queries. Pending candidates can be paged, confirmed, or rejected
   through authorized, idempotent review writes. Selected candidates can be

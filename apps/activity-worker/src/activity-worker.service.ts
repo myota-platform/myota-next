@@ -10,7 +10,10 @@ import type { Consumer, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import { WorkerProbeServer } from '@app/platform/worker-probes.js';
+import {
+  WorkerProbeServer,
+  workerProbePort,
+} from '@app/platform/worker-probes.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
 import {
   ActivityWorkRepository,
@@ -99,7 +102,11 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
       this.natsUp = true;
       void this.monitorNats();
       await this.probes.listen(
-        boundedPort(process.env.ACTIVITY_WORKER_HEALTH_PORT, 9112),
+        workerProbePort(
+          process.env.ACTIVITY_WORKER_HEALTH_PORT,
+          9112,
+          'ACTIVITY_WORKER_HEALTH_PORT',
+        ),
         async () => {
           if (this.stopping || !this.natsUp || !this.pool) return false;
           await this.pool.query('SELECT 1');
@@ -463,13 +470,6 @@ function safeError(error: unknown): string {
   return (error instanceof Error ? error.message : String(error))
     .replace(/[\r\n\t]+/g, ' ')
     .slice(0, 300);
-}
-
-function boundedPort(value: string | undefined, fallback: number): number {
-  const parsed = Number(value ?? fallback);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535)
-    throw new Error('ACTIVITY_WORKER_HEALTH_PORT must be a valid TCP port');
-  return parsed;
 }
 
 function pause(milliseconds: number): Promise<void> {
