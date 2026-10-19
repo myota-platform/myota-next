@@ -41,16 +41,6 @@ export class RecoveryResetDto {
   newPassword!: string;
 }
 
-export class ProfileUpdateDto {
-  @IsOptional()
-  @IsString()
-  websiteUrl?: string | null;
-
-  @IsOptional()
-  @IsString()
-  biographyMarkdown?: string | null;
-}
-
 export class AdminAccountsQueryDto {
   @IsOptional()
   @IsString()

@@ -603,10 +603,16 @@ export class IdentityAuthService {
 
   async updateOwnProfile(
     authorization: string,
-    body: { websiteUrl?: string | null; biographyMarkdown?: string | null },
+    body: Record<string, any>,
   ): Promise<Record<string, unknown>> {
     if (!authorization.startsWith('Bearer ')) {
       throw new UnauthorizedException('Bearer authentication is required');
+    }
+    const allowedFields = new Set(['websiteUrl', 'biographyMarkdown']);
+    if (Object.keys(body).some((field) => !allowedFields.has(field))) {
+      throw new BadRequestException(
+        'profile update contains unsupported fields',
+      );
     }
     if (Object.keys(body).length === 0) {
       throw new BadRequestException('profile update must include a field');

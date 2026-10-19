@@ -31,7 +31,6 @@ import {
   RecoveryRequestDto,
   RecoveryResetDto,
   RefreshTokenDto,
-  ProfileUpdateDto,
   ReplaceAccountRolesDto,
   SecurityEventsQueryDto,
   OidcProviderMappingDto,
@@ -140,7 +139,7 @@ export class AuthController {
   @Patch('me/profile')
   updateProfile(
     @Headers('authorization') authorization: string | undefined,
-    @Body() body: ProfileUpdateDto,
+    @Body() body: Record<string, any>,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
