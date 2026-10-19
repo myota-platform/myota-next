@@ -828,9 +828,8 @@ export class IdentityAccountService {
       const account = result.rows[0];
       if (!account) throw new NotFoundException('account not found');
 
-      const anonymize = Boolean(
-        body.anonymize && (body.status ?? account.status) === 'DEACTIVATED',
-      );
+      const nextStatus = body.status ?? account.status;
+      const anonymize = Boolean(body.anonymize && nextStatus === 'DEACTIVATED');
       let email: string | null | undefined;
       if ('email' in body) {
         email = body.email?.trim().toLowerCase() || null;
@@ -928,7 +927,10 @@ export class IdentityAccountService {
         );
       }
 
-      if (anonymize) {
+      if (
+        nextStatus === 'DEACTIVATED' &&
+        (anonymize || account.status !== 'DEACTIVATED')
+      ) {
         await client.query(
           `UPDATE public.auth_session SET revoked_at = coalesce(revoked_at, now())
             WHERE account_id = $1`,
@@ -936,7 +938,7 @@ export class IdentityAccountService {
         );
         await writeSecurityEvent(client, 'identity.account.deactivated.v1', {
           accountId,
-          anonymized: true,
+          anonymized: anonymize,
         });
       }
       await writeSecurityEvent(client, 'identity.account.admin-updated.v1', {

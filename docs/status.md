@@ -80,8 +80,9 @@
 
 ## Not implemented yet
 
-- Remaining Identity APIs include account deactivation as its dedicated
-  operation. Profile-image orphan cleanup and automated
+- Administrative account updates revoke active sessions and emit the
+  deactivation security event when an account transitions to DEACTIVATED, with
+  optional anonymization. Profile-image orphan cleanup and automated
   compatibility coverage for the first auth slice are still outstanding.
 - Remaining Activity APIs include file-based QSO import and operational
   workflows. Remaining Geodata mutations, import handlers and worker
