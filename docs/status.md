@@ -48,7 +48,8 @@
   idempotency responses transactionally, updates subject aggregates, and
   queues award recalculation work through the Activity outbox. High-volume QSO
   ingestion requests are authorized, bounded, persisted as Activity jobs, and
-  exposed through an owner-scoped status API. The Activity worker consumes the
+  exposed through an owner-scoped status API. Bounded UTF-8 CSV logs are
+  normalized into those ingestion jobs. The Activity worker consumes the
   registered JetStream work durables and processes jobs transactionally with
   database leases, message progress acknowledgements, bounded retries, and
   dead-letter records. Public activation history masks operator
@@ -174,10 +175,9 @@
 
 - Automated compatibility coverage for the first Identity slice remains
   outstanding.
-- Remaining Activity parity and recovery evidence are outstanding. CSV file
-  import validates bounded UTF-8 logs and queues normalized QSO rows for the
-  existing ingestion worker. The Gateway now routes public API requests to their owning
-  services and protects the Grafana identity callback. Geodata import
+- Remaining Activity parity and recovery evidence are outstanding. The
+  Gateway routes public API requests to their owning services and protects the
+  Grafana identity callback. Geodata import
   preprocessing, promotion, deletion, and enrichment now consume registered
   JetStream durables and claim the referenced owner-database job. A periodic
   reconciler republishes stale queued work and expired leases transactionally
