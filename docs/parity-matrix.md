@@ -79,7 +79,9 @@ authenticated audit reads and approved-entity vector tiles are also implemented.
 JSON GeoJSON, WFS GeoJSON, and ArcGIS FeatureServer JSON import creation stores
 normalized GeoJSON source documents in S3-compatible storage and queues
 idempotent import runs transactionally. ArcGIS geometries with WGS84 and
-Web Mercator spatial references are normalized to WGS84. The worker validates feature
+Web Mercator spatial references are normalized to WGS84. Pasted KML and GPX
+are also converted to GeoJSON with XML document types rejected and bounded
+feature/coordinate counts. Multipart uploads still accept GeoJSON only. The worker validates feature
 names and WGS84 geometries, stages candidates with provenance and 50 m duplicate
 warnings, records errors, and emits the preprocessing fact. Community proposals
 join this pipeline and automatically queue promotion to CANDIDATE. Multipart/resumable

@@ -115,7 +115,8 @@
   creation, bounded binary parts, progress reads, completion, checksum and
   malware scanning, abort, and transactional import-run/outbox creation. This
   path currently accepts GeoJSON up to the worker's 20 MiB in-memory limit;
-  other legacy import formats and larger streaming imports remain outstanding.
+  Pasted-import creation now also decodes bounded KML and GPX to GeoJSON;
+  Shapefile, OSM PBF, and larger streaming imports remain outstanding.
   Durable object references from the configured import bucket are also
   bounded, hash-checked, validated as GeoJSON, and staged in the worker's
   normalized source format.

@@ -14,6 +14,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parseXmlImport } from './geodata-xml-import.js';
 
 const adapters = new Set(['PARKSERVE_US', 'OSM', 'GOVERNMENT_GIS', 'MANUAL']);
 const entityTypePattern = /^[A-Z][A-Z0-9_]{1,63}$/;
@@ -293,9 +294,11 @@ function prepareImport(
   const format = (typeof body.format === 'string' ? body.format : 'GEOJSON')
     .trim()
     .toUpperCase();
-  if (!['GEOJSON', 'WFS', 'ARCGIS_FEATURESERVER'].includes(format))
+  if (
+    !['GEOJSON', 'WFS', 'ARCGIS_FEATURESERVER', 'KML', 'GPX'].includes(format)
+  )
     throw new BadRequestException(
-      'this import endpoint accepts GEOJSON, WFS GeoJSON, or ARCGIS_FEATURESERVER JSON',
+      'this import endpoint accepts GEOJSON, WFS GeoJSON, ARCGIS_FEATURESERVER JSON, KML, or GPX',
     );
   const source = body.source;
   if (!source || typeof source !== 'object' || Array.isArray(source))
@@ -335,12 +338,19 @@ function prepareImport(
   if (Array.isArray(body.features)) {
     document = { type: 'FeatureCollection', features: body.features };
   } else if (typeof body.content === 'string') {
-    try {
-      const parsed: unknown = JSON.parse(body.content);
-      if (!isRecord(parsed)) throw new Error('expected an object');
-      document = parsed;
-    } catch {
-      throw new BadRequestException(`${format} content must be valid JSON`);
+    if (format === 'KML' || format === 'GPX') {
+      document = {
+        type: 'FeatureCollection',
+        features: parseXmlImport(format, body.content),
+      };
+    } else {
+      try {
+        const parsed: unknown = JSON.parse(body.content);
+        if (!isRecord(parsed)) throw new Error('expected an object');
+        document = parsed;
+      } catch {
+        throw new BadRequestException(`${format} content must be valid JSON`);
+      }
     }
   } else {
     throw new BadRequestException(`features or ${format} content is required`);
