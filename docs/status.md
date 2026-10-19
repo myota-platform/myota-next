@@ -52,8 +52,10 @@
   normalized into those ingestion jobs. The Activity worker consumes the
   registered JetStream work durables and processes jobs transactionally with
   database leases, message progress acknowledgements, bounded retries, and
-  dead-letter records. Public activation history masks operator
-  callsigns, leaderboards use subject aggregates, and result exports support
+  dead-letter records. Its `/healthz` and `/readyz` endpoints expose liveness
+  and database/NATS readiness on `ACTIVITY_WORKER_HEALTH_PORT`. Public
+  activation history masks operator callsigns, leaderboards use subject
+  aggregates, and result exports support
   JSON and CSV. QSO correction requests and administrator review now use
   transactional Activity persistence; applying a correction queues award
   recalculation. Activity statistics can be listed and rebuild jobs queued,

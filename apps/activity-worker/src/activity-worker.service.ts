@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   Logger,
   OnModuleDestroy,
@@ -7,6 +8,9 @@ import {
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import type { Consumer, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
+import type { Pool } from 'pg';
+import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { WorkerProbeServer } from '@app/platform/worker-probes.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
 import {
   ActivityWorkRepository,
@@ -45,10 +49,13 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   private resolveStop!: () => void;
   private connection?: Awaited<ReturnType<typeof connect>>;
   private loops: Promise<void>[] = [];
+  private readonly probes = new WorkerProbeServer();
+  private natsUp = false;
 
   constructor(
     private readonly repository: ActivityWorkRepository,
     private readonly retention: ActivityRetentionRepository,
+    @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {
     this.stopSignal = new Promise((resolve) => {
       this.resolveStop = resolve;
@@ -89,6 +96,16 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
           consumer: await js.consumers.get(STREAM, item.durable),
         });
       }
+      this.natsUp = true;
+      void this.monitorNats();
+      await this.probes.listen(
+        boundedPort(process.env.ACTIVITY_WORKER_HEALTH_PORT, 9112),
+        async () => {
+          if (this.stopping || !this.natsUp || !this.pool) return false;
+          await this.pool.query('SELECT 1');
+          return true;
+        },
+      );
       this.loops = [
         ...definitions.map((definition) => this.consume(definition)),
         this.reconcileQueuedOutbox(),
@@ -103,8 +120,27 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     this.stopping = true;
     this.resolveStop();
+    await this.probes.close();
     await Promise.allSettled(this.loops);
     await this.connection?.drain();
+  }
+
+  private async monitorNats(): Promise<void> {
+    try {
+      for await (const status of this.connection!.status()) {
+        if (status.type === 'disconnect' || status.type === 'reconnecting') {
+          this.natsUp = false;
+        } else if (status.type === 'reconnect') {
+          this.natsUp = true;
+        } else if (status.type === 'close') {
+          this.natsUp = false;
+          return;
+        }
+      }
+    } catch (error) {
+      this.natsUp = false;
+      this.logger.warn(`NATS status monitor stopped: ${safeError(error)}`);
+    }
   }
 
   private validateConsumer(
@@ -427,6 +463,13 @@ function safeError(error: unknown): string {
   return (error instanceof Error ? error.message : String(error))
     .replace(/[\r\n\t]+/g, ' ')
     .slice(0, 300);
+}
+
+function boundedPort(value: string | undefined, fallback: number): number {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535)
+    throw new Error('ACTIVITY_WORKER_HEALTH_PORT must be a valid TCP port');
+  return parsed;
 }
 
 function pause(milliseconds: number): Promise<void> {
