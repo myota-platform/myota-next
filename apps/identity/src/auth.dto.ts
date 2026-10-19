@@ -194,6 +194,13 @@ export class UpdateAccountDto {
   roleCodes?: string[];
 }
 
+export class ReplaceAccountRolesDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RoleGrantDto)
+  roles!: RoleGrantDto[];
+}
+
 export class AddCallsignDto {
   @IsString()
   @MinLength(1)

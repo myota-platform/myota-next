@@ -30,6 +30,7 @@ import {
   RecoveryResetDto,
   RefreshTokenDto,
   ProfileUpdateDto,
+  ReplaceAccountRolesDto,
   SecurityEventsQueryDto,
 } from './auth.dto.js';
 import { IdentityAuthService } from './auth.service.js';
@@ -210,6 +211,19 @@ export class AuthController {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
     return this.accounts.updateAccount(authorization, accountId, body);
+  }
+
+  @Put('accounts/:accountId/role-assignments')
+  replaceAccountRoleAssignments(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Body() body: ReplaceAccountRolesDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.updateAccount(authorization, accountId, {
+      roles: body.roles,
+    });
   }
 
   @Post('accounts/:accountId/callsigns')
