@@ -76,8 +76,10 @@
   manually set, and location edits require `geodata.location.manage`. An
   authorized, idempotent request can queue BigDataCloud reverse geocoding; the
   Geodata worker applies results only to the matching geometry and protects
-  manual fields. Automatic enrichment triggers on promotion and geometry edits,
-  failed-queue redrive, and NATS delivery remain outstanding.
+  manual fields. Missing metadata now queues enrichment automatically on
+  lifecycle promotion; geometry changes queue refreshes, and releasing manual
+  fields queues only missing values. Failed-queue redrive and NATS delivery
+  remain outstanding.
   The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
   paged import-run status reads are also exposed. Authenticated entity audit

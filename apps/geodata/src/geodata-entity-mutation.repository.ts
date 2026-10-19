@@ -10,6 +10,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { entityProjection } from './geodata.repository.js';
+import {
+  locationSnapshot,
+  missingLocationFields,
+  queueLocationEnrichment,
+} from './geodata-location-enrichment.js';
 
 const locationColumns: Record<string, string> = {
   continent: 'continent',
@@ -78,7 +83,11 @@ export class GeodataEntityMutationRepository {
         }
       }
       const result = await client.query(
-        `SELECT id,revision,lifecycle_status,public_properties
+        `SELECT id,revision,lifecycle_status,public_properties,
+          ST_AsGeoJSON(geom)::jsonb AS geometry,continent,continent_code,
+          country,country_code,region,region_code,subdivision,subdivision_code,
+          province,province_code,county,county_code,city,municipality,locality,
+          manual_location_fields
          FROM geodata_entity WHERE id=$1 FOR UPDATE`,
         [id],
       );
@@ -122,12 +131,29 @@ export class GeodataEntityMutationRepository {
           note,
           occurredAt: changedAt.toISOString(),
         });
-        const nextProperties = {
+        let nextProperties = {
           ...properties,
           review,
           reviewHistory,
           updatedAt: changedAt.toISOString(),
         };
+        let enrichmentEvent: Record<string, unknown> | undefined;
+        if (['APPROVED', 'CANDIDATE'].includes(targetStatus)) {
+          const enrichment = queueLocationEnrichment(
+            id,
+            nextProperties,
+            row.geometry,
+            locationSnapshot(row),
+            row.manual_location_fields,
+            'LIFECYCLE_PROMOTED',
+            reviewerId,
+            true,
+          );
+          if (enrichment) {
+            nextProperties = enrichment.properties;
+            enrichmentEvent = enrichment.event;
+          }
+        }
         await client.query(
           `UPDATE geodata_entity SET lifecycle_status=$2,public_properties=$3::jsonb,updated_at=$4
            WHERE id=$1`,
@@ -159,6 +185,14 @@ export class GeodataEntityMutationRepository {
            VALUES ($1,'geodata.entity.status-changed.v1','geodata-service','entity',$2,$3::jsonb,$4,$5)`,
           [randomUUID(), id, JSON.stringify(payload), changedAt, randomUUID()],
         );
+        if (enrichmentEvent)
+          await this.writeEntityEvent(
+            client,
+            id,
+            'geodata.entity.location-enrichment-requested.v1',
+            enrichmentEvent,
+            changedAt,
+          );
       }
       const current = await client.query(
         `SELECT ${entityProjection} AS entity FROM geodata_entity WHERE id=$1`,
@@ -277,6 +311,7 @@ export class GeodataEntityMutationRepository {
       }
       const result = await client.query(
         `SELECT id,revision,name,website,description,lifecycle_status,public_properties,
+          ST_AsGeoJSON(geom)::jsonb AS geometry,
           continent,continent_code,country,country_code,region,region_code,
           subdivision,subdivision_code,province,province_code,county,county_code,
           city,municipality,locality,manual_location_fields
@@ -300,6 +335,7 @@ export class GeodataEntityMutationRepository {
       let nextLocation: Record<string, unknown> = {};
       let nextManual: string[] = [];
       let previousLocation: Record<string, unknown> = {};
+      let releasedManualFields: string[] = [];
       if (locationInput && requestedManual) {
         const previousManual = Array.isArray(row.manual_location_fields)
           ? row.manual_location_fields.filter(
@@ -310,6 +346,7 @@ export class GeodataEntityMutationRepository {
         const released = previousManual.filter(
           (field: string) => !nextManual.includes(field),
         );
+        releasedManualFields = released;
         const fieldNames = Object.keys(locationColumns);
         previousLocation = Object.fromEntries(
           fieldNames.map((field) => [field, row[locationColumns[field]]]),
@@ -388,6 +425,24 @@ export class GeodataEntityMutationRepository {
             note,
             updatedAt: changedAt.toISOString(),
           };
+        const propertyDelta: Record<string, unknown> = {
+          reviewHistory,
+          ...(locationChanged ? { provenance } : {}),
+          updatedAt: changedAt.toISOString(),
+        };
+        const enrichment =
+          locationChanged && releasedManualFields.length
+            ? queueLocationEnrichment(
+                id,
+                { ...properties, ...propertyDelta },
+                row.geometry,
+                nextLocation,
+                nextManual,
+                'MANUAL_FIELDS_RELEASED',
+                editorId,
+                true,
+              )
+            : undefined;
         const updateParams: unknown[] = [
           id,
           name ?? null,
@@ -395,16 +450,13 @@ export class GeodataEntityMutationRepository {
           website ?? null,
           'description' in body,
           description ?? null,
-          JSON.stringify({
-            reviewHistory,
-            ...(locationChanged ? { provenance } : {}),
-            updatedAt: changedAt.toISOString(),
-          }),
+          JSON.stringify(enrichment?.properties ?? propertyDelta),
           changedAt,
         ];
         let updateSql = `UPDATE geodata_entity SET name=COALESCE($2,name),website=CASE WHEN $3 THEN $4 ELSE website END,
           description=CASE WHEN $5 THEN $6 ELSE description END,
           public_properties=public_properties || $7::jsonb,updated_at=$8`;
+        if (enrichment) updateSql += ',location_work_dispatched_at=now()';
         if (locationChanged) {
           for (const [field, value] of Object.entries(nextLocation)) {
             if (!(field in locationColumns)) continue;
@@ -425,6 +477,14 @@ export class GeodataEntityMutationRepository {
             changedAt,
           );
         }
+        if (enrichment)
+          await this.writeEntityEvent(
+            client,
+            id,
+            'geodata.entity.location-enrichment-requested.v1',
+            enrichment.event,
+            new Date(enrichment.requestedAt),
+          );
         if (changed.name)
           await this.writeEntityEvent(
             client,
@@ -834,7 +894,10 @@ export class GeodataEntityMutationRepository {
         }
       }
       const selected = await client.query(
-        `SELECT id,revision,ST_AsGeoJSON(geom)::jsonb AS geometry,public_properties
+        `SELECT id,revision,ST_AsGeoJSON(geom)::jsonb AS geometry,public_properties,
+          continent,continent_code,country,country_code,region,region_code,
+          subdivision,subdivision_code,province,province_code,county,county_code,
+          city,municipality,locality,manual_location_fields
          FROM geodata_entity WHERE id=$1 FOR UPDATE`,
         [id],
       );
@@ -844,12 +907,15 @@ export class GeodataEntityMutationRepository {
         throw new ConflictException('entity version is stale');
       const checked = await client.query(
         `SELECT ST_IsValid(g) AS valid,ST_IsEmpty(g) AS empty,
+          ST_AsGeoJSON(g)::jsonb AS canonical_geometry,
           ST_XMin(Box3D(g)) AS min_x,ST_XMax(Box3D(g)) AS max_x,
           ST_YMin(Box3D(g)) AS min_y,ST_YMax(Box3D(g)) AS max_y
          FROM (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1),4326) AS g) input`,
         [geometry],
       );
       const bounds = checked.rows[0];
+      const canonicalGeometry = bounds?.canonical_geometry as
+        Record<string, unknown> | undefined;
       if (
         !bounds?.valid ||
         bounds.empty ||
@@ -861,7 +927,10 @@ export class GeodataEntityMutationRepository {
         throw new BadRequestException(
           'geometry must be valid and within WGS84 bounds',
         );
-      if (JSON.stringify(row.geometry) !== geometry) {
+      if (
+        canonicalGeometry &&
+        JSON.stringify(row.geometry) !== JSON.stringify(canonicalGeometry)
+      ) {
         await client.query(
           "SELECT set_config('myota.geodata_writer','row-v1',true)",
         );
@@ -878,19 +947,27 @@ export class GeodataEntityMutationRepository {
           geometry: row.geometry,
           editedAt: changedAt.toISOString(),
         });
+        let nextProperties: Record<string, unknown> = {
+          ...properties,
+          geometryHistory,
+          updatedAt: changedAt.toISOString(),
+        };
+        const enrichment = queueLocationEnrichment(
+          id,
+          nextProperties,
+          canonicalGeometry,
+          locationSnapshot(row),
+          row.manual_location_fields,
+          'GEOMETRY_CHANGED',
+          editorId,
+          false,
+        );
+        if (enrichment) nextProperties = enrichment.properties;
         await client.query(
           `UPDATE geodata_entity SET geom=ST_SetSRID(ST_GeomFromGeoJSON($2),4326),
            centroid=ST_Centroid(ST_SetSRID(ST_GeomFromGeoJSON($2),4326))::geography,
-           public_properties=public_properties || $3::jsonb,updated_at=$4 WHERE id=$1`,
-          [
-            id,
-            geometry,
-            JSON.stringify({
-              geometryHistory,
-              updatedAt: changedAt.toISOString(),
-            }),
-            changedAt,
-          ],
+           public_properties=$3::jsonb,location_work_dispatched_at=now(),updated_at=$4 WHERE id=$1`,
+          [id, geometry, JSON.stringify(nextProperties), changedAt],
         );
         await this.writeEntityEvent(
           client,
@@ -899,6 +976,14 @@ export class GeodataEntityMutationRepository {
           { entityId: id, editorId, note, geometry: body.geometry },
           changedAt,
         );
+        if (enrichment)
+          await this.writeEntityEvent(
+            client,
+            id,
+            'geodata.entity.location-enrichment-requested.v1',
+            enrichment.event,
+            new Date(enrichment.requestedAt),
+          );
       }
       const response = await this.readEntityWithClient(client, id);
       if (key)
@@ -1095,29 +1180,6 @@ function sameText(left: unknown, right: unknown) {
   return (
     textValue(left).toLocaleLowerCase() === textValue(right).toLocaleLowerCase()
   );
-}
-
-function missingLocationFields(
-  location: Record<string, unknown>,
-  manual: string[],
-) {
-  const groups = [
-    ['continent'],
-    ['continentCode'],
-    ['country'],
-    ['countryCode'],
-    ['region', 'subdivision'],
-    ['regionCode', 'subdivisionCode'],
-    ['city', 'municipality'],
-  ];
-  return groups
-    .filter(
-      (group) =>
-        !group.some(
-          (field) => location[field] !== null && location[field] !== '',
-        ) && !group.some((field) => manual.includes(field)),
-    )
-    .map((group) => group[0]);
 }
 
 function parseIfMatch(value: string | undefined) {

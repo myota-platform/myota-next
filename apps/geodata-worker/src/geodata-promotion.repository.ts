@@ -6,6 +6,10 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import {
+  locationSnapshot,
+  queueLocationEnrichment,
+} from '../../geodata/src/geodata-location-enrichment.js';
 
 interface PromotionQueue {
   id: string;
@@ -455,6 +459,44 @@ export class GeodataPromotionRepository {
           JSON.stringify({ ...properties, geometry: properties.geometry }),
         ],
       );
+      if (['APPROVED', 'CANDIDATE'].includes(queue.target_status)) {
+        const state = await client.query(
+          `SELECT ST_AsGeoJSON(geom)::jsonb AS geometry,public_properties,
+            continent,continent_code,country,country_code,region,region_code,
+            subdivision,subdivision_code,province,province_code,county,county_code,
+            city,municipality,locality,manual_location_fields
+           FROM geodata_entity WHERE id=$1 FOR UPDATE`,
+          [entityId],
+        );
+        const entity = state.rows[0];
+        if (entity) {
+          const enrichment = queueLocationEnrichment(
+            entityId,
+            isRecord(entity.public_properties) ? entity.public_properties : {},
+            entity.geometry,
+            locationSnapshot(entity),
+            entity.manual_location_fields,
+            'LIFECYCLE_PROMOTED',
+            queue.requested_by,
+            true,
+          );
+          if (enrichment) {
+            await client.query(
+              `UPDATE geodata_entity SET public_properties=$2::jsonb,
+                location_work_dispatched_at=now() WHERE id=$1`,
+              [entityId, JSON.stringify(enrichment.properties)],
+            );
+            await this.writeFact(
+              client,
+              'geodata.entity.location-enrichment-requested.v1',
+              'entity',
+              entityId,
+              enrichment.event,
+              new Date(enrichment.requestedAt),
+            );
+          }
+        }
+      }
       const eventType = existingEntityId
         ? 'geodata.entity.import-updated.v1'
         : queue.target_status === 'APPROVED'
