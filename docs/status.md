@@ -68,7 +68,9 @@
   through authorized, idempotent review writes. Selected candidates can be
   queued for CANDIDATE or scope-gated APPROVED promotion; the worker writes
   entities, category and source links, audit/outbox events, and per-candidate
-  queue outcomes. Entity edits and failed-queue redrive remain outstanding.
+  queue outcomes. Entity lifecycle review and If-Match protected name, website,
+  and description edits are transactional and audited. Location/geometry/category
+  edits and failed-queue redrive remain outstanding.
   The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
   paged import-run status reads are also exposed. Authenticated entity audit
@@ -96,9 +98,9 @@
   first Identity slice are still outstanding.
 - Remaining Activity APIs include file-based QSO import and operational
   workflows. Geodata multipart/resumable and external object-reference imports,
-  entity mutations, failed-queue redrive, and remaining worker operations are
-  outstanding, along with Gateway routing and protected observability proxy
-  behavior.
+  location/geometry/category mutations, failed-queue redrive, and remaining
+  worker operations are outstanding, along with Gateway routing and protected
+  observability proxy behavior.
 - Activity NATS delivery, lease heartbeats during large batches, redrive, and
   remaining job consumers. Geodata NATS delivery, lease heartbeats for large
   jobs, explicit redrive, and remaining deletion, enrichment, and retention

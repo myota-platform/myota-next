@@ -6,6 +6,7 @@ import {
   Headers,
   HttpCode,
   Param,
+  Patch,
   Post,
   Query,
   Res,
@@ -194,6 +195,30 @@ export class GeodataController {
   getEntity(@Param('entityId') id: string) {
     return this.repository.getEntity(id);
   }
+
+  @Patch('entities/:entityId')
+  patchEntityMetadata(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Param('entityId') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    authorizeReview(authorization);
+    return this.repository.patchEntityMetadata(id, key, ifMatch, body);
+  }
+
+  @Post('entities/:entityId/reviews')
+  reviewEntity(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Param('entityId') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    authorizeReview(authorization);
+    return this.repository.reviewEntity(id, key, ifMatch, body);
+  }
 }
 
 function authorizeBearer(authorization: string | undefined) {
@@ -204,6 +229,13 @@ function authorizeImport(authorization: string | undefined) {
   const claims = verifyAccessToken(authorization);
   if (!claims.scp.some((scope) => scope === '*' || scope === 'geodata.import'))
     throw new ForbiddenException('geodata.import scope is required');
+  return claims;
+}
+
+function authorizeReview(authorization: string | undefined) {
+  const claims = verifyAccessToken(authorization);
+  if (!claims.scp.some((scope) => scope === '*' || scope === 'geodata.review'))
+    throw new ForbiddenException('geodata.review scope is required');
   return claims;
 }
 

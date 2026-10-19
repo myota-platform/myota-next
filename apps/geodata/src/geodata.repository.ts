@@ -2,6 +2,7 @@ import {
   Inject,
   Injectable,
   BadRequestException,
+  ConflictException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -474,6 +475,359 @@ export class GeodataRepository {
     }
   }
 
+  async reviewEntity(
+    id: string,
+    key: string | undefined,
+    ifMatch: string | undefined,
+    body: Record<string, unknown>,
+  ) {
+    const reviewerId =
+      typeof body.reviewerId === 'string' ? body.reviewerId.trim() : '';
+    const targetStatus =
+      typeof body.status === 'string'
+        ? body.status.toUpperCase()
+        : typeof body.decision === 'string'
+          ? body.decision.toUpperCase()
+          : '';
+    const note =
+      typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
+    if (!reviewerId) throw new BadRequestException('reviewerId is required');
+    if (
+      !['APPROVED', 'CANDIDATE', 'RETIRED', 'REJECTED'].includes(targetStatus)
+    )
+      throw new BadRequestException('unsupported entity review status');
+    const expectedVersion = parseIfMatch(ifMatch);
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      if (key) {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-entity-review:' || $1,0))",
+          [key],
+        );
+        const previous = await client.query(
+          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          ['geodata-entity-review', key],
+        );
+        if (previous.rows[0]) {
+          await client.query('COMMIT');
+          return previous.rows[0].response;
+        }
+      }
+      const result = await client.query(
+        `SELECT id,revision,lifecycle_status,public_properties
+         FROM geodata_entity WHERE id=$1 FOR UPDATE`,
+        [id],
+      );
+      const row = result.rows[0];
+      if (!row) throw new NotFoundException('geodata entity not found');
+      if (expectedVersion !== null && Number(row.revision) !== expectedVersion)
+        throw new ConflictException('entity version is stale');
+      const previousStatus = String(row.lifecycle_status);
+      if (
+        (previousStatus === 'APPROVED' && targetStatus !== 'RETIRED') ||
+        (previousStatus === 'RETIRED' && targetStatus !== 'RETIRED') ||
+        (previousStatus === 'CANDIDATE' &&
+          !['CANDIDATE', 'APPROVED', 'REJECTED'].includes(targetStatus)) ||
+        (previousStatus === 'REJECTED' && targetStatus !== 'REJECTED')
+      )
+        throw new ConflictException(
+          'entity cannot transition to the requested status',
+        );
+      if (targetStatus !== previousStatus) {
+        await client.query(
+          "SELECT set_config('myota.geodata_writer','row-v1',true)",
+        );
+        const properties = isRecord(row.public_properties)
+          ? row.public_properties
+          : {};
+        const changedAt = new Date();
+        const review = {
+          ...(isRecord(properties.review) ? properties.review : {}),
+          reviewerId,
+          note,
+          changedAt: changedAt.toISOString(),
+        };
+        const reviewHistory = Array.isArray(properties.reviewHistory)
+          ? [...properties.reviewHistory]
+          : [];
+        reviewHistory.push({
+          action: 'STATUS_CHANGED',
+          status: targetStatus,
+          previousStatus,
+          reviewerId,
+          note,
+          occurredAt: changedAt.toISOString(),
+        });
+        const nextProperties = {
+          ...properties,
+          review,
+          reviewHistory,
+          updatedAt: changedAt.toISOString(),
+        };
+        await client.query(
+          `UPDATE geodata_entity SET lifecycle_status=$2,public_properties=$3::jsonb,updated_at=$4
+           WHERE id=$1`,
+          [id, targetStatus, JSON.stringify(nextProperties), changedAt],
+        );
+        const payload = {
+          entityId: id,
+          status: targetStatus,
+          previousStatus,
+          reviewerId,
+          note,
+        };
+        await client.query(
+          `INSERT INTO geodata_audit_event(event_id,aggregate_type,aggregate_id,event,occurred_at)
+           VALUES ($1,'entity',$2,$3::jsonb,$4)`,
+          [
+            randomUUID(),
+            id,
+            JSON.stringify({
+              eventType: 'geodata.entity.status-changed.v1',
+              ...payload,
+            }),
+            changedAt,
+          ],
+        );
+        await client.query(
+          `INSERT INTO outbox_event
+           (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+           VALUES ($1,'geodata.entity.status-changed.v1','geodata-service','entity',$2,$3::jsonb,$4,$5)`,
+          [randomUUID(), id, JSON.stringify(payload), changedAt, randomUUID()],
+        );
+      }
+      const current = await client.query(
+        `SELECT ${entityProjection} AS entity FROM geodata_entity WHERE id=$1`,
+        [id],
+      );
+      const response = current.rows[0]?.entity;
+      if (key)
+        await client.query(
+          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+          ['geodata-entity-review', key, JSON.stringify(response)],
+        );
+      await client.query('COMMIT');
+      return response;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async patchEntityMetadata(
+    id: string,
+    key: string | undefined,
+    ifMatch: string | undefined,
+    body: Record<string, unknown>,
+  ) {
+    const editorId =
+      typeof body.editorId === 'string' ? body.editorId.trim() : '';
+    if (!editorId) throw new BadRequestException('editorId is required');
+    const supported = new Set([
+      'editorId',
+      'name',
+      'website',
+      'description',
+      'note',
+    ]);
+    const unknown = Object.keys(body).filter((field) => !supported.has(field));
+    if (unknown.length)
+      throw new BadRequestException(
+        `unsupported entity metadata fields: ${unknown.sort().join(', ')}`,
+      );
+    if (!['name', 'website', 'description'].some((field) => field in body))
+      throw new BadRequestException(
+        'at least one editable metadata field is required',
+      );
+    const note =
+      typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
+    let name: string | undefined;
+    if ('name' in body) {
+      if (
+        typeof body.name !== 'string' ||
+        !body.name.trim() ||
+        body.name.trim().length > 240
+      )
+        throw new BadRequestException('name must contain 1 to 240 characters');
+      name = body.name.trim();
+    }
+    const website =
+      'website' in body ? normalizeWebsite(body.website) : undefined;
+    const description =
+      'description' in body
+        ? normalizeDescription(body.description)
+        : undefined;
+    const expectedVersion = parseIfMatch(ifMatch);
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      if (key) {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-entity-metadata:' || $1,0))",
+          [key],
+        );
+        const previous = await client.query(
+          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          ['geodata-entity-metadata', key],
+        );
+        if (previous.rows[0]) {
+          await client.query('COMMIT');
+          return previous.rows[0].response;
+        }
+      }
+      const result = await client.query(
+        `SELECT id,revision,name,website,description,lifecycle_status,public_properties
+         FROM geodata_entity WHERE id=$1 FOR UPDATE`,
+        [id],
+      );
+      const row = result.rows[0];
+      if (!row) throw new NotFoundException('geodata entity not found');
+      if (expectedVersion !== null && Number(row.revision) !== expectedVersion)
+        throw new ConflictException('entity version is stale');
+      const changed: Record<string, { previous: unknown; value: unknown }> = {};
+      for (const [field, value] of Object.entries({
+        name,
+        website,
+        description,
+      })) {
+        if (value !== undefined && value !== row[field])
+          changed[field] = { previous: row[field], value };
+      }
+      if (Object.keys(changed).length) {
+        await client.query(
+          "SELECT set_config('myota.geodata_writer','row-v1',true)",
+        );
+        const properties = isRecord(row.public_properties)
+          ? row.public_properties
+          : {};
+        const changedAt = new Date();
+        const reviewHistory = Array.isArray(properties.reviewHistory)
+          ? [...properties.reviewHistory]
+          : [];
+        if (changed.name)
+          reviewHistory.push({
+            action: 'ENTITY_NAME_CHANGED',
+            editorId,
+            previousName: changed.name.previous,
+            name: changed.name.value,
+            note,
+            occurredAt: changedAt.toISOString(),
+          });
+        const metadataFields = Object.keys(changed)
+          .filter((field) => field !== 'name')
+          .sort();
+        if (metadataFields.length)
+          reviewHistory.push({
+            action: 'ENTITY_METADATA_UPDATED',
+            editorId,
+            fields: metadataFields,
+            note,
+            occurredAt: changedAt.toISOString(),
+          });
+        await client.query(
+          `UPDATE geodata_entity SET name=COALESCE($2,name),website=CASE WHEN $3 THEN $4 ELSE website END,
+           description=CASE WHEN $5 THEN $6 ELSE description END,
+           public_properties=public_properties || $7::jsonb,updated_at=$8 WHERE id=$1`,
+          [
+            id,
+            name ?? null,
+            'website' in body,
+            website ?? null,
+            'description' in body,
+            description ?? null,
+            JSON.stringify({
+              reviewHistory,
+              updatedAt: changedAt.toISOString(),
+            }),
+            changedAt,
+          ],
+        );
+        if (changed.name)
+          await this.writeEntityEvent(
+            client,
+            id,
+            'geodata.entity.name-changed.v1',
+            {
+              entityId: id,
+              editorId,
+              previousName: changed.name.previous,
+              name: changed.name.value,
+              note,
+            },
+            changedAt,
+          );
+        const metadataChanges = Object.fromEntries(
+          Object.entries(changed).filter(([field]) => field !== 'name'),
+        );
+        if (Object.keys(metadataChanges).length)
+          await this.writeEntityEvent(
+            client,
+            id,
+            'geodata.entity.metadata-updated.v1',
+            {
+              entityId: id,
+              editorId,
+              changes: metadataChanges,
+              note,
+            },
+            changedAt,
+          );
+      }
+      const current = await client.query(
+        `SELECT ${entityProjection} AS entity FROM geodata_entity WHERE id=$1`,
+        [id],
+      );
+      const response = current.rows[0]?.entity;
+      if (key)
+        await client.query(
+          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+          ['geodata-entity-metadata', key, JSON.stringify(response)],
+        );
+      await client.query('COMMIT');
+      return response;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async writeEntityEvent(
+    client: import('pg').PoolClient,
+    entityId: string,
+    eventType: string,
+    payload: Record<string, unknown>,
+    occurredAt: Date,
+  ) {
+    await client.query(
+      `INSERT INTO geodata_audit_event(event_id,aggregate_type,aggregate_id,event,occurred_at)
+       VALUES ($1,'entity',$2,$3::jsonb,$4)`,
+      [
+        randomUUID(),
+        entityId,
+        JSON.stringify({ eventType, ...payload }),
+        occurredAt,
+      ],
+    );
+    await client.query(
+      `INSERT INTO outbox_event
+       (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+       VALUES ($1,$2,'geodata-service','entity',$3,$4::jsonb,$5,$6)`,
+      [
+        randomUUID(),
+        eventType,
+        entityId,
+        JSON.stringify(payload),
+        occurredAt,
+        randomUUID(),
+      ],
+    );
+  }
+
   async getTile(zoom: number, x: number, y: number) {
     if (
       !Number.isInteger(zoom) ||
@@ -618,4 +972,56 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseIfMatch(value: string | undefined) {
+  if (value === undefined) return null;
+  const match = /^"([0-9]+)"$/.exec(value);
+  if (!match)
+    throw new BadRequestException('If-Match must be a quoted entity version');
+  return Number(match[1]);
+}
+
+function normalizeWebsite(value: unknown) {
+  if (value === null) return null;
+  if (typeof value !== 'string')
+    throw new BadRequestException('website must be a string or null');
+  const website = value.trim();
+  if (!website) return null;
+  if (website.length > 2048)
+    throw new BadRequestException('website must be 2048 characters or fewer');
+  let parsed: URL;
+  try {
+    parsed = new URL(website);
+  } catch {
+    throw new BadRequestException(
+      'website must be an absolute HTTP or HTTPS URL',
+    );
+  }
+  if (
+    !['http:', 'https:'].includes(parsed.protocol) ||
+    !parsed.hostname ||
+    parsed.username ||
+    parsed.password
+  )
+    throw new BadRequestException(
+      'website must be an absolute HTTP or HTTPS URL',
+    );
+  return website;
+}
+
+function normalizeDescription(value: unknown) {
+  if (value === null) return null;
+  if (typeof value !== 'string')
+    throw new BadRequestException('description must be a string or null');
+  const description = value.trim();
+  if (description.length > 2000)
+    throw new BadRequestException(
+      'description must be 2000 characters or fewer',
+    );
+  return description || null;
 }
