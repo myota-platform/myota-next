@@ -47,7 +47,8 @@ Activity worker parses records, records successes and rejects, updates
 aggregates, and reports import status. CSV file uploads now validate bounded
 UTF-8 input and queue normalized rows through the same ingestion job. Remaining
 Activity work includes notification production beyond qualification, NATS delivery, and
-worker recovery. Statistics listing and rebuild-job APIs,
+worker recovery. Long-running Activity jobs now extend their 120-second leases
+from a separate database connection while processing. Statistics listing and rebuild-job APIs,
 transactional snapshot rebuilds, and owner-scoped notification reads are
 implemented. ADIF import creation, processing, and status reads are implemented.
 Activity entity-deletion impact reads and idempotent cascades also remove
@@ -56,8 +57,9 @@ activations, and enqueue award recalculation jobs.
 Geodata deletion now calculates impact, requires explicit confirmation, invokes
 the Activity cascade with a stable idempotency key, and transactionally removes
 Geodata references and the entity. The Geodata worker polls deletion jobs with
-fair rotation alongside existing queues; NATS delivery, lease heartbeats, and
-explicit redrive remain outstanding.
+fair rotation alongside existing queues; NATS delivery and explicit redrive
+remain outstanding. Activity lease extension is supported for long-running
+jobs.
 Tagged load-test cleanup now requires explicit environment opt-in, global
 operator authorization, exact confirmation, terminal work, safe object scope,
 and a no-Activity-impact check before deletion.

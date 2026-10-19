@@ -35,6 +35,32 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
           await delay(pollMs);
           continue;
         }
+        const heartbeatMs = boundedInteger(
+          process.env.MYOTA_WORKER_LEASE_HEARTBEAT_MS,
+          40000,
+          5000,
+          60000,
+        );
+        let heartbeatRunning = false;
+        const heartbeatTimer = setInterval(() => {
+          if (heartbeatRunning) return;
+          heartbeatRunning = true;
+          void this.repository
+            .heartbeat(job)
+            .then((extended) => {
+              if (!extended)
+                this.logger.warn(`Activity job ${job.id} lease was lost`);
+            })
+            .catch((error: unknown) => {
+              this.logger.warn(
+                `Activity job ${job.id} lease heartbeat failed: ${error instanceof Error ? error.message : 'database error'}`,
+              );
+            })
+            .finally(() => {
+              heartbeatRunning = false;
+            });
+        }, heartbeatMs);
+        heartbeatTimer.unref();
         try {
           await this.repository.process(job);
           this.logger.log(`Completed activity job ${job.id} (${job.kind})`);
@@ -43,7 +69,10 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
             `Activity job ${job.id} failed`,
             error instanceof Error ? error.stack : undefined,
           );
+          clearInterval(heartbeatTimer);
           await this.repository.retry(job, error);
+        } finally {
+          clearInterval(heartbeatTimer);
         }
       } catch (error) {
         this.logger.error(

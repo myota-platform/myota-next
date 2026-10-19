@@ -81,12 +81,26 @@ export class ActivityWorkRepository {
     }
   }
 
+  async heartbeat(job: ClaimedJob): Promise<boolean> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `UPDATE activity_job SET lease_expires_at=now()+interval '120 seconds'
+         WHERE id=$1 AND status='RUNNING' AND lease_token=$2 RETURNING id`,
+        [job.id, job.leaseToken],
+      );
+      return Boolean(result.rows[0]);
+    } finally {
+      client.release();
+    }
+  }
+
   async process(job: ClaimedJob) {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
       const lease = await client.query(
-        `SELECT id FROM activity_job WHERE id=$1 AND status='RUNNING' AND lease_token=$2 FOR UPDATE`,
+        `SELECT id FROM activity_job WHERE id=$1 AND status='RUNNING' AND lease_token=$2`,
         [job.id, job.leaseToken],
       );
       if (!lease.rows[0])

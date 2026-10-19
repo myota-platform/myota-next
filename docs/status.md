@@ -146,8 +146,8 @@
   ingestion worker. Geodata queue-level redrive and remaining worker operations are
   outstanding, along with Gateway routing and protected
   observability proxy behavior.
-- Activity NATS delivery, lease heartbeats during large batches, redrive, and
-  remaining job consumers. Geodata NATS delivery, lease heartbeats for large
+- Activity NATS delivery, redrive, and remaining job consumers. The Activity
+  worker now extends active job leases while long batches run. Geodata NATS delivery, lease heartbeats for large
   jobs, explicit redrive, and remaining enrichment and retention consumers.
 - Admin and Participant web applications.
 - Database migration runner, data transfer tooling, deployment images, and
