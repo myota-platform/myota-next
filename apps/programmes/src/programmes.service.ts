@@ -505,9 +505,12 @@ function normalizeEntityType(
 
 function parsePage(value: string | undefined, fallback: number): number {
   if (value === undefined || value.trim() === '') return fallback;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) {
+  const normalized = value.trim();
+  if (!/^[+-]?\d(?:_?\d)*$/.test(normalized)) {
     throw new BadRequestException('page and pageSize must be integers');
   }
+  const parsed = Number(normalized.replaceAll('_', ''));
+  if (!Number.isSafeInteger(parsed))
+    throw new BadRequestException('page and pageSize must be integers');
   return Math.max(1, parsed);
 }
