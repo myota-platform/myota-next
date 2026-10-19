@@ -409,6 +409,7 @@ export class ActivityWorkRepository {
     let accepted = 0;
     let rejected = 0;
     const errors: string[] = [];
+    const awardSubjects = new Set<string>([String(record.operator_id)]);
     for (let index = 0; index < rows.length; index++) {
       const savepoint = `adif_record_${index}`;
       await client.query(`SAVEPOINT ${savepoint}`);
@@ -417,6 +418,7 @@ export class ActivityWorkRepository {
           { ...rows[index], source: 'adif', sourceImportId: importId },
           String(record.activation_id),
         );
+        if (qso.hunterId) awardSubjects.add(String(qso.hunterId));
         const occurred = new Date(qso.timestamp);
         if (
           occurred < new Date(record.started_at) ||
@@ -514,7 +516,7 @@ export class ActivityWorkRepository {
           awardId,
           JSON.stringify({
             programmeSlug: record.programme_slug,
-            subjectIds: [record.operator_id],
+            subjectIds: [...awardSubjects],
           }),
           `adif:${importId}:award-recalculate`,
         ],
