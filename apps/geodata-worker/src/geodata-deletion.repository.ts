@@ -27,17 +27,18 @@ export class GeodataDeletionRepository {
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {}
 
-  async claim(): Promise<DeletionJob | null> {
+  async claim(jobId?: string): Promise<DeletionJob | null> {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
       const result = await client.query(
         `SELECT id,payload FROM geodata_control_record
-         WHERE kind='entityDeletionJobs' AND
+         WHERE kind='entityDeletionJobs' AND ($1::uuid IS NULL OR id=$1) AND
            (payload->>'status'='QUEUED' OR
             (payload->>'status'='PROCESSING' AND
              (payload->>'leaseUntil')::timestamptz<=now()))
          ORDER BY updated_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,
+        [jobId ?? null],
       );
       const row = result.rows[0];
       if (!row) {
@@ -62,6 +63,56 @@ export class GeodataDeletionRepository {
       );
       await client.query('COMMIT');
       return claimed;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getDeletionState(jobId: string): Promise<{
+    status: string;
+    leaseRemainingSeconds: number;
+  } | null> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT payload->>'status' AS status,
+          GREATEST(0,EXTRACT(EPOCH FROM ((payload->>'leaseUntil')::timestamptz-now()))) AS lease_remaining
+         FROM geodata_control_record WHERE kind='entityDeletionJobs' AND id=$1`,
+        [jobId],
+      );
+      const row = result.rows[0];
+      return row
+        ? {
+            status: row.status,
+            leaseRemainingSeconds: Number(row.lease_remaining ?? 0),
+          }
+        : null;
+    } finally {
+      client.release();
+    }
+  }
+
+  async heartbeat(job: DeletionJob): Promise<boolean> {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      const result = await client.query(
+        `UPDATE geodata_control_record SET payload=payload || jsonb_build_object(
+           'leaseUntil',now()+interval '120 seconds','updatedAt',now()),updated_at=now()
+         WHERE kind='entityDeletionJobs' AND id=$1 AND payload->>'status'='PROCESSING'
+           AND payload->>'leaseUntil'=$2 RETURNING id`,
+        [job.id, job.leaseUntil],
+      );
+      await client.query('COMMIT');
+      if (result.rowCount)
+        job.leaseUntil = new Date(Date.now() + 120_000).toISOString();
+      return Boolean(result.rowCount);
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;

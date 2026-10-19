@@ -40,15 +40,17 @@ export class GeodataWorkRepository {
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {}
 
-  async claim(): Promise<ImportRun | null> {
+  async claim(runId?: string): Promise<ImportRun | null> {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
-      const cancellation = await client.query(
-        `SELECT id,adapter_code,source_metadata,source_key,source_hash,attempt_count,complete_snapshot
+      const cancellation = runId
+        ? { rows: [] as ImportRun[] }
+        : await client.query(
+            `SELECT id,adapter_code,source_metadata,source_key,source_hash,attempt_count,complete_snapshot
          FROM import_run WHERE status='CANCELLING'
          ORDER BY cancellation_requested_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,
-      );
+          );
       const pendingCancellation = cancellation.rows[0] as ImportRun | undefined;
       if (pendingCancellation) {
         await client.query(
@@ -83,9 +85,10 @@ export class GeodataWorkRepository {
       const found = await client.query(
         `SELECT id,adapter_code,source_metadata,source_key,source_hash,attempt_count,complete_snapshot
          FROM import_run
-         WHERE source_key IS NOT NULL AND
+         WHERE source_key IS NOT NULL AND ($1::uuid IS NULL OR id=$1) AND
            (status='QUEUED' OR (status='PROCESSING' AND lease_until < now()))
          ORDER BY started_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,
+        [runId ?? null],
       );
       const row = found.rows[0] as ImportRun | undefined;
       if (!row) {
@@ -103,6 +106,115 @@ export class GeodataWorkRepository {
       );
       await client.query('COMMIT');
       return { ...row, attempt_count: Number(row.attempt_count) + 1 };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getRunState(runId: string): Promise<{
+    status: string;
+    leaseRemainingSeconds: number;
+  } | null> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT status,GREATEST(0,EXTRACT(EPOCH FROM (lease_until-now()))) AS lease_remaining
+         FROM import_run WHERE id=$1`,
+        [runId],
+      );
+      const row = result.rows[0];
+      return row
+        ? {
+            status: row.status,
+            leaseRemainingSeconds: Number(row.lease_remaining ?? 0),
+          }
+        : null;
+    } finally {
+      client.release();
+    }
+  }
+
+  async staleCancellationIds(limit = 100): Promise<string[]> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT id FROM import_run WHERE status='CANCELLING'
+           AND (lease_until IS NULL OR lease_until<=now())
+         ORDER BY cancellation_requested_at,id LIMIT $1`,
+        [limit],
+      );
+      return result.rows.map((row) => String(row.id));
+    } finally {
+      client.release();
+    }
+  }
+
+  async recordWorkDeadLetter(
+    eventId: string,
+    workType: string,
+    envelope: Record<string, unknown>,
+    attempts: number,
+    error: unknown,
+  ): Promise<void> {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await client.query(
+        `INSERT INTO dead_letter_event(event_id,event_type,payload,attempts,error)
+         VALUES ($1,$2,$3::jsonb,$4,$5)
+         ON CONFLICT (event_id) DO UPDATE SET
+           attempts=GREATEST(dead_letter_event.attempts,EXCLUDED.attempts),
+           error=EXCLUDED.error,dead_lettered_at=now(),resolved_at=NULL`,
+        [
+          eventId,
+          workType,
+          JSON.stringify(envelope),
+          Math.max(1, attempts),
+          error instanceof Error
+            ? error.message.slice(0, 1000)
+            : String(error).slice(0, 1000),
+        ],
+      );
+      const aggregate = isRecord(envelope.aggregate) ? envelope.aggregate : {};
+      if (aggregate.type === 'import_run' && typeof aggregate.id === 'string') {
+        await client.query(
+          `UPDATE import_run SET status='FAILED',last_error='work delivery exhausted',
+             completed_at=now(),heartbeat_at=NULL,lease_until=NULL
+           WHERE id=$1 AND status IN ('QUEUED','PROCESSING')`,
+          [aggregate.id],
+        );
+      } else if (
+        aggregate.type === 'import_processing_queue' &&
+        typeof aggregate.id === 'string'
+      ) {
+        await client.query(
+          `UPDATE geodata_import_processing_queue SET status='FAILED',error='work delivery exhausted',
+             completed_at=now(),heartbeat_at=NULL,lease_until=NULL
+           WHERE id=$1 AND status IN ('QUEUED','PROCESSING')`,
+          [aggregate.id],
+        );
+      } else if (
+        aggregate.type === 'entity' &&
+        typeof aggregate.id === 'string' &&
+        isRecord(envelope.payload) &&
+        typeof envelope.payload.requestId === 'string'
+      ) {
+        await client.query(
+          `UPDATE geodata_entity SET public_properties=public_properties ||
+             jsonb_build_object('locationEnrichmentStatus','FAILED',
+               'locationEnrichmentCompletedAt',now()),updated_at=now()
+           WHERE id=$1 AND public_properties->>'locationEnrichmentRequestId'=$2
+             AND public_properties->>'locationEnrichmentStatus' IN ('QUEUED','PROCESSING')`,
+          [aggregate.id, envelope.payload.requestId],
+        );
+      }
+      await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
@@ -301,6 +413,54 @@ export class GeodataWorkRepository {
     } catch (failure) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw failure;
+    } finally {
+      client.release();
+    }
+  }
+
+  async finalizeStaleCancellation(runId: string): Promise<boolean> {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      const selected = await client.query(
+        `SELECT id,adapter_code,source_metadata,source_key,source_hash,attempt_count,complete_snapshot
+         FROM import_run WHERE id=$1 AND status='CANCELLING'
+           AND (lease_until IS NULL OR lease_until<=now()) FOR UPDATE`,
+        [runId],
+      );
+      const run = selected.rows[0] as ImportRun | undefined;
+      if (!run) {
+        await client.query('COMMIT');
+        return false;
+      }
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await client.query(
+        'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+        [run.id],
+      );
+      await client.query(
+        `UPDATE import_run SET status='CANCELLED',completed_at=now(),heartbeat_at=NULL,lease_until=NULL,last_error=NULL,
+         stats='{"preprocessed":0,"created":0,"updated":0,"skipped":0,"errors":0,"disappeared":0}'::jsonb WHERE id=$1`,
+        [run.id],
+      );
+      await client.query(
+        `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+         VALUES ($1,'geodata.import.cancelled.v1','geodata-worker','import_run',$2,$3::jsonb,now(),$4)`,
+        [
+          randomUUID(),
+          run.id,
+          JSON.stringify({ importRunId: run.id }),
+          randomUUID(),
+        ],
+      );
+      await client.query('COMMIT');
+      await this.deleteSource(run);
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
     } finally {
       client.release();
     }

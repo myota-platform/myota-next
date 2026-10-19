@@ -59,7 +59,10 @@ export class GeodataEnrichmentRepository {
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {}
 
-  async claim(): Promise<EnrichmentJob | null> {
+  async claim(
+    entityId?: string,
+    requestId?: string,
+  ): Promise<EnrichmentJob | null> {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -69,9 +72,12 @@ export class GeodataEnrichmentRepository {
           ST_Y(COALESCE(centroid,ST_Centroid(geom)::geography)::geometry) AS lat
          FROM geodata_entity
          WHERE public_properties->>'locationEnrichmentStatus' IN ('QUEUED','PROCESSING')
+           AND ($1::uuid IS NULL OR id=$1)
+           AND ($2::uuid IS NULL OR public_properties->>'locationEnrichmentRequestId'=$2)
            AND location_work_dispatched_at <= now()
          ORDER BY location_work_dispatched_at,id
-         FOR UPDATE SKIP LOCKED LIMIT 1`,
+        FOR UPDATE SKIP LOCKED LIMIT 1`,
+        [entityId ?? null, requestId ?? null],
       );
       const row = selected.rows[0];
       if (!row) {
@@ -106,6 +112,33 @@ export class GeodataEnrichmentRepository {
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getRequestState(entityId: string): Promise<{
+    status: string | null;
+    requestId: string | null;
+    leaseRemainingSeconds: number;
+  } | null> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT public_properties->>'locationEnrichmentStatus' AS status,
+          public_properties->>'locationEnrichmentRequestId' AS request_id,
+          GREATEST(0,EXTRACT(EPOCH FROM (location_work_dispatched_at-now()))) AS lease_remaining
+         FROM geodata_entity WHERE id=$1`,
+        [entityId],
+      );
+      const row = result.rows[0];
+      return row
+        ? {
+            status: row.status,
+            requestId: row.request_id,
+            leaseRemainingSeconds: Number(row.lease_remaining ?? 0),
+          }
+        : null;
     } finally {
       client.release();
     }

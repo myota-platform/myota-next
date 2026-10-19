@@ -153,8 +153,10 @@
 - Remaining Activity operational workflows are outstanding. CSV file import
   validates bounded UTF-8 logs and queues normalized QSO rows for the existing
   ingestion worker. The Gateway now routes public API requests to their owning
-  services and protects the Grafana identity callback. Geodata remaining worker
-  operations are outstanding.
+  services and protects the Grafana identity callback. Geodata import
+  preprocessing, promotion, deletion, and enrichment now consume registered
+  JetStream durables and claim the referenced owner-database job; retention and
+  outage/recovery evidence remain outstanding.
 - The NestJS outbox relay now publishes contract-routed facts and work from one
   configured owner database per process, with stable JetStream message IDs,
   bounded retries, dead-letter persistence, and read-only validation of the
@@ -163,8 +165,8 @@
   outage/recovery evidence remains outstanding. Activity
   job redrive is audited and available to
   administrators; the Activity worker now extends active job leases while
-  long batches run. Geodata lease heartbeats for large jobs and remaining
-  enrichment and retention consumers remain outstanding.
+  long batches run. Geodata import, promotion, and deletion work extends owner
+  leases during long jobs; recovery evidence and retention remain outstanding.
 - Admin and Participant web applications.
 - Database migration runner, data transfer tooling, deployment images, and
   production observability configuration.

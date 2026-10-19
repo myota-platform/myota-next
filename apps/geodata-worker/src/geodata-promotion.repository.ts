@@ -27,7 +27,7 @@ export class GeodataPromotionRepository {
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {}
 
-  async claimPromotion(): Promise<PromotionQueue | null> {
+  async claimPromotion(queueId?: string): Promise<PromotionQueue | null> {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -35,7 +35,8 @@ export class GeodataPromotionRepository {
         `SELECT q.id,q.import_run_id,q.candidate_ids,q.target_status,q.requested_by,q.job_metadata,q.attempt_count
          FROM geodata_import_processing_queue q
          JOIN import_run candidate_run ON candidate_run.id=q.import_run_id
-         WHERE (q.status='QUEUED' OR (q.status='PROCESSING' AND q.lease_until < now()))
+         WHERE ($1::uuid IS NULL OR q.id=$1)
+           AND (q.status='QUEUED' OR (q.status='PROCESSING' AND q.lease_until < now()))
            AND NOT EXISTS (
              SELECT 1 FROM geodata_import_processing_queue active
              JOIN import_run active_run ON active_run.id=active.import_run_id
@@ -55,6 +56,7 @@ export class GeodataPromotionRepository {
                )
            )
          ORDER BY q.requested_at,q.id FOR UPDATE OF q SKIP LOCKED LIMIT 1`,
+        [queueId ?? null],
       );
       const row = result.rows[0] as PromotionQueue | undefined;
       if (!row) {
@@ -81,6 +83,29 @@ export class GeodataPromotionRepository {
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getPromotionState(queueId: string): Promise<{
+    status: string;
+    leaseRemainingSeconds: number;
+  } | null> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT status,GREATEST(0,EXTRACT(EPOCH FROM (lease_until-now()))) AS lease_remaining
+         FROM geodata_import_processing_queue WHERE id=$1`,
+        [queueId],
+      );
+      const row = result.rows[0];
+      return row
+        ? {
+            status: row.status,
+            leaseRemainingSeconds: Number(row.lease_remaining ?? 0),
+          }
+        : null;
     } finally {
       client.release();
     }

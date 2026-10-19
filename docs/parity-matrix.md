@@ -57,10 +57,12 @@ linked QSOs and correction rows, rebuild subject aggregates, invalidate affected
 activations, and enqueue award recalculation jobs.
 Geodata deletion now calculates impact, requires explicit confirmation, invokes
 the Activity cascade with a stable idempotency key, and transactionally removes
-Geodata references and the entity. The Geodata worker polls deletion jobs with
-fair rotation alongside existing queues; NATS delivery and explicit redrive
-remain outstanding. Activity lease extension is supported for long-running
-jobs.
+Geodata references and the entity. Import preprocessing, promotion, deletion,
+and location enrichment now consume their registered JetStream durables and
+claim only the referenced Geodata job. Long-running import, promotion, and
+deletion work extends owner-database leases and JetStream acknowledgements.
+Retention and outage/recovery evidence remain outstanding. Activity lease
+extension is supported for long-running jobs.
 Tagged load-test cleanup now requires explicit environment opt-in, global
 operator authorization, exact confirmation, terminal work, safe object scope,
 and a no-Activity-impact check before deletion.
@@ -114,8 +116,9 @@ workflows remain outstanding.
   retry, redacted poison-event dead-lettering, and audited CLI redrive are
   implemented, with outcome and unresolved-dead-letter metrics. Recovery
   evidence remains open.
-- Geodata workers: import preprocessing and promotion, confirmed entity
-  deletion, location enrichment, retention, and recovery tasks.
+- Geodata workers: registered JetStream consumers for import preprocessing and
+  promotion, confirmed entity deletion, and location enrichment are implemented.
+  Retention and outage/recovery tasks remain open.
 - Gateway: routes public API requests to their owning services, protects
   Identity internal endpoints, streams request and response bodies, enforces
   configured proxy timeouts, and resolves Grafana identity and permissions from
