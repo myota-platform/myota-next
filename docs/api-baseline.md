@@ -11,6 +11,19 @@ below inventories the target contract; the four added operations are extensions,
 not upstream OpenAPI parity requirements, and need separate evidence against
 current source behavior.
 
+The target also edits six shared operation definitions:
+
+- `GET /v1/identity/admin/security-events`, `GET /v1/identity/accounts/{accountId}/export`,
+  and `POST /v1/identity/auth/service-token` add operation IDs.
+- `POST /v1/geodata/refresh-schedules/{scheduleId}/run` documents the required
+  `features` input that the reference handler enforces.
+- `POST /v1/geodata/imports/{runId}/process` clarifies which failed-queue
+  candidates can be retried.
+- `POST /v1/identity/oidc/providers` declares `201`, while the upstream
+  OpenAPI declares `200`. The reference Python handler returns `201`, and the
+  NestJS handler also returns `201`; resolve this contract/runtime discrepancy
+  against deployed behavior before treating either response as canonical.
+
 Target-only operations:
 
 - `POST /v1/activity/work-jobs/{jobId}/redrive`
