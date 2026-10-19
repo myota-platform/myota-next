@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Res,
 } from '@nestjs/common';
@@ -15,12 +16,14 @@ import type { Response } from 'express';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { GeodataRepository } from './geodata.repository.js';
 import { GeodataImportService } from './geodata-import.service.js';
+import { GeodataMutationRepository } from './geodata-mutation.repository.js';
 
 @Controller('geodata')
 export class GeodataController {
   constructor(
     private readonly repository: GeodataRepository,
     private readonly imports: GeodataImportService,
+    private readonly mutations: GeodataMutationRepository,
   ) {}
 
   @Post('imports')
@@ -70,7 +73,7 @@ export class GeodataController {
       throw new ForbiddenException(
         'geodata.review scope is required to approve imported entities',
       );
-    return this.repository.queueImportProcessing(runId, key, body);
+    return this.mutations.queueImportProcessing(runId, key, body);
   }
 
   @Get('imports/:runId/processing-queues/:queueId')
@@ -101,7 +104,7 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
   ) {
     authorizeImport(authorization);
-    return this.repository.validateImportCandidates(runId, key, body);
+    return this.mutations.validateImportCandidates(runId, key, body);
   }
 
   @Get('entities')
@@ -205,7 +208,7 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
   ) {
     authorizeReview(authorization);
-    return this.repository.patchEntityMetadata(id, key, ifMatch, body);
+    return this.mutations.patchEntityMetadata(id, key, ifMatch, body);
   }
 
   @Post('entities/:entityId/reviews')
@@ -217,7 +220,31 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
   ) {
     authorizeReview(authorization);
-    return this.repository.reviewEntity(id, key, ifMatch, body);
+    return this.mutations.reviewEntity(id, key, ifMatch, body);
+  }
+
+  @Put('entities/:entityId/categories')
+  replaceEntityCategories(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Param('entityId') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    authorizeReview(authorization);
+    return this.mutations.replaceEntityCategories(id, key, ifMatch, body);
+  }
+
+  @Put('entities/:entityId/geometry')
+  replaceEntityGeometry(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Param('entityId') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    authorizeReview(authorization);
+    return this.mutations.replaceEntityGeometry(id, key, ifMatch, body);
   }
 }
 
