@@ -18,6 +18,11 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
+  MYOTA_CLIENT_ADDRESS_HEADER,
+  MYOTA_CLIENT_ADDRESS_SIGNATURE_HEADER,
+  verifyClientAddress,
+} from '@app/platform';
+import {
   LoginDto,
   CreateAccountDto,
   AddCallsignDto,
@@ -412,9 +417,27 @@ export class AuthController {
   }
 
   private requestContext(request: Request) {
+    const clientAddress = request.get(MYOTA_CLIENT_ADDRESS_HEADER);
+    const clientAddressSignature = request.get(
+      MYOTA_CLIENT_ADDRESS_SIGNATURE_HEADER,
+    );
+    const trustedClientAddress =
+      clientAddress &&
+      clientAddressSignature &&
+      verifyClientAddress(
+        clientAddress,
+        clientAddressSignature,
+        process.env.MYOTA_AUTH_SIGNING_KEY ?? '',
+      )
+        ? clientAddress
+        : null;
     return {
       userAgent: request.get('user-agent') ?? null,
-      remoteAddr: request.ip ?? null,
+      remoteAddr:
+        trustedClientAddress ??
+        request.socket.remoteAddress ??
+        request.ip ??
+        null,
     };
   }
 }

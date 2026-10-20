@@ -8,6 +8,11 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import {
+  MYOTA_CLIENT_ADDRESS_HEADER,
+  MYOTA_CLIENT_ADDRESS_SIGNATURE_HEADER,
+  signClientAddress,
+} from '@app/platform';
 
 const ROUTES: Array<[string, string]> = [
   ['/v1/identity/', 'IDENTITY'],
@@ -195,6 +200,16 @@ export class GatewayController {
     ]) {
       const value = request.header(name);
       if (value) headers.set(name, value);
+    }
+    // Replace caller-supplied values with the signed address observed by Gateway.
+    const clientAddress = request.socket.remoteAddress;
+    const signingKey = process.env.MYOTA_AUTH_SIGNING_KEY;
+    if (clientAddress && signingKey) {
+      headers.set(MYOTA_CLIENT_ADDRESS_HEADER, clientAddress);
+      headers.set(
+        MYOTA_CLIENT_ADDRESS_SIGNATURE_HEADER,
+        signClientAddress(clientAddress, signingKey),
+      );
     }
 
     let body: BodyInit | undefined;

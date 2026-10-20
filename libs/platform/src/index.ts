@@ -8,4 +8,5 @@ export * from './observe.js';
 export * from './outbox.js';
 export * from './outbox-routing.js';
 export * from './pagination.js';
+export * from './request-context.js';
 export * from './worker-probes.js';

@@ -472,6 +472,7 @@ services:
     build: { context: .., dockerfile: Dockerfile, args: { APP_NAME: gateway } }
     environment:
       <<: *observe-env
+      MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
       MYOTA_IDENTITY_URL: http://identity:8001
       MYOTA_PROGRAMMES_URL: http://programmes:8002
       MYOTA_GEODATA_URL: http://geodata:8003

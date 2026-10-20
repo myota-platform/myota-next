@@ -75,7 +75,10 @@
   value handling. Unicode 15.0 case-fold mappings in Core now provide indexed
   email identity keys for login, recovery, account creation, and email updates;
   migration rejects case-fold-equivalent duplicate addresses before building
-  the unique index. Identity startup also creates the configured bootstrap
+  the unique index. The Gateway overwrites and signs the client socket address;
+  Identity verifies it before using it for login rate limits and security-event
+  audit metadata.
+  Identity startup also creates the configured bootstrap
   administrator idempotently, fills only a missing password, ensures the
   `GLOBAL_OPERATOR` role, and writes the account and bootstrap facts to Core.
 - Transactional event helpers write domain events to the Core outbox and
