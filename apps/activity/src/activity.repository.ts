@@ -8,6 +8,11 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import {
+  nextPageIfMore,
+  pageOffset,
+  type PageInteger,
+} from '@app/platform/pagination.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
@@ -67,7 +72,7 @@ export class ActivityRepository {
   async listPage(
     programme: string | undefined,
     operatorId: string | undefined,
-    page: number,
+    page: PageInteger,
     pageSize: number,
   ) {
     const client = await this.connect();
@@ -92,18 +97,14 @@ export class ActivityRepository {
       const result = await client.query(
         `SELECT *, ${activationTimestampProjection} FROM activity_activation${where}
          ORDER BY started_at DESC LIMIT $${limitIndex} OFFSET $${limitIndex + 1}`,
-        [
-          ...filters,
-          pageSize,
-          Math.min((page - 1) * pageSize, Number.MAX_SAFE_INTEGER),
-        ],
+        [...filters, pageSize, pageOffset(page, pageSize)],
       );
       return {
         items: result.rows.map((row) => activationRecord(row)),
         page,
         pageSize,
         total,
-        nextPage: page * pageSize < total ? page + 1 : null,
+        nextPage: nextPageIfMore(page, pageSize, total),
       };
     } finally {
       client.release();
@@ -127,7 +128,7 @@ export class ActivityRepository {
 
   async listStatisticsPage(
     programme: string | undefined,
-    page: number,
+    page: PageInteger,
     pageSize: number,
   ) {
     const client = await this.connect();
@@ -144,11 +145,7 @@ export class ActivityRepository {
                 ${statisticTimestampProjection}
          FROM activity_statistic_snapshot${where} ORDER BY generated_at DESC
          LIMIT $${filters.length + 1} OFFSET $${filters.length + 2}`,
-        [
-          ...filters,
-          pageSize,
-          Math.min((page - 1) * pageSize, Number.MAX_SAFE_INTEGER),
-        ],
+        [...filters, pageSize, pageOffset(page, pageSize)],
       );
       return {
         items: result.rows.map((row) => ({
@@ -163,7 +160,7 @@ export class ActivityRepository {
         page,
         pageSize,
         total,
-        nextPage: page * pageSize < total ? page + 1 : null,
+        nextPage: nextPageIfMore(page, pageSize, total),
       };
     } finally {
       client.release();

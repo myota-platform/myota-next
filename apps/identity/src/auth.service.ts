@@ -16,7 +16,11 @@ import {
 } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import { parsePageInteger } from '@app/platform/pagination.js';
+import {
+  nextPageIfMore,
+  pageOffset,
+  parsePageInteger,
+} from '@app/platform/pagination.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import {
   isPythonWhitespace,
@@ -590,8 +594,9 @@ export class IdentityAuthService {
           unicodeCaseFold(account.email ?? '').includes(search),
       );
       const total = matchingAccounts.length;
+      const offset = pageOffset(page, pageSize);
       const accountIds = matchingAccounts
-        .slice((page - 1) * pageSize, page * pageSize)
+        .slice(offset, offset + pageSize)
         .map((account) => account.id);
       const [accountDetails, rolesByAccount, callsignsByAccount] =
         await Promise.all([
@@ -647,7 +652,7 @@ export class IdentityAuthService {
         page,
         pageSize,
         total,
-        nextPage: page * pageSize < total ? page + 1 : null,
+        nextPage: nextPageIfMore(page, pageSize, total),
       };
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);

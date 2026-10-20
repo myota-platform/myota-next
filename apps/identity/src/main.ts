@@ -7,6 +7,6 @@ await bootstrapHttpService(
   undefined,
   [],
   [],
-  false,
+  true,
   'identity-api',
 );

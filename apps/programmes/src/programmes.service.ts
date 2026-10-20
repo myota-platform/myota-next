@@ -7,7 +7,11 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { verifyAccessToken } from '@app/platform/access-token.js';
-import { parsePageInteger } from '@app/platform/pagination.js';
+import {
+  nextPageIfMore,
+  pageOffset,
+  parsePageInteger,
+} from '@app/platform/pagination.js';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { nextPolicyVersion, type ProgrammeRecord } from './programme.types.js';
@@ -31,14 +35,14 @@ export class ProgrammesService {
   async list(query: { page?: string; pageSize?: string }) {
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
-    const start = (page - 1) * pageSize;
+    const start = pageOffset(page, pageSize);
     const { items, total } = await this.programmes.listPage(pageSize, start);
     return {
       items,
       page,
       pageSize,
       total,
-      nextPage: start + pageSize < total ? page + 1 : null,
+      nextPage: nextPageIfMore(page, pageSize, total),
     };
   }
 

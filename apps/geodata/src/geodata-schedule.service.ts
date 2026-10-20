@@ -16,7 +16,11 @@ import {
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import { parsePageInteger } from '@app/platform/pagination.js';
+import {
+  nextPageIfMore,
+  pageOffset,
+  parsePageInteger,
+} from '@app/platform/pagination.js';
 import { GeodataImportService } from './geodata-import.service.js';
 import {
   lockRequest,
@@ -52,14 +56,14 @@ export class GeodataScheduleService {
   async list(query: Record<string, unknown>) {
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
-    const offset = BigInt(page - 1) * BigInt(pageSize);
+    const offset = pageOffset(page, pageSize);
     const client = await this.connect();
     try {
       const result = await client.query(
         `SELECT payload::text AS payload_json FROM geodata_control_record
          WHERE kind='schedules' ORDER BY id COLLATE "C"
          LIMIT $1 OFFSET $2::bigint`,
-        [pageSize, offset.toString()],
+        [pageSize, offset],
       );
       const total = await client.query(
         "SELECT count(*)::integer AS total FROM geodata_control_record WHERE kind='schedules'",
@@ -72,8 +76,7 @@ export class GeodataScheduleService {
         page,
         pageSize,
         total: totalCount,
-        nextPage:
-          offset + BigInt(pageSize) < BigInt(totalCount) ? page + 1 : null,
+        nextPage: nextPageIfMore(page, pageSize, totalCount),
       };
     } finally {
       client.release();

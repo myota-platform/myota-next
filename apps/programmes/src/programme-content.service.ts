@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { verifyAccessToken } from '@app/platform/access-token.js';
-import { parsePageInteger } from '@app/platform/pagination.js';
+import {
+  nextPageIfMore,
+  pageOffset,
+  parsePageInteger,
+} from '@app/platform/pagination.js';
 import { ProgrammeReadRepository } from './programme-read.repository.js';
 import {
   ProgrammeContentRepository,
@@ -43,7 +47,7 @@ export class ProgrammeContentService {
     this.authorizeAdmin(authorization, slug);
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
-    const start = (page - 1) * pageSize;
+    const start = pageOffset(page, pageSize);
     const { items, total } = await this.reads.listContentPage(
       slug,
       query.locale,
@@ -56,7 +60,7 @@ export class ProgrammeContentService {
       page,
       pageSize,
       total,
-      nextPage: start + pageSize < total ? page + 1 : null,
+      nextPage: nextPageIfMore(page, pageSize, total),
     };
   }
 

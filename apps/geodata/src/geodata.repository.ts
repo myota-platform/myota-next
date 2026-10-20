@@ -8,7 +8,11 @@ import {
 import { createHash } from 'node:crypto';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import { parsePageInteger } from '@app/platform/pagination.js';
+import {
+  nextPageIfMore,
+  pageOffset,
+  parsePageInteger,
+} from '@app/platform/pagination.js';
 import { firstQueryValue } from '@app/platform/query.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { parsePythonFloatText } from '@app/platform/python-numeric.js';
@@ -73,7 +77,7 @@ export class GeodataRepository {
         `SELECT count(*)::integer AS total FROM geodata_entity WHERE ${where}`,
         values,
       );
-      const offset = (page - 1) * pageSize;
+      const offset = pageOffset(page, pageSize);
       const rows = await client.query(
         `SELECT ${entityProjection} AS entity FROM geodata_entity
          WHERE ${where} ORDER BY lower(name),id LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
@@ -85,7 +89,7 @@ export class GeodataRepository {
         page,
         pageSize,
         total,
-        nextPage: page * pageSize < total ? page + 1 : null,
+        nextPage: nextPageIfMore(page, pageSize, total),
       };
     } finally {
       client.release();
@@ -135,7 +139,7 @@ export class GeodataRepository {
       );
       const rows = await client.query(
         `SELECT ${importProjection} AS run FROM import_run ORDER BY started_at DESC,id LIMIT $1 OFFSET $2`,
-        [pageSize, (page - 1) * pageSize],
+        [pageSize, pageOffset(page, pageSize)],
       );
       const total = Number(counted.rows[0]?.total ?? 0);
       return {
@@ -143,7 +147,7 @@ export class GeodataRepository {
         page,
         pageSize,
         total,
-        nextPage: page * pageSize < total ? page + 1 : null,
+        nextPage: nextPageIfMore(page, pageSize, total),
       };
     } finally {
       client.release();
@@ -200,7 +204,7 @@ export class GeodataRepository {
          WHERE ($1::text IS NULL OR c.resolution=$1)
          ORDER BY c.id
          LIMIT $2 OFFSET $3`,
-        [resolution, pageSize, (page - 1) * pageSize],
+        [resolution, pageSize, pageOffset(page, pageSize)],
       );
       const total = Number(count.rows[0]?.total ?? 0);
       return {
@@ -208,7 +212,7 @@ export class GeodataRepository {
         page,
         pageSize,
         total,
-        nextPage: page * pageSize < total ? page + 1 : null,
+        nextPage: nextPageIfMore(page, pageSize, total),
       };
     } finally {
       client.release();
@@ -228,7 +232,7 @@ export class GeodataRepository {
         `SELECT ${candidateProjection} AS candidate
          FROM geodata_import_candidate WHERE import_run_id=$1 AND validation_status='PENDING'
          ORDER BY ordinal,id LIMIT $2 OFFSET $3`,
-        [runId, pageSize, (page - 1) * pageSize],
+        [runId, pageSize, pageOffset(page, pageSize)],
       );
       const total = Number(counted.rows[0]?.total ?? 0);
       return {
@@ -236,7 +240,7 @@ export class GeodataRepository {
         page,
         pageSize,
         total,
-        nextPage: page * pageSize < total ? page + 1 : null,
+        nextPage: nextPageIfMore(page, pageSize, total),
       };
     } finally {
       client.release();

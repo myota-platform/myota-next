@@ -16,7 +16,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
-import { parsePageInteger } from '@app/platform/pagination.js';
+import {
+  nextPageIfMore,
+  pageOffset,
+  parsePageInteger,
+} from '@app/platform/pagination.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { ActivityRepository } from './activity.repository.js';
@@ -52,7 +56,7 @@ export class AwardsService {
     if (claims) this.authorize(claims.scp, ['awards.read', 'awards.admin']);
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
-    const offset = (BigInt(page) - 1n) * BigInt(pageSize);
+    const offset = BigInt(pageOffset(page, pageSize));
     const result = await this.awardsRepository.listAwardDefinitionsPage(
       query.programme,
       query.category?.toUpperCase(),
@@ -65,8 +69,7 @@ export class AwardsService {
       page,
       pageSize,
       total: result.total,
-      nextPage:
-        offset + BigInt(pageSize) < BigInt(result.total) ? page + 1 : null,
+      nextPage: nextPageIfMore(page, pageSize, result.total),
     };
   }
 
@@ -412,7 +415,7 @@ export class AwardsService {
     this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
-    const offset = (BigInt(page) - 1n) * BigInt(pageSize);
+    const offset = BigInt(pageOffset(page, pageSize));
     const result = await this.awardsRepository.listAwardRequestsPage(
       query.subjectId,
       offset,
@@ -423,8 +426,7 @@ export class AwardsService {
       page,
       pageSize,
       total: result.total,
-      nextPage:
-        offset + BigInt(pageSize) < BigInt(result.total) ? page + 1 : null,
+      nextPage: nextPageIfMore(page, pageSize, result.total),
     };
   }
 
@@ -497,7 +499,7 @@ export class AwardsService {
     this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
-    const offset = (BigInt(page) - 1n) * BigInt(pageSize);
+    const offset = BigInt(pageOffset(page, pageSize));
     const result = await this.awardsRepository.listAwardIssuancesPage(
       offset,
       pageSize,
@@ -507,8 +509,7 @@ export class AwardsService {
       page,
       pageSize,
       total: result.total,
-      nextPage:
-        offset + BigInt(pageSize) < BigInt(result.total) ? page + 1 : null,
+      nextPage: nextPageIfMore(page, pageSize, result.total),
     };
   }
 
@@ -580,7 +581,7 @@ export class AwardsService {
     this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
-    const offset = (BigInt(page) - 1n) * BigInt(pageSize);
+    const offset = BigInt(pageOffset(page, pageSize));
     const result = await this.awardsRepository.listAwardAssetsPage(
       offset,
       pageSize,
@@ -590,8 +591,7 @@ export class AwardsService {
       page,
       pageSize,
       total: result.total,
-      nextPage:
-        offset + BigInt(pageSize) < BigInt(result.total) ? page + 1 : null,
+      nextPage: nextPageIfMore(page, pageSize, result.total),
     };
   }
 

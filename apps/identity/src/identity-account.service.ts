@@ -9,7 +9,11 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import { parsePageInteger } from '@app/platform/pagination.js';
+import {
+  nextPageIfMore,
+  pageOffset,
+  parsePageInteger,
+} from '@app/platform/pagination.js';
 import { writeOutboxEvent, writeSecurityEvent } from '@app/platform/outbox.js';
 import {
   collapsePythonWhitespace,
@@ -330,7 +334,7 @@ export class IdentityAccountService {
              FROM public.security_event
             ORDER BY occurred_at DESC, event_order ASC
             LIMIT $1 OFFSET $2`,
-        [pageSize, (page - 1) * pageSize],
+        [pageSize, pageOffset(page, pageSize)],
       );
       await client.query('COMMIT');
       const total = Number(countResult.rows[0]?.total ?? 0);
@@ -344,7 +348,7 @@ export class IdentityAccountService {
         page,
         pageSize,
         total,
-        nextPage: page * pageSize < total ? page + 1 : null,
+        nextPage: nextPageIfMore(page, pageSize, total),
       };
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
