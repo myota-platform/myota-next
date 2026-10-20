@@ -24,9 +24,20 @@ export class PublicActivityController {
 
   @Get('results')
   results(
-    @Query('programme') programme?: string,
-    @Query('format') format = 'json',
+    @Query('programme') programme?: string | string[],
+    @Query('format') format: string | string[] = 'json',
   ) {
-    return this.activity.publicResults(programme, format);
+    return this.activity.publicResults(
+      firstNonBlankQueryValue(programme),
+      firstNonBlankQueryValue(format) ?? 'json',
+    );
   }
+}
+
+function firstNonBlankQueryValue(
+  value: string | string[] | undefined,
+): string | undefined {
+  return (Array.isArray(value) ? value : [value]).find(
+    (item): item is string => typeof item === 'string' && item !== '',
+  );
 }
