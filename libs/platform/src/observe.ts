@@ -14,9 +14,12 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule({
 });
 
 export function observeRoot(serviceId: string) {
+  const appKey = process.env.OBSERVE_APP_KEY ?? '';
+  const appSecret = process.env.OBSERVE_APP_SECRET ?? '';
   return ObserveModule.forRoot({
-    appKey: process.env.OBSERVE_APP_KEY ?? '',
-    appSecret: process.env.OBSERVE_APP_SECRET ?? '',
+    enabled: Boolean(appKey.trim() && appSecret.trim()),
+    appKey,
+    appSecret,
     serviceId,
     serviceVersion:
       process.env.MYOTA_BUILD_VERSION ?? process.env.GIT_SHA ?? undefined,

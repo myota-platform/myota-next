@@ -22,6 +22,15 @@ const bootstrapPath = path.join(
   repositoryRoot,
   'libs/platform/src/bootstrap.ts',
 );
+const observePath = path.join(repositoryRoot, 'libs/platform/src/observe.ts');
+const observeSource = fs.readFileSync(observePath, 'utf8');
+if (
+  !/enabled:\s*Boolean\(appKey\.trim\(\)\s*&&\s*appSecret\.trim\(\)\)/.test(
+    observeSource,
+  )
+)
+  errors.push('Observe reporting must be disabled without both credentials');
+
 const bootstrapSource = fs.readFileSync(bootstrapPath, 'utf8');
 if (
   !bootstrapSource.includes("from './observe.js'") ||
