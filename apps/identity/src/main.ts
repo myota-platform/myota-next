@@ -1,4 +1,12 @@
 import { bootstrapHttpService } from '@app/platform';
 import { IdentityModule } from './identity.module.js';
 
-await bootstrapHttpService(IdentityModule, 8001);
+await bootstrapHttpService(
+  IdentityModule,
+  8001,
+  undefined,
+  [],
+  [],
+  false,
+  'identity-api',
+);

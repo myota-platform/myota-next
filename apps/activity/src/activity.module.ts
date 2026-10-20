@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import {
   DatabaseHealthModule,
   HealthController,
+  HttpMetricsController,
   observeRoot,
 } from '@app/platform';
 import { ActivityController } from './activity.controller.js';
@@ -23,6 +24,7 @@ import { AdifImportController } from './adif-import.controller.js';
   ],
   controllers: [
     HealthController,
+    HttpMetricsController,
     ActivityController,
     QsoIngestionController,
     PublicActivityController,

@@ -402,7 +402,9 @@ map renders point, line, polygon, and multipart entity geometries.
 - Gateway: routes public API requests to their owning services, protects
   Identity internal endpoints, streams request and response bodies, enforces
   configured proxy timeouts, and resolves Grafana identity and permissions from
-  the live Identity service. Gateway request counters are exposed at `/metrics`.
+  the live Identity service. All five APIs expose service/method/route/status
+  request counters at `/metrics`; Gateway also retains its proxy-specific
+  counters.
 - Outbox relay: independently configured Core, Activity, and Geodata relay
   processes claim only their own database's events and publish registered fact
   or work envelopes to JetStream with stable event IDs and validates existing

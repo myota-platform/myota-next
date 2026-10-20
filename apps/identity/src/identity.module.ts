@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import {
   DatabaseHealthModule,
   HealthController,
+  HttpMetricsController,
   observeRoot,
 } from '@app/platform';
 import { AuthController } from './auth.controller.js';
@@ -19,7 +20,7 @@ import { IdentityBootstrapService } from './identity-bootstrap.service.js';
     observeRoot('identity-api'),
     DatabaseHealthModule.forEnvironment('CORE_DATABASE_URL'),
   ],
-  controllers: [HealthController, AuthController],
+  controllers: [HealthController, HttpMetricsController, AuthController],
   providers: [
     IdentityAuthService,
     IdentityRoleService,

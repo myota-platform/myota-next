@@ -1,4 +1,12 @@
 import { bootstrapHttpService } from '@app/platform';
 import { ProgrammesModule } from './programmes.module.js';
 
-await bootstrapHttpService(ProgrammesModule, 8002, undefined, [], [], true);
+await bootstrapHttpService(
+  ProgrammesModule,
+  8002,
+  undefined,
+  [],
+  [],
+  true,
+  'programmes-api',
+);

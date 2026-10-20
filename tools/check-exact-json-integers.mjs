@@ -28,7 +28,7 @@ requirePattern(
 );
 requirePattern(
   'apps/programmes/src/main.ts',
-  /bootstrapHttpService\(ProgrammesModule,[\s\S]*?\[\],\s*\[\],\s*true\)/,
+  /bootstrapHttpService\(\s*ProgrammesModule,[\s\S]*?\[\],\s*\[\],\s*true,\s*'programmes-api',/,
   'Programme API bootstrap must enable BigInt JSON response serialization',
 );
 requirePattern(
@@ -63,8 +63,8 @@ requirePattern(
 );
 requirePattern(
   'apps/geodata/src/main.ts',
-  /bootstrapHttpService\([\s\S]*?^\s*\[\{ path: 'metrics', method: RequestMethod\.GET \}\],\s*true,/m,
-  'Geodata API bootstrap must expose root metrics and enable BigInt JSON response serialization',
+  /bootstrapHttpService\([\s\S]*?^\s*\[\],\s*true,\s*'geodata-api',/m,
+  'Geodata API bootstrap must enable BigInt JSON response serialization and label HTTP metrics',
 );
 requirePattern(
   'apps/geodata/src/geodata-schedule.service.ts',

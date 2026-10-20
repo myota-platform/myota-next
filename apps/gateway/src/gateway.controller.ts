@@ -8,6 +8,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { renderHttpRequestMetrics } from '@app/platform/http-metrics.js';
 import {
   MYOTA_CLIENT_ADDRESS_HEADER,
   MYOTA_CLIENT_ADDRESS_SIGNATURE_HEADER,
@@ -153,7 +154,7 @@ export class GatewayController {
     ];
     response
       .type('text/plain; version=0.0.4; charset=utf-8')
-      .send(`${lines.join('\n')}\n`);
+      .send(`${lines.join('\n')}\n${renderHttpRequestMetrics()}`);
   }
 
   @All('*path')

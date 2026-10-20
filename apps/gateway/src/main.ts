@@ -8,8 +8,7 @@ await bootstrapHttpService(
   8080,
   integerSetting(process.env.MYOTA_MAX_BODY_BYTES, 35 * 1024 * 1024),
   [],
-  [
-    { path: '_internal/grafana/auth', method: RequestMethod.GET },
-    { path: 'metrics', method: RequestMethod.GET },
-  ],
+  [{ path: '_internal/grafana/auth', method: RequestMethod.GET }],
+  false,
+  'gateway',
 );

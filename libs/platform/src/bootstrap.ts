@@ -8,6 +8,7 @@ import { ApiProblemFilter, parserProblem, requestIds } from './http-problem.js';
 import { ObserveInstrument } from './observe.js';
 import { containsBigInt, stringifyJsonWithBigInts } from './json-bigint.js';
 import { parseJsonWithExactIntegers } from './json-exact.js';
+import { recordHttpRequest } from './http-metrics.js';
 
 export async function bootstrapHttpService(
   rootModule: Type<unknown>,
@@ -19,12 +20,19 @@ export async function bootstrapHttpService(
   rawBodyRoutes: string[] = [],
   globalPrefixExclusions: { path: string; method: RequestMethod }[] = [],
   preserveBigIntJson = false,
+  serviceId = 'myota-api',
 ): Promise<INestApplication> {
   const app = await NestFactory.create(rootModule, {
     bodyParser: false,
     instrument: ObserveInstrument,
   });
   app.use(requestIds);
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    response.once('finish', () =>
+      recordHttpRequest(serviceId, request, response.statusCode),
+    );
+    next();
+  });
   for (const route of rawBodyRoutes)
     app.use(
       route,
@@ -99,6 +107,7 @@ export async function bootstrapHttpService(
     exclude: [
       { path: 'healthz', method: RequestMethod.GET },
       { path: 'readyz', method: RequestMethod.GET },
+      { path: 'metrics', method: RequestMethod.GET },
       ...globalPrefixExclusions,
     ],
   });

@@ -43,6 +43,9 @@
   `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` to report telemetry; without them,
   the SDK emits no telemetry. `MYOTA_BUILD_VERSION` or `GIT_SHA` labels the
   deployed version when provided.
+- The shared HTTP bootstrap records Prometheus request counters labeled by
+  service, method, route template, and status for all five API processes. Their
+  `/metrics` endpoints remain outside the `/v1` API prefix.
 - Geodata exposes a Prometheus `/metrics` endpoint with PostGIS tile-query
   duration and slow-query metrics. The `MYOTA_SLOW_QUERY_THRESHOLD_MS` setting
   defaults to 250 ms, matching the Python reference. The legacy `entity_upsert`

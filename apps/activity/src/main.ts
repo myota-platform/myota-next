@@ -6,4 +6,8 @@ await bootstrapHttpService(
   ActivityModule,
   8004,
   integerSetting(process.env.MYOTA_MAX_BODY_BYTES, 35 * 1024 * 1024),
+  [],
+  [],
+  false,
+  'activity-api',
 );

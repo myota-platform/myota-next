@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import {
   DatabaseHealthModule,
   HealthController,
+  HttpMetricsController,
   observeRoot,
 } from '@app/platform';
 import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
@@ -30,6 +31,7 @@ import { PublicProgrammeContentController } from './public-programme-content.con
   ],
   controllers: [
     HealthController,
+    HttpMetricsController,
     ProgrammesController,
     EntityTypesController,
     ProgrammeContentController,

@@ -4,6 +4,7 @@ export * from './access-token.js';
 export * from './database.module.js';
 export * from './health.controller.js';
 export * from './http-problem.js';
+export * from './http-metrics.js';
 export * from './integer-setting.js';
 export * from './import-limits.js';
 export * from './json-bigint.js';
