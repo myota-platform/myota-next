@@ -393,9 +393,9 @@ export class GeodataImportMutationRepository {
       } else {
         await client.query(
           `UPDATE geodata_import_candidate SET validation_status='CONFIRMED',
-           validation_note=$3,validated_by=$4,validated_at=now(),updated_at=now()
+           validation_note=$3::jsonb,validated_by=$4,validated_at=now(),updated_at=now()
            WHERE import_run_id=$1 AND id=ANY($2::uuid[]) AND validation_status<>'PROCESSED'`,
-          [runId, candidateIds, note, reviewerId],
+          [runId, candidateIds, JSON.stringify(note), reviewerId],
         );
       }
       const eventType = rejected

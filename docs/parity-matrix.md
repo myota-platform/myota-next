@@ -200,7 +200,8 @@ for CANDIDATE or scope-gated APPROVED promotion; the worker persists entities,
 category and source links, audit/outbox events, and queue outcomes. Entity
 review, metadata, category, and geometry changes, plus import candidate
 validation and promotion, preserve submitted note values without coercion or
-truncation, matching the Python handlers. If-Match protected name, website,
+truncation, matching the Python handlers; candidate validation notes are stored
+as JSONB with existing text values preserved as JSON strings. If-Match protected name, website,
 description, geometry, and
 category and location edits are also implemented; other review
 workflows remain outstanding.

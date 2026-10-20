@@ -97,6 +97,9 @@ outbox.
 large inputs without retaining all prepared candidates and validation errors
 in application memory. Final candidate writes and their compatible outbox
 events still commit atomically.
+`geo/006` stores import candidate validation notes as JSONB, converting
+existing text values to JSON strings so arbitrary submitted JSON note values
+round-trip through candidate reads.
 
 `activity/002` adds an owner-scoped ordering index for bounded notification
 pages without changing the existing three-database ownership model.

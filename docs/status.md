@@ -393,7 +393,8 @@
   case-sensitive enum
   validation, and review notes are stored without truncation. Import candidate
   validation and promotion also preserve submitted note JSON values without
-  coercion or truncation. The Admin
+  coercion or truncation; `geo/006` migrates the stored validation note from
+  text to JSONB while retaining existing text values as JSON strings. The Admin
   includes a role-gated conflation workspace for filtering candidates, inspecting
   match signals and prior decisions, and recording resolutions. Entity import
   promotion now searches overlapping PostGIS bounding boxes, computes the
