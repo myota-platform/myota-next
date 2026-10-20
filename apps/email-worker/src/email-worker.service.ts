@@ -536,7 +536,7 @@ function parseCommand(raw: Uint8Array): EmailCommand {
   if (raw.byteLength > MAX_COMMAND_BYTES)
     throw new Error('email command exceeds contract limit');
   const envelope: unknown = JSON.parse(
-    new TextDecoder('utf-8', { fatal: true }).decode(raw),
+    new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(raw),
   );
   if (
     !isRecord(envelope) ||
