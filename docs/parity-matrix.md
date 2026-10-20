@@ -65,7 +65,8 @@ normalized QSO writes, validity checks, ownership checks, subject aggregates,
 transactional event outbox records, idempotency responses, and award recalculation
 jobs. Activation resource updates require `status=CLOSED`, and close ignores
 `Idempotency-Key`, so repeated closes fail after the first transition as in the
-reference. Timestamp normalization accepts lowercase `t`, ISO week dates,
+reference. Activation validity defaults come from `programmeRules` only, even
+when validation uses the `rules` alias. Timestamp normalization accepts lowercase `t`, ISO week dates,
 one-character date/time separators, and fractional-second time-zone offsets
 supported by Python's
 `datetime.fromisoformat`. QSO ingestion requests also persist bounded,

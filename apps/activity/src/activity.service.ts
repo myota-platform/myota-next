@@ -67,6 +67,9 @@ export class ActivityService {
     body: JsonRecord,
   ) {
     const activation = normalizeActivation(body);
+    const validityDays = Object.hasOwn(body, 'validityDays')
+      ? body.validityDays
+      : body.programmeRules?.activationValidityDays;
     const missing = [
       'programmeSlug',
       'entityId',
@@ -85,7 +88,7 @@ export class ActivityService {
       throw new ForbiddenException(
         'activation operator does not match the authenticated account',
       );
-    return this.repository.create(activation, key);
+    return this.repository.create({ ...activation, validityDays }, key);
   }
 
   async get(authorization: string | undefined, id: string) {
