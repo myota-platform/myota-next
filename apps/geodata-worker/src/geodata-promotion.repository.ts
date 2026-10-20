@@ -3,7 +3,7 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import {
@@ -409,12 +409,16 @@ export class GeodataPromotionRepository {
         [leftId, rightId],
       );
       if (prior.rows[0]) continue;
+      const conflationId = createHash('sha256')
+        .update(JSON.stringify([leftId, rightId]), 'utf8')
+        .digest('hex')
+        .slice(0, 32);
       await client.query(
         `INSERT INTO conflation_candidate
           (id,left_entity_id,right_entity_id,similarity,reason,resolution,resolution_history)
          VALUES ($1,$2,$3,$4,$5::jsonb,'OPEN','[]'::jsonb)`,
         [
-          randomUUID(),
+          conflationId,
           leftId,
           rightId,
           score.score,

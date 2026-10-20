@@ -61,6 +61,7 @@ export class GeodataImportMutationRepository {
       const previous = selected.rows[0];
       if (!previous)
         throw new NotFoundException('conflation candidate not found');
+      const responseId = String(previous.id).replaceAll('-', '');
       const occurredAt = new Date().toISOString();
       const history = Array.isArray(previous.resolution_history)
         ? [...previous.resolution_history]
@@ -88,7 +89,7 @@ export class GeodataImportMutationRepository {
         ],
       );
       const item = {
-        id: candidateId,
+        id: responseId,
         leftEntityId: String(previous.left_entity_id),
         rightEntityId: String(previous.right_entity_id),
         score: Number(previous.similarity),
@@ -107,7 +108,7 @@ export class GeodataImportMutationRepository {
         `INSERT INTO outbox_event
          (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
          VALUES ($1,'geodata.conflation.resolved.v1','geodata-service','conflation_candidate',$2,$3::jsonb,now(),$4)`,
-        [randomUUID(), candidateId, JSON.stringify(item), randomUUID()],
+        [randomUUID(), responseId, JSON.stringify(item), randomUUID()],
       );
       if (key)
         await client.query(

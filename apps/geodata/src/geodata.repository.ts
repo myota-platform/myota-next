@@ -171,7 +171,7 @@ export class GeodataRepository {
       );
       const rows = await client.query(
         `SELECT jsonb_build_object(
-          'id',c.id::text,'leftEntityId',c.left_entity_id::text,
+          'id',replace(c.id::text,'-',''),'leftEntityId',c.left_entity_id::text,
           'rightEntityId',c.right_entity_id::text,'score',c.similarity,
           'signals',c.reason,'resolution',c.resolution,
           'resolutionHistory',c.resolution_history,
