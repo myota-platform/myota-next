@@ -975,10 +975,13 @@ export class ActivityRepository {
       const validity = Object.hasOwn(data, 'validityDays')
         ? data.validityDays
         : data.programmeRules?.activationValidityDays;
-      const validityDays =
+      const parsedValidityDays =
         validity == null || ['', 'unlimited', 'UNLIMITED'].includes(validity)
           ? null
           : pythonFloat(validity, 'validityDays');
+      if (Number.isNaN(parsedValidityDays))
+        throw new BadRequestException('cannot convert float NaN to integer');
+      const validityDays = parsedValidityDays;
       const inserted = await client.query(
         `INSERT INTO activity_activation
         (id,programme_slug,entity_id,entity_type,jurisdiction_code,operator_id,operator_callsign,started_at,validity_expires_at,location,programme_rules)
