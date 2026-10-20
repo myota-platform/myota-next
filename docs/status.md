@@ -260,7 +260,8 @@
   updates accept Python's `way`, `linestring`, and `multilinestring` aliases
   and persist their canonical type with only type and coordinates. API edits
   and import workers share Python's structural validation and configured
-  coordinate limit. Category
+  coordinate limit; edits enforce WGS84 bounds without an additional
+  topology-validity rejection. Category
   codes use Python's Unicode whitespace stripping rules. Location
   names, entity names, location values, websites, and descriptions now use
   Python whitespace stripping and code-point length rules. Entity, import, and

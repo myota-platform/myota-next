@@ -957,7 +957,7 @@ export class GeodataEntityMutationRepository {
       if (expectedVersion !== null && Number(row.revision) !== expectedVersion)
         throw new ConflictException('entity version is stale');
       const checked = await client.query(
-        `SELECT ST_IsValid(g) AS valid,ST_IsEmpty(g) AS empty,
+        `SELECT ST_IsEmpty(g) AS empty,
           ST_AsGeoJSON(g)::jsonb AS canonical_geometry,
           ST_XMin(Box3D(g)) AS min_x,ST_XMax(Box3D(g)) AS max_x,
           ST_YMin(Box3D(g)) AS min_y,ST_YMax(Box3D(g)) AS max_y
@@ -968,16 +968,14 @@ export class GeodataEntityMutationRepository {
       const canonicalGeometry = bounds?.canonical_geometry as
         Record<string, unknown> | undefined;
       if (
-        !bounds?.valid ||
+        !bounds ||
         bounds.empty ||
         Number(bounds.min_x) < -180 ||
         Number(bounds.max_x) > 180 ||
         Number(bounds.min_y) < -90 ||
         Number(bounds.max_y) > 90
       )
-        throw new BadRequestException(
-          'geometry must be valid and within WGS84 bounds',
-        );
+        throw new BadRequestException('geometry must be within WGS84 bounds');
       if (
         canonicalGeometry &&
         JSON.stringify(row.geometry) !== JSON.stringify(canonicalGeometry)
