@@ -15,6 +15,7 @@ import {
   parsePageTotal,
 } from '@app/platform/pagination.js';
 import { firstQueryValue } from '@app/platform/query.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { parsePythonFloatText } from '@app/platform/python-numeric.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
@@ -139,12 +140,15 @@ export class GeodataRepository {
         'SELECT count(*) AS total FROM import_run',
       );
       const rows = await client.query(
-        `SELECT ${importProjection} AS run FROM import_run ORDER BY started_at DESC,id LIMIT $1 OFFSET $2`,
+        `SELECT (${importProjection})::text AS run FROM import_run ORDER BY started_at DESC,id LIMIT $1 OFFSET $2`,
         [pageSize, pageOffset(page, pageSize)],
       );
       const total = parsePageTotal(counted.rows[0]?.total ?? '0');
       return {
-        items: rows.rows.map((row) => row.run),
+        items: rows.rows.map(
+          (row) =>
+            parseJsonWithExactIntegers(row.run) as Record<string, unknown>,
+        ),
         page,
         pageSize,
         total,
@@ -159,12 +163,15 @@ export class GeodataRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        `SELECT ${importProjection} AS run FROM import_run WHERE id=$1`,
+        `SELECT (${importProjection})::text AS run FROM import_run WHERE id=$1`,
         [id],
       );
       if (!result.rows[0])
         throw new NotFoundException('geodata import not found');
-      return result.rows[0].run;
+      return parseJsonWithExactIntegers(result.rows[0].run) as Record<
+        string,
+        unknown
+      >;
     } finally {
       client.release();
     }

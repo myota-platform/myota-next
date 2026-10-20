@@ -399,7 +399,9 @@ compatible outbox event are finalized atomically, with event arrays assembled
 in the database. Finalization's discarded-record and processing-queue totals
 preserve exact PostgreSQL integers through the response and outbox payload.
 Import promotion summaries also preserve exact PostgreSQL created, updated,
-and remaining counts in persisted statistics.
+and remaining counts in persisted statistics. Import status reads parse the
+JSONB projection as exact-integer JSON, preserving large candidate totals and
+statistics through the API response.
 Record hashes use Python float formatting and Unicode
 code-point key ordering. Streamed GeoJSON and direct GEOJSON/WFS JSON imports
 retain raw numeric tokens in features and injected root CRS values within the
