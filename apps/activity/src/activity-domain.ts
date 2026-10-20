@@ -46,12 +46,22 @@ export function parseTimestamp(value: string): Date {
 
 function validateTimestampFields(value: string) {
   const fields =
-    /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:[.,]\d+)?)?)?/.exec(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:[.,]\d+)?)?(?:Z|([+-])(\d{2}):?(\d{2})?)?)?$/i.exec(
       value,
     );
-  if (!fields) return;
-  const [, yearText, monthText, dayText, hourText, minuteText, secondText] =
-    fields;
+  if (!fields) throw new BadRequestException('timestamp is invalid');
+  const [
+    ,
+    yearText,
+    monthText,
+    dayText,
+    hourText,
+    minuteText,
+    secondText,
+    ,
+    offsetHours,
+    offsetMinutes,
+  ] = fields;
   const year = Number(yearText);
   const month = Number(monthText);
   const day = Number(dayText);
@@ -86,8 +96,10 @@ function validateTimestampFields(value: string) {
       (secondText !== undefined && Number(secondText) > 59)
     )
       throw new BadRequestException('timestamp is invalid');
-    const offset = /([+-])(\d{2}):?(\d{2})?$/.exec(value);
-    if (offset && (Number(offset[2]) > 23 || Number(offset[3] ?? 0) > 59))
+    if (
+      offsetHours !== undefined &&
+      (Number(offsetHours) > 23 || Number(offsetMinutes ?? 0) > 59)
+    )
       throw new BadRequestException('timestamp is invalid');
   }
 }
