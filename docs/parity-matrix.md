@@ -28,9 +28,10 @@ to the relational Core model and outbox.
 These are the first implemented slices; they still need automated
 compatibility coverage before they count as parity complete.
 Administrator account search now uses full default Unicode 15.0 case folding,
-matching the Python 3.12 reference. To preserve that behavior, the service folds
-the status-matched account names and email addresses before slicing the result
-page; role and callsign details are still loaded only for that page.
+matching the Python 3.12 reference. It scans only IDs, names, email addresses,
+and status for eligible accounts, folds names and email addresses before
+slicing the result page, then loads profile, role, and callsign details only
+for that page.
 
 Activity has an initial activation and single-QSO slice: activation list/create/read/close,
 normalized QSO writes, validity checks, ownership checks, subject aggregates,

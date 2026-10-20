@@ -70,6 +70,13 @@ interface AdminAccountRow extends AccountRow {
   primary_callsign_id: string | null;
 }
 
+interface AdminAccountSearchRow {
+  id: string;
+  display_name: string;
+  email: string | null;
+  status: string;
+}
+
 interface RoleAssignmentRow {
   accountId: string;
   id: string;
@@ -546,56 +553,70 @@ export class IdentityAuthService {
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       const filter = '($1::text IS NULL OR a.status = $1)';
-      const accountResult = await client.query<AdminAccountRow>(
-        `SELECT a.id, a.display_name, a.email::text AS email,
-                a.participation_type, a.status, a.created_at, a.updated_at,
-                NULL::text AS password_hash, 0 AS failed_attempts,
-                NULL::timestamptz AS locked_until,
-                p.website_url, p.biography_markdown, p.profile_image_id,
-                p.profile_image_media_type, p.profile_image_updated_at,
-                primary_call.callsign_id AS primary_callsign_id
+      const searchResult = await client.query<AdminAccountSearchRow>(
+        `SELECT a.id, a.display_name, a.email::text AS email, a.status
            FROM public.account a
-           LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
-           LEFT JOIN public.account_primary_callsign primary_call
-             ON primary_call.account_id = a.id
           WHERE ${filter}
           ORDER BY a.created_at, a.id`,
         [status],
       );
-      const matchingAccounts = accountResult.rows.filter(
+      const matchingAccounts = searchResult.rows.filter(
         (account) =>
           !search ||
           unicodeCaseFold(account.display_name ?? '').includes(search) ||
           unicodeCaseFold(account.email ?? '').includes(search),
       );
       const total = matchingAccounts.length;
-      const pageAccounts = matchingAccounts.slice(
-        (page - 1) * pageSize,
-        page * pageSize,
+      const accountIds = matchingAccounts
+        .slice((page - 1) * pageSize, page * pageSize)
+        .map((account) => account.id);
+      const [accountDetails, rolesByAccount, callsignsByAccount] =
+        await Promise.all([
+          accountIds.length
+            ? client.query<AdminAccountRow>(
+                `SELECT a.id, a.display_name, a.email::text AS email,
+                        a.participation_type, a.status, a.created_at, a.updated_at,
+                        NULL::text AS password_hash, 0 AS failed_attempts,
+                        NULL::timestamptz AS locked_until,
+                        p.website_url, p.biography_markdown, p.profile_image_id,
+                        p.profile_image_media_type, p.profile_image_updated_at,
+                        primary_call.callsign_id AS primary_callsign_id
+                   FROM public.account a
+                   LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
+                   LEFT JOIN public.account_primary_callsign primary_call
+                     ON primary_call.account_id = a.id
+                  WHERE a.id = ANY($1::uuid[])`,
+                [accountIds],
+              )
+            : Promise.resolve({ rows: [] as AdminAccountRow[] }),
+          this.loadRolesForAccounts(client, accountIds),
+          this.loadCallsignsForAccounts(client, accountIds),
+        ]);
+      const accountById = new Map(
+        accountDetails.rows.map((account) => [account.id, account]),
       );
-      const accountIds = pageAccounts.map((account) => account.id);
-      const [rolesByAccount, callsignsByAccount] = await Promise.all([
-        this.loadRolesForAccounts(client, accountIds),
-        this.loadCallsignsForAccounts(client, accountIds),
-      ]);
-      const items = pageAccounts.map((account) => {
+      const items = accountIds.flatMap((accountId) => {
+        const account = accountById.get(accountId);
+        if (!account) return [];
         const roles = rolesByAccount.get(account.id) ?? [];
-        return {
-          id: account.id,
-          displayName: account.display_name,
-          email: account.email,
-          participationType: account.participation_type,
-          status: account.status,
-          websiteUrl: account.website_url ?? null,
-          biographyMarkdown: account.biography_markdown ?? null,
-          profileImage: profileImageFor(account),
-          createdAt: account.created_at,
-          updatedAt: account.updated_at,
-          primaryCallsignId: account.primary_callsign_id,
-          callsigns: callsignsByAccount.get(account.id) ?? [],
-          roles,
-          scopes: effectiveScopes(roles),
-        };
+        return [
+          {
+            id: account.id,
+            displayName: account.display_name,
+            email: account.email,
+            participationType: account.participation_type,
+            status: account.status,
+            websiteUrl: account.website_url ?? null,
+            biographyMarkdown: account.biography_markdown ?? null,
+            profileImage: profileImageFor(account),
+            createdAt: account.created_at,
+            updatedAt: account.updated_at,
+            primaryCallsignId: account.primary_callsign_id,
+            callsigns: callsignsByAccount.get(account.id) ?? [],
+            roles,
+            scopes: effectiveScopes(roles),
+          },
+        ];
       });
       await client.query('COMMIT');
       return {
