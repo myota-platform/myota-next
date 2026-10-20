@@ -287,7 +287,8 @@
   the same request contract and replay the prior import/schedule response.
   Deletion-job creation and confirmation also replay by owner, path, and body,
   including confirmation retries after job completion. Import finalization
-  follows the same request fingerprint and replay contract.
+  and failed promotion queue redrive follow the same request fingerprint and
+  replay contract.
   `/healthz` and `/readyz` expose worker liveness and
   GeoData PostgreSQL/NATS readiness on `GEODATA_WORKER_HEALTH_PORT`. The service
   also has PostGIS-backed public entity

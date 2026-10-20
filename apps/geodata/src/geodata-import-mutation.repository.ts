@@ -819,7 +819,41 @@ export class GeodataImportMutationRepository {
     key: string | undefined,
     requestedBy: string,
     reasonValue: unknown,
+    requestHash?: string,
   ) {
+    if (key && requestHash) {
+      const replayClient = await this.connect();
+      try {
+        await replayClient.query('BEGIN');
+        await replayClient.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
+          [key],
+        );
+        const previous = await replayClient.query(
+          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          ['geodata-import-redrive', key],
+        );
+        if (previous.rows[0]) {
+          const saved = previous.rows[0].response;
+          if (
+            !isRecord(saved) ||
+            saved.requestHash !== requestHash ||
+            !Object.hasOwn(saved, 'result')
+          )
+            throw new ConflictException(
+              'Idempotency-Key was already used for another request',
+            );
+          await replayClient.query('COMMIT');
+          return saved.result;
+        }
+        await replayClient.query('COMMIT');
+      } catch (error) {
+        await replayClient.query('ROLLBACK').catch(() => undefined);
+        throw error;
+      } finally {
+        replayClient.release();
+      }
+    }
     const reason = typeof reasonValue === 'string' ? reasonValue.trim() : '';
     if (!reason || reason.length > 1000)
       throw new BadRequestException(
@@ -830,7 +864,7 @@ export class GeodataImportMutationRepository {
       await client.query('BEGIN');
       if (key) {
         await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-import-redrive:' || $1,0))",
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
           [key],
         );
         const previous = await client.query(
@@ -838,8 +872,18 @@ export class GeodataImportMutationRepository {
           ['geodata-import-redrive', key],
         );
         if (previous.rows[0]) {
+          const saved = previous.rows[0].response;
+          if (
+            requestHash &&
+            (!isRecord(saved) ||
+              saved.requestHash !== requestHash ||
+              !Object.hasOwn(saved, 'result'))
+          )
+            throw new ConflictException(
+              'Idempotency-Key was already used for another request',
+            );
           await client.query('COMMIT');
-          return previous.rows[0].response;
+          return requestHash && isRecord(saved) ? saved.result : saved;
         }
       }
       const selected = await client.query(
@@ -908,7 +952,13 @@ export class GeodataImportMutationRepository {
       if (key)
         await client.query(
           'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
-          ['geodata-import-redrive', key, JSON.stringify(response)],
+          [
+            'geodata-import-redrive',
+            key,
+            JSON.stringify(
+              requestHash ? { requestHash, result: response } : response,
+            ),
+          ],
         );
       await client.query('COMMIT');
       return response;

@@ -395,14 +395,22 @@ export class GeodataController {
     @Param('runId') runId: string,
     @Param('queueId') queueId: string,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
     const claims = authorizeImport(authorization);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
     return this.importMutations.redriveImportProcessingQueue(
       runId,
       queueId,
-      key,
+      idempotency.key,
       claims.sub,
       body.reason,
+      idempotency.requestHash,
     );
   }
 

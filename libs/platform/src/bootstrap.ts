@@ -43,6 +43,9 @@ export async function bootstrapHttpService(
           /^\/v1\/geodata\/imports\/[^/]+\/processed$/.test(
             request.url?.split('?', 1)[0] ?? '',
           ) ||
+          /^\/v1\/geodata\/imports\/[^/]+\/processing-queues\/[^/]+\/redrive$/.test(
+            request.url?.split('?', 1)[0] ?? '',
+          ) ||
           /^\/v1\/geodata\/entities\/[^/]+(?:\/(?:location-enrichment-requests|reviews|categories|geometry))?$/.test(
             request.url?.split('?', 1)[0] ?? '',
           ) ||
