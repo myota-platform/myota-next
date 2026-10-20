@@ -170,7 +170,10 @@
   GeoData PostgreSQL/NATS readiness on `GEODATA_WORKER_HEALTH_PORT`. The service
   also has PostGIS-backed public entity
   list/detail reads with bounded paging, status/category/location filters, and
-  bounding-box queries. The adapter catalogue retains baseline format names
+  bounding-box queries. Catalogue filters and conflation resolution select the
+  first nonblank repeated value; catalogue text filters are case-insensitive,
+  while resolution is case-sensitive. Repeated status filters combine values.
+  The adapter catalogue retains baseline format names
   and aliases, including `PARKSERVE_US` and `SHP`, and lists Shapefile support
   for manual imports. Pending candidates can be paged, confirmed, or rejected
   through authorized, idempotent review writes. Selected candidates can be

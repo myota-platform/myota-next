@@ -22,23 +22,27 @@ export class GeodataRepository {
       values.push(value);
       filters.push(fragment.replace('?', `$${values.length}`));
     };
-    if (query.programme) add('programme_slug=?', query.programme);
+    const programme = firstQueryString(query.programme);
+    if (programme) add('programme_slug=?', programme);
     const statuses = listValues(query.status)
       .flatMap((value) => value.split(','))
       .map((value) => value.trim().toUpperCase())
       .filter(Boolean);
     if (statuses.length && !statuses.includes('ALL'))
       add('lifecycle_status=ANY(?::text[])', statuses);
-    if (query.entityType)
+    const entityType = firstQueryString(query.entityType);
+    if (entityType)
       add(
         `EXISTS (SELECT 1 FROM geodata_entity_category c WHERE c.entity_id=geodata_entity.id AND lower(c.category_code)=lower(?))`,
-        query.entityType,
+        entityType,
       );
-    for (const field of ['continent', 'country', 'region', 'province'])
-      if (query[field])
-        add(`lower(COALESCE(${field},''))=lower(?)`, query[field]);
-    if (query.city) {
-      values.push(query.city, query.city);
+    for (const field of ['continent', 'country', 'region', 'province']) {
+      const value = firstQueryString(query[field]);
+      if (value) add(`lower(COALESCE(${field},''))=lower(?)`, value);
+    }
+    const city = firstQueryString(query.city);
+    if (city) {
+      values.push(city, city);
       const first = values.length - 1;
       filters.push(
         `(lower(COALESCE(city,''))=lower($${first}) OR lower(COALESCE(municipality,''))=lower($${first + 1}))`,
@@ -156,10 +160,7 @@ export class GeodataRepository {
   async listConflation(query: Record<string, unknown>) {
     const page = parsePageInteger(query.page, 1);
     const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
-    const resolution =
-      typeof query.resolution === 'string' && query.resolution.trim()
-        ? query.resolution.trim().toUpperCase()
-        : null;
+    const resolution = firstQueryString(query.resolution) || null;
     const client = await this.connect();
     try {
       const count = await client.query(
