@@ -201,6 +201,8 @@
   response.
   Activation validity defaults use only the submitted `programmeRules` field,
   matching the reference even when validation uses the `rules` alias.
+  Statistics rebuild requests always use the reference's programme-and-UTC-day
+  idempotency key; a caller-supplied header does not override it.
   Requests store any
   truthy `proposedValues` JSON shape accepted by the reference. Review resolves the QSO through the
   correction record, as the reference does. Applying an object correction queues

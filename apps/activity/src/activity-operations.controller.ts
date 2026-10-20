@@ -36,10 +36,9 @@ export class ActivityOperationsController {
   @HttpCode(202)
   rebuildStatistics(
     @Headers('authorization') authorization: string | undefined,
-    @Headers('idempotency-key') key: string | undefined,
     @Body() body: Record<string, any>,
   ) {
-    return this.activity.createStatisticsRebuild(authorization, key, body);
+    return this.activity.createStatisticsRebuild(authorization, body);
   }
 
   @Get('statistics/rebuild-jobs/:jobId')

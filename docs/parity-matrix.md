@@ -107,6 +107,8 @@ empty `items` array instead of a validation error.
 The notifications endpoint now supports the contract's optional `page` and
 `pageSize` parameters with database-bounded reads; requests without paging
 parameters retain the prior unpaged response shape.
+Statistics rebuild requests deduplicate by programme and UTC day, ignoring a
+caller-supplied `Idempotency-Key`, as in the reference implementation.
 The Admin Activity page opens activation details and normalized QSOs, lists
 statistics snapshots in programme scope, and allows Activity administrators to
 queue and inspect rebuild jobs. It also lists notifications for the signed-in

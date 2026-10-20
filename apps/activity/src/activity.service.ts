@@ -492,7 +492,6 @@ export class ActivityService {
 
   async createStatisticsRebuild(
     authorization: string | undefined,
-    key: string | undefined,
     body: JsonRecord,
   ) {
     this.authorize(authorization, ['activity.admin']);
@@ -501,7 +500,7 @@ export class ActivityService {
     const job = await this.repository.enqueueJob(
       'STATISTICS_REBUILD',
       { programmeSlug },
-      key ?? `statistics:${programmeSlug ?? 'all'}:${today}`,
+      `statistics:${programmeSlug || 'all'}:${today}`,
     );
     return { jobId: job.id, ...job };
   }
