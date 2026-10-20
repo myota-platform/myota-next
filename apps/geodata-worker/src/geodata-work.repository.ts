@@ -12,10 +12,12 @@ import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { pythonFloatString } from '@app/platform/python-number.js';
 import {
   firstPythonTruthy,
   pythonTruthy,
 } from '@app/platform/python-truthiness.js';
+import { comparePythonStrings } from '@app/platform/python-string.js';
 import { streamShapefileFeatures } from './geodata-shapefile-stream.js';
 import {
   readGeoJsonDocumentMetadata,
@@ -1381,12 +1383,19 @@ function resolveLegacyManualSourceRef(
 function hashCanonicalJson(value: unknown): string {
   const canonical = (item: unknown): string => {
     if (Array.isArray(item)) return `[${item.map(canonical).join(',')}]`;
+    if (item === null) return 'null';
+    if (typeof item === 'string') return JSON.stringify(item);
+    if (typeof item === 'boolean') return item ? 'true' : 'false';
+    if (typeof item === 'number')
+      return Number.isInteger(item) && !Object.is(item, -0)
+        ? String(item)
+        : pythonFloatString(item);
     if (isRecord(item))
       return `{${Object.keys(item)
-        .sort()
+        .sort(comparePythonStrings)
         .map((key) => `${JSON.stringify(key)}:${canonical(item[key])}`)
         .join(',')}}`;
-    return JSON.stringify(item) ?? 'null';
+    return 'null';
   };
   return createHash('sha256').update(canonical(value), 'utf8').digest('hex');
 }

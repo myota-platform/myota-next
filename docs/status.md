@@ -404,9 +404,12 @@
   250,000 vertices per feature, plus the configured feature cap.
   GeoJSON and Shapefile upload parsing enforce 16 MiB and 250,000 vertices per
   feature. Prepared candidates and validation errors are attempt-scoped in the
-  Geodata database; per-record hashes and source manifests are persisted
-  alongside final candidate creation, queue creation, status, and outbox events
-  in one transaction. The final event is assembled in PostgreSQL to avoid
+  Geodata database; per-record hashes and source manifests use Python float
+  formatting and Unicode code-point key ordering. JavaScript numbers do not
+  retain whether an integral source value was a Python integer or float, so
+  hashes can differ for values such as `1` versus `1.0`. Candidate
+  creation, queue creation, status, hashes, and outbox events finalize in one
+  transaction. The final event is assembled in PostgreSQL to avoid
   retaining every feature summary in the worker heap.
   Direct JSON imports and durable source-object references honor the configured
   body and upload limits. The direct JSON import path still materializes the

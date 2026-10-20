@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { pythonFloatString } from '@app/platform/python-number.js';
+import { comparePythonStrings } from '@app/platform/python-string.js';
 
 class JsonNumber {
   constructor(
@@ -22,15 +24,15 @@ function pythonJson(value: unknown): string {
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (value instanceof JsonNumber)
     return value.floating
-      ? pythonFloat(value.value as number)
+      ? pythonFloatString(value.value as number)
       : String(value.value);
   if (typeof value === 'number')
-    return Number.isInteger(value) ? String(value) : pythonFloat(value);
+    return Number.isInteger(value) ? String(value) : pythonFloatString(value);
   if (typeof value === 'bigint') return String(value);
   if (Array.isArray(value)) return `[${value.map(pythonJson).join(', ')}]`;
   if (isRecord(value))
     return `{${Object.keys(value)
-      .sort(compareCodePoints)
+      .sort(comparePythonStrings)
       .map((key) => `${pythonJsonString(key)}: ${pythonJson(value[key])}`)
       .join(', ')}}`;
   return 'null';
@@ -42,52 +44,6 @@ function pythonJsonString(value: string): string {
     (character) =>
       `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
   );
-}
-
-function pythonFloat(value: number): string {
-  if (!Number.isFinite(value)) return String(value);
-  const negative = value < 0 || Object.is(value, -0);
-  const absolute = Math.abs(value);
-  if (absolute === 0) return negative ? '-0.0' : '0.0';
-
-  const [mantissa, exponentText] = absolute.toString().toLowerCase().split('e');
-  const explicitExponent = exponentText ? Number(exponentText) : 0;
-  const dot = mantissa.indexOf('.');
-  const decimalPosition = dot < 0 ? mantissa.length : dot;
-  let digits = mantissa.replace('.', '');
-  let adjustedPosition = decimalPosition + explicitExponent;
-  const leadingZeroes = digits.match(/^0+/)?.[0].length ?? 0;
-  digits = digits.slice(leadingZeroes);
-  adjustedPosition -= leadingZeroes;
-  digits = digits.replace(/0+$/, '');
-  const scientificExponent = adjustedPosition - 1;
-  const sign = negative ? '-' : '';
-
-  if (scientificExponent >= 16 || scientificExponent < -4) {
-    const fraction = digits.length > 1 ? `.${digits.slice(1)}` : '';
-    const exponentSign = scientificExponent >= 0 ? '+' : '-';
-    const exponent = String(Math.abs(scientificExponent)).padStart(2, '0');
-    return `${sign}${digits[0]}${fraction}e${exponentSign}${exponent}`;
-  }
-
-  const point = scientificExponent + 1;
-  if (point <= 0) return `${sign}0.${'0'.repeat(-point)}${digits}`;
-  if (point >= digits.length)
-    return `${sign}${digits}${'0'.repeat(point - digits.length)}.0`;
-  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
-}
-
-function compareCodePoints(left: string, right: string): number {
-  const leftPoints = Array.from(left, (character) => character.codePointAt(0)!);
-  const rightPoints = Array.from(right, (character) =>
-    character.codePointAt(0)!,
-  );
-  const length = Math.min(leftPoints.length, rightPoints.length);
-  for (let index = 0; index < length; index += 1) {
-    if (leftPoints[index] !== rightPoints[index])
-      return leftPoints[index] - rightPoints[index];
-  }
-  return leftPoints.length - rightPoints.length;
 }
 
 function isPythonTruthyJson(value: unknown): boolean {

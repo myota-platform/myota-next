@@ -39,3 +39,37 @@ export function pythonRound(value: number, decimalPlaces: number): number {
   const result = Number(decimal);
   return negative ? -result : result;
 }
+
+/** Format a finite binary64 value like Python's `repr(float)`. */
+export function pythonFloatString(value: number): string {
+  if (!Number.isFinite(value)) return String(value);
+  const negative = value < 0 || Object.is(value, -0);
+  const absolute = Math.abs(value);
+  if (absolute === 0) return negative ? '-0.0' : '0.0';
+
+  const [mantissa, exponentText] = absolute.toString().toLowerCase().split('e');
+  const explicitExponent = exponentText ? Number(exponentText) : 0;
+  const dot = mantissa.indexOf('.');
+  const decimalPosition = dot < 0 ? mantissa.length : dot;
+  let digits = mantissa.replace('.', '');
+  let adjustedPosition = decimalPosition + explicitExponent;
+  const leadingZeroes = digits.match(/^0+/)?.[0].length ?? 0;
+  digits = digits.slice(leadingZeroes);
+  adjustedPosition -= leadingZeroes;
+  digits = digits.replace(/0+$/, '');
+  const scientificExponent = adjustedPosition - 1;
+  const sign = negative ? '-' : '';
+
+  if (scientificExponent >= 16 || scientificExponent < -4) {
+    const fraction = digits.length > 1 ? `.${digits.slice(1)}` : '';
+    const exponentSign = scientificExponent >= 0 ? '+' : '-';
+    const exponent = String(Math.abs(scientificExponent)).padStart(2, '0');
+    return `${sign}${digits[0]}${fraction}e${exponentSign}${exponent}`;
+  }
+
+  const point = scientificExponent + 1;
+  if (point <= 0) return `${sign}0.${'0'.repeat(-point)}${digits}`;
+  if (point >= digits.length)
+    return `${sign}${digits}${'0'.repeat(point - digits.length)}.0`;
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
+}
