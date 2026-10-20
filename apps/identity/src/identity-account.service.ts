@@ -118,19 +118,7 @@ export class IdentityAccountService {
       callsign: pythonTruthy(body.callsign) ? String(body.callsign) : undefined,
       roles: additionalAssignments,
     } as CreateAccountDto;
-    let roleDefinitions: RoleDefinition[] = [];
-    if (additionalAssignments.length > 0) {
-      if (!actorScopes.has('*') && !actorScopes.has('identity.roles.assign')) {
-        throw new ForbiddenException('identity.roles.assign scope is required');
-      }
-      const catalogue = await this.roleService.listAdminRoles(authorization);
-      roleDefinitions = catalogue.items as RoleDefinition[];
-    }
-    const grants = this.validateRoleGrants(
-      additionalAssignments,
-      actorScopes,
-      roleDefinitions,
-    );
+    let grants: RoleGrant[] = [];
 
     const client = await this.connect();
     try {
@@ -160,6 +148,23 @@ export class IdentityAccountService {
       );
       if (duplicate.rowCount) {
         throw new BadRequestException('email already exists');
+      }
+
+      if (additionalAssignments.length > 0) {
+        if (
+          !actorScopes.has('*') &&
+          !actorScopes.has('identity.roles.assign')
+        ) {
+          throw new ForbiddenException(
+            'identity.roles.assign scope is required',
+          );
+        }
+        const catalogue = await this.roleService.listAdminRoles(authorization);
+        grants = this.validateRoleGrants(
+          additionalAssignments,
+          actorScopes,
+          catalogue.items as RoleDefinition[],
+        );
       }
 
       const accountId = randomUUID();

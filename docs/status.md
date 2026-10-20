@@ -86,7 +86,9 @@
   Account creation uses the reference's non-empty email and `@` validation
   after Python-compatible trimming and case folding. It authorizes the
   administrator before validating the payload and normalizes callsign
-  whitespace like the Python handler.
+  whitespace like the Python handler. Idempotent replays and duplicate-email
+  failures precede the extra role-assignment authorization, matching the
+  reference order.
   Login and recovery accept any non-empty email string and resolve it through
   the normalized Identity email key, matching the Python handler.
   Callsign evidence metadata, verification source, and retirement `validTo`
