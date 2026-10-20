@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   parseTimestamp,
   pythonFloat,
@@ -149,22 +150,29 @@ export function evaluateAwardCondition(
     Object.hasOwn(condition, 'kind') ? condition.kind : '',
   ).toUpperCase();
   if (kind === 'AND' || kind === 'ALL') {
-    const children = condition.conditions;
-    return (
-      Array.isArray(children) &&
-      children.length > 0 &&
-      children.every((child) => evaluateAwardCondition(child, facts))
+    const children = Object.hasOwn(condition, 'conditions')
+      ? condition.conditions
+      : [];
+    if (!pythonTruthy(children)) return false;
+    return pythonConditionIterable(children).every((child) =>
+      evaluateAwardCondition(asAwardCondition(child), facts),
     );
   }
   if (kind === 'OR' || kind === 'ANY') {
-    const children = condition.conditions;
-    return (
-      Array.isArray(children) &&
-      children.some((child) => evaluateAwardCondition(child, facts))
+    const children = Object.hasOwn(condition, 'conditions')
+      ? condition.conditions
+      : [];
+    if (!pythonTruthy(children)) return false;
+    return pythonConditionIterable(children).some((child) =>
+      evaluateAwardCondition(asAwardCondition(child), facts),
     );
   }
-  if (kind === 'NOT')
-    return !evaluateAwardCondition(condition.condition ?? {}, facts);
+  if (kind === 'NOT') {
+    const nested = Object.hasOwn(condition, 'condition')
+      ? condition.condition
+      : {};
+    return !evaluateAwardCondition(asAwardCondition(nested), facts);
+  }
   if (kind === 'ENTITY_TYPE') {
     const values = Object.hasOwn(condition, 'values') ? condition.values : [];
     const entityType = pythonConditionString(
@@ -233,7 +241,13 @@ function pythonConditionIterable(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
   if (typeof value === 'string') return Array.from(value);
   if (value !== null && typeof value === 'object') return Object.keys(value);
-  throw new TypeError('award condition values are not iterable');
+  throw new TypeError('award condition operand is not iterable');
+}
+
+function asAwardCondition(value: unknown): JsonRecord {
+  if (value !== null && typeof value === 'object' && !Array.isArray(value))
+    return value as JsonRecord;
+  throw new TypeError('award condition must be an object');
 }
 
 export function evaluateAward(
