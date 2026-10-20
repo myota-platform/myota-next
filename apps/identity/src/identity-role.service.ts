@@ -159,7 +159,7 @@ export class IdentityRoleService {
       ['identity.roles.manage'],
       'identity.roles.manage scope is required',
     );
-    const code = roleCode.trim().toUpperCase();
+    const code = roleCode.toUpperCase();
     const client = await this.connect();
     try {
       await client.query('BEGIN');
