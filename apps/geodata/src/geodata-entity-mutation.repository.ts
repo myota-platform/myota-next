@@ -285,8 +285,9 @@ export class GeodataEntityMutationRepository {
       );
       if (replay.found) return replay.response;
     }
-    const editorId = typeof body.editorId === 'string' ? body.editorId : '';
-    if (!editorId) throw new BadRequestException('editorId is required');
+    const editorId = body.editorId;
+    if (!pythonTruthy(editorId))
+      throw new BadRequestException('editorId is required');
     const supported = new Set([
       'editorId',
       'name',
@@ -623,8 +624,9 @@ export class GeodataEntityMutationRepository {
       );
       if (replay.found) return replay.response;
     }
-    const editorId = typeof body.editorId === 'string' ? body.editorId : '';
-    if (!editorId) throw new BadRequestException('editorId is required');
+    const editorId = body.editorId;
+    if (!pythonTruthy(editorId))
+      throw new BadRequestException('editorId is required');
     const expectedVersion = parseIfMatch(ifMatch);
     const client = await this.connect();
     try {
@@ -785,8 +787,9 @@ export class GeodataEntityMutationRepository {
       );
       if (replay.found) return replay.response;
     }
-    const editorId = typeof body.editorId === 'string' ? body.editorId : '';
-    if (!editorId) throw new BadRequestException('editorId is required');
+    const editorId = body.editorId;
+    if (!pythonTruthy(editorId))
+      throw new BadRequestException('editorId is required');
     const rawTypes = firstTruthyCategoryInput([
       body.entityTypes,
       body.entityTypeCodes,
@@ -961,8 +964,9 @@ export class GeodataEntityMutationRepository {
       );
       if (replay.found) return replay.response;
     }
-    const editorId = typeof body.editorId === 'string' ? body.editorId : '';
-    if (!editorId) throw new BadRequestException('editorId is required');
+    const editorId = body.editorId;
+    if (!pythonTruthy(editorId))
+      throw new BadRequestException('editorId is required');
     const geometryInput = isRecord(body.geometry) ? body.geometry : null;
     const rawGeometryType =
       typeof geometryInput?.type === 'string' ? geometryInput.type : '';
