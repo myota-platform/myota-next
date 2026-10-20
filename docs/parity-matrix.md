@@ -102,6 +102,9 @@ is omitted, matching Python's `dict.get` behavior.
 Programme list pages and shared-category `assignedProgrammes` arrays preserve
 the reference's insertion order through a Core-owned record sequence; existing
 rows are backfilled by creation timestamp and slug.
+Programme PATCH requests with `status: "ARCHIVED"` follow the reference's
+archive action: other supplied update fields are ignored, the policy version
+is unchanged, and the archive event contains only the slug.
 
 Activity has an initial activation and single-QSO slice: activation list/create/read/close,
 normalized QSO writes, validity checks, ownership checks, subject aggregates,

@@ -152,6 +152,19 @@ export class ProgrammesService {
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');
+      if (status === 'ARCHIVED') {
+        programme.status = 'ARCHIVED';
+        programme.updatedAt = new Date().toISOString();
+        await this.programmes.save(client, programme);
+        await this.mutations.recordEvent(
+          client,
+          'programme.archived.v1',
+          'programme',
+          programme.id,
+          { slug },
+        );
+        return programme;
+      }
       if (body.name !== undefined) programme.name = body.name;
       if (body.description !== undefined)
         programme.description = body.description;
@@ -181,17 +194,14 @@ export class ProgrammesService {
       if (body.rules !== undefined || body.entityTypes !== undefined) {
         programme.policyVersion = nextPolicyVersion(programme.policyVersion);
       }
-      if (status === 'ARCHIVED') programme.status = 'ARCHIVED';
       programme.updatedAt = new Date().toISOString();
       await this.programmes.save(client, programme);
       await this.mutations.recordEvent(
         client,
-        status === 'ARCHIVED'
-          ? 'programme.archived.v1'
-          : 'programme.updated.v1',
+        'programme.updated.v1',
         'programme',
         programme.id,
-        status === 'ARCHIVED' ? { slug } : programme,
+        programme,
       );
       return programme;
     });

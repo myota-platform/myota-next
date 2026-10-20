@@ -238,27 +238,33 @@ export class PatchProgrammePolicyDraftDto {
 }
 
 export class UpdateProgrammeDto {
+  @ValidateIf((object) => object.status !== 'ARCHIVED')
   @IsOptional()
   @IsString()
   name?: string;
 
+  @ValidateIf((object) => object.status !== 'ARCHIVED')
   @IsOptional()
   @IsString()
   description?: string;
 
+  @ValidateIf((object) => object.status !== 'ARCHIVED')
   @IsOptional()
   @IsArray()
   @IsObject({ each: true })
   entityTypes?: Record<string, unknown>[];
 
+  @ValidateIf((object) => object.status !== 'ARCHIVED')
   @IsOptional()
   @IsObject()
   rules?: Record<string, unknown>;
 
+  @ValidateIf((object) => object.status !== 'ARCHIVED')
   @IsOptional()
   @IsObject()
   theme?: Record<string, unknown>;
 
+  @ValidateIf((object) => object.status !== 'ARCHIVED')
   @IsOptional()
   @IsObject()
   oidc?: Record<string, unknown> | null;
