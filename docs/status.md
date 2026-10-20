@@ -233,7 +233,8 @@
   Direct JSON imports and durable source-object references honor the configured
   body and upload limits. The direct JSON import path still materializes the
   normalized collection; multipart GeoJSON FeatureCollections and top-level
-  feature arrays stream one feature at a time. Root `crs` and
+  feature arrays stream one feature at a time. Single Features and supported
+  geometry documents are normalized as one item. Root `crs` and
   `spatialReference` metadata is applied to features without an explicit `crs`,
   matching the reference reader. Shapefile
   source bytes and decoded

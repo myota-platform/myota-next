@@ -14,7 +14,7 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { streamShapefileFeatures } from './geodata-shapefile-stream.js';
 import {
-  readGeoJsonDocumentCrs,
+  readGeoJsonDocumentMetadata,
   streamGeoJsonFeatures,
 } from './geodata-geojson-stream.js';
 import { decodeOsmPbfStream } from './geodata-osm-pbf.js';
@@ -462,7 +462,7 @@ export class GeodataWorkRepository {
       );
       features = document.features;
     } else if (format === 'GEOJSON') {
-      const documentCrs = await readGeoJsonDocumentCrs(
+      const documentMetadata = await readGeoJsonDocumentMetadata(
         object.Body as AsyncIterable<Uint8Array>,
         () => this.heartbeat(run),
       );
@@ -475,7 +475,7 @@ export class GeodataWorkRepository {
         replay.Body as AsyncIterable<Uint8Array>,
         run.source_hash,
         featureLimit,
-        documentCrs,
+        documentMetadata,
         () => this.heartbeat(run),
       );
     } else if (format === 'SHAPEFILE' || format === 'SHP') {

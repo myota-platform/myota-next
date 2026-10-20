@@ -21,13 +21,13 @@ type ContainerFrame = {
   expectKey?: boolean;
 };
 
-/** Read the document CRS without retaining features, matching the reference's first parse pass. */
-export async function readGeoJsonDocumentCrs(
+/** Read root metadata without retaining features, matching the reference's first parse pass. */
+export async function readGeoJsonDocumentMetadata(
   source: AsyncIterable<Uint8Array>,
   heartbeat: () => Promise<void>,
 ) {
   const parser = new JSONParser({
-    paths: ['$.crs', '$.spatialReference'],
+    paths: ['$.crs', '$.spatialReference', '$.type'],
     keepStack: false,
     stringBufferSize: 64 * 1024,
   });
@@ -35,6 +35,8 @@ export async function readGeoJsonDocumentCrs(
   let hasDocumentCrs = false;
   let spatialReference: unknown;
   let hasSpatialReference = false;
+  let rootType: unknown;
+  let hasRootType = false;
   let sourceBytes = 0;
   let lastHeartbeatBytes = 0;
   const sourceLimit = Math.min(
@@ -45,7 +47,10 @@ export async function readGeoJsonDocumentCrs(
   parser.onValue = ({ value, key, stack }) => {
     if (stack.length !== 1 || stack[0]?.mode !== TOKEN_PARSER_OBJECT_MODE)
       return;
-    if (key === 'crs' && !hasDocumentCrs) {
+    if (key === 'type' && !hasRootType) {
+      rootType = value;
+      hasRootType = true;
+    } else if (key === 'crs' && !hasDocumentCrs) {
       documentCrs = value;
       hasDocumentCrs = true;
     } else if (key === 'spatialReference' && !hasSpatialReference) {
@@ -69,20 +74,24 @@ export async function readGeoJsonDocumentCrs(
   }
 
   parser.end();
-  if (!hasDocumentCrs || documentCrs === null || documentCrs === undefined)
-    return spatialReference;
-  return documentCrs;
+  return {
+    crs:
+      !hasDocumentCrs || documentCrs === null || documentCrs === undefined
+        ? spatialReference
+        : documentCrs,
+    rootType,
+  };
 }
 
 /**
- * Stream GeoJSON features from a FeatureCollection or top-level feature array.
+ * Stream a GeoJSON FeatureCollection or array; single objects are parsed once.
  * Only the current feature is assembled by the parser before it is yielded.
  */
 export async function* streamGeoJsonFeatures(
   source: AsyncIterable<Uint8Array>,
   sourceHash: string,
   featureLimit: number,
-  documentCrs: unknown,
+  documentMetadata: { crs: unknown; rootType: unknown },
   heartbeat: () => Promise<void>,
 ): AsyncGenerator<unknown> {
   const guard = new GeoJsonResourceGuard();
@@ -120,8 +129,14 @@ export async function* streamGeoJsonFeatures(
           firstTokenOffset++;
         if (firstTokenOffset < part.length) {
           const rootIsArray = part[firstTokenOffset] === 0x5b;
+          const rootIsCollection =
+            !rootIsArray && documentMetadata.rootType === 'FeatureCollection';
           parser = new JSONParser({
-            paths: rootIsArray ? ['$.*'] : ['$.features.*'],
+            paths: rootIsArray
+              ? ['$.*']
+              : rootIsCollection
+                ? ['$.features.*']
+                : ['$'],
             keepStack: false,
             stringBufferSize: 64 * 1024,
           });
@@ -131,30 +146,40 @@ export async function* streamGeoJsonFeatures(
               stack.length === 1 &&
               stack[0]?.mode === TOKEN_PARSER_ARRAY_MODE;
             const isFeatureCollectionItem =
-              !rootIsArray &&
+              rootIsCollection &&
               stack.length === 2 &&
               stack[0]?.mode === TOKEN_PARSER_OBJECT_MODE &&
               stack[1]?.mode === TOKEN_PARSER_ARRAY_MODE &&
               stack[1]?.key === 'features';
-            if (!isTopLevelArrayItem && !isFeatureCollectionItem) return;
+            const isSingleObject =
+              !rootIsArray && !rootIsCollection && stack.length === 0;
+            if (
+              !isTopLevelArrayItem &&
+              !isFeatureCollectionItem &&
+              !isSingleObject
+            )
+              return;
+
+            const feature = isSingleObject ? toGeoJsonFeature(value) : value;
 
             featureCount += 1;
             if (featureCount > featureLimit)
               throw new Error(
                 `geodata import contains more than ${featureLimit} features`,
               );
-            if (countFeatureVertices(value) > MAX_FEATURE_VERTICES)
+            if (countFeatureVertices(feature) > MAX_FEATURE_VERTICES)
               throw new Error(
                 `a source geometry exceeds the configured vertex limit (${MAX_FEATURE_VERTICES})`,
               );
             if (
-              pythonTruthy(documentCrs) &&
-              isRecord(value) &&
-              !Object.hasOwn(value, 'crs')
+              pythonTruthy(documentMetadata.crs) &&
+              isRecord(feature) &&
+              !Object.hasOwn(feature, 'crs')
             ) {
-              (value as unknown as Record<string, unknown>).crs = documentCrs;
+              (feature as unknown as Record<string, unknown>).crs =
+                documentMetadata.crs;
             }
-            pending.push(value);
+            pending.push(feature);
           };
           parserPart = part.subarray(firstTokenOffset);
         }
@@ -192,6 +217,7 @@ class GeoJsonResourceGuard {
   private rootType: unknown;
   private sawFeaturesArray = false;
   private sawRootArray = false;
+  private sawRootObject = false;
 
   write(chunk: Uint8Array) {
     for (const byte of chunk) {
@@ -260,8 +286,10 @@ class GeoJsonResourceGuard {
         'GeoJSON source ended before the FeatureCollection was complete',
       );
     if (this.sawRootArray) return;
-    if (this.rootType !== 'FeatureCollection' || !this.sawFeaturesArray)
+    if (!this.sawRootObject)
       throw new Error('stored GeoJSON source is not a FeatureCollection');
+    if (this.rootType === 'FeatureCollection' && !this.sawFeaturesArray)
+      throw new Error('stored GeoJSON FeatureCollection has no features array');
   }
 
   private consumeStringByte(byte: number, position: number) {
@@ -312,6 +340,7 @@ class GeoJsonResourceGuard {
     const isFeaturesArray =
       kind === 'array' && parent?.root === true && parent.key === 'features';
     const isFeatureItem = parent?.features === true;
+    if (isRoot) this.sawRootObject = true;
     if (isRootArray) this.sawRootArray = true;
     if (isFeaturesArray) this.sawFeaturesArray = true;
     if (isFeatureItem) this.activeFeatureStart = position;
@@ -400,6 +429,31 @@ function pythonTruthy(value: unknown): boolean {
 function positiveEnv(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function toGeoJsonFeature(value: unknown) {
+  if (!isRecord(value)) throw new Error('unsupported GeoJSON document type');
+  if (value.type === 'Feature') return value;
+  if (isRecord(value.geometry)) {
+    const feature: Record<string, unknown> = {
+      type: 'Feature',
+      geometry: value.geometry,
+      properties: pythonTruthy(value.properties) ? value.properties : {},
+    };
+    if (value.id !== null && value.id !== undefined) feature.id = value.id;
+    return feature;
+  }
+  if (
+    [
+      'Point',
+      'LineString',
+      'MultiLineString',
+      'Polygon',
+      'MultiPolygon',
+    ].includes(String(value.type))
+  )
+    return { type: 'Feature', geometry: value, properties: {} };
+  throw new Error('unsupported GeoJSON document type');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
