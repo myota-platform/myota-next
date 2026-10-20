@@ -449,7 +449,8 @@
   baseline name/containment/overlap/distance/jurisdiction score, using Python
   Unicode casefolding and whitespace stripping for the name signal, and applies
   `SequenceMatcher`'s 200-code-point popularity heuristic and ties-to-even
-  rounding to six decimal places. It stores
+  rounding to six decimal places. Bounding-box centroid coordinates use
+  seven-place ties-to-even rounding before distance scoring. It stores
   deduplicated candidates at the existing 0.55 threshold.
   The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized

@@ -1074,7 +1074,10 @@ function boxIntersection(left: BoundingBox, right: BoundingBox) {
 }
 
 function boxCenter(box: BoundingBox) {
-  return { lon: (box[0] + box[2]) / 2, lat: (box[1] + box[3]) / 2 };
+  return {
+    lon: pythonRound((box[0] + box[2]) / 2, 7),
+    lat: pythonRound((box[1] + box[3]) / 2, 7),
+  };
 }
 
 function haversineKm(
