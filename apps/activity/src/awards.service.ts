@@ -591,9 +591,8 @@ export class AwardsService {
       );
     this.previewBusy = true;
     try {
-      const name = typeof body.name === 'string' ? body.name.trim() : '';
-      if (!name || name.length > 200)
-        throw new BadRequestException('name must be 1 to 200 characters');
+      const name = typeof body.name === 'string' ? body.name : '';
+      if (!name) throw new BadRequestException('missing required fields: name');
       const template = asRecord(body.template, 'template');
       if (!Array.isArray(template.elements) || template.elements.length > 30)
         throw new BadRequestException(
@@ -642,13 +641,13 @@ export class AwardsService {
       }
 
       const mockData = {
-        AWARD_NAME: name,
+        AWARD_NAME: Array.from(name).slice(0, 200).join(''),
         CALLSIGN: 'EA7TEST',
         PERSON_NAME: 'Demo Radio Operator',
         DATE_OBTAINED: new Date().toISOString().slice(0, 10),
         MANAGER_NAME:
-          typeof body.managerName === 'string' && body.managerName.trim()
-            ? body.managerName.trim().slice(0, 200)
+          typeof body.managerName === 'string' && body.managerName
+            ? Array.from(body.managerName).slice(0, 200).join('')
             : 'Demo Award Manager',
       };
       const pdf = await renderCertificatePdf({

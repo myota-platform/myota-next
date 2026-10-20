@@ -368,7 +368,8 @@
   and paging for definitions, requests, assets, and issuances now run in
   Activity PostgreSQL so the API reads only one page. Certificate preview
   resolves its background asset by indexed metadata instead of reading the
-  entire asset catalogue. Award evaluation and
+  entire asset catalogue. Preview names preserve submitted whitespace and
+  truncate at 200 Unicode code points, matching the Python renderer. Award evaluation and
   historical recalculation jobs use service-owned facts, persist versioned
   progress, and create deduplicated qualification notifications. Participant
   progress reads evaluate and persist the current aggregate snapshot. Award
