@@ -26,6 +26,7 @@ import { comparePythonStrings } from '@app/platform/python-string.js';
 import { streamShapefileFeatures } from './geodata-shapefile-stream.js';
 import {
   readGeoJsonDocumentMetadata,
+  sourceHashOverrideForGeoJsonFeature,
   sourceJsonForGeoJsonFeature,
   streamGeoJsonFeatures,
 } from './geodata-geojson-stream.js';
@@ -486,7 +487,14 @@ export class GeodataWorkRepository {
         replay.Body as AsyncIterable<Uint8Array>,
         run.source_hash,
         featureLimit,
-        documentMetadata,
+        {
+          ...documentMetadata,
+          sourceFeatureHashOverrides:
+            run.source_metadata.sourceFormat === 'ARCGIS_FEATURESERVER' &&
+            Array.isArray(run.source_metadata.sourceFeatureHashOverrides)
+              ? run.source_metadata.sourceFeatureHashOverrides
+              : undefined,
+        },
         () => this.heartbeat(run),
       );
     } else if (format === 'SHAPEFILE' || format === 'SHP') {
@@ -541,7 +549,9 @@ export class GeodataWorkRepository {
       try {
         if (!isRecord(feature)) throw new Error('feature must be an object');
         const sourceJson = sourceJsonForGeoJsonFeature(feature);
-        const sourceHash = hashCanonicalJson(feature, sourceJson);
+        const sourceHash =
+          sourceHashOverrideForGeoJsonFeature(feature) ??
+          hashCanonicalJson(feature, sourceJson);
         const normalized = normalizeAdapterFeature(run.adapter_code, feature);
         const properties = normalized.properties;
         const sourceRefCandidate = firstPythonTruthy(

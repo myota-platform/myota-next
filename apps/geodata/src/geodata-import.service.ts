@@ -34,6 +34,7 @@ type ImportOptions = {
   autoPromote?: { requestedBy: string; note: string };
   requestHash?: string;
   rawDocumentJson?: string;
+  sourceFeatureHashOverrides?: string[];
 };
 
 @Injectable()
@@ -110,7 +111,12 @@ export class GeodataImportService {
       await client.query(
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
       );
-      const metadata = {
+      const sourceFeatureHashOverrides =
+        prepared.sourceFormat === 'ARCGIS_FEATURESERVER' &&
+        options.sourceFeatureHashOverrides?.length === prepared.features.length
+          ? options.sourceFeatureHashOverrides
+          : undefined;
+      const metadata: Record<string, unknown> = {
         source: prepared.source,
         entityTypes: prepared.entityTypes,
         filename: prepared.filename,
@@ -125,6 +131,7 @@ export class GeodataImportService {
           ? { communityProposal: options.communityProposal }
           : {}),
         ...(options.autoPromote ? { autoPromote: options.autoPromote } : {}),
+        ...(sourceFeatureHashOverrides ? { sourceFeatureHashOverrides } : {}),
       };
       await client.query(
         `INSERT INTO import_run
@@ -142,7 +149,7 @@ export class GeodataImportService {
           prepared.disappearancePolicy,
         ],
       );
-      const response = {
+      const response: Record<string, unknown> = {
         ...metadata,
         ...(options.communityProposal
           ? { proposalId: options.communityProposal.proposalId }
@@ -156,6 +163,7 @@ export class GeodataImportService {
         stats: { featureCount: prepared.features.length },
         sourceHash,
       };
+      delete response.sourceFeatureHashOverrides;
       await client.query(
         `INSERT INTO outbox_event
           (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)

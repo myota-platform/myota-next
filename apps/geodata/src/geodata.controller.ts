@@ -31,7 +31,7 @@ import { GeodataLoadTestCleanupService } from './geodata-load-test-cleanup.servi
 import { integerSetting } from '@app/platform/integer-setting.js';
 import {
   fingerprintJsonRequest,
-  rawGeoJsonImportDocument,
+  rawImportSourceData,
 } from './geodata-request-fingerprint.js';
 
 @Controller('geodata')
@@ -281,12 +281,13 @@ export class GeodataController {
     const rawBody = (
       request as Request & { rawBody?: Buffer }
     ).rawBody?.toString('utf8');
+    const rawSourceData = rawBody ? rawImportSourceData(rawBody) : {};
     const idempotencyKey = key
       ? `http:${claims.sub}:${request.originalUrl}:${key}`
       : undefined;
     return this.imports.create(idempotencyKey, () => body, {
       requestHash: key ? fingerprintJsonRequest(body, rawBody) : undefined,
-      rawDocumentJson: rawBody ? rawGeoJsonImportDocument(rawBody) : undefined,
+      ...rawSourceData,
     });
   }
 

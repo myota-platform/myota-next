@@ -18,6 +18,7 @@ const sourceJsonByFeature = new WeakMap<
     rawJson: string;
     inheritedCrsJson?: string;
     rootGeometryDocument?: boolean;
+    sourceHashOverride?: string;
   }
 >();
 
@@ -26,9 +27,18 @@ export function sourceJsonForGeoJsonFeature(feature: unknown):
       rawJson: string;
       inheritedCrsJson?: string;
       rootGeometryDocument?: boolean;
+      sourceHashOverride?: string;
     }
   | undefined {
   return isObject(feature) ? sourceJsonByFeature.get(feature) : undefined;
+}
+
+export function sourceHashOverrideForGeoJsonFeature(
+  feature: unknown,
+): string | undefined {
+  return isObject(feature)
+    ? sourceJsonByFeature.get(feature)?.sourceHashOverride
+    : undefined;
 }
 
 type ContainerFrame = {
@@ -120,6 +130,7 @@ export async function* streamGeoJsonFeatures(
     crs: unknown;
     crsSourceKey: string;
     crsJson?: string;
+    sourceFeatureHashOverrides?: unknown[];
     rootType: unknown;
   },
   heartbeat: () => Promise<void>,
@@ -198,6 +209,19 @@ export async function* streamGeoJsonFeatures(
             const sourceJson = isObject(feature)
               ? guard.takeCompletedFeatureJson()
               : undefined;
+            const sourceHashOverride =
+              typeof documentMetadata.sourceFeatureHashOverrides?.[
+                featureCount
+              ] === 'string' &&
+              /^[0-9a-f]{64}$/.test(
+                documentMetadata.sourceFeatureHashOverrides[
+                  featureCount
+                ] as string,
+              )
+                ? (documentMetadata.sourceFeatureHashOverrides[
+                    featureCount
+                  ] as string)
+                : undefined;
 
             featureCount += 1;
             if (featureCount > featureLimit)
@@ -218,11 +242,17 @@ export async function* streamGeoJsonFeatures(
                 documentMetadata.crs;
               inheritedDocumentCrs = true;
             }
-            if (sourceJson !== undefined && isObject(feature)) {
+            if (
+              (sourceJson !== undefined || sourceHashOverride !== undefined) &&
+              isObject(feature)
+            ) {
               const inheritedCrsJson = inheritedDocumentCrs
                 ? documentMetadata.crsJson
                 : undefined;
-              if (!inheritedDocumentCrs || inheritedCrsJson !== undefined)
+              if (
+                sourceJson !== undefined &&
+                (!inheritedDocumentCrs || inheritedCrsJson !== undefined)
+              )
                 sourceJsonByFeature.set(feature, {
                   rawJson: sourceJson,
                   ...(inheritedCrsJson !== undefined
@@ -231,6 +261,14 @@ export async function* streamGeoJsonFeatures(
                   ...(isSingleObject && documentMetadata.rootType !== 'Feature'
                     ? { rootGeometryDocument: true }
                     : {}),
+                  ...(sourceHashOverride !== undefined
+                    ? { sourceHashOverride }
+                    : {}),
+                });
+              else if (sourceHashOverride !== undefined)
+                sourceJsonByFeature.set(feature, {
+                  rawJson: '',
+                  sourceHashOverride,
                 });
             }
             pending.push(feature);

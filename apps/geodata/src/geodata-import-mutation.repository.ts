@@ -289,7 +289,7 @@ export class GeodataImportMutationRepository {
         return {
           status: run.status,
           httpStatus: run.status === 'CANCELLING' ? 202 : 200,
-          sourceMetadata: run.source_metadata,
+          sourceMetadata: publicSourceMetadata(run.source_metadata),
         };
       }
       if (!['UPLOAD_PENDING', 'QUEUED', 'PROCESSING'].includes(run.status))
@@ -346,7 +346,7 @@ export class GeodataImportMutationRepository {
       return {
         status: nextStatus,
         httpStatus: active ? 202 : 200,
-        sourceMetadata: run.source_metadata,
+        sourceMetadata: publicSourceMetadata(run.source_metadata),
       };
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
@@ -824,4 +824,12 @@ function pythonString(value: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function publicSourceMetadata(
+  metadata: Record<string, unknown>,
+): Record<string, unknown> {
+  const result = { ...metadata };
+  delete result.sourceFeatureHashOverrides;
+  return result;
 }

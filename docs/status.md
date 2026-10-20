@@ -409,8 +409,10 @@
   and direct GEOJSON/WFS JSON imports retain raw numeric tokens so `1` and
   `1.0` hash as distinct Python integer and float values, including inherited
   root CRS values up to 16 MiB and streamed root geometry documents converted
-  into Features. Oversized root CRS values, normalized ArcGIS imports, and
-  generated Shapefile/PBF features can still lose that distinction.
+  into Features. Direct ArcGIS FeatureServer imports hash the raw source records
+  before service normalization. Oversized root CRS values, ArcGIS scheduled
+  refreshes transformed by the Node importer, and generated Shapefile/PBF
+  features can still lose that distinction.
   Candidate creation, queue creation, status, hashes, and outbox events
   finalize in one transaction. The final event is assembled in PostgreSQL to avoid
   retaining every feature summary in the worker heap.

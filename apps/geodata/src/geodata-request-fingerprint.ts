@@ -71,27 +71,47 @@ export function canonicalPythonGeoJsonFeature(
   return canonicalJsonValue(feature);
 }
 
-/** Preserve source number tokens for direct GeoJSON and WFS import payloads. */
-export function rawGeoJsonImportDocument(
-  rawRequest: string,
-): string | undefined {
+export function rawImportSourceData(rawRequest: string): {
+  rawDocumentJson?: string;
+  sourceFeatureHashOverrides?: string[];
+} {
   const request = new JsonParser(rawRequest).parse();
-  if (!isRecord(request)) return undefined;
+  if (!isRecord(request)) return {};
   const format =
     typeof request.format === 'string'
       ? request.format.toUpperCase()
       : 'GEOJSON';
-  if (format !== 'GEOJSON' && format !== 'WFS') return undefined;
-  if (Array.isArray(request.features))
-    return `{"features":${canonicalJsonValue(request.features)},"type":"FeatureCollection"}`;
-  if (typeof request.content === 'string') {
+  if (format === 'GEOJSON' || format === 'WFS') {
+    if (Array.isArray(request.features))
+      return {
+        rawDocumentJson: `{"features":${canonicalJsonValue(request.features)},"type":"FeatureCollection"}`,
+      };
+    if (typeof request.content !== 'string') return {};
     try {
-      return canonicalPythonJson(request.content);
+      return { rawDocumentJson: canonicalPythonJson(request.content) };
     } catch {
-      return undefined;
+      return {};
     }
   }
-  return undefined;
+  let document: unknown;
+  if (format !== 'ARCGIS_FEATURESERVER') return {};
+  if (Array.isArray(request.features))
+    document = { features: request.features };
+  else if (typeof request.content === 'string') {
+    try {
+      document = new JsonParser(request.content).parse();
+    } catch {
+      return {};
+    }
+  }
+  if (!isRecord(document) || !Array.isArray(document.features)) return {};
+  return {
+    sourceFeatureHashOverrides: document.features.map((feature) =>
+      createHash('sha256')
+        .update(canonicalJsonValue(feature), 'utf8')
+        .digest('hex'),
+    ),
+  };
 }
 
 function canonicalJsonValue(value: unknown): string {
