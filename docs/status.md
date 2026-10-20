@@ -72,7 +72,10 @@
   Core-owned maintenance process expires Identity records and removes aged,
   unreferenced profile-image objects. Token, recovery, lockout, and maintenance
   integer settings use the shared strict parser to match Python's environment
-  value handling.
+  value handling. Unicode 15.0 case-fold mappings in Core now provide indexed
+  email identity keys for login, recovery, account creation, and email updates;
+  migration rejects case-fold-equivalent duplicate addresses before building
+  the unique index.
 - Transactional event helpers write domain events to the Core outbox and
   security events to both the security-event table and outbox.
 - Programme records now live in a Core relational table migrated from the

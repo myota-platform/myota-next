@@ -31,7 +31,9 @@ Administrator account search now uses full default Unicode 15.0 case folding,
 matching the Python 3.12 reference. It scans only IDs, names, email addresses,
 and status for eligible accounts, folds names and email addresses before
 slicing the result page, then loads profile, role, and callsign details only
-for that page.
+for that page. Login, recovery, account creation, and account updates also use
+Unicode case-folded Core email keys with a unique index; the forward migration
+checks legacy JSONB emails for case-fold collisions before cutover.
 
 Activity has an initial activation and single-QSO slice: activation list/create/read/close,
 normalized QSO writes, validity checks, ownership checks, subject aggregates,

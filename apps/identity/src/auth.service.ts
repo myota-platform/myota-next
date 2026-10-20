@@ -151,7 +151,7 @@ export class IdentityAuthService {
     let failure: Error | undefined;
     try {
       await client.query('BEGIN');
-      const normalizedEmail = input.email.trim().toLowerCase();
+      const normalizedEmail = unicodeCaseFold(input.email.trim());
       const accountResult = await client.query<AccountRow>(
         `SELECT a.id, a.display_name, a.email::text AS email, a.updated_at,
                 a.participation_type, a.status, c.password_hash,
@@ -161,7 +161,7 @@ export class IdentityAuthService {
            FROM public.account a
            LEFT JOIN public.account_credential c ON c.account_id = a.id
            LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
-          WHERE lower(btrim(a.email::text)) = $1
+          WHERE a.identity_email_key = $1
           FOR UPDATE OF a`,
         [normalizedEmail],
       );
@@ -318,7 +318,7 @@ export class IdentityAuthService {
   }
 
   async requestRecovery(email: string): Promise<Record<string, unknown>> {
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = unicodeCaseFold(email.trim());
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -328,7 +328,7 @@ export class IdentityAuthService {
       );
       const accountResult = await client.query<{ id: string }>(
         `SELECT id FROM public.account
-          WHERE lower(btrim(email::text)) = $1`,
+          WHERE identity_email_key = $1`,
         [normalizedEmail],
       );
       const account = accountResult.rows[0];

@@ -11,6 +11,7 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { writeOutboxEvent, writeSecurityEvent } from '@app/platform/outbox.js';
+import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import {
   IdentityAuthService,
   hashPassword,
@@ -79,7 +80,7 @@ export class IdentityAccountService {
         'passwords cannot be set during account creation; use the invitation setup flow',
       );
     }
-    const normalizedEmail = body.email.trim().toLowerCase();
+    const normalizedEmail = unicodeCaseFold(body.email.trim());
     if (!normalizedEmail.includes('@')) {
       throw new BadRequestException('email must be a valid address');
     }
@@ -122,7 +123,7 @@ export class IdentityAccountService {
 
       const duplicate = await client.query(
         `SELECT 1 FROM public.account
-          WHERE lower(btrim(email::text)) = $1`,
+          WHERE identity_email_key = $1`,
         [normalizedEmail],
       );
       if (duplicate.rowCount) {
@@ -835,11 +836,11 @@ export class IdentityAccountService {
       let emailKey: string | null = null;
       if ('email' in body) {
         email = body.email || null;
-        emailKey = email?.trim().toLowerCase() || null;
+        emailKey = email?.trim() ? unicodeCaseFold(email.trim()) : null;
         if (emailKey) {
           const duplicate = await client.query(
             `SELECT 1 FROM public.account
-              WHERE lower(btrim(email::text)) = $1 AND id <> $2`,
+              WHERE identity_email_key = $1 AND id <> $2`,
             [emailKey, accountId],
           );
           if (duplicate.rowCount) {
