@@ -240,19 +240,8 @@ export class ActivityService {
     });
   }
 
-  async getJob(authorization: string | undefined, id: string) {
-    const claims = verifyAccessToken(authorization);
-    const job = await this.repository.getJob(id);
-    const activationId = job.payload?.activationId;
-    if (activationId) {
-      const activation = await this.repository.get(activationId);
-      this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
-    } else if (
-      !claims.scp.some((scope) => ['*', 'activity.admin'].includes(scope))
-    ) {
-      throw new ForbiddenException('activity.admin scope is required');
-    }
-    return job;
+  async getJob(id: string) {
+    return this.repository.getJob(id);
   }
 
   async redriveWorkJob(

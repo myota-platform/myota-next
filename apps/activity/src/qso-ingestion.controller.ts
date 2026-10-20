@@ -34,10 +34,7 @@ export class QsoIngestionController {
   }
 
   @Get(':ingestionId')
-  get(
-    @Headers('authorization') authorization: string | undefined,
-    @Param('ingestionId') id: string,
-  ) {
-    return this.activity.getJob(authorization, id);
+  get(@Param('ingestionId') id: string) {
+    return this.activity.getJob(id);
   }
 }

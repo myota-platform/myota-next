@@ -42,11 +42,8 @@ export class ActivityOperationsController {
   }
 
   @Get('statistics/rebuild-jobs/:jobId')
-  getStatisticsRebuild(
-    @Headers('authorization') authorization: string | undefined,
-    @Param('jobId') jobId: string,
-  ) {
-    return this.activity.getJob(authorization, jobId);
+  getStatisticsRebuild(@Param('jobId') jobId: string) {
+    return this.activity.getJob(jobId);
   }
 
   @Get('notifications')
