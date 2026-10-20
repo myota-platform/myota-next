@@ -12,6 +12,7 @@ import {
   firstPythonTruthy,
   normalizeEntityTypeCodes,
 } from './geodata-entity-types.js';
+import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
@@ -348,7 +349,7 @@ function referenceInteger(value: unknown): number {
   if (typeof value === 'number') return Math.trunc(value);
   if (typeof value === 'boolean') return Number(value);
   if (typeof value !== 'string') return Number.NaN;
-  const normalized = value.trim();
+  const normalized = normalizePythonNumericText(value);
   if (!/^[+-]?\d(?:_?\d)*$/.test(normalized)) return Number.NaN;
   return Number(normalized.replaceAll('_', ''));
 }
