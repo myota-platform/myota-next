@@ -396,18 +396,6 @@ export class ActivityWorkRepository {
     const record = selected.rows[0];
     if (!record) throw new Error('ADIF import not found');
     if (['COMPLETED', 'FAILED'].includes(record.status)) return;
-    if (record.activation_status !== 'OPEN') {
-      await this.finishAdifImport(
-        client,
-        record,
-        0,
-        0,
-        1,
-        ['activation is not open'],
-        'FAILED',
-      );
-      return;
-    }
     let content: Buffer;
     try {
       content = await readObject(
@@ -458,6 +446,8 @@ export class ActivityWorkRepository {
         );
       }
     }
+    if (normalized.length && record.activation_status !== 'OPEN')
+      throw new Error('activation is not open');
     if (
       normalized.some(
         ({ qso }) =>
