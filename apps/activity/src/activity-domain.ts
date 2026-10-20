@@ -6,7 +6,9 @@ export type JsonRecord = Record<string, any>;
 export function parseTimestamp(value: string): Date {
   if (typeof value !== 'string')
     throw new BadRequestException('timestamp is invalid');
-  let normalized = value.replace(/([T ]\d{2}:\d{2}:\d{2}),(\d+)/, '$1.$2');
+  let normalized = value
+    .replace(/^(\d{4}(?:-\d{2}-\d{2}|\d{4}))t/i, '$1T')
+    .replace(/([T ]\d{2}:\d{2}:\d{2}),(\d+)/, '$1.$2');
   const compact =
     /^(\d{4})(\d{2})(\d{2})([T ])(\d{2})(\d{2})(\d{2})?([.,]\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?$/i.exec(
       normalized,
@@ -107,7 +109,10 @@ function validateTimestampFields(value: string) {
 export function normalizeTimestamp(value: string | Date): string {
   if (!(value instanceof Date) && typeof value !== 'string')
     throw new BadRequestException('timestamp is invalid');
-  const raw = value instanceof Date ? value.toISOString() : value;
+  const raw =
+    value instanceof Date
+      ? value.toISOString()
+      : value.replace(/^(\d{4}(?:-\d{2}-\d{2}|\d{4}))t/i, '$1T');
   const date = parseTimestamp(raw);
   const fraction = /[T ]\d{2}:\d{2}:\d{2}[.,](\d+)/.exec(raw)?.[1] ?? '';
   const microseconds = fraction.slice(0, 6).padEnd(6, '0');

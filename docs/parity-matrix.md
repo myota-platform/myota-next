@@ -54,7 +54,9 @@ checks legacy JSONB emails for case-fold collisions before cutover.
 Activity has an initial activation and single-QSO slice: activation list/create/read/close,
 normalized QSO writes, validity checks, ownership checks, subject aggregates,
 transactional event outbox records, idempotency responses, and award recalculation
-jobs. QSO ingestion requests also persist bounded, owner-scoped jobs with a status
+jobs. Timestamp normalization accepts the lowercase ISO `t` separator supported
+by Python's `datetime.fromisoformat`. QSO ingestion requests also persist bounded,
+owner-scoped jobs with a status
 read path, and the separate Activity worker consumes its six registered JetStream
 durables with database leases, progress acknowledgements, retries, and dead-letter
 state. Activity notification events use a separate durable consumer. Recovery
