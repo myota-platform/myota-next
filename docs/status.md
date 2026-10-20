@@ -246,7 +246,9 @@
   distinct import. The worker decodes and normalizes the ADIF
   file before row processing, so parser failures fail the import. Later
   per-record failures are reported alongside persisted QSOs and aggregate
-  updates. Timestamp parsing preserves the Python reference's ISO week dates,
+  updates. An out-of-window QSO aborts the batch without writing rows, and the
+  work job retries and dead-letters while the import remains `PROCESSING`, as
+  in the Python reference. Timestamp parsing preserves the Python reference's ISO week dates,
   one-character date/time separators, compact ISO date and time forms,
   slash-separated QSO dates with compact times, and UTC offsets with hours,
   minutes, seconds, or fractional seconds.

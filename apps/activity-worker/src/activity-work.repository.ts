@@ -199,6 +199,18 @@ export class ActivityWorkRepository {
       if (!lease.rows[0])
         throw new Error('worker lease was lost before processing');
       if (job.kind === 'ADIF_IMPORT') {
+        await client.query(
+          "UPDATE activity_import SET status='PROCESSING',started_at=now() WHERE id=$1 AND status='QUEUED'",
+          [job.payload.importId],
+        );
+        await client.query('COMMIT');
+        await client.query('BEGIN');
+        const currentLease = await client.query(
+          `SELECT id FROM activity_job WHERE id=$1 AND status='RUNNING' AND lease_token=$2`,
+          [job.id, job.leaseToken],
+        );
+        if (!currentLease.rows[0])
+          throw new Error('worker lease was lost before processing');
         await this.processAdifImport(client, job.payload);
       } else if (job.kind === 'QSO_INGESTION') {
         const activationResult = await client.query(
@@ -384,10 +396,6 @@ export class ActivityWorkRepository {
     const record = selected.rows[0];
     if (!record) throw new Error('ADIF import not found');
     if (['COMPLETED', 'FAILED'].includes(record.status)) return;
-    await client.query(
-      "UPDATE activity_import SET status='PROCESSING',started_at=COALESCE(started_at,now()) WHERE id=$1",
-      [importId],
-    );
     if (record.activation_status !== 'OPEN') {
       await this.finishAdifImport(
         client,
@@ -462,16 +470,7 @@ export class ActivityWorkRepository {
             ) > 0),
       )
     ) {
-      await this.finishAdifImport(
-        client,
-        record,
-        rows.length,
-        0,
-        rows.length,
-        ['QSO is outside the activation validity window'],
-        'FAILED',
-      );
-      return;
+      throw new Error('a QSO is outside the activation validity window');
     }
     const recordNumbers = new Map<string, number>();
     for (const item of normalized)
