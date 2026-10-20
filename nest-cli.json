@@ -114,6 +114,15 @@
       "entryFile": "index",
       "sourceRoot": "libs/platform/src",
       "compilerOptions": { "tsConfigPath": "libs/platform/tsconfig.lib.json" }
+    },
+    "geodata-domain": {
+      "type": "library",
+      "root": "libs/geodata-domain",
+      "entryFile": "index",
+      "sourceRoot": "libs/geodata-domain/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/geodata-domain/tsconfig.lib.json"
+      }
     }
   }
 }

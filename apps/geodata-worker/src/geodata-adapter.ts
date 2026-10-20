@@ -1,4 +1,5 @@
 import proj4 from 'proj4';
+import { normalizeAttachmentMetadata } from '@app/geodata-domain';
 import { inferFeatureName } from './geodata-feature-name.js';
 
 const OSM_REQUIRED_TAGS = [
@@ -52,6 +53,9 @@ export function normalizeAdapterFeature(
     ? feature.properties
     : feature.tags;
   const properties = isRecord(rawProperties) ? { ...rawProperties } : {};
+  properties.attachments = normalizeAttachmentMetadata(
+    pythonOr(feature.attachments, properties.attachments, undefined),
+  );
   if (way) {
     if (!Object.hasOwn(properties, 'featureType'))
       properties.featureType = 'way';
@@ -106,6 +110,9 @@ function normalizeGovernmentFeature(
     isTruthy(feature.properties) && isRecord(feature.properties)
       ? { ...feature.properties }
       : {};
+  properties.attachments = normalizeAttachmentMetadata(
+    pythonOr(feature.attachments, properties.attachments, undefined),
+  );
   const sourceFormat = String(
     properties.sourceFormat || properties.format || 'GEOJSON',
   ).toUpperCase();

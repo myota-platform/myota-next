@@ -71,3 +71,7 @@ applications. Use Node.js 24 LTS and NestJS 12 as the
 initial runtime baseline. Persistence libraries remain an implementation
 choice, but must support explicit SQL migrations, PostgreSQL transactions,
 PostGIS operations, and clear connection ownership per service.
+
+Place domain rules shared by a service API and its workers in a service-owned
+library, such as `libs/geodata-domain`. Keep cross-cutting runtime facilities
+in `libs/platform`; do not put service-specific validation there.

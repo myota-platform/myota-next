@@ -21,7 +21,9 @@
     "types": ["vitest/globals", "node"],
     "paths": {
       "@app/platform": ["./libs/platform/src/index.ts"],
-      "@app/platform/*": ["./libs/platform/src/*"]
+      "@app/platform/*": ["./libs/platform/src/*"],
+      "@app/geodata-domain": ["./libs/geodata-domain/src/index.ts"],
+      "@app/geodata-domain/*": ["./libs/geodata-domain/src/*"]
     }
   },
   "files": [],
@@ -37,6 +39,7 @@
     { "path": "./apps/geodata-worker/tsconfig.app.json" },
     { "path": "./apps/email-worker/tsconfig.app.json" },
     { "path": "./apps/outbox-worker/tsconfig.app.json" },
-    { "path": "./libs/platform/tsconfig.lib.json" }
+    { "path": "./libs/platform/tsconfig.lib.json" },
+    { "path": "./libs/geodata-domain/tsconfig.lib.json" }
   ]
 }
