@@ -408,8 +408,11 @@ async function reverseGeocode(
     process.env.BIGDATACLOUD_REVERSE_GEOCODE_URL ??
     'https://api-bdc.net/data/reverse-geocode';
   const url = new URL(endpoint);
-  url.searchParams.set('latitude', String(coordinates[1]));
-  url.searchParams.set('longitude', String(coordinates[0]));
+  url.searchParams.set('latitude', String(roundToFiveDecimals(coordinates[1])));
+  url.searchParams.set(
+    'longitude',
+    String(roundToFiveDecimals(coordinates[0])),
+  );
   url.searchParams.set(
     'localityLanguage',
     process.env.BIGDATACLOUD_LOCALITY_LANGUAGE ?? 'en',
@@ -526,6 +529,9 @@ function boundedTimeout(value: string | undefined) {
   return Number.isFinite(seconds) && seconds >= 1 && seconds <= 60
     ? seconds * 1000
     : 10000;
+}
+function roundToFiveDecimals(value: number) {
+  return Number(value.toFixed(5));
 }
 function text(value: unknown) {
   return typeof value === 'string' ? value : '';
