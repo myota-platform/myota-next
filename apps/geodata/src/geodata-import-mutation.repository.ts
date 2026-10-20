@@ -36,8 +36,7 @@ export class GeodataImportMutationRepository {
         !isUuid(body.survivorEntityId))
     )
       throw new BadRequestException('survivorEntityId must be a UUID');
-    const note =
-      typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
+    const note = typeof body.note === 'string' ? body.note : null;
     const client = await this.connect();
     try {
       await client.query('BEGIN');

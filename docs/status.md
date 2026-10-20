@@ -376,7 +376,8 @@
   A worker restart recovers runs left in the CANCELLING state.
   Persisted conflation candidates can be paged by resolution and resolved with
   reviewer history, idempotency, and a transactional outbox fact. Decision
-  values retain the reference's case-sensitive enum validation. The Admin
+  values retain the reference's case-sensitive enum validation, and review
+  notes are stored without truncation. The Admin
   includes a role-gated conflation workspace for filtering candidates, inspecting
   match signals and prior decisions, and recording resolutions. Entity import
   promotion now searches overlapping PostGIS bounding boxes, computes the
