@@ -29,7 +29,7 @@ export class GeodataDeletionService {
     const claims = verifyAccessToken(authorization);
     const entityId = typeof body.entityId === 'string' ? body.entityId : '';
     const requestedBy =
-      typeof body.requestedBy === 'string' ? body.requestedBy.trim() : '';
+      typeof body.requestedBy === 'string' ? body.requestedBy : '';
     if (!entityId || !requestedBy)
       throw new BadRequestException('entityId and requestedBy are required');
     const client = await this.connect();
@@ -169,10 +169,9 @@ export class GeodataDeletionService {
     const claims = verifyAccessToken(authorization);
     const confirmation =
       typeof body.confirmation === 'string'
-        ? body.confirmation.trim().toUpperCase()
+        ? body.confirmation.toUpperCase()
         : '';
-    const deletedBy =
-      typeof body.deletedBy === 'string' ? body.deletedBy.trim() : '';
+    const deletedBy = typeof body.deletedBy === 'string' ? body.deletedBy : '';
     if (confirmation !== 'DELETE' || !deletedBy)
       throw new BadRequestException(
         'confirmation must be DELETE and deletedBy is required',

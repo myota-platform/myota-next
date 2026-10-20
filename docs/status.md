@@ -259,8 +259,8 @@
   geometry, category, and manual location edits are also audited. Category
   codes use Python's Unicode whitespace stripping rules. Location
   names, entity names, location values, websites, and descriptions now use
-  Python whitespace stripping and code-point length rules. Entity and import
-  audit actor IDs retain submitted values without trimming, and import
+  Python whitespace stripping and code-point length rules. Entity, import, and
+  deletion audit actor IDs retain submitted values without trimming; import
   finalization defaults to `administrator` when no actor is supplied. Location
   names are
   checked against the provider catalogue, provider codes cannot be
