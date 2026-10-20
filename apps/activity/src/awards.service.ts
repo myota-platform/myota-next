@@ -44,23 +44,23 @@ export class AwardsService {
   ) {
     const claims = authorization ? verifyAccessToken(authorization) : null;
     if (claims) this.authorize(claims.scp, ['awards.read', 'awards.admin']);
-    let items = await this.repository.listAwardDefinitions();
-    if (!claims) items = items.filter((award) => award.status === 'PUBLISHED');
-    if (query.programme)
-      items = items.filter((award) => award.programmeSlug === query.programme);
-    if (query.category)
-      items = items.filter(
-        (award) => award.category === query.category?.toUpperCase(),
-      );
     const page = parsePageInteger(query.page, 1);
     const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
-    const start = (page - 1) * pageSize;
+    const offset = (BigInt(page) - 1n) * BigInt(pageSize);
+    const result = await this.repository.listAwardDefinitionsPage(
+      query.programme,
+      query.category?.toUpperCase(),
+      !claims,
+      offset,
+      pageSize,
+    );
     return {
-      items: items.slice(start, start + pageSize),
+      items: result.items,
       page,
       pageSize,
-      total: items.length,
-      nextPage: start + pageSize < items.length ? page + 1 : null,
+      total: result.total,
+      nextPage:
+        offset + BigInt(pageSize) < BigInt(result.total) ? page + 1 : null,
     };
   }
 

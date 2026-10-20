@@ -265,7 +265,9 @@
 - Award definitions now support public published-only reads, administrative
   draft create/edit, review submission and decisions, print-readiness
   validation, publication, and retirement. Saved and published facts commit to
-  the Activity outbox with their definition updates. Award evaluation and
+  the Activity outbox with their definition updates. Listing filters, counting,
+  and paging now run in Activity PostgreSQL so the API reads only one page.
+  Award evaluation and
   historical recalculation jobs use service-owned facts, persist versioned
   progress, and create deduplicated qualification notifications. Participant
   progress reads evaluate and persist the current aggregate snapshot. Award

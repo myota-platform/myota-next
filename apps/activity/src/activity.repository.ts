@@ -392,13 +392,45 @@ export class ActivityRepository {
     });
   }
 
-  async listAwardDefinitions(): Promise<JsonRecord[]> {
+  async listAwardDefinitionsPage(
+    programme: string | undefined,
+    category: string | undefined,
+    publishedOnly: boolean,
+    offset: bigint,
+    pageSize: number,
+  ): Promise<{ items: JsonRecord[]; total: number }> {
     const client = await this.connect();
     try {
       const result = await client.query(
-        'SELECT definition FROM activity_award_definition ORDER BY programme_slug,code,version',
+        `WITH filtered AS MATERIALIZED (
+           SELECT definition,programme_slug,code,version
+           FROM activity_award_definition
+           WHERE ($1::text IS NULL OR programme_slug=$1)
+             AND ($2::text IS NULL OR definition->>'category'=$2)
+             AND (NOT $3::boolean OR status='PUBLISHED')
+         ), page_rows AS MATERIALIZED (
+           SELECT definition FROM filtered
+           ORDER BY programme_slug,code,version
+           LIMIT $5 OFFSET $4::bigint
+         ), total AS (
+           SELECT count(*) AS value FROM filtered
+         )
+         SELECT total.value,page_rows.definition
+         FROM total LEFT JOIN page_rows ON TRUE`,
+        [
+          programme ?? null,
+          category ?? null,
+          publishedOnly,
+          offset.toString(),
+          pageSize,
+        ],
       );
-      return result.rows.map((row) => row.definition);
+      return {
+        items: result.rows
+          .filter((row) => row.definition !== null)
+          .map((row) => row.definition),
+        total: Number(result.rows[0]?.value ?? 0),
+      };
     } finally {
       client.release();
     }
