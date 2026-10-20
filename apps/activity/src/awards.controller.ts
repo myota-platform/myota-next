@@ -13,6 +13,7 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { firstQueryValue } from '@app/platform/query.js';
 import { AwardsService } from './awards.service.js';
 
 @Controller('awards')
@@ -24,13 +25,18 @@ export class AwardsController {
     @Headers('authorization') authorization: string | undefined,
     @Query()
     query: {
-      programme?: string;
-      category?: string;
-      page?: string;
-      pageSize?: string;
+      programme?: string | string[];
+      category?: string | string[];
+      page?: string | string[];
+      pageSize?: string | string[];
     },
   ) {
-    return this.awards.list(authorization, query);
+    return this.awards.list(authorization, {
+      programme: firstQueryValue(query.programme),
+      category: firstQueryValue(query.category),
+      page: firstQueryValue(query.page),
+      pageSize: firstQueryValue(query.pageSize),
+    });
   }
 
   @Post()
@@ -62,10 +68,15 @@ export class AwardsController {
   @Get('progress')
   progress(
     @Headers('authorization') authorization: string | undefined,
-    @Query('awardId') awardId = '',
-    @Query('participantId') participantId = '',
+    @Query('awardId') awardId?: string | string[],
+    @Query('participantId') participantId?: string | string[],
+    @Query('subjectId') subjectId?: string | string[],
   ) {
-    return this.awards.progress(authorization, awardId, participantId);
+    return this.awards.progress(
+      authorization,
+      firstQueryValue(awardId) ?? '',
+      firstQueryValue(participantId) ?? firstQueryValue(subjectId) ?? '',
+    );
   }
 
   @Post('previews')
@@ -81,9 +92,17 @@ export class AwardsController {
   listRequests(
     @Headers('authorization') authorization: string | undefined,
     @Query()
-    query: { subjectId?: string; page?: string; pageSize?: string },
+    query: {
+      subjectId?: string | string[];
+      page?: string | string[];
+      pageSize?: string | string[];
+    },
   ) {
-    return this.awards.listRequests(authorization, query);
+    return this.awards.listRequests(authorization, {
+      subjectId: firstQueryValue(query.subjectId),
+      page: firstQueryValue(query.page),
+      pageSize: firstQueryValue(query.pageSize),
+    });
   }
 
   @Post('requests')
@@ -107,9 +126,12 @@ export class AwardsController {
   @Get('issuances')
   listIssuances(
     @Headers('authorization') authorization: string | undefined,
-    @Query() query: { page?: string; pageSize?: string },
+    @Query() query: { page?: string | string[]; pageSize?: string | string[] },
   ) {
-    return this.awards.listIssuances(authorization, query);
+    return this.awards.listIssuances(authorization, {
+      page: firstQueryValue(query.page),
+      pageSize: firstQueryValue(query.pageSize),
+    });
   }
 
   @Post('issuances/:issuanceId/render-jobs')
@@ -142,9 +164,12 @@ export class AwardsController {
   @Get('assets')
   listAssets(
     @Headers('authorization') authorization: string | undefined,
-    @Query() query: { page?: string; pageSize?: string },
+    @Query() query: { page?: string | string[]; pageSize?: string | string[] },
   ) {
-    return this.awards.listAssets(authorization, query);
+    return this.awards.listAssets(authorization, {
+      page: firstQueryValue(query.page),
+      pageSize: firstQueryValue(query.pageSize),
+    });
   }
 
   @Post('assets')

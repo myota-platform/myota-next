@@ -8,6 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { firstQueryValue } from '@app/platform/query.js';
 import { ActivityService } from './activity.service.js';
 
 @Controller()
@@ -17,9 +18,18 @@ export class ActivityOperationsController {
   @Get('statistics')
   statistics(
     @Headers('authorization') authorization: string | undefined,
-    @Query() query: { programme?: string; page?: string; pageSize?: string },
+    @Query()
+    query: {
+      programme?: string | string[];
+      page?: string | string[];
+      pageSize?: string | string[];
+    },
   ) {
-    return this.activity.listStatistics(authorization, query);
+    return this.activity.listStatistics(authorization, {
+      programme: firstQueryValue(query.programme),
+      page: firstQueryValue(query.page),
+      pageSize: firstQueryValue(query.pageSize),
+    });
   }
 
   @Post('statistics/rebuild-jobs')
@@ -45,12 +55,16 @@ export class ActivityOperationsController {
     @Headers('authorization') authorization: string | undefined,
     @Query()
     query: {
-      recipientId?: string;
-      page?: string;
-      pageSize?: string;
+      recipientId?: string | string[];
+      page?: string | string[];
+      pageSize?: string | string[];
     },
   ) {
-    return this.activity.listNotifications(authorization, query);
+    return this.activity.listNotifications(authorization, {
+      recipientId: firstQueryValue(query.recipientId),
+      page: firstQueryValue(query.page),
+      pageSize: firstQueryValue(query.pageSize),
+    });
   }
 
   @Post('activity/work-jobs/:jobId/redrive')
