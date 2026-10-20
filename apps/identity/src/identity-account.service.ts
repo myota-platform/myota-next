@@ -158,11 +158,12 @@ export class IdentityAccountService {
             'identity.roles.assign scope is required',
           );
         }
-        const catalogue = await this.roleService.listAdminRoles(authorization);
+        const definitions =
+          await this.roleService.readRoleDefinitionsForTransaction(client);
         grants = this.validateRoleGrants(
           additionalAssignments,
           actorScopes,
-          catalogue.items as RoleDefinition[],
+          definitions,
         );
       }
 
