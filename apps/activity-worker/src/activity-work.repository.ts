@@ -441,16 +441,6 @@ export class ActivityWorkRepository {
           { ...rows[index], source: 'adif', sourceImportId: importId },
           String(record.activation_id),
         );
-        if (
-          compareTimestamps(qso.timestamp, record.activation_started_at_iso) <
-            0 ||
-          (record.activation_validity_expires_at_iso &&
-            compareTimestamps(
-              qso.timestamp,
-              record.activation_validity_expires_at_iso,
-            ) > 0)
-        )
-          throw new Error('QSO is outside the activation validity window');
         if (qso.hunterId) awardSubjects.add(String(qso.hunterId));
         normalized.push({ index, qso });
       } catch (error) {
@@ -459,6 +449,29 @@ export class ActivityWorkRepository {
           `record ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
+    }
+    if (
+      normalized.some(
+        ({ qso }) =>
+          compareTimestamps(qso.timestamp, record.activation_started_at_iso) <
+            0 ||
+          (record.activation_validity_expires_at_iso &&
+            compareTimestamps(
+              qso.timestamp,
+              record.activation_validity_expires_at_iso,
+            ) > 0),
+      )
+    ) {
+      await this.finishAdifImport(
+        client,
+        record,
+        rows.length,
+        0,
+        rows.length,
+        ['QSO is outside the activation validity window'],
+        'FAILED',
+      );
+      return;
     }
     const recordNumbers = new Map<string, number>();
     for (const item of normalized)
