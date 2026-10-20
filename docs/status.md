@@ -164,7 +164,7 @@
   database deduplication, per-record outbox events, and first-record keyed award
   recalculation, matching the reference batch path. Its `/healthz` and `/readyz` endpoints expose liveness
   and database/NATS readiness on `ACTIVITY_WORKER_HEALTH_PORT`. Public
-  activation history masks operator callsigns, leaderboards use subject
+  activation history normalizes and masks operator callsigns, leaderboards use subject
   aggregates, and result exports support
   JSON and CSV. QSO correction requests and administrator review now use
   transactional Activity persistence; applying a correction queues award

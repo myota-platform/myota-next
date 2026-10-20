@@ -18,6 +18,7 @@ import { ActivityRepository } from './activity.repository.js';
 import { parseQsoCsv } from './qso-csv.js';
 import {
   normalizeActivation,
+  normalizeCallsign,
   normalizeQso,
   normalizeTimestamp,
   type JsonRecord,
@@ -575,6 +576,7 @@ async function scanUpload(content: Buffer, filename: string) {
 }
 
 function maskCallsign(value: string) {
-  if (value.length <= 3) return '***';
-  return `${value.slice(0, 2)}***${value.slice(-1)}`;
+  const normalized = normalizeCallsign(value);
+  if (normalized.length <= 3) return '***';
+  return `${normalized.slice(0, 2)}***${normalized.slice(-1)}`;
 }
