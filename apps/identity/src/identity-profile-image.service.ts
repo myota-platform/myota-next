@@ -160,9 +160,10 @@ export class IdentityProfileImageService {
            profile_image_updated_at = EXCLUDED.profile_image_updated_at`,
         [actorId, imageId, updatedAt],
       );
+      const accountUpdatedAt = new Date();
       await client.query(
         'UPDATE public.account SET updated_at = $2 WHERE id = $1',
-        [actorId, updatedAt],
+        [actorId, accountUpdatedAt],
       );
       const profileImage = {
         id: imageId,

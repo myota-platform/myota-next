@@ -68,7 +68,8 @@ and dimensions above 4096 pixels, honor EXIF orientation, center-crop to 512 by
 256 KiB output cap in both the Pillow and Sharp paths. Sharp ignores embedded
 ICC profiles during normalization to match Pillow's direct channel conversion.
 Byte-level rendition equivalence across resizing and WebP encoding still needs
-representative fixtures.
+representative fixtures. Profile-image and account update timestamps are
+assigned independently, matching the reference's two clock reads.
 Identity startup now idempotently provisions the configured bootstrap account,
 sets its password only when no credential exists, ensures its global operator
 role, and writes the corresponding Core outbox and security events.
