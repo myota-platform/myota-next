@@ -71,9 +71,19 @@ remains archived.
    database targets. Verify required PostgreSQL extensions and cluster roles,
    including Geodata's PostGIS and QGIS roles, on the destination cluster.
 5. Restore each source owner into its matching destination without changing
-   owner boundaries. Convert the verified Python migration ledger entries to
-   the NestJS ledger format; reject unknown migration IDs, checksum drift, or
-   a source schema outside the verified migration history.
+   owner boundaries. After the restored destination passes preflight, convert
+   its verified Python ledger with the owner-scoped adoption command. For
+   example:
+
+   ```sh
+   MYOTA_TRANSFER_LEDGER_CONFIRM='ADOPT PYTHON LEDGER core=target-host:5432/myota_core' \
+     npm run db:transfer:adopt-ledger -- --owner=core
+   ```
+
+   The command accepts only the known Python migration IDs and checksums. It
+   changes ledger metadata, not application rows. Reject unknown migration
+   IDs, checksum drift, or a source schema outside the verified history.
+
 6. Apply the NestJS forward migrations with the owner-scoped migration runner.
    A failure in one database stops cutover; restore all three destinations to
    their pre-transfer backups before retrying the transfer.
@@ -92,11 +102,12 @@ remains archived.
 
 ## Implementation gates
 
-The transfer tooling still needs migration-ledger conversion, checksummed
-staging, a target-specific destructive confirmation, and per-owner validation
-reports. A copy command must stage all three source dumps before modifying any
-target and must never begin copying until all six database targets and source
-migration ledgers pass preflight.
+The transfer tooling still needs a checksummed three-owner copy command, a
+target-specific destructive confirmation, and per-owner validation reports.
+The ledger adoption command is implemented but has not been rehearsed against
+disposable PostgreSQL databases. A copy command must stage all three source
+dumps before modifying any target and must never begin copying until all six
+database targets and source migration ledgers pass preflight.
 
 Do not run a production transfer until the tool has been rehearsed on
 disposable copies of all three databases, destination role and grant handling
