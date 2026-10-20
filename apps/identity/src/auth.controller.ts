@@ -62,7 +62,9 @@ export class AuthController {
 
   @Post('auth/register')
   register(): never {
-    throw new ForbiddenException('Public registration is not available');
+    throw new ForbiddenException(
+      'public participant registration is unavailable until email verification and abuse controls are deployed',
+    );
   }
 
   @Post('auth/login')
