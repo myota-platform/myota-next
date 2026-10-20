@@ -156,27 +156,34 @@ multipolygon features using a temporary disk-backed node-location index.
 PBF source bytes stream to disk with checksum verification; the default upload
 limit is 256 MiB and can be raised to 512 MiB. Decoded PBF output is capped at
 128 MiB and streamed one feature at a time into four-record staging batches,
-with per-feature 16 MiB and 250,000 vertex limits and the configured feature
-cap. GeoJSON multipart uploads stream their source and yield one parsed
+with the configured per-feature byte limit (16 MiB by default), 250,000 vertex
+limit, and configured feature cap. GeoJSON multipart uploads stream their
+source and yield one parsed
 feature at a time, with a 256 MiB default upload cap (512 MiB maximum), 16 MiB
-per-feature size, 250,000 vertices, and the configured feature count. Prepared
-candidates and validation errors are staged by import attempt in Geodata
+per-feature size by default, 250,000 vertices, and the configured feature
+count. The shared `MYOTA_IMPORT_MAX_FEATURE_BYTES` setting controls decoded
+feature size in GeoJSON, KML/GPX, Shapefile, and PBF imports (16 MiB by
+default). Prepared candidates and validation errors are staged by import attempt in Geodata
 PostgreSQL; candidate creation, import status, processing queue, and the
 compatible outbox event are finalized atomically, with event arrays assembled
 in the database. Record hashes use Python float formatting and Unicode
 code-point key ordering. Streamed GeoJSON and direct GEOJSON/WFS JSON imports
-retain raw numeric tokens in features and injected root CRS values up to 16 MiB.
+retain raw numeric tokens in features and injected root CRS values within the
+configured decoded-size limit (`MYOTA_IMPORT_MAX_FEATURE_BYTES`, 16 MiB by
+default).
 Streamed root geometry documents converted into Features retain those tokens as
 well. Direct ArcGIS FeatureServer imports hash raw source records before API
 normalization. The scheduled Node importer preserves source numeric tokens in
-the generated Feature hashes it submits. Oversized root CRS values and
-generated Shapefile/PBF features can still lose integer-versus-float
-distinctions. The direct JSON import path materializes the normalized
-collection, while multipart GeoJSON streams source features.
+the generated Feature hashes it submits. Streamed imports reject features whose
+inherited CRS pushes their decoded size over the reference's configured limit.
+Generated Shapefile/PBF features can still lose integer-versus-float
+distinctions in their source hashes. The direct JSON import path materializes
+the normalized collection, while multipart GeoJSON streams source features.
 Shapefile multipart uploads stream to
 temporary disk and decode records one at a time, with a 256 MiB default upload
 cap (512 MiB maximum), 1 GiB expanded-size cap, 16 MiB
-per-feature size, 250,000 vertices, and the configured feature count. Less
+per-feature size by default, 250,000 vertices, and the configured feature
+count. Less
 common geometry types and uncommon CRS definitions still need compatibility
 qualification against the reference parser.
 Import adapters infer feature names from the reference alias catalogue before

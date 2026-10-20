@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { SAXParser, type SAXOptions } from 'sax';
+import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 
 type Feature = {
@@ -9,7 +10,6 @@ type Feature = {
 };
 
 const maximumXmlBytes = 20 * 1024 * 1024;
-const maximumFeatureBytes = 16 * 1024 * 1024;
 const maximumFeatures = 100_000;
 const maximumCoordinates = 250_000;
 
@@ -50,10 +50,11 @@ export function parseXmlImport(
   const local = (name: string) => name.split(':').at(-1) ?? name;
   const addFeature = (feature: Feature) => {
     if (
-      Buffer.byteLength(JSON.stringify(feature), 'utf8') > maximumFeatureBytes
+      Buffer.byteLength(JSON.stringify(feature), 'utf8') >
+      MAX_IMPORT_FEATURE_BYTES
     )
       fail(
-        `a source feature exceeds the configured decoded-size limit (${maximumFeatureBytes} bytes)`,
+        `a source feature exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
       );
     features.push(feature);
     if (features.length > maximumFeatures)

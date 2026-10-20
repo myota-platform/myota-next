@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { JSONParser } from '@streamparser/json';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
+import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
 
 const MAX_SOURCE_BYTES = 512 * 1024 * 1024;
-const MAX_FEATURE_BYTES = 16 * 1024 * 1024;
 const MAX_FEATURE_VERTICES = 250_000;
 const MAX_NESTING_DEPTH = 128;
 const PARSER_CHUNK_BYTES = 64 * 1024;
@@ -114,6 +114,7 @@ export async function readGeoJsonDocumentMetadata(
     crs: crsSourceKey === 'spatialReference' ? spatialReference : documentCrs,
     crsSourceKey,
     crsJson: rootValueGuard.rootValueJsonFor(crsSourceKey),
+    crsJsonTooLarge: rootValueGuard.rootValueWasTooLarge(crsSourceKey),
     rootType,
   };
 }
@@ -130,6 +131,7 @@ export async function* streamGeoJsonFeatures(
     crs: unknown;
     crsSourceKey: string;
     crsJson?: string;
+    crsJsonTooLarge?: boolean;
     sourceFeatureHashOverrides?: unknown[];
     rootType: unknown;
   },
@@ -232,6 +234,13 @@ export async function* streamGeoJsonFeatures(
               throw new Error(
                 `a source geometry exceeds the configured vertex limit (${MAX_FEATURE_VERTICES})`,
               );
+            if (
+              pythonTruthy(documentMetadata.crs) &&
+              documentMetadata.crsJsonTooLarge &&
+              isRecord(feature) &&
+              !Object.hasOwn(feature, 'crs')
+            )
+              throw featureSizeError();
             let inheritedDocumentCrs = false;
             if (
               pythonTruthy(documentMetadata.crs) &&
@@ -311,6 +320,7 @@ class GeoJsonResourceGuard {
   private completedFeatureJson: string[] = [];
   private completedFeatureReadIndex = 0;
   private rootValueJson = new Map<string, string>();
+  private oversizedRootValues = new Set<string>();
   private activeRootValueKey: string | undefined;
   private rootValueDepth = 0;
   private rootValueString = false;
@@ -337,6 +347,10 @@ class GeoJsonResourceGuard {
 
   rootValueJsonFor(key: string): string | undefined {
     return this.rootValueJson.get(key);
+  }
+
+  rootValueWasTooLarge(key: string): boolean {
+    return this.oversizedRootValues.has(key);
   }
 
   write(chunk: Uint8Array) {
@@ -455,8 +469,10 @@ class GeoJsonResourceGuard {
       throw new Error('GeoJSON root property name exceeds 1024 bytes');
     if (this.valueCandidate && this.stringBytes > 64)
       throw new Error('GeoJSON type value is invalid');
-    if (this.stringBytes > MAX_FEATURE_BYTES)
-      throw new Error('a GeoJSON string exceeds the 16 MiB feature-size limit');
+    if (this.stringBytes > MAX_IMPORT_FEATURE_BYTES)
+      throw new Error(
+        `a GeoJSON string exceeds the configured feature-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
+      );
     if (this.keyCandidate || this.valueCandidate) this.stringParts.push(byte);
     if (!this.escaped && byte === 0x22) {
       this.inString = false;
@@ -564,23 +580,23 @@ class GeoJsonResourceGuard {
   private finishScalarFeature(position: number) {
     if (
       this.scalarFeatureStart !== undefined &&
-      position - this.scalarFeatureStart + 1 > MAX_FEATURE_BYTES
+      position - this.scalarFeatureStart + 1 > MAX_IMPORT_FEATURE_BYTES
     )
-      throw new Error('a GeoJSON feature exceeds the 16 MiB size limit');
+      throw featureSizeError();
     this.scalarFeatureStart = undefined;
   }
 
   private checkFeatureSize(position: number) {
     if (
       this.activeFeatureStart !== undefined &&
-      position - this.activeFeatureStart + 1 > MAX_FEATURE_BYTES
+      position - this.activeFeatureStart + 1 > MAX_IMPORT_FEATURE_BYTES
     )
-      throw new Error('a GeoJSON feature exceeds the 16 MiB size limit');
+      throw featureSizeError();
     if (
       this.scalarFeatureStart !== undefined &&
-      position - this.scalarFeatureStart + 1 > MAX_FEATURE_BYTES
+      position - this.scalarFeatureStart + 1 > MAX_IMPORT_FEATURE_BYTES
     )
-      throw new Error('a GeoJSON feature exceeds the 16 MiB size limit');
+      throw featureSizeError();
   }
 
   private beginRootValueCapture(byte: number, localIndex: number) {
@@ -613,7 +629,7 @@ class GeoJsonResourceGuard {
       (total, part) => total + part.length,
       0,
     );
-    if (size + bytes.length > MAX_FEATURE_BYTES) {
+    if (size + bytes.length > MAX_IMPORT_FEATURE_BYTES) {
       this.rootValueParts = [];
       this.rootValueOverflow = true;
       return;
@@ -634,11 +650,15 @@ class GeoJsonResourceGuard {
         ),
       );
     }
-    if (!this.rootValueOverflow && this.activeRootValueKey !== undefined)
-      this.rootValueJson.set(
-        this.activeRootValueKey,
-        Buffer.concat(this.rootValueParts).toString('utf8'),
-      );
+    if (this.activeRootValueKey !== undefined) {
+      if (this.rootValueOverflow)
+        this.oversizedRootValues.add(this.activeRootValueKey);
+      else
+        this.rootValueJson.set(
+          this.activeRootValueKey,
+          Buffer.concat(this.rootValueParts).toString('utf8'),
+        );
+    }
     this.activeRootValueKey = undefined;
     this.rootValueDepth = 0;
     this.rootValueString = false;
@@ -647,6 +667,12 @@ class GeoJsonResourceGuard {
     this.rootValueParts = [];
     this.rootValueSegmentStart = undefined;
   }
+}
+
+function featureSizeError() {
+  return new Error(
+    `a source feature exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
+  );
 }
 
 function countFeatureVertices(value: unknown): number {

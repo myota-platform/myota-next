@@ -7,11 +7,12 @@ import { pipeline } from 'node:stream/promises';
 import proj4, { type Converter } from 'proj4';
 import yauzl from 'yauzl';
 import { open as openShapefile } from 'shapefile';
+import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
 
 const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 1024 * 1024 * 1024;
 const MAX_ARCHIVE_MEMBERS = 100;
-const MAX_RECORD_BYTES = 16 * 1024 * 1024;
+const MAX_RECORD_BYTES = MAX_IMPORT_FEATURE_BYTES;
 const MAX_FEATURE_VERTICES = 250_000;
 const MAX_METADATA_BYTES = 1024 * 1024;
 
@@ -167,7 +168,9 @@ export async function* streamShapefileFeatures(
           : result.value;
         const encodedBytes = Buffer.byteLength(JSON.stringify(feature));
         if (encodedBytes > MAX_RECORD_BYTES)
-          throw new Error('a Shapefile feature exceeds the 16 MiB size limit');
+          throw new Error(
+            `a source feature exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
+          );
         if (countVertices(feature) > MAX_FEATURE_VERTICES)
           throw new Error(
             `a source geometry exceeds the configured vertex limit (${MAX_FEATURE_VERTICES})`,
@@ -357,7 +360,9 @@ async function validateShapeRecords(path: string, fileBytes: number) {
         throw new Error('shapefile record header is truncated');
       const contentBytes = header.readUInt32BE(4) * 2;
       if (contentBytes > MAX_RECORD_BYTES)
-        throw new Error('a shapefile record exceeds the 16 MiB size limit');
+        throw new Error(
+          `a shapefile record exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
+        );
       position += header.length + contentBytes;
       if (position > fileBytes)
         throw new Error('shapefile record data is truncated');

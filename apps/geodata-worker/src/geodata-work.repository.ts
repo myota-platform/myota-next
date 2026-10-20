@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
 import { pythonFloatString } from '@app/platform/python-number.js';
 import {
   canonicalPythonGeoJsonFeature,
@@ -1418,6 +1419,10 @@ function hashCanonicalJson(
             'crs',
             sourceJson.inheritedCrsJson,
           );
+    if (Buffer.byteLength(canonical, 'utf8') > MAX_IMPORT_FEATURE_BYTES)
+      throw new Error(
+        `a source feature exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
+      );
     return createHash('sha256').update(canonical, 'utf8').digest('hex');
   }
   const canonical = (item: unknown): string => {

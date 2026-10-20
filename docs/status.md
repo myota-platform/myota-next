@@ -390,7 +390,7 @@
   required; DBF text uses PyShp's UTF-8 default and `.cpg` files are ignored,
   matching the reference loader.
   Pasted-import creation also decodes bounded KML and GPX to GeoJSON, applying
-  a 16 MiB decoded-feature limit and the 250,000 coordinate ceiling per
+  the shared decoded-feature limit and the 250,000 coordinate ceiling per
   emitted geometry or GPX track segment.
   OSM PBF
   uploads now decode in the Geodata worker with osmium-tool. The converter
@@ -402,18 +402,20 @@
   `MYOTA_OSM_PBF_MAX_UPLOAD_BYTES`. Decoded output is capped at 128 MiB, with
   features streamed one at a time into four-record staging batches, 16 MiB and
   250,000 vertices per feature, plus the configured feature cap.
-  GeoJSON and Shapefile upload parsing enforce 16 MiB and 250,000 vertices per
-  feature. Prepared candidates and validation errors are attempt-scoped in the
+  GeoJSON, KML, GPX, Shapefile, and PBF parsing use the shared
+  `MYOTA_IMPORT_MAX_FEATURE_BYTES` decoded-size limit (16 MiB by default) and
+  enforce 250,000 vertices per feature. Prepared candidates and validation errors are attempt-scoped in the
   Geodata database; per-record hashes and source manifests use Python float
   formatting and Unicode code-point key ordering. Streamed GeoJSON features
   and direct GEOJSON/WFS JSON imports retain raw numeric tokens so `1` and
   `1.0` hash as distinct Python integer and float values, including inherited
-  root CRS values up to 16 MiB and streamed root geometry documents converted
+  root CRS values within the configured decoded-size limit and streamed root geometry documents converted
   into Features. Direct ArcGIS FeatureServer imports hash the raw source records
   before service normalization. The scheduled Node importer also preserves the
   source numeric tokens in the generated Feature hashes it submits. Oversized
-  root CRS values and generated Shapefile/PBF features can still lose that
-  distinction.
+  features with injected CRS now fail the same configured decoded-size check as the
+  reference. Generated Shapefile/PBF features can still lose integer-versus-
+  float distinctions in their source hashes.
   Candidate creation, queue creation, status, hashes, and outbox events
   finalize in one transaction. The final event is assembled in PostgreSQL to avoid
   retaining every feature summary in the worker heap.
