@@ -86,7 +86,7 @@ async function main() {
           `${owner} destination is missing source ACL roles: ${missingTargetRoles.join(', ')}`,
         );
       if (owner === 'geo')
-        await assertPostgisAvailable(sourceClient, targetClient);
+        await assertGeoExtensionsAvailable(sourceClient, targetClient);
       const objectCount = await targetClient.query<{ count: string }>(`
         WITH application_objects AS (
           SELECT n.nspname AS schema_name,c.relname AS object_name
@@ -233,27 +233,55 @@ async function aclRoles(client: Client): Promise<string[]> {
   return result.rows.map((row) => row.rolname);
 }
 
-async function assertPostgisAvailable(source: Client, target: Client) {
+async function assertGeoExtensionsAvailable(source: Client, target: Client) {
+  const required = [
+    'fuzzystrmatch',
+    'pgcrypto',
+    'postgis',
+    'postgis_tiger_geocoder',
+    'postgis_topology',
+  ];
   const sourceInstalled = await source.query<{
-    version: string | null;
-  }>(`
-    SELECT extversion AS version FROM pg_extension WHERE extname='postgis'
-  `);
-  const sourceVersion = sourceInstalled.rows[0]?.version;
-  if (!sourceVersion)
-    throw new Error('Geodata source database does not have PostGIS installed');
-  const targetAvailable = await target.query<{ available: boolean }>(
+    name: string;
+    version: string;
+  }>(
     `
-    SELECT EXISTS (
-      SELECT 1 FROM pg_available_extension_versions
-       WHERE name='postgis' AND version=$1
-    ) AS available
+    SELECT extname AS name,extversion AS version
+      FROM pg_extension
+     WHERE extname=ANY($1::text[])
+     ORDER BY extname
   `,
-    [sourceVersion],
+    [required],
   );
-  if (!targetAvailable.rows[0]?.available)
+  const versions = new Map(
+    sourceInstalled.rows.map(({ name, version }) => [name, version]),
+  );
+  const missingSource = required.filter((name) => !versions.has(name));
+  if (missingSource.length)
     throw new Error(
-      `Geodata destination server does not provide PostGIS ${sourceVersion}`,
+      `Geodata source database is missing required extensions: ${missingSource.join(', ')}`,
+    );
+
+  const targetAvailable = await target.query<{
+    name: string;
+    version: string;
+  }>(
+    `
+    SELECT name,version
+      FROM pg_available_extension_versions
+     WHERE name=ANY($1::text[])
+  `,
+    [required],
+  );
+  const available = new Set(
+    targetAvailable.rows.map(({ name, version }) => `${name}@${version}`),
+  );
+  const missingTarget = required.filter(
+    (name) => !available.has(`${name}@${versions.get(name)}`),
+  );
+  if (missingTarget.length)
+    throw new Error(
+      `Geodata destination server does not provide source extension versions: ${missingTarget.map((name) => `${name}@${versions.get(name)}`).join(', ')}`,
     );
 }
 

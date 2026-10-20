@@ -20,9 +20,10 @@ npm run db:transfer:preflight
 The command makes read-only PostgreSQL connections. It requires six distinct
 host/port/database targets, verifies the source migration ledger and known
 checksums for each owner, checks that source ACL roles exist on the matching
-destination, verifies PostGIS availability, and reports destination
-migration-ledger shape and non-extension application object counts. It does
-not modify either side.
+destination, verifies that the Geodata destination provides each required
+extension at the source version, and reports destination migration-ledger
+shape and non-extension application object counts. It does not modify either
+side.
 
 Stage source dumps and destination recovery dumps in a new private directory:
 
