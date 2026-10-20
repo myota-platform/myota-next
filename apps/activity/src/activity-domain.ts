@@ -597,6 +597,16 @@ function sliceAdifValue(value: string, lengthText?: string): string {
   return Array.from(value).slice(0, Number(length)).join('');
 }
 
+export function calculateAdifRejectedRecords(
+  recordsSeen: number,
+  recordsAccepted: number,
+  normalizationErrorCount: number,
+): number {
+  // Preserve the Python worker's persisted counter, including its additional
+  // normalization-error count on top of all non-accepted records.
+  return recordsSeen - recordsAccepted + normalizationErrorCount;
+}
+
 export function evaluateActivation(
   activation: JsonRecord,
   qsos: JsonRecord[],

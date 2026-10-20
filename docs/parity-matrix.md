@@ -266,7 +266,10 @@ one is outside the activation window. The Nest worker commits the import's
 it at the delivery limit, leaving the import `PROCESSING` as the Python
 reference does. A closed activation follows the same reference boundary:
 normalized records fail the insert and retry the job, while an import with no
-normalized records can complete with its rejected-row errors. Automated
+normalized records can complete with its rejected-row errors. The persisted
+`recordsRejected` value uses the Python worker's formula
+`recordsSeen - recordsAccepted + normalizationErrorCount`, including its
+additional count for normalization errors. Automated
 compatibility and outage/recovery qualification remain outstanding.
 Failed or queued Activity jobs can be redriven by administrators with
 an audited reason; long-running Activity jobs now extend their 120-second leases

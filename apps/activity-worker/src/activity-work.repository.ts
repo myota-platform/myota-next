@@ -19,6 +19,7 @@ import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   compareTimestamps,
+  calculateAdifRejectedRecords,
   normalizeTimestamp,
   parseAdif,
   normalizeQso,
@@ -429,7 +430,7 @@ export class ActivityWorkRepository {
       return;
     }
     let accepted = 0;
-    let rejected = 0;
+    let normalizationErrorCount = 0;
     const errors: string[] = [];
     const awardSubjects = new Set<string>([String(record.operator_id)]);
     const normalized: { index: number; qso: JsonRecord }[] = [];
@@ -442,7 +443,7 @@ export class ActivityWorkRepository {
         if (qso.hunterId) awardSubjects.add(String(qso.hunterId));
         normalized.push({ index, qso });
       } catch (error) {
-        rejected++;
+        normalizationErrorCount++;
         errors.push(
           `record ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -516,7 +517,6 @@ export class ActivityWorkRepository {
         );
         await client.query('RELEASE SAVEPOINT adif_batch_insert');
         insertedRows.push(...inserted.rows);
-        rejected += normalized.length - inserted.rows.length;
       } catch {
         await client.query('ROLLBACK TO SAVEPOINT adif_batch_insert');
         await client.query('RELEASE SAVEPOINT adif_batch_insert');
@@ -526,12 +526,10 @@ export class ActivityWorkRepository {
           try {
             const row = await this.insertAdifQso(client, record, importId, qso);
             if (row) insertedRows.push(row);
-            else rejected++;
             await client.query(`RELEASE SAVEPOINT ${savepoint}`);
           } catch (error) {
             await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
             await client.query(`RELEASE SAVEPOINT ${savepoint}`);
-            rejected++;
             errors.push(
               `record ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
             );
@@ -576,7 +574,6 @@ export class ActivityWorkRepository {
         await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
         await client.query(`RELEASE SAVEPOINT ${savepoint}`);
         await client.query('DELETE FROM activity_qso WHERE id=$1', [row.id]);
-        rejected++;
         errors.push(
           `record ${recordNumber}: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -610,6 +607,11 @@ export class ActivityWorkRepository {
         [`adif:${importId}:award-recalculate`, randomUUID()],
       );
     }
+    const rejected = calculateAdifRejectedRecords(
+      rows.length,
+      accepted,
+      normalizationErrorCount,
+    );
     const result = await this.finishAdifImport(
       client,
       record,
