@@ -647,7 +647,9 @@
   `MYOTA_IMPORT_HEARTBEAT_SECONDS` (30 seconds), with Python-compatible integer
   parsing and the reference minimums. JetStream progress acknowledgements
   renew independently at one third of each durable's ACK wait. Failed progress acknowledgements do not fail
-  the active owner operation. Work IDs accept all canonical UUID version and
+  the active owner operation. Cancellation reconciliation follows
+  `GEODATA_CANCELLATION_RECONCILE_SECONDS` (30 seconds by default, at least 5).
+  Work IDs accept all canonical UUID version and
   variant bits; `causationId` is optional, and exhausted invalid deliveries use
   the reference's UUID fallback and payload event-type precedence. Stale
   dispatch recovery and Geodata retention are

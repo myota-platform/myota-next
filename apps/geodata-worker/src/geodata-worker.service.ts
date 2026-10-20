@@ -12,6 +12,7 @@ import type { Consumer, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { integerSetting } from '@app/platform/integer-setting.js';
 import { IMPORT_RUN_HEARTBEAT_SECONDS } from '@app/platform/import-limits.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
 import {
@@ -34,6 +35,10 @@ const MAX_WORK_WAIT_SECONDS = 30;
 const WORK_RECONCILE_SECONDS = Math.max(
   5,
   Number(process.env.GEODATA_WORK_RECONCILE_SECONDS ?? 60),
+);
+const CANCELLATION_RECONCILE_SECONDS = Math.max(
+  5,
+  integerSetting(process.env.GEODATA_CANCELLATION_RECONCILE_SECONDS, 30),
 );
 const RETENTION_INTERVAL_SECONDS = Math.max(
   60,
@@ -528,7 +533,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
           `Geodata cancellation reconciliation failed: ${safeError(error)}`,
         );
       }
-      await this.wait(30_000);
+      await this.wait(CANCELLATION_RECONCILE_SECONDS * 1000);
     }
   }
 

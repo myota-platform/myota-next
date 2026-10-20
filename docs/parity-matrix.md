@@ -370,7 +370,9 @@ map renders point, line, polygon, and multipart entity geometries.
   `/healthz` and `/readyz` expose liveness and Geodata PostgreSQL/NATS
   readiness. Import run leases and database heartbeats use the Python-compatible
   `MYOTA_IMPORT_LEASE_SECONDS` and `MYOTA_IMPORT_HEARTBEAT_SECONDS` settings;
-  JetStream ACK extensions follow one third of the registered durable ACK wait.
+  cancellation reconciliation uses `GEODATA_CANCELLATION_RECONCILE_SECONDS`
+  (default 30 seconds, minimum 5); JetStream ACK extensions follow one third of
+  the registered durable ACK wait.
   Stale queued and expired work is re-enqueued through the owner outbox.
   Scheduled import and upload-session retention is implemented; outage/recovery
   evidence remains open.
