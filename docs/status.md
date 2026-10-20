@@ -460,12 +460,15 @@
   shape and record pairing, with iteration bounded by the SHX and active DBF
   row counts to match PyShp. Shapefile upload size follows
   `MYOTA_SHAPEFILE_MAX_UPLOAD_BYTES` or the shared upload limit; archives are capped at 100
-  members and 1 GiB expanded. Matching .shp, .shx, and .dbf sidecars are
+  members and the configured expanded-size limit (1 GiB by default).
+  `MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES` follows Python integer parsing.
+  Matching .shp, .shx, and .dbf sidecars are
   required; DBF text uses PyShp's UTF-8 default and `.cpg` files are ignored,
   matching the reference loader.
   Pasted-import creation also decodes bounded KML and GPX to GeoJSON, applying
-  the shared decoded-feature limit and the 250,000 coordinate ceiling per
-  emitted geometry or GPX track segment.
+  the shared decoded-feature limit and the configured vertex ceiling per
+  emitted geometry or GPX track segment (`MYOTA_IMPORT_MAX_FEATURE_VERTICES`,
+  250,000 by default).
   OSM PBF
   uploads now decode in the Geodata worker with osmium-tool. The converter
   preserves OSM tags and stable type/id source references, filters the current
@@ -474,10 +477,11 @@
   source bytes stream to disk with checksum verification; upload size follows
   `MYOTA_OSM_PBF_MAX_UPLOAD_BYTES` or the shared upload limit. Decoded output is capped at 128 MiB, with
   features streamed one at a time into four-record staging batches, 16 MiB and
-  250,000 vertices per feature, plus the configured feature cap.
+  the configured vertex ceiling per feature, plus the configured feature cap.
   GeoJSON, KML, GPX, Shapefile, and PBF parsing use the shared
   `MYOTA_IMPORT_MAX_FEATURE_BYTES` decoded-size limit (16 MiB by default) and
-  enforce 250,000 vertices per feature. Prepared candidates and validation errors are attempt-scoped in the
+  enforce `MYOTA_IMPORT_MAX_FEATURE_VERTICES` (250,000 by default) through the
+  Python-compatible integer parser. Prepared candidates and validation errors are attempt-scoped in the
   Geodata database; per-record hashes and source manifests use Python float
   formatting and Unicode code-point key ordering. Streamed GeoJSON features
   and direct GEOJSON/WFS JSON imports retain raw numeric tokens so `1` and
@@ -506,8 +510,9 @@
   `spatialReference` metadata is applied to features without an explicit `crs`,
   matching the reference reader. Shapefile
   source bytes and decoded
-  records now stream via bounded temporary files, matching the reference's 1
-  GiB expanded-size default and reproject coordinates using `.prj` metadata.
+  records now stream via bounded temporary files, matching the reference's
+  configurable expanded-size cap (1 GiB default) and reproject coordinates
+  using `.prj` metadata.
   NULL shape records fail preprocessing because PyShp cannot represent them as
   GeoJSON.
   The streaming parser's less common geometry types and uncommon CRS

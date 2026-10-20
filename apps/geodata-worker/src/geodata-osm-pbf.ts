@@ -8,13 +8,15 @@ import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
+import {
+  MAX_IMPORT_FEATURE_BYTES,
+  MAX_IMPORT_FEATURE_VERTICES,
+} from '@app/platform/import-limits.js';
 import { canonicalPythonGeneratedJson } from '../../geodata/src/geodata-request-fingerprint.js';
 import { setSourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 
 const MAX_SOURCE_BYTES = 512 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 128 * 1024 * 1024;
-const MAX_FEATURE_VERTICES = 250_000;
 const REQUIRED_TAGS = [
   'leisure=park',
   'leisure=nature_reserve',
@@ -186,8 +188,10 @@ async function* parseOsmiumFeatures(
       throw new Error(
         `an OSM feature exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
       );
-    if (countVertices(geometry.coordinates) > MAX_FEATURE_VERTICES)
-      throw new Error('an OSM feature exceeds the 250000 vertex limit');
+    if (countVertices(geometry.coordinates) > MAX_IMPORT_FEATURE_VERTICES)
+      throw new Error(
+        `an OSM feature exceeds the ${MAX_IMPORT_FEATURE_VERTICES} vertex limit`,
+      );
     featureCount += 1;
     if (featureCount > featureLimit)
       throw new Error(`OSM PBF contains more than ${featureLimit} features`);

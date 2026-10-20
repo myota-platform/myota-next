@@ -102,6 +102,27 @@ requirePattern(
   'Geodata worker feature limits must parse configuration with Python-compatible integer settings',
 );
 requirePattern(
+  'libs/platform/src/import-limits.ts',
+  /MAX_IMPORT_FEATURE_VERTICES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_FEATURE_VERTICES[\s\S]*?MAX_SHAPEFILE_EXPANDED_BYTES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES/,
+  'Geodata vertex and expanded Shapefile limits must use Python-compatible integer settings',
+);
+for (const relativePath of [
+  'apps/geodata/src/geodata-xml-import.ts',
+  'apps/geodata-worker/src/geodata-geojson-stream.ts',
+  'apps/geodata-worker/src/geodata-osm-pbf.ts',
+  'apps/geodata-worker/src/geodata-shapefile-stream.ts',
+])
+  requirePattern(
+    relativePath,
+    /MAX_IMPORT_FEATURE_VERTICES/,
+    `${relativePath} must honor the configured Geodata vertex limit`,
+  );
+requirePattern(
+  'apps/geodata-worker/src/geodata-shapefile-stream.ts',
+  /MAX_SHAPEFILE_EXPANDED_BYTES/,
+  'Shapefile streaming must honor its configured expanded-size limit',
+);
+requirePattern(
   'libs/platform/src/bootstrap.ts',
   /containsBigInt\(body\)[\s\S]*?stringifyJsonWithBigInts\(body\)/,
   'shared HTTP bootstrap must serialize BigInt responses as JSON integers',
@@ -140,6 +161,6 @@ if (errors.length) {
   process.exitCode = 1;
 } else {
   process.stdout.write(
-    'Exact JSON integers and Python-compatible Geodata multipart integer conversions are guarded across the API, workers, and scheduled importer.\n',
+    'Exact JSON integers, Python-compatible Geodata multipart conversions, and import-limit settings are guarded across the API, workers, and scheduled importer.\n',
   );
 }

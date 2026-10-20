@@ -8,15 +8,17 @@ import { pipeline } from 'node:stream/promises';
 import proj4, { type Converter } from 'proj4';
 import yauzl from 'yauzl';
 import { open as openShapefile } from 'shapefile';
-import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
+import {
+  MAX_IMPORT_FEATURE_BYTES,
+  MAX_IMPORT_FEATURE_VERTICES,
+  MAX_SHAPEFILE_EXPANDED_BYTES,
+} from '@app/platform/import-limits.js';
 import { canonicalPythonGeneratedJson } from '../../geodata/src/geodata-request-fingerprint.js';
 import { setSourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 
 const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
-const MAX_EXPANDED_BYTES = 1024 * 1024 * 1024;
 const MAX_ARCHIVE_MEMBERS = 100;
 const MAX_RECORD_BYTES = MAX_IMPORT_FEATURE_BYTES;
-const MAX_FEATURE_VERTICES = 250_000;
 const MAX_METADATA_BYTES = 1024 * 1024;
 
 type ExtractedMember = { path: string; size: number; name: string };
@@ -95,8 +97,10 @@ export async function* streamShapefileFeatures(
         throw new Error('Shapefile ZIP contains duplicate file names');
       names.add(normalizedName);
       expandedBytes += entry.uncompressedSize;
-      if (expandedBytes > MAX_EXPANDED_BYTES)
-        throw new Error('Shapefile ZIP expands beyond 1 GiB');
+      if (expandedBytes > MAX_SHAPEFILE_EXPANDED_BYTES)
+        throw new Error(
+          `Shapefile ZIP expands beyond the ${MAX_SHAPEFILE_EXPANDED_BYTES} byte limit`,
+        );
       if (
         normalizedName.endsWith('.prj') &&
         entry.uncompressedSize > MAX_METADATA_BYTES
@@ -197,9 +201,9 @@ export async function* streamShapefileFeatures(
           throw new Error(
             `a source feature exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
           );
-        if (countVertices(feature) > MAX_FEATURE_VERTICES)
+        if (countVertices(feature) > MAX_IMPORT_FEATURE_VERTICES)
           throw new Error(
-            `a source geometry exceeds the configured vertex limit (${MAX_FEATURE_VERTICES})`,
+            `a source geometry exceeds the configured vertex limit (${MAX_IMPORT_FEATURE_VERTICES})`,
           );
         if (isRecord(feature)) {
           setSourceFeatureHashOverride(
@@ -491,7 +495,7 @@ function countVertices(value: unknown): number {
       typeof current[1] === 'number'
     ) {
       vertices += 1;
-      if (vertices > MAX_FEATURE_VERTICES) return vertices;
+      if (vertices > MAX_IMPORT_FEATURE_VERTICES) return vertices;
     } else {
       for (const item of current) pending.push(item);
     }

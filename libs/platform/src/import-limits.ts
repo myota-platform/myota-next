@@ -1,19 +1,14 @@
-const DEFAULT_IMPORT_FEATURE_BYTES = 16 * 1024 * 1024;
-const configuredFeatureBytes = process.env.MYOTA_IMPORT_MAX_FEATURE_BYTES;
+import { integerSetting } from './integer-setting.js';
 
-export const MAX_IMPORT_FEATURE_BYTES =
-  configuredFeatureBytes === undefined
-    ? DEFAULT_IMPORT_FEATURE_BYTES
-    : parseIntegerSetting(configuredFeatureBytes);
-
-function parseIntegerSetting(value: string): number {
-  const normalized = value.trim();
-  if (!/^[+-]?\d(?:_?\d)*$/.test(normalized))
-    throw new Error('MYOTA_IMPORT_MAX_FEATURE_BYTES must be an integer');
-  const parsed = Number(normalized.replaceAll('_', ''));
-  if (!Number.isSafeInteger(parsed))
-    return normalized.startsWith('-')
-      ? Number.MIN_SAFE_INTEGER
-      : Number.MAX_SAFE_INTEGER;
-  return parsed;
-}
+export const MAX_IMPORT_FEATURE_BYTES = integerSetting(
+  process.env.MYOTA_IMPORT_MAX_FEATURE_BYTES,
+  16 * 1024 * 1024,
+);
+export const MAX_IMPORT_FEATURE_VERTICES = integerSetting(
+  process.env.MYOTA_IMPORT_MAX_FEATURE_VERTICES,
+  250_000,
+);
+export const MAX_SHAPEFILE_EXPANDED_BYTES = integerSetting(
+  process.env.MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES,
+  1024 ** 3,
+);

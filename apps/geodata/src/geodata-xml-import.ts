@@ -1,7 +1,10 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { BadRequestException } from '@nestjs/common';
 import { SAXParser, type SAXOptions } from 'sax';
-import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
+import {
+  MAX_IMPORT_FEATURE_BYTES,
+  MAX_IMPORT_FEATURE_VERTICES,
+} from '@app/platform/import-limits.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 
 type Feature = {
@@ -12,7 +15,7 @@ type Feature = {
 
 const maximumXmlBytes = 20 * 1024 * 1024;
 const maximumFeatures = 100_000;
-const maximumCoordinates = 250_000;
+const maximumCoordinates = MAX_IMPORT_FEATURE_VERTICES;
 
 export function parseXmlImport(
   format: 'KML' | 'GPX',
@@ -122,7 +125,9 @@ export function parseXmlImport(
       else {
         trackPoints.push([longitude, latitude]);
         if (trackPoints.length > maximumCoordinates)
-          fail('XML import exceeds the 250000 coordinate limit per feature');
+          fail(
+            `XML import exceeds the ${maximumCoordinates} coordinate limit per feature`,
+          );
       }
     }
     if (
@@ -186,7 +191,9 @@ export function parseXmlImport(
           geometry &&
           countCoordinatePairs(geometry.coordinates) > maximumCoordinates
         )
-          fail('XML import exceeds the 250000 coordinate limit per feature');
+          fail(
+            `XML import exceeds the ${maximumCoordinates} coordinate limit per feature`,
+          );
         if (geometry)
           addFeature({
             type: 'Feature',

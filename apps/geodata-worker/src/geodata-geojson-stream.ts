@@ -1,14 +1,16 @@
 import { createHash } from 'node:crypto';
 import { JSONParser } from '@streamparser/json';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
-import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
+import {
+  MAX_IMPORT_FEATURE_BYTES,
+  MAX_IMPORT_FEATURE_VERTICES,
+} from '@app/platform/import-limits.js';
 import {
   setSourceFeatureHashOverride,
   sourceFeatureHashOverride,
 } from './geodata-source-feature-hash.js';
 
 const MAX_SOURCE_BYTES = 512 * 1024 * 1024;
-const MAX_FEATURE_VERTICES = 250_000;
 const MAX_NESTING_DEPTH = 128;
 const PARSER_CHUNK_BYTES = 64 * 1024;
 const MAX_ROOT_KEY_BYTES = 1024;
@@ -235,9 +237,9 @@ export async function* streamGeoJsonFeatures(
               throw new Error(
                 `geodata import contains more than ${featureLimit} features`,
               );
-            if (countFeatureVertices(feature) > MAX_FEATURE_VERTICES)
+            if (countFeatureVertices(feature) > MAX_IMPORT_FEATURE_VERTICES)
               throw new Error(
-                `a source geometry exceeds the configured vertex limit (${MAX_FEATURE_VERTICES})`,
+                `a source geometry exceeds the configured vertex limit (${MAX_IMPORT_FEATURE_VERTICES})`,
               );
             if (
               pythonTruthy(documentMetadata.crs) &&
@@ -695,7 +697,7 @@ function countFeatureVertices(value: unknown): number {
       typeof current[1] === 'number'
     ) {
       vertices += 1;
-      if (vertices > MAX_FEATURE_VERTICES) return vertices;
+      if (vertices > MAX_IMPORT_FEATURE_VERTICES) return vertices;
     } else {
       for (const item of current) pending.push(item);
     }
