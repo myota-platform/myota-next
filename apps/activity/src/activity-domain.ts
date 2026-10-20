@@ -504,7 +504,8 @@ function stringValue(value: unknown) {
 
 export function parseAdif(text: string): JsonRecord[] {
   const records: JsonRecord[] = [];
-  const fields = /<([^:>]+)(?::(\d+))?(?:[:][^>]*)?>(.*?)(?=<[^>]*>|$)/gis;
+  const fields =
+    /<([^:>]+)(?::(\p{Decimal_Number}+))?(?:[:][^>]*)?>(.*?)(?=<[^>]*>|$)/gisu;
   const mapping: Record<string, string> = {
     CALL: 'workedCallsign',
     QSO_DATE_TIME: 'timestamp',
@@ -523,7 +524,7 @@ export function parseAdif(text: string): JsonRecord[] {
   for (const match of text.matchAll(fields)) {
     const name = trimPythonWhitespace(match[1].toUpperCase());
     const value = trimPythonWhitespace(
-      (match[3] ?? '').slice(0, match[2] ? Number(match[2]) : undefined),
+      sliceAdifValue(match[3] ?? '', match[2]),
     );
     if (name === 'EOR') {
       if (Object.keys(current).length) records.push(current);
@@ -557,6 +558,13 @@ export function parseAdif(text: string): JsonRecord[] {
       ? [normalizeQsoFields({ ...record, timestamp })]
       : [];
   });
+}
+
+function sliceAdifValue(value: string, lengthText?: string): string {
+  if (lengthText === undefined) return value;
+  const length = BigInt(normalizePythonNumericText(lengthText));
+  if (length >= BigInt(value.length)) return value;
+  return Array.from(value).slice(0, Number(length)).join('');
 }
 
 export function evaluateActivation(

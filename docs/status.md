@@ -251,7 +251,8 @@
   creation also ignores `Idempotency-Key`; each accepted upload creates a
   distinct import. The worker decodes and normalizes the ADIF
   file before row processing, so parser failures fail the import. Later
-  per-record failures are reported alongside persisted QSOs and aggregate
+  ADIF field lengths count Unicode code points and accept Unicode decimal digits,
+  matching the Python parser. Per-record failures are reported alongside persisted QSOs and aggregate
   updates. An out-of-window QSO aborts the batch without writing rows, and the
   work job retries and dead-letters while the import remains `PROCESSING`, as
   in the Python reference. Timestamp parsing preserves the Python reference's ISO week dates,
