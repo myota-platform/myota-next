@@ -86,8 +86,10 @@ export class ActivityController {
     @Param('activationId') id: string,
     @Body() body: Record<string, any>,
   ) {
-    if (body.status !== undefined && body.status !== 'CLOSED')
-      throw new BadRequestException('only status CLOSED is supported');
+    if (body.status !== 'CLOSED')
+      throw new BadRequestException(
+        'the activation resource currently supports status=CLOSED only',
+      );
     return this.activity.close(authorization, key, id, body);
   }
 }
