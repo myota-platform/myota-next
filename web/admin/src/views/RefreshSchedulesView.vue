@@ -51,17 +51,18 @@ async function load(requestedOffset = offset.value): Promise<void> {
     const [page, categoryPage] = await Promise.all([
       apiRequest<{
         items: RefreshSchedule[];
+        page: number;
+        pageSize: number;
         total: number;
-        limit: number;
-        offset: number;
+        nextPage: number | null;
       }>(
-        `/v1/geodata/refresh-schedules?limit=${pageSize}&offset=${requestedOffset}`,
+        `/v1/geodata/refresh-schedules?page=${Math.floor(requestedOffset / pageSize) + 1}&pageSize=${pageSize}`,
       ),
       apiRequest<{ items: EntityCategory[] }>('/v1/entity-types'),
     ]);
     schedules.value = page.items || [];
     total.value = page.total || 0;
-    offset.value = page.offset || 0;
+    offset.value = (page.page - 1) * page.pageSize;
     categories.value = categoryPage.items || [];
   });
 }

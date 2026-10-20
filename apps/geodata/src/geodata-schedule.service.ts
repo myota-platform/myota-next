@@ -9,6 +9,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parsePageInteger } from '@app/platform/pagination.js';
 import { GeodataImportService } from './geodata-import.service.js';
 
 type RefreshSchedule = {
@@ -37,24 +38,28 @@ export class GeodataScheduleService {
   ) {}
 
   async list(query: Record<string, unknown>) {
-    const limit = boundedInteger(query.limit, 100, 1, 500);
-    const offset = boundedInteger(query.offset, 0, 0, 1_000_000);
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const offset = BigInt(page - 1) * BigInt(pageSize);
     const client = await this.connect();
     try {
       const result = await client.query(
         `SELECT payload FROM geodata_control_record
-         WHERE kind='schedules' ORDER BY updated_at DESC,id
-         LIMIT $1 OFFSET $2`,
-        [limit, offset],
+         WHERE kind='schedules' ORDER BY payload->>'createdAt' ASC NULLS LAST,id
+         LIMIT $1 OFFSET $2::bigint`,
+        [pageSize, offset.toString()],
       );
       const total = await client.query(
         "SELECT count(*)::integer AS total FROM geodata_control_record WHERE kind='schedules'",
       );
+      const totalCount = total.rows[0].total as number;
       return {
         items: result.rows.map((row) => row.payload),
-        total: total.rows[0].total as number,
-        limit,
-        offset,
+        page,
+        pageSize,
+        total: totalCount,
+        nextPage:
+          offset + BigInt(pageSize) < BigInt(totalCount) ? page + 1 : null,
       };
     } finally {
       client.release();
@@ -269,21 +274,4 @@ function prepareSchedule(body: Record<string, unknown>): RefreshSchedule {
     nextRunAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
   };
-}
-
-function boundedInteger(
-  value: unknown,
-  fallback: number,
-  min: number,
-  max: number,
-) {
-  const parsed =
-    typeof value === 'number'
-      ? value
-      : typeof value === 'string'
-        ? Number.parseInt(value, 10)
-        : Number.NaN;
-  return Number.isInteger(parsed) && parsed >= min && parsed <= max
-    ? parsed
-    : fallback;
 }

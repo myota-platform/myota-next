@@ -94,11 +94,10 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
 
   private async listSchedules(): Promise<RefreshSchedule[]> {
     const items: RefreshSchedule[] = [];
-    const limit = 500;
-    for (let offset = 0; ; offset += limit) {
+    for (let page = 1; ; page += 1) {
       const url = new URL(`${this.apiBase()}/v1/geodata/refresh-schedules`);
-      url.searchParams.set('limit', String(limit));
-      url.searchParams.set('offset', String(offset));
+      url.searchParams.set('page', String(page));
+      url.searchParams.set('pageSize', '100');
       const response = await fetch(url, {
         headers: { authorization: `Bearer ${this.accessToken()}` },
         signal: AbortSignal.timeout(30_000),
@@ -106,11 +105,17 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
       if (!response.ok)
         throw new Error(`schedule API returned HTTP ${response.status}`);
       const body: unknown = await response.json();
-      if (!isRecord(body) || !Array.isArray(body.items))
+      if (
+        !isRecord(body) ||
+        !Array.isArray(body.items) ||
+        body.page !== page ||
+        body.pageSize !== 100 ||
+        !Number.isInteger(body.total) ||
+        (body.nextPage !== null && body.nextPage !== page + 1)
+      )
         throw new Error('schedule API returned an invalid response');
       items.push(...(body.items as RefreshSchedule[]));
-      const total = Number(body.total);
-      if (items.length >= total || body.items.length === 0) return items;
+      if (body.nextPage === null) return items;
     }
   }
 
