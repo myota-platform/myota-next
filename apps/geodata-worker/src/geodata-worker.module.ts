@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { DatabaseHealthModule } from '@app/platform';
+import { DatabaseHealthModule, observeRoot } from '@app/platform';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
 import { GeodataPromotionRepository } from './geodata-promotion.repository.js';
 import { GeodataEnrichmentRepository } from './geodata-enrichment.repository.js';
@@ -8,7 +8,10 @@ import { GeodataRetentionRepository } from './geodata-retention.repository.js';
 import { GeodataWorkerService } from './geodata-worker.service.js';
 
 @Module({
-  imports: [DatabaseHealthModule.forEnvironment('GEO_DATABASE_URL')],
+  imports: [
+    observeRoot('geodata-worker'),
+    DatabaseHealthModule.forEnvironment('GEO_DATABASE_URL'),
+  ],
   providers: [
     GeodataWorkRepository,
     GeodataPromotionRepository,

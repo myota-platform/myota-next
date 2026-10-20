@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
-import { DatabaseHealthModule, HealthController } from '@app/platform';
+import {
+  DatabaseHealthModule,
+  HealthController,
+  observeRoot,
+} from '@app/platform';
 import { ProgrammesController } from './programmes.controller.js';
 import { EntityTypesController } from './entity-types.controller.js';
 import { ProgrammesService } from './programmes.service.js';
@@ -10,7 +14,10 @@ import { ProgrammePolicyController } from './programme-policy.controller.js';
 import { ProgrammePolicyService } from './programme-policy.service.js';
 
 @Module({
-  imports: [DatabaseHealthModule.forEnvironment('CORE_DATABASE_URL')],
+  imports: [
+    observeRoot('programmes-api'),
+    DatabaseHealthModule.forEnvironment('CORE_DATABASE_URL'),
+  ],
   controllers: [
     HealthController,
     ProgrammesController,

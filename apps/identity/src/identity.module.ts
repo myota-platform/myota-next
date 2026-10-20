@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
-import { DatabaseHealthModule, HealthController } from '@app/platform';
+import {
+  DatabaseHealthModule,
+  HealthController,
+  observeRoot,
+} from '@app/platform';
 import { AuthController } from './auth.controller.js';
 import { IdentityAuthService } from './auth.service.js';
 import { IdentityRoleService } from './identity-role.service.js';
@@ -9,7 +13,10 @@ import { IdentityCredentialService } from './identity-credential.service.js';
 import { IdentityProfileImageService } from './identity-profile-image.service.js';
 
 @Module({
-  imports: [DatabaseHealthModule.forEnvironment('CORE_DATABASE_URL')],
+  imports: [
+    observeRoot('identity-api'),
+    DatabaseHealthModule.forEnvironment('CORE_DATABASE_URL'),
+  ],
   controllers: [HealthController, AuthController],
   providers: [
     IdentityAuthService,

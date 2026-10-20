@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
-import { DatabaseHealthModule, HealthController } from '@app/platform';
+import {
+  DatabaseHealthModule,
+  HealthController,
+  observeRoot,
+} from '@app/platform';
 import { GeodataController } from './geodata.controller.js';
 import { GeodataRepository } from './geodata.repository.js';
 import { GeodataImportService } from './geodata-import.service.js';
@@ -12,7 +16,10 @@ import { GeodataProposalService } from './geodata-proposal.service.js';
 import { GeodataLoadTestCleanupService } from './geodata-load-test-cleanup.service.js';
 
 @Module({
-  imports: [DatabaseHealthModule.forEnvironment('GEO_DATABASE_URL')],
+  imports: [
+    observeRoot('geodata-api'),
+    DatabaseHealthModule.forEnvironment('GEO_DATABASE_URL'),
+  ],
   controllers: [HealthController, GeodataController],
   providers: [
     GeodataRepository,

@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { RequestMethod } from '@nestjs/common';
 import express from 'express';
 import { integerSetting } from './integer-setting.js';
+import { ObserveInstrument } from './observe.js';
 
 export async function bootstrapHttpService(
   rootModule: Type<unknown>,
@@ -14,7 +15,10 @@ export async function bootstrapHttpService(
   rawBodyRoutes: string[] = [],
   globalPrefixExclusions: { path: string; method: RequestMethod }[] = [],
 ): Promise<INestApplication> {
-  const app = await NestFactory.create(rootModule, { bodyParser: false });
+  const app = await NestFactory.create(rootModule, {
+    bodyParser: false,
+    instrument: ObserveInstrument,
+  });
   for (const route of rawBodyRoutes)
     app.use(
       route,

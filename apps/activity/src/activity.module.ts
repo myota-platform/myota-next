@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
-import { DatabaseHealthModule, HealthController } from '@app/platform';
+import {
+  DatabaseHealthModule,
+  HealthController,
+  observeRoot,
+} from '@app/platform';
 import { ActivityController } from './activity.controller.js';
 import { ActivityRepository } from './activity.repository.js';
 import { ActivityService } from './activity.service.js';
@@ -12,7 +16,10 @@ import { AwardsService } from './awards.service.js';
 import { AdifImportController } from './adif-import.controller.js';
 
 @Module({
-  imports: [DatabaseHealthModule.forEnvironment('ACTIVITY_DATABASE_URL')],
+  imports: [
+    observeRoot('activity-api'),
+    DatabaseHealthModule.forEnvironment('ACTIVITY_DATABASE_URL'),
+  ],
   controllers: [
     HealthController,
     ActivityController,

@@ -17,6 +17,12 @@
   Identity and Programmes default to 1 MiB, Geodata to 1 GiB as in the Python
   reference, and Activity/Gateway to 35 MiB for encoded upload paths. Individual
   import and upload handlers may enforce smaller limits.
+- `@nestjs/observe` 0.3.16 is wired through the shared platform package into all
+  12 NestJS components (five APIs and seven workers/importer), with a distinct
+  service ID for each and automatic instrumentation enabled at bootstrap. Set
+  `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` to report telemetry; without them,
+  the SDK emits no telemetry. `MYOTA_BUILD_VERSION` or `GIT_SHA` labels the
+  deployed version when provided.
 - Current OpenAPI, event schemas, and three database migration baselines copied
   as compatibility references.
 - First Identity slice: disabled public registration, password login, refresh
