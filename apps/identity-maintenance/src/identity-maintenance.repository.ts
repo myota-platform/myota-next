@@ -13,9 +13,6 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 @Injectable()
 export class IdentityMaintenanceRepository {
   private readonly logger = new Logger(IdentityMaintenanceRepository.name);
@@ -139,9 +136,7 @@ export class IdentityMaintenanceRepository {
         if (
           parts.length !== 3 ||
           parts[0] !== 'profiles' ||
-          !UUID.test(parts[1]) ||
           !parts[2].endsWith('.webp') ||
-          !UUID.test(parts[2].slice(0, -5)) ||
           !(object.LastModified instanceof Date) ||
           object.LastModified.getTime() > cutoff
         )
