@@ -91,7 +91,9 @@ removes the last Programme domain data bucket from the JSONB snapshot. Catalogue
 updates and assigned Programme record changes commit in the same transaction.
 `core/010` deletes the obsolete Programme snapshot row after all domain records
 and event publication have moved to relational tables and the transactional
-outbox.
+outbox. `core/014` preserves account-role insertion order when reads return role
+arrays. Existing assignments are backfilled by creation timestamp and ID; new
+assignments receive a Core-owned monotonic ordering value.
 
 `geo/002` adds attempt-scoped import feature staging so workers can process
 large inputs without retaining all prepared candidates and validation errors

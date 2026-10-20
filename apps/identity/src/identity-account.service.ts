@@ -873,7 +873,7 @@ export class IdentityAccountService {
          LEFT JOIN public.programme p ON p.id = ar.programme_id
          LEFT JOIN public.jurisdiction j ON j.id = ar.jurisdiction_id
         WHERE ar.account_id = $1 AND ar.valid_to IS NULL
-        ORDER BY ar.created_at, ar.id`,
+        ORDER BY ar.assignment_order`,
       [accountId],
     );
     return result.rows.map((role) => ({

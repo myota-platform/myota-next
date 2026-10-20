@@ -861,7 +861,7 @@ export class IdentityAuthService {
          LEFT JOIN public.jurisdiction j ON j.id = ar.jurisdiction_id
         WHERE ar.account_id = ANY($1::uuid[])
           AND ar.valid_to IS NULL
-        ORDER BY ar.created_at, ar.id`,
+        ORDER BY ar.assignment_order`,
       [accountIds],
     );
     for (const row of result.rows) {

@@ -48,6 +48,8 @@ reads, owner-only profile updates, account creation, and administrator account
 listing, owner/global account reads and account role reads in NestJS. The role catalogue endpoint returns built-in and persisted
 custom roles under the existing authorized scopes; custom role creation and
 partial updates are backed by Core transactions and security/outbox events.
+Role arrays preserve assignment order, including multi-role replacements that
+share a creation timestamp.
 Administrative account updates now preserve profile, password, status,
 anonymization, and role replacement behavior in Core transactions. As in the
 reference handler, changing status alone does not anonymize the account or
