@@ -59,7 +59,9 @@ interface AccountRow {
   email: string | null;
   participation_type: string;
   status: string;
+  created_at?: Date;
   updated_at?: Date;
+  primary_callsign_id?: string | null;
   password_hash: string | null;
   failed_attempts: number;
   locked_until: Date | null;
@@ -517,7 +519,11 @@ export class IdentityAuthService {
       if (revoked.rowCount)
         throw new UnauthorizedException('token has been revoked');
       const accountResult = await client.query<AccountRow>(
-        `SELECT a.id, a.display_name, a.email::text AS email, a.updated_at,
+        `SELECT a.id, a.display_name, a.email::text AS email, a.created_at,
+                a.updated_at,
+                (SELECT primary_call.callsign_id
+                   FROM public.account_primary_callsign primary_call
+                  WHERE primary_call.account_id = a.id) AS primary_callsign_id,
                 a.participation_type, a.status, NULL::text AS password_hash,
                 0 AS failed_attempts, NULL::timestamptz AS locked_until,
                 p.website_url, p.biography_markdown,
@@ -542,7 +548,9 @@ export class IdentityAuthService {
         email: account.email,
         participationType: account.participation_type,
         status: account.status,
+        createdAt: account.created_at,
         updatedAt: account.updated_at,
+        primaryCallsignId: account.primary_callsign_id ?? null,
         websiteUrl: account.website_url ?? null,
         biographyMarkdown: account.biography_markdown ?? null,
         profileImage: account.profile_image_id
@@ -554,7 +562,13 @@ export class IdentityAuthService {
               updatedAt: account.profile_image_updated_at,
             }
           : null,
-        callsigns,
+        callsigns: callsigns.map((callsign) =>
+          Object.fromEntries(
+            Object.entries(callsign).filter(
+              ([key]) => key !== 'accountId' && key !== 'primary',
+            ),
+          ),
+        ),
         roles,
         scopes,
       };

@@ -1744,13 +1744,16 @@ components:
         streams: { type: array, items: { $ref: '#/components/schemas/JetStreamStream' } }
     Account:
       type: object
-      required: [id, displayName, participationType, status]
+      required: [id, displayName, participationType, status, createdAt, updatedAt, primaryCallsignId]
       properties:
         id: { type: string, format: uuid }
         displayName: { type: string }
         email: { type: string, format: email, nullable: true }
         participationType: { type: string, enum: [OPERATOR, SWL] }
         status: { type: string, enum: [PENDING_SETUP, ACTIVE, DEACTIVATED] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        primaryCallsignId: { type: [string, 'null'], format: uuid }
         websiteUrl: { type: [string, 'null'], maxLength: 2048, format: uri, pattern: '^[Hh][Tt][Tt][Pp][Ss]?://', description: Optional personal website. Only HTTP and HTTPS are accepted; embedded credentials are rejected. }
         biographyMarkdown: { type: [string, 'null'], maxLength: 2000, description: Optional Markdown source. Clients must strip raw HTML and sanitize rendered output. }
         profileImage:

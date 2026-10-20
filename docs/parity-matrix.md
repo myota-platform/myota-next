@@ -78,6 +78,9 @@ ICC profiles during normalization to match Pillow's direct channel conversion.
 Byte-level rendition equivalence across resizing and WebP encoding still needs
 representative fixtures. Profile-image and account update timestamps are
 assigned independently, matching the reference's two clock reads.
+The authenticated account response also includes account creation time and
+the primary callsign ID as separate account fields, matching the Python
+account projection.
 Identity startup now idempotently provisions the configured bootstrap account,
 sets its password only when no credential exists, ensures its global operator
 role, and writes the corresponding Core outbox and security events.
