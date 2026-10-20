@@ -930,10 +930,7 @@ export class IdentityAccountService {
         );
       }
 
-      if (
-        nextStatus === 'DEACTIVATED' &&
-        (anonymize || account.status !== 'DEACTIVATED')
-      ) {
+      if (anonymize) {
         await client.query(
           `UPDATE public.auth_session SET revoked_at = coalesce(revoked_at, now())
             WHERE account_id = $1`,
@@ -941,7 +938,7 @@ export class IdentityAccountService {
         );
         await writeSecurityEvent(client, 'identity.account.deactivated.v1', {
           accountId,
-          anonymized: anonymize,
+          anonymized: true,
         });
       }
       await writeSecurityEvent(client, 'identity.account.admin-updated.v1', {
