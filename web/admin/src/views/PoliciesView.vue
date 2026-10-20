@@ -17,8 +17,17 @@ interface Policy {
   effectiveFrom?: string;
   status?: string;
 }
+interface Page<T> {
+  items: T[];
+  page: number;
+  total: number;
+  nextPage: number | null;
+}
 const store = useAppStore();
 const policies = ref<Policy[]>([]);
+const policyPage = ref(1);
+const policyNextPage = ref<number | null>(null);
+const policyTotal = ref(0);
 const selected = ref<Policy | null>(null);
 const feedback = usePageFeedback();
 const { error, message, loading, saving } = feedback;
@@ -54,24 +63,38 @@ function edit(policy: Policy | null): void {
     ),
   });
 }
-async function fetchItems(selectedId?: string | Event): Promise<void> {
+async function fetchItems(
+  selectedId?: string | Event,
+  requestedPage = policyPage.value,
+): Promise<void> {
   if (!programme.value) return;
   const current = ++generation;
   const id = typeof selectedId === 'string' ? selectedId : undefined;
-  const data = await apiRequest<{ items: Policy[] }>(
-    `/v1/programmes/${encodeURIComponent(programme.value)}/policy-drafts?pageSize=100`,
+  const data = await apiRequest<Page<Policy>>(
+    `/v1/programmes/${encodeURIComponent(programme.value)}/policy-drafts?page=${requestedPage}&pageSize=50`,
   );
   if (current !== generation) return;
   policies.value = data.items || [];
+  policyPage.value = data.page || requestedPage;
+  policyTotal.value = data.total || 0;
+  policyNextPage.value = data.nextPage ?? null;
   if (id) edit(policies.value.find((item) => item.id === id) || null);
 }
 async function load(): Promise<void> {
   await feedback.run(() => fetchItems(selected.value?.id));
 }
+async function changePolicyPage(page: number): Promise<void> {
+  if (page < 1 || loading.value || saving.value) return;
+  await feedback.run(async () => {
+    edit(null);
+    await fetchItems(undefined, page);
+  });
+}
 async function save(): Promise<void> {
   if (!editable.value || !programme.value) return;
   await feedback.run(
     async () => {
+      const creating = !selected.value?.id;
       const saved = await apiRequest<Policy>(
         `/v1/programmes/${encodeURIComponent(programme.value)}/policy-drafts`,
         {
@@ -88,6 +111,7 @@ async function save(): Promise<void> {
           }),
         },
       );
+      if (creating) policyPage.value = 1;
       await fetchItems(saved.id);
     },
     { mutation: true, success: 'Policy draft saved.' },
@@ -127,6 +151,7 @@ async function action(action: string, decision?: string): Promise<void> {
 }
 watch(programme, () => {
   generation++;
+  policyPage.value = 1;
   edit(null);
   policies.value = [];
   store.currentProgramme = programme.value;
@@ -152,7 +177,12 @@ onMounted(() => {
   <PageFeedback :error="error" :message="message" :loading="loading" />
   <div class="split-layout">
     <article class="panel">
-      <div class="panel-heading"><h2>Policy drafts</h2></div>
+      <div class="panel-heading">
+        <h2>Policy drafts</h2>
+        <span class="muted"
+          >{{ policyTotal }} drafts · page {{ policyPage }}</span
+        >
+      </div>
       <div class="table-list">
         <button
           v-for="item in policies"
@@ -174,6 +204,22 @@ onMounted(() => {
           >
         </button>
         <p v-if="!policies.length" class="muted empty">No drafts yet.</p>
+      </div>
+      <div class="toolbar policy-pagination">
+        <button
+          class="secondary"
+          :disabled="policyPage <= 1 || loading || saving"
+          @click="changePolicyPage(policyPage - 1)"
+        >
+          Previous
+        </button>
+        <button
+          class="secondary"
+          :disabled="policyNextPage === null || loading || saving"
+          @click="changePolicyPage(policyNextPage || policyPage)"
+        >
+          Next
+        </button>
       </div>
     </article>
     <article class="panel">

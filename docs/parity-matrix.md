@@ -354,7 +354,9 @@ a static source scan resolves 62 concrete Admin HTTP method/path pairs, all
 present in the OpenAPI contract. This does not establish payload or workflow
 parity. The Admin programme editor and Participant selector follow the
 programme API's page metadata so both receive the complete catalogue. The Admin
-Awards screen uses independent bounded paging for award
+Content and Policy views page versions independently while keeping coverage,
+review, and editing scoped to the selected programme. The Admin Awards screen uses
+independent bounded paging for award
 definitions, requests, and issuances; the asset catalogue follows its API pages
 for design selection. The Participant client includes localized published programme content,
 paged approved/candidate entity catalogue and map, map-picked point proposals and existing-candidate proposals, published award and level catalogue with eligible-level requests, activation creation,

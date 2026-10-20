@@ -17,11 +17,20 @@ interface ContentItem {
   status?: string;
   effectiveFrom?: string;
 }
+interface Page<T> {
+  items: T[];
+  page: number;
+  total: number;
+  nextPage: number | null;
+}
 const store = useAppStore();
 const programme = ref(
   store.currentProgramme || store.programmes[0]?.slug || '',
 );
 const items = ref<ContentItem[]>([]);
+const contentPage = ref(1);
+const contentNextPage = ref<number | null>(null);
+const contentTotal = ref(0);
 const coverage = ref<any[]>([]);
 const selected = ref<ContentItem | null>(null);
 const feedback = usePageFeedback();
@@ -50,13 +59,16 @@ function edit(item: ContentItem | null): void {
     effectiveFrom: utcInput(item?.effectiveFrom),
   });
 }
-async function fetchItems(selectedId?: string | Event): Promise<void> {
+async function fetchItems(
+  selectedId?: string | Event,
+  requestedPage = contentPage.value,
+): Promise<void> {
   if (!programme.value) return;
   const current = ++generation;
   const id = typeof selectedId === 'string' ? selectedId : undefined;
   const [data, coverageData] = await Promise.all([
-    apiRequest<{ items: ContentItem[] }>(
-      `/v1/programmes/${encodeURIComponent(programme.value)}/content?pageSize=100`,
+    apiRequest<Page<ContentItem>>(
+      `/v1/programmes/${encodeURIComponent(programme.value)}/content?page=${requestedPage}&pageSize=50`,
     ),
     apiRequest<{ locales: any[] }>(
       `/v1/programmes/${encodeURIComponent(programme.value)}/content/coverage`,
@@ -64,16 +76,27 @@ async function fetchItems(selectedId?: string | Event): Promise<void> {
   ]);
   if (current !== generation) return;
   items.value = data.items || [];
+  contentPage.value = data.page || requestedPage;
+  contentTotal.value = data.total || 0;
+  contentNextPage.value = data.nextPage ?? null;
   coverage.value = coverageData.locales || [];
   if (id) edit(items.value.find((item) => item.id === id) || null);
 }
 async function load(): Promise<void> {
   await feedback.run(() => fetchItems(selected.value?.id));
 }
+async function changeContentPage(page: number): Promise<void> {
+  if (page < 1 || loading.value || saving.value) return;
+  await feedback.run(async () => {
+    edit(null);
+    await fetchItems(undefined, page);
+  });
+}
 async function save(): Promise<void> {
   if (!editable.value || !programme.value) return;
   await feedback.run(
     async () => {
+      const creating = !selected.value?.id;
       const saved = await apiRequest<ContentItem>(
         `/v1/programmes/${encodeURIComponent(programme.value)}/content`,
         {
@@ -87,6 +110,7 @@ async function save(): Promise<void> {
           }),
         },
       );
+      if (creating) contentPage.value = 1;
       await fetchItems(saved.id);
     },
     { mutation: true, success: 'Content draft saved.' },
@@ -122,6 +146,7 @@ async function action(actionName: string, decision?: string): Promise<void> {
 }
 watch(programme, () => {
   generation++;
+  contentPage.value = 1;
   edit(null);
   items.value = [];
   coverage.value = [];
@@ -170,7 +195,12 @@ onMounted(() => {
   </article>
   <div class="split-layout">
     <article class="panel">
-      <div class="panel-heading"><h2>Content versions</h2></div>
+      <div class="panel-heading">
+        <h2>Content versions</h2>
+        <span class="muted"
+          >{{ contentTotal }} versions · page {{ contentPage }}</span
+        >
+      </div>
       <div class="table-list">
         <button
           v-for="item in items"
@@ -194,6 +224,22 @@ onMounted(() => {
           >
         </button>
         <p v-if="!items.length" class="muted empty">No content drafts yet.</p>
+      </div>
+      <div class="toolbar content-pagination">
+        <button
+          class="secondary"
+          :disabled="contentPage <= 1 || loading || saving"
+          @click="changeContentPage(contentPage - 1)"
+        >
+          Previous
+        </button>
+        <button
+          class="secondary"
+          :disabled="contentNextPage === null || loading || saving"
+          @click="changeContentPage(contentNextPage || contentPage)"
+        >
+          Next
+        </button>
       </div>
     </article>
     <article class="panel">
