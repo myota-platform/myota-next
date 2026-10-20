@@ -17,6 +17,7 @@ import { ProgrammeContentController } from './programme-content.controller.js';
 import { ProgrammeContentService } from './programme-content.service.js';
 import { ProgrammePolicyController } from './programme-policy.controller.js';
 import { ProgrammePolicyService } from './programme-policy.service.js';
+import { PublicProgrammeContentController } from './public-programme-content.controller.js';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { ProgrammePolicyService } from './programme-policy.service.js';
     EntityTypesController,
     ProgrammeContentController,
     ProgrammePolicyController,
+    PublicProgrammeContentController,
   ],
   providers: [
     ProgrammesService,

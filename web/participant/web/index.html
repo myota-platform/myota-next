@@ -58,6 +58,21 @@
           <button id="refresh">Refresh map</button>
         </aside>
       </section>
+      <section class="panel public-content-panel">
+        <div class="panel-head">
+          <h3>Programme information</h3>
+          <label id="content-locale-label" hidden
+            >Language<select id="content-locale"></select
+          ></label>
+        </div>
+        <p
+          id="content-status"
+          class="small"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div id="programme-content"></div>
+      </section>
       <section class="panel">
         <div class="panel-head">
           <h3>Entities</h3>

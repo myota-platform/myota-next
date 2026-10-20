@@ -21,6 +21,7 @@ const ROUTES: Array<[string, string]> = [
   ['/v1/adif/', 'ACTIVITY'],
   ['/v1/qsos', 'ACTIVITY'],
   ['/v1/statistics', 'ACTIVITY'],
+  ['/v1/public/programmes/', 'PROGRAMMES'],
   ['/v1/public/', 'ACTIVITY'],
   ['/v1/notifications', 'ACTIVITY'],
 ];

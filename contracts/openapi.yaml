@@ -1468,6 +1468,17 @@ paths:
       summary: List public activation history
       parameters: [{ in: query, name: programme, schema: { type: string } }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' }]
       responses: { '200': { description: Public activation page } }
+  /v1/public/programmes/{slug}/content:
+    get:
+      tags: [Programmes]
+      summary: Get currently effective published programme content
+      operationId: getPublishedProgrammeContent
+      parameters:
+        - { in: path, name: slug, required: true, schema: { type: string } }
+        - { in: query, name: locale, schema: { type: string } }
+      responses:
+        '200': { description: Published content for the programme and locale }
+        '404': { description: Programme not found }
   /v1/public/leaderboards:
     get:
       tags: [Activity]

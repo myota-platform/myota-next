@@ -372,6 +372,44 @@ a {
   margin: 0 24px 30px;
   padding-bottom: 20px;
 }
+.public-content-panel {
+  margin: 0 24px 18px;
+  padding-bottom: 16px;
+}
+.public-content-panel .panel-head {
+  gap: 16px;
+}
+.public-content-panel .panel-head label {
+  color: var(--muted);
+  font-size: 12px;
+}
+.public-content-panel select {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: block;
+  margin-top: 4px;
+  padding: 7px 9px;
+}
+.public-content-item {
+  border-top: 1px solid var(--line);
+  padding: 14px 20px;
+}
+.public-content-item h4 {
+  margin: 0 0 8px;
+}
+.public-content-value {
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.public-content-value pre {
+  font-family: inherit;
+  margin: 0;
+  white-space: pre-wrap;
+}
+.public-content-panel > #content-status {
+  padding: 0 20px;
+}
 .awards-panel .panel-head {
   align-items: flex-start;
 }

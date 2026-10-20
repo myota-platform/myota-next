@@ -7,8 +7,8 @@ The exact reference contract files are now preserved locally in
 `af9b9bd81c723f040ae3ddd407992cb53c89c18a6fbd4f5e147fa0df27025eba` and
 defines 135 operations across 113 paths. The target
 [`contracts/openapi.yaml`](../contracts/openapi.yaml) contains that baseline
-plus four target-only operations, for 139 operations across 117 paths. The table
-below inventories the target contract; the four added operations are extensions,
+plus five target-only operations, for 140 operations across 118 paths. The table
+below inventories the target contract; the five added operations are extensions,
 not upstream OpenAPI parity requirements, and need separate evidence against
 current source behavior.
 
@@ -34,8 +34,9 @@ Target-only operations:
 - `POST /v1/adif/imports`
 - `POST /v1/geodata/imports/{runId}/processing-queues/{queueId}/redrive`
 - `POST /v1/qso-ingestions/csv`
+- `GET /v1/public/programmes/{slug}/content`
 
-OpenAPI 3.1.0; 139 operations across 117 paths.
+OpenAPI 3.1.0; 140 operations across 118 paths.
 
 Every operation below has a matching NestJS route decorator. The controller link is route-level traceability only; behavioral parity still requires the checks described in the parity matrix.
 
@@ -138,6 +139,7 @@ Every operation below has a matching NestJS route decorator. The controller link
 | POST   | /v1/programmes/{slug}/content/{contentId}/review                  |                                            | [controller](../apps/programmes/src/programme-content.controller.ts) | Review programme content                                                           |
 | POST   | /v1/programmes/{slug}/content/{contentId}/publish                 |                                            | [controller](../apps/programmes/src/programme-content.controller.ts) | Publish programme content                                                          |
 | PATCH  | /v1/programmes/{slug}/content/{contentId}                         | patchProgrammeContent                      | [controller](../apps/programmes/src/programme-content.controller.ts) | Update content or advance its draft lifecycle                                      |
+| GET    | /v1/public/programmes/{slug}/content                              | getPublishedProgrammeContent               | [module](../apps/programmes/src/programmes.module.ts)                | Get effective published programme content                                          |
 | GET    | /v1/programmes/{slug}/policy-drafts                               |                                            | [controller](../apps/programmes/src/programme-policy.controller.ts)  | List programme policy drafts                                                       |
 | POST   | /v1/programmes/{slug}/policy-drafts                               |                                            | [controller](../apps/programmes/src/programme-policy.controller.ts)  | Create or update a programme policy draft                                          |
 | POST   | /v1/programmes/{slug}/policy-drafts/{draftId}/submit              |                                            | [controller](../apps/programmes/src/programme-policy.controller.ts)  | Submit a policy draft for review                                                   |

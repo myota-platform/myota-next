@@ -57,6 +57,7 @@ async function loadProgramme(slug) {
   $('programme-description').textContent = programme.description;
   $('rules').innerHTML =
     `<dt>Activation QSOs</dt><dd>${programme.rules.minimumQsos.activation}</dd><dt>Hunter QSOs</dt><dd>${programme.rules.minimumQsos.hunter}</dd><dt>Public access</dt><dd>${programme.rules.publicAccessRequired ? 'Required' : 'Programme-defined'}</dd>`;
+  await loadProgrammeContent(slug);
   entities = (
     await api(`/v1/geodata/entities?programme=${encodeURIComponent(slug)}`)
   ).items;
@@ -73,6 +74,66 @@ async function loadProgramme(slug) {
   renderMarkers();
   await loadPublicAwards(slug);
   await loadActivations();
+}
+
+async function loadProgrammeContent(slug, locale) {
+  $('content-status').textContent = 'Loading published programme information…';
+  $('programme-content').replaceChildren();
+  try {
+    const result = await api(
+      `/v1/public/programmes/${encodeURIComponent(slug)}/content${locale ? `?locale=${encodeURIComponent(locale)}` : ''}`,
+    );
+    let items = result.items || [];
+    if (!locale) {
+      const locales = [
+        ...new Set(
+          items
+            .map((item) => item.locale)
+            .filter(
+              (itemLocale) => typeof itemLocale === 'string' && itemLocale,
+            ),
+        ),
+      ];
+      const currentLocale = $('content-locale').value;
+      locale = locales.includes(currentLocale)
+        ? currentLocale
+        : locales.includes('en')
+          ? 'en'
+          : locales[0] || 'en';
+      $('content-locale-label').hidden = locales.length < 2;
+      $('content-locale').innerHTML = locales
+        .map(
+          (itemLocale) =>
+            `<option value="${escapeHtml(itemLocale)}">${escapeHtml(itemLocale)}</option>`,
+        )
+        .join('');
+      if (locales.length) $('content-locale').value = locale;
+      items = items.filter((item) => item.locale === locale);
+    }
+    $('content-status').textContent = items.length
+      ? `${items.length} published item${items.length === 1 ? '' : 's'} · ${locale}`
+      : `No published information is available in ${locale}.`;
+    for (const item of items) {
+      const article = document.createElement('article');
+      article.className = 'public-content-item';
+      const heading = document.createElement('h4');
+      heading.textContent = item.key || 'Programme information';
+      article.append(heading);
+      const value = document.createElement('div');
+      value.className = 'public-content-value';
+      if (typeof item.value === 'string') {
+        value.textContent = item.value;
+      } else {
+        const pre = document.createElement('pre');
+        pre.textContent = JSON.stringify(item.value, null, 2);
+        value.append(pre);
+      }
+      article.append(value);
+      $('programme-content').append(article);
+    }
+  } catch (error) {
+    $('content-status').textContent = error.message;
+  }
 }
 function renderEntities() {
   $('entities').innerHTML = entities
@@ -126,6 +187,8 @@ $('programme-select').onchange = async (e) => {
   location.hash = e.target.value;
   await loadProgramme(e.target.value);
 };
+$('content-locale').onchange = () =>
+  loadProgrammeContent($('programme-select').value, $('content-locale').value);
 $('refresh').onclick = () => loadProgramme($('programme-select').value);
 loadProgrammes().catch((e) => {
   $('loading').textContent = e.message;

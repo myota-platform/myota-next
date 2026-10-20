@@ -72,6 +72,13 @@ export class ProgrammeContentService {
     };
   }
 
+  async publicContent(slug: string, locale?: string) {
+    const result = await this.reads.listPublishedContent(slug, locale);
+    if (!result.programmeFound)
+      throw new NotFoundException('programme not found');
+    return { programmeSlug: slug, locale: locale ?? null, items: result.items };
+  }
+
   async save(
     authorization: string | undefined,
     slug: string,

@@ -319,9 +319,10 @@
   under `web/` as separate deployable artifacts. Admin local checks/build are
   part of CI. A static source scan resolves 62 concrete Admin HTTP method/path
   pairs, all present in the OpenAPI contract. This does not establish payload
-  or workflow parity. The Participant UI includes activation creation, QSO
-  entry, and activation close, but lacks browser-level compatibility coverage.
-  Visual/accessibility review and deployment integration also remain open.
+  or workflow parity. The Participant UI includes localized published programme
+  content, activation creation, QSO entry, and activation close, but lacks
+  browser-level compatibility coverage. Visual/accessibility review and
+  deployment integration also remain open.
 - Data transfer tooling, image publication, deployment manifests, and
   production observability configuration. A reusable Docker recipe now builds
   one unprivileged runtime image per Nest application. An owner-scoped database

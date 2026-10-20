@@ -8,7 +8,7 @@ The files in this directory serve two purposes:
 - The files at this directory's root are the active contracts for this
   monorepo's processes.
 
-The active OpenAPI file adds four target-only operations and revises six shared
+The active OpenAPI file adds five target-only operations and revises six shared
 operation definitions; see [`docs/api-baseline.md`](../docs/api-baseline.md).
 The active event registry retains the same 68 facts and 11 work schemas as the
 reference, and adds relay routing metadata and producer aliases for the new

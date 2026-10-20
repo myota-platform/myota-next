@@ -165,10 +165,10 @@ The baseline Admin and Participant applications are carried forward under
 `web/` with separate deployment artifacts. The Admin build is checked in CI;
 a static source scan resolves 62 concrete Admin HTTP method/path pairs, all
 present in the OpenAPI contract. This does not establish payload or workflow
-parity. The Participant client includes activation creation, single-QSO entry,
-and activation close, but those workflows lack browser-level compatibility
-coverage. Remaining work includes workflow completion, accessibility/visual
-review, and deployment integration.
+parity. The Participant client includes localized published programme content,
+activation creation, single-QSO entry, and activation close, but those
+workflows lack browser-level compatibility coverage. Remaining work includes
+workflow completion, accessibility/visual review, and deployment integration.
 
 ## Workers and operations
 

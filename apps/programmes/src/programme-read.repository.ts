@@ -11,6 +11,11 @@ export interface SnapshotPage {
   total: number;
 }
 
+export interface PublishedContentPage {
+  programmeFound: boolean;
+  items: Record<string, unknown>[];
+}
+
 export interface ContentCoverage {
   programmeFound: boolean;
   totalKeys: number;
@@ -65,6 +70,53 @@ export class ProgrammeReadRepository {
       );
       const row = result.rows[0];
       return { items: row?.items ?? [], total: row?.total ?? 0 };
+    } finally {
+      client.release();
+    }
+  }
+
+  async listPublishedContent(
+    programmeSlug: string,
+    locale: string | undefined,
+  ): Promise<PublishedContentPage> {
+    const client = await this.connect();
+    try {
+      const result = await client.query<PublishedContentPage>(
+        `WITH eligible AS MATERIALIZED (
+           SELECT content.id,content.content_key,content.locale,content.payload,
+                  row_number() OVER (
+                    PARTITION BY content.content_key,content.locale
+                    ORDER BY (content.payload->>'effectiveFrom')::timestamptz DESC,
+                             (content.payload->>'publishedAt')::timestamptz DESC,
+                             content.id COLLATE "C" DESC
+                  ) AS version_rank
+             FROM public.programme_content AS content
+            WHERE content.programme_slug=$1
+              AND content.status='PUBLISHED'
+              AND (content.payload->>'effectiveFrom')::timestamptz <= now()
+              AND ($2::text IS NULL OR content.locale=$2)
+         ), visible AS (
+           SELECT content_key,locale,payload FROM eligible WHERE version_rank=1
+         )
+         SELECT EXISTS(
+                  SELECT 1 FROM public.programme_record WHERE slug=$1
+                ) AS "programmeFound",
+                COALESCE(
+                  (SELECT jsonb_agg(
+                    jsonb_build_object(
+                      'key',payload->>'key',
+                      'locale',locale,
+                      'value',payload->'value',
+                      'fallbackLocale',payload->'fallbackLocale',
+                      'effectiveFrom',payload->'effectiveFrom',
+                      'publishedAt',payload->'publishedAt'
+                    ) ORDER BY content_key COLLATE "C",locale COLLATE "C"
+                  ) FROM visible),
+                  '[]'::jsonb
+                ) AS items`,
+        [programmeSlug, locale ?? null],
+      );
+      return result.rows[0] ?? { programmeFound: false, items: [] };
     } finally {
       client.release();
     }
