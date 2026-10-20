@@ -18,6 +18,32 @@ export function fingerprintJsonRequest(
   return createHash('sha256').update(pythonJson(value)).digest('hex');
 }
 
+/** Canonicalize raw JSON with Python's compact, sorted, Unicode-preserving form. */
+export function canonicalPythonJson(rawBody: string): string {
+  return canonicalJsonValue(new JsonParser(rawBody).parse());
+}
+
+function canonicalJsonValue(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (value instanceof JsonNumber)
+    return value.floating
+      ? pythonFloatString(value.value as number)
+      : String(value.value);
+  if (typeof value === 'number')
+    return Number.isInteger(value) ? String(value) : pythonFloatString(value);
+  if (typeof value === 'bigint') return String(value);
+  if (Array.isArray(value))
+    return `[${value.map(canonicalJsonValue).join(',')}]`;
+  if (isRecord(value))
+    return `{${Object.keys(value)
+      .sort(comparePythonStrings)
+      .map((key) => `${JSON.stringify(key)}:${canonicalJsonValue(value[key])}`)
+      .join(',')}}`;
+  return 'null';
+}
+
 function pythonJson(value: unknown): string {
   if (value === null) return 'null';
   if (typeof value === 'string') return pythonJsonString(value);

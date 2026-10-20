@@ -12,6 +12,13 @@ const MAX_ROOT_KEY_BYTES = 1024;
 // under this project's isolated module compilation.
 const TOKEN_PARSER_OBJECT_MODE = 0;
 const TOKEN_PARSER_ARRAY_MODE = 1;
+const sourceJsonByFeature = new WeakMap<object, string>();
+
+export function sourceJsonForGeoJsonFeature(
+  feature: unknown,
+): string | undefined {
+  return isObject(feature) ? sourceJsonByFeature.get(feature) : undefined;
+}
 
 type ContainerFrame = {
   kind: 'object' | 'array';
@@ -95,7 +102,7 @@ export async function* streamGeoJsonFeatures(
   documentMetadata: { crs: unknown; rootType: unknown },
   heartbeat: () => Promise<void>,
 ): AsyncGenerator<unknown> {
-  const guard = new GeoJsonResourceGuard();
+  const guard = new GeoJsonResourceGuard(documentMetadata.rootType);
   const pending: unknown[] = [];
   let featureCount = 0;
   let sourceBytes = 0;
@@ -162,6 +169,9 @@ export async function* streamGeoJsonFeatures(
               return;
 
             const feature = isSingleObject ? toGeoJsonFeature(value) : value;
+            const sourceJson = isObject(feature)
+              ? guard.takeCompletedFeatureJson()
+              : undefined;
 
             featureCount += 1;
             if (featureCount > featureLimit)
@@ -172,6 +182,7 @@ export async function* streamGeoJsonFeatures(
               throw new Error(
                 `a source geometry exceeds the configured vertex limit (${MAX_FEATURE_VERTICES})`,
               );
+            let inheritedDocumentCrs = false;
             if (
               pythonTruthy(documentMetadata.crs) &&
               isRecord(feature) &&
@@ -179,7 +190,14 @@ export async function* streamGeoJsonFeatures(
             ) {
               (feature as unknown as Record<string, unknown>).crs =
                 documentMetadata.crs;
+              inheritedDocumentCrs = true;
             }
+            if (
+              sourceJson !== undefined &&
+              !inheritedDocumentCrs &&
+              isObject(feature)
+            )
+              sourceJsonByFeature.set(feature, sourceJson);
             pending.push(feature);
           };
           parserPart = part.subarray(firstTokenOffset);
@@ -215,13 +233,28 @@ class GeoJsonResourceGuard {
   private stringParts: number[] = [];
   private scalarFeatureStart: number | undefined;
   private activeFeatureStart: number | undefined;
+  private activeFeatureParts: Buffer[] = [];
+  private activeFeatureSegmentStart: number | undefined;
+  private completedFeatureJson: string[] = [];
+  private completedFeatureReadIndex = 0;
   private rootType: unknown;
   private sawFeaturesArray = false;
   private sawRootArray = false;
   private sawRootObject = false;
 
+  constructor(private readonly documentType: unknown) {}
+
+  takeCompletedFeatureJson(): string | undefined {
+    const result = this.completedFeatureJson[this.completedFeatureReadIndex];
+    if (result !== undefined) this.completedFeatureReadIndex += 1;
+    return result;
+  }
+
   write(chunk: Uint8Array) {
-    for (const byte of chunk) {
+    if (this.activeFeatureStart !== undefined)
+      this.activeFeatureSegmentStart = 0;
+    for (let localIndex = 0; localIndex < chunk.length; localIndex += 1) {
+      const byte = chunk[localIndex]!;
       const position = this.offset++;
       if (this.inString) {
         this.consumeStringByte(byte, position);
@@ -248,12 +281,12 @@ class GeoJsonResourceGuard {
       }
 
       if (byte === 0x7b || byte === 0x5b) {
-        this.beginContainer(byte, position);
+        this.beginContainer(byte, position, localIndex);
         continue;
       }
 
       if (byte === 0x7d || byte === 0x5d) {
-        this.endContainer(position);
+        this.endContainer(position, localIndex, chunk);
         continue;
       }
 
@@ -278,6 +311,15 @@ class GeoJsonResourceGuard {
           this.scalarFeatureStart = position;
       }
       this.checkFeatureSize(position);
+    }
+    if (
+      this.activeFeatureStart !== undefined &&
+      this.activeFeatureSegmentStart !== undefined
+    ) {
+      this.activeFeatureParts.push(
+        Buffer.from(chunk.subarray(this.activeFeatureSegmentStart)),
+      );
+      this.activeFeatureSegmentStart = undefined;
     }
   }
 
@@ -331,7 +373,7 @@ class GeoJsonResourceGuard {
     this.checkFeatureSize(position);
   }
 
-  private beginContainer(byte: number, position: number) {
+  private beginContainer(byte: number, position: number, localIndex: number) {
     const parent = this.frames.at(-1);
     const kind = byte === 0x7b ? 'object' : 'array';
     if (this.frames.length >= MAX_NESTING_DEPTH)
@@ -340,11 +382,19 @@ class GeoJsonResourceGuard {
     const isRootArray = this.frames.length === 0 && kind === 'array';
     const isFeaturesArray =
       kind === 'array' && parent?.root === true && parent.key === 'features';
-    const isFeatureItem = parent?.features === true;
+    const isFeatureItem =
+      parent?.features === true ||
+      (this.frames.length === 0 &&
+        kind === 'object' &&
+        this.documentType === 'Feature');
     if (isRoot) this.sawRootObject = true;
     if (isRootArray) this.sawRootArray = true;
     if (isFeaturesArray) this.sawFeaturesArray = true;
-    if (isFeatureItem) this.activeFeatureStart = position;
+    if (isFeatureItem) {
+      this.activeFeatureStart = position;
+      this.activeFeatureParts = [];
+      this.activeFeatureSegmentStart = localIndex;
+    }
     if (parent?.root && parent.key === 'type') this.rootType = null;
     if (parent?.kind === 'object') parent.key = undefined;
     this.frames.push({
@@ -357,11 +407,26 @@ class GeoJsonResourceGuard {
     this.checkFeatureSize(position);
   }
 
-  private endContainer(position: number) {
+  private endContainer(
+    position: number,
+    localIndex: number,
+    chunk: Uint8Array,
+  ) {
     const frame = this.frames.pop();
     if (!frame) throw new Error('GeoJSON source has mismatched containers');
     if (frame.featureItem) {
       this.checkFeatureSize(position);
+      if (this.activeFeatureSegmentStart !== undefined)
+        this.activeFeatureParts.push(
+          Buffer.from(
+            chunk.subarray(this.activeFeatureSegmentStart, localIndex + 1),
+          ),
+        );
+      this.completedFeatureJson.push(
+        Buffer.concat(this.activeFeatureParts).toString('utf8'),
+      );
+      this.activeFeatureParts = [];
+      this.activeFeatureSegmentStart = undefined;
       this.activeFeatureStart = undefined;
       this.scalarFeatureStart = undefined;
     }
@@ -450,4 +515,8 @@ function toGeoJsonFeature(value: unknown) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
 }
