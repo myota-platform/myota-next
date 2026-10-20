@@ -92,11 +92,11 @@ export class OidcProviderMappingDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  scopes?: string[];
+  scopes?: string[] | null;
 
   @IsOptional()
   @IsBoolean()
-  enabled?: boolean;
+  enabled?: boolean | null;
 }
 
 export class ServiceTokenRequestDto {

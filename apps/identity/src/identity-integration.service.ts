@@ -32,14 +32,17 @@ export class IdentityIntegrationService {
     try {
       await client.query('BEGIN');
       const id = randomUUID();
-      const scopes = body.scopes ?? ['openid', 'profile', 'email'];
+      const scopes =
+        body.scopes === undefined
+          ? ['openid', 'profile', 'email']
+          : body.scopes;
       const mappingResult = await client.query<{
         id: string;
         programme_slug: string;
         issuer: string;
         client_id: string;
-        scopes: string[];
-        enabled: boolean;
+        scopes: string[] | null;
+        enabled: boolean | null;
         created_at: Date;
         updated_at: Date;
       }>(
@@ -54,7 +57,7 @@ export class IdentityIntegrationService {
           body.issuer,
           body.clientId,
           scopes,
-          body.enabled ?? true,
+          body.enabled === undefined ? true : body.enabled,
         ],
       );
       const row = mappingResult.rows[0];

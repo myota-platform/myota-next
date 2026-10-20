@@ -55,7 +55,8 @@ checks legacy JSONB emails for case-fold collisions before cutover.
 OIDC provider registration remains create-only, matching the pinned Python
 handler; repeated requests create separate mappings even when they carry the
 same optional `Idempotency-Key`. Mapping field values are stored verbatim;
-non-empty whitespace-only strings are accepted as by the reference. Its runtime
+non-empty whitespace-only strings and explicit `null` values for optional
+`scopes` and `enabled` fields are preserved as by the reference. Its runtime
 response is `201` even though the preserved upstream OpenAPI contract declares
 `200`.
 
