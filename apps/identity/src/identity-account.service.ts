@@ -328,7 +328,7 @@ export class IdentityAccountService {
       }>(
         `SELECT id, event_type, payload, occurred_at
              FROM public.security_event
-            ORDER BY occurred_at DESC, id DESC
+            ORDER BY occurred_at DESC, event_order ASC
             LIMIT $1 OFFSET $2`,
         [pageSize, (page - 1) * pageSize],
       );

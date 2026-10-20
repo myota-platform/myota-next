@@ -78,8 +78,9 @@ and status for eligible accounts in reference insertion order, folds names and e
 slicing the result page, then loads profile, role, and callsign details only
 for that page. The Admin Identity view follows the returned page metadata and
 lets administrators move between matching account pages without loading the
-full account list. Its security-event feed also pages through the API's audit
-history in 20-event increments. Login, recovery, account creation, and account
+full account list. Its security-event feed pages through the API's audit
+history in 20-event increments, using the Core `event_order` sequence to order
+events with tied timestamps. Login, recovery, account creation, and account
 updates also use Unicode case-folded Core email keys with a unique index; the
 forward migration checks legacy JSONB emails for case-fold collisions before
 cutover.
