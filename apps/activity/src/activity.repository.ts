@@ -982,7 +982,11 @@ export class ActivityRepository {
           if (values[field] === undefined) continue;
           assignments.push(`${column}=$${parameters.length + 1}`);
           parameters.push(
-            field === 'occurredAt' ? new Date(values[field]) : values[field],
+            field === 'occurredAt'
+              ? values[field]
+                ? normalizeTimestamp(values[field])
+                : null
+              : values[field],
           );
         }
         parameters.push(qsoId);

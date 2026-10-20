@@ -186,7 +186,9 @@
   JSON and CSV. QSO correction requests and administrator review now use
   transactional Activity persistence; requests store any truthy `proposedValues`
   JSON shape accepted by the reference. Applying an object correction queues
-  award recalculation. Activity statistics can be listed and rebuild jobs queued,
+  award recalculation, and correction timestamps retain Python-compatible
+  falsey-value handling and microsecond precision. Activity statistics can be
+  listed and rebuild jobs queued,
   processed into versioned programme/category/entity/jurisdiction snapshots,
   and inspected; recipient notifications can be read with owner/admin checks.
   Activation history, public activation history, and statistics pages now use
