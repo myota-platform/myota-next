@@ -718,16 +718,17 @@ function senderConfig(): Sender {
 }
 
 function identityBaseUrl() {
-  const raw = process.env.MYOTA_IDENTITY_URL ?? 'http://identity:8001';
+  const raw =
+    process.env.MYOTA_IDENTITY_URL ??
+    process.env.IDENTITY_INTERNAL_URL ??
+    'http://identity:8001';
   const url = new URL(raw);
   if (
     !['http:', 'https:'].includes(url.protocol) ||
     url.username ||
     url.password
   )
-    throw new Error(
-      'MYOTA_IDENTITY_URL must be an HTTP(S) URL without credentials',
-    );
+    throw new Error('Identity URL must be an HTTP(S) URL without credentials');
   return raw.replace(/\/$/, '');
 }
 

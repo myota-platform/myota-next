@@ -13,13 +13,15 @@ crash after SMTP accepts a message but before that commit can cause a duplicate;
 delivery is at least once.
 
 Required configuration includes `CORE_DATABASE_URL`, `NATS_URL`,
-`MYOTA_IDENTITY_URL`, `MYOTA_EMAIL_SERVICE_CLIENT_SECRET`,
+`MYOTA_IDENTITY_URL` (or the legacy `IDENTITY_INTERNAL_URL` alias),
+`MYOTA_EMAIL_SERVICE_CLIENT_SECRET`,
 `EMAIL_SENDER_ADDRESS`, `EMAIL_SENDER_DISPLAY_NAME`, `EMAIL_SMTP_HOST`,
 `EMAIL_SMTP_PORT`, `EMAIL_SMTP_USERNAME`, `EMAIL_SMTP_PASSWORD`,
 `EMAIL_SMTP_TLS_MODE`, and `EMAIL_SMTP_TIMEOUT_SECONDS`. Secrets can be mounted
 as files by setting the corresponding `_FILE` environment variable instead of
 the value variable. SMTP TLS, timeouts, credentials, and sender values are
 validated before the worker starts.
+When both Identity URL variables are set, `MYOTA_IDENTITY_URL` takes precedence.
 
 To request an audited recovery, reset one dead-letter ledger entry and record
 the operator reason with:

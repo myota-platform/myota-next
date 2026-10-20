@@ -692,7 +692,8 @@
 - Email delivery. The NestJS consumer rejects invalid UTF-8 and invalid UTC
   date-time values before validating `email.send.v1`, including lowercase `t`
   separators rejected by the reference checker. It resolves recipients
-  through Identity, accepts schema-valid producer names and UUID version and
+  through Identity using `MYOTA_IDENTITY_URL`, with `IDENTITY_INTERNAL_URL`
+  retained as an alias, accepts schema-valid producer names and UUID version and
   variant bits, and applies the schema's Unicode code-point lengths to bounded
   envelope and template text. Address validation follows the reference's
   254-character, nonempty local/domain, space, and CR/LF rules. SMTP TLS mode
