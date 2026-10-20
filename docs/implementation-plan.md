@@ -34,42 +34,44 @@ current reference.
 The Node 24/NestJS workspace, separate service and worker entry points,
 database-aware readiness, copied contracts and migrations, formatting, lint,
 typecheck, build gates, an owner-scoped migration runner, and a per-application
-Docker recipe are in place, with GitHub Actions running the static and build
-gates on pushes and pull requests. Image publication, data transfer, and
+Docker recipe are in place. GitHub Actions run static and build gates and
+provide a gated workflow for publishing application images. Data transfer and
 deployment qualification remain open. Identity, Programmes, Activity, and
-Geodata each have working vertical slices. See the [implementation status](status.md)
-and [parity matrix](parity-matrix.md) for current coverage.
+Geodata have substantial working slices. See the [implementation status](status.md)
+and [parity matrix](parity-matrix.md) for current coverage and known gaps.
 
 ## 2. Implement contract-shaped synchronous behavior
 
-- Finish contract coverage for Identity and Programmes.
-- Implement Gateway routing and authorization forwarding.
-- Add migration-based persistence and compatibility coverage before expanding
-  behavior.
+- NestJS controllers are mapped to all upstream OpenAPI operations. Identity
+  and Programmes use owner-scoped relational persistence, and Gateway routing
+  and authorization forwarding are implemented.
+- Continue checking payload, authorization, error, and workflow behavior
+  against the reference. Route coverage alone does not establish parity.
 
 ## 3. Implement Activity and Geodata domains
 
-- Finish Activity and Geodata APIs, workers, recovery, and redrive.
-- Preserve the Core, Activity, and Geodata database boundaries and their
-  high-write and spatial query behavior.
-- Port remaining file formats, uploads, rendering, and domain rules with
-  compatibility coverage.
+- Activity and Geodata APIs and workers implement the documented activity,
+  import, award, rendering, review, and several recovery workflows. Preserve
+  the Core, Activity, and Geodata database boundaries and their high-write and
+  spatial query behavior.
+- Continue resolving behavior gaps and qualifying worker recovery and
+  throughput. See the parity matrix for specific differences and open evidence.
 
 ## 4. Carry forward and reconcile browser applications
 
-- Keep the baseline Admin and Participant applications as separate deployable
-  artifacts while reconciling their API dependencies to the Nest services.
-- Implement all baseline routes and permission states against the new APIs.
-- Cover destructive, conflict, upload, async progress, accessibility, and
-  responsive behaviors with browser tests.
+- Admin and Participant applications are separate deployable artifacts and use
+  the NestJS APIs. Admin route-to-contract mapping and local build checks are in
+  place.
+- Verify payloads, permission states, destructive and conflict flows, uploads,
+  async progress, accessibility, and responsive behavior in browser workflows.
 
 ## 5. Prove parity and prepare data transition
 
-- Run contract, service, database, worker, integration, browser, image, and
-  deployment checks in CI.
+- Extend automated compatibility evidence across APIs, databases, workers, and
+  browser workflows. Current CI static and build checks do not prove parity.
 - Compare seeded datasets and representative API results with the reference.
-- Design a repeatable export/import, row-count and consistency verifier, and
-  rollback procedure for each database; test these on disposable copies.
+- Rehearse the existing per-owner export/import, row-count, consistency, and
+  rollback tooling on disposable copies of Core, Activity, and Geodata.
 - Exercise backups, restore, broker outage, worker restart, and object-store
   recovery before considering a production transition.
 
