@@ -22,8 +22,7 @@ export class GeodataImportMutationRepository {
     key: string | undefined,
     body: Record<string, unknown>,
   ) {
-    const decision =
-      typeof body.decision === 'string' ? body.decision.toUpperCase() : '';
+    const decision = typeof body.decision === 'string' ? body.decision : '';
     if (!['MERGED', 'KEPT_SEPARATE', 'IGNORED', 'OPEN'].includes(decision))
       throw new BadRequestException(
         'decision must be MERGED, KEPT_SEPARATE, IGNORED, or OPEN',
