@@ -298,6 +298,9 @@ transactional outbox. Scheduled retention removes eligible import history and
 owned source objects, expires stale multipart uploads, and preserves materialized
 entities. Outage/recovery evidence remains outstanding. Activity lease extension
 is supported for long-running jobs.
+Location-enrichment workers check the request ID, geometry hash, and terminal
+status before calling the provider, so stale requests and redelivered completed
+or failed work do not repeat reverse-geocoding lookups.
 Tagged load-test cleanup now requires explicit environment opt-in, global
 operator authorization, exact confirmation, terminal work, safe object scope,
 and a no-Activity-impact check before deletion.

@@ -146,6 +146,66 @@ export class GeodataEnrichmentRepository {
   }
 
   async process(job: EnrichmentJob) {
+    const preflight = await this.connect();
+    try {
+      await preflight.query('BEGIN');
+      const selected = await preflight.query(
+        `SELECT public_properties,ST_AsGeoJSON(geom)::jsonb AS geometry
+           FROM geodata_entity WHERE id=$1 FOR UPDATE`,
+        [job.id],
+      );
+      const row = selected.rows[0];
+      if (!row) {
+        await preflight.query('COMMIT');
+        return;
+      }
+      const props = record(row.public_properties);
+      if (props.locationEnrichmentRequestId !== job.requestId) {
+        await preflight.query('COMMIT');
+        return;
+      }
+      if (geometryHash(row.geometry) !== job.geometryHash) {
+        const completedAt = new Date();
+        const stale = {
+          ...props,
+          locationEnrichmentStatus: 'SUPERSEDED',
+          locationEnrichmentCompletedAt: completedAt.toISOString(),
+        };
+        await preflight.query(
+          'UPDATE geodata_entity SET public_properties=$2::jsonb,updated_at=$3 WHERE id=$1',
+          [job.id, stringifyJsonWithBigInts(stale), completedAt],
+        );
+        await this.writeEvent(
+          preflight,
+          job.id,
+          'geodata.entity.location-enriched.v1',
+          {
+            entityId: job.id,
+            requestId: job.requestId,
+            geometryHash: job.geometryHash,
+            status: 'SUPERSEDED',
+            reason: job.reason,
+          },
+          completedAt,
+        );
+        await preflight.query('COMMIT');
+        return;
+      }
+      if (
+        props.locationEnrichmentStatus === 'COMPLETED' ||
+        props.locationEnrichmentStatus === 'FAILED'
+      ) {
+        await preflight.query('COMMIT');
+        return;
+      }
+      await preflight.query('COMMIT');
+    } catch (error) {
+      await preflight.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      preflight.release();
+    }
+
     const result = await reverseGeocode(job.point);
     const client = await this.connect();
     try {
