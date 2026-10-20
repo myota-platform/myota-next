@@ -264,7 +264,9 @@ float-truncation behavior through API parsing, persistence, and importer due-tim
 calculation.
 Multipart upload part numbers follow Python integer parsing for whitespace,
 Unicode decimal digits, and underscores before enforcing the 1 through 10000
-range.
+range. Multipart expected sizes follow Python `int()` conversion for booleans,
+finite floats, and integer strings with Unicode digits or underscores before
+the source-specific byte limit is enforced.
 Complete snapshot imports are also accepted on the ordinary import path; the
 worker applies disappearance policy after the final batch is staged, before
 candidate review or promotion, matching the reference worker lifecycle.

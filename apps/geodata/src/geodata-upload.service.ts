@@ -22,6 +22,7 @@ import { Readable } from 'node:stream';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
+import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import { normalizeEntityTypeCodes } from './geodata-entity-types.js';
 
 const maxUploadBytes = integerEnv('MYOTA_UPLOAD_MAX_BYTES', 1024 ** 3);
@@ -613,15 +614,16 @@ function validateCreate(body: Record<string, unknown>) {
       : fallbackFormat;
   const format = formatValue.toUpperCase();
   const sourceLimit = sourceUploadLimit(format);
-  const expectedSize = Number(body.expectedSize);
+  const parsedExpectedSize = pythonInteger(body.expectedSize);
   if (
-    !Number.isSafeInteger(expectedSize) ||
-    expectedSize < 1 ||
-    expectedSize > sourceLimit
+    parsedExpectedSize === null ||
+    parsedExpectedSize < 1n ||
+    parsedExpectedSize > BigInt(sourceLimit)
   )
     throw new BadRequestException(
       `upload size must be between 1 and ${sourceLimit} bytes`,
     );
+  const expectedSize = Number(parsedExpectedSize);
   const entityTypes = normalizeEntityTypeCodes(
     body.entityTypes,
     body.entityType,
@@ -690,6 +692,18 @@ function validateCreate(body: Record<string, unknown>) {
 
 function integerEnv(name: string, fallback: number) {
   return integerSetting(process.env[name], fallback);
+}
+
+function pythonInteger(value: unknown): bigint | null {
+  if (typeof value === 'boolean') return value ? 1n : 0n;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return null;
+    return BigInt(Math.trunc(value));
+  }
+  if (typeof value !== 'string') return null;
+  const normalized = normalizePythonNumericText(value);
+  if (!/^[+-]?\d(?:_?\d)*$/.test(normalized)) return null;
+  return BigInt(normalized.replaceAll('_', ''));
 }
 
 function sourceUploadLimit(format: string) {

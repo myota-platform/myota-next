@@ -87,6 +87,11 @@ requirePattern(
   'Geodata multipart upload part numbers must follow Python integer parsing and bounds',
 );
 requirePattern(
+  'apps/geodata/src/geodata-upload.service.ts',
+  /const parsedExpectedSize = pythonInteger\(body\.expectedSize\)[\s\S]*?function pythonInteger\(value: unknown\): bigint \| null[\s\S]*?normalizePythonNumericText\(value\)[\s\S]*?BigInt\(normalized\.replaceAll\('_', ''\)\)/,
+  'Geodata multipart expected sizes must follow Python integer conversion before size bounds',
+);
+requirePattern(
   'libs/platform/src/bootstrap.ts',
   /containsBigInt\(body\)[\s\S]*?stringifyJsonWithBigInts\(body\)/,
   'shared HTTP bootstrap must serialize BigInt responses as JSON integers',
