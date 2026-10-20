@@ -195,6 +195,7 @@ export class GatewayController {
       'content-type',
       'idempotency-key',
       'if-match',
+      'user-agent',
       'x-correlation-id',
       'x-request-id',
     ]) {

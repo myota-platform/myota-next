@@ -72,8 +72,9 @@
   Core-owned maintenance process expires Identity records and removes aged,
   unreferenced profile-image objects. Token, recovery, lockout, and maintenance
   integer settings use the shared strict parser to match Python's environment
-  value handling. Unicode 15.0 case-fold mappings in Core now provide indexed
-  email identity keys for login, recovery, account creation, and email updates;
+  value handling. The Gateway also forwards User-Agent so Identity session
+  metadata matches direct request context. Unicode 15.0 case-fold mappings in
+  Core now provide indexed email identity keys for login, recovery, account creation, and email updates;
   migration rejects case-fold-equivalent duplicate addresses before building
   the unique index. The Gateway overwrites and signs the client socket address;
   Identity verifies it before using it for login rate limits and security-event
