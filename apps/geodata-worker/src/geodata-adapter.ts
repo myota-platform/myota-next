@@ -66,7 +66,7 @@ export function normalizeAdapterFeature(
   const geometry = isTruthy(rawGeometry)
     ? normalizeGeometry(
         rawGeometry,
-        feature.crs ?? feature.spatialReference ?? properties.crs,
+        pythonOr(feature.crs, feature.spatialReference, properties.crs),
       )
     : null;
 
@@ -132,7 +132,7 @@ function normalizeGovernmentFeature(
   const geometry = isTruthy(rawGeometry)
     ? normalizeGeometry(
         rawGeometry,
-        feature.crs ?? feature.spatialReference ?? properties.crs,
+        pythonOr(feature.crs, feature.spatialReference, properties.crs),
       )
     : null;
   properties.sourceFormat = sourceFormat;
@@ -346,6 +346,10 @@ function isTruthy(value: unknown): boolean {
   if (Array.isArray(value)) return value.length > 0;
   if (typeof value === 'object') return Object.keys(value).length > 0;
   return true;
+}
+
+function pythonOr(first: unknown, second: unknown, fallback: unknown) {
+  return isTruthy(first) ? first : isTruthy(second) ? second : fallback;
 }
 
 function isRecord(value: unknown): value is Record<string, any> {
