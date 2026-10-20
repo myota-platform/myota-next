@@ -12,7 +12,7 @@ below inventories the target contract; the five added operations are extensions,
 not upstream OpenAPI parity requirements, and need separate evidence against
 current source behavior.
 
-The target also edits seven shared operation definitions:
+The target also edits eight shared operation definitions:
 
 - `GET /v1/identity/admin/security-events`, `GET /v1/identity/accounts/{accountId}/export`,
   and `POST /v1/identity/auth/service-token` add operation IDs.
@@ -23,6 +23,8 @@ The target also edits seven shared operation definitions:
 - `GET /v1/geodata/entities` documents that legacy individual bounds take
   precedence over `bbox` when any individual bound is supplied, matching the
   current reference handler.
+- `POST /v1/geodata/proposals` documents optional attachment metadata accepted
+  by the Python handler and preserved on the proposed entity.
 - `POST /v1/identity/oidc/providers` declares `201`, while the upstream
   OpenAPI declares `200`. The reference Python handler returns `201`, and the
   NestJS handler also returns `201`; resolve this contract/runtime discrepancy
