@@ -66,6 +66,14 @@ export function normalizeUtcTimestamp(value: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
     normalized += 'T00:00:00';
   }
+  const timeParts = /T(\d{2}):(\d{2}):(\d{2})/i.exec(normalized);
+  if (
+    timeParts &&
+    (Number(timeParts[1]) > 23 ||
+      Number(timeParts[2]) > 59 ||
+      Number(timeParts[3]) > 59)
+  )
+    throw new BadRequestException('effectiveFrom must be a valid timestamp');
   const dateParts = /^(\d{4})-(\d{2})-(\d{2})/.exec(normalized);
   if (dateParts) {
     const year = Number(dateParts[1]);

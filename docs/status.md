@@ -154,8 +154,8 @@
   publication timestamps accept Python-compatible calendar and ISO week dates,
   basic and extended date and time forms, arbitrary single-character date/time
   separators, comma-fraction input, and timezone offsets with seconds and
-  fractional seconds; invalid dates and offsets are rejected, and values
-  normalize to UTC with microsecond precision.
+  fractional seconds; invalid dates, clock fields, and offsets are rejected,
+  and values normalize to UTC with microsecond precision.
   Programme content and policy-draft filtering, sorting, counting, and page
   selection, plus locale coverage aggregation, run in Core PostgreSQL; the API
   transfers only the requested page or aggregate into Node.js. A dedicated
