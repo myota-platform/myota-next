@@ -197,7 +197,9 @@
   JSON and CSV. QSO correction requests and administrator review now use
   transactional Activity persistence; required fields use Python truthiness,
   so empty arrays and objects are treated as missing and field validation
-  precedes authentication where the reference does. QSO and close operations
+  precedes authentication where the reference does. Correction review checks
+  required fields before authorization and validates the decision afterward,
+  matching the reference's error order. QSO and close operations
   load the activation before operator authorization. QSO ingestion also checks
   record-array shape and batch size after activation authorization.
   QSO ingestion defaults `sourceFormat` only when omitted and preserves an

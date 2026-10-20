@@ -466,14 +466,13 @@ export class ActivityService {
     correctionId: string,
     body: JsonRecord,
   ) {
-    if (
-      !['APPLIED', 'REJECTED'].includes(body.decision) ||
-      !pythonTruthy(body.reviewedBy)
-    )
+    if (!pythonTruthy(body.decision) || !pythonTruthy(body.reviewedBy))
       throw new BadRequestException(
-        'decision must be APPLIED or REJECTED and reviewedBy is required',
+        'missing required fields: decision, reviewedBy',
       );
     this.authorize(authorization, ['activity.admin']);
+    if (body.decision !== 'APPLIED' && body.decision !== 'REJECTED')
+      throw new BadRequestException('decision must be APPLIED or REJECTED');
     return this.repository.reviewCorrection(qsoId, correctionId, body);
   }
 
