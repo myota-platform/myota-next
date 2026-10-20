@@ -94,6 +94,8 @@
   recalculation. Activity statistics can be listed and rebuild jobs queued,
   processed into versioned programme/category/entity/jurisdiction snapshots,
   and inspected; recipient notifications can be read with owner/admin checks.
+  Activation history, public activation history, and statistics pages now use
+  database limits and offsets; public result exports remain complete exports.
   ADIF uploads are ownership-checked, size-limited, scanned, stored in S3, and
   queued transactionally; the Activity worker decodes and normalizes the ADIF
   file before row processing, so parser failures fail the import. Later

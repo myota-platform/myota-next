@@ -85,3 +85,6 @@ events still commit atomically.
 
 `activity/002` adds an owner-scoped ordering index for bounded notification
 pages without changing the existing three-database ownership model.
+
+`activity/003` supports programme-filtered activation pages without scanning
+and materializing every matching activation in the API process.

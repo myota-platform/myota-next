@@ -44,17 +44,14 @@ export class ActivityService {
       claims.scp.includes('*') || claims.scp.includes('activity.admin')
         ? query.operatorId
         : claims.sub;
-    const items = await this.repository.list(query.programme, operatorId);
     const page = parsePageInteger(query.page, 1);
     const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
-    const start = (page - 1) * pageSize;
-    return {
-      items: items.slice(start, start + pageSize),
+    return this.repository.listPage(
+      query.programme,
+      operatorId,
       page,
       pageSize,
-      total: items.length,
-      nextPage: start + pageSize < items.length ? page + 1 : null,
-    };
+    );
   }
 
   async create(
@@ -357,22 +354,22 @@ export class ActivityService {
   }
 
   async publicHistory(programme?: string, page?: string, pageSize?: string) {
-    const items = await this.repository.list(programme);
-    const publicItems = items.map((item) => ({
-      ...item,
-      operatorCallsign: item.operatorCallsign
-        ? maskCallsign(item.operatorCallsign)
-        : null,
-    }));
     const pageNumber = parsePageInteger(page, 1);
     const size = Math.min(100, parsePageInteger(pageSize, 50));
-    const start = (pageNumber - 1) * size;
+    const result = await this.repository.listPage(
+      programme,
+      undefined,
+      pageNumber,
+      size,
+    );
     return {
-      items: publicItems.slice(start, start + size),
-      page: pageNumber,
-      pageSize: size,
-      total: publicItems.length,
-      nextPage: start + size < publicItems.length ? pageNumber + 1 : null,
+      ...result,
+      items: result.items.map((item) => ({
+        ...item,
+        operatorCallsign: item.operatorCallsign
+          ? maskCallsign(item.operatorCallsign)
+          : null,
+      })),
     };
   }
 
@@ -478,17 +475,9 @@ export class ActivityService {
     query: { programme?: string; page?: string; pageSize?: string },
   ) {
     this.authorize(authorization, ['activity.read', 'activity.admin']);
-    const items = await this.repository.listStatistics(query.programme);
     const page = parsePageInteger(query.page, 1);
     const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
-    const start = (page - 1) * pageSize;
-    return {
-      items: items.slice(start, start + pageSize),
-      page,
-      pageSize,
-      total: items.length,
-      nextPage: start + pageSize < items.length ? page + 1 : null,
-    };
+    return this.repository.listStatisticsPage(query.programme, page, pageSize);
   }
 
   async createStatisticsRebuild(

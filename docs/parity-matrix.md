@@ -57,6 +57,9 @@ an audited reason; long-running Activity jobs now extend their 120-second leases
 from a separate database connection while processing. Statistics listing and rebuild-job APIs,
 transactional snapshot rebuilds, and owner-scoped notification reads are
 implemented. ADIF import creation, processing, and status reads are implemented.
+Activity activation history, public activation history, and statistics pages
+apply database limits and offsets while retaining their existing page metadata;
+public result exports remain complete exports.
 The notifications endpoint now supports the contract's optional `page` and
 `pageSize` parameters with database-bounded reads; requests without paging
 parameters retain the prior unpaged response shape.

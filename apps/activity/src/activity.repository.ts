@@ -38,6 +38,52 @@ export class ActivityRepository {
     }
   }
 
+  async listPage(
+    programme: string | undefined,
+    operatorId: string | undefined,
+    page: number,
+    pageSize: number,
+  ) {
+    const client = await this.connect();
+    try {
+      const clauses: string[] = [];
+      const filters: unknown[] = [];
+      if (programme) {
+        filters.push(programme);
+        clauses.push(`programme_slug=$${filters.length}`);
+      }
+      if (operatorId) {
+        filters.push(operatorId);
+        clauses.push(`operator_id=$${filters.length}`);
+      }
+      const where = clauses.length ? ` WHERE ${clauses.join(' AND ')}` : '';
+      const count = await client.query(
+        `SELECT count(*) AS total FROM activity_activation${where}`,
+        filters,
+      );
+      const total = Number(count.rows[0]?.total ?? 0);
+      const limitIndex = filters.length + 1;
+      const result = await client.query(
+        `SELECT *, ${activationTimestampProjection} FROM activity_activation${where}
+         ORDER BY started_at DESC LIMIT $${limitIndex} OFFSET $${limitIndex + 1}`,
+        [
+          ...filters,
+          pageSize,
+          Math.min((page - 1) * pageSize, Number.MAX_SAFE_INTEGER),
+        ],
+      );
+      return {
+        items: result.rows.map((row) => activationRecord(row)),
+        page,
+        pageSize,
+        total,
+        nextPage: page * pageSize < total ? page + 1 : null,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
   async leaderboard(programme: string, category: string, limit = 50) {
     const client = await this.connect();
     try {
@@ -53,23 +99,45 @@ export class ActivityRepository {
     }
   }
 
-  async listStatistics(programme?: string): Promise<JsonRecord[]> {
+  async listStatisticsPage(
+    programme: string | undefined,
+    page: number,
+    pageSize: number,
+  ) {
     const client = await this.connect();
     try {
+      const filters = programme ? [programme] : [];
+      const where = programme ? ' WHERE programme_slug=$1' : '';
+      const count = await client.query(
+        `SELECT count(*) AS total FROM activity_statistic_snapshot${where}`,
+        filters,
+      );
+      const total = Number(count.rows[0]?.total ?? 0);
       const result = await client.query(
         `SELECT id,programme_slug,statistic_type,scope_key,metric_values,algorithm_version,generated_at
-         FROM activity_statistic_snapshot${programme ? ' WHERE programme_slug=$1' : ''} ORDER BY generated_at DESC`,
-        programme ? [programme] : [],
+         FROM activity_statistic_snapshot${where} ORDER BY generated_at DESC
+         LIMIT $${filters.length + 1} OFFSET $${filters.length + 2}`,
+        [
+          ...filters,
+          pageSize,
+          Math.min((page - 1) * pageSize, Number.MAX_SAFE_INTEGER),
+        ],
       );
-      return result.rows.map((row) => ({
-        id: String(row.id),
-        programme: row.programme_slug,
-        type: row.statistic_type,
-        scope: row.scope_key,
-        values: row.metric_values,
-        algorithmVersion: row.algorithm_version,
-        generatedAt: date(row.generated_at),
-      }));
+      return {
+        items: result.rows.map((row) => ({
+          id: String(row.id),
+          programme: row.programme_slug,
+          type: row.statistic_type,
+          scope: row.scope_key,
+          values: row.metric_values,
+          algorithmVersion: row.algorithm_version,
+          generatedAt: date(row.generated_at),
+        })),
+        page,
+        pageSize,
+        total,
+        nextPage: page * pageSize < total ? page + 1 : null,
+      };
     } finally {
       client.release();
     }
