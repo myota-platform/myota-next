@@ -397,14 +397,16 @@ paths:
       tags: [Geodata]
       security: [{ bearerAuth: [] }]
       summary: Create a geodata import resource and queue candidate preprocessing
-      description: Accepts a JSON feature collection or text document, a multipart upload, or a durable object-storage reference. All sources enter the preprocessing queue before promotion.
+      description: Accepts a JSON feature collection or text document, or a durable object-storage reference. Persistent deployments reject single-request multipart uploads; use the resumable upload session endpoints instead. All accepted sources enter the preprocessing queue before promotion.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content:
           application/json: { schema: { oneOf: [{ $ref: '#/components/schemas/GeoImport' }, { $ref: '#/components/schemas/GeoImportObjectReference' }] } }
           multipart/form-data: { schema: { $ref: '#/components/schemas/GeoImportMultipart' } }
-      responses: { '202': { description: Import accepted } }
+      responses:
+        '202': { description: Import accepted }
+        '400': { description: Invalid request, oversized body, or single-request multipart uploads are disabled }
   /v1/geodata/imports/{runId}:
     get:
       tags: [Geodata]

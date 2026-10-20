@@ -26,6 +26,7 @@ import { GeodataDeletionService } from './geodata-deletion.service.js';
 import { GeodataScheduleService } from './geodata-schedule.service.js';
 import { GeodataProposalService } from './geodata-proposal.service.js';
 import { GeodataLoadTestCleanupService } from './geodata-load-test-cleanup.service.js';
+import { integerSetting } from '@app/platform/integer-setting.js';
 
 @Controller('geodata')
 export class GeodataController {
@@ -184,9 +185,32 @@ export class GeodataController {
   createImport(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') key: string | undefined,
+    @Req() request: Request,
     @Body() body: Record<string, unknown>,
   ) {
     authorizeImport(authorization);
+    if (request.is('multipart/form-data')) {
+      request.resume();
+      const contentLength = request.header('content-length') ?? '0';
+      const length = Number(contentLength);
+      if (!Number.isInteger(length))
+        throw new BadRequestException('invalid Content-Length');
+      const maximumBytes = integerSetting(
+        process.env.MYOTA_MAX_BODY_BYTES,
+        1024 * 1024 * 1024,
+      );
+      if (length > maximumBytes)
+        throw new BadRequestException(
+          `request body exceeds ${maximumBytes} bytes`,
+        );
+      if (length <= 0)
+        throw new BadRequestException(
+          'multipart request body must not be empty',
+        );
+      throw new BadRequestException(
+        'single-request uploads are disabled; create a resumable upload session',
+      );
+    }
     return this.imports.create(key, body);
   }
 
