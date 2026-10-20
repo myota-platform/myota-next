@@ -12,6 +12,8 @@ schema in the OpenAPI contract. Responses carry request and correlation IDs in
 headers and in the problem body. Identity login preserves the reference status
 behavior: invalid credentials return 400, while permission and rate-limit
 failures return 403. Other NestJS 401 permission exceptions also map to 403.
+The Gateway forwards W3C `traceparent` and `tracestate` headers to the owning
+API and passes trace headers back to clients when an upstream provides them.
 
 ## Domain functions
 

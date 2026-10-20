@@ -34,7 +34,7 @@ export function requestIds(
   response.setHeader('X-Correlation-ID', correlationId);
   response.setHeader(
     'Access-Control-Expose-Headers',
-    'X-Request-ID, X-Correlation-ID',
+    'X-Request-ID, X-Correlation-ID, traceparent, tracestate, X-Trace-ID',
   );
   response.locals.requestId = requestId;
   response.locals.correlationId = correlationId;

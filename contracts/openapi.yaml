@@ -9,7 +9,8 @@ info:
     UTC offset; timezone-bearing inputs are normalized to UTC. Legacy unqualified
     date-times are interpreted as UTC, never the server or browser local timezone.
     Error responses use the Problem schema and include X-Request-ID and
-    X-Correlation-ID response headers.
+    X-Correlation-ID response headers. The Gateway forwards W3C trace context
+    headers to API services and returns upstream trace headers when provided.
 servers:
   - url: http://localhost:8080
 tags:

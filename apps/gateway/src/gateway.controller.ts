@@ -39,6 +39,9 @@ const SAFE_RESPONSE_HEADERS = [
   'content-type',
   'deprecation',
   'etag',
+  'traceparent',
+  'tracestate',
+  'x-trace-id',
   'x-correlation-id',
   'x-request-id',
   'sunset',
@@ -204,6 +207,8 @@ export class GatewayController {
       'user-agent',
       'x-correlation-id',
       'x-request-id',
+      'traceparent',
+      'tracestate',
     ]) {
       const value = request.header(name);
       if (value) headers.set(name, value);
