@@ -182,7 +182,8 @@ Public leaderboard category values are uppercased and passed through to the
 aggregate query, matching the reference: unrecognized categories return an
 empty `items` array instead of a validation error.
 The notifications endpoint preserves the reference's unpaged `{ items }`
-response and ignores `page` and `pageSize` query parameters. The Admin Activity
+response, falls back to the caller's subject when `recipientId` is absent or
+blank, and ignores `page` and `pageSize` query parameters. The Admin Activity
 view requests that response without adding page controls or inferred metadata.
 Statistics rebuild requests deduplicate by programme and UTC day, ignoring a
 caller-supplied `Idempotency-Key`, as in the reference implementation.

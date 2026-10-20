@@ -509,7 +509,7 @@ export class ActivityService {
       'activity.read',
       'identity.me',
     ]);
-    const recipient = query.recipientId ?? claims.sub;
+    const recipient = query.recipientId || claims.sub;
     if (
       claims.sub !== recipient &&
       !claims.scp.some((scope) => ['*', 'activity.admin'].includes(scope))
