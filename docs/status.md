@@ -188,8 +188,9 @@
   JSON and CSV. QSO correction requests and administrator review now use
   transactional Activity persistence; required fields use Python truthiness,
   so empty arrays and objects are treated as missing and field validation
-  precedes authentication where the reference does. QSO ingestion resolves and
-  authorizes its activation before checking record-array shape and batch size.
+  precedes authentication where the reference does. QSO and close operations
+  load the activation before operator authorization. QSO ingestion also checks
+  record-array shape and batch size after activation authorization.
   Requests store any
   truthy `proposedValues` JSON shape accepted by the reference. Review resolves the QSO through the
   correction record, as the reference does. Applying an object correction queues

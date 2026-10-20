@@ -125,8 +125,8 @@ export class ActivityService {
       throw new BadRequestException(
         'workedCallsign and timestamp are required',
       );
-    const claims = verifyAccessToken(authorization);
     const activation = await this.repository.get(activationId);
+    const claims = verifyAccessToken(authorization);
     this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
     return this.repository.addQso(
       activationId,
@@ -141,8 +141,8 @@ export class ActivityService {
     activationId: string,
     body: JsonRecord,
   ) {
-    const claims = verifyAccessToken(authorization);
     const activation = await this.repository.get(activationId);
+    const claims = verifyAccessToken(authorization);
     this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
     const endedAt = Object.hasOwn(body, 'endedAt')
       ? body.endedAt
@@ -162,8 +162,8 @@ export class ActivityService {
       throw new BadRequestException(
         `missing required fields: ${missing.join(', ')}`,
       );
-    const claims = verifyAccessToken(authorization);
     const activation = await this.repository.get(body.activationId);
+    const claims = verifyAccessToken(authorization);
     this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
     if (!Array.isArray(body.qsos) || body.qsos.length === 0)
       throw new BadRequestException('qsos must be a non-empty array');
