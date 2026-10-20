@@ -181,7 +181,9 @@ PyShp's GeoJSON conversion. OSM PBF uploads are decoded by
 `osmium-tool` in the Geodata worker image, preserve OSM tags and type/id source
 references, and emit the configured hiking, protected-area, point, path, and
 multipolygon features using a temporary disk-backed node-location index.
-PBF source bytes stream to disk with checksum verification. API admission and
+Shapefile and PBF working directories use `MYOTA_UPLOAD_SPOOL_DIR` when set,
+and otherwise use the OS temporary directory. PBF source bytes stream to disk
+with checksum verification. API admission and
 worker decoding share the same configured upload cap, defaulting to 1 GiB or
 the optional format-specific override. PBF output is streamed one feature at a
 time, bounded by the per-feature and total-feature limits, into staged batches bounded by

@@ -2,8 +2,7 @@ import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { Readable, Transform } from 'node:stream';
@@ -13,6 +12,7 @@ import {
   MAX_IMPORT_FEATURE_BYTES,
   MAX_IMPORT_FEATURE_VERTICES,
 } from '@app/platform/import-limits.js';
+import { createUploadSpoolDirectory } from '@app/platform/upload-spool.js';
 import { canonicalPythonGeneratedJson } from '../../geodata/src/geodata-request-fingerprint.js';
 import { setSourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 
@@ -58,7 +58,7 @@ export async function* decodeOsmPbfStream(
   if (!normalizedFilename.endsWith('.pbf'))
     throw new Error('OSM PBF imports must use a .pbf filename');
 
-  const directory = await mkdtemp(join(tmpdir(), 'myota-osm-'));
+  const directory = await createUploadSpoolDirectory('myota-osm-');
   const sourcePath = join(directory, 'source.osm.pbf');
   const configPath = join(directory, 'export.json');
   const locationIndexPath = join(directory, 'node-locations.store');

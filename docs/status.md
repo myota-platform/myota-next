@@ -466,7 +466,8 @@
   keys remain unmodified. Upload size defaults to 1 GiB through
   `MYOTA_UPLOAD_MAX_BYTES`; optional format-specific settings can override that
   value. This path streams GeoJSON sources and decoded features.
-  Shapefile ZIP uploads stream to temporary disk, then decode one shape/DBF
+  Shapefile ZIP uploads stream to the configured `MYOTA_UPLOAD_SPOOL_DIR`
+  (OS temporary directory by default), then decode one shape/DBF
   record at a time, selecting the first `.shp` entry and its matching `.shx`
   and `.dbf` files as the reference does. Deleted DBF rows are filtered before
   shape and record pairing, with iteration bounded by the SHX and active DBF
@@ -486,7 +487,7 @@
   preserves OSM tags and stable type/id source references, filters the current
   hiking-path and protected-area tag catalogue, and assembles closed-way and
   multipolygon areas using a temporary disk-backed node-location index. PBF
-  source bytes stream to disk with checksum verification; upload size follows
+  source bytes stream to the configured upload spool with checksum verification; upload size follows
   `MYOTA_OSM_PBF_MAX_UPLOAD_BYTES` or the shared upload limit. Output streams
   one feature at a time under the per-feature and total-feature limits, into
   staged batches bounded by

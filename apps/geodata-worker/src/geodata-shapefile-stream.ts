@@ -1,8 +1,7 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdtemp, open, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { open, readFile, rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import proj4, { type Converter } from 'proj4';
@@ -14,6 +13,7 @@ import {
   MAX_IMPORT_FEATURE_VERTICES,
   MAX_SHAPEFILE_EXPANDED_BYTES,
 } from '@app/platform/import-limits.js';
+import { createUploadSpoolDirectory } from '@app/platform/upload-spool.js';
 import { canonicalPythonGeneratedJson } from '../../geodata/src/geodata-request-fingerprint.js';
 import { setSourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 
@@ -34,7 +34,7 @@ export async function* streamShapefileFeatures(
   if (!filename.toLowerCase().endsWith('.zip'))
     throw new Error('Shapefile imports must be ZIP archives');
 
-  const directory = await mkdtemp(join(tmpdir(), 'myota-shapefile-'));
+  const directory = await createUploadSpoolDirectory('myota-shapefile-');
   let zip: yauzl.ZipFile | undefined;
   try {
     const archivePath = join(directory, 'source.zip');
