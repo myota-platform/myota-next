@@ -518,8 +518,7 @@ function parseCommand(raw: Uint8Array): EmailCommand {
     envelope.producer !== 'identity' ||
     !UUID.test(String(envelope.workId)) ||
     typeof envelope.createdAt !== 'string' ||
-    !envelope.createdAt.endsWith('Z') ||
-    !Number.isFinite(Date.parse(envelope.createdAt)) ||
+    !isValidUtcDateTime(envelope.createdAt) ||
     (envelope.aggregate !== undefined && !isRecord(envelope.aggregate)) ||
     (envelope.correlationId !== undefined &&
       (typeof envelope.correlationId !== 'string' ||
@@ -555,6 +554,45 @@ function parseCommand(raw: Uint8Array): EmailCommand {
     templateId: payload.templateId,
     templateData: data,
   };
+}
+
+function isValidUtcDateTime(value: string) {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/.exec(value);
+  if (!match || match[0] !== value) return false;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText] =
+    match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  if (
+    year < 1 ||
+    month < 1 ||
+    month > 12 ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59
+  )
+    return false;
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [
+    31,
+    leapYear ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+  return day >= 1 && day <= daysInMonth[month - 1];
 }
 
 function renderMessage(command: EmailCommand) {
