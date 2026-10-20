@@ -2,7 +2,7 @@ export interface ProgrammeRecord {
   id: string;
   slug: string;
   name: string;
-  description?: string;
+  description?: string | null;
   entityTypeCodes?: string[];
   rules: unknown;
   entityTypes: unknown[];

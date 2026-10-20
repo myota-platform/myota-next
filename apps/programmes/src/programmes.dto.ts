@@ -3,12 +3,10 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
-  IsInt,
   IsObject,
   IsOptional,
   IsString,
   MinLength,
-  Min,
   ValidateIf,
 } from 'class-validator';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
@@ -29,20 +27,18 @@ export class CreateProgrammeDto {
 
   @IsOptional()
   @IsString()
-  description?: string;
+  description?: string | null;
 
   @IsOptional()
   @IsObject()
-  theme?: Record<string, unknown>;
+  theme?: Record<string, unknown> | null;
 
   @IsOptional()
   @IsObject()
   oidc?: Record<string, unknown> | null;
 
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  policyVersion?: number;
+  @Allow()
+  policyVersion?: unknown;
 }
 
 export class EntityTypeDto {

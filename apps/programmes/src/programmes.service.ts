@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
+import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import type { ProgrammeRecord } from './programme.types.js';
 import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
@@ -99,12 +100,18 @@ export class ProgrammesService {
         id: randomUUID(),
         slug,
         name: body.name,
-        description: body.description ?? '',
+        description: body.description !== undefined ? body.description : '',
         entityTypeCodes,
         entityTypes,
         rules: body.rules,
-        policyVersion: body.policyVersion ?? 1,
-        theme: body.theme ?? { primary: '#0f766e', accent: '#f59e0b' },
+        policyVersion:
+          body.policyVersion !== undefined
+            ? parsePythonPolicyVersion(body.policyVersion)
+            : 1,
+        theme:
+          body.theme !== undefined
+            ? body.theme
+            : { primary: '#0f766e', accent: '#f59e0b' },
         oidc: body.oidc ?? null,
         status: 'ACTIVE',
         createdAt: now,
@@ -396,6 +403,26 @@ export class ProgrammesService {
     }
     throw new ForbiddenException('programme administration scope is required');
   }
+}
+
+function parsePythonPolicyVersion(value: unknown): number {
+  if (typeof value === 'boolean') return Number(value);
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const integer = Math.trunc(value);
+    if (Number.isSafeInteger(integer)) return integer;
+  }
+  if (typeof value === 'string') {
+    const normalized = normalizePythonNumericText(value);
+    if (/^[+-]?\d(?:_?\d)*$/.test(normalized)) {
+      const integer = BigInt(normalized.replaceAll('_', ''));
+      if (
+        integer <= BigInt(Number.MAX_SAFE_INTEGER) &&
+        integer >= BigInt(Number.MIN_SAFE_INTEGER)
+      )
+        return Number(integer);
+    }
+  }
+  throw new BadRequestException('policyVersion must be an integer');
 }
 
 const GEOMETRY_TYPES = new Set([

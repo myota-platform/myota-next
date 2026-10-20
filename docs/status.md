@@ -135,6 +135,9 @@
   types, and rules, matching the Python reference. Global entity-type catalogue
   management uses its own Core table; assignments are persisted in the
   relational Programme record and commit with catalogue and outbox changes.
+  Programme creation preserves explicit null descriptions and themes while
+  applying defaults only when those fields are omitted. `policyVersion` uses
+  Python integer conversion and is not constrained to positive values.
   Entity-type code, geometry, label, and description cleanup use Python's
   Unicode whitespace stripping rules.
   Programme content supports draft editing,
