@@ -15,7 +15,7 @@ const MAX_RECORD_BYTES = 16 * 1024 * 1024;
 const MAX_FEATURE_VERTICES = 250_000;
 const MAX_METADATA_BYTES = 1024 * 1024;
 
-type ExtractedMember = { path: string; size: number };
+type ExtractedMember = { path: string; size: number; name: string };
 
 /** Stream a ZIP Shapefile source through disk-backed archive and record readers. */
 export async function* streamShapefileFeatures(
@@ -115,13 +115,16 @@ export async function* streamShapefileFeatures(
       members.set(normalizedName, {
         path: memberPath,
         size: entry.uncompressedSize,
+        name,
       });
     }
 
-    const shapeName = [...members.keys()].find((name) => name.endsWith('.shp'));
-    if (!shapeName) throw new Error('Shapefile ZIP must contain a .shp file');
+    const shapeEntry = [...members.entries()].find(([, member]) =>
+      member.name.endsWith('.shp'),
+    );
+    if (!shapeEntry) throw new Error('Shapefile ZIP must contain a .shp file');
+    const [shapeName, shape] = shapeEntry;
     const stem = shapeName.slice(0, -4);
-    const shape = members.get(shapeName)!;
     const index = members.get(`${stem}.shx`);
     const dbf = members.get(`${stem}.dbf`);
     if (!index || !dbf)
