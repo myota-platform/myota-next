@@ -19,6 +19,7 @@ import { parseQsoCsv } from './qso-csv.js';
 import {
   normalizeActivation,
   normalizeQso,
+  normalizeTimestamp,
   type JsonRecord,
 } from './activity-domain.js';
 
@@ -133,7 +134,7 @@ export class ActivityService {
     const claims = verifyAccessToken(authorization);
     const activation = await this.repository.get(activationId);
     this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
-    const endedAt = body.endedAt ?? new Date().toISOString();
+    const endedAt = body.endedAt ?? normalizeTimestamp(new Date());
     return this.repository.close(activationId, endedAt, key);
   }
 

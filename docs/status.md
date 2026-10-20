@@ -132,9 +132,10 @@
   programme location requirements and configured entity bounds. It persists normalized
   activations and QSOs in Activity PostgreSQL with UTC microsecond timestamp
   precision preserved through normalization, validity checks, persistence,
-  deduplication, and reads. It writes domain events and
-  idempotency responses transactionally, updates subject aggregates, and
-  queues award recalculation work through the Activity outbox. High-volume QSO
+  deduplication, and reads. Default activation-close and rule-evaluation times
+  use the same six-digit UTC timestamp form as the reference. It writes domain
+  events and idempotency responses transactionally, updates subject aggregates,
+  and queues award recalculation work through the Activity outbox. High-volume QSO
   ingestion requests are authorized, bounded, persisted as Activity jobs, and
   exposed through an owner-scoped status API. Bounded UTF-8 CSV logs are
   normalized into those ingestion jobs. The Activity worker consumes the

@@ -436,7 +436,7 @@ export function evaluateActivation(
   return {
     valid: violations.length === 0,
     violations,
-    evaluatedAt: new Date().toISOString(),
+    evaluatedAt: normalizeTimestamp(new Date()),
     qsoCount: qsos.length,
     ruleVersion: rules.version,
   };
