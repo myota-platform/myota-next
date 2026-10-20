@@ -39,6 +39,41 @@ export class GeodataImportService {
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {}
 
+  async replayRequest(key: string, requestHash: string) {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
+        [key],
+      );
+      const previous = await client.query(
+        'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+        ['geodata-service', key],
+      );
+      if (!previous.rows[0]) {
+        await client.query('COMMIT');
+        return { found: false as const };
+      }
+      const saved = previous.rows[0].response;
+      if (
+        !isRecord(saved) ||
+        saved.requestHash !== requestHash ||
+        !Object.hasOwn(saved, 'result')
+      )
+        throw new ConflictException(
+          'Idempotency-Key was already used for another request',
+        );
+      await client.query('COMMIT');
+      return { found: true as const, response: saved.result };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async create(
     key: string | undefined,
     body: Record<string, unknown>,
@@ -57,7 +92,9 @@ export class GeodataImportService {
       await client.query('BEGIN');
       if (key) {
         await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-service:' || $1,0))",
+          options.requestHash
+            ? "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))"
+            : "SELECT pg_advisory_xact_lock(hashtextextended('geodata-service:' || $1,0))",
           [key],
         );
         const previous = await client.query(

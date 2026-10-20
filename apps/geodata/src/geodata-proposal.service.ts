@@ -13,12 +13,23 @@ import { GeodataImportService } from './geodata-import.service.js';
 export class GeodataProposalService {
   constructor(private readonly imports: GeodataImportService) {}
 
-  create(
+  async create(
     key: string | undefined,
     proposerId: string,
     body: Record<string, unknown>,
     rawBody?: string,
   ) {
+    const idempotencyKey = key
+      ? `http:${proposerId}:/v1/geodata/proposals:${key}`
+      : undefined;
+    const requestHash = key ? fingerprintJsonRequest(body, rawBody) : undefined;
+    if (idempotencyKey && requestHash) {
+      const previous = await this.imports.replayRequest(
+        idempotencyKey,
+        requestHash,
+      );
+      if (previous.found) return previous.response;
+    }
     if (!isRecord(body.feature) || !pythonTruthy(body.feature))
       throw new BadRequestException('feature is required');
     const suppliedSource = firstPythonTruthy(body.source);
@@ -68,7 +79,7 @@ export class GeodataProposalService {
     };
     feature.properties = properties;
     return this.imports.create(
-      key ? `http:${proposerId}:/v1/geodata/proposals:${key}` : undefined,
+      idempotencyKey,
       {
         adapter: 'MANUAL',
         programmeSlug: body.programmeSlug,
@@ -84,7 +95,7 @@ export class GeodataProposalService {
       },
       {
         communityProposal: { proposalId, proposerId },
-        requestHash: key ? fingerprintJsonRequest(body, rawBody) : undefined,
+        requestHash,
       },
     );
   }

@@ -11,7 +11,8 @@ export function fingerprintJsonRequest(
   body: unknown,
   rawBody?: string,
 ): string {
-  const value = rawBody === undefined ? body : new JsonParser(rawBody).parse();
+  const parsed = rawBody === undefined ? body : new JsonParser(rawBody).parse();
+  const value = isPythonTruthyJson(parsed) ? parsed : {};
   return createHash('sha256').update(pythonJson(value)).digest('hex');
 }
 
@@ -87,6 +88,20 @@ function compareCodePoints(left: string, right: string): number {
       return leftPoints[index] - rightPoints[index];
   }
   return leftPoints.length - rightPoints.length;
+}
+
+function isPythonTruthyJson(value: unknown): boolean {
+  if (value === null || value === false) return false;
+  if (typeof value === 'string' || Array.isArray(value))
+    return value.length > 0;
+  if (value instanceof JsonNumber)
+    return typeof value.value === 'bigint'
+      ? value.value !== 0n
+      : value.value !== 0;
+  if (typeof value === 'number' || typeof value === 'bigint')
+    return value !== 0;
+  if (isRecord(value)) return Object.keys(value).length > 0;
+  return true;
 }
 
 class JsonParser {

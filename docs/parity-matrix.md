@@ -221,8 +221,8 @@ import fallback. Import source identity selects `sourceKey`, `url`, then `name`
 using Python truthiness and preserves submitted whitespace. Proposal feature
 objects follow adapter normalization without an extra `type` requirement.
 Proposal idempotency scopes keys by owner and route, fingerprints the parsed
-request body, and rejects changed-body reuse while preserving integer versus
-float values.
+request body before validation, and rejects changed-body reuse while preserving
+integer versus float values.
 Candidate validation notes are stored as JSONB with existing text values
 preserved as JSON strings. If-Match protected name, website,
 description, geometry, and
