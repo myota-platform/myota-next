@@ -178,7 +178,9 @@ JSON GeoJSON, WFS GeoJSON, and ArcGIS FeatureServer JSON import creation stores
 normalized GeoJSON source documents in S3-compatible storage and queues
 idempotent import runs transactionally. ArcGIS geometries with WGS84 and
 Web Mercator spatial references are normalized to WGS84; other EPSG WKIDs are
-reprojected when the installed `proj4` definitions support them. WGS84 input
+reprojected when the installed `proj4` definitions support them. Spatial
+reference selection prefers `wkid` over `latestWkid`, and unsupported
+projections use the normalized `unsupported CRS EPSG:<id>` error. WGS84 input
 retains extra ordinates, the Web Mercator special case emits XY only, and other
 projected CRS transforms preserve ordinates beyond XY, matching the pinned
 Python path. Web Mercator exponential overflow rejects the feature as in Python.

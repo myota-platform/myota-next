@@ -456,11 +456,9 @@ function normalizeArcGisDocument(
       (candidate) =>
         candidate && (candidate.latestWkid != null || candidate.wkid != null),
     );
-    const wkid = Number(reference?.latestWkid ?? reference?.wkid ?? 4326);
-    if (!Number.isInteger(wkid) || wkid <= 0)
-      throw new BadRequestException(
-        `unsupported ArcGIS spatial reference WKID ${String(wkid)}`,
-      );
+    const wkid = Number(reference?.wkid ?? reference?.latestWkid ?? 4326);
+    if (!Number.isInteger(wkid))
+      throw new BadRequestException(`unsupported CRS EPSG:${String(wkid)}`);
     const properties = isRecord(raw.attributes) ? { ...raw.attributes } : {};
     let normalized: Record<string, unknown>;
     if (Array.isArray(geometry.rings))
@@ -517,10 +515,9 @@ function reprojectCoordinates(value: unknown, sourceWkid: number): unknown {
       ]);
       return [longitude, latitude, ...value.slice(2)];
     } catch (error) {
-      throw new BadRequestException(
-        `unsupported ArcGIS spatial reference WKID ${sourceWkid}`,
-        { cause: error },
-      );
+      throw new BadRequestException(`unsupported CRS EPSG:${sourceWkid}`, {
+        cause: error,
+      });
     }
   }
   return value.map((child) => reprojectCoordinates(child, sourceWkid));
