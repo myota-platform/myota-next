@@ -414,8 +414,11 @@
   before service normalization. The scheduled Node importer also preserves the
   source numeric tokens in the generated Feature hashes it submits. Oversized
   features with injected CRS now fail the same configured decoded-size check as the
-  reference. Generated Shapefile/PBF features can still lose integer-versus-
-  float distinctions in their source hashes.
+  reference. Generated PBF feature hashes treat geometry coordinates as Python
+  floats. Shapefile feature hashes use DBF field types to retain integer versus
+  float values and include the source `.prj` text in the decoded feature.
+  Binary-format source hashes still need fixture qualification, including large
+  DBF integers and uncommon geometries or CRS definitions.
   Candidate creation, queue creation, status, hashes, and outbox events
   finalize in one transaction. The final event is assembled in PostgreSQL to avoid
   retaining every feature summary in the worker heap.

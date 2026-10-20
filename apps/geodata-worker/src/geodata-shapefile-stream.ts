@@ -8,6 +8,8 @@ import proj4, { type Converter } from 'proj4';
 import yauzl from 'yauzl';
 import { open as openShapefile } from 'shapefile';
 import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
+import { canonicalPythonGeneratedJson } from '../../geodata/src/geodata-request-fingerprint.js';
+import { setSourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 
 const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 1024 * 1024 * 1024;
@@ -134,13 +136,14 @@ export async function* streamShapefileFeatures(
       );
     await validateShapeRecords(shape.path, shape.size);
     const filteredDbf = await filterDeletedDbfRecords(dbf.path, directory);
+    const floatingProperties = await getDbfFloatingProperties(filteredDbf.path);
     const shapeRecordLimit = await getShapeRecordLimit(index.path);
     const recordLimit =
       filteredDbf.recordLimit === undefined
         ? undefined
         : Math.max(0, Math.min(filteredDbf.recordLimit, shapeRecordLimit));
     const prj = members.get(`${stem}.prj`);
-    const projectionText = prj ? (await readFile(prj.path, 'utf8')).trim() : '';
+    const projectionText = prj ? await readFile(prj.path, 'utf8') : '';
     const projection = projectionText
       ? createWgs84Projection(projectionText)
       : undefined;
@@ -166,7 +169,18 @@ export async function* streamShapefileFeatures(
         const feature = projection
           ? reprojectFeature(result.value, projection)
           : result.value;
-        const encodedBytes = Buffer.byteLength(JSON.stringify(feature));
+        if (projectionText && isRecord(feature)) feature.crs = projectionText;
+        const canonical = isRecord(feature)
+          ? canonicalPythonGeneratedJson(
+              feature,
+              (path) =>
+                (path[0] === 'geometry' && path[1] === 'coordinates') ||
+                (path[0] === 'properties' &&
+                  typeof path[1] === 'string' &&
+                  floatingProperties.has(path[1])),
+            )
+          : JSON.stringify(feature);
+        const encodedBytes = Buffer.byteLength(canonical, 'utf8');
         if (encodedBytes > MAX_RECORD_BYTES)
           throw new Error(
             `a source feature exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
@@ -175,6 +189,12 @@ export async function* streamShapefileFeatures(
           throw new Error(
             `a source geometry exceeds the configured vertex limit (${MAX_FEATURE_VERTICES})`,
           );
+        if (isRecord(feature)) {
+          setSourceFeatureHashOverride(
+            feature,
+            createHash('sha256').update(canonical, 'utf8').digest('hex'),
+          );
+        }
         if (featureCount % 100 === 0) await heartbeat();
         yield feature;
       }
@@ -264,6 +284,45 @@ async function filterDeletedDbfRecords(path: string, directory: string) {
     return { path: outputPath, recordLimit: activeCount };
   } finally {
     await input.close();
+  }
+}
+
+async function getDbfFloatingProperties(path: string): Promise<Set<string>> {
+  const file = await open(path, 'r');
+  try {
+    const header = Buffer.alloc(32);
+    const headerRead = await file.read(header, 0, header.length, 0);
+    if (headerRead.bytesRead !== header.length) return new Set();
+    const headerLength = header.readUInt16LE(8);
+    const floatingProperties = new Set<string>();
+    let position = 32;
+    while (position + 32 <= headerLength) {
+      const descriptor = Buffer.alloc(32);
+      const result = await file.read(
+        descriptor,
+        0,
+        descriptor.length,
+        position,
+      );
+      if (result.bytesRead !== descriptor.length || descriptor[0] === 0x0d)
+        break;
+      const fieldName = descriptor
+        .subarray(0, 11)
+        .toString('ascii')
+        .replace(/\0.*$/, '')
+        .trimEnd();
+      const fieldType = String.fromCharCode(descriptor[11] ?? 0);
+      const decimalPlaces = descriptor[17] ?? 0;
+      if (
+        fieldName &&
+        (fieldType === 'F' || (fieldType === 'N' && decimalPlaces > 0))
+      )
+        floatingProperties.add(fieldName);
+      position += descriptor.length;
+    }
+    return floatingProperties;
+  } finally {
+    await file.close();
   }
 }
 

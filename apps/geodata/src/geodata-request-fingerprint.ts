@@ -23,6 +23,41 @@ export function canonicalPythonJson(rawBody: string): string {
   return canonicalJsonValue(new JsonParser(rawBody).parse());
 }
 
+export function canonicalPythonGeneratedJson(
+  value: unknown,
+  isFloat: (path: readonly (string | number)[], value: number) => boolean,
+): string {
+  const canonical = (
+    item: unknown,
+    path: readonly (string | number)[],
+  ): string => {
+    if (item === null) return 'null';
+    if (typeof item === 'string') return JSON.stringify(item);
+    if (typeof item === 'boolean') return item ? 'true' : 'false';
+    if (typeof item === 'number')
+      return isFloat(path, item)
+        ? pythonFloatString(item)
+        : Number.isInteger(item)
+          ? String(item)
+          : pythonFloatString(item);
+    if (typeof item === 'bigint') return String(item);
+    if (Array.isArray(item))
+      return `[${item
+        .map((child, index) => canonical(child, [...path, index]))
+        .join(',')}]`;
+    if (isRecord(item))
+      return `{${Object.keys(item)
+        .sort(comparePythonStrings)
+        .map(
+          (key) =>
+            `${JSON.stringify(key)}:${canonical(item[key], [...path, key])}`,
+        )
+        .join(',')}}`;
+    return 'null';
+  };
+  return canonical(value, []);
+}
+
 export function canonicalPythonJsonWithProperty(
   rawObject: string,
   key: string,

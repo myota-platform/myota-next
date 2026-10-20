@@ -2,6 +2,10 @@ import { createHash } from 'node:crypto';
 import { JSONParser } from '@streamparser/json';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
+import {
+  setSourceFeatureHashOverride,
+  sourceFeatureHashOverride,
+} from './geodata-source-feature-hash.js';
 
 const MAX_SOURCE_BYTES = 512 * 1024 * 1024;
 const MAX_FEATURE_VERTICES = 250_000;
@@ -37,7 +41,8 @@ export function sourceHashOverrideForGeoJsonFeature(
   feature: unknown,
 ): string | undefined {
   return isObject(feature)
-    ? sourceJsonByFeature.get(feature)?.sourceHashOverride
+    ? (sourceJsonByFeature.get(feature)?.sourceHashOverride ??
+        sourceFeatureHashOverride(feature))
     : undefined;
 }
 
@@ -255,6 +260,8 @@ export async function* streamGeoJsonFeatures(
               (sourceJson !== undefined || sourceHashOverride !== undefined) &&
               isObject(feature)
             ) {
+              if (sourceHashOverride !== undefined)
+                setSourceFeatureHashOverride(feature, sourceHashOverride);
               const inheritedCrsJson = inheritedDocumentCrs
                 ? documentMetadata.crsJson
                 : undefined;

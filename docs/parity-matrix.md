@@ -176,8 +176,11 @@ well. Direct ArcGIS FeatureServer imports hash raw source records before API
 normalization. The scheduled Node importer preserves source numeric tokens in
 the generated Feature hashes it submits. Streamed imports reject features whose
 inherited CRS pushes their decoded size over the reference's configured limit.
-Generated Shapefile/PBF features can still lose integer-versus-float
-distinctions in their source hashes. The direct JSON import path materializes
+Generated PBF hashes now retain Python float formatting for geometry
+coordinates. Shapefile hashes use DBF numeric field types to distinguish integer
+and floating-point attributes and include the source `.prj` text. Binary-format
+hash and feature parity still requires fixture qualification, including large
+DBF integers and uncommon geometries or CRS definitions. The direct JSON import path materializes
 the normalized collection, while multipart GeoJSON streams source features.
 Shapefile multipart uploads stream to
 temporary disk and decode records one at a time, with a 256 MiB default upload

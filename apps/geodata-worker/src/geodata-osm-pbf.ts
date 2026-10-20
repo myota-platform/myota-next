@@ -8,6 +8,8 @@ import { StringDecoder } from 'node:string_decoder';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
+import { canonicalPythonGeneratedJson } from '../../geodata/src/geodata-request-fingerprint.js';
+import { setSourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 
 const MAX_SOURCE_BYTES = 512 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 128 * 1024 * 1024;
@@ -170,7 +172,15 @@ async function* parseOsmiumFeatures(
       properties: featureProperties,
       geometry,
     };
-    const encoded = Buffer.byteLength(JSON.stringify(feature));
+    const canonical = canonicalPythonGeneratedJson(
+      feature,
+      (path) => path[0] === 'geometry' && path[1] === 'coordinates',
+    );
+    setSourceFeatureHashOverride(
+      feature,
+      createHash('sha256').update(canonical, 'utf8').digest('hex'),
+    );
+    const encoded = Buffer.byteLength(canonical, 'utf8');
     if (encoded > MAX_IMPORT_FEATURE_BYTES)
       throw new Error(
         `an OSM feature exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
