@@ -141,8 +141,8 @@ export async function* streamShapefileFeatures(
     await validateShapeRecords(shape.path, shape.size);
     const cpg = members.get(`${stem}.cpg`);
     const encoding = cpg
-      ? (await readFile(cpg.path, 'utf8')).trim() || 'windows-1252'
-      : 'windows-1252';
+      ? (await readFile(cpg.path, 'utf8')).trim() || 'utf-8'
+      : 'utf-8';
     const prj = members.get(`${stem}.prj`);
     const projectionText = prj ? (await readFile(prj.path, 'utf8')).trim() : '';
     const projection = projectionText
