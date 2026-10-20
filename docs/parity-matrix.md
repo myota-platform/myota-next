@@ -99,6 +99,11 @@ account, including sessions already revoked, matching the Python handler.
 Login audit events preserve the reference's `actorId` payload and account
 aggregate for known accounts, while unknown-account events remain associated
 with the `system` aggregate.
+Failed login attempts for known accounts without a password credential now
+create lockout state in Core and trigger the same five-attempt, fifteen-minute
+lockout as other known accounts. The credential row can hold this state with a
+null password hash and password-change timestamp; password setup fills those
+fields and clears the lockout state.
 The internal email-recipient resolver rejects revoked service tokens before
 scope checks and maps malformed UUID forms to the same unavailable-recipient
 response as the Python handler.

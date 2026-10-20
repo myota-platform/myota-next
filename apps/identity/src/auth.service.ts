@@ -233,12 +233,18 @@ export class IdentityAuthService {
         if (account) {
           const failedAttempts = Number(account.failed_attempts) + 1;
           await client.query(
-            `UPDATE public.account_credential
-                SET failed_attempts = $2,
-                    locked_until = CASE WHEN $2 >= 5
-                      THEN now() + interval '900 seconds'
-                      ELSE locked_until END
-              WHERE account_id = $1`,
+            `INSERT INTO public.account_credential
+               (account_id, password_hash, password_changed_at,
+                failed_attempts, locked_until)
+             VALUES ($1, NULL, NULL, $2,
+                     CASE WHEN $2 >= 5
+                       THEN clock_timestamp() + interval '900 seconds'
+                       ELSE NULL END)
+             ON CONFLICT (account_id) DO UPDATE SET
+               failed_attempts = EXCLUDED.failed_attempts,
+               locked_until = CASE WHEN EXCLUDED.failed_attempts >= 5
+                 THEN clock_timestamp() + interval '900 seconds'
+                 ELSE account_credential.locked_until END`,
             [account.id, failedAttempts],
           );
         }
