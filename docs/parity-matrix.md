@@ -27,6 +27,10 @@ creation, evidence, verification, primary selection, and retirement also write
 to the relational Core model and outbox.
 These are the first implemented slices; they still need automated
 compatibility coverage before they count as parity complete.
+Administrator account search currently uses JavaScript/PostgreSQL lowercase
+conversion, while the reference uses Python Unicode `casefold()`. ASCII search
+matches; full Unicode case-fold equivalence remains an identified compatibility
+gap.
 
 Activity has an initial activation and single-QSO slice: activation list/create/read/close,
 normalized QSO writes, validity checks, ownership checks, subject aggregates,
