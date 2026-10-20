@@ -352,8 +352,9 @@ map renders point, line, polygon, and multipart entity geometries.
 
 - Activity workers: QSO ingestion, ADIF processing, award evaluation and
   recalculation, certificate rendering, and statistics rebuild are consumed
-  from their registered JetStream durables. Database leases and message
-  progress acknowledgements protect long jobs; notifications are handled by
+  from their registered JetStream durables up to each durable's configured
+  `max_ack_pending` concurrency. Database leases and message progress
+  acknowledgements protect long jobs; notifications are handled by
   the separate consumer described below. ADIF source-object retention is
   scheduled, and queued jobs missing an outbox command are repaired periodically;
   other retention and recovery evidence remain open.
@@ -368,6 +369,8 @@ map renders point, line, polygon, and multipart entity geometries.
   bounded replay runs. Recovery evidence remains open.
 - Geodata workers: registered JetStream consumers for import preprocessing and
   promotion, confirmed entity deletion, and location enrichment are implemented.
+  Each durable is polled concurrently up to its registered `max_ack_pending`
+  limit.
   `/healthz` and `/readyz` expose liveness and Geodata PostgreSQL/NATS
   readiness. Import run leases and database heartbeats use the Python-compatible
   `MYOTA_IMPORT_LEASE_SECONDS` and `MYOTA_IMPORT_HEARTBEAT_SECONDS` settings;

@@ -222,8 +222,9 @@
   ingestion requests are authorized, bounded, persisted as Activity jobs, and
   exposed through an owner-scoped status API. Bounded UTF-8 CSV logs are
   normalized into those ingestion jobs. The Activity worker consumes the
-  registered JetStream work durables and processes jobs transactionally with
-  database leases, message progress acknowledgements, bounded retries, and
+  registered JetStream work durables concurrently up to each durable's
+  `max_ack_pending` limit, and processes jobs transactionally with database
+  leases, message progress acknowledgements, bounded retries, and
   dead-letter records. Failed progress acknowledgements are logged while the
   database lease protects the active job from duplicate execution. Work IDs
   accept canonical UUIDs with any version and
@@ -645,7 +646,8 @@
   job redrive is audited and available to
   administrators; the Activity worker now extends active job leases while
   long batches run and repairs missing queued-job outbox commands. Geodata import, promotion, and deletion work extends owner
-  leases during long jobs. Import run leases and database heartbeat cadence
+  leases during long jobs; each work durable is polled concurrently up to its
+  registered `max_ack_pending` limit. Import run leases and database heartbeat cadence
   follow `MYOTA_IMPORT_LEASE_SECONDS` (900 seconds by default) and
   `MYOTA_IMPORT_HEARTBEAT_SECONDS` (30 seconds), with Python-compatible integer
   parsing and the reference minimums. JetStream progress acknowledgements

@@ -166,7 +166,11 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
         },
       );
       this.loops = [
-        ...definitions.map((definition) => this.consume(definition)),
+        ...definitions.flatMap((definition) =>
+          Array.from({ length: definition.maxPending }, () =>
+            this.consume(definition),
+          ),
+        ),
         this.reconcileCancellations(),
         this.reconcileExpiredWork(),
         this.runRetention(),

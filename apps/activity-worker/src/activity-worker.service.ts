@@ -42,6 +42,7 @@ type WorkDefinition = {
   subject: string;
   durable: string;
   consumer: Consumer;
+  maxPending: number;
 };
 
 @Injectable()
@@ -97,6 +98,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
           subject: item.subject,
           durable: item.durable,
           consumer: await js.consumers.get(STREAM, item.durable),
+          maxPending: consumerPolicy(item.durable).maxAckPending,
         });
       }
       this.natsUp = true;
@@ -114,7 +116,11 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
         },
       );
       this.loops = [
-        ...definitions.map((definition) => this.consume(definition)),
+        ...definitions.flatMap((definition) =>
+          Array.from({ length: definition.maxPending }, () =>
+            this.consume(definition),
+          ),
+        ),
         this.reconcileQueuedOutbox(),
         this.runRetention(),
       ];
