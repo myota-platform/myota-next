@@ -1159,7 +1159,7 @@ paths:
       security: [{ bearerAuth: [] }]
       deprecated: true
       summary: Submit a policy draft for review
-      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses: { '200': { description: Policy draft submitted } }
   /v1/programmes/{slug}/policy-drafts/{draftId}/review:
     post:
@@ -1167,7 +1167,7 @@ paths:
       security: [{ bearerAuth: [] }]
       deprecated: true
       summary: Review a policy draft
-      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, additionalProperties: true } } }
@@ -1178,7 +1178,7 @@ paths:
       security: [{ bearerAuth: [] }]
       deprecated: true
       summary: Publish a policy draft
-      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses: { '200': { description: Policy draft published } }
   /v1/programmes/{slug}/policy-drafts/{draftId}:
     patch:
@@ -1186,7 +1186,7 @@ paths:
       security: [{ bearerAuth: [] }]
       summary: Update a policy draft or advance its lifecycle
       operationId: patchProgrammePolicyDraft
-      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, additionalProperties: true, description: Set status to UNDER_REVIEW, APPROVED, CHANGES_REQUESTED, or PUBLISHED to invoke the corresponding lifecycle transition. } } }

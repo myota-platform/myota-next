@@ -5,7 +5,6 @@ import {
   Headers,
   HttpCode,
   Param,
-  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -67,7 +66,7 @@ export class ProgrammePolicyController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
-    @Param('draftId', new ParseUUIDPipe()) draftId: string,
+    @Param('draftId') draftId: string,
   ) {
     return this.policies.submit(authorization, slug, draftId, idempotencyKey);
   }
@@ -78,7 +77,7 @@ export class ProgrammePolicyController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
-    @Param('draftId', new ParseUUIDPipe()) draftId: string,
+    @Param('draftId') draftId: string,
     @Body() body: ReviewProgrammePolicyDraftDto,
   ) {
     return this.policies.review(
@@ -96,7 +95,7 @@ export class ProgrammePolicyController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
-    @Param('draftId', new ParseUUIDPipe()) draftId: string,
+    @Param('draftId') draftId: string,
     @Body() body: PublishProgrammePolicyDraftDto,
   ) {
     return this.policies.publish(
@@ -114,7 +113,7 @@ export class ProgrammePolicyController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
-    @Param('draftId', new ParseUUIDPipe()) draftId: string,
+    @Param('draftId') draftId: string,
     @Body() body: PatchProgrammePolicyDraftDto,
   ) {
     return this.policies.patch(

@@ -8,7 +8,6 @@ import {
   IsObject,
   IsOptional,
   IsString,
-  IsUUID,
   MinLength,
   Min,
 } from 'class-validator';
@@ -161,7 +160,7 @@ export class PatchProgrammeContentDto {
 
 export class SaveProgrammePolicyDraftDto {
   @IsOptional()
-  @IsUUID()
+  @IsString()
   draftId?: string;
 
   @IsIn(['RULES', 'AWARD'])

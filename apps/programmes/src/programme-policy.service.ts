@@ -76,7 +76,7 @@ export class ProgrammePolicyService {
       );
     }
     return this.policies.mutate(idempotencyKey, async (client) => {
-      const draftId = body.draftId ?? randomUUID();
+      const draftId = body.draftId || randomUUID();
       await this.policies.lockRecord(client, draftId);
       const previous = await this.policies.find(client, draftId);
       if (
