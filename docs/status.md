@@ -151,10 +151,11 @@
   Programme records.
   Programme policy drafts support scoped authoring,
   submission, review, publishing, and effective policy updates. Effective
-  publication timestamps accept Python-compatible basic and extended date and
-  time forms, space-separated and comma-fraction input, and timezone offsets
-  with seconds and fractional seconds; invalid dates and offsets are rejected,
-  and values normalize to UTC with microsecond precision.
+  publication timestamps accept Python-compatible calendar and ISO week dates,
+  basic and extended date and time forms, space-separated and comma-fraction
+  input, and timezone offsets with seconds and fractional seconds; invalid dates
+  and offsets are rejected, and values normalize to UTC with microsecond
+  precision.
   Programme content and policy-draft filtering, sorting, counting, and page
   selection, plus locale coverage aggregation, run in Core PostgreSQL; the API
   transfers only the requested page or aggregate into Node.js. A dedicated
