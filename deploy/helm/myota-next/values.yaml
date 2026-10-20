@@ -29,6 +29,9 @@ geodataWorker:
     promotion: ''
     deletion: ''
     enrichment: ''
+  legacyConcurrency:
+    deletion: ''
+    location: ''
 images:
   gateway: { repository: '', tag: '', digest: '' }
   identity: { repository: '', tag: '', digest: '' }

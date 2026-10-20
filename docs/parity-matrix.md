@@ -457,20 +457,23 @@ map renders point, line, polygon, and multipart entity geometries.
   NestJS runtime uses durable consumer concurrency for persisted work, so these
   settings do not all translate to the same execution boundary:
 
-  | Python setting           | Python work                                                    | NestJS counterpart                                                                                                         | Compatibility status                             |
-  | ------------------------ | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-  | `MYOTA_UPLOAD_WORKERS`   | API-local completion and recovery of uploaded source objects   | Upload admission and object handoff stay in Geodata API; preprocessing starts on the worker durable                        | No direct worker-concurrency alias               |
-  | `MYOTA_IMPORT_WORKERS`   | In-process import preprocessing, promotion, and recovery tasks | `geodata-preprocessing-v1` and `geodata-import-promotion-v1`, each with its own `GEODATA_WORKER_*_MAX_ACK_PENDING` setting | Split into two independently tunable durables    |
-  | `MYOTA_LOCATION_WORKERS` | In-process location-enrichment tasks                           | `geodata-location-enrichment-v1` with `GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING`                                          | Same work class, different queue and lease model |
-  | `MYOTA_DELETION_WORKERS` | In-process entity-deletion tasks                               | `geodata-entity-deletion-v1` with `GEODATA_WORKER_DELETION_MAX_ACK_PENDING`                                                | Same work class, different queue and lease model |
+  | Python setting           | Python work                                                    | NestJS counterpart                                                                                                         | Compatibility status                                       |
+  | ------------------------ | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+  | `MYOTA_UPLOAD_WORKERS`   | API-local completion and recovery of uploaded source objects   | Upload admission and object handoff stay in Geodata API; preprocessing starts on the worker durable                        | No direct worker-concurrency alias                         |
+  | `MYOTA_IMPORT_WORKERS`   | In-process import preprocessing, promotion, and recovery tasks | `geodata-preprocessing-v1` and `geodata-import-promotion-v1`, each with its own `GEODATA_WORKER_*_MAX_ACK_PENDING` setting | Split into two independently tunable durables              |
+  | `MYOTA_LOCATION_WORKERS` | In-process location-enrichment tasks                           | `geodata-location-enrichment-v1` with `GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING`                                          | Accepted as a fallback alias; queue and lease model differ |
+  | `MYOTA_DELETION_WORKERS` | In-process entity-deletion tasks                               | `geodata-entity-deletion-v1` with `GEODATA_WORKER_DELETION_MAX_ACK_PENDING`                                                | Accepted as a fallback alias; queue and lease model differ |
 
-  The Nest runtime does not accept these legacy settings as aliases. Do not
-  infer concurrency parity from equal numbers: a Python pool is shared across
-  task submissions, while each Nest durable has an independent pending limit
-  and can run in multiple worker replicas. Before operational parity is
-  qualified, compare per-work throughput and resource limits under
-  representative loads, then tune the registered durable policies and worker
-  replica counts together.
+  The Nest runtime accepts only the matching location and deletion settings as
+  fallback aliases; explicit per-durable and shared Nest settings take
+  precedence. It does not alias `MYOTA_UPLOAD_WORKERS` or `MYOTA_IMPORT_WORKERS`:
+  upload completion remains API-local, while import work is split across
+  preprocessing and promotion durables. Do not infer concurrency parity from
+  equal numbers: a Python pool is shared across task submissions, while each
+  Nest durable has an independent pending limit and can run in multiple worker
+  replicas. Before operational parity is qualified, compare per-work
+  throughput and resource limits under representative loads, then tune the
+  registered durable policies and worker replica counts together.
   The Geodata API exposes `/metrics` with PostGIS tile-query duration and
   slow-query counters; `MYOTA_SLOW_QUERY_THRESHOLD_MS` retains its 250 ms
   default and controls the slow-query counter. The reference's `entity_upsert`

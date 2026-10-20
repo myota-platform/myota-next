@@ -31,9 +31,13 @@ settings `GEODATA_WORKER_PREPROCESSING_MAX_ACK_PENDING`,
 `GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING` override the corresponding built-in
 limits. They are read by both this provisioner and the Geodata worker. When a
 specific setting is absent, `GEODATA_WORKER_MAX_ACK_PENDING` applies to every
-Geodata durable; otherwise registered per-durable defaults apply. A change to
-an existing durable's limit is treated as configuration drift and requires an
-explicitly reviewed successor durable.
+Geodata durable. If those settings are absent, `MYOTA_DELETION_WORKERS` and
+`MYOTA_LOCATION_WORKERS` are accepted as fallbacks for the matching deletion
+and location-enrichment durables. These legacy aliases clamp values below one
+to one, matching the Python worker-pool minimum; unset or empty values defer to
+the registered defaults. Otherwise registered per-durable defaults apply. A
+change to an existing durable's limit is treated as configuration drift and
+requires an explicitly reviewed successor durable.
 
 `NATS_TOPOLOGY_SCOPE` may be set to `activity-work`, `geodata-work`, or
 `email-work` to provision only that stream and its registered durables. These

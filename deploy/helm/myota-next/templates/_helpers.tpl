@@ -27,6 +27,8 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
   "GEODATA_WORKER_PROMOTION_MAX_ACK_PENDING" $settings.promotion
   "GEODATA_WORKER_DELETION_MAX_ACK_PENDING" $settings.deletion
   "GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING" $settings.enrichment
+  "MYOTA_DELETION_WORKERS" .Values.geodataWorker.legacyConcurrency.deletion
+  "MYOTA_LOCATION_WORKERS" .Values.geodataWorker.legacyConcurrency.location
 }}
 {{- range $name, $value := $overrides }}
 {{- if $value }}

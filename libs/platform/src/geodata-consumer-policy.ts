@@ -17,6 +17,7 @@ export type GeodataConsumerPolicy = {
 
 type RegisteredGeodataConsumerPolicy = GeodataConsumerPolicy & {
   maxPendingSetting: string;
+  legacyMaxPendingSetting?: string;
 };
 
 const policies: Record<string, RegisteredGeodataConsumerPolicy> = {
@@ -37,12 +38,14 @@ const policies: Record<string, RegisteredGeodataConsumerPolicy> = {
     maxPending: 1,
     maxDeliveries: 100,
     maxPendingSetting: 'GEODATA_WORKER_DELETION_MAX_ACK_PENDING',
+    legacyMaxPendingSetting: 'MYOTA_DELETION_WORKERS',
   },
   'geodata-location-enrichment-v1': {
     ackWaitSeconds: 120,
     maxPending: 4,
     maxDeliveries: 8,
     maxPendingSetting: 'GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING',
+    legacyMaxPendingSetting: 'MYOTA_LOCATION_WORKERS',
   },
 };
 
@@ -60,11 +63,31 @@ export function geodataConsumerPolicy(
     maxPending:
       optionalPositiveSetting(registered.maxPendingSetting, environment) ??
       optionalPositiveSetting('GEODATA_WORKER_MAX_ACK_PENDING', environment) ??
+      optionalWorkerConcurrencySetting(
+        registered.legacyMaxPendingSetting,
+        environment,
+      ) ??
       registered.maxPending,
     maxDeliveries:
       optionalPositiveSetting('GEODATA_WORKER_MAX_DELIVERIES', environment) ??
       registered.maxDeliveries,
   };
+}
+
+function optionalWorkerConcurrencySetting(
+  name: string | undefined,
+  environment: NodeJS.ProcessEnv,
+): number | undefined {
+  if (!name || environment[name] === undefined || environment[name] === '')
+    return undefined;
+  const normalized = normalizePythonIntegerText(environment[name]!);
+  if (!/^[+-]?\d(?:_?\d)*$/.test(normalized))
+    throw new Error(`${name} must be a base-10 integer`);
+  const value = BigInt(normalized.replaceAll('_', ''));
+  if (value <= 1n) return 1;
+  if (value > BigInt(Number.MAX_SAFE_INTEGER))
+    throw new Error(`${name} must be a positive safe integer`);
+  return Number(value);
 }
 
 function optionalPositiveSetting(
