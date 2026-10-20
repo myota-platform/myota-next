@@ -11,6 +11,8 @@ let activationEntityOptions = new Map();
 let publicAwards = [];
 let awardAccount = null;
 let awardAccessToken = localStorage.getItem('myota_public_access') || '';
+let awardRefreshToken = localStorage.getItem('myota_public_refresh') || '';
+let awardRefreshInFlight = null;
 const escapeHtml = (value) =>
   String(value ?? '').replace(
     /[&<>"']/g,
@@ -30,14 +32,78 @@ async function awardApi(path, options = {}) {
     ...(options.body ? { 'Content-Type': 'application/json' } : {}),
     ...(options.headers || {}),
   };
-  if (awardAccessToken) headers.Authorization = `Bearer ${awardAccessToken}`;
-  const res = await fetch(path, { ...options, headers });
+  const res = await participantFetch(path, { ...options, headers });
   const body = await res.json().catch(() => ({}));
   if (!res.ok)
     throw new Error(
       body.detail || body.message || body.title || res.statusText,
     );
   return body;
+}
+function clearParticipantSession() {
+  awardAccessToken = '';
+  awardRefreshToken = '';
+  awardAccount = null;
+  localStorage.removeItem('myota_public_access');
+  localStorage.removeItem('myota_public_refresh');
+  if ($('activation-start-form')) $('activation-start-form').hidden = true;
+  if ($('qso-form')) $('qso-form').hidden = true;
+  if ($('activations-list')) $('activations-list').replaceChildren();
+  if ($('qso-activation')) $('qso-activation').replaceChildren();
+  if ($('activation-callsign')) $('activation-callsign').replaceChildren();
+}
+async function refreshParticipantSession() {
+  if (!awardRefreshToken) return false;
+  if (!awardRefreshInFlight) {
+    awardRefreshInFlight = (async () => {
+      let response;
+      try {
+        response = await fetch('/v1/identity/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: awardRefreshToken }),
+        });
+      } catch {
+        throw new Error('Session refresh is unavailable. Please try again.');
+      }
+      if (!response.ok) {
+        if ([401, 403].includes(response.status)) {
+          clearParticipantSession();
+          return false;
+        }
+        throw new Error(
+          `Session refresh failed (${response.status}). Please try again.`,
+        );
+      }
+      const session = await response.json().catch(() => null);
+      if (!session?.accessToken || !session?.refreshToken) {
+        clearParticipantSession();
+        return false;
+      }
+      awardAccessToken = session.accessToken;
+      awardRefreshToken = session.refreshToken;
+      localStorage.setItem('myota_public_access', awardAccessToken);
+      localStorage.setItem('myota_public_refresh', awardRefreshToken);
+      return true;
+    })().finally(() => {
+      awardRefreshInFlight = null;
+    });
+  }
+  return awardRefreshInFlight;
+}
+async function participantFetch(path, options = {}) {
+  const send = () => {
+    const headers = { ...(options.headers || {}) };
+    if (awardAccessToken) headers.Authorization = `Bearer ${awardAccessToken}`;
+    return fetch(path, { ...options, headers });
+  };
+  let response = await send();
+  if (
+    [401, 403].includes(response.status) &&
+    (await refreshParticipantSession())
+  )
+    response = await send();
+  return response;
 }
 async function loadProgrammes() {
   const catalogue = [];
@@ -790,7 +856,9 @@ async function signInForAward() {
     }),
   });
   awardAccessToken = data.accessToken;
+  awardRefreshToken = data.refreshToken;
   localStorage.setItem('myota_public_access', awardAccessToken);
+  localStorage.setItem('myota_public_refresh', awardRefreshToken);
   awardAccount = await awardApi('/v1/identity/me');
   renderOperatorCallsigns();
   await loadActivations();
@@ -856,8 +924,7 @@ async function profileApi(path, options = {}, asBlob = false) {
     Accept: asBlob ? 'image/webp' : 'application/json',
     ...(options.headers || {}),
   };
-  if (awardAccessToken) headers.Authorization = `Bearer ${awardAccessToken}`;
-  const response = await fetch(path, { ...options, headers });
+  const response = await participantFetch(path, { ...options, headers });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(
@@ -925,9 +992,7 @@ async function loadProfile() {
     revokeProfileSource();
     clearProfileImage();
     if (/401|403|authentication|token/i.test(error.message)) {
-      awardAccessToken = '';
-      awardAccount = null;
-      localStorage.removeItem('myota_public_access');
+      clearParticipantSession();
     }
   }
 }
