@@ -353,6 +353,7 @@ export class ActivityNotificationsService
       }
       const [recipient, kind] = recipientAndKind(event, eventType);
       if (recipient && kind) {
+        const notificationEventId = String(event.eventId);
         await client.query(
           `INSERT INTO public.activity_notification
             (id, recipient_id, notification_type, payload, status, delivered_at, deduplication_key)
@@ -362,8 +363,8 @@ export class ActivityNotificationsService
             randomUUID(),
             recipient,
             kind,
-            JSON.stringify({ eventType, eventId }),
-            `event:${eventId}`,
+            JSON.stringify({ eventType, eventId: notificationEventId }),
+            `event:${notificationEventId}`,
           ],
         );
       }
