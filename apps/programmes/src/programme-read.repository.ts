@@ -19,11 +19,11 @@ export interface PublishedContentPage {
 
 export interface ContentCoverage {
   programmeFound: boolean;
-  totalKeys: number;
+  totalKeys: PageInteger;
   locales: {
     locale: string;
-    published: number;
-    total: number;
+    published: PageInteger;
+    total: PageInteger;
     coveragePercent: number;
     missingKeys: string[];
   }[];
@@ -174,7 +174,17 @@ export class ProgrammeReadRepository {
   async getContentCoverage(slug: string): Promise<ContentCoverage> {
     const client = await this.connect();
     try {
-      const result = await client.query<ContentCoverage>(
+      const result = await client.query<{
+        programmeFound: boolean;
+        totalKeys: string;
+        locales: {
+          locale: string;
+          published: string;
+          total: string;
+          coveragePercent: number;
+          missingKeys: string[];
+        }[];
+      }>(
         `WITH programme AS (
            SELECT payload AS value,
                   CASE
@@ -221,7 +231,7 @@ export class ProgrammeReadRepository {
          ), coverage AS (
            SELECT effective.locale,
                   effective.locale_order,
-                  (SELECT count(DISTINCT published.content_key)::int
+                  (SELECT count(DISTINCT published.content_key)
                      FROM content AS published
                     WHERE published.locale = effective.locale
                       AND published.status = 'PUBLISHED') AS published,
@@ -239,7 +249,7 @@ export class ProgrammeReadRepository {
              FROM effective_locales AS effective
          ), coverage_values AS (
            SELECT coverage.*,
-                  (SELECT count(*)::int FROM content_keys) AS total,
+                  (SELECT count(*) FROM content_keys) AS total,
                   coverage.published * 100.0 /
                     NULLIF((SELECT count(*) FROM content_keys), 0) AS percentage
              FROM coverage
@@ -248,13 +258,13 @@ export class ProgrammeReadRepository {
                   SELECT 1 FROM programme
                    WHERE jsonb_typeof(programme.value) = 'object'
                 ) AS "programmeFound",
-                (SELECT count(*)::int FROM content_keys) AS "totalKeys",
+                (SELECT count(*)::text FROM content_keys) AS "totalKeys",
                 COALESCE(
                   (SELECT jsonb_agg(
                     jsonb_build_object(
                       'locale', coverage.locale,
-                      'published', coverage.published,
-                      'total', coverage.total,
+                      'published', coverage.published::text,
+                      'total', coverage.total::text,
                       'coveragePercent', CASE
                         WHEN coverage.total = 0 THEN 0
                         WHEN coverage.percentage - floor(coverage.percentage) = 0.5
@@ -269,9 +279,18 @@ export class ProgrammeReadRepository {
                 ) AS locales`,
         [slug],
       );
-      return (
-        result.rows[0] ?? { programmeFound: false, totalKeys: 0, locales: [] }
-      );
+      const row = result.rows[0];
+      return row
+        ? {
+            programmeFound: row.programmeFound,
+            totalKeys: parsePageTotal(row.totalKeys),
+            locales: row.locales.map((locale) => ({
+              ...locale,
+              published: parsePageTotal(locale.published),
+              total: parsePageTotal(locale.total),
+            })),
+          }
+        : { programmeFound: false, totalKeys: 0, locales: [] };
     } finally {
       client.release();
     }

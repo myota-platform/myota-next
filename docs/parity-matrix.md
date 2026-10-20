@@ -24,7 +24,8 @@ those exact integers in JSON responses, including values above JavaScript's
 safe integer range. Database page totals also avoid PostgreSQL 32-bit casts and
 JavaScript number rounding, preserving exact integer totals in JSON. SQL page
 offsets remain exact beyond JavaScript's safe integer range and reach the
-database as integer parameters.
+database as integer parameters. Programme content coverage keeps total and
+published key counts exact as well.
 
 The route maps at the pinned Python reference revision contain 135 literal
 method/path pairs across Identity, Programmes, Activity, Awards, and Geodata.
