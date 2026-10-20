@@ -417,8 +417,12 @@
   reference. Generated PBF feature hashes treat geometry coordinates as Python
   floats. Shapefile feature hashes use DBF field types to retain integer versus
   float values and include the source `.prj` text in the decoded feature.
-  Binary-format source hashes still need fixture qualification, including large
-  DBF integers and uncommon geometries or CRS definitions.
+  DBF integer fields with zero decimal places are read exactly and staged as
+  numeric JSON tokens, including values beyond JavaScript's safe integer range.
+  The default PostgreSQL JSONB parser still converts those large values to
+  JavaScript numbers on reads, so API round-trip parity remains open. Binary
+  format hashes and uncommon geometries or CRS definitions still need fixture
+  qualification.
   Candidate creation, queue creation, status, hashes, and outbox events
   finalize in one transaction. The final event is assembled in PostgreSQL to avoid
   retaining every feature summary in the worker heap.

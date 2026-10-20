@@ -16,6 +16,7 @@ import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
 import { pythonFloatString } from '@app/platform/python-number.js';
 import {
   canonicalPythonGeoJsonFeature,
+  canonicalPythonGeneratedJson,
   canonicalPythonJson,
   canonicalPythonJsonWithProperty,
 } from '../../geodata/src/geodata-request-fingerprint.js';
@@ -851,7 +852,7 @@ export class GeodataWorkRepository {
               run.attempt_count,
               record.ordinal,
               record.candidate.candidateId,
-              JSON.stringify(record.candidate),
+              canonicalPythonGeneratedJson(record.candidate, () => false),
             ],
           );
         } else if ('skipped' in record) {
@@ -1370,7 +1371,8 @@ function sourceKeyFromMetadata(source: Record<string, unknown>): string {
 function pythonSourceRef(value: unknown): string {
   if (typeof value === 'boolean') return value ? 'True' : 'False';
   if (typeof value === 'string') return value;
-  if (typeof value === 'number') return String(value);
+  if (typeof value === 'number' || typeof value === 'bigint')
+    return String(value);
   return JSON.stringify(value) ?? String(value);
 }
 

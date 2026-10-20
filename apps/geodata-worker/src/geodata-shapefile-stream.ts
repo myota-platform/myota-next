@@ -136,7 +136,6 @@ export async function* streamShapefileFeatures(
       );
     await validateShapeRecords(shape.path, shape.size);
     const filteredDbf = await filterDeletedDbfRecords(dbf.path, directory);
-    const floatingProperties = await getDbfFloatingProperties(filteredDbf.path);
     const shapeRecordLimit = await getShapeRecordLimit(index.path);
     const recordLimit =
       filteredDbf.recordLimit === undefined
@@ -147,10 +146,17 @@ export async function* streamShapefileFeatures(
     const projection = projectionText
       ? createWgs84Projection(projectionText)
       : undefined;
-    const reader = await openShapefile(shape.path, filteredDbf.path, {
-      encoding: 'utf-8',
-      highWaterMark: 64 * 1024,
-    });
+    const dbfRecords = await openDbfRecordReader(filteredDbf.path);
+    let reader: Awaited<ReturnType<typeof openShapefile>>;
+    try {
+      reader = await openShapefile(shape.path, filteredDbf.path, {
+        encoding: 'utf-8',
+        highWaterMark: 64 * 1024,
+      });
+    } catch (error) {
+      await dbfRecords.close();
+      throw error;
+    }
     let featureCount = 0;
     try {
       while (true) {
@@ -169,6 +175,11 @@ export async function* streamShapefileFeatures(
         const feature = projection
           ? reprojectFeature(result.value, projection)
           : result.value;
+        if (isRecord(feature) && isRecord(feature.properties))
+          Object.assign(
+            feature.properties,
+            await dbfRecords.exactIntegerProperties(featureCount - 1),
+          );
         if (projectionText && isRecord(feature)) feature.crs = projectionText;
         const canonical = isRecord(feature)
           ? canonicalPythonGeneratedJson(
@@ -177,7 +188,7 @@ export async function* streamShapefileFeatures(
                 (path[0] === 'geometry' && path[1] === 'coordinates') ||
                 (path[0] === 'properties' &&
                   typeof path[1] === 'string' &&
-                  floatingProperties.has(path[1])),
+                  dbfRecords.floatingProperties.has(path[1])),
             )
           : JSON.stringify(feature);
         const encodedBytes = Buffer.byteLength(canonical, 'utf8');
@@ -200,6 +211,7 @@ export async function* streamShapefileFeatures(
       }
     } finally {
       await reader.cancel().catch(() => undefined);
+      await dbfRecords.close();
     }
     if (!featureCount)
       throw new Error('Shapefile archive contains no features');
@@ -287,43 +299,77 @@ async function filterDeletedDbfRecords(path: string, directory: string) {
   }
 }
 
-async function getDbfFloatingProperties(path: string): Promise<Set<string>> {
+async function openDbfRecordReader(path: string) {
   const file = await open(path, 'r');
-  try {
-    const header = Buffer.alloc(32);
-    const headerRead = await file.read(header, 0, header.length, 0);
-    if (headerRead.bytesRead !== header.length) return new Set();
-    const headerLength = header.readUInt16LE(8);
-    const floatingProperties = new Set<string>();
-    let position = 32;
-    while (position + 32 <= headerLength) {
-      const descriptor = Buffer.alloc(32);
-      const result = await file.read(
-        descriptor,
-        0,
-        descriptor.length,
-        position,
-      );
-      if (result.bytesRead !== descriptor.length || descriptor[0] === 0x0d)
-        break;
-      const fieldName = descriptor
-        .subarray(0, 11)
-        .toString('ascii')
-        .replace(/\0.*$/, '')
-        .trimEnd();
-      const fieldType = String.fromCharCode(descriptor[11] ?? 0);
-      const decimalPlaces = descriptor[17] ?? 0;
-      if (
-        fieldName &&
-        (fieldType === 'F' || (fieldType === 'N' && decimalPlaces > 0))
-      )
-        floatingProperties.add(fieldName);
-      position += descriptor.length;
-    }
-    return floatingProperties;
-  } finally {
+  const header = Buffer.alloc(32);
+  const headerRead = await file.read(header, 0, header.length, 0);
+  if (headerRead.bytesRead !== header.length) {
     await file.close();
+    throw new Error('Shapefile DBF header is truncated');
   }
+  const headerLength = header.readUInt16LE(8);
+  const recordLength = header.readUInt16LE(10);
+  const floatingProperties = new Set<string>();
+  const integerFields: { name: string; offset: number; length: number }[] = [];
+  let position = 32;
+  let recordOffset = 1;
+  while (position + 32 <= headerLength) {
+    const descriptor = Buffer.alloc(32);
+    const result = await file.read(descriptor, 0, descriptor.length, position);
+    if (result.bytesRead !== descriptor.length || descriptor[0] === 0x0d) break;
+    const fieldName = descriptor
+      .subarray(0, 11)
+      .toString('ascii')
+      .replace(/\0.*$/, '')
+      .trimEnd();
+    const fieldType = String.fromCharCode(descriptor[11] ?? 0);
+    const fieldLength = descriptor[16] ?? 0;
+    const decimalPlaces = descriptor[17] ?? 0;
+    if (
+      fieldName &&
+      (fieldType === 'F' || (fieldType === 'N' && decimalPlaces > 0))
+    )
+      floatingProperties.add(fieldName);
+    if (fieldName && fieldType === 'N' && decimalPlaces === 0)
+      integerFields.push({
+        name: fieldName,
+        offset: recordOffset,
+        length: fieldLength,
+      });
+    recordOffset += fieldLength;
+    position += descriptor.length;
+  }
+  return {
+    floatingProperties,
+    async exactIntegerProperties(
+      index: number,
+    ): Promise<Record<string, bigint>> {
+      const row = Buffer.alloc(recordLength);
+      const result = await file.read(
+        row,
+        0,
+        row.length,
+        headerLength + index * recordLength,
+      );
+      if (result.bytesRead !== row.length || row[0] !== 0x20)
+        throw new Error('Shapefile DBF record is truncated or deleted');
+      const values: Record<string, bigint> = {};
+      for (const field of integerFields) {
+        const raw = row
+          .subarray(field.offset, field.offset + field.length)
+          .toString('ascii')
+          .trim();
+        if (!raw) continue;
+        if (!/^[+-]?\d+$/.test(raw))
+          throw new Error(
+            `Shapefile DBF integer field '${field.name}' is invalid`,
+          );
+        values[field.name] = BigInt(raw);
+      }
+      return values;
+    },
+    close: () => file.close(),
+  };
 }
 
 /** PyShp limits shape iteration to the number of records in the .shx file. */
