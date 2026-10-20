@@ -283,11 +283,7 @@ export class IdentityProfileImageService {
     }
     const content = Buffer.concat(chunks, size);
     try {
-      const image = sharp(content, {
-        limitInputPixels: MAX_INPUT_DIMENSION * MAX_INPUT_DIMENSION,
-        animated: false,
-      });
-      const metadata = await image.metadata();
+      const metadata = await sharp(content, { pages: -1 }).metadata();
       if (metadata.format !== format) {
         throw new BadRequestException(
           'profile image content does not match its media type',
