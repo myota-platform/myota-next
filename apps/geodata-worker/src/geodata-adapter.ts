@@ -1,5 +1,6 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import proj4 from 'proj4';
+import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import {
   normalizeAttachmentMetadata,
   validateGeometryCoordinates,
@@ -184,7 +185,7 @@ function normalizeGeometry(value: unknown, crs: unknown) {
     linestring: 'LineString',
     multilinestring: 'MultiLineString',
   };
-  const type = aliases[rawType.toLowerCase()] ?? rawType;
+  const type = aliases[unicodeCaseFold(rawType)] ?? rawType;
   if (
     ![
       'Point',
