@@ -505,9 +505,9 @@ function normalizeQsoFields(data: JsonRecord): JsonRecord {
     throw new BadRequestException(`unsupported band: ${data.band}`);
   if (data.mode != null && data.mode !== '' && !mode)
     throw new BadRequestException(`unsupported mode: ${data.mode}`);
-  const workedStationKey = `${workedCallsign}|${String(data.workedLocator || '')
-    .toUpperCase()
-    .trim()}`;
+  const workedStationKey = `${workedCallsign}|${trimPythonWhitespace(
+    String(data.workedLocator || '').toUpperCase(),
+  )}`;
   return {
     ...data,
     workedCallsign,
