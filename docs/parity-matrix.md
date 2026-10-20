@@ -572,13 +572,13 @@ definitions, requests, and issuances; the asset catalogue follows its API pages
 for design selection. The Participant client includes localized published programme content,
 paged approved/candidate entity catalogue and map, map-picked point proposals and existing-candidate proposals, published award and level catalogue with eligible-level requests using the current Identity account and callsign data, rotating Identity refresh-session recovery for authenticated requests, activation creation and complete paged own-activation history for QSO selection,
 single-QSO entry, profile editing and image management. Chromium browser checks
-exercise Admin sign-in, identity session bootstrap, scope denial, and
-Participant programme selection, public content, and entity lists with
-intercepted API responses. The remaining Admin workflows and authenticated
-Participant flows still lack browser-level compatibility coverage. The award
-catalogue follows all API pages. Remaining work includes accessibility/visual
-review and deployment integration. Its public map renders point, line, polygon,
-and multipart entity geometries.
+exercise Admin sign-in, identity session bootstrap, scope denial, Participant
+programme selection and public content, and its activation, QSO, and close
+workflow with intercepted API responses. The remaining Admin workflows and
+Participant profile and award workflows still lack browser-level compatibility
+coverage. The award catalogue follows all API pages. Remaining work includes
+accessibility/visual review and deployment integration. Its public map renders
+point, line, polygon, and multipart entity geometries.
 
 ## Workers and operations
 

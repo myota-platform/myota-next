@@ -15,5 +15,6 @@ docker build -t myota/participant:dev .
 Deployment integration and route-by-route behavioral parity remain open. The
 public programme selector, content, and entity catalogue have an initial
 Chromium browser check with intercepted API responses. The current activation
-flow can start an activation, record a single QSO, and close an open activation;
-authenticated workflows still need browser-level compatibility coverage.
+flow is also browser-checked through sign-in, activation start, QSO entry, and
+close. Profile, image, and award workflows still need browser-level
+compatibility coverage.
