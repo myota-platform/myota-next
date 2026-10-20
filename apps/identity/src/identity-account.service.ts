@@ -450,13 +450,6 @@ export class IdentityAccountService {
       ? body.roles
       : (body.roleCodes ?? []).map((code) => ({ code }));
     let definitions: RoleDefinition[] = [];
-    if (
-      hasRoleUpdate &&
-      !actorScopes.has('*') &&
-      !actorScopes.has('identity.roles.assign')
-    ) {
-      throw new ForbiddenException('identity.roles.assign scope is required');
-    }
     if (hasRoleUpdate && requestedRoles.length > 0) {
       const catalogue = await this.roleService.listAdminRoles(authorization);
       definitions = catalogue.items as RoleDefinition[];
@@ -600,6 +593,14 @@ export class IdentityAccountService {
 
       let roles: Record<string, unknown>[];
       if (hasRoleUpdate) {
+        if (
+          !actorScopes.has('*') &&
+          !actorScopes.has('identity.roles.assign')
+        ) {
+          throw new ForbiddenException(
+            'identity.roles.assign scope is required',
+          );
+        }
         if (actor.id === accountId) {
           throw new ForbiddenException(
             'actors cannot change their own role assignments',
