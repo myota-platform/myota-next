@@ -669,41 +669,17 @@ export class IdentityAuthService {
     if (!authorization.startsWith('Bearer ')) {
       throw new UnauthorizedException('Bearer authentication is required');
     }
-    const allowedFields = new Set(['websiteUrl', 'biographyMarkdown']);
-    if (Object.keys(body).some((field) => !allowedFields.has(field))) {
-      throw new BadRequestException(
-        'profile update contains unsupported fields',
-      );
-    }
-    if (Object.keys(body).length === 0) {
-      throw new BadRequestException('profile update must include a field');
-    }
-    const values = { ...body };
-    if ('websiteUrl' in values) {
-      values.websiteUrl = validateWebsiteUrl(values.websiteUrl);
-    }
-    if ('biographyMarkdown' in values) {
-      const biography = values.biographyMarkdown;
-      if (biography !== null && typeof biography !== 'string') {
-        throw new BadRequestException(
-          'biographyMarkdown must be a string or null',
-        );
-      }
-      if (
-        typeof biography === 'string' &&
-        Array.from(biography).length > 2000
-      ) {
-        throw new BadRequestException(
-          'biographyMarkdown exceeds 2000 characters',
-        );
-      }
-      values.biographyMarkdown = biography === '' ? null : biography;
-    }
-
     const claims = verifyToken(authorization.slice(7), 'access');
     const client = await this.connect();
     try {
       await client.query('BEGIN');
+      const revoked = await client.query(
+        'SELECT 1 FROM public.auth_revocation WHERE jti = $1 AND expires_at > now()',
+        [claims.jti],
+      );
+      if (revoked.rowCount)
+        throw new UnauthorizedException('token has been revoked');
+
       const accountResult = await client.query<AccountRow>(
         `SELECT a.id, a.display_name, a.email::text AS email, a.updated_at,
                 a.participation_type, a.status, NULL::text AS password_hash,
@@ -719,12 +695,37 @@ export class IdentityAuthService {
       const account = accountResult.rows[0];
       if (!account)
         throw new UnauthorizedException('account is inactive or unavailable');
-      const revoked = await client.query(
-        'SELECT 1 FROM public.auth_revocation WHERE jti = $1 AND expires_at > now()',
-        [claims.jti],
-      );
-      if (revoked.rowCount)
-        throw new UnauthorizedException('token has been revoked');
+
+      const allowedFields = new Set(['websiteUrl', 'biographyMarkdown']);
+      if (Object.keys(body).some((field) => !allowedFields.has(field))) {
+        throw new BadRequestException(
+          'profile update contains unsupported fields',
+        );
+      }
+      if (Object.keys(body).length === 0) {
+        throw new BadRequestException('profile update must include a field');
+      }
+      const values = { ...body };
+      if ('websiteUrl' in values) {
+        values.websiteUrl = validateWebsiteUrl(values.websiteUrl);
+      }
+      if ('biographyMarkdown' in values) {
+        const biography = values.biographyMarkdown;
+        if (biography !== null && typeof biography !== 'string') {
+          throw new BadRequestException(
+            'biographyMarkdown must be a string or null',
+          );
+        }
+        if (
+          typeof biography === 'string' &&
+          Array.from(biography).length > 2000
+        ) {
+          throw new BadRequestException(
+            'biographyMarkdown exceeds 2000 characters',
+          );
+        }
+        values.biographyMarkdown = biography === '' ? null : biography;
+      }
 
       await client.query(
         `INSERT INTO public.identity_account_profile
