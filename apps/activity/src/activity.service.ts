@@ -13,6 +13,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import {
+  MAX_UPLOAD_BYTES,
   integerSetting,
   pythonTruthy,
   trimPythonWhitespace,
@@ -289,10 +290,7 @@ export class ActivityService {
     const claims = verifyAccessToken(authorization);
     this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
     const content = decodeBase64(body.contentBase64);
-    const maxBytes = integerSetting(
-      process.env.MYOTA_UPLOAD_MAX_BYTES,
-      25 * 1024 * 1024,
-    );
+    const maxBytes = MAX_UPLOAD_BYTES;
     if (content.length > maxBytes)
       throw new BadRequestException(
         `${filename} exceeds the configured upload limit`,

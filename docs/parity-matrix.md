@@ -156,10 +156,13 @@ field is omitted, and award-definition optional fields retain explicit null
 values where the reference uses dictionary defaults only for omitted fields.
 Award evaluation stringifies an explicit null metric as Python `None` instead
 of replacing it with the default metric.
-ADIF uploads now pass
-authorization, malware checks, and object storage before durable queueing; the
-Activity worker parses records, records successes and rejects, updates
-aggregates, and reports import status. CSV file uploads now validate bounded
+ADIF uploads use the reference's shared `MYOTA_UPLOAD_MAX_BYTES` cap (1 GiB by
+default), then pass authorization, malware checks, and object storage before
+durable queueing; the Activity worker enforces the same cap, parses records,
+records successes and rejects, updates aggregates, and reports import status.
+The Activity API's default JSON body limit matches the reference's 1 GiB limit;
+`MYOTA_MAX_BODY_BYTES` can override it independently of the decoded upload cap.
+CSV file uploads now validate bounded
 UTF-8 input and queue normalized rows through the same ingestion job. Base64
 decoding for CSV and ADIF uploads matches Python's strict validation, which
 accepts non-zero unused padding bits.
