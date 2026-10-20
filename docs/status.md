@@ -640,7 +640,8 @@
   envelope and template text. Address validation follows the reference's
   254-character, nonempty local/domain, space, and CR/LF rules. SMTP TLS mode
   is case-insensitive, and port/timeout values use decimal parsing consistent
-  with Python's configuration parser. It sends through TLS-configured SMTP
+  with Python's configuration parser, including Python whitespace and Unicode
+  decimal digits. It sends through TLS-configured SMTP
   and records deduplication, attempts, and redacted dead letters in the Core
   database. The former fourth email database is removed from the target. Identity production
   and deployment qualification remain outstanding. With `MYOTA_OTEL_ENABLED=1`,

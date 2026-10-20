@@ -14,6 +14,7 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import { readFileSync } from 'node:fs';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
+import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import { EmailWorkerTelemetry } from './email-worker-telemetry.js';
 
 const STREAM = 'MYOTA_EMAIL_WORK';
@@ -678,14 +679,14 @@ function smtpConfig(): SmtpConfig {
 
 function parsePythonInteger(value: string | undefined): number {
   if (value === undefined) return Number.NaN;
-  const normalized = value.trim();
+  const normalized = normalizePythonNumericText(value);
   if (!/^[+-]?\d(?:_?\d)*$/.test(normalized)) return Number.NaN;
   return Number(normalized.replaceAll('_', ''));
 }
 
 function parsePythonFloat(value: string | undefined, fallback: number): number {
   if (value === undefined) return fallback;
-  const normalized = value.trim();
+  const normalized = normalizePythonNumericText(value);
   if (
     !/^[+-]?(?:(?:\d(?:_?\d)*(?:\.(?:\d(?:_?\d)*)?)?)|(?:\.\d(?:_?\d)*))(?:[eE][+-]?\d(?:_?\d)*)?$/.test(
       normalized,
