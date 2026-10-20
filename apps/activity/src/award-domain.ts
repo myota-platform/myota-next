@@ -1,5 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import {
   parseTimestamp,
   pythonFloat,
@@ -105,7 +107,13 @@ export function validateTemplate(elements: unknown) {
         `unsupported certificate element: ${kind || 'missing'}`,
       );
     seen.add(kind);
-    if (kind === 'CUSTOM_TEXT' && !String(element.label ?? '').trim())
+    const label =
+      element.label === undefined
+        ? ''
+        : element.label === null
+          ? 'None'
+          : String(element.label);
+    if (kind === 'CUSTOM_TEXT' && !trimPythonWhitespace(label))
       throw new BadRequestException('custom text requires a label');
     for (const field of ['x', 'y', 'width', 'height']) {
       const value = Number(element[field]);
@@ -239,8 +247,11 @@ function integerValue(value: unknown, field: string) {
   if (typeof value === 'number' && Number.isFinite(value))
     return Math.trunc(value);
   if (typeof value === 'boolean') return Number(value);
-  if (typeof value === 'string' && /^[+-]?\d(?:_?\d)*$/.test(value.trim()))
-    return Number(value.trim().replaceAll('_', ''));
+  if (typeof value === 'string') {
+    const normalized = normalizePythonNumericText(value);
+    if (/^[+-]?\d(?:_?\d)*$/.test(normalized))
+      return Number(normalized.replaceAll('_', ''));
+  }
   throw new BadRequestException(`${field} must be an integer`);
 }
 

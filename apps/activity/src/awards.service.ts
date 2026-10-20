@@ -17,6 +17,7 @@ import sharp from 'sharp';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { ActivityRepository } from './activity.repository.js';
 import {
   evaluateAward,
@@ -922,7 +923,9 @@ function boundedEnv(
 }
 
 async function scanWithClamav(content: Buffer, filename: string) {
-  const endpoint = process.env.MYOTA_CLAMAV_URL?.trim();
+  const endpoint = process.env.MYOTA_CLAMAV_URL
+    ? trimPythonWhitespace(process.env.MYOTA_CLAMAV_URL)
+    : undefined;
   if (!endpoint) return;
   try {
     const response = await fetch(endpoint, {

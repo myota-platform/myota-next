@@ -12,7 +12,11 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { integerSetting, verifyAccessToken } from '@app/platform';
+import {
+  integerSetting,
+  trimPythonWhitespace,
+  verifyAccessToken,
+} from '@app/platform';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { ActivityRepository } from './activity.repository.js';
 import { parseQsoCsv } from './qso-csv.js';
@@ -550,7 +554,9 @@ function decodeBase64(value: string) {
 }
 
 async function scanUpload(content: Buffer, filename: string) {
-  const endpoint = process.env.MYOTA_CLAMAV_URL?.trim();
+  const endpoint = process.env.MYOTA_CLAMAV_URL
+    ? trimPythonWhitespace(process.env.MYOTA_CLAMAV_URL)
+    : undefined;
   if (!endpoint) return;
   try {
     const response = await fetch(endpoint, {
