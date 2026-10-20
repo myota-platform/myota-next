@@ -88,6 +88,8 @@ issuance is transactional and permanent, and PDF render jobs store artifacts in
 S3-compatible storage with authorized presigned download URLs. The Admin can
 render transient PDF previews from mock data and registered assets without
 creating an issuance or object; preview and issuance use the same renderer.
+Award definition saves and eligible award requests return HTTP 201 when created
+and 200 when they return an existing record, matching the reference handlers.
 Optional preview artwork and signature inputs use the reference's truthiness
 defaults, so falsey values behave as absent.
 Registered award assets and bounded content storage are implemented. Award

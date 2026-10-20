@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Headers,
+  HttpCode,
   Param,
   Patch,
   Post,
@@ -25,6 +26,7 @@ export class ActivityController {
   }
 
   @Post('entity-deletion-cascades')
+  @HttpCode(200)
   cascadeDeleteEntity(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') key: string | undefined,

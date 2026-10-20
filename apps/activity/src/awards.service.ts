@@ -103,11 +103,12 @@ export class AwardsService {
       if (asset.kind !== 'SIGNATURE')
         throw new BadRequestException('choose a registered signature asset');
     }
-    return this.awardsRepository.saveAwardDefinition(
+    const saved = await this.awardsRepository.saveAwardDefinition(
       record,
       key,
       'awards.definition.saved.v1',
     );
+    return { award: saved, statusCode: existing ? 200 : 201 };
   }
 
   async patch(
@@ -131,11 +132,12 @@ export class AwardsService {
       return this.publish(authorization, id, patch, key);
     if (status === 'RETIRED') return this.retire(authorization, id, patch, key);
     const existing = await this.getAwardDefinitionOrThrow(id);
-    return this.save(authorization, key, {
+    const saved = await this.save(authorization, key, {
       ...existing,
       ...patch,
       awardId: id,
     });
+    return saved.award;
   }
 
   async submit(authorization: string | undefined, id: string, key?: string) {
@@ -384,7 +386,7 @@ export class AwardsService {
         'the requested award level is not currently eligible',
       );
     const now = new Date().toISOString();
-    return this.awardsRepository.createAwardRequest({
+    const saved = await this.awardsRepository.createAwardRequest({
       id: randomUUID(),
       awardId: award.id,
       programmeSlug: award.programmeSlug,
@@ -397,6 +399,10 @@ export class AwardsService {
       status: 'REQUESTED',
       requestedAt: now,
     });
+    return {
+      request: saved.request,
+      statusCode: saved.created ? 201 : 200,
+    };
   }
 
   async listRequests(

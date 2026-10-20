@@ -712,7 +712,7 @@ paths:
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AwardDefinition' } } }
-      responses: { '201': { description: Draft award created } }
+      responses: { '200': { description: Existing draft updated }, '201': { description: Draft award created } }
   /v1/awards/{awardId}:
     get:
       tags: [Awards]
@@ -860,7 +860,7 @@ paths:
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AwardRequest' } } }
-      responses: { '201': { description: Award request created } }
+      responses: { '200': { description: Existing eligible request returned }, '201': { description: Award request created } }
   /v1/awards/requests/{requestId}/issuances:
     post:
       tags: [Awards]

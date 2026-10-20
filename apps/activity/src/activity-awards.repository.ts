@@ -205,7 +205,9 @@ export class ActivityAwardsRepository {
     }
   }
 
-  async createAwardRequest(record: JsonRecord): Promise<JsonRecord> {
+  async createAwardRequest(
+    record: JsonRecord,
+  ): Promise<{ request: JsonRecord; created: boolean }> {
     return this.mutate(undefined, async (client) => {
       const result = await client.query(
         `INSERT INTO activity_award_request(id,award_id,programme_slug,level_id,subject_id,category,callsign,person_name,facts,status,requested_at)
@@ -239,7 +241,7 @@ export class ActivityAwardsRepository {
           request,
           'awards-service',
         );
-      return request;
+      return { request, created: result.rows.length > 0 };
     });
   }
 

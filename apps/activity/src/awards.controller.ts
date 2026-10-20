@@ -10,9 +10,10 @@ import {
   Post,
   Put,
   Query,
+  Res,
   Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { firstQueryValue } from '@app/platform/query.js';
 import { AwardsService } from './awards.service.js';
 
@@ -43,8 +44,12 @@ export class AwardsController {
   create(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: Record<string, any>,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.awards.save(authorization, undefined, body);
+    return this.awards.save(authorization, undefined, body).then((saved) => {
+      response.status(saved.statusCode);
+      return saved.award;
+    });
   }
 
   @Post('evaluation-jobs')
@@ -109,8 +114,12 @@ export class AwardsController {
   requestAward(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: Record<string, any>,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.awards.requestAward(authorization, body);
+    return this.awards.requestAward(authorization, body).then((saved) => {
+      response.status(saved.statusCode);
+      return saved.request;
+    });
   }
 
   @Post('requests/:requestId/issuances')
