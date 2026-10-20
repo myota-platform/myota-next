@@ -12,6 +12,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { firstQueryValue } from '@app/platform/query.js';
 import {
   PatchProgrammeContentDto,
   PublishProgrammeContentDto,
@@ -38,13 +39,18 @@ export class ProgrammeContentController {
     @Param('slug') slug: string,
     @Query()
     query: {
-      locale?: string;
-      status?: string;
-      page?: string;
-      pageSize?: string;
+      locale?: string | string[];
+      status?: string | string[];
+      page?: string | string[];
+      pageSize?: string | string[];
     },
   ) {
-    return this.content.list(authorization, slug, query);
+    return this.content.list(authorization, slug, {
+      locale: firstQueryValue(query.locale),
+      status: firstQueryValue(query.status),
+      page: firstQueryValue(query.page),
+      pageSize: firstQueryValue(query.pageSize),
+    });
   }
 
   @Post()

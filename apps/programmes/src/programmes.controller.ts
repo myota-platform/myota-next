@@ -11,14 +11,24 @@ import {
 } from '@nestjs/common';
 import { ProgrammesService } from './programmes.service.js';
 import { CreateProgrammeDto, UpdateProgrammeDto } from './programmes.dto.js';
+import { firstQueryValue } from '@app/platform/query.js';
 
 @Controller('programmes')
 export class ProgrammesController {
   constructor(private readonly programmes: ProgrammesService) {}
 
   @Get()
-  list(@Query() query: { page?: string; pageSize?: string }) {
-    return this.programmes.list(query);
+  list(
+    @Query()
+    query: {
+      page?: string | string[];
+      pageSize?: string | string[];
+    },
+  ) {
+    return this.programmes.list({
+      page: firstQueryValue(query.page),
+      pageSize: firstQueryValue(query.pageSize),
+    });
   }
 
   @Post()

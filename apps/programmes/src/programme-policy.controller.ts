@@ -12,6 +12,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { firstQueryValue } from '@app/platform/query.js';
 import {
   PatchProgrammePolicyDraftDto,
   PublishProgrammePolicyDraftDto,
@@ -28,9 +29,18 @@ export class ProgrammePolicyController {
   list(
     @Headers('authorization') authorization: string | undefined,
     @Param('slug') slug: string,
-    @Query() query: { type?: string; page?: string; pageSize?: string },
+    @Query()
+    query: {
+      type?: string | string[];
+      page?: string | string[];
+      pageSize?: string | string[];
+    },
   ) {
-    return this.policies.list(authorization, slug, query);
+    return this.policies.list(authorization, slug, {
+      type: firstQueryValue(query.type),
+      page: firstQueryValue(query.page),
+      pageSize: firstQueryValue(query.pageSize),
+    });
   }
 
   @Post()

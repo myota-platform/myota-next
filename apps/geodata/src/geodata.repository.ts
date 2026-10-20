@@ -8,6 +8,7 @@ import {
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
+import { firstQueryValue } from '@app/platform/query.js';
 
 @Injectable()
 export class GeodataRepository {
@@ -22,7 +23,7 @@ export class GeodataRepository {
       values.push(value);
       filters.push(fragment.replace('?', `$${values.length}`));
     };
-    const programme = firstQueryString(query.programme);
+    const programme = firstQueryValue(query.programme);
     if (programme) add('programme_slug=?', programme);
     const statuses = listValues(query.status)
       .flatMap((value) => value.split(','))
@@ -30,17 +31,17 @@ export class GeodataRepository {
       .filter(Boolean);
     if (statuses.length && !statuses.includes('ALL'))
       add('lifecycle_status=ANY(?::text[])', statuses);
-    const entityType = firstQueryString(query.entityType);
+    const entityType = firstQueryValue(query.entityType);
     if (entityType)
       add(
         `EXISTS (SELECT 1 FROM geodata_entity_category c WHERE c.entity_id=geodata_entity.id AND lower(c.category_code)=lower(?))`,
         entityType,
       );
     for (const field of ['continent', 'country', 'region', 'province']) {
-      const value = firstQueryString(query[field]);
+      const value = firstQueryValue(query[field]);
       if (value) add(`lower(COALESCE(${field},''))=lower(?)`, value);
     }
-    const city = firstQueryString(query.city);
+    const city = firstQueryValue(query.city);
     if (city) {
       values.push(city, city);
       const first = values.length - 1;
@@ -160,7 +161,7 @@ export class GeodataRepository {
   async listConflation(query: Record<string, unknown>) {
     const page = parsePageInteger(query.page, 1);
     const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
-    const resolution = firstQueryString(query.resolution) || null;
+    const resolution = firstQueryValue(query.resolution) || null;
     const client = await this.connect();
     try {
       const count = await client.query(
@@ -398,11 +399,11 @@ function listValues(value: unknown) {
 
 function parseBounds(query: Record<string, unknown>) {
   const names = ['minLon', 'minLat', 'maxLon', 'maxLat'] as const;
-  const legacyValues = names.map((name) => firstQueryString(query[name]));
+  const legacyValues = names.map((name) => firstQueryValue(query[name]));
   const hasLegacyBounds = legacyValues.some(
     (value) => value !== undefined && value !== '',
   );
-  const bbox = firstQueryString(query.bbox) ?? '';
+  const bbox = firstQueryValue(query.bbox) ?? '';
   let raw: number[];
   if (bbox && !hasLegacyBounds) {
     const values = bbox.split(',').map((value) => value.trim());
@@ -434,11 +435,4 @@ function parseBounds(query: Record<string, unknown>) {
       'map bounds must have minimum values below maximum values',
     );
   return raw;
-}
-
-function firstQueryString(value: unknown) {
-  const values = Array.isArray(value) ? value : [value];
-  return values.find(
-    (item): item is string => typeof item === 'string' && item !== '',
-  );
 }
