@@ -11,6 +11,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import type { AccessTokenClaims } from '@app/platform/access-token.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { entityProjection } from './geodata.repository.js';
 import {
   locationSnapshot,
@@ -1187,7 +1188,9 @@ function normalizeEntityTypeCodes(value: unknown): string[] {
   for (const item of values) {
     const candidate = isRecord(item) ? item.code : item;
     const code =
-      typeof candidate === 'string' ? candidate.trim().toUpperCase() : '';
+      typeof candidate === 'string'
+        ? trimPythonWhitespace(candidate).toUpperCase()
+        : '';
     if (/^[A-Z][A-Z0-9_]{1,63}$/.test(code) && !result.includes(code))
       result.push(code);
   }

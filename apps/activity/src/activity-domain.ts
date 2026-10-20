@@ -1,6 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
+import {
+  collapsePythonWhitespace,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
 
 export type JsonRecord = Record<string, any>;
 
@@ -268,49 +272,6 @@ export function normalizeCallsign(value: unknown): string {
     throw new BadRequestException('callsign is invalid');
   }
   return normalized;
-}
-
-function collapsePythonWhitespace(value: string): string {
-  const output: string[] = [];
-  let pendingSpace = false;
-  for (const character of value) {
-    const codePoint = character.codePointAt(0)!;
-    if (isPythonWhitespace(codePoint)) {
-      pendingSpace ||= output.length > 0;
-      continue;
-    }
-    if (pendingSpace) output.push(' ');
-    output.push(character);
-    pendingSpace = false;
-  }
-  return output.join('');
-}
-
-function trimPythonWhitespace(value: string): string {
-  const characters = Array.from(value);
-  let start = 0;
-  let end = characters.length;
-  while (start < end && isPythonWhitespace(characters[start].codePointAt(0)!))
-    start += 1;
-  while (end > start && isPythonWhitespace(characters[end - 1].codePointAt(0)!))
-    end -= 1;
-  return characters.slice(start, end).join('');
-}
-
-function isPythonWhitespace(codePoint: number): boolean {
-  return (
-    (codePoint >= 0x09 && codePoint <= 0x0d) ||
-    (codePoint >= 0x1c && codePoint <= 0x20) ||
-    codePoint === 0x85 ||
-    codePoint === 0xa0 ||
-    codePoint === 0x1680 ||
-    (codePoint >= 0x2000 && codePoint <= 0x200a) ||
-    codePoint === 0x2028 ||
-    codePoint === 0x2029 ||
-    codePoint === 0x202f ||
-    codePoint === 0x205f ||
-    codePoint === 0x3000
-  );
 }
 
 export function normalizeActivation(data: JsonRecord): JsonRecord {

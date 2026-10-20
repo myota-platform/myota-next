@@ -241,7 +241,8 @@
   entities, category and source links, audit/outbox events, and per-candidate
   queue outcomes. Entity lifecycle review and If-Match protected name, website,
   and description edits are transactional and audited. If-Match protected
-  geometry, category, and manual location edits are also audited. Location
+  geometry, category, and manual location edits are also audited. Category
+  codes use Python's Unicode whitespace stripping rules. Location
   names are checked against the provider catalogue, provider codes cannot be
   manually set, and location edits require GIS administrator coverage or
   `geodata.location.manage`. Review writes require role coverage for the
