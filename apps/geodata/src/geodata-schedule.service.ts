@@ -158,9 +158,6 @@ export class GeodataScheduleService {
     );
     const now = new Date();
     const runAt = now.toISOString();
-    const nextRunAt = new Date(
-      now.getTime() + schedule.intervalSeconds * 1000,
-    ).toISOString();
     const update = await this.connect();
     try {
       await update.query('BEGIN');
@@ -169,10 +166,10 @@ export class GeodataScheduleService {
       );
       const saved = await update.query(
         `UPDATE geodata_control_record
-         SET payload=payload || jsonb_build_object('lastRunAt',$2::text,'nextRunAt',$3::text),updated_at=now()
+         SET payload=payload || jsonb_build_object('lastRunAt',$2::text,'nextRunAt',$2::text),updated_at=now()
          WHERE kind='schedules' AND id=$1 AND payload->>'enabled'='true'
          RETURNING payload`,
-        [scheduleId, runAt, nextRunAt],
+        [scheduleId, runAt],
       );
       if (!saved.rows[0])
         throw new ConflictException('refresh schedule was disabled');

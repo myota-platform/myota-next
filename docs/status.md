@@ -191,7 +191,9 @@
   disappearance policies after successful preprocessing. Ordinary imports also
   accept complete snapshots and apply disappearance policy at that stage. The opt-in
   allowlisted importer now executes due schedules through the Geodata API;
-  deployment and live-source qualification remain outstanding.
+  schedule runs preserve the reference timestamp updates, while the importer
+  uses `lastRunAt + intervalSeconds` to determine the next automatic run.
+  Deployment and live-source qualification remain outstanding.
   Candidate-level failures from a FAILED promotion queue can be resubmitted
   through the promotion API, and failed queues can now be redriven as a whole
   with a recorded reason. Community proposals now enter

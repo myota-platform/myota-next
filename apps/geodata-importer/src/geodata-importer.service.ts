@@ -18,6 +18,8 @@ type RefreshSchedule = {
   adapter: string;
   source: Record<string, unknown>;
   entityTypes: string[];
+  intervalSeconds: number;
+  lastRunAt: string | null;
   disappearancePolicy: string;
   enabled: boolean;
   nextRunAt: string;
@@ -68,11 +70,17 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
   private async poll() {
     try {
       for (const schedule of await this.listSchedules()) {
+        const lastRunAt = schedule.lastRunAt
+          ? Date.parse(schedule.lastRunAt)
+          : Number.NaN;
+        const dueAt = Number.isFinite(lastRunAt)
+          ? lastRunAt + schedule.intervalSeconds * 1000
+          : Date.parse(schedule.nextRunAt);
         if (
           this.stopping ||
           !schedule.enabled ||
-          !Number.isFinite(Date.parse(schedule.nextRunAt)) ||
-          Date.parse(schedule.nextRunAt) > Date.now() ||
+          !Number.isFinite(dueAt) ||
+          dueAt > Date.now() ||
           (this.retryAfter.get(schedule.id) ?? 0) > Date.now()
         )
           continue;
