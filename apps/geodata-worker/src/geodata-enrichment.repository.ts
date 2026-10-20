@@ -1,4 +1,5 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
+import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import {
   Inject,
   Injectable,
@@ -448,8 +449,7 @@ async function reverseGeocode(
           ) &&
           !(
             region &&
-            text(entry.name).toLocaleLowerCase() ===
-              text(region).toLocaleLowerCase()
+            unicodeCaseFold(text(entry.name)) === unicodeCaseFold(text(region))
           ),
       );
     const province = pickAdministrative(
@@ -468,8 +468,7 @@ async function reverseGeocode(
       countyName &&
       [provinceName, city].some(
         (value) =>
-          text(value).toLocaleLowerCase() ===
-          text(countyName).toLocaleLowerCase(),
+          unicodeCaseFold(text(value)) === unicodeCaseFold(text(countyName)),
       )
     ) {
       county = undefined;
@@ -546,7 +545,7 @@ function pickAdministrative(
     const searchable = [entry.name, entry.description, entry.isoName]
       .map(text)
       .join(' ')
-      .toLocaleLowerCase();
+      .toLowerCase();
     if (patterns.some((pattern) => searchable.includes(pattern))) return entry;
   }
   return entries.find((entry) => levels.includes(Number(entry.adminLevel)));

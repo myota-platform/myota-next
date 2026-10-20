@@ -309,6 +309,9 @@ entity list/detail reads with filters and bounds, the import adapter catalogue,
 provider-derived location options, and authorized import-run list/status reads;
 authenticated audit reads and GeoJSON vector tile collections are also
 implemented with the legacy tile metadata and feature selection behavior.
+Reverse-geocoder subdivision and county deduplication uses the shared Unicode
+case-fold mapping, and adapter keyword matching uses locale-independent
+lowercasing, preserving the Python name comparisons.
 JSON GeoJSON, WFS GeoJSON, and ArcGIS FeatureServer JSON import creation stores
 normalized GeoJSON source documents in S3-compatible storage and queues
 idempotent import runs transactionally. ArcGIS geometries with WGS84 and
