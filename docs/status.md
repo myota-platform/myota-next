@@ -391,8 +391,9 @@
   pair; pages preserve the reference's ID order, and list and resolution records
   retain the programme and creation/update timestamps. Decision values retain
   case-sensitive enum
-  validation, and review notes are stored without truncation. Import candidate
-  validation and promotion also preserve submitted note JSON values without
+  validation, and conflation notes preserve submitted JSON values without
+  coercion or truncation. Import candidate validation and promotion also
+  preserve submitted note JSON values without
   coercion or truncation; `geo/006` migrates the stored validation note from
   text to JSONB while retaining existing text values as JSON strings. The Admin
   includes a role-gated conflation workspace for filtering candidates, inspecting
