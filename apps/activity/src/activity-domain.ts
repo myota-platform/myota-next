@@ -438,7 +438,7 @@ export function evaluateActivation(
     violations,
     evaluatedAt: normalizeTimestamp(new Date()),
     qsoCount: qsos.length,
-    ruleVersion: rules.version,
+    ruleVersion: rules.version ?? null,
   };
 }
 
