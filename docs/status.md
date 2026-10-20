@@ -427,15 +427,15 @@
   malware scanning, abort, and transactional import-run/outbox creation.
   Upload adapter values are matched exactly, format values are uppercased
   without trimming, filenames preserve submitted whitespace, and idempotency
-  keys remain unmodified. This
-  path streams GeoJSON sources and decoded features; its upload default is 256
-  MiB and can be raised to 512 MiB with `MYOTA_GEOJSON_MAX_UPLOAD_BYTES`.
+  keys remain unmodified. Upload size defaults to 1 GiB through
+  `MYOTA_UPLOAD_MAX_BYTES`; optional format-specific settings can override that
+  value. This path streams GeoJSON sources and decoded features.
   Shapefile ZIP uploads stream to temporary disk, then decode one shape/DBF
   record at a time, selecting the first `.shp` entry and its matching `.shx`
   and `.dbf` files as the reference does. Deleted DBF rows are filtered before
   shape and record pairing, with iteration bounded by the SHX and active DBF
-  row counts to match PyShp. Their default upload cap is 256 MiB and can be raised to
-  512 MiB with `MYOTA_SHAPEFILE_MAX_UPLOAD_BYTES`; archives are capped at 100
+  row counts to match PyShp. Shapefile upload size follows
+  `MYOTA_SHAPEFILE_MAX_UPLOAD_BYTES` or the shared upload limit; archives are capped at 100
   members and 1 GiB expanded. Matching .shp, .shx, and .dbf sidecars are
   required; DBF text uses PyShp's UTF-8 default and `.cpg` files are ignored,
   matching the reference loader.
@@ -447,9 +447,8 @@
   preserves OSM tags and stable type/id source references, filters the current
   hiking-path and protected-area tag catalogue, and assembles closed-way and
   multipolygon areas using a temporary disk-backed node-location index. PBF
-  source bytes stream to disk with checksum verification; the upload default
-  is 256 MiB and can be raised to 512 MiB with
-  `MYOTA_OSM_PBF_MAX_UPLOAD_BYTES`. Decoded output is capped at 128 MiB, with
+  source bytes stream to disk with checksum verification; upload size follows
+  `MYOTA_OSM_PBF_MAX_UPLOAD_BYTES` or the shared upload limit. Decoded output is capped at 128 MiB, with
   features streamed one at a time into four-record staging batches, 16 MiB and
   250,000 vertices per feature, plus the configured feature cap.
   GeoJSON, KML, GPX, Shapefile, and PBF parsing use the shared
@@ -492,8 +491,8 @@
   be claimed.
   The adapter catalogue and admin selector now expose only import formats the
   current boundary can decode. The admin file picker accepts GeoJSON and OSM
-  PBF and Shapefile ZIP files up to their configured caps (256 MiB by default,
-  512 MiB maximum).
+  PBF and Shapefile ZIP files up to their configured upload limits, which
+  default to the shared 1 GiB cap.
   Durable object references from the configured import bucket are also
   bounded, hash-checked, validated as GeoJSON, and staged in the worker's
   normalized source format.

@@ -21,31 +21,25 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { integerSetting } from '@app/platform/integer-setting.js';
 import { normalizeEntityTypeCodes } from './geodata-entity-types.js';
 
-// Bound source uploads; the worker applies tighter format-specific decode caps.
-const maxUploadBytes = Math.min(
-  positiveEnv('MYOTA_UPLOAD_MAX_BYTES', 20 * 1024 * 1024),
-  20 * 1024 * 1024,
+const maxUploadBytes = integerEnv('MYOTA_UPLOAD_MAX_BYTES', 1024 ** 3);
+const maxGeoJsonUploadBytes = integerEnv(
+  'MYOTA_GEOJSON_MAX_UPLOAD_BYTES',
+  maxUploadBytes,
 );
-const maxGeoJsonUploadBytes = Math.min(
-  positiveEnv('MYOTA_GEOJSON_MAX_UPLOAD_BYTES', 256 * 1024 * 1024),
-  512 * 1024 * 1024,
+const maxOsmPbfUploadBytes = integerEnv(
+  'MYOTA_OSM_PBF_MAX_UPLOAD_BYTES',
+  maxUploadBytes,
 );
-const maxOsmPbfUploadBytes = Math.min(
-  positiveEnv('MYOTA_OSM_PBF_MAX_UPLOAD_BYTES', 256 * 1024 * 1024),
-  512 * 1024 * 1024,
+const maxShapefileUploadBytes = integerEnv(
+  'MYOTA_SHAPEFILE_MAX_UPLOAD_BYTES',
+  maxUploadBytes,
 );
-const maxShapefileUploadBytes = Math.min(
-  positiveEnv('MYOTA_SHAPEFILE_MAX_UPLOAD_BYTES', 256 * 1024 * 1024),
-  512 * 1024 * 1024,
-);
-const maxPartBytes = Math.min(
-  16 * 1024 * 1024,
-  Math.max(
-    5 * 1024 * 1024,
-    positiveEnv('MYOTA_UPLOAD_PART_MAX_BYTES', 16 * 1024 * 1024),
-  ),
+const maxPartBytes = Math.max(
+  5 * 1024 * 1024,
+  integerEnv('MYOTA_UPLOAD_PART_MAX_BYTES', 16 * 1024 * 1024),
 );
 
 @Injectable()
@@ -321,16 +315,22 @@ export class GeodataUploadService {
         if (Number(head?.ContentLength) !== Number(session.expected_size))
           throw error;
       }
+      const metadata = session.metadata as Record<string, unknown>;
+      const format =
+        typeof metadata.format === 'string'
+          ? metadata.format.toUpperCase()
+          : '';
+      const sourceLimit = sourceUploadLimit(format);
       const scan = await this.scanObject(
         session.bucket,
         session.object_key,
         Number(session.expected_size),
+        sourceLimit,
       );
       if (session.expected_sha256 && scan.sha256 !== session.expected_sha256)
         throw new BadRequestException(
           'completed object checksum does not match sha256',
         );
-      const metadata = session.metadata as Record<string, unknown>;
       const source = {
         ...(metadata.source as Record<string, unknown>),
         bucket: session.bucket,
@@ -442,8 +442,13 @@ export class GeodataUploadService {
     }
   }
 
-  private async scanObject(bucket: string, key: string, expectedSize: number) {
-    if (expectedSize > maxUploadBytes)
+  private async scanObject(
+    bucket: string,
+    key: string,
+    expectedSize: number,
+    sourceLimit: number,
+  ) {
+    if (expectedSize > sourceLimit)
       throw new BadRequestException(
         'upload exceeds the configured upload limit',
       );
@@ -607,16 +612,7 @@ function validateCreate(body: Record<string, unknown>) {
       ? body.format
       : fallbackFormat;
   const format = formatValue.toUpperCase();
-  const sourceLimit =
-    format === 'OSM_PBF'
-      ? maxOsmPbfUploadBytes
-      : format === 'GEOJSON'
-        ? maxGeoJsonUploadBytes
-        : format === 'SHAPEFILE' ||
-            format === 'SHP' ||
-            format === 'PARKSERVE_US'
-          ? maxShapefileUploadBytes
-          : maxUploadBytes;
+  const sourceLimit = sourceUploadLimit(format);
   const expectedSize = Number(body.expectedSize);
   if (
     !Number.isSafeInteger(expectedSize) ||
@@ -692,7 +688,16 @@ function validateCreate(body: Record<string, unknown>) {
   return { filename, expectedSize, sha256, metadata };
 }
 
-function positiveEnv(name: string, fallback: number) {
-  const parsed = Number.parseInt(process.env[name] ?? '', 10);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+function integerEnv(name: string, fallback: number) {
+  return integerSetting(process.env[name], fallback);
+}
+
+function sourceUploadLimit(format: string) {
+  return format === 'OSM_PBF'
+    ? maxOsmPbfUploadBytes
+    : format === 'GEOJSON'
+      ? maxGeoJsonUploadBytes
+      : format === 'SHAPEFILE' || format === 'SHP' || format === 'PARKSERVE_US'
+        ? maxShapefileUploadBytes
+        : maxUploadBytes;
 }

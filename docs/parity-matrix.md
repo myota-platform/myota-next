@@ -179,13 +179,14 @@ PyShp's GeoJSON conversion. OSM PBF uploads are decoded by
 `osmium-tool` in the Geodata worker image, preserve OSM tags and type/id source
 references, and emit the configured hiking, protected-area, point, path, and
 multipolygon features using a temporary disk-backed node-location index.
-PBF source bytes stream to disk with checksum verification; the default upload
-limit is 256 MiB and can be raised to 512 MiB. Decoded PBF output is capped at
+PBF source bytes stream to disk with checksum verification; source upload size
+uses the shared 1 GiB default or the optional format-specific override. Decoded PBF output is capped at
 128 MiB and streamed one feature at a time into four-record staging batches,
 with the configured per-feature byte limit (16 MiB by default), 250,000 vertex
 limit, and configured feature cap. GeoJSON multipart uploads stream their
 source and yield one parsed
-feature at a time, with a 256 MiB default upload cap (512 MiB maximum), 16 MiB
+feature at a time, with the shared 1 GiB upload default or the optional
+format-specific override, 16 MiB
 per-feature size by default, 250,000 vertices, and the configured feature
 count. The shared `MYOTA_IMPORT_MAX_FEATURE_BYTES` setting controls decoded
 feature size in GeoJSON, KML/GPX, Shapefile, and PBF imports (16 MiB by
@@ -212,8 +213,8 @@ parity still requires fixtures for binary formats and uncommon geometries or
 CRS definitions. The direct JSON import path materializes
 the normalized collection, while multipart GeoJSON streams source features.
 Shapefile multipart uploads stream to
-temporary disk and decode records one at a time, with a 256 MiB default upload
-cap (512 MiB maximum), 1 GiB expanded-size cap, 16 MiB
+temporary disk and decode records one at a time, with the shared 1 GiB upload
+default or the optional format-specific override, a 1 GiB expanded-size cap, 16 MiB
 per-feature size by default, 250,000 vertices, and the configured feature
 count. Less
 common geometry types and uncommon CRS definitions still need compatibility
