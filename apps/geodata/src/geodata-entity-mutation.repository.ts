@@ -1491,11 +1491,12 @@ function normalizeWebsite(value: unknown) {
       'website must be an absolute HTTP or HTTPS URL',
     );
   }
+  const authority =
+    website.match(/^[a-z][a-z\d+.-]*:\/\/([^/?#]*)/i)?.[1] ?? '';
   if (
     !['http:', 'https:'].includes(parsed.protocol) ||
     !parsed.hostname ||
-    parsed.username ||
-    parsed.password
+    authority.includes('@')
   )
     throw new BadRequestException(
       'website must be an absolute HTTP or HTTPS URL',
