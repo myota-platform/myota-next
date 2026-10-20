@@ -613,8 +613,8 @@ function renderMessage(command: EmailCommand) {
 }
 
 function smtpConfig(): SmtpConfig {
-  const port = Number(process.env.EMAIL_SMTP_PORT);
-  const timeout = Number(process.env.EMAIL_SMTP_TIMEOUT_SECONDS ?? 10);
+  const port = parsePythonInteger(process.env.EMAIL_SMTP_PORT);
+  const timeout = parsePythonFloat(process.env.EMAIL_SMTP_TIMEOUT_SECONDS, 10);
   const tlsMode = (process.env.EMAIL_SMTP_TLS_MODE ?? 'starttls').toLowerCase();
   const config = {
     host: process.env.EMAIL_SMTP_HOST?.trim() ?? '',
@@ -638,6 +638,25 @@ function smtpConfig(): SmtpConfig {
   )
     throw new Error('SMTP configuration is incomplete or outside bounds');
   return { ...config, tlsMode: tlsMode as SmtpConfig['tlsMode'] };
+}
+
+function parsePythonInteger(value: string | undefined): number {
+  if (value === undefined) return Number.NaN;
+  const normalized = value.trim();
+  if (!/^[+-]?\d(?:_?\d)*$/.test(normalized)) return Number.NaN;
+  return Number(normalized.replaceAll('_', ''));
+}
+
+function parsePythonFloat(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  const normalized = value.trim();
+  if (
+    !/^[+-]?(?:(?:\d(?:_?\d)*(?:\.(?:\d(?:_?\d)*)?)?)|(?:\.\d(?:_?\d)*))(?:[eE][+-]?\d(?:_?\d)*)?$/.test(
+      normalized,
+    )
+  )
+    return Number.NaN;
+  return Number(normalized.replaceAll('_', ''));
 }
 
 function readSecret(name: string) {

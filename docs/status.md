@@ -416,10 +416,10 @@
   variant bits, and applies the schema's Unicode code-point lengths to bounded
   envelope and template text. Address validation follows the reference's
   254-character, nonempty local/domain, space, and CR/LF rules. SMTP TLS mode
-  is case-insensitive, matching the reference configuration parser. It sends
-  through TLS-configured SMTP and records
-  deduplication, attempts, and redacted dead letters in the Core database. The
-  former fourth email database is removed from the target. Identity production,
+  is case-insensitive, and port/timeout values use decimal parsing consistent
+  with Python's configuration parser. It sends through TLS-configured SMTP
+  and records deduplication, attempts, and redacted dead letters in the Core
+  database. The former fourth email database is removed from the target. Identity production,
   OpenTelemetry export, and deployment integration remain outstanding. The
   worker exposes `/healthz`, `/readyz`, and Prometheus metrics. Retry backoff
   uses the greater of JetStream delivery count and the persisted attempt count,
