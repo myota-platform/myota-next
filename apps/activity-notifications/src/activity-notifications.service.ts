@@ -506,7 +506,7 @@ function fallbackEventId(subject: string, sequence: number): string {
     .update(`${subject}:${sequence}`)
     .digest('hex')
     .slice(0, 32);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
 function redact(value: unknown, key = ''): unknown {

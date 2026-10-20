@@ -555,6 +555,8 @@
   event ID spelling, while consumer checkpoints use normalized UUIDs. Its
   UUID parsing accepts nil IDs and all version/variant bit patterns supported
   by Python's UUID parser.
+  Malformed envelopes without a usable event ID use the same deterministic
+  subject/sequence digest UUID as the Python consumer.
   Recipient extraction follows Python truthiness and mapping fallbacks so
   malformed truthy recipient fields retry and dead-letter instead of silently
   dropping a notification.
