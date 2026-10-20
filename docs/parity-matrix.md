@@ -232,8 +232,9 @@ and floating-point attributes and include the source `.prj` text. Binary-format
 integer attributes are staged without precision loss, including values beyond
 JavaScript's safe integer range. Geodata PostgreSQL pools preserve those values
 on reads, and the API returns them as numeric JSON tokens. Generic projected
-CRS transforms preserve ordinates beyond XY; the reference's Web Mercator
-special case emits XY only. Hash and feature
+CRS transforms preserve ordinates beyond XY, and unsupported CRS identifiers
+use the reference domain error; the reference's Web Mercator special case
+emits XY only. Hash and feature
 parity still requires fixtures for binary formats and uncommon geometries or
 CRS definitions. The direct JSON import path materializes
 the normalized collection, while multipart GeoJSON streams source features.

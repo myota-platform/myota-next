@@ -235,10 +235,13 @@ function normalizeCoordinates(value: unknown, source: string): unknown {
         (180 / Math.PI) * (2 * Math.atan(exponential) - Math.PI / 2);
       return [longitude, mercatorLatitude];
     }
-    const [longitude, latitude] = proj4(source, 'EPSG:4326', [
-      value[0],
-      value[1],
-    ]);
+    let longitude: number;
+    let latitude: number;
+    try {
+      [longitude, latitude] = proj4(source, 'EPSG:4326', [value[0], value[1]]);
+    } catch (error) {
+      throw new Error(`unsupported CRS ${source}`, { cause: error });
+    }
     // The pinned Python transformer reprojects XY and preserves higher ordinates.
     return [longitude, latitude, ...value.slice(2)];
   }
