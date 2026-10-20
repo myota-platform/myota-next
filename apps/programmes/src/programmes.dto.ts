@@ -76,7 +76,7 @@ export class EntityTypeDto {
 
 export class SaveProgrammeContentDto {
   @IsOptional()
-  @IsUUID()
+  @IsString()
   contentId?: string;
 
   @IsString()

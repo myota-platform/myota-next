@@ -88,7 +88,7 @@ export class ProgrammeContentService {
     this.authorizeAdmin(authorization, slug);
     this.requireContent(body.key, body.locale, body.value);
     return this.contents.mutate(idempotencyKey, async (client) => {
-      const contentId = body.contentId ?? randomUUID();
+      const contentId = body.contentId || randomUUID();
       await this.contents.lockRecord(client, contentId);
       const previous = await this.contents.find(client, contentId);
       if (previous && previous.programmeSlug !== slug) {
