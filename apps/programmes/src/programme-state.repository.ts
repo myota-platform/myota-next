@@ -44,6 +44,53 @@ export class ProgrammeStateRepository {
     }
   }
 
+  async listContentPage(
+    programmeSlug: string,
+    locale: string | undefined,
+    status: string | undefined,
+    pageSize: number,
+    offset: number,
+  ): Promise<{ items: Record<string, unknown>[]; total: number }> {
+    const client = await this.connect();
+    try {
+      const result = await client.query<{
+        items: Record<string, unknown>[];
+        total: number;
+      }>(
+        `WITH filtered AS MATERIALIZED (
+           SELECT content.value
+             FROM public.service_state AS snapshot
+             CROSS JOIN LATERAL jsonb_each(
+               CASE WHEN jsonb_typeof(snapshot.state #> '{data,content}') = 'object'
+                 THEN snapshot.state #> '{data,content}'
+                 ELSE '{}'::jsonb
+               END
+             ) AS content(key, value)
+            WHERE snapshot.service = 'programmes'
+              AND content.value->>'programmeSlug' = $1
+              AND ($2::text IS NULL OR content.value->>'locale' = $2)
+              AND ($3::text IS NULL OR content.value->>'status' = $3)
+         ), page AS (
+           SELECT value FROM filtered
+            ORDER BY value->>'key' COLLATE "C", value->>'locale' COLLATE "C"
+            LIMIT $4 OFFSET $5
+         )
+         SELECT COALESCE(
+                  (SELECT jsonb_agg(page.value ORDER BY
+                    page.value->>'key' COLLATE "C",
+                    page.value->>'locale' COLLATE "C") FROM page),
+                  '[]'::jsonb
+                ) AS items,
+                (SELECT count(*)::int FROM filtered) AS total`,
+        [programmeSlug, locale ?? null, status ?? null, pageSize, offset],
+      );
+      const row = result.rows[0];
+      return { items: row?.items ?? [], total: row?.total ?? 0 };
+    } finally {
+      client.release();
+    }
+  }
+
   async mutate<T>(
     idempotencyKey: string | undefined,
     mutate: (client: PoolClient, state: ProgrammeState) => Promise<T>,

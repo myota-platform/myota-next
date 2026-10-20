@@ -72,6 +72,8 @@
   time forms, space-separated and comma-fraction input, and compact timezone
   offsets; they reject impossible calendar dates and normalize to UTC with
   microsecond precision.
+  Programme content filtering, sorting, counting, and page selection run in
+  Core PostgreSQL; the API transfers only the requested page into Node.js.
   These operations
   share a dedicated Core snapshot repository and transactional outbox boundary.
 - Activity now has an initial API slice for activation listing, creation,

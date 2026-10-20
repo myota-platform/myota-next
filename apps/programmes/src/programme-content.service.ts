@@ -47,22 +47,16 @@ export class ProgrammeContentService {
     this.authorizeAdmin(authorization, slug);
     const page = parsePageInteger(query.page, 1);
     const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
-    const state = await this.state.load();
-    const items = Object.values(contentBucket(state)).filter(
-      (item) =>
-        item.programmeSlug === slug &&
-        (!query.locale || item.locale === query.locale) &&
-        (!query.status || item.status === query.status),
-    );
-    items.sort((left, right) =>
-      `${left.key}\u0000${left.locale}`.localeCompare(
-        `${right.key}\u0000${right.locale}`,
-      ),
-    );
-    const total = items.length;
     const start = (page - 1) * pageSize;
+    const { items, total } = await this.state.listContentPage(
+      slug,
+      query.locale,
+      query.status,
+      pageSize,
+      start,
+    );
     return {
-      items: items.slice(start, start + pageSize),
+      items,
       page,
       pageSize,
       total,
