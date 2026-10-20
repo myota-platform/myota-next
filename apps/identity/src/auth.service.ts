@@ -163,7 +163,11 @@ export class IdentityAuthService {
         trimPythonWhitespace(input.email),
       );
       const accountResult = await client.query<AccountRow>(
-        `SELECT a.id, a.display_name, a.email::text AS email, a.updated_at,
+        `SELECT a.id, a.display_name, a.email::text AS email, a.created_at,
+                a.updated_at,
+                (SELECT primary_call.callsign_id
+                   FROM public.account_primary_callsign primary_call
+                  WHERE primary_call.account_id = a.id) AS primary_callsign_id,
                 a.participation_type, a.status, c.password_hash,
                 coalesce(c.failed_attempts, 0) AS failed_attempts, c.locked_until,
                 p.website_url, p.biography_markdown, p.profile_image_id,
@@ -298,7 +302,11 @@ export class IdentityAuthService {
           'refresh session is invalid or revoked',
         );
       const accountResult = await client.query<AccountRow>(
-        `SELECT a.id, a.display_name, a.email::text AS email, a.updated_at,
+        `SELECT a.id, a.display_name, a.email::text AS email, a.created_at,
+                a.updated_at,
+                (SELECT primary_call.callsign_id
+                   FROM public.account_primary_callsign primary_call
+                  WHERE primary_call.account_id = a.id) AS primary_callsign_id,
                 a.participation_type, a.status, NULL::text AS password_hash,
                 0 AS failed_attempts, NULL::timestamptz AS locked_until,
                 p.website_url, p.biography_markdown, p.profile_image_id,
@@ -563,13 +571,7 @@ export class IdentityAuthService {
               updatedAt: account.profile_image_updated_at,
             }
           : null,
-        callsigns: callsigns.map((callsign) =>
-          Object.fromEntries(
-            Object.entries(callsign).filter(
-              ([key]) => key !== 'accountId' && key !== 'primary',
-            ),
-          ),
-        ),
+        callsigns: profileCallsigns(callsigns),
         roles,
         scopes,
       };
@@ -795,7 +797,10 @@ export class IdentityAuthService {
     account: AccountRow,
     context: RequestContext,
   ): Promise<Record<string, unknown>> {
-    const roles = await this.loadRoles(client, account.id);
+    const [roles, callsigns] = await Promise.all([
+      this.loadRoles(client, account.id),
+      this.loadCallsigns(client, account.id),
+    ]);
     const scopes = effectiveScopes(roles);
     const sessionId = randomUUID();
     const accessJti = randomUUID();
@@ -849,10 +854,13 @@ export class IdentityAuthService {
         email: account.email,
         participationType: account.participation_type,
         status: account.status,
+        createdAt: account.created_at,
         updatedAt: account.updated_at,
+        primaryCallsignId: account.primary_callsign_id ?? null,
         websiteUrl: account.website_url ?? null,
         biographyMarkdown: account.biography_markdown ?? null,
         profileImage: profileImageFor(account),
+        callsigns: profileCallsigns(callsigns),
       },
     };
   }
@@ -991,6 +999,22 @@ function profileImageFor(account: AccountRow) {
         updatedAt: account.profile_image_updated_at,
       }
     : null;
+}
+
+function profileCallsigns(callsigns: CallsignRow[]) {
+  return callsigns.map((callsign) => ({
+    id: callsign.id,
+    value: callsign.value,
+    status: callsign.status,
+    source: callsign.source,
+    verificationSource: callsign.verificationSource,
+    verifiedAt: callsign.verifiedAt,
+    validFrom: callsign.validFrom,
+    validTo: callsign.validTo,
+    evidenceIds: callsign.evidenceIds,
+    createdAt: callsign.createdAt,
+    updatedAt: callsign.updatedAt,
+  }));
 }
 
 export function validateWebsiteUrl(

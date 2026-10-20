@@ -78,9 +78,9 @@ ICC profiles during normalization to match Pillow's direct channel conversion.
 Byte-level rendition equivalence across resizing and WebP encoding still needs
 representative fixtures. Profile-image and account update timestamps are
 assigned independently, matching the reference's two clock reads.
-The authenticated account response also includes account creation time and
-the primary callsign ID as separate account fields, matching the Python
-account projection.
+The current-account and login/refresh account projections include account
+creation time, primary callsign ID, and callsigns as separate fields, matching
+the Python account projection.
 Login audit events preserve the reference's `actorId` payload and account
 aggregate for known accounts, while unknown-account events remain associated
 with the `system` aggregate.
