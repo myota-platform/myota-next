@@ -209,7 +209,8 @@
   Shapefile ZIP uploads stream to temporary disk, then decode one shape/DBF
   record at a time, selecting the first `.shp` entry and its matching `.shx`
   and `.dbf` files as the reference does. Deleted DBF rows are filtered before
-  shape and record pairing, matching PyShp's iterator behavior. Their default upload cap is 256 MiB and can be raised to
+  shape and record pairing, with iteration bounded by the SHX and active DBF
+  row counts to match PyShp. Their default upload cap is 256 MiB and can be raised to
   512 MiB with `MYOTA_SHAPEFILE_MAX_UPLOAD_BYTES`; archives are capped at 100
   members and 1 GiB expanded. Matching .shp, .shx, and .dbf sidecars are
   required; DBF text uses PyShp's UTF-8 default and `.cpg` files are ignored,

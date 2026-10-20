@@ -130,6 +130,11 @@ export async function* streamShapefileFeatures(
       );
     await validateShapeRecords(shape.path, shape.size);
     const filteredDbf = await filterDeletedDbfRecords(dbf.path, directory);
+    const shapeRecordLimit = await getShapeRecordLimit(index.path);
+    const recordLimit =
+      filteredDbf.recordLimit === undefined
+        ? undefined
+        : Math.max(0, Math.min(filteredDbf.recordLimit, shapeRecordLimit));
     const prj = members.get(`${stem}.prj`);
     const projectionText = prj ? (await readFile(prj.path, 'utf8')).trim() : '';
     const projection = projectionText
@@ -142,11 +147,7 @@ export async function* streamShapefileFeatures(
     let featureCount = 0;
     try {
       while (true) {
-        if (
-          filteredDbf.recordLimit !== undefined &&
-          featureCount >= filteredDbf.recordLimit
-        )
-          break;
+        if (recordLimit !== undefined && featureCount >= recordLimit) break;
         const result = await reader.read();
         if (result.done) break;
         featureCount += 1;
@@ -214,7 +215,7 @@ async function filterDeletedDbfRecords(path: string, directory: string) {
       if (row[0] !== 0x20) hasDeletedRows = true;
       else activeCount++;
     }
-    if (!hasDeletedRows) return { path, recordLimit: undefined };
+    if (!hasDeletedRows) return { path, recordLimit: activeCount };
 
     const outputPath = join(directory, 'active-records.dbf');
     const output = await open(outputPath, 'wx');
@@ -253,6 +254,20 @@ async function filterDeletedDbfRecords(path: string, directory: string) {
     return { path: outputPath, recordLimit: activeCount };
   } finally {
     await input.close();
+  }
+}
+
+/** PyShp limits shape iteration to the number of records in the .shx file. */
+async function getShapeRecordLimit(path: string) {
+  const file = await open(path, 'r');
+  try {
+    const recordLength = Buffer.alloc(4);
+    const result = await file.read(recordLength, 0, 4, 24);
+    if (result.bytesRead !== 4)
+      throw new Error('Shapefile index header is truncated');
+    return Math.floor((recordLength.readInt32BE(0) * 2 - 100) / 8);
+  } finally {
+    await file.close();
   }
 }
 
