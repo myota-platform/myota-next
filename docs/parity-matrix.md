@@ -218,9 +218,10 @@ coercion or truncation, matching the Python handlers. Entity review status
 falls back from `status` to legacy `decision` using Python truthiness; candidate
 proposal identity remains in `candidateSource`, and `sourceRef` uses the normal
 import fallback. Import source identity selects `sourceKey`, `url`, then `name`
-using Python truthiness and preserves submitted whitespace. Candidate
-validation notes are stored as JSONB with existing
-text values preserved as JSON strings. If-Match protected name, website,
+using Python truthiness and preserves submitted whitespace. Proposal feature
+objects follow adapter normalization without an extra `type` requirement.
+Candidate validation notes are stored as JSONB with existing text values
+preserved as JSON strings. If-Match protected name, website,
 description, geometry, and
 category and location edits are also implemented; other review
 workflows remain outstanding.

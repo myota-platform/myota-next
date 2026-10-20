@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { normalizeAttachmentMetadata } from '@app/geodata-domain';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   firstPythonTruthy,
   normalizeEntityTypeCodes,
@@ -16,8 +17,8 @@ export class GeodataProposalService {
     proposerId: string,
     body: Record<string, unknown>,
   ) {
-    if (!isRecord(body.feature) || body.feature.type !== 'Feature')
-      throw new BadRequestException('feature must be a GeoJSON Feature');
+    if (!isRecord(body.feature) || !pythonTruthy(body.feature))
+      throw new BadRequestException('feature is required');
     const suppliedSource = firstPythonTruthy(body.source);
     if (suppliedSource !== undefined && !isRecord(suppliedSource))
       throw new BadRequestException('source must be an object');
