@@ -142,8 +142,9 @@
   Core table; draft creation retains truthy supplied string IDs, generates a
   UUID for omitted or empty IDs, and accepts those IDs on lifecycle routes.
   Falsey optional effective dates normalize to null on draft save and patch,
-  matching the Python handler. Draft lifecycle writes and outbox events are
-  atomic, and policy
+  matching the Python handler; falsey optional status values on content and
+  policy PATCH requests remain ordinary draft edits. Draft lifecycle writes
+  and outbox events are atomic, and policy
   publication remains atomic with the Programme record update. A dedicated
   read repository serves content pages, policy pages, and locale coverage;
   Programme metadata and policy-effective state are carried in relational

@@ -119,7 +119,7 @@ export class PublishProgrammeContentDto {
 }
 
 export class PatchProgrammeContentDto {
-  @IsOptional()
+  @ValidateIf((_object, value) => pythonTruthy(value))
   @IsIn(['DRAFT', 'CHANGES_REQUESTED', 'UNDER_REVIEW', 'APPROVED', 'PUBLISHED'])
   status?: string;
 
@@ -204,7 +204,7 @@ export class PublishProgrammePolicyDraftDto {
 }
 
 export class PatchProgrammePolicyDraftDto {
-  @IsOptional()
+  @ValidateIf((_object, value) => pythonTruthy(value))
   @IsIn(['DRAFT', 'CHANGES_REQUESTED', 'UNDER_REVIEW', 'APPROVED', 'PUBLISHED'])
   status?: string;
 
