@@ -94,6 +94,10 @@ aggregates, and reports import status. CSV file uploads now validate bounded
 UTF-8 input and queue normalized rows through the same ingestion job. Remaining
 Activity notification producers cover ADIF completion and award qualification;
 the durable consumer handles cross-service Identity and Geodata decisions.
+ADIF validity-window handling still differs from the Python reference: the
+reference validates the whole insert batch and aborts it if any QSO is outside
+the activation window, while Nest rejects only those records and may accept the
+remaining rows. Resolve this behavior before declaring ADIF parity.
 Automated compatibility and outage/recovery qualification remain outstanding.
 Failed or queued Activity jobs can be redriven by administrators with
 an audited reason; long-running Activity jobs now extend their 120-second leases
