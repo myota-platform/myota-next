@@ -14,6 +14,7 @@ import {
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   compareTimestamps,
   normalizeTimestamp,
@@ -861,7 +862,7 @@ export class ActivityWorkRepository {
     );
     const award = result.rows[0]?.definition;
     if (!award) throw new Error('award definition not found');
-    const facts = isPythonTruthy(payload.facts)
+    const facts = pythonTruthy(payload.facts)
       ? payload.facts
       : await readSubjectFacts(
           client,
@@ -1165,14 +1166,6 @@ function date(value: unknown) {
   return value == null
     ? null
     : new Date(value as string | number | Date).toISOString();
-}
-
-function isPythonTruthy(value: unknown): boolean {
-  if (value == null || value === false || value === 0 || value === '')
-    return false;
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === 'object') return Object.keys(value).length > 0;
-  return true;
 }
 
 async function readObject(client: S3Client, bucket: string, key: string) {

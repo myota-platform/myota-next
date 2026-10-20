@@ -1,10 +1,9 @@
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import { firstPythonTruthy } from '@app/platform/python-truthiness.js';
+
+export { firstPythonTruthy } from '@app/platform/python-truthiness.js';
 
 const entityTypePattern = /^[A-Z][A-Z0-9_]{1,63}$/;
-
-export function firstPythonTruthy(...values: unknown[]): unknown {
-  return values.find(isPythonTruthy);
-}
 
 export function normalizeEntityTypeCodes(
   value: unknown,
@@ -29,14 +28,6 @@ export function normalizeEntityTypeCodes(
       result.push(code);
   }
   return result;
-}
-
-function isPythonTruthy(value: unknown): boolean {
-  if (value == null || value === false || value === 0 || value === '')
-    return false;
-  if (Array.isArray(value)) return value.length > 0;
-  if (isRecord(value)) return Object.keys(value).length > 0;
-  return true;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

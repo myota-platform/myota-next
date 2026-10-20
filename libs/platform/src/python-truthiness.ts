@@ -7,3 +7,7 @@ export function pythonTruthy(value: unknown): boolean {
   if (typeof value === 'object') return Object.keys(value).length > 0;
   return true;
 }
+
+export function firstPythonTruthy(...values: unknown[]): unknown {
+  return values.find(pythonTruthy);
+}

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { JSONParser } from '@streamparser/json';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 
 const MAX_SOURCE_BYTES = 512 * 1024 * 1024;
 const MAX_FEATURE_BYTES = 16 * 1024 * 1024;
@@ -415,15 +416,6 @@ function countFeatureVertices(value: unknown): number {
 
 function isJsonWhitespace(byte: number) {
   return byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0d;
-}
-
-function pythonTruthy(value: unknown): boolean {
-  if (value === null || value === undefined || value === false) return false;
-  if (typeof value === 'number') return value !== 0 && !Number.isNaN(value);
-  if (typeof value === 'string' || Array.isArray(value))
-    return value.length > 0;
-  if (isRecord(value)) return Object.keys(value).length > 0;
-  return true;
 }
 
 function positiveEnv(value: string | undefined, fallback: number): number {

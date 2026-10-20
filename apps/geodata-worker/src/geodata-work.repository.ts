@@ -12,6 +12,10 @@ import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import {
+  firstPythonTruthy,
+  pythonTruthy,
+} from '@app/platform/python-truthiness.js';
 import { streamShapefileFeatures } from './geodata-shapefile-stream.js';
 import {
   readGeoJsonDocumentMetadata,
@@ -533,12 +537,12 @@ export class GeodataWorkRepository {
         const sourceHash = hashCanonicalJson(feature);
         const normalized = normalizeAdapterFeature(run.adapter_code, feature);
         const properties = normalized.properties;
-        const sourceRefCandidate = firstPythonTruthy([
+        const sourceRefCandidate = firstPythonTruthy(
           properties.sourceRef,
           properties.id,
           properties['@id'],
           feature.id,
-        ]);
+        );
         const sourceRef = resolveLegacyManualSourceRef(
           !pythonTruthy(sourceRefCandidate)
             ? `${sourceKey}:import-${run.id}:record-${ordinal}`
@@ -1366,24 +1370,6 @@ function resolveLegacyManualSourceRef(
     if (!legacyPattern.test(stableSourceRef)) return stableSourceRef;
   }
   return `${sourceKey}:import-${runId}:record-${ordinal}`;
-}
-
-function pythonTruthy(value: unknown): boolean {
-  if (
-    value == null ||
-    value === false ||
-    value === '' ||
-    value === 0 ||
-    (typeof value === 'number' && Number.isNaN(value))
-  )
-    return false;
-  if (Array.isArray(value)) return value.length > 0;
-  if (isRecord(value)) return Object.keys(value).length > 0;
-  return true;
-}
-
-function firstPythonTruthy(values: unknown[]): unknown {
-  return values.find(pythonTruthy);
 }
 
 function hashCanonicalJson(value: unknown): string {
