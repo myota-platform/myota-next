@@ -9,6 +9,17 @@ export function parseTimestamp(value: string): Date {
   let normalized = value
     .replace(/^(\d{4}(?:-\d{2}-\d{2}|\d{4}))t/i, '$1T')
     .replace(/([T ]\d{2}:\d{2}:\d{2}),(\d+)/, '$1.$2');
+  const weekDate = /^(\d{4})-?W(\d{2})(?:-?([1-7]))?([Tt ].*)?$/i.exec(
+    normalized,
+  );
+  if (weekDate) {
+    const [, yearText, weekText, dayText, time] = weekDate;
+    normalized = `${isoWeekDate(
+      Number(yearText),
+      Number(weekText),
+      Number(dayText ?? 1),
+    )}${time?.replace(/^t/, 'T') ?? ''}`;
+  }
   const compact =
     /^(\d{4})(\d{2})(\d{2})([T ])(\d{2})(\d{2})(\d{2})?([.,]\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?$/i.exec(
       normalized,
@@ -44,6 +55,37 @@ export function parseTimestamp(value: string): Date {
   if (!Number.isFinite(date.getTime()))
     throw new BadRequestException('timestamp is invalid');
   return date;
+}
+
+function isoWeekDate(year: number, week: number, day: number): string {
+  if (year < 1 || week < 1 || week > 53 || day < 1 || day > 7)
+    throw new BadRequestException('timestamp is invalid');
+  const januaryFirst = new Date(0);
+  januaryFirst.setUTCFullYear(year, 0, 1);
+  januaryFirst.setUTCHours(0, 0, 0, 0);
+  const januaryFirstWeekday = (januaryFirst.getUTCDay() + 6) % 7;
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const maximumWeek =
+    januaryFirstWeekday === 3 || (januaryFirstWeekday === 2 && leapYear)
+      ? 53
+      : 52;
+  if (week > maximumWeek) throw new BadRequestException('timestamp is invalid');
+
+  const januaryFourth = new Date(0);
+  januaryFourth.setUTCFullYear(year, 0, 4);
+  januaryFourth.setUTCHours(0, 0, 0, 0);
+  const januaryFourthWeekday = (januaryFourth.getUTCDay() + 6) % 7;
+  januaryFourth.setUTCDate(
+    januaryFourth.getUTCDate() -
+      januaryFourthWeekday +
+      (week - 1) * 7 +
+      day -
+      1,
+  );
+  const calendarYear = januaryFourth.getUTCFullYear();
+  if (calendarYear > 9999)
+    throw new BadRequestException('timestamp is invalid');
+  return januaryFourth.toISOString().slice(0, 10);
 }
 
 function validateTimestampFields(value: string) {
