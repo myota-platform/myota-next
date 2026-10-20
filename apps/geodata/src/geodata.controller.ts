@@ -212,6 +212,7 @@ export class GeodataController {
   }
 
   @Post('import-uploads/:uploadId/parts/:partNumber')
+  @HttpCode(200)
   uploadImportPart(
     @Headers('authorization') authorization: string | undefined,
     @Headers('x-part-sha256') checksum: string | undefined,
@@ -336,6 +337,7 @@ export class GeodataController {
   }
 
   @Post('imports/:runId/processed')
+  @HttpCode(200)
   async finalizeImport(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') key: string | undefined,
@@ -431,6 +433,7 @@ export class GeodataController {
   }
 
   @Post('imports/:runId/candidates/validate')
+  @HttpCode(200)
   validateImportCandidates(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') key: string | undefined,
@@ -525,6 +528,7 @@ export class GeodataController {
   }
 
   @Post('conflation/:candidateId/resolve')
+  @HttpCode(200)
   resolveConflation(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') key: string | undefined,
@@ -624,6 +628,7 @@ export class GeodataController {
   }
 
   @Post('entities/:entityId/reviews')
+  @HttpCode(200)
   reviewEntity(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') key: string | undefined,
