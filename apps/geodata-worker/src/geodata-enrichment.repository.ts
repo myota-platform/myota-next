@@ -421,7 +421,6 @@ async function reverseGeocode(
       geocodedAt: new Date().toISOString(),
       location: {},
     };
-  const geocodedAt = new Date().toISOString();
   const endpoint =
     process.env.BIGDATACLOUD_REVERSE_GEOCODE_URL ??
     'https://api-bdc.net/data/reverse-geocode';
@@ -498,7 +497,7 @@ async function reverseGeocode(
       provider: 'BIGDATACLOUD',
       status: 'ENRICHED',
       lookupSource: data.lookupSource ?? null,
-      geocodedAt,
+      geocodedAt: new Date().toISOString(),
       payload: data,
       location: {
         continent: data.continent ?? null,
@@ -522,7 +521,7 @@ async function reverseGeocode(
     result = {
       provider: 'BIGDATACLOUD',
       status: 'FAILED',
-      geocodedAt,
+      geocodedAt: new Date().toISOString(),
       location: {},
       error: error instanceof Error ? error.message : String(error),
     };
