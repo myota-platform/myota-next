@@ -61,4 +61,5 @@ spec:
             - name: {{ $name }}
               value: {{ required (printf "jetstreamProvisioner.capacity value for %s is required" $name) $value | quote }}
 {{- end }}
+{{- include "myota-next.geodata-worker-policy-env" . | nindent 12 }}
 {{- end }}

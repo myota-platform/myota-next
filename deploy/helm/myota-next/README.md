@@ -76,6 +76,15 @@ same create-only, drift-rejecting tool as local provisioning and never updates
 existing stream or consumer configuration. See
 [`deploy/jetstream/README.md`](../../jetstream/README.md) for required limits.
 
+Geodata durable concurrency can be configured independently with
+`geodataWorker.maxAckPending.preprocessing`, `.promotion`, `.deletion`, and
+`.enrichment`. The chart passes these values to both the Geodata worker and the
+JetStream provisioner Job, so runtime polling concurrency matches each
+consumer's `max_ack_pending`. If provisioning is managed outside this chart,
+apply the same settings there. Existing consumer configuration is immutable in
+the provisioner; changing a policy requires an explicitly reviewed successor
+durable.
+
 Workers expose internal health listeners only where their process supports
 them. The chart creates ClusterIP services for the four domain APIs and the
 Gateway; worker health ports are not exposed as Services.

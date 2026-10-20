@@ -20,6 +20,22 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
 {{- end -}}
 {{- end -}}
 
+{{- define "myota-next.geodata-worker-policy-env" -}}
+{{- $settings := .Values.geodataWorker.maxAckPending -}}
+{{- $overrides := dict
+  "GEODATA_WORKER_PREPROCESSING_MAX_ACK_PENDING" $settings.preprocessing
+  "GEODATA_WORKER_PROMOTION_MAX_ACK_PENDING" $settings.promotion
+  "GEODATA_WORKER_DELETION_MAX_ACK_PENDING" $settings.deletion
+  "GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING" $settings.enrichment
+}}
+{{- range $name, $value := $overrides }}
+{{- if $value }}
+- name: {{ $name }}
+  value: {{ $value | toString | quote }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
 {{- define "myota-next.env" -}}
 {{- $root := .root -}}
 {{- range $key, $value := .env }}

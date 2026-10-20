@@ -15,26 +15,34 @@ export type GeodataConsumerPolicy = {
   maxDeliveries: number;
 };
 
-const policies: Record<string, GeodataConsumerPolicy> = {
+type RegisteredGeodataConsumerPolicy = GeodataConsumerPolicy & {
+  maxPendingSetting: string;
+};
+
+const policies: Record<string, RegisteredGeodataConsumerPolicy> = {
   'geodata-preprocessing-v1': {
     ackWaitSeconds: 300,
     maxPending: 1,
     maxDeliveries: 100,
+    maxPendingSetting: 'GEODATA_WORKER_PREPROCESSING_MAX_ACK_PENDING',
   },
   'geodata-import-promotion-v1': {
     ackWaitSeconds: 300,
     maxPending: 1,
     maxDeliveries: 100,
+    maxPendingSetting: 'GEODATA_WORKER_PROMOTION_MAX_ACK_PENDING',
   },
   'geodata-entity-deletion-v1': {
     ackWaitSeconds: 120,
     maxPending: 1,
     maxDeliveries: 100,
+    maxPendingSetting: 'GEODATA_WORKER_DELETION_MAX_ACK_PENDING',
   },
   'geodata-location-enrichment-v1': {
     ackWaitSeconds: 120,
     maxPending: 4,
     maxDeliveries: 8,
+    maxPendingSetting: 'GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING',
   },
 };
 
@@ -46,11 +54,11 @@ export function geodataConsumerPolicy(
   if (!registered)
     throw new Error(`No Geodata policy registered for ${durable}`);
   return {
-    ...registered,
     ackWaitSeconds:
       optionalPositiveSetting('GEODATA_WORKER_ACK_WAIT_SECONDS', environment) ??
       registered.ackWaitSeconds,
     maxPending:
+      optionalPositiveSetting(registered.maxPendingSetting, environment) ??
       optionalPositiveSetting('GEODATA_WORKER_MAX_ACK_PENDING', environment) ??
       registered.maxPending,
     maxDeliveries:

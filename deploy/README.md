@@ -22,6 +22,8 @@ development-sized JetStream limits from `deploy/.env`. Those settings are
 local examples, not production capacity recommendations. The provisioner
 requires `NATS_TOPOLOGY_APPLY=1`, creates missing resources, and stops on
 configuration drift. See [JetStream topology](jetstream/README.md).
+Geodata consumer concurrency can be tuned per durable through the matching
+`GEODATA_WORKER_*_MAX_ACK_PENDING` values in `deploy/.env`.
 
 Open the Participant app at `http://localhost:8090`, Admin at
 `http://localhost:8091`, the Gateway at `http://localhost:8080`, Mailpit at

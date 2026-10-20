@@ -384,7 +384,12 @@ map renders point, line, polygon, and multipart entity geometries.
   (default 30 seconds, minimum 5); JetStream ACK extensions follow one third of
   the registered durable ACK wait. Optional `GEODATA_WORKER_ACK_WAIT_SECONDS`,
   `GEODATA_WORKER_MAX_ACK_PENDING`, and `GEODATA_WORKER_MAX_DELIVERIES` settings
-  are shared by JetStream provisioning and worker policy validation.
+  are shared by JetStream provisioning and worker policy validation. The
+  per-durable `GEODATA_WORKER_PREPROCESSING_MAX_ACK_PENDING`,
+  `GEODATA_WORKER_PROMOTION_MAX_ACK_PENDING`,
+  `GEODATA_WORKER_DELETION_MAX_ACK_PENDING`, and
+  `GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING` settings override the global
+  pending limit and are applied consistently at provisioning and runtime.
   The reference Python API also exposes separate `MYOTA_UPLOAD_WORKERS`,
   `MYOTA_IMPORT_WORKERS`, `MYOTA_LOCATION_WORKERS`, and
   `MYOTA_DELETION_WORKERS` thread-pool limits. They do not map one-to-one to

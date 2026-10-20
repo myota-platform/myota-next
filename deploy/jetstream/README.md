@@ -23,6 +23,18 @@ The facts stream has a fixed 30-day age limit. Work stream limits must come
 from deployment capacity and recovery planning; the tool has no production
 capacity defaults. `NATS_URL` defaults to `nats://nats:4222`.
 
+Geodata's registered durable `max_ack_pending` values also determine how many
+work messages each worker polls concurrently. The optional per-durable
+settings `GEODATA_WORKER_PREPROCESSING_MAX_ACK_PENDING`,
+`GEODATA_WORKER_PROMOTION_MAX_ACK_PENDING`,
+`GEODATA_WORKER_DELETION_MAX_ACK_PENDING`, and
+`GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING` override the corresponding built-in
+limits. They are read by both this provisioner and the Geodata worker. When a
+specific setting is absent, `GEODATA_WORKER_MAX_ACK_PENDING` applies to every
+Geodata durable; otherwise registered per-durable defaults apply. A change to
+an existing durable's limit is treated as configuration drift and requires an
+explicitly reviewed successor durable.
+
 `NATS_TOPOLOGY_SCOPE` may be set to `activity-work`, `geodata-work`, or
 `email-work` to provision only that stream and its registered durables. These
 scopes require only that stream's capacity settings. The default `all` scope

@@ -23,6 +23,12 @@ jetstreamProvisioner:
     emailWorkMaxBytes: ''
     emailWorkMaxMessages: ''
     emailWorkMaxMessageBytes: ''
+geodataWorker:
+  maxAckPending:
+    preprocessing: ''
+    promotion: ''
+    deletion: ''
+    enrichment: ''
 images:
   gateway: { repository: '', tag: '', digest: '' }
   identity: { repository: '', tag: '', digest: '' }
