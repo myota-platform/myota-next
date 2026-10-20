@@ -144,7 +144,7 @@ export function parseXmlImport(
       textCapture?.name === name ? textCapture.chunks.join('').trim() : '';
     if (format === 'KML' && placemark) {
       if (name === 'name' && value && placemark.name === undefined)
-        placemark.name = value.slice(0, 300);
+        placemark.name = value;
       if (name === 'coordinates' && value) {
         for (const token of value.replaceAll('\n', ' ').split(/\s+/)) {
           const point = readCoordinate(token);
@@ -192,7 +192,7 @@ export function parseXmlImport(
       }
     } else if (format === 'GPX') {
       if (gpxPoint && ['name', 'desc', 'type'].includes(name) && value)
-        gpxPoint.properties[name] = value.slice(0, 300);
+        gpxPoint.properties[name] = value;
       if (gpxPoint && ['wpt', 'rtept'].includes(name)) {
         addFeature({
           type: 'Feature',

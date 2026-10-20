@@ -571,8 +571,6 @@ export class GeodataWorkRepository {
             typeof properties.name === 'string'
               ? properties.name
               : 'Unnamed candidate';
-          if (name.length > 300)
-            throw new Error('feature name exceeds 300 characters');
           const geometry = JSON.stringify(normalized.geometry);
           const client = await this.connect();
           try {
