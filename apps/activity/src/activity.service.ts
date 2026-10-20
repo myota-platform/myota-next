@@ -117,11 +117,11 @@ export class ActivityService {
     activationId: string,
     body: JsonRecord,
   ) {
-    const claims = verifyAccessToken(authorization);
     if (!pythonTruthy(body.workedCallsign) || !pythonTruthy(body.timestamp))
       throw new BadRequestException(
         'workedCallsign and timestamp are required',
       );
+    const claims = verifyAccessToken(authorization);
     const activation = await this.repository.get(activationId);
     this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
     return this.repository.addQso(
@@ -435,7 +435,6 @@ export class ActivityService {
     qsoId: string,
     body: JsonRecord,
   ) {
-    const claims = verifyAccessToken(authorization);
     if (
       !pythonTruthy(body.requestedBy) ||
       !pythonTruthy(body.reason) ||
@@ -444,6 +443,7 @@ export class ActivityService {
       throw new BadRequestException(
         'requestedBy, reason, and proposedValues are required',
       );
+    const claims = verifyAccessToken(authorization);
     if (
       claims.sub !== body.requestedBy &&
       !claims.scp.some((scope) => ['*', 'activity.admin'].includes(scope))
@@ -462,7 +462,6 @@ export class ActivityService {
     correctionId: string,
     body: JsonRecord,
   ) {
-    this.authorize(authorization, ['activity.admin']);
     if (
       !['APPLIED', 'REJECTED'].includes(body.decision) ||
       !pythonTruthy(body.reviewedBy)
@@ -470,6 +469,7 @@ export class ActivityService {
       throw new BadRequestException(
         'decision must be APPLIED or REJECTED and reviewedBy is required',
       );
+    this.authorize(authorization, ['activity.admin']);
     return this.repository.reviewCorrection(qsoId, correctionId, body, key);
   }
 
