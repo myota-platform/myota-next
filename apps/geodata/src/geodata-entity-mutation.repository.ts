@@ -11,6 +11,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
+import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import type { AccessTokenClaims } from '@app/platform/access-token.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { validateGeometryCoordinates } from '@app/geodata-domain';
@@ -1335,7 +1336,7 @@ function buildManualLocationTree(rows: Record<string, unknown>[]) {
     const label = textValue(name);
     if (!label) return null;
     const normalizedCode = normalizedLocationCode(code);
-    const key = `${normalizedCode ?? ''}:${label.toLowerCase()}`;
+    const key = `${normalizedCode ?? ''}:${unicodeCaseFold(label)}`;
     let node = nodes.get(key);
     if (!node) {
       node = { name: label, code: normalizedCode, children: new Map() };
@@ -1369,16 +1370,18 @@ function buildManualLocationTree(rows: Record<string, unknown>[]) {
       })
       .sort(
         (left, right) =>
-          compareText(left.name.toLowerCase(), right.name.toLowerCase()) ||
-          compareText(left.code ?? '', right.code ?? ''),
+          compareText(
+            unicodeCaseFold(left.name),
+            unicodeCaseFold(right.name),
+          ) || compareText(left.code ?? '', right.code ?? ''),
       );
   return sorted(continents, ['countries', 'subdivisions', 'provinces']);
 }
 
 function findLocationNode(nodes: ManualLocationNode[], name: unknown) {
-  const target = textValue(name).toLowerCase();
+  const target = unicodeCaseFold(textValue(name));
   return target
-    ? nodes.find((node) => node.name.toLowerCase() === target)
+    ? nodes.find((node) => unicodeCaseFold(node.name) === target)
     : undefined;
 }
 

@@ -284,8 +284,8 @@
   category updates accept scalar codes and category objects, remove duplicate
   codes while preserving order, and keep the first code primary. An authorized,
   idempotent request can queue BigDataCloud reverse geocoding; the
-  provider-derived location hierarchy sorts case-insensitively with codes as
-  tie-breakers. The
+  provider-derived location hierarchy uses Python Unicode case folding for
+  matching, deduplication, and sorting, with codes as tie-breakers. The
   Geodata worker applies results only to the matching geometry and protects
   manual fields. Missing metadata now queues enrichment automatically on
   lifecycle promotion; geometry changes queue refreshes, and releasing manual

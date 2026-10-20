@@ -17,6 +17,8 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { verifyAccessToken } from '@app/platform/access-token.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import { GeodataRepository } from './geodata.repository.js';
 import { GeodataImportService } from './geodata-import.service.js';
 import { GeodataImportMutationRepository } from './geodata-import-mutation.repository.js';
@@ -570,13 +572,11 @@ function buildLocationTree(rows: Record<string, string | null>[]) {
     code: string | null,
     childFields: string[],
   ) => {
-    const label = String(name ?? '').trim();
+    const label = trimPythonWhitespace(String(name ?? ''));
     if (!label) return null;
     const normalizedCode =
-      String(code ?? '')
-        .trim()
-        .toUpperCase() || null;
-    const key = `${normalizedCode ?? ''}:${label.toLowerCase()}`;
+      trimPythonWhitespace(String(code ?? '')).toUpperCase() || null;
+    const key = `${normalizedCode ?? ''}:${unicodeCaseFold(label)}`;
     let value = map.get(key);
     if (!value) {
       value = { name: label, code: normalizedCode };
@@ -662,8 +662,8 @@ function buildLocationTree(rows: Record<string, string | null>[]) {
       })
       .sort((a, b) => {
         const nameOrder = compareText(
-          String(a.name).toLowerCase(),
-          String(b.name).toLowerCase(),
+          unicodeCaseFold(String(a.name)),
+          unicodeCaseFold(String(b.name)),
         );
         return (
           nameOrder ||
