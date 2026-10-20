@@ -1085,8 +1085,8 @@ export class ActivityRepository {
         );
       const inserted = await client.query(
         `INSERT INTO activity_qso
-        (id,activation_id,programme_slug,operator_id,operator_callsign,hunter_id,hunter_callsign,worked_callsign,worked_station_key,worked_entity_id,occurred_at,band,mode,rst,source,deduplication_key,raw_payload)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz,$12,$13,$14,$15,$16,$17::jsonb)
+        (id,activation_id,programme_slug,operator_id,operator_callsign,hunter_id,hunter_callsign,worked_callsign,worked_station_key,worked_entity_id,occurred_at,band,mode,rst,source,source_import_id,deduplication_key,raw_payload)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz,$12,$13,$14,$15,$16,$17,$18::jsonb)
         ON CONFLICT (deduplication_key) DO NOTHING RETURNING *,
         ${qsoTimestampProjection}`,
         [
@@ -1105,6 +1105,7 @@ export class ActivityRepository {
           qso.mode,
           qso.rst ?? null,
           qso.source,
+          qso.sourceImportId ?? null,
           qso.deduplicationKey,
           JSON.stringify(qso),
         ],
