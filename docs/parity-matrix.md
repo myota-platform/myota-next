@@ -164,12 +164,13 @@ candidates and validation errors are staged by import attempt in Geodata
 PostgreSQL; candidate creation, import status, processing queue, and the
 compatible outbox event are finalized atomically, with event arrays assembled
 in the database. Record hashes use Python float formatting and Unicode
-code-point key ordering. Streamed GeoJSON features retain raw numeric tokens
-when they have no inherited document CRS. Direct JSON imports, GeoJSON geometry
-documents converted into Features, inherited-CRS GeoJSON, and generated
-Shapefile/PBF features can still lose integer-versus-float distinctions. The
-direct JSON import path materializes the normalized collection, while multipart
-GeoJSON streams source features. Shapefile multipart uploads stream to
+code-point key ordering. Streamed GeoJSON and direct GEOJSON/WFS JSON imports
+retain raw numeric tokens when features have no inherited document CRS. GeoJSON
+geometry documents converted into Features, inherited-CRS GeoJSON, normalized
+ArcGIS imports, and generated Shapefile/PBF features can still lose
+integer-versus-float distinctions. The direct JSON import path materializes the
+normalized collection, while multipart GeoJSON streams source features.
+Shapefile multipart uploads stream to
 temporary disk and decode records one at a time, with a 256 MiB default upload
 cap (512 MiB maximum), 1 GiB expanded-size cap, 16 MiB
 per-feature size, 250,000 vertices, and the configured feature count. Less

@@ -406,10 +406,11 @@
   feature. Prepared candidates and validation errors are attempt-scoped in the
   Geodata database; per-record hashes and source manifests use Python float
   formatting and Unicode code-point key ordering. Streamed GeoJSON features
-  retain raw numeric tokens so `1` and `1.0` hash as distinct Python integer
-  and float values when the feature has no inherited document CRS. Direct JSON,
-  GeoJSON geometry documents converted into Features, inherited-CRS GeoJSON,
-  and generated Shapefile/PBF features can still lose that distinction.
+  and direct GEOJSON/WFS JSON imports retain raw numeric tokens so `1` and
+  `1.0` hash as distinct Python integer and float values when the feature has
+  no inherited document CRS. GeoJSON geometry documents converted into
+  Features, inherited-CRS GeoJSON, normalized ArcGIS imports, and generated
+  Shapefile/PBF features can still lose that distinction.
   Candidate creation, queue creation, status, hashes, and outbox events
   finalize in one transaction. The final event is assembled in PostgreSQL to avoid
   retaining every feature summary in the worker heap.

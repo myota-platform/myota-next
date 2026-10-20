@@ -33,6 +33,7 @@ type ImportOptions = {
   communityProposal?: { proposalId: string; proposerId: string };
   autoPromote?: { requestedBy: string; note: string };
   requestHash?: string;
+  rawDocumentJson?: string;
 };
 
 @Injectable()
@@ -91,7 +92,9 @@ export class GeodataImportService {
         );
       const id = randomUUID();
       objectKey = `geodata/imports/${id}/source.geojson`;
-      const raw = Buffer.from(JSON.stringify(prepared.document));
+      const raw = Buffer.from(
+        options.rawDocumentJson ?? JSON.stringify(prepared.document),
+      );
       const sourceHash = createHash('sha256').update(raw).digest('hex');
 
       await this.s3().send(

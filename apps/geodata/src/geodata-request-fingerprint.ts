@@ -23,6 +23,29 @@ export function canonicalPythonJson(rawBody: string): string {
   return canonicalJsonValue(new JsonParser(rawBody).parse());
 }
 
+/** Preserve source number tokens for direct GeoJSON and WFS import payloads. */
+export function rawGeoJsonImportDocument(
+  rawRequest: string,
+): string | undefined {
+  const request = new JsonParser(rawRequest).parse();
+  if (!isRecord(request)) return undefined;
+  const format =
+    typeof request.format === 'string'
+      ? request.format.toUpperCase()
+      : 'GEOJSON';
+  if (format !== 'GEOJSON' && format !== 'WFS') return undefined;
+  if (Array.isArray(request.features))
+    return `{"features":${canonicalJsonValue(request.features)},"type":"FeatureCollection"}`;
+  if (typeof request.content === 'string') {
+    try {
+      return canonicalPythonJson(request.content);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 function canonicalJsonValue(value: unknown): string {
   if (value === null) return 'null';
   if (typeof value === 'string') return JSON.stringify(value);

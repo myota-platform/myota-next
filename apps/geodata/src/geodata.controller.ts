@@ -29,7 +29,10 @@ import { GeodataScheduleService } from './geodata-schedule.service.js';
 import { GeodataProposalService } from './geodata-proposal.service.js';
 import { GeodataLoadTestCleanupService } from './geodata-load-test-cleanup.service.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
-import { fingerprintJsonRequest } from './geodata-request-fingerprint.js';
+import {
+  fingerprintJsonRequest,
+  rawGeoJsonImportDocument,
+} from './geodata-request-fingerprint.js';
 
 @Controller('geodata')
 export class GeodataController {
@@ -283,6 +286,7 @@ export class GeodataController {
       : undefined;
     return this.imports.create(idempotencyKey, () => body, {
       requestHash: key ? fingerprintJsonRequest(body, rawBody) : undefined,
+      rawDocumentJson: rawBody ? rawGeoJsonImportDocument(rawBody) : undefined,
     });
   }
 
