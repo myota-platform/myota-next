@@ -199,7 +199,7 @@ export class AwardsController {
     return this.awards.putAssetContent(
       authorization,
       assetId,
-      contentType?.split(';')[0]?.trim(),
+      contentType?.split(';')[0],
       content,
     );
   }
