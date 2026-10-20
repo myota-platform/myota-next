@@ -58,7 +58,6 @@ export class GeodataProposalService {
         error instanceof Error ? error.message : 'invalid attachments',
       );
     }
-    properties.sourceRef = `community-proposal:${proposalId}`;
     properties.candidateSource = {
       type: 'COMMUNITY_PROPOSAL',
       proposalId,
@@ -77,9 +76,6 @@ export class GeodataProposalService {
           license: Object.hasOwn(source, 'license')
             ? source.license
             : 'programme-supplied',
-          type: 'COMMUNITY_PROPOSAL',
-          proposalId,
-          proposerId,
         },
         features: [feature],
       },

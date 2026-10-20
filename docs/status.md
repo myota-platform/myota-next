@@ -268,8 +268,11 @@
   references to their import, hashes each normalized source record separately,
   stages candidates with provenance and 50 m duplicate warnings, records errors,
   and emits preprocessing results with skipped reasons. Community proposal
-  promotion preserves the reference `candidateSource` shape and source
-  name/license fallback semantics, including explicitly supplied values.
+  promotion preserves the reference `candidateSource` shape and derives
+  `sourceRef` through the ordinary import fallback. Import source identity now
+  selects `sourceKey`, `url`, then `name` with Python truthiness and preserves
+  submitted whitespace; source metadata keeps the caller's values plus the
+  reference name/license defaults.
   `/healthz` and `/readyz` expose worker liveness and
   GeoData PostgreSQL/NATS readiness on `GEODATA_WORKER_HEALTH_PORT`. The service
   also has PostGIS-backed public entity

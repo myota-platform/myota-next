@@ -518,9 +518,7 @@ export class GeodataWorkRepository {
     const source = isRecord(run.source_metadata.source)
       ? run.source_metadata.source
       : {};
-    const sourceKey =
-      textValue(source.sourceKey ?? source.url ?? source.name) ??
-      'unknown-source';
+    const sourceKey = sourceKeyFromMetadata(source);
     let featureCount = 0;
     for await (const feature of features) {
       const ordinal = featureCount;
@@ -1016,9 +1014,7 @@ export class GeodataWorkRepository {
       const source = isRecord(run.source_metadata.source)
         ? run.source_metadata.source
         : {};
-      const sourceKey =
-        textValue(source.sourceKey ?? source.url ?? source.name) ??
-        'unknown-source';
+      const sourceKey = sourceKeyFromMetadata(source);
       const manifestSummary = await client.query(
         `WITH source_records AS (
            SELECT DISTINCT ON (source_ref COLLATE "C") source_ref,source_hash,ordinal
@@ -1180,9 +1176,7 @@ export class GeodataWorkRepository {
     const source = isRecord(run.source_metadata.source)
       ? run.source_metadata.source
       : {};
-    const sourceKey =
-      textValue(source.sourceKey ?? source.url ?? source.name) ??
-      'unknown-source';
+    const sourceKey = sourceKeyFromMetadata(source);
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtextextended('geodata-snapshot:' || $1 || ':' || $2,0))",
       [sourceKey, run.adapter_code],
@@ -1339,6 +1333,18 @@ function errorMessage(error: unknown) {
 
 function textValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function sourceKeyFromMetadata(source: Record<string, unknown>): string {
+  const value = firstPythonTruthy(source.sourceKey, source.url, source.name);
+  if (value === undefined) return 'unknown-source';
+  if (value === true) return 'True';
+  if (value === false) return 'False';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object') return JSON.stringify(value) ?? '';
+  if (typeof value === 'number' || typeof value === 'bigint')
+    return value.toString();
+  return '';
 }
 
 function pythonSourceRef(value: unknown): string {
