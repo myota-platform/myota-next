@@ -250,7 +250,7 @@ export class GeodataEntityMutationRepository {
         `unsupported entity metadata fields: ${unknown.sort().join(', ')}`,
       );
     if (
-      !['name', 'website', 'description', 'location', 'manualFields'].some(
+      !['name', 'website', 'description', 'location'].some(
         (field) => field in body,
       )
     )
@@ -300,8 +300,6 @@ export class GeodataEntityMutationRepository {
           'manualFields must contain supported location fields',
         );
       requestedManual = [...new Set(manual as string[])].sort();
-    } else if ('manualFields' in body) {
-      throw new BadRequestException('manualFields requires a location object');
     }
     const expectedVersion = parseIfMatch(ifMatch);
     const client = await this.connect();
