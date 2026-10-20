@@ -261,15 +261,10 @@ export class ActivityService {
     const claims = verifyAccessToken(authorization);
     const activationId =
       typeof body.activationId === 'string' ? body.activationId : '';
-    const filename =
-      typeof body.filename === 'string' ? body.filename.trim() : '';
+    const filename = typeof body.filename === 'string' ? body.filename : '';
     if (!activationId || !filename || typeof body.contentBase64 !== 'string')
       throw new BadRequestException(
         'activationId, filename, and contentBase64 are required',
-      );
-    if (filename.length > 255 || /[\\/]/.test(filename))
-      throw new BadRequestException(
-        'filename must be a simple filename of 255 characters or fewer',
       );
     const activation = await this.repository.get(activationId);
     this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
@@ -290,7 +285,7 @@ export class ActivityService {
     await scanUpload(content, filename);
     const sha256 = createHash('sha256').update(content).digest('hex');
     const bucket = process.env.MYOTA_ADIF_BUCKET ?? 'myota-adif';
-    const objectKey = `adif/${activationId}/${randomUUID()}-${filename}`;
+    const objectKey = `adif/${activationId}/${randomUUID()}-${filename.replaceAll('/', '_')}`;
     try {
       const client = this.s3();
       try {
