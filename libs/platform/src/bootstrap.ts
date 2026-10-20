@@ -46,6 +46,9 @@ export async function bootstrapHttpService(
           /^\/v1\/geodata\/conflation\/[^/]+\/resolve$/.test(
             request.url?.split('?', 1)[0] ?? '',
           ) ||
+          /^\/v1\/geodata\/refresh-schedules\/[^/]+\/run$/.test(
+            request.url?.split('?', 1)[0] ?? '',
+          ) ||
           request.url?.split('?', 1)[0] === '/v1/geodata/refresh-schedules'
         )
           Object.assign(request, { rawBody: buffer });

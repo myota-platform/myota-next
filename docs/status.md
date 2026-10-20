@@ -283,7 +283,8 @@
   location-enrichment writes follow the same contract. Conflation resolution
   uses the same request contract and retains transactional history and outbox
   writes. Refresh schedule creation also scopes idempotency by owner and path
-  and rejects changed-body reuse before validation.
+  and rejects changed-body reuse before validation. Manual schedule runs use
+  the same request contract and replay the prior import/schedule response.
   `/healthz` and `/readyz` expose worker liveness and
   GeoData PostgreSQL/NATS readiness on `GEODATA_WORKER_HEALTH_PORT`. The service
   also has PostGIS-backed public entity

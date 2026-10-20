@@ -231,8 +231,9 @@ contract while retaining scope checks and atomic queue/outbox writes. Entity
 review, metadata, category, geometry, and location-enrichment writes also use
 the owner/path/body contract and replay before mutation validation. Conflation
 resolution uses the same contract while preserving its transactional history
-and outbox write. Refresh schedule creation also scopes keys by owner and path,
-checks the request fingerprint before validation, and rejects changed-body reuse.
+and outbox write. Refresh schedule creation and manual runs also scope keys by
+owner and path, check the request fingerprint before validation, and reject
+changed-body reuse; a run replay preserves the prior import and schedule result.
 Candidate validation notes are stored as JSONB with existing text values
 preserved as JSON strings. If-Match protected name, website,
 description, geometry, and

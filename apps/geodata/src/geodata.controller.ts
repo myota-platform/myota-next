@@ -112,9 +112,22 @@ export class GeodataController {
     @Headers('idempotency-key') key: string | undefined,
     @Param('scheduleId') scheduleId: string,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
     const claims = authorizeImport(authorization);
-    return this.schedules.run(key, scheduleId, claims.sub, body);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
+    return this.schedules.run(
+      idempotency.key,
+      scheduleId,
+      claims.sub,
+      body,
+      idempotency.requestHash,
+    );
   }
 
   @Post('proposals')
