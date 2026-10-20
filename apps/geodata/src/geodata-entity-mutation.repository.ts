@@ -75,8 +75,7 @@ export class GeodataEntityMutationRepository {
     const requestedStatus = body.status || body.decision;
     const targetStatus =
       typeof requestedStatus === 'string' ? requestedStatus : '';
-    const note =
-      typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
+    const note = body.note === undefined ? null : body.note;
     if (!reviewerId) throw new BadRequestException('reviewerId is required');
     if (
       !['APPROVED', 'CANDIDATE', 'RETIRED', 'REJECTED'].includes(targetStatus)

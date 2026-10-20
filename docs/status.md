@@ -267,9 +267,11 @@
   through authorized, idempotent review writes. Selected candidates can be
   queued for CANDIDATE or role-scoped APPROVED promotion; the worker writes
   entities, category and source links, audit/outbox events, and per-candidate
-  queue outcomes. Entity lifecycle review and If-Match protected name, website,
-  and description edits are transactional and audited. If-Match protected
-  geometry, category, and manual location edits are also audited. Geometry
+  queue outcomes. Entity lifecycle review preserves submitted review-note JSON
+  values without type coercion or truncation, as the Python handler does, and
+  If-Match protected name, website, and description edits are transactional and
+  audited. If-Match protected geometry, category, and manual location edits are
+  also audited. Geometry
   updates accept Python's `way`, `linestring`, and `multilinestring` aliases
   and persist their canonical type with only type and coordinates. API edits
   and import workers share Python's structural validation and configured
