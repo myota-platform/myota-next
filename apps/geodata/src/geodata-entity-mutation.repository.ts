@@ -764,7 +764,7 @@ export class GeodataEntityMutationRepository {
       if (row.lifecycle_status === 'RETIRED')
         throw new ConflictException('retired entities cannot change category');
       const currentCategories = await client.query(
-        'SELECT category_code FROM geodata_entity_category WHERE entity_id=$1 ORDER BY is_primary DESC,category_code',
+        'SELECT category_code FROM geodata_entity_category WHERE entity_id=$1 ORDER BY ordinal',
         [id],
       );
       const previousTypes = currentCategories.rows.map((category) =>
@@ -835,9 +835,9 @@ export class GeodataEntityMutationRepository {
         );
         for (let index = 0; index < entityTypes.length; index++)
           await client.query(
-            `INSERT INTO geodata_entity_category(entity_id,category_id,category_code,is_primary)
-             VALUES ($1,$2,$3,$4)`,
-            [id, categoryIds[index], entityTypes[index], index === 0],
+            `INSERT INTO geodata_entity_category(entity_id,category_id,category_code,is_primary,ordinal)
+             VALUES ($1,$2,$3,$4,$5)`,
+            [id, categoryIds[index], entityTypes[index], index === 0, index],
           );
         await this.writeEntityEvent(
           client,

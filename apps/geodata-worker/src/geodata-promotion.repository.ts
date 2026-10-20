@@ -695,13 +695,14 @@ export class GeodataPromotionRepository {
       );
       for (let index = 0; index < entityTypes.length; index++)
         await client.query(
-          `INSERT INTO geodata_entity_category(entity_id,category_id,category_code,is_primary)
-           VALUES ($1,$2,$3,$4)`,
+          `INSERT INTO geodata_entity_category(entity_id,category_id,category_code,is_primary,ordinal)
+           VALUES ($1,$2,$3,$4,$5)`,
           [
             entityId,
             categories[index],
             String(entityTypes[index]),
             index === 0,
+            index,
           ],
         );
       await client.query('DELETE FROM source_reference WHERE entity_id=$1', [

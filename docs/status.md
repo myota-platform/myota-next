@@ -264,6 +264,8 @@
   topology-validity rejection. Category
   codes use Python's Unicode whitespace stripping rules, and category edit
   history records both the primary-code aliases and full category lists.
+  Relational category assignments preserve caller order across promotion,
+  category edits, and entity reads.
   Location
   names, entity names, location values, websites, and descriptions now use
   Python whitespace stripping and code-point length rules. Entity, import, and

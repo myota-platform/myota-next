@@ -345,7 +345,7 @@ export const entityProjection = `public_properties || jsonb_build_object(
   'maidenheadGridSquares4',maidenhead_grid_squares_4,'maidenheadLocators6',maidenhead_locators_6,
   'sourceState',source_state,'jurisdiction',jurisdiction,'attachments',attachments,'version',revision,
   'manualLocationFields',manual_location_fields,
-  'categories',COALESCE((SELECT jsonb_agg(category_code ORDER BY category_code) FROM geodata_entity_category c WHERE c.entity_id=geodata_entity.id),'[]'::jsonb),
+  'categories',COALESCE((SELECT jsonb_agg(category_code ORDER BY ordinal) FROM geodata_entity_category c WHERE c.entity_id=geodata_entity.id),'[]'::jsonb),
   'location',jsonb_build_object('continent',continent,'continentCode',continent_code,
     'country',country,'countryCode',country_code,'region',region,'regionCode',region_code,
     'subdivision',subdivision,'subdivisionCode',subdivision_code,'province',province,
