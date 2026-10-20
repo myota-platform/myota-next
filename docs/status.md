@@ -83,6 +83,8 @@
   authentication compares UTF-8 secret bytes in constant time and requires at
   least 32 configured secret bytes; caller-issued service tokens require a
   non-empty scope list before authorization, matching the Python handler.
+  Callsign evidence metadata, verification source, and retirement `validTo`
+  preserve explicitly submitted `null` values where the Python handler does.
   Recovery responses expose the development reset token unless `MYOTA_ENV` is
   exactly `production`, matching the reference's case-sensitive check.
   The Core migration removes the retired `operations.read` scope from persisted

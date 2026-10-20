@@ -567,6 +567,7 @@ export class IdentityAccountService {
       );
       if (!callsign.rowCount) throw new NotFoundException('callsign not found');
       const evidenceId = randomUUID();
+      const metadata = body.metadata === undefined ? {} : body.metadata;
       const evidence = {
         id: evidenceId,
         callsignId,
@@ -574,7 +575,7 @@ export class IdentityAccountService {
         evidenceType: body.evidenceType,
         source: body.source,
         checksum: body.checksum ?? null,
-        metadata: body.metadata ?? {},
+        metadata,
         submittedAt: new Date(),
         status: 'PENDING',
       };
@@ -590,7 +591,7 @@ export class IdentityAccountService {
           body.evidenceType,
           body.source,
           body.checksum ?? null,
-          JSON.stringify(body.metadata ?? {}),
+          JSON.stringify(metadata),
           evidence.submittedAt,
         ],
       );
@@ -647,7 +648,8 @@ export class IdentityAccountService {
         );
       }
       const verifiedAt = new Date();
-      const verificationSource = body.source ?? 'manual-review';
+      const verificationSource =
+        body.source === undefined ? 'manual-review' : body.source;
       await client.query(
         `UPDATE public.callsign
             SET lifecycle_status = 'VERIFIED', verification_source = $2,
@@ -747,7 +749,12 @@ export class IdentityAccountService {
           [accountId, replacement],
         );
       }
-      const validTo = body.validTo ? new Date(body.validTo) : new Date();
+      const validTo =
+        body.validTo === undefined
+          ? new Date()
+          : body.validTo === null
+            ? null
+            : new Date(body.validTo);
       await client.query(
         `UPDATE public.callsign
             SET lifecycle_status = 'RETIRED', valid_to = $2, updated_at = now()

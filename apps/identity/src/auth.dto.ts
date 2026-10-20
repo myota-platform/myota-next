@@ -273,13 +273,13 @@ export class CallsignEvidenceDto {
 
   @IsOptional()
   @IsObject()
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> | null;
 }
 
 export class VerifyCallsignDto {
   @IsOptional()
   @IsString()
-  source?: string;
+  source?: string | null;
 }
 
 export class SetPrimaryCallsignDto {
@@ -294,5 +294,5 @@ export class RetireCallsignDto {
 
   @IsOptional()
   @IsDateString()
-  validTo?: string;
+  validTo?: string | null;
 }
