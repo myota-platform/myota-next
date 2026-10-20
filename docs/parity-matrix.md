@@ -54,7 +54,8 @@ partial updates are backed by Core transactions and security/outbox events.
 Owner profile updates authenticate and check revocation and account availability
 before validating submitted fields, matching the Python handler's response
 precedence. Website URL normalization also removes empty trailing query and
-fragment delimiters, matching Python's `urlunsplit` behavior.
+fragment delimiters, matching Python's `urlunsplit` behavior, and rejects
+URLs without a syntactic authority, matching `urlsplit` validation.
 Role arrays preserve assignment order, including multi-role replacements that
 share a creation timestamp.
 Administrative account updates now preserve profile, password, status,
