@@ -15,14 +15,22 @@ export function normalizeUtcTimestamp(value: string): string {
     '$1.',
   );
   normalized = normalized.replace(/[t ]/, 'T');
-  const weekDate = /^(\d{4})-?W(\d{2})(?:-?([1-7]))?(T.*)?$/i.exec(normalized);
+  const weekDate = /^(\d{4})-?W(\d{2})(?:-?([1-7]))?(?:([^0-9])(.+))?$/iu.exec(
+    normalized,
+  );
   if (weekDate) {
-    const [, yearText, weekText, dayText, time] = weekDate;
+    const [, yearText, weekText, dayText, _separator, time] = weekDate;
     normalized = `${isoWeekDate(
       Number(yearText),
       Number(weekText),
       Number(dayText ?? 1),
-    )}${time ?? ''}`;
+    )}${time ? `T${time}` : ''}`;
+  }
+  const arbitraryTimeSeparator =
+    /^(\d{4}(?:-\d{2}-\d{2}|\d{4}))([^0-9])(?=\d{2}:?\d{2})/u.exec(normalized);
+  if (arbitraryTimeSeparator) {
+    const [, date, separator] = arbitraryTimeSeparator;
+    normalized = `${date}T${normalized.slice(date.length + separator.length)}`;
   }
   const compactDateTime =
     /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})?(\d{2})?(.*)$/.exec(normalized);
