@@ -340,7 +340,9 @@ export class GeodataEntityMutationRepository {
           `unsupported location fields: ${unknownLocation.sort().join(', ')}`,
         );
       locationInput = body.location;
-      const manual = body.manualFields ?? Object.keys(locationInput);
+      const manual = Object.hasOwn(body, 'manualFields')
+        ? body.manualFields
+        : Object.keys(locationInput);
       if (
         !Array.isArray(manual) ||
         manual.some(
