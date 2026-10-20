@@ -17,8 +17,8 @@ import {
   MAX_IMPORT_BATCH_BYTES,
   MAX_IMPORT_BATCH_FEATURES,
   MAX_IMPORT_FEATURE_BYTES,
+  MAX_IMPORT_FEATURES,
 } from '@app/platform/import-limits.js';
-import { integerSetting } from '@app/platform/integer-setting.js';
 import { pythonFloatString } from '@app/platform/python-number.js';
 import {
   canonicalPythonGeoJsonFeature,
@@ -469,10 +469,7 @@ export class GeodataWorkRepository {
       typeof run.source_metadata.filename === 'string'
         ? run.source_metadata.filename
         : '';
-    const featureLimit = integerSetting(
-      process.env.GEODATA_MAX_IMPORT_FEATURES,
-      5000,
-    );
+    const featureLimit = MAX_IMPORT_FEATURES;
     let features: Iterable<unknown> | AsyncIterable<unknown>;
     if (format === 'OSM_PBF') {
       features = decodeOsmPbfStream(

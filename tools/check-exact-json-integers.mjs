@@ -82,6 +82,25 @@ requirePattern(
   'Scheduled importer must calculate arbitrary-precision intervals',
 );
 requirePattern(
+  'apps/geodata-importer/src/geodata-importer.service.ts',
+  /features\.length > MAX_IMPORT_FEATURES/,
+  'Scheduled importer must use the shared Python-compatible Geodata feature limit',
+);
+if (
+  /MAX_SOURCE_BYTES/.test(
+    fs.readFileSync(
+      path.join(
+        repositoryRoot,
+        'apps/geodata-importer/src/geodata-importer.service.ts',
+      ),
+      'utf8',
+    ),
+  )
+)
+  errors.push(
+    'Scheduled importer must not impose a smaller source response cap',
+  );
+requirePattern(
   'apps/geodata/src/geodata.controller.ts',
   /parseImportPartNumber\(partNumber\)[\s\S]*?function parseImportPartNumber\(value: string\): number[\s\S]*?normalizePythonNumericText\(value\)[\s\S]*?BigInt\(normalized\.replaceAll\('_', ''\)\)[\s\S]*?parsed > 10000n/,
   'Geodata multipart upload part numbers must follow Python integer parsing and bounds',
@@ -93,17 +112,17 @@ requirePattern(
 );
 requirePattern(
   'apps/geodata/src/geodata-import.service.ts',
-  /const maxFeatures = integerSetting\([\s\S]*?process\.env\.GEODATA_MAX_IMPORT_FEATURES[\s\S]*?5000/,
-  'Geodata API feature limits must parse configuration with Python-compatible integer settings',
+  /features\.length > MAX_IMPORT_FEATURES/,
+  'Geodata API must use the shared Python-compatible feature limit',
 );
 requirePattern(
   'apps/geodata-worker/src/geodata-work.repository.ts',
-  /const featureLimit = integerSetting\([\s\S]*?process\.env\.GEODATA_MAX_IMPORT_FEATURES,[\s\S]*?5000/,
-  'Geodata worker feature limits must parse configuration with Python-compatible integer settings',
+  /const featureLimit = MAX_IMPORT_FEATURES/,
+  'Geodata worker must use the shared Python-compatible feature limit',
 );
 requirePattern(
   'libs/platform/src/import-limits.ts',
-  /MAX_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_GEOJSON_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_OSM_PBF_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_SHAPEFILE_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_IMPORT_FEATURE_VERTICES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_FEATURE_VERTICES[\s\S]*?MAX_SHAPEFILE_EXPANDED_BYTES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES[\s\S]*?MAX_IMPORT_BATCH_BYTES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_BYTES[\s\S]*?MAX_IMPORT_BATCH_FEATURES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_SIZE/,
+  /MAX_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_GEOJSON_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_OSM_PBF_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_SHAPEFILE_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_IMPORT_FEATURES = integerSetting\(\s*process\.env\.GEODATA_MAX_IMPORT_FEATURES,\s*5000,[\s\S]*?MAX_IMPORT_FEATURE_VERTICES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_FEATURE_VERTICES[\s\S]*?MAX_SHAPEFILE_EXPANDED_BYTES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES[\s\S]*?MAX_IMPORT_BATCH_BYTES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_BYTES[\s\S]*?MAX_IMPORT_BATCH_FEATURES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_SIZE/,
   'Geodata upload, decoder, and batch limits must use Python-compatible integer settings',
 );
 for (const relativePath of [

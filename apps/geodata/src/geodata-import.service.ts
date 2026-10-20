@@ -16,8 +16,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import proj4 from 'proj4';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import { MAX_UPLOAD_BYTES } from '@app/platform/import-limits.js';
-import { integerSetting } from '@app/platform/integer-setting.js';
+import {
+  MAX_IMPORT_FEATURES,
+  MAX_UPLOAD_BYTES,
+} from '@app/platform/import-limits.js';
 import {
   firstPythonTruthy,
   normalizeEntityTypeCodes,
@@ -408,13 +410,9 @@ function prepareImport(body: Record<string, unknown>) {
     throw new BadRequestException(
       'GEOJSON features must be non-empty Feature objects',
     );
-  const maxFeatures = integerSetting(
-    process.env.GEODATA_MAX_IMPORT_FEATURES,
-    5000,
-  );
-  if (features.length > maxFeatures)
+  if (features.length > MAX_IMPORT_FEATURES)
     throw new BadRequestException(
-      `an import may contain at most ${maxFeatures} features`,
+      `an import may contain at most ${MAX_IMPORT_FEATURES} features`,
     );
   return {
     adapter,

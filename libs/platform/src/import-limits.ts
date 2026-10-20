@@ -20,6 +20,10 @@ export const MAX_IMPORT_FEATURE_BYTES = integerSetting(
   process.env.MYOTA_IMPORT_MAX_FEATURE_BYTES,
   16 * 1024 * 1024,
 );
+export const MAX_IMPORT_FEATURES = integerSetting(
+  process.env.GEODATA_MAX_IMPORT_FEATURES,
+  5000,
+);
 export const MAX_IMPORT_FEATURE_VERTICES = integerSetting(
   process.env.MYOTA_IMPORT_MAX_FEATURE_VERTICES,
   250_000,

@@ -261,9 +261,11 @@ note through the audited API. Admin users with import scope can also create and
 page refresh schedules, then queue a complete GeoJSON snapshot manually. A
 separate Node importer polls due schedules and
 fetches GeoJSON or ArcGIS FeatureServer data only from allowlisted HTTPS hosts;
-it rejects redirects and responses above 16 MiB, then submits data through the
-schedule run API. The API retains the reference timestamp updates; the importer
-calculates automatic eligibility from `lastRunAt + intervalSeconds`.
+it rejects redirects and reads the complete response, then submits data through
+the schedule run API, matching the reference fetcher's response handling. The
+shared `GEODATA_MAX_IMPORT_FEATURES` limit is checked consistently by the
+importer, API, and worker. The API retains the reference timestamp updates; the
+importer calculates automatic eligibility from `lastRunAt + intervalSeconds`.
 `GEODATA_IMPORTER_ENABLED` keeps it opt-in. Deployment, live-source
 qualification, and outage/recovery evidence are outstanding.
 Refresh intervals preserve arbitrary-precision integer values and follow

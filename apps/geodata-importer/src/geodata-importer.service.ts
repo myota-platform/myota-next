@@ -7,16 +7,10 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { signAccessToken } from '@app/platform/access-token.js';
+import { MAX_IMPORT_FEATURES } from '@app/platform/import-limits.js';
 import { scheduledFeatureHashOverrides } from '../../geodata/src/geodata-request-fingerprint.js';
 
 const DEFAULT_POLL_SECONDS = 60;
-const MAX_SOURCE_BYTES = 16 * 1024 * 1024;
-const MAX_FEATURES = boundedInteger(
-  process.env.GEODATA_MAX_IMPORT_FEATURES,
-  5000,
-  1,
-  100_000,
-);
 const SERVICE_SUBJECT = 'service:geodata-importer';
 const IMPORT_SCOPES = ['geodata.import'];
 
@@ -149,8 +143,10 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     const format =
       typeof formatValue === 'string' ? formatValue.toUpperCase() : 'GEOJSON';
     const features = featuresFromDocument(document, format);
-    if (features.length > MAX_FEATURES)
-      throw new Error(`source exceeds the ${MAX_FEATURES} feature limit`);
+    if (features.length > MAX_IMPORT_FEATURES)
+      throw new Error(
+        `source exceeds the ${MAX_IMPORT_FEATURES} feature limit`,
+      );
     const sourceFeatureHashOverrides = scheduledFeatureHashOverrides(
       rawJson,
       format,
@@ -209,21 +205,12 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
       throw new Error('source redirects are not supported');
     if (!response.ok)
       throw new Error(`source returned HTTP ${response.status}`);
-    const declaredLength = Number(response.headers.get('content-length'));
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_SOURCE_BYTES)
-      throw new Error('source response exceeds the 16 MiB limit');
     if (!response.body) throw new Error('source returned an empty response');
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
-    let bytes = 0;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      bytes += value.byteLength;
-      if (bytes > MAX_SOURCE_BYTES) {
-        await reader.cancel();
-        throw new Error('source response exceeds the 16 MiB limit');
-      }
       chunks.push(value);
     }
     const text = Buffer.concat(chunks).toString('utf8');

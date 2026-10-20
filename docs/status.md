@@ -424,7 +424,9 @@
   accept complete snapshots and apply disappearance policy at that stage. The opt-in
   allowlisted importer now executes due schedules through the Geodata API;
   schedule runs preserve the reference timestamp updates, while the importer
-  uses `lastRunAt + intervalSeconds` to determine the next automatic run.
+  uses `lastRunAt + intervalSeconds` to determine the next automatic run. It
+  reads the complete allowlisted response and shares the configured feature cap
+  with the API and worker, matching the reference fetch and import limits.
   Deployment and live-source qualification remain outstanding.
   Candidate-level failures from a FAILED promotion queue can be resubmitted
   through the promotion API, and failed queues can now be redriven as a whole
