@@ -499,14 +499,22 @@ export class GeodataController {
     @Headers('if-match') ifMatch: string | undefined,
     @Param('entityId') id: string,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
     const claims = authorizeReview(authorization);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
     return this.entityMutations.patchEntityMetadata(
       id,
-      key,
+      idempotency.key,
       ifMatch,
       body,
       claims,
+      idempotency.requestHash,
     );
   }
 
@@ -518,14 +526,22 @@ export class GeodataController {
     @Headers('if-match') ifMatch: string | undefined,
     @Param('entityId') id: string,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
     const claims = verifyAccessToken(authorization);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
     return this.entityMutations.requestLocationEnrichment(
       id,
-      key,
+      idempotency.key,
       ifMatch,
       body,
       claims,
+      idempotency.requestHash,
     );
   }
 
@@ -536,9 +552,23 @@ export class GeodataController {
     @Headers('if-match') ifMatch: string | undefined,
     @Param('entityId') id: string,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
     const claims = authorizeReview(authorization);
-    return this.entityMutations.reviewEntity(id, key, ifMatch, body, claims);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
+    return this.entityMutations.reviewEntity(
+      id,
+      idempotency.key,
+      ifMatch,
+      body,
+      claims,
+      idempotency.requestHash,
+    );
   }
 
   @Put('entities/:entityId/categories')
@@ -548,14 +578,22 @@ export class GeodataController {
     @Headers('if-match') ifMatch: string | undefined,
     @Param('entityId') id: string,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
     const claims = authorizeReview(authorization);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
     return this.entityMutations.replaceEntityCategories(
       id,
-      key,
+      idempotency.key,
       ifMatch,
       body,
       claims,
+      idempotency.requestHash,
     );
   }
 
@@ -566,14 +604,22 @@ export class GeodataController {
     @Headers('if-match') ifMatch: string | undefined,
     @Param('entityId') id: string,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
     const claims = authorizeReview(authorization);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
     return this.entityMutations.replaceEntityGeometry(
       id,
-      key,
+      idempotency.key,
       ifMatch,
       body,
       claims,
+      idempotency.requestHash,
     );
   }
 }
@@ -586,6 +632,22 @@ function parseTileCoordinate(value: string): number {
   if (!Number.isSafeInteger(parsed))
     throw new BadRequestException('tile coordinates must be integers');
   return parsed;
+}
+
+function scopedRequestIdempotency(
+  key: string | undefined,
+  owner: string,
+  request: Request,
+  body: Record<string, unknown>,
+) {
+  if (!key) return { key: undefined, requestHash: undefined };
+  const rawBody = (request as Request & { rawBody?: Buffer }).rawBody?.toString(
+    'utf8',
+  );
+  return {
+    key: `http:${owner}:${request.originalUrl}:${key}`,
+    requestHash: fingerprintJsonRequest(body, rawBody),
+  };
 }
 
 function authorizeBearer(authorization: string | undefined) {

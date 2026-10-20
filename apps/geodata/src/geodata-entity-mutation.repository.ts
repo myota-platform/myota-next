@@ -70,7 +70,16 @@ export class GeodataEntityMutationRepository {
     ifMatch: string | undefined,
     body: Record<string, unknown>,
     claims: AccessTokenClaims,
+    requestHash?: string,
   ) {
+    if (key && requestHash) {
+      const replay = await this.replayRequest(
+        'geodata-entity-review',
+        key,
+        requestHash,
+      );
+      if (replay.found) return replay.response;
+    }
     const reviewerId =
       typeof body.reviewerId === 'string' ? body.reviewerId : '';
     const requestedStatus = firstPythonTruthy(body.status, body.decision);
@@ -88,7 +97,7 @@ export class GeodataEntityMutationRepository {
       await client.query('BEGIN');
       if (key) {
         await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-entity-review:' || $1,0))",
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
           [key],
         );
       }
@@ -106,13 +115,15 @@ export class GeodataEntityMutationRepository {
       if (!row) throw new NotFoundException('geodata entity not found');
       assertReviewCoverage(claims, row);
       if (key) {
-        const previous = await client.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-          ['geodata-entity-review', key],
+        const previous = await this.idempotentResponse(
+          client,
+          'geodata-entity-review',
+          key,
+          requestHash,
         );
-        if (previous.rows[0]) {
+        if (previous.found) {
           await client.query('COMMIT');
-          return previous.rows[0].response;
+          return previous.response;
         }
       }
       if (expectedVersion !== null && Number(row.revision) !== expectedVersion)
@@ -222,9 +233,12 @@ export class GeodataEntityMutationRepository {
       );
       const response = current.rows[0]?.entity;
       if (key)
-        await client.query(
-          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
-          ['geodata-entity-review', key, JSON.stringify(response)],
+        await this.saveIdempotentResponse(
+          client,
+          'geodata-entity-review',
+          key,
+          response,
+          requestHash,
         );
       await client.query('COMMIT');
       return response;
@@ -242,7 +256,16 @@ export class GeodataEntityMutationRepository {
     ifMatch: string | undefined,
     body: Record<string, unknown>,
     claims: AccessTokenClaims,
+    requestHash?: string,
   ) {
+    if (key && requestHash) {
+      const replay = await this.replayRequest(
+        'geodata-entity-metadata',
+        key,
+        requestHash,
+      );
+      if (replay.found) return replay.response;
+    }
     const editorId = typeof body.editorId === 'string' ? body.editorId : '';
     if (!editorId) throw new BadRequestException('editorId is required');
     const supported = new Set([
@@ -316,7 +339,7 @@ export class GeodataEntityMutationRepository {
       await client.query('BEGIN');
       if (key) {
         await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-entity-metadata:' || $1,0))",
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
           [key],
         );
       }
@@ -336,13 +359,15 @@ export class GeodataEntityMutationRepository {
       if ('location' in body)
         assertGisAdminCoverage(claims, row, 'geodata.location.manage');
       if (key) {
-        const previous = await client.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-          ['geodata-entity-metadata', key],
+        const previous = await this.idempotentResponse(
+          client,
+          'geodata-entity-metadata',
+          key,
+          requestHash,
         );
-        if (previous.rows[0]) {
+        if (previous.found) {
           await client.query('COMMIT');
-          return previous.rows[0].response;
+          return previous.response;
         }
       }
       if (expectedVersion !== null && Number(row.revision) !== expectedVersion)
@@ -547,9 +572,12 @@ export class GeodataEntityMutationRepository {
       );
       const response = current.rows[0]?.entity;
       if (key)
-        await client.query(
-          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
-          ['geodata-entity-metadata', key, JSON.stringify(response)],
+        await this.saveIdempotentResponse(
+          client,
+          'geodata-entity-metadata',
+          key,
+          response,
+          requestHash,
         );
       await client.query('COMMIT');
       return response;
@@ -567,7 +595,16 @@ export class GeodataEntityMutationRepository {
     ifMatch: string | undefined,
     body: Record<string, unknown>,
     claims: AccessTokenClaims,
+    requestHash?: string,
   ) {
+    if (key && requestHash) {
+      const replay = await this.replayRequest(
+        'geodata-location-enrichment',
+        key,
+        requestHash,
+      );
+      if (replay.found) return replay.response;
+    }
     const editorId = typeof body.editorId === 'string' ? body.editorId : '';
     if (!editorId) throw new BadRequestException('editorId is required');
     const expectedVersion = parseIfMatch(ifMatch);
@@ -576,7 +613,7 @@ export class GeodataEntityMutationRepository {
       await client.query('BEGIN');
       if (key) {
         await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-location-enrichment:' || $1,0))",
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
           [key],
         );
       }
@@ -592,13 +629,15 @@ export class GeodataEntityMutationRepository {
       if (!row) throw new NotFoundException('geodata entity not found');
       assertGisAdminCoverage(claims, row, 'geodata.location.manage');
       if (key) {
-        const previous = await client.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-          ['geodata-location-enrichment', key],
+        const previous = await this.idempotentResponse(
+          client,
+          'geodata-location-enrichment',
+          key,
+          requestHash,
         );
-        if (previous.rows[0]) {
+        if (previous.found) {
           await client.query('COMMIT');
-          return previous.rows[0].response;
+          return previous.response;
         }
       }
       if (expectedVersion !== null && Number(row.revision) !== expectedVersion)
@@ -701,6 +740,7 @@ export class GeodataEntityMutationRepository {
           'geodata-location-enrichment',
           key,
           receipt,
+          requestHash,
         );
       await client.query('COMMIT');
       return receipt;
@@ -718,7 +758,16 @@ export class GeodataEntityMutationRepository {
     ifMatch: string | undefined,
     body: Record<string, unknown>,
     claims: AccessTokenClaims,
+    requestHash?: string,
   ) {
+    if (key && requestHash) {
+      const replay = await this.replayRequest(
+        'geodata-entity-categories',
+        key,
+        requestHash,
+      );
+      if (replay.found) return replay.response;
+    }
     const editorId = typeof body.editorId === 'string' ? body.editorId : '';
     if (!editorId) throw new BadRequestException('editorId is required');
     const rawTypes = firstTruthyCategoryInput([
@@ -741,7 +790,7 @@ export class GeodataEntityMutationRepository {
       await client.query('BEGIN');
       if (key) {
         await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-entity-categories:' || $1,0))",
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
           [key],
         );
       }
@@ -759,6 +808,7 @@ export class GeodataEntityMutationRepository {
           client,
           'geodata-entity-categories',
           key,
+          requestHash,
         );
         if (previous.found) {
           await client.query('COMMIT');
@@ -866,6 +916,7 @@ export class GeodataEntityMutationRepository {
           'geodata-entity-categories',
           key,
           response,
+          requestHash,
         );
       await client.query('COMMIT');
       return response;
@@ -883,7 +934,16 @@ export class GeodataEntityMutationRepository {
     ifMatch: string | undefined,
     body: Record<string, unknown>,
     claims: AccessTokenClaims,
+    requestHash?: string,
   ) {
+    if (key && requestHash) {
+      const replay = await this.replayRequest(
+        'geodata-entity-geometry',
+        key,
+        requestHash,
+      );
+      if (replay.found) return replay.response;
+    }
     const editorId = typeof body.editorId === 'string' ? body.editorId : '';
     if (!editorId) throw new BadRequestException('editorId is required');
     const geometryInput = isRecord(body.geometry) ? body.geometry : null;
@@ -934,7 +994,7 @@ export class GeodataEntityMutationRepository {
       await client.query('BEGIN');
       if (key) {
         await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-entity-geometry:' || $1,0))",
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
           [key],
         );
       }
@@ -955,6 +1015,7 @@ export class GeodataEntityMutationRepository {
           client,
           'geodata-entity-geometry',
           key,
+          requestHash,
         );
         if (previous.found) {
           await client.query('COMMIT');
@@ -1048,6 +1109,7 @@ export class GeodataEntityMutationRepository {
           'geodata-entity-geometry',
           key,
           response,
+          requestHash,
         );
       await client.query('COMMIT');
       return response;
@@ -1103,14 +1165,54 @@ export class GeodataEntityMutationRepository {
     client: PoolClient,
     service: string,
     key: string,
+    requestHash?: string,
   ) {
     const result = await client.query(
       'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
       [service, key],
     );
-    return result.rows[0]
-      ? { found: true, response: result.rows[0].response }
-      : { found: false as const, response: undefined };
+    if (!result.rows[0]) return { found: false as const, response: undefined };
+    const saved = result.rows[0].response;
+    if (requestHash) {
+      if (
+        !isRecord(saved) ||
+        saved.requestHash !== requestHash ||
+        !Object.hasOwn(saved, 'result')
+      )
+        throw new ConflictException(
+          'Idempotency-Key was already used for another request',
+        );
+      return { found: true as const, response: saved.result };
+    }
+    return { found: true as const, response: saved };
+  }
+
+  private async replayRequest(
+    service: string,
+    key: string,
+    requestHash: string,
+  ) {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
+        [key],
+      );
+      const previous = await this.idempotentResponse(
+        client,
+        service,
+        key,
+        requestHash,
+      );
+      await client.query('COMMIT');
+      return previous;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   private async saveIdempotentResponse(
@@ -1118,10 +1220,17 @@ export class GeodataEntityMutationRepository {
     service: string,
     key: string,
     response: unknown,
+    requestHash?: string,
   ) {
     await client.query(
       'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
-      [service, key, JSON.stringify(response)],
+      [
+        service,
+        key,
+        JSON.stringify(
+          requestHash ? { requestHash, result: response } : response,
+        ),
+      ],
     );
   }
 
