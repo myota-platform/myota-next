@@ -45,9 +45,9 @@ export class GeodataImportMutationRepository {
       throw new BadRequestException(
         'decision must be MERGED, KEPT_SEPARATE, IGNORED, or OPEN',
       );
-    const reviewerId =
-      typeof body.reviewerId === 'string' ? body.reviewerId : '';
-    if (!reviewerId) throw new BadRequestException('reviewerId is required');
+    const reviewerId = body.reviewerId;
+    if (!pythonTruthy(reviewerId))
+      throw new BadRequestException('reviewerId is required');
     if (
       body.survivorEntityId !== undefined &&
       (typeof body.survivorEntityId !== 'string' ||
@@ -107,7 +107,9 @@ export class GeodataImportMutationRepository {
             ? body.survivorEntityId
             : null,
           stringifyJsonWithBigInts(history),
-          isUuid(reviewerId) ? reviewerId : null,
+          typeof reviewerId === 'string' && isUuid(reviewerId)
+            ? reviewerId
+            : null,
         ],
       );
       const item = {
