@@ -43,8 +43,17 @@ const locationColumns: Record<string, string> = {
   municipality: 'municipality',
   locality: 'locality',
 };
+const providerDerivedLocationFields = new Set([
+  'continentCode',
+  'countryCode',
+  'regionCode',
+  'subdivisionCode',
+  'provinceCode',
+]);
 const manualLocationFields = new Set(
-  Object.keys(locationColumns).filter((field) => !field.endsWith('Code')),
+  Object.keys(locationColumns).filter(
+    (field) => !providerDerivedLocationFields.has(field),
+  ),
 );
 
 @Injectable()
@@ -1243,7 +1252,9 @@ function normalizeManualLocationValue(field: string, value: unknown) {
     throw new BadRequestException(
       `location field ${field} must be scalar or null`,
     );
-  const normalized = trimPythonWhitespace(String(value));
+  const normalized = trimPythonWhitespace(
+    typeof value === 'boolean' ? (value ? 'True' : 'False') : String(value),
+  );
   return field.endsWith('Code') ? normalized.toUpperCase() : normalized || null;
 }
 

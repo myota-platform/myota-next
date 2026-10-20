@@ -276,11 +276,11 @@
   Entity, import, and
   deletion audit actor IDs retain submitted values without trimming; import
   finalization defaults to `administrator` when no actor is supplied. Location
-  names are
-  checked against the provider catalogue, provider codes cannot be
-  manually set, and location edits require GIS administrator coverage or
-  `geodata.location.manage`. Review writes require role coverage for the
-  entity's programme, category, and jurisdiction. Entity
+  names are checked against the provider catalogue. Continent, country,
+  region, subdivision, and province codes are provider-derived; `countyCode`
+  remains manually editable as in the reference. Location edits require GIS
+  administrator coverage or `geodata.location.manage`. Review writes require
+  role coverage for the entity's programme, category, and jurisdiction. Entity
   category updates accept scalar codes and category objects, remove duplicate
   codes while preserving order, and keep the first code primary. An authorized,
   idempotent request can queue BigDataCloud reverse geocoding; the
