@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
+import { comparePythonStrings } from '@app/platform/python-string.js';
 import {
   nextPageIfMore,
   pageOffset,
@@ -361,7 +362,7 @@ export class ProgrammesService {
       }),
     );
     return items.sort((left, right) =>
-      String(left.code).localeCompare(String(right.code)),
+      comparePythonStrings(String(left.code), String(right.code)),
     );
   }
 

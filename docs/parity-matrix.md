@@ -104,7 +104,8 @@ timestamps for lifecycle events and `updatedAt`, matching the reference's
 separate clock reads.
 Programme list pages and shared-category `assignedProgrammes` arrays preserve
 the reference's insertion order through a Core-owned record sequence; existing
-rows are backfilled by creation timestamp and slug.
+rows are backfilled by creation timestamp and slug. Shared entity-type catalogue
+items use Python code-point ordering by code.
 Entity-type `active` inputs and stored values are coerced using Python
 truthiness rather than requiring a JSON boolean, including falsey legacy JSON
 values, before the normalized catalogue record is persisted.
