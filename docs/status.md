@@ -291,8 +291,10 @@
   implemented; outage/recovery evidence remains outstanding.
 - Baseline Admin Vue application and static Participant application now live
   under `web/` as separate deployable artifacts. Admin local checks/build are
-  part of CI; route-by-route API parity, visual/accessibility review, and
-  deployment integration remain outstanding.
+  part of CI. A source scan matched all 63 unique literal Admin API path forms
+  to paths in the OpenAPI contract; operation methods and payloads, workflow
+  completion, visual/accessibility review, and deployment integration remain
+  outstanding.
 - Data transfer tooling, image publication, deployment manifests, and
   production observability configuration. A reusable Docker recipe now builds
   one unprivileged runtime image per Nest application. An owner-scoped database
