@@ -285,14 +285,11 @@ export class GeodataImportService {
 }
 
 function prepareImport(body: Record<string, unknown>) {
-  const adapter = (typeof body.adapter === 'string' ? body.adapter : '')
-    .trim()
-    .toUpperCase();
+  const adapter = typeof body.adapter === 'string' ? body.adapter : '';
   if (!adapters.has(adapter))
     throw new BadRequestException('unsupported import adapter');
-  const format = (typeof body.format === 'string' ? body.format : 'GEOJSON')
-    .trim()
-    .toUpperCase();
+  const format =
+    typeof body.format === 'string' ? body.format.toUpperCase() : 'GEOJSON';
   if (
     !['GEOJSON', 'WFS', 'ARCGIS_FEATURESERVER', 'KML', 'GPX'].includes(format)
   )
@@ -388,9 +385,7 @@ function prepareImport(body: Record<string, unknown>) {
     filename:
       typeof body.filename === 'string' ? body.filename.slice(0, 255) : null,
     programmeSlug:
-      typeof body.programmeSlug === 'string'
-        ? body.programmeSlug.trim() || null
-        : null,
+      typeof body.programmeSlug === 'string' ? body.programmeSlug : null,
     completeSnapshot: body.completeSnapshot === true,
     disappearancePolicy,
     sourceFormat,

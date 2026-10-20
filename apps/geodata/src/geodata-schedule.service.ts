@@ -217,8 +217,7 @@ export class GeodataScheduleService {
 }
 
 function prepareSchedule(body: Record<string, unknown>): RefreshSchedule {
-  const adapter =
-    typeof body.adapter === 'string' ? body.adapter.trim().toUpperCase() : '';
+  const adapter = typeof body.adapter === 'string' ? body.adapter : '';
   if (!adapters.has(adapter))
     throw new BadRequestException('unsupported refresh adapter');
   if (

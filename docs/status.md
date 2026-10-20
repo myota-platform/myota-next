@@ -291,7 +291,9 @@
   the same validated import pipeline and automatically queue promotion to the
   CANDIDATE lifecycle state. Tagged load-test cleanup is opt-in, confirmation
   protected, restricted to terminal runs and owned object storage, and refuses
-  to remove entities with Activity impact.
+  to remove entities with Activity impact. Direct and scheduled imports preserve
+  exact adapter values and programme slugs; import formats are uppercased
+  without trimming, matching Python input handling.
   Owner-scoped resumable S3 multipart uploads now support idempotent session
   creation, bounded binary parts, progress reads, completion, checksum and
   malware scanning, abort, and transactional import-run/outbox creation.
