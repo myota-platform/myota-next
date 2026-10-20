@@ -376,8 +376,6 @@ export class ActivityService {
   async leaderboard(programme: string, category = 'HUNTER') {
     if (!programme) throw new BadRequestException('programme is required');
     const normalizedCategory = category.toUpperCase();
-    if (!['ACTIVATOR', 'HUNTER'].includes(normalizedCategory))
-      throw new BadRequestException('category must be ACTIVATOR or HUNTER');
     return {
       programme,
       category: normalizedCategory,

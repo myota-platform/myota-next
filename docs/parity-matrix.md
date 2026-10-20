@@ -60,6 +60,9 @@ implemented. ADIF import creation, processing, and status reads are implemented.
 Activity activation history, public activation history, and statistics pages
 apply database limits and offsets while retaining their existing page metadata;
 public result exports remain complete exports.
+Public leaderboard category values are uppercased and passed through to the
+aggregate query, matching the reference: unrecognized categories return an
+empty `items` array instead of a validation error.
 The notifications endpoint now supports the contract's optional `page` and
 `pageSize` parameters with database-bounded reads; requests without paging
 parameters retain the prior unpaged response shape.
