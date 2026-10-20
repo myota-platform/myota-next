@@ -32,6 +32,7 @@
     "db:backup": "node --experimental-strip-types tools/db-backup.ts",
     "db:restore": "node --experimental-strip-types tools/db-restore.ts",
     "provision:jetstream": "node --experimental-strip-types tools/provision-jetstream.ts",
+    "outbox:admin": "node --experimental-strip-types tools/outbox-admin.ts",
     "redrive:email": "node --experimental-strip-types apps/email-worker/src/redrive-email.ts",
     "redrive:activity-notification": "node --experimental-strip-types apps/activity-notifications/src/redrive-notification.ts",
     "test": "vitest run",
@@ -40,7 +41,7 @@
     "lint": "oxlint --type-aware apps libs tools && node tools/check-nest-observability.mjs && node tools/check-openapi-nest-routes.mjs",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.{ts,mjs}\" \"web/admin/*.{ts,html,json}\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
     "format:check": "prettier --check \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.{ts,mjs}\" \"web/admin/*.{ts,html,json}\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
-    "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-migrate.ts tools/db-backup.ts tools/db-restore.ts tools/provision-jetstream.ts tools/render-seaweedfs-s3-config.ts"
+    "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-migrate.ts tools/db-backup.ts tools/db-restore.ts tools/provision-jetstream.ts tools/outbox-admin.ts tools/render-seaweedfs-s3-config.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",

@@ -353,6 +353,9 @@
   bounded retries, dead-letter persistence, and read-only validation of the
   deployment-owned fact/work streams and registered durable policies. Relay
   metrics are exposed, and registered work payload schemas are validated.
+  The `outbox:admin` CLI now lists bounded dead-letter metadata and transactionally
+  requeues an event from one explicitly selected owner database with its previous
+  attempt count and error retained in the redrive audit.
   `/healthz` reports liveness and `/readyz` reflects database and NATS status;
   outage/recovery evidence remains outstanding. Activity
   job redrive is audited and available to
