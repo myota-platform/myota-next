@@ -4,6 +4,21 @@ import { normalizePythonNumericText } from './python-numeric.js';
 
 export type PageInteger = number | bigint;
 
+export function parsePageTotal(value: unknown): PageInteger {
+  let total: bigint;
+  if (typeof value === 'bigint') total = value;
+  else if (typeof value === 'number' && Number.isSafeInteger(value))
+    total = BigInt(value);
+  else if (typeof value === 'string' && /^\d+$/.test(value))
+    total = BigInt(value);
+  else
+    throw new TypeError('database page total must be a non-negative integer');
+
+  if (total < 0n)
+    throw new TypeError('database page total must be a non-negative integer');
+  return total <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(total) : total;
+}
+
 export function parsePageInteger(
   value: unknown,
   fallback: number,
@@ -35,13 +50,9 @@ export function parsePageInteger(
   return Math.max(1, parsed);
 }
 
-export function pageOffset(page: PageInteger, pageSize: number): number {
+export function pageOffset(page: PageInteger, pageSize: number): PageInteger {
   const offset = (BigInt(page) - 1n) * BigInt(pageSize);
-  return Number(
-    offset > BigInt(Number.MAX_SAFE_INTEGER)
-      ? BigInt(Number.MAX_SAFE_INTEGER)
-      : offset,
-  );
+  return offset <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(offset) : offset;
 }
 
 export function nextPage(page: PageInteger): PageInteger {
@@ -52,7 +63,7 @@ export function nextPage(page: PageInteger): PageInteger {
 export function nextPageIfMore(
   page: PageInteger,
   pageSize: number,
-  total: number,
+  total: PageInteger,
 ): PageInteger | null {
   return BigInt(page) * BigInt(pageSize) < BigInt(total)
     ? nextPage(page)

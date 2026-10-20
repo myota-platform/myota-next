@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parsePageTotal, type PageInteger } from '@app/platform/pagination.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import type { ProgrammeRecord } from './programme.types.js';
 
@@ -16,13 +17,13 @@ export class ProgrammeRepository {
 
   async listPage(
     pageSize: number,
-    offset: number,
-  ): Promise<{ items: ProgrammeRecord[]; total: number }> {
+    offset: PageInteger,
+  ): Promise<{ items: ProgrammeRecord[]; total: PageInteger }> {
     const client = await this.connect();
     try {
       const result = await client.query<{
         items: ProgrammeRecord[];
-        total: number;
+        total: string;
       }>(
         `WITH page AS (
            SELECT payload, record_order FROM public.programme_record
@@ -34,11 +35,14 @@ export class ProgrammeRepository {
                      FROM page),
                   '[]'::jsonb
                 ) AS items,
-                (SELECT count(*)::int FROM public.programme_record) AS total`,
+                (SELECT count(*)::text FROM public.programme_record) AS total`,
         [pageSize, offset],
       );
       const row = result.rows[0];
-      return { items: row?.items ?? [], total: row?.total ?? 0 };
+      return {
+        items: row?.items ?? [],
+        total: parsePageTotal(row?.total ?? '0'),
+      };
     } finally {
       client.release();
     }

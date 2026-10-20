@@ -12,6 +12,7 @@ import {
   nextPageIfMore,
   pageOffset,
   parsePageInteger,
+  parsePageTotal,
 } from '@app/platform/pagination.js';
 import { firstQueryValue } from '@app/platform/query.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
@@ -74,7 +75,7 @@ export class GeodataRepository {
     const client = await this.connect();
     try {
       const counted = await client.query(
-        `SELECT count(*)::integer AS total FROM geodata_entity WHERE ${where}`,
+        `SELECT count(*) AS total FROM geodata_entity WHERE ${where}`,
         values,
       );
       const offset = pageOffset(page, pageSize);
@@ -83,7 +84,7 @@ export class GeodataRepository {
          WHERE ${where} ORDER BY lower(name),id LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
         [...values, pageSize, offset],
       );
-      const total = Number(counted.rows[0]?.total ?? 0);
+      const total = parsePageTotal(counted.rows[0]?.total ?? '0');
       return {
         items: rows.rows.map((row) => row.entity),
         page,
@@ -135,13 +136,13 @@ export class GeodataRepository {
     const client = await this.connect();
     try {
       const counted = await client.query(
-        'SELECT count(*)::integer AS total FROM import_run',
+        'SELECT count(*) AS total FROM import_run',
       );
       const rows = await client.query(
         `SELECT ${importProjection} AS run FROM import_run ORDER BY started_at DESC,id LIMIT $1 OFFSET $2`,
         [pageSize, pageOffset(page, pageSize)],
       );
-      const total = Number(counted.rows[0]?.total ?? 0);
+      const total = parsePageTotal(counted.rows[0]?.total ?? '0');
       return {
         items: rows.rows.map((row) => row.run),
         page,
@@ -176,7 +177,7 @@ export class GeodataRepository {
     const client = await this.connect();
     try {
       const count = await client.query(
-        'SELECT count(*)::integer AS total FROM conflation_candidate WHERE ($1::text IS NULL OR resolution=$1)',
+        'SELECT count(*) AS total FROM conflation_candidate WHERE ($1::text IS NULL OR resolution=$1)',
         [resolution],
       );
       const rows = await client.query(
@@ -206,7 +207,7 @@ export class GeodataRepository {
          LIMIT $2 OFFSET $3`,
         [resolution, pageSize, pageOffset(page, pageSize)],
       );
-      const total = Number(count.rows[0]?.total ?? 0);
+      const total = parsePageTotal(count.rows[0]?.total ?? '0');
       return {
         items: rows.rows.map((row) => row.candidate),
         page,
@@ -225,7 +226,7 @@ export class GeodataRepository {
     const client = await this.connect();
     try {
       const counted = await client.query(
-        "SELECT count(*)::integer AS total FROM geodata_import_candidate WHERE import_run_id=$1 AND validation_status='PENDING'",
+        "SELECT count(*) AS total FROM geodata_import_candidate WHERE import_run_id=$1 AND validation_status='PENDING'",
         [runId],
       );
       const result = await client.query(
@@ -234,7 +235,7 @@ export class GeodataRepository {
          ORDER BY ordinal,id LIMIT $2 OFFSET $3`,
         [runId, pageSize, pageOffset(page, pageSize)],
       );
-      const total = Number(counted.rows[0]?.total ?? 0);
+      const total = parsePageTotal(counted.rows[0]?.total ?? '0');
       return {
         items: result.rows.map((row) => row.candidate),
         page,

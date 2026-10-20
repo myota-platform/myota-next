@@ -8,6 +8,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parsePageTotal, type PageInteger } from '@app/platform/pagination.js';
 import { normalizeTimestamp, type JsonRecord } from './activity-domain.js';
 
 const awardRequestTimestampProjection = `to_char(requested_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS requested_at_iso,
@@ -61,7 +62,7 @@ export class ActivityAwardsRepository {
     publishedOnly: boolean,
     offset: bigint,
     pageSize: number,
-  ): Promise<{ items: JsonRecord[]; total: number }> {
+  ): Promise<{ items: JsonRecord[]; total: PageInteger }> {
     const client = await this.connect();
     try {
       const filters: string[] = [];
@@ -99,7 +100,7 @@ export class ActivityAwardsRepository {
         items: result.rows
           .filter((row) => row.definition !== null)
           .map((row) => row.definition),
-        total: Number(result.rows[0]?.value ?? 0),
+        total: parsePageTotal(result.rows[0]?.value ?? '0'),
       };
     } finally {
       client.release();
@@ -137,7 +138,7 @@ export class ActivityAwardsRepository {
   async listAwardAssetsPage(
     offset: bigint,
     pageSize: number,
-  ): Promise<{ items: JsonRecord[]; total: number }> {
+  ): Promise<{ items: JsonRecord[]; total: PageInteger }> {
     const client = await this.connect();
     try {
       const result = await client.query(
@@ -154,7 +155,7 @@ export class ActivityAwardsRepository {
         items: result.rows
           .filter((row) => row.metadata !== null)
           .map((row) => row.metadata),
-        total: Number(result.rows[0]?.value ?? 0),
+        total: parsePageTotal(result.rows[0]?.value ?? '0'),
       };
     } finally {
       client.release();
@@ -249,7 +250,7 @@ export class ActivityAwardsRepository {
     subjectId: string | undefined,
     offset: bigint,
     pageSize: number,
-  ): Promise<{ items: JsonRecord[]; total: number }> {
+  ): Promise<{ items: JsonRecord[]; total: PageInteger }> {
     const client = await this.connect();
     try {
       const values: unknown[] = [];
@@ -281,7 +282,7 @@ export class ActivityAwardsRepository {
         items: result.rows
           .filter((row) => row.id !== null)
           .map(awardRequestRecord),
-        total: Number(result.rows[0]?.value ?? 0),
+        total: parsePageTotal(result.rows[0]?.value ?? '0'),
       };
     } finally {
       client.release();
@@ -352,7 +353,7 @@ export class ActivityAwardsRepository {
   async listAwardIssuancesPage(
     offset: bigint,
     pageSize: number,
-  ): Promise<{ items: JsonRecord[]; total: number }> {
+  ): Promise<{ items: JsonRecord[]; total: PageInteger }> {
     const client = await this.connect();
     try {
       const result = await client.query(
@@ -369,7 +370,7 @@ export class ActivityAwardsRepository {
         items: result.rows
           .filter((row) => row.issuance !== null)
           .map((row) => row.issuance),
-        total: Number(result.rows[0]?.value ?? 0),
+        total: parsePageTotal(result.rows[0]?.value ?? '0'),
       };
     } finally {
       client.release();

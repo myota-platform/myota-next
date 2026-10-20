@@ -5,10 +5,11 @@ import {
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parsePageTotal, type PageInteger } from '@app/platform/pagination.js';
 
 export interface SnapshotPage {
   items: Record<string, unknown>[];
-  total: number;
+  total: PageInteger;
 }
 
 export interface PublishedContentPage {
@@ -39,11 +40,14 @@ export class ProgrammeReadRepository {
     locale: string | undefined,
     status: string | undefined,
     pageSize: number,
-    offset: number,
+    offset: PageInteger,
   ): Promise<SnapshotPage> {
     const client = await this.connect();
     try {
-      const result = await client.query<SnapshotPage>(
+      const result = await client.query<{
+        items: Record<string, unknown>[];
+        total: string;
+      }>(
         `WITH filtered AS MATERIALIZED (
            SELECT content.payload AS value,
                   content.content_key,
@@ -67,11 +71,14 @@ export class ProgrammeReadRepository {
                     page.content_order) FROM page),
                   '[]'::jsonb
                 ) AS items,
-                (SELECT count(*)::int FROM filtered) AS total`,
+                (SELECT count(*)::text FROM filtered) AS total`,
         [programmeSlug, locale ?? null, status ?? null, pageSize, offset],
       );
       const row = result.rows[0];
-      return { items: row?.items ?? [], total: row?.total ?? 0 };
+      return {
+        items: row?.items ?? [],
+        total: parsePageTotal(row?.total ?? '0'),
+      };
     } finally {
       client.release();
     }
@@ -128,11 +135,14 @@ export class ProgrammeReadRepository {
     programmeSlug: string,
     type: string | undefined,
     pageSize: number,
-    offset: number,
+    offset: PageInteger,
   ): Promise<SnapshotPage> {
     const client = await this.connect();
     try {
-      const result = await client.query<SnapshotPage>(
+      const result = await client.query<{
+        items: Record<string, unknown>[];
+        total: string;
+      }>(
         `WITH filtered AS MATERIALIZED (
            SELECT draft.payload AS value, draft.updated_at, draft.id
              FROM public.programme_policy_draft AS draft
@@ -148,11 +158,14 @@ export class ProgrammeReadRepository {
                     page.updated_at COLLATE "C" DESC, page.id COLLATE "C") FROM page),
                   '[]'::jsonb
                 ) AS items,
-                (SELECT count(*)::int FROM filtered) AS total`,
+                (SELECT count(*)::text FROM filtered) AS total`,
         [programmeSlug, type ?? null, pageSize, offset],
       );
       const row = result.rows[0];
-      return { items: row?.items ?? [], total: row?.total ?? 0 };
+      return {
+        items: row?.items ?? [],
+        total: parsePageTotal(row?.total ?? '0'),
+      };
     } finally {
       client.release();
     }

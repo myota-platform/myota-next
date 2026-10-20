@@ -20,6 +20,7 @@ import {
   nextPageIfMore,
   pageOffset,
   parsePageInteger,
+  parsePageTotal,
 } from '@app/platform/pagination.js';
 import { GeodataImportService } from './geodata-import.service.js';
 import {
@@ -66,9 +67,9 @@ export class GeodataScheduleService {
         [pageSize, offset],
       );
       const total = await client.query(
-        "SELECT count(*)::integer AS total FROM geodata_control_record WHERE kind='schedules'",
+        "SELECT count(*) AS total FROM geodata_control_record WHERE kind='schedules'",
       );
-      const totalCount = total.rows[0].total as number;
+      const totalCount = parsePageTotal(total.rows[0]?.total ?? '0');
       return {
         items: result.rows.map((row) =>
           parseJsonWithExactIntegers(String(row.payload_json)),

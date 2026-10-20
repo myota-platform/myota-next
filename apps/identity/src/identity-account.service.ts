@@ -14,6 +14,7 @@ import {
   nextPageIfMore,
   pageOffset,
   parsePageInteger,
+  parsePageTotal,
 } from '@app/platform/pagination.js';
 import { writeOutboxEvent, writeSecurityEvent } from '@app/platform/outbox.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
@@ -346,7 +347,7 @@ export class IdentityAccountService {
         [pageSize, pageOffset(page, pageSize)],
       );
       await client.query('COMMIT');
-      const total = Number(countResult.rows[0]?.total ?? 0);
+      const total = parsePageTotal(countResult.rows[0]?.total ?? '0');
       return {
         items: eventsResult.rows.map((event) => ({
           id: event.id,

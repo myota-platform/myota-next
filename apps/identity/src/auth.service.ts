@@ -618,9 +618,11 @@ export class IdentityAuthService {
       );
       const total = matchingAccounts.length;
       const offset = pageOffset(page, pageSize);
-      const accountIds = matchingAccounts
-        .slice(offset, offset + pageSize)
-        .map((account) => account.id);
+      const accountIds = (
+        typeof offset === 'bigint'
+          ? []
+          : matchingAccounts.slice(offset, offset + pageSize)
+      ).map((account) => account.id);
       const [accountDetails, rolesByAccount, callsignsByAccount] =
         await Promise.all([
           accountIds.length

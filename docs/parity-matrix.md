@@ -21,7 +21,10 @@ The Gateway forwards W3C `traceparent` and `tracestate` headers to the owning
 API and passes trace headers back to clients when an upstream provides them.
 Paged endpoints accept arbitrary-size Python integer page values and preserve
 those exact integers in JSON responses, including values above JavaScript's
-safe integer range.
+safe integer range. Database page totals also avoid PostgreSQL 32-bit casts and
+JavaScript number rounding, preserving exact integer totals in JSON. SQL page
+offsets remain exact beyond JavaScript's safe integer range and reach the
+database as integer parameters.
 
 The route maps at the pinned Python reference revision contain 135 literal
 method/path pairs across Identity, Programmes, Activity, Awards, and Geodata.

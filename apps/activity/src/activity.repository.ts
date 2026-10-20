@@ -11,6 +11,7 @@ import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import {
   nextPageIfMore,
   pageOffset,
+  parsePageTotal,
   type PageInteger,
 } from '@app/platform/pagination.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
@@ -92,7 +93,7 @@ export class ActivityRepository {
         `SELECT count(*) AS total FROM activity_activation${where}`,
         filters,
       );
-      const total = Number(count.rows[0]?.total ?? 0);
+      const total = parsePageTotal(count.rows[0]?.total ?? '0');
       const limitIndex = filters.length + 1;
       const result = await client.query(
         `SELECT *, ${activationTimestampProjection} FROM activity_activation${where}
@@ -139,7 +140,7 @@ export class ActivityRepository {
         `SELECT count(*) AS total FROM activity_statistic_snapshot${where}`,
         filters,
       );
-      const total = Number(count.rows[0]?.total ?? 0);
+      const total = parsePageTotal(count.rows[0]?.total ?? '0');
       const result = await client.query(
         `SELECT id,programme_slug,statistic_type,scope_key,metric_values,algorithm_version,generated_at,
                 ${statisticTimestampProjection}
