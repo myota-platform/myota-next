@@ -150,9 +150,10 @@ workflows remain outstanding.
 
 The baseline Admin and Participant applications are carried forward under
 `web/` with separate deployment artifacts. The Admin build is checked in CI;
-a source scan found all 63 unique literal Admin API path forms in the OpenAPI
-contract. Remaining work is operation-method and payload reconciliation,
-workflow completion, accessibility/visual review, and deployment integration.
+a static source scan resolves 56 concrete Admin HTTP method/path pairs, all
+present in the OpenAPI contract. This does not establish payload or workflow
+parity. Remaining work includes workflow completion, accessibility/visual
+review, and deployment integration.
 
 ## Workers and operations
 
