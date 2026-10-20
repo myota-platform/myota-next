@@ -82,6 +82,11 @@ requirePattern(
   'Scheduled importer must calculate arbitrary-precision intervals',
 );
 requirePattern(
+  'apps/geodata/src/geodata.controller.ts',
+  /parseImportPartNumber\(partNumber\)[\s\S]*?function parseImportPartNumber\(value: string\): number[\s\S]*?normalizePythonNumericText\(value\)[\s\S]*?BigInt\(normalized\.replaceAll\('_', ''\)\)[\s\S]*?parsed > 10000n/,
+  'Geodata multipart upload part numbers must follow Python integer parsing and bounds',
+);
+requirePattern(
   'libs/platform/src/bootstrap.ts',
   /containsBigInt\(body\)[\s\S]*?stringifyJsonWithBigInts\(body\)/,
   'shared HTTP bootstrap must serialize BigInt responses as JSON integers',

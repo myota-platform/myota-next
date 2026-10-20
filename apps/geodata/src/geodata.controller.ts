@@ -224,7 +224,7 @@ export class GeodataController {
     return this.uploads.uploadPart(
       claims.sub,
       id,
-      Number(partNumber),
+      parseImportPartNumber(partNumber),
       request.body as Buffer,
       checksum,
     );
@@ -729,6 +729,16 @@ function parseTileCoordinates(
   )
     throw new BadRequestException('invalid Web Mercator tile coordinates');
   return [Number(zoom), Number(x), Number(y)];
+}
+
+function parseImportPartNumber(value: string): number {
+  const normalized = normalizePythonNumericText(value);
+  if (!/^[+-]?\d(?:_?\d)*$/.test(normalized))
+    throw new BadRequestException('partNumber must be between 1 and 10000');
+  const parsed = BigInt(normalized.replaceAll('_', ''));
+  if (parsed < 1n || parsed > 10000n)
+    throw new BadRequestException('partNumber must be between 1 and 10000');
+  return Number(parsed);
 }
 
 function scopedRequestIdempotency(

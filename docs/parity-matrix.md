@@ -262,6 +262,9 @@ Refresh intervals preserve arbitrary-precision integer values and follow
 Python `int()` whitespace, Unicode decimal, underscore, boolean, and
 float-truncation behavior through API parsing, persistence, and importer due-time
 calculation.
+Multipart upload part numbers follow Python integer parsing for whitespace,
+Unicode decimal digits, and underscores before enforcing the 1 through 10000
+range.
 Complete snapshot imports are also accepted on the ordinary import path; the
 worker applies disappearance policy after the final batch is staged, before
 candidate review or promotion, matching the reference worker lifecycle.
