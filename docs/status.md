@@ -184,8 +184,9 @@
   activation history normalizes and masks operator callsigns, leaderboards use subject
   aggregates, and result exports support
   JSON and CSV. QSO correction requests and administrator review now use
-  transactional Activity persistence; applying a correction queues award
-  recalculation. Activity statistics can be listed and rebuild jobs queued,
+  transactional Activity persistence; requests store any truthy `proposedValues`
+  JSON shape accepted by the reference. Applying an object correction queues
+  award recalculation. Activity statistics can be listed and rebuild jobs queued,
   processed into versioned programme/category/entity/jurisdiction snapshots,
   and inspected; recipient notifications can be read with owner/admin checks.
   Activation history, public activation history, and statistics pages now use

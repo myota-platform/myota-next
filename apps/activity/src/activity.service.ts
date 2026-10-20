@@ -435,13 +435,7 @@ export class ActivityService {
     body: JsonRecord,
   ) {
     const claims = verifyAccessToken(authorization);
-    if (
-      !body.requestedBy ||
-      !body.reason ||
-      !body.proposedValues ||
-      typeof body.proposedValues !== 'object' ||
-      Array.isArray(body.proposedValues)
-    )
+    if (!body.requestedBy || !body.reason || !body.proposedValues)
       throw new BadRequestException(
         'requestedBy, reason, and proposedValues are required',
       );
