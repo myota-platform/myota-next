@@ -273,7 +273,9 @@
   selects `sourceKey`, `url`, then `name` with Python truthiness and preserves
   submitted whitespace; source metadata keeps the caller's values plus the
   reference name/license defaults. Proposal feature objects pass through the
-  same adapter normalization without an extra `type` requirement.
+  same adapter normalization without an extra `type` requirement. Proposal
+  idempotency is scoped to proposer and route and rejects reuse with a changed
+  request body.
   `/healthz` and `/readyz` expose worker liveness and
   GeoData PostgreSQL/NATS readiness on `GEODATA_WORKER_HEALTH_PORT`. The service
   also has PostGIS-backed public entity

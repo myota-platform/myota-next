@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   ServiceUnavailableException,
@@ -27,6 +28,7 @@ const adapters = new Set(['PARKSERVE_US', 'OSM', 'GOVERNMENT_GIS', 'MANUAL']);
 type ImportOptions = {
   communityProposal?: { proposalId: string; proposerId: string };
   autoPromote?: { requestedBy: string; note: string };
+  requestHash?: string;
 };
 
 @Injectable()
@@ -63,8 +65,21 @@ export class GeodataImportService {
           ['geodata-service', key],
         );
         if (previous.rows[0]) {
+          const saved = previous.rows[0].response;
+          if (options.requestHash) {
+            if (
+              !isRecord(saved) ||
+              saved.requestHash !== options.requestHash ||
+              !Object.hasOwn(saved, 'result')
+            )
+              throw new ConflictException(
+                'Idempotency-Key was already used for another request',
+              );
+            await client.query('COMMIT');
+            return saved.result;
+          }
           await client.query('COMMIT');
-          return previous.rows[0].response;
+          return saved;
         }
       }
 
@@ -150,7 +165,15 @@ export class GeodataImportService {
       if (key)
         await client.query(
           'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
-          ['geodata-service', key, JSON.stringify(response)],
+          [
+            'geodata-service',
+            key,
+            JSON.stringify(
+              options.requestHash
+                ? { requestHash: options.requestHash, result: response }
+                : response,
+            ),
+          ],
         );
       await client.query('COMMIT');
       return response;

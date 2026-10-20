@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { normalizeAttachmentMetadata } from '@app/geodata-domain';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
@@ -66,7 +66,7 @@ export class GeodataProposalService {
     };
     feature.properties = properties;
     return this.imports.create(
-      key ? `proposal:${proposerId}:${key}` : undefined,
+      key ? `http:${proposerId}:/v1/geodata/proposals:${key}` : undefined,
       {
         adapter: 'MANUAL',
         programmeSlug: body.programmeSlug,
@@ -80,9 +80,49 @@ export class GeodataProposalService {
         },
         features: [feature],
       },
-      { communityProposal: { proposalId, proposerId } },
+      {
+        communityProposal: { proposalId, proposerId },
+        requestHash: key ? fingerprintRequest(body) : undefined,
+      },
     );
   }
+}
+
+function fingerprintRequest(body: Record<string, unknown>): string {
+  return createHash('sha256').update(pythonSortedJson(body)).digest('hex');
+}
+
+function pythonSortedJson(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value === 'string')
+    return JSON.stringify(value).replace(
+      /[\u007f-\uffff]/g,
+      (character) =>
+        `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
+    );
+  if (typeof value === 'number') return JSON.stringify(value);
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (Array.isArray(value))
+    return `[${value.map(pythonSortedJson).join(', ')}]`;
+  if (isRecord(value))
+    return `{${Object.keys(value)
+      .sort(compareCodePoints)
+      .map((key) => `${pythonSortedJson(key)}: ${pythonSortedJson(value[key])}`)
+      .join(', ')}}`;
+  return 'null';
+}
+
+function compareCodePoints(left: string, right: string): number {
+  const leftPoints = Array.from(left, (character) => character.codePointAt(0)!);
+  const rightPoints = Array.from(right, (character) =>
+    character.codePointAt(0)!,
+  );
+  const length = Math.min(leftPoints.length, rightPoints.length);
+  for (let index = 0; index < length; index += 1) {
+    if (leftPoints[index] !== rightPoints[index])
+      return leftPoints[index] - rightPoints[index];
+  }
+  return leftPoints.length - rightPoints.length;
 }
 
 function isRecord(value: unknown): value is Record<string, any> {
