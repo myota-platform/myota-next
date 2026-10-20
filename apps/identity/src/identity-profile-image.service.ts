@@ -312,6 +312,7 @@ export class IdentityProfileImageService {
         const output = await sharp(content, {
           limitInputPixels: MAX_INPUT_DIMENSION * MAX_INPUT_DIMENSION,
           animated: false,
+          ignoreIcc: true,
         })
           .rotate()
           .resize(OUTPUT_DIMENSION, OUTPUT_DIMENSION, {
