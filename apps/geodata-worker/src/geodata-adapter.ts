@@ -228,9 +228,10 @@ function normalizeCoordinates(value: unknown, source: string): unknown {
       const y = value[1];
       const longitude = (x / 20037508.34) * 180;
       const latitude = (y / 20037508.34) * 180;
+      const exponential = Math.exp((latitude * Math.PI) / 180);
+      if (!Number.isFinite(exponential)) throw new Error('math range error');
       const mercatorLatitude =
-        (180 / Math.PI) *
-        (2 * Math.atan(Math.exp((latitude * Math.PI) / 180)) - Math.PI / 2);
+        (180 / Math.PI) * (2 * Math.atan(exponential) - Math.PI / 2);
       return [longitude, mercatorLatitude];
     }
     const [longitude, latitude] = proj4(source, 'EPSG:4326', [

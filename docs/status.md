@@ -254,6 +254,8 @@
   FeatureServer JSON imports; ArcGIS WKIDs are normalized to WGS84 GeoJSON
   before storage using the built-in Web Mercator aliases or an installed
   `proj4` definition, and the source format is retained in import metadata.
+  Web Mercator latitude conversion reports positive exponential overflow rather
+  than accepting a clamped 90-degree latitude, matching Python.
   Import
   creation stores the normalized source document in S3-compatible object
   storage and creates an idempotent queued import run (configurable

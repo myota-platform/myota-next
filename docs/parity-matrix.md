@@ -142,7 +142,8 @@ idempotent import runs transactionally. ArcGIS geometries with WGS84 and
 Web Mercator spatial references are normalized to WGS84; other EPSG WKIDs are
 reprojected when the installed `proj4` definitions support them. Reprojected
 coordinates retain XY only, while unprojected WGS84 coordinates retain extra
-ordinates, matching the pinned Python transform path. Pasted KML and GPX are
+ordinates, matching the pinned Python transform path. Web Mercator exponential
+overflow rejects the feature as in Python. Pasted KML and GPX are
 also converted to GeoJSON with XML document types rejected and bounded
 feature/coordinate counts. Multipart uploads accept GeoJSON and bounded
 Shapefile ZIP archives with matching sidecars (`SHAPEFILE`, `SHP`, and the
