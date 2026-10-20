@@ -69,9 +69,9 @@ export class IdentityIntegrationService {
                        created_at, updated_at`,
         [
           id,
-          body.programmeSlug.trim(),
-          body.issuer.trim(),
-          body.clientId.trim(),
+          body.programmeSlug,
+          body.issuer,
+          body.clientId,
           scopes,
           body.enabled ?? true,
         ],
