@@ -42,6 +42,15 @@ interface Statistic {
   generatedAt?: string;
 }
 
+interface ActivityNotification {
+  id: string;
+  type?: string;
+  payload?: unknown;
+  status?: string;
+  createdAt?: string;
+  deliveredAt?: string | null;
+}
+
 interface ActivityJob {
   jobId?: string;
   id?: string;
@@ -57,6 +66,7 @@ const feedback = usePageFeedback();
 const { error, loading } = feedback;
 const items = ref<Activation[]>([]);
 const statistics = ref<Statistic[]>([]);
+const notifications = ref<ActivityNotification[]>([]);
 const selected = ref<Activation | null>(null);
 const detailLoading = ref(false);
 const detailError = ref('');
@@ -77,16 +87,18 @@ function scopedPath(path: string): string {
 
 async function load(): Promise<void> {
   await feedback.run(async () => {
-    const [activations, statisticPage] = await Promise.all([
+    const [activations, statisticPage, notificationPage] = await Promise.all([
       apiRequest<{ items: Activation[] }>(
         scopedPath('/v1/activations?pageSize=100'),
       ),
       apiRequest<{ items: Statistic[] }>(
         scopedPath('/v1/statistics?pageSize=100'),
       ),
+      apiRequest<{ items: ActivityNotification[] }>('/v1/notifications'),
     ]);
     items.value = activations.items || [];
     statistics.value = statisticPage.items || [];
+    notifications.value = notificationPage.items || [];
     if (selected.value) {
       const fresh = items.value.find((item) => item.id === selected.value?.id);
       if (!fresh) selected.value = null;
@@ -313,6 +325,37 @@ watch(programme, () => {
       </div>
       <p v-if="!statistics.length && !loading" class="muted empty">
         No statistics snapshots available.
+      </p>
+    </div>
+  </article>
+
+  <article class="panel">
+    <div class="panel-heading">
+      <div>
+        <h2>My Activity notifications</h2>
+        <p class="muted">Notification records addressed to your account.</p>
+      </div>
+      <span class="muted">{{ notifications.length }} loaded</span>
+    </div>
+    <div class="table-list">
+      <div
+        v-for="item in notifications"
+        :key="item.id"
+        class="table-row statistic-row"
+      >
+        <span>
+          <strong>{{ item.type || 'Activity notification' }}</strong>
+          <small>{{
+            item.createdAt ? utcDisplay(item.createdAt) : 'Time unavailable'
+          }}</small>
+          <code>{{ formatValues(item.payload) }}</code>
+        </span>
+        <span class="status-pill" :class="(item.status || '').toLowerCase()">
+          {{ item.status || 'UNKNOWN' }}
+        </span>
+      </div>
+      <p v-if="!notifications.length && !loading" class="muted empty">
+        No Activity notifications for this account.
       </p>
     </div>
   </article>

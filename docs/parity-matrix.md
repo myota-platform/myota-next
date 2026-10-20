@@ -59,8 +59,8 @@ transactional snapshot rebuilds, and owner-scoped notification reads are
 implemented. ADIF import creation, processing, and status reads are implemented.
 The Admin Activity page opens activation details and normalized QSOs, lists
 statistics snapshots in programme scope, and allows Activity administrators to
-queue and inspect rebuild jobs. These controls follow the read and admin scopes
-enforced by the API.
+queue and inspect rebuild jobs. It also lists notifications for the signed-in
+account. These controls follow the read and admin scopes enforced by the API.
 Activity entity-deletion impact reads and idempotent cascades also remove
 linked QSOs and correction rows, rebuild subject aggregates, invalidate affected
 activations, and enqueue award recalculation jobs.
