@@ -164,7 +164,7 @@
   lifecycle promotion; geometry changes queue refreshes, and releasing manual
   fields queues only missing values. Refresh schedules can be created, listed,
   and manually run as complete snapshots. The Admin supports schedule creation,
-  paging, and manual GeoJSON snapshot runs capped at 16 MiB. Snapshot runs stage and promote the
+  paging, and manual GeoJSON snapshot runs. Snapshot runs stage and promote the
   full validated candidate set, record source manifests, and apply configured
   disappearance policies only after successful promotion. The opt-in
   allowlisted importer now executes due schedules through the Geodata API;

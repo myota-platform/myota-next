@@ -118,10 +118,6 @@ async function runSchedule(schedule: RefreshSchedule): Promise<void> {
       'Choose a GeoJSON snapshot before running the schedule.';
     return;
   }
-  if (file.size > 16 * 1024 * 1024) {
-    actionError.value = 'Manual snapshots are limited to 16 MiB.';
-    return;
-  }
   actionError.value = '';
   message.value = '';
   runningId.value = schedule.id;
@@ -255,7 +251,7 @@ onMounted(() => void load(0));
       </div>
     </div>
     <label class="snapshot-picker">
-      Manual complete snapshot (GeoJSON, max 16 MiB)
+      Manual complete snapshot (GeoJSON)
       <input
         type="file"
         accept=".json,.geojson,application/geo+json,application/json"
