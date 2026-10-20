@@ -169,8 +169,9 @@ MiB default upload cap (512 MiB maximum), 1 GiB expanded-size cap, 16 MiB
 per-feature size, 250,000 vertices, and the configured feature count. Less
 common geometry types and uncommon CRS definitions still need compatibility
 qualification against the reference parser.
-Import adapters infer feature names from
-the reference alias catalogue before validation. The worker validates WGS84
+Import adapters infer feature names from the reference alias catalogue before
+validation, using Python-compatible Unicode casefolding, whitespace collapse,
+and 300-code-point truncation. The worker validates WGS84
 geometries, stages candidates with provenance and 50 m duplicate
 warnings, records errors, and emits the preprocessing fact. Community proposals
 join this pipeline, and community proposals and imported features preserve

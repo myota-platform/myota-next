@@ -300,7 +300,9 @@
   while resolution is case-sensitive. Repeated status filters combine values.
   The adapter catalogue retains baseline format names
   and aliases, including `PARKSERVE_US` and `SHP`, and lists Shapefile support
-  for manual imports. Pending candidates can be paged, confirmed, or rejected
+  for manual imports. Feature-name alias matching uses Python-compatible Unicode
+  casefolding, whitespace collapse, and 300-code-point truncation. Pending
+  candidates can be paged, confirmed, or rejected
   through authorized, idempotent review writes. Candidate validation checks
   required fields first and preserves duplicate IDs in submitted order, matching
   the Python handler. Validation status coercion applies Python truthiness and

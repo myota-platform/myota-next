@@ -1,3 +1,5 @@
+import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
+
 const aliases = [
   'name',
   'official_name',
@@ -76,13 +78,47 @@ export function inferFeatureName(
 }
 
 function normalizeKey(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  return unicodeCaseFold(value).replace(/[^a-z0-9]+/g, '');
 }
 
 function nameValue(value: unknown): string | null {
   if (typeof value !== 'string') return null;
-  const cleaned = value.trim().replace(/\s+/g, ' ');
-  return emptyNames.has(cleaned.toLowerCase()) ? null : cleaned.slice(0, 300);
+  const cleaned = collapsePythonWhitespace(value);
+  return emptyNames.has(unicodeCaseFold(cleaned))
+    ? null
+    : Array.from(cleaned).slice(0, 300).join('');
+}
+
+function collapsePythonWhitespace(value: string): string {
+  let output = '';
+  let pendingSpace = false;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0)!;
+    if (isPythonWhitespace(codePoint)) {
+      if (output) pendingSpace = true;
+      continue;
+    }
+    if (pendingSpace) output += ' ';
+    output += character;
+    pendingSpace = false;
+  }
+  return output;
+}
+
+function isPythonWhitespace(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x09 && codePoint <= 0x0d) ||
+    (codePoint >= 0x1c && codePoint <= 0x20) ||
+    codePoint === 0x85 ||
+    codePoint === 0xa0 ||
+    codePoint === 0x1680 ||
+    (codePoint >= 0x2000 && codePoint <= 0x200a) ||
+    codePoint === 0x2028 ||
+    codePoint === 0x2029 ||
+    codePoint === 0x202f ||
+    codePoint === 0x205f ||
+    codePoint === 0x3000
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
