@@ -84,7 +84,9 @@
   least 32 configured secret characters; caller-issued service tokens require a
   non-empty scope list before authorization, matching the Python handler.
   Account creation uses the reference's non-empty email and `@` validation
-  after Python-compatible trimming and case folding.
+  after Python-compatible trimming and case folding. It authorizes the
+  administrator before validating the payload and normalizes callsign
+  whitespace like the Python handler.
   Login and recovery accept any non-empty email string and resolve it through
   the normalized Identity email key, matching the Python handler.
   Callsign evidence metadata, verification source, and retirement `validTo`

@@ -24,7 +24,6 @@ import {
 } from '@app/platform';
 import {
   LoginDto,
-  CreateAccountDto,
   AddCallsignDto,
   CallsignEvidenceDto,
   RetireCallsignDto,
@@ -252,7 +251,7 @@ export class AuthController {
   createAccount(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
-    @Body() body: CreateAccountDto,
+    @Body() body: Record<string, unknown>,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');

@@ -11,7 +11,11 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { writeOutboxEvent, writeSecurityEvent } from '@app/platform/outbox.js';
-import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import {
+  collapsePythonWhitespace,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import {
   IdentityAuthService,
@@ -63,7 +67,7 @@ export class IdentityAccountService {
 
   async create(
     authorization: string,
-    body: CreateAccountDto,
+    body: Record<string, unknown>,
     idempotencyKey?: string,
   ): Promise<Record<string, unknown>> {
     const actor = await this.auth.currentAccount(authorization);
@@ -73,17 +77,47 @@ export class IdentityAccountService {
         'identity.accounts.create scope is required',
       );
     }
+    const missing = ['displayName', 'participationType', 'email'].filter(
+      (field) => !pythonTruthy(body[field]),
+    );
+    if (missing.length)
+      throw new BadRequestException(
+        `missing required fields: ${missing.join(', ')}`,
+      );
     if ('password' in body) {
       throw new BadRequestException(
         'passwords cannot be set during account creation; use the invitation setup flow',
       );
     }
-    const normalizedEmail = unicodeCaseFold(trimPythonWhitespace(body.email));
+    if (body.roles != null && !Array.isArray(body.roles))
+      throw new BadRequestException('roles must be an array');
+    if (
+      body.participationType !== 'OPERATOR' &&
+      body.participationType !== 'SWL'
+    )
+      throw new BadRequestException(
+        'participationType must be OPERATOR or SWL',
+      );
+    const email = String(body.email);
+    const normalizedEmail = unicodeCaseFold(trimPythonWhitespace(email));
     if (!normalizedEmail.includes('@')) {
       throw new BadRequestException('email must be a valid address');
     }
 
-    const additionalAssignments = body.roles ?? [];
+    const additionalAssignments = (body.roles ?? []) as RoleGrantDto[];
+    if (
+      additionalAssignments.some(
+        (role) => !role || typeof role !== 'object' || Array.isArray(role),
+      )
+    )
+      throw new BadRequestException('each role assignment must be an object');
+    const input = {
+      displayName: String(body.displayName),
+      email: normalizedEmail,
+      participationType: body.participationType as 'OPERATOR' | 'SWL',
+      callsign: pythonTruthy(body.callsign) ? String(body.callsign) : undefined,
+      roles: additionalAssignments,
+    } as CreateAccountDto;
     let roleDefinitions: RoleDefinition[] = [];
     if (additionalAssignments.length > 0) {
       if (!actorScopes.has('*') && !actorScopes.has('identity.roles.assign')) {
@@ -137,14 +171,19 @@ export class IdentityAccountService {
            (id, display_name, email, identity_email_key, participation_type, status)
          VALUES ($1, $2, $3, $3, $4, 'PENDING_SETUP')
          RETURNING created_at, updated_at`,
-        [accountId, body.displayName, normalizedEmail, body.participationType],
+        [
+          accountId,
+          input.displayName,
+          normalizedEmail,
+          input.participationType,
+        ],
       );
 
       const callsigns: Record<string, unknown>[] = [];
       let primaryCallsignId: string | null = null;
       let callsignValue: string | undefined;
-      if (body.callsign) {
-        callsignValue = trimPythonWhitespace(body.callsign).toUpperCase();
+      if (input.callsign) {
+        callsignValue = collapsePythonWhitespace(input.callsign.toUpperCase());
         if (!callsignValue) {
           throw new BadRequestException('callsign cannot be empty');
         }
@@ -173,7 +212,7 @@ export class IdentityAccountService {
           updatedAt: createdAt,
         };
         callsigns.push(callsign);
-        if (body.participationType === 'OPERATOR') {
+        if (input.participationType === 'OPERATOR') {
           primaryCallsignId = callsignId;
           await client.query(
             `INSERT INTO public.account_primary_callsign (account_id, callsign_id)
@@ -191,9 +230,9 @@ export class IdentityAccountService {
 
       const account = {
         id: accountId,
-        displayName: body.displayName,
+        displayName: input.displayName,
         email: normalizedEmail,
-        participationType: body.participationType,
+        participationType: input.participationType,
         status: 'PENDING_SETUP',
         websiteUrl: null,
         biographyMarkdown: null,
