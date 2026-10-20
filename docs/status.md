@@ -171,7 +171,8 @@
   numeric whitespace and Unicode decimal digit handling. Activation payload
   normalization and required-field checks precede operator authorization, as in
   the reference. Falsey `location` and `rules` alias values normalize to empty
-  objects as in Python. It persists
+  objects as in Python; rule evaluation also defaults falsey persisted rules to
+  an empty object. It persists
   normalized activations and QSOs in Activity PostgreSQL with UTC microsecond
   timestamp precision preserved through normalization, validity checks,
   persistence, deduplication, and reads. QSO `source` defaults to `manual` only

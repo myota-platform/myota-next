@@ -564,7 +564,9 @@ export function evaluateActivation(
   qsos: JsonRecord[],
   endedAt: unknown,
 ): JsonRecord {
-  const rules = activation.programmeRules ?? {};
+  const rules = pythonTruthy(activation.programmeRules)
+    ? activation.programmeRules
+    : {};
   const violations: string[] = [];
   const normalizedEndedAt = pythonTruthy(endedAt)
     ? normalizeTimestamp(endedAt as string)
