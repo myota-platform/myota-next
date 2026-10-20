@@ -212,8 +212,8 @@
   shape and record pairing, matching PyShp's iterator behavior. Their default upload cap is 256 MiB and can be raised to
   512 MiB with `MYOTA_SHAPEFILE_MAX_UPLOAD_BYTES`; archives are capped at 100
   members and 1 GiB expanded. Matching .shp, .shx, and .dbf sidecars are
-  required; DBF text defaults to UTF-8 when no .cpg encoding is provided,
-  matching PyShp.
+  required; DBF text uses PyShp's UTF-8 default and `.cpg` files are ignored,
+  matching the reference loader.
   Pasted-import creation also decodes bounded KML and GPX to GeoJSON. OSM PBF
   uploads now decode in the Geodata worker with osmium-tool. The converter
   preserves OSM tags and stable type/id source references, filters the current

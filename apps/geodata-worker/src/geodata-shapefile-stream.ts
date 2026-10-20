@@ -98,19 +98,13 @@ export async function* streamShapefileFeatures(
         entry.uncompressedSize > MAX_METADATA_BYTES
       )
         throw new Error('Shapefile projection metadata exceeds 1 MiB');
-      if (
-        normalizedName.endsWith('.cpg') &&
-        entry.uncompressedSize > MAX_METADATA_BYTES
-      )
-        throw new Error('Shapefile encoding metadata exceeds 1 MiB');
-
       const leafName = basename(name);
       if (
         !leafName ||
         name.endsWith('/') ||
         normalizedName.includes('__macosx/') ||
         leafName.startsWith('._') ||
-        !/\.(shp|shx|dbf|prj|cpg)$/i.test(leafName)
+        !/\.(shp|shx|dbf|prj)$/i.test(leafName)
       )
         continue;
 
@@ -136,17 +130,13 @@ export async function* streamShapefileFeatures(
       );
     await validateShapeRecords(shape.path, shape.size);
     const filteredDbf = await filterDeletedDbfRecords(dbf.path, directory);
-    const cpg = members.get(`${stem}.cpg`);
-    const encoding = cpg
-      ? (await readFile(cpg.path, 'utf8')).trim() || 'utf-8'
-      : 'utf-8';
     const prj = members.get(`${stem}.prj`);
     const projectionText = prj ? (await readFile(prj.path, 'utf8')).trim() : '';
     const projection = projectionText
       ? createWgs84Projection(projectionText)
       : undefined;
     const reader = await openShapefile(shape.path, filteredDbf.path, {
-      encoding,
+      encoding: 'utf-8',
       highWaterMark: 64 * 1024,
     });
     let featureCount = 0;
