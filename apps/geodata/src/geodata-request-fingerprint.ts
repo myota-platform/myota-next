@@ -23,6 +23,17 @@ export function canonicalPythonJson(rawBody: string): string {
   return canonicalJsonValue(new JsonParser(rawBody).parse());
 }
 
+export function canonicalPythonJsonWithProperty(
+  rawObject: string,
+  key: string,
+  rawValue: string,
+): string {
+  const value = new JsonParser(rawObject).parse();
+  if (!isRecord(value)) return canonicalJsonValue(value);
+  value[key] = new JsonParser(rawValue).parse();
+  return canonicalJsonValue(value);
+}
+
 /** Preserve source number tokens for direct GeoJSON and WFS import payloads. */
 export function rawGeoJsonImportDocument(
   rawRequest: string,

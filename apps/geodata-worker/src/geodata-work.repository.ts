@@ -13,7 +13,10 @@ import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { pythonFloatString } from '@app/platform/python-number.js';
-import { canonicalPythonJson } from '../../geodata/src/geodata-request-fingerprint.js';
+import {
+  canonicalPythonJson,
+  canonicalPythonJsonWithProperty,
+} from '../../geodata/src/geodata-request-fingerprint.js';
 import {
   firstPythonTruthy,
   pythonTruthy,
@@ -536,10 +539,8 @@ export class GeodataWorkRepository {
       let record: StagedImportRecord;
       try {
         if (!isRecord(feature)) throw new Error('feature must be an object');
-        const sourceHash = hashCanonicalJson(
-          feature,
-          sourceJsonForGeoJsonFeature(feature),
-        );
+        const sourceJson = sourceJsonForGeoJsonFeature(feature);
+        const sourceHash = hashCanonicalJson(feature, sourceJson);
         const normalized = normalizeAdapterFeature(run.adapter_code, feature);
         const properties = normalized.properties;
         const sourceRefCandidate = firstPythonTruthy(
@@ -1385,11 +1386,21 @@ function resolveLegacyManualSourceRef(
   return `${sourceKey}:import-${runId}:record-${ordinal}`;
 }
 
-function hashCanonicalJson(value: unknown, rawJson?: string): string {
-  if (rawJson !== undefined)
-    return createHash('sha256')
-      .update(canonicalPythonJson(rawJson), 'utf8')
-      .digest('hex');
+function hashCanonicalJson(
+  value: unknown,
+  sourceJson?: { rawJson: string; inheritedCrsJson?: string },
+): string {
+  if (sourceJson !== undefined) {
+    const canonical =
+      sourceJson.inheritedCrsJson === undefined
+        ? canonicalPythonJson(sourceJson.rawJson)
+        : canonicalPythonJsonWithProperty(
+            sourceJson.rawJson,
+            'crs',
+            sourceJson.inheritedCrsJson,
+          );
+    return createHash('sha256').update(canonical, 'utf8').digest('hex');
+  }
   const canonical = (item: unknown): string => {
     if (Array.isArray(item)) return `[${item.map(canonical).join(',')}]`;
     if (item === null) return 'null';

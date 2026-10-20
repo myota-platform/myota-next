@@ -407,9 +407,9 @@
   Geodata database; per-record hashes and source manifests use Python float
   formatting and Unicode code-point key ordering. Streamed GeoJSON features
   and direct GEOJSON/WFS JSON imports retain raw numeric tokens so `1` and
-  `1.0` hash as distinct Python integer and float values when the feature has
-  no inherited document CRS. GeoJSON geometry documents converted into
-  Features, inherited-CRS GeoJSON, normalized ArcGIS imports, and generated
+  `1.0` hash as distinct Python integer and float values, including inherited
+  root CRS values up to 16 MiB. GeoJSON geometry documents converted into
+  Features, oversized root CRS values, normalized ArcGIS imports, and generated
   Shapefile/PBF features can still lose that distinction.
   Candidate creation, queue creation, status, hashes, and outbox events
   finalize in one transaction. The final event is assembled in PostgreSQL to avoid

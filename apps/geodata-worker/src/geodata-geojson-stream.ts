@@ -12,11 +12,14 @@ const MAX_ROOT_KEY_BYTES = 1024;
 // under this project's isolated module compilation.
 const TOKEN_PARSER_OBJECT_MODE = 0;
 const TOKEN_PARSER_ARRAY_MODE = 1;
-const sourceJsonByFeature = new WeakMap<object, string>();
+const sourceJsonByFeature = new WeakMap<
+  object,
+  { rawJson: string; inheritedCrsJson?: string }
+>();
 
 export function sourceJsonForGeoJsonFeature(
   feature: unknown,
-): string | undefined {
+): { rawJson: string; inheritedCrsJson?: string } | undefined {
   return isObject(feature) ? sourceJsonByFeature.get(feature) : undefined;
 }
 
@@ -39,6 +42,7 @@ export async function readGeoJsonDocumentMetadata(
     keepStack: false,
     stringBufferSize: 64 * 1024,
   });
+  const rootValueGuard = new GeoJsonResourceGuard(undefined, false, true);
   let documentCrs: unknown;
   let hasDocumentCrs = false;
   let spatialReference: unknown;
@@ -73,7 +77,9 @@ export async function readGeoJsonDocumentMetadata(
     if (sourceBytes > sourceLimit)
       throw new Error('GeoJSON source exceeds the configured upload limit');
     for (let offset = 0; offset < chunk.length; offset += PARSER_CHUNK_BYTES) {
-      parser.write(chunk.subarray(offset, offset + PARSER_CHUNK_BYTES));
+      const part = chunk.subarray(offset, offset + PARSER_CHUNK_BYTES);
+      rootValueGuard.write(part);
+      parser.write(part);
       if (sourceBytes - lastHeartbeatBytes >= 32 * 1024 * 1024) {
         await heartbeat();
         lastHeartbeatBytes = sourceBytes;
@@ -82,11 +88,14 @@ export async function readGeoJsonDocumentMetadata(
   }
 
   parser.end();
+  const crsSourceKey =
+    !hasDocumentCrs || documentCrs === null || documentCrs === undefined
+      ? 'spatialReference'
+      : 'crs';
   return {
-    crs:
-      !hasDocumentCrs || documentCrs === null || documentCrs === undefined
-        ? spatialReference
-        : documentCrs,
+    crs: crsSourceKey === 'spatialReference' ? spatialReference : documentCrs,
+    crsSourceKey,
+    crsJson: rootValueGuard.rootValueJsonFor(crsSourceKey),
     rootType,
   };
 }
@@ -99,10 +108,19 @@ export async function* streamGeoJsonFeatures(
   source: AsyncIterable<Uint8Array>,
   sourceHash: string,
   featureLimit: number,
-  documentMetadata: { crs: unknown; rootType: unknown },
+  documentMetadata: {
+    crs: unknown;
+    crsSourceKey: string;
+    crsJson?: string;
+    rootType: unknown;
+  },
   heartbeat: () => Promise<void>,
 ): AsyncGenerator<unknown> {
-  const guard = new GeoJsonResourceGuard(documentMetadata.rootType);
+  const guard = new GeoJsonResourceGuard(
+    documentMetadata.rootType,
+    true,
+    false,
+  );
   const pending: unknown[] = [];
   let featureCount = 0;
   let sourceBytes = 0;
@@ -192,12 +210,18 @@ export async function* streamGeoJsonFeatures(
                 documentMetadata.crs;
               inheritedDocumentCrs = true;
             }
-            if (
-              sourceJson !== undefined &&
-              !inheritedDocumentCrs &&
-              isObject(feature)
-            )
-              sourceJsonByFeature.set(feature, sourceJson);
+            if (sourceJson !== undefined && isObject(feature)) {
+              const inheritedCrsJson = inheritedDocumentCrs
+                ? documentMetadata.crsJson
+                : undefined;
+              if (!inheritedDocumentCrs || inheritedCrsJson !== undefined)
+                sourceJsonByFeature.set(feature, {
+                  rawJson: sourceJson,
+                  ...(inheritedCrsJson !== undefined
+                    ? { inheritedCrsJson }
+                    : {}),
+                });
+            }
             pending.push(feature);
           };
           parserPart = part.subarray(firstTokenOffset);
@@ -237,12 +261,24 @@ class GeoJsonResourceGuard {
   private activeFeatureSegmentStart: number | undefined;
   private completedFeatureJson: string[] = [];
   private completedFeatureReadIndex = 0;
+  private rootValueJson = new Map<string, string>();
+  private activeRootValueKey: string | undefined;
+  private rootValueDepth = 0;
+  private rootValueString = false;
+  private rootValueOpeningContainer = false;
+  private rootValueOverflow = false;
+  private rootValueParts: Buffer[] = [];
+  private rootValueSegmentStart: number | undefined;
   private rootType: unknown;
   private sawFeaturesArray = false;
   private sawRootArray = false;
   private sawRootObject = false;
 
-  constructor(private readonly documentType: unknown) {}
+  constructor(
+    private readonly documentType: unknown,
+    private readonly captureFeatureJson = true,
+    private readonly captureRootValues = true,
+  ) {}
 
   takeCompletedFeatureJson(): string | undefined {
     const result = this.completedFeatureJson[this.completedFeatureReadIndex];
@@ -250,16 +286,31 @@ class GeoJsonResourceGuard {
     return result;
   }
 
+  rootValueJsonFor(key: string): string | undefined {
+    return this.rootValueJson.get(key);
+  }
+
   write(chunk: Uint8Array) {
     if (this.activeFeatureStart !== undefined)
       this.activeFeatureSegmentStart = 0;
+    if (this.captureRootValues && this.activeRootValueKey !== undefined)
+      this.rootValueSegmentStart = 0;
     for (let localIndex = 0; localIndex < chunk.length; localIndex += 1) {
       const byte = chunk[localIndex]!;
       const position = this.offset++;
       if (this.inString) {
-        this.consumeStringByte(byte, position);
+        this.consumeStringByte(byte, position, localIndex, chunk);
         continue;
       }
+
+      if (this.captureRootValues) this.beginRootValueCapture(byte, localIndex);
+      if (
+        this.activeRootValueKey !== undefined &&
+        this.rootValueDepth === 0 &&
+        !this.rootValueString &&
+        (byte === 0x2c || byte === 0x7d)
+      )
+        this.finishRootValueCapture(localIndex, chunk, false);
 
       if (byte === 0x22) {
         this.inString = true;
@@ -313,6 +364,7 @@ class GeoJsonResourceGuard {
       this.checkFeatureSize(position);
     }
     if (
+      this.captureFeatureJson &&
       this.activeFeatureStart !== undefined &&
       this.activeFeatureSegmentStart !== undefined
     ) {
@@ -320,6 +372,14 @@ class GeoJsonResourceGuard {
         Buffer.from(chunk.subarray(this.activeFeatureSegmentStart)),
       );
       this.activeFeatureSegmentStart = undefined;
+    }
+    if (
+      this.captureRootValues &&
+      this.activeRootValueKey !== undefined &&
+      this.rootValueSegmentStart !== undefined
+    ) {
+      this.appendRootValuePart(chunk.subarray(this.rootValueSegmentStart));
+      this.rootValueSegmentStart = undefined;
     }
   }
 
@@ -335,7 +395,12 @@ class GeoJsonResourceGuard {
       throw new Error('stored GeoJSON FeatureCollection has no features array');
   }
 
-  private consumeStringByte(byte: number, position: number) {
+  private consumeStringByte(
+    byte: number,
+    position: number,
+    localIndex: number,
+    chunk: Uint8Array,
+  ) {
     this.stringBytes += 1;
     if (this.keyCandidate && this.stringBytes > MAX_ROOT_KEY_BYTES)
       throw new Error('GeoJSON root property name exceeds 1024 bytes');
@@ -366,6 +431,8 @@ class GeoJsonResourceGuard {
       this.valueCandidate = false;
       this.stringParts = [];
       this.checkFeatureSize(position);
+      if (this.rootValueString && this.rootValueDepth === 0)
+        this.finishRootValueCapture(localIndex, chunk, true);
       return;
     }
     if (this.escaped) this.escaped = false;
@@ -390,7 +457,12 @@ class GeoJsonResourceGuard {
     if (isRoot) this.sawRootObject = true;
     if (isRootArray) this.sawRootArray = true;
     if (isFeaturesArray) this.sawFeaturesArray = true;
-    if (isFeatureItem) {
+    if (this.activeRootValueKey !== undefined && this.rootValueDepth > 0) {
+      if (this.rootValueOpeningContainer)
+        this.rootValueOpeningContainer = false;
+      else this.rootValueDepth += 1;
+    }
+    if (this.captureFeatureJson && isFeatureItem) {
       this.activeFeatureStart = position;
       this.activeFeatureParts = [];
       this.activeFeatureSegmentStart = localIndex;
@@ -414,6 +486,11 @@ class GeoJsonResourceGuard {
   ) {
     const frame = this.frames.pop();
     if (!frame) throw new Error('GeoJSON source has mismatched containers');
+    if (this.activeRootValueKey !== undefined && this.rootValueDepth > 0) {
+      this.rootValueDepth -= 1;
+      if (this.rootValueDepth === 0)
+        this.finishRootValueCapture(localIndex, chunk, true);
+    }
     if (frame.featureItem) {
       this.checkFeatureSize(position);
       if (this.activeFeatureSegmentStart !== undefined)
@@ -455,6 +532,71 @@ class GeoJsonResourceGuard {
       position - this.scalarFeatureStart + 1 > MAX_FEATURE_BYTES
     )
       throw new Error('a GeoJSON feature exceeds the 16 MiB size limit');
+  }
+
+  private beginRootValueCapture(byte: number, localIndex: number) {
+    if (
+      this.activeRootValueKey !== undefined ||
+      isJsonWhitespace(byte) ||
+      byte === 0x3a ||
+      byte === 0x2c ||
+      byte === 0x7d
+    )
+      return;
+    const frame = this.frames.at(-1);
+    const key =
+      frame?.root && frame.expectKey === false ? frame.key : undefined;
+    if (key !== 'crs' && key !== 'spatialReference') return;
+    this.activeRootValueKey = key;
+    this.rootValueParts = [];
+    this.rootValueOverflow = false;
+    this.rootValueSegmentStart = localIndex;
+    this.rootValueString = byte === 0x22;
+    if (byte === 0x7b || byte === 0x5b) {
+      this.rootValueDepth = 1;
+      this.rootValueOpeningContainer = true;
+    }
+  }
+
+  private appendRootValuePart(bytes: Uint8Array) {
+    if (this.rootValueOverflow) return;
+    const size = this.rootValueParts.reduce(
+      (total, part) => total + part.length,
+      0,
+    );
+    if (size + bytes.length > MAX_FEATURE_BYTES) {
+      this.rootValueParts = [];
+      this.rootValueOverflow = true;
+      return;
+    }
+    this.rootValueParts.push(Buffer.from(bytes));
+  }
+
+  private finishRootValueCapture(
+    localIndex: number,
+    chunk: Uint8Array,
+    includeCurrentByte: boolean,
+  ) {
+    if (this.rootValueSegmentStart !== undefined) {
+      this.appendRootValuePart(
+        chunk.subarray(
+          this.rootValueSegmentStart,
+          localIndex + (includeCurrentByte ? 1 : 0),
+        ),
+      );
+    }
+    if (!this.rootValueOverflow && this.activeRootValueKey !== undefined)
+      this.rootValueJson.set(
+        this.activeRootValueKey,
+        Buffer.concat(this.rootValueParts).toString('utf8'),
+      );
+    this.activeRootValueKey = undefined;
+    this.rootValueDepth = 0;
+    this.rootValueString = false;
+    this.rootValueOpeningContainer = false;
+    this.rootValueOverflow = false;
+    this.rootValueParts = [];
+    this.rootValueSegmentStart = undefined;
   }
 }
 
