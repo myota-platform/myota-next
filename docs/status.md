@@ -31,6 +31,10 @@
   `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` to report telemetry; without them,
   the SDK emits no telemetry. `MYOTA_BUILD_VERSION` or `GIT_SHA` labels the
   deployed version when provided.
+- ADIF QSO imports normalize and validate records before inserting valid rows in
+  one PostgreSQL batch. If a database value rejects that batch, the worker falls
+  back to per-record inserts so valid records still import and errors retain
+  their record numbers.
 - Programme records, content, policy drafts, and entity-type catalogue now use
   Core relational tables. Programme mutations now use the shared transaction
   repository and outbox without persisting duplicate event history in a JSONB
