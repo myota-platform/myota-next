@@ -547,10 +547,7 @@ function decodeBase64(value: string) {
     )
   )
     throw new BadRequestException('contentBase64 must be valid base64');
-  const content = Buffer.from(value, 'base64');
-  if (content.toString('base64') !== value)
-    throw new BadRequestException('contentBase64 must be valid base64');
-  return content;
+  return Buffer.from(value, 'base64');
 }
 
 async function scanUpload(content: Buffer, filename: string) {
