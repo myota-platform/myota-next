@@ -53,11 +53,15 @@ export function parseXmlImport(
       fail('XML import has too many features');
   };
   const readCoordinate = (raw: string) => {
-    const values = raw.split(',').map(Number);
+    const values = raw.split(',');
+    if (values.length < 2) return undefined;
+    const longitude = Number(values[0]);
+    const latitude = Number(values[1]);
     if (
-      values.length < 2 ||
-      !Number.isFinite(values[0]) ||
-      !Number.isFinite(values[1])
+      !values[0]?.trim() ||
+      !values[1]?.trim() ||
+      !Number.isFinite(longitude) ||
+      !Number.isFinite(latitude)
     ) {
       fail('XML import contains an invalid coordinate');
       return undefined;
@@ -65,7 +69,7 @@ export function parseXmlImport(
     coordinatesSeen++;
     if (coordinatesSeen > maximumCoordinates)
       fail('XML import exceeds the 250000 coordinate limit');
-    return values.slice(0, 3);
+    return [longitude, latitude];
   };
 
   parser.onerror = (error) => {
