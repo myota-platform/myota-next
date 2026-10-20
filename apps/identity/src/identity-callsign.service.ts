@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
+  ValidationPipe,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
@@ -15,10 +16,10 @@ import { IdentityAuthService } from './auth.service.js';
 import type {
   AddCallsignDto,
   CallsignEvidenceDto,
-  RetireCallsignDto,
   SetPrimaryCallsignDto,
   VerifyCallsignDto,
 } from './auth.dto.js';
+import { RetireCallsignDto } from './auth.dto.js';
 
 interface AccountRecord {
   id: string;
@@ -378,7 +379,7 @@ export class IdentityCallsignService {
     authorization: string,
     accountId: string,
     callsignId: string,
-    body: RetireCallsignDto,
+    rawBody: unknown,
   ) {
     await this.authorizeAccountTarget(authorization, accountId);
     const client = await this.connect();
@@ -409,11 +410,7 @@ export class IdentityCallsignService {
       );
       const current = currentResult.rows[0];
       if (!current) throw new NotFoundException('callsign not found');
-      const evidence = await client.query<{ id: string }>(
-        `SELECT id FROM public.callsign_evidence
-          WHERE callsign_id = $1 ORDER BY evidence_order`,
-        [callsignId],
-      );
+      const body = await validateRetireCallsignBody(rawBody);
       if (account.rows[0].primary_callsign_id === callsignId) {
         const replacement = body.newPrimaryCallsignId;
         if (!replacement) {
@@ -437,6 +434,11 @@ export class IdentityCallsignService {
           [accountId, replacement],
         );
       }
+      const evidence = await client.query<{ id: string }>(
+        `SELECT id FROM public.callsign_evidence
+          WHERE callsign_id = $1 ORDER BY evidence_order`,
+        [callsignId],
+      );
       let validTo: Date | null;
       let responseValidTo: string | Date | null;
       if (body.validTo === undefined) {
@@ -608,4 +610,18 @@ export class IdentityCallsignService {
     );
     return { ...this.accountView(account), callsigns: callsigns.rows };
   }
+}
+
+const retireCallsignValidationPipe = new ValidationPipe({
+  transform: true,
+  whitelist: true,
+});
+
+async function validateRetireCallsignBody(
+  body: unknown,
+): Promise<RetireCallsignDto> {
+  return (await retireCallsignValidationPipe.transform(body, {
+    type: 'body',
+    metatype: RetireCallsignDto,
+  })) as RetireCallsignDto;
 }

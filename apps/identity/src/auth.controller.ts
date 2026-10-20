@@ -26,7 +26,6 @@ import {
   LoginDto,
   AddCallsignDto,
   CallsignEvidenceDto,
-  RetireCallsignDto,
   SetPrimaryCallsignDto,
   VerifyCallsignDto,
   AdminAccountsQueryDto,
@@ -396,7 +395,7 @@ export class AuthController {
     @Headers('authorization') authorization: string | undefined,
     @Param('accountId', new ParseUUIDPipe()) accountId: string,
     @Param('callsignId', new ParseUUIDPipe()) callsignId: string,
-    @Body() body: RetireCallsignDto,
+    @Body() body: unknown,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');

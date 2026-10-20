@@ -75,6 +75,9 @@ to the relational Core model and outbox. Account reads and exports preserve the
 reference's callsign, evidence, and security-event insertion order through
 Core-owned order values. Existing rows are backfilled chronologically with IDs
 as deterministic tie-breakers.
+Callsign retirement authenticates and resolves the account and callsign before
+validating its optional fields, then validates a primary replacement before
+reading evidence, matching the reference's operation order.
 Administrator account PATCH and role-assignment PUT authenticate and resolve
 the target account before validating the request body, matching the reference's
 response precedence. When role replacement is requested, Nest checks
