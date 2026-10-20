@@ -64,6 +64,8 @@ a new target database. The runner does not adopt an existing schema without a
 migration ledger, transfer production data, or provide rollback. Before cutover,
 validate source and target counts and constraints, rehearse repeatable transfer
 on disposable copies, and document rollback for each database independently.
+The verified source migration history and transfer requirements are recorded
+in [cross-version database transfer](../../../docs/operations/cross-version-data-transfer.md).
 Do not introduce cross-database foreign keys or combine the three restore
 boundaries.
 

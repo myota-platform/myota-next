@@ -388,7 +388,9 @@
   close; and point, line, polygon, and multipart map geometries. It lacks
   browser-level compatibility coverage. Visual/accessibility review and
   deployment integration also remain open.
-- Data transfer tooling, image publication, deployment manifests, and
+- Cross-version transfer tooling (requirements and verified migration history:
+  [database transfer plan](operations/cross-version-data-transfer.md)), image
+  publication, deployment manifests, and
   production observability configuration. A reusable Docker recipe now builds
   one unprivileged runtime image per Nest application. An owner-scoped database
   migration runner applies the checked-in SQL baseline and forward migrations

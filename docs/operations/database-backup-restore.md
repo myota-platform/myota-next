@@ -29,4 +29,5 @@ tools; set `PG_RESTORE_PATH` if needed. Each database restore uses one
 transaction, but the three-database restore is not atomic as a whole: if a later
 owner fails, earlier databases remain restored. The commands back up database
 state only; object-store data and JetStream messages require separate recovery
-procedures.
+procedures. Cross-version transfer from the Python schema is tracked in
+[cross-version database transfer](cross-version-data-transfer.md).
