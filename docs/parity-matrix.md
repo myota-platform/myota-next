@@ -99,6 +99,8 @@ behavior for nested conditions. Award asset IDs and recalculation subject lists
 use Python truthiness defaults, issuance defaults `dateObtained` only when the
 field is omitted, and award-definition optional fields retain explicit null
 values where the reference uses dictionary defaults only for omitted fields.
+Award evaluation stringifies an explicit null metric as Python `None` instead
+of replacing it with the default metric.
 ADIF uploads now pass
 authorization, malware checks, and object storage before durable queueing; the
 Activity worker parses records, records successes and rejects, updates

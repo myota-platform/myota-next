@@ -264,7 +264,11 @@ export function evaluateAward(
   facts: JsonRecord,
 ) {
   const conditionMet = evaluateAwardCondition(award.condition, facts);
-  const metric = String(award.achievementMetric ?? 'QSO_COUNT');
+  const metric = pythonConditionString(
+    Object.hasOwn(award, 'achievementMetric')
+      ? award.achievementMetric
+      : 'QSO_COUNT',
+  );
   const metricField: Record<string, string> = {
     QSO_COUNT: 'qsoCount',
     ACTIVATION_COUNT: 'activationCount',
