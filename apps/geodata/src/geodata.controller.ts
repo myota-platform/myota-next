@@ -111,9 +111,13 @@ export class GeodataController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') key: string | undefined,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
     const claims = verifyAccessToken(authorization);
-    return this.proposals.create(key, claims.sub, body);
+    const rawBody = (
+      request as Request & { rawBody?: Buffer }
+    ).rawBody?.toString('utf8');
+    return this.proposals.create(key, claims.sub, body, rawBody);
   }
 
   @Delete('load-test-runs/:testRunId')

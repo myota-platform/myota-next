@@ -26,7 +26,15 @@ export async function bootstrapHttpService(
       route,
       express.raw({ type: 'application/octet-stream', limit: '16mb' }),
     );
-  app.use(express.json({ limit: jsonLimit }));
+  app.use(
+    express.json({
+      limit: jsonLimit,
+      verify: (request, _response, buffer) => {
+        if (request.url?.split('?', 1)[0] === '/v1/geodata/proposals')
+          Object.assign(request, { rawBody: buffer });
+      },
+    }),
+  );
   app.use(express.urlencoded({ extended: true, limit: jsonLimit }));
   app.use(parserProblem);
   app.setGlobalPrefix('v1', {
