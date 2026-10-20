@@ -615,7 +615,7 @@ function renderMessage(command: EmailCommand) {
 function smtpConfig(): SmtpConfig {
   const port = Number(process.env.EMAIL_SMTP_PORT);
   const timeout = Number(process.env.EMAIL_SMTP_TIMEOUT_SECONDS ?? 10);
-  const tlsMode = process.env.EMAIL_SMTP_TLS_MODE ?? 'starttls';
+  const tlsMode = (process.env.EMAIL_SMTP_TLS_MODE ?? 'starttls').toLowerCase();
   const config = {
     host: process.env.EMAIL_SMTP_HOST?.trim() ?? '',
     port,
