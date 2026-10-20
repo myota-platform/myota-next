@@ -239,9 +239,9 @@ export class IdentityAuthService {
           );
         }
         await this.writeAudit(client, 'identity.login.failed.v1', {
-          accountId: account?.id ?? null,
           email: input.email,
           remoteAddr: context.remoteAddr,
+          ...(account ? { actorId: account.id } : {}),
         });
         failure = new BadRequestException('invalid credentials');
       }
@@ -255,6 +255,7 @@ export class IdentityAuthService {
         );
         await this.writeAudit(client, 'identity.login.succeeded.v1', {
           accountId: account.id,
+          actorId: account.id,
           remoteAddr: context.remoteAddr,
         });
         const result = await this.createSession(client, account, context);

@@ -41,7 +41,11 @@ export async function writeSecurityEvent(
   const candidateAccountId = payload.accountId ?? payload.actorId;
   const accountId = isUuid(candidateAccountId) ? candidateAccountId : null;
   const aggregateId =
-    typeof payload.accountId === 'string' ? payload.accountId : 'system';
+    typeof payload.accountId === 'string'
+      ? payload.accountId
+      : typeof payload.actorId === 'string'
+        ? payload.actorId
+        : 'system';
   const occurredAt = new Date();
 
   await client.query(
