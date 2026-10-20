@@ -1699,6 +1699,34 @@ select:disabled {
 .table-row small {
   overflow-wrap: anywhere;
 }
+.activity-row {
+  cursor: pointer;
+}
+.activity-detail {
+  border-top: 1px solid var(--line);
+  margin-top: 14px;
+  padding-top: 14px;
+}
+.activity-job {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.activity-job .error-text {
+  flex-basis: 100%;
+}
+.statistic-row code {
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.error-text {
+  color: var(--danger);
+  margin: 8px 0 0;
+}
 @media (max-width: 1000px) {
   .top-actions .status-dot {
     display: none;
