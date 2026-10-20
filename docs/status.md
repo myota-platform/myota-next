@@ -201,7 +201,9 @@
   persistence, deduplication, and reads. QSO `source` defaults to `manual` only
   when absent; optional `sourceImportId` provenance is retained on direct and
   worker inserts. Activation `allowedBands` and `allowedModes` default only
-  when omitted and preserve Python iterable behavior. QSO callsigns collapse
+  when omitted and preserve Python iterable behavior and null/boolean string
+  conversion.
+  QSO callsigns collapse
   Python's Unicode whitespace set before validation, and worked locator keys
   use Python's truthiness and Unicode whitespace stripping rules. QSO
   timestamps use Python truthiness when falling back from `timestamp` to

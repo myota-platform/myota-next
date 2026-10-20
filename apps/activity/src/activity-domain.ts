@@ -363,6 +363,15 @@ function pythonIterable(value: unknown, field: string): unknown[] {
   throw new TypeError(`${field} is not iterable`);
 }
 
+function pythonScalarString(value: unknown): string {
+  if (value === null) return 'None';
+  if (value === true) return 'True';
+  if (value === false) return 'False';
+  if (typeof value === 'string' || typeof value === 'number')
+    return String(value);
+  return JSON.stringify(value) ?? 'None';
+}
+
 export function pythonFloat(value: unknown, field: string): number {
   if (typeof value === 'number') return value;
   if (typeof value === 'boolean') return value ? 1 : 0;
@@ -617,11 +626,11 @@ export function evaluateActivation(
     ? pythonIterable(rules.allowedModes, 'allowedModes')
     : [];
   const bands = new Set(
-    allowedBands.map((v: unknown) => String(v).toUpperCase()),
+    allowedBands.map((v: unknown) => pythonScalarString(v).toUpperCase()),
   );
   const modes = new Set(
     allowedModes.map((v: unknown) =>
-      String(v).toUpperCase().replaceAll('-', ''),
+      pythonScalarString(v).toUpperCase().replaceAll('-', ''),
     ),
   );
   for (const qso of qsos) {
