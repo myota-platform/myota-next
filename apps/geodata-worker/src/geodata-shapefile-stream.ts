@@ -135,6 +135,7 @@ export async function* streamShapefileFeatures(
         'Shapefile ZIP must include matching .shx and .dbf files',
       );
     await validateShapeRecords(shape.path, shape.size);
+    const filteredDbf = await filterDeletedDbfRecords(dbf.path, directory);
     const cpg = members.get(`${stem}.cpg`);
     const encoding = cpg
       ? (await readFile(cpg.path, 'utf8')).trim() || 'utf-8'
@@ -144,13 +145,18 @@ export async function* streamShapefileFeatures(
     const projection = projectionText
       ? createWgs84Projection(projectionText)
       : undefined;
-    const reader = await openShapefile(shape.path, dbf.path, {
+    const reader = await openShapefile(shape.path, filteredDbf.path, {
       encoding,
       highWaterMark: 64 * 1024,
     });
     let featureCount = 0;
     try {
       while (true) {
+        if (
+          filteredDbf.recordLimit !== undefined &&
+          featureCount >= filteredDbf.recordLimit
+        )
+          break;
         const result = await reader.read();
         if (result.done) break;
         featureCount += 1;
@@ -179,6 +185,102 @@ export async function* streamShapefileFeatures(
   } finally {
     zip?.close();
     await rm(directory, { recursive: true, force: true });
+  }
+}
+
+/** PyShp omits deleted DBF rows before pairing records with shapes. */
+async function filterDeletedDbfRecords(path: string, directory: string) {
+  const input = await open(path, 'r');
+  try {
+    const header = Buffer.alloc(32);
+    const headerRead = await input.read(header, 0, header.length, 0);
+    if (headerRead.bytesRead !== header.length)
+      return { path, recordLimit: undefined };
+
+    const recordCount = header.readUInt32LE(4);
+    const headerLength = header.readUInt16LE(8);
+    const recordLength = header.readUInt16LE(10);
+    const size = (await input.stat()).size;
+    if (
+      recordLength < 1 ||
+      headerLength < 33 ||
+      headerLength > size ||
+      headerLength + recordCount * recordLength > size
+    )
+      return { path, recordLimit: undefined };
+
+    const row = Buffer.alloc(recordLength);
+    let hasDeletedRows = false;
+    let activeCount = 0;
+    for (let index = 0; index < recordCount; index++) {
+      const result = await input.read(
+        row,
+        0,
+        recordLength,
+        headerLength + index * recordLength,
+      );
+      if (result.bytesRead !== recordLength)
+        return { path, recordLimit: undefined };
+      if (row[0] !== 0x20) hasDeletedRows = true;
+      else activeCount++;
+    }
+    if (!hasDeletedRows) return { path, recordLimit: undefined };
+
+    const outputPath = join(directory, 'active-records.dbf');
+    const output = await open(outputPath, 'wx');
+    try {
+      const outputHeader = Buffer.from(header);
+      outputHeader.writeUInt32LE(activeCount, 4);
+      const descriptors = Buffer.alloc(headerLength - header.length);
+      const descriptorsRead = await input.read(
+        descriptors,
+        0,
+        descriptors.length,
+        header.length,
+      );
+      if (descriptorsRead.bytesRead !== descriptors.length)
+        throw new Error('Shapefile DBF header is truncated');
+      await writeFileHandle(output, outputHeader, 0);
+      await writeFileHandle(output, descriptors, header.length);
+      let outputPosition = headerLength;
+      for (let index = 0; index < recordCount; index++) {
+        const result = await input.read(
+          row,
+          0,
+          recordLength,
+          headerLength + index * recordLength,
+        );
+        if (result.bytesRead !== recordLength)
+          throw new Error('Shapefile DBF record is truncated');
+        if (row[0] !== 0x20) continue;
+        await writeFileHandle(output, row, outputPosition);
+        outputPosition += recordLength;
+      }
+      await writeFileHandle(output, Buffer.from([0x1a]), outputPosition);
+    } finally {
+      await output.close();
+    }
+    return { path: outputPath, recordLimit: activeCount };
+  } finally {
+    await input.close();
+  }
+}
+
+async function writeFileHandle(
+  file: Awaited<ReturnType<typeof open>>,
+  bytes: Buffer,
+  position?: number,
+) {
+  let offset = 0;
+  while (offset < bytes.length) {
+    const result = await file.write(
+      bytes,
+      offset,
+      bytes.length - offset,
+      position === undefined ? null : position + offset,
+    );
+    if (!result.bytesWritten) throw new Error('Could not write Shapefile DBF');
+    offset += result.bytesWritten;
   }
 }
 
