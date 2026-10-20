@@ -5,6 +5,14 @@ This is the acceptance inventory for the new implementation. The copied
 baseline. Current implementation reference:
 [`myota`](https://github.com/myota-platform/myota/tree/7f904a5130e59006765cf882956a4adbfecb17ec).
 
+## HTTP compatibility
+
+NestJS HTTP APIs format framework and parser failures with the shared `Problem`
+schema in the OpenAPI contract. Responses carry request and correlation IDs in
+headers and in the problem body. Identity login preserves the reference status
+behavior: invalid credentials return 400, while permission and rate-limit
+failures return 403. Other NestJS 401 permission exceptions also map to 403.
+
 ## Domain functions
 
 | Area           | Required parity                                                                                                                                                                                                                                                                                                                                                                                                   |
