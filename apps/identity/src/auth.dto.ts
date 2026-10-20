@@ -104,19 +104,19 @@ export class OidcProviderMappingDto {
 }
 
 export class AdminRoleDefinitionDto {
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   code?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   name?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   description?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @IsArray()
   @IsString({ each: true })
   scopes?: string[];
