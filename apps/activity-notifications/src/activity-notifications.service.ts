@@ -352,7 +352,7 @@ export class ActivityNotificationsService
         return false;
       }
       const [recipient, kind] = recipientAndKind(event, eventType);
-      if (typeof recipient === 'string' && recipient.length > 0 && kind) {
+      if (recipient && kind) {
         await client.query(
           `INSERT INTO public.activity_notification
             (id, recipient_id, notification_type, payload, status, delivered_at, deduplication_key)
@@ -445,7 +445,7 @@ export class ActivityNotificationsService
 function recipientAndKind(
   event: Envelope,
   eventType: string,
-): [unknown, string | null] {
+): [string | undefined, string | null] {
   const payload = event.payload ?? {};
   if (
     eventType.startsWith('geodata.entity.reviewed') ||
@@ -454,24 +454,32 @@ function recipientAndKind(
     const review = asRecord(payload.review);
     const provenance = asRecord(payload.provenance);
     return [
-      payload.proposerId ?? review?.proposerId ?? provenance?.proposerId,
+      nonEmptyString(payload.proposerId) ||
+        nonEmptyString(review?.proposerId) ||
+        nonEmptyString(provenance?.proposerId),
       'GEODATA_PROPOSAL_DECISION',
     ];
   }
   if (eventType.startsWith('identity.')) {
     const account = asRecord(payload.account);
     return [
-      payload.accountId ?? account?.id ?? asRecord(event.aggregate)?.id,
+      nonEmptyString(payload.accountId) ||
+        nonEmptyString(account?.id) ||
+        nonEmptyString(asRecord(event.aggregate)?.id),
       'ACCOUNT_SECURITY_EVENT',
     ];
   }
-  return [null, null];
+  return [undefined, null];
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function isUuid(value: unknown): value is string {
