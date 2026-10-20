@@ -22,7 +22,6 @@ export interface ProgrammeRecord {
 
 export interface ProgrammeState {
   events?: Record<string, unknown>[];
-  data?: Record<string, unknown>;
 }
 
 @Injectable()
@@ -37,7 +36,7 @@ export class ProgrammeStateRepository {
       const result = await client.query<{ state: ProgrammeState }>(
         "SELECT state FROM public.service_state WHERE service = 'programmes'",
       );
-      return result.rows[0]?.state ?? { events: [], data: {} };
+      return result.rows[0]?.state ?? { events: [] };
     } finally {
       client.release();
     }
@@ -65,7 +64,7 @@ export class ProgrammeStateRepository {
           return previous.rows[0].response;
         }
       }
-      const initialState = { events: [], data: {} };
+      const initialState = { events: [] };
       await client.query(
         `INSERT INTO public.service_state (service, state)
          VALUES ('programmes', $1::jsonb)

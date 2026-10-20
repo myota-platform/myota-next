@@ -84,6 +84,9 @@ policy drafts, keeping publication of a rules or awards draft atomic with the
 Programme snapshot update. `core/008` backfills Programme records into a Core
 table, removes the duplicate `items` map from the Programme snapshot, and keeps
 record mutations and entity-type assignments in the same Core transaction.
+`core/009` moves the shared entity-type catalogue into its own Core table and
+removes the last Programme domain data bucket from the JSONB snapshot. Catalogue
+updates and assigned Programme record changes commit in the same transaction.
 
 `geo/002` adds attempt-scoped import feature staging so workers can process
 large inputs without retaining all prepared candidates and validation errors

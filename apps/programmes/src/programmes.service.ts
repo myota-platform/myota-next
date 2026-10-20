@@ -14,6 +14,7 @@ import type {
   ProgrammeState,
 } from './programme-state.repository.js';
 import { ProgrammeRepository } from './programme.repository.js';
+import { ProgrammeEntityTypeRepository } from './programme-entity-type.repository.js';
 import type {
   CreateProgrammeDto,
   EntityTypeDto,
@@ -25,6 +26,7 @@ export class ProgrammesService {
   constructor(
     private readonly state: ProgrammeStateRepository,
     private readonly programmes: ProgrammeRepository,
+    private readonly entityTypes: ProgrammeEntityTypeRepository,
   ) {}
 
   async list(query: { page?: string; pageSize?: string }) {
@@ -80,16 +82,15 @@ export class ProgrammesService {
       if (await this.programmes.getInTransaction(client, slug)) {
         throw new BadRequestException('programme slug already exists');
       }
-      state.data ??= {};
-      const catalog = backfillEntityTypeCatalog(
-        state,
-        await this.programmes.listAll(client),
-      );
+      const catalog = await this.entityTypes.listAll(client);
       const normalizedTypes = body.entityTypes.map((entityType) =>
         normalizeEntityType(entityType),
       );
       for (const entityType of normalizedTypes) {
-        catalog[entityType.code] ??= entityType;
+        if (!catalog[entityType.code]) {
+          catalog[entityType.code] = entityType;
+          await this.entityTypes.save(client, entityType);
+        }
       }
       const entityTypeCodes = [
         ...new Set(normalizedTypes.map((item) => item.code)),
@@ -145,16 +146,16 @@ export class ProgrammesService {
       if (body.theme !== undefined) programme.theme = body.theme;
       if (body.oidc !== undefined) programme.oidc = body.oidc;
       if (body.entityTypes !== undefined) {
-        const catalog = backfillEntityTypeCatalog(
-          state,
-          await this.programmes.listAll(client),
-        );
+        const catalog = await this.entityTypes.listAll(client);
         const codes: string[] = [];
         for (const item of body.entityTypes) {
           const code =
             typeof item.code === 'string' ? item.code.trim().toUpperCase() : '';
           const normalized = normalizeEntityType(item, catalog[code]);
-          catalog[code] ??= normalized;
+          if (!catalog[code]) {
+            catalog[code] = normalized;
+            await this.entityTypes.save(client, normalized);
+          }
           codes.push(code);
         }
         programme.entityTypeCodes = [...new Set(codes)];
@@ -184,9 +185,8 @@ export class ProgrammesService {
 
   async listEntityTypeCatalog(authorization?: string) {
     this.authorizeAdmin(authorization);
-    const state = await this.state.load();
     const programmes = await this.programmes.all();
-    const catalog = backfillEntityTypeCatalog(state, programmes);
+    const catalog = await this.entityTypes.all();
     return {
       items: this.catalogWithAssignments(catalog, programmes),
     };
@@ -197,10 +197,8 @@ export class ProgrammesService {
     slug: string,
   ) {
     this.authorizeAdmin(authorization, slug);
-    const state = await this.state.load();
     const programme = await this.programmes.get(slug);
     if (!programme) throw new NotFoundException('programme not found');
-    backfillEntityTypeCatalog(state, [programme]);
     return { programmeSlug: slug, items: programme.entityTypes ?? [] };
   }
 
@@ -212,11 +210,12 @@ export class ProgrammesService {
     this.authorizeAdmin(authorization);
     return this.state.mutate(idempotencyKey, async (client, state) => {
       const programmes = await this.programmes.listAll(client);
-      const catalog = backfillEntityTypeCatalog(state, programmes);
+      const catalog = await this.entityTypes.listAll(client);
       const code = body.code.trim().toUpperCase();
       const previous = catalog[code];
       const entityType = normalizeEntityType(body, previous);
       catalog[code] = entityType;
+      await this.entityTypes.save(client, entityType);
       for (const programme of this.refreshAssignedEntityTypes(
         programmes,
         catalog,
@@ -251,11 +250,12 @@ export class ProgrammesService {
       const programmes = await this.programmes.listAll(client);
       const programme = programmes.find((item) => item.slug === slug);
       if (!programme) throw new NotFoundException('programme not found');
-      const catalog = backfillEntityTypeCatalog(state, programmes);
+      const catalog = await this.entityTypes.listAll(client);
       const code = body.code.trim().toUpperCase();
       const previous = catalog[code];
       const entityType = normalizeEntityType(body, previous);
       catalog[code] = entityType;
+      await this.entityTypes.save(client, entityType);
       for (const assigned of this.refreshAssignedEntityTypes(
         programmes,
         catalog,
@@ -301,10 +301,7 @@ export class ProgrammesService {
     return this.state.mutate(idempotencyKey, async (client, state) => {
       const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');
-      const catalog = backfillEntityTypeCatalog(
-        state,
-        await this.programmes.listAll(client),
-      );
+      const catalog = await this.entityTypes.listAll(client);
       if (!catalog[code])
         throw new BadRequestException('unknown entity category');
       await this.applyAssignment(client, state, programme, code, catalog, true);
@@ -327,10 +324,7 @@ export class ProgrammesService {
     return this.state.mutate(idempotencyKey, async (client, state) => {
       const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');
-      const catalog = backfillEntityTypeCatalog(
-        state,
-        await this.programmes.listAll(client),
-      );
+      const catalog = await this.entityTypes.listAll(client);
       await this.applyAssignment(
         client,
         state,
@@ -422,61 +416,6 @@ export class ProgrammesService {
     }
     throw new ForbiddenException('programme administration scope is required');
   }
-}
-
-function entityCatalog(
-  state: ProgrammeState,
-): Record<string, Record<string, unknown>> {
-  state.data ??= {};
-  const existing = state.data.entityTypeCatalog;
-  if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
-    return existing as Record<string, Record<string, unknown>>;
-  }
-  const catalog: Record<string, Record<string, unknown>> = {};
-  state.data.entityTypeCatalog = catalog;
-  return catalog;
-}
-
-function backfillEntityTypeCatalog(
-  state: ProgrammeState,
-  programmes: ProgrammeRecord[],
-): Record<string, Record<string, unknown>> {
-  const catalog = entityCatalog(state);
-  for (const programme of programmes) {
-    const legacyTypes = Array.isArray(programme.entityTypes)
-      ? programme.entityTypes
-      : [];
-    for (const value of legacyTypes) {
-      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
-      const item = value as Record<string, unknown>;
-      const code =
-        typeof item.code === 'string' ? item.code.trim().toUpperCase() : '';
-      if (!code) continue;
-      if (!catalog[code]) catalog[code] = { ...item, code };
-      if (!Array.isArray(catalog[code].geometryTypes)) {
-        const geometry =
-          typeof catalog[code].geometry === 'string'
-            ? catalog[code].geometry
-            : 'MULTIPOLYGON';
-        catalog[code].geometryTypes = [geometry];
-      }
-    }
-    const codes =
-      programme.entityTypeCodes ??
-      legacyTypes.flatMap((value) => {
-        if (!value || typeof value !== 'object' || Array.isArray(value))
-          return [];
-        const code = (value as Record<string, unknown>).code;
-        return typeof code === 'string' && code.trim()
-          ? [code.trim().toUpperCase()]
-          : [];
-      });
-    programme.entityTypeCodes = [...new Set(codes)];
-    programme.entityTypes = programme.entityTypeCodes.flatMap((code) =>
-      catalog[code] ? [catalog[code]] : [],
-    );
-  }
-  return catalog;
 }
 
 const GEOMETRY_TYPES = new Set([

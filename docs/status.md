@@ -25,6 +25,9 @@
   `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` to report telemetry; without them,
   the SDK emits no telemetry. `MYOTA_BUILD_VERSION` or `GIT_SHA` labels the
   deployed version when provided.
+- Programme records, content, policy drafts, and entity-type catalogue now use
+  Core relational tables. The Programme snapshot retains only event history;
+  runtime adoption of the new migrations remains a separate deployment gate.
 - A create-only JetStream provisioner consumes the event registry, requires
   explicit apply opt-in and measured finite stream limits, creates missing
   streams/durables, and rejects configuration drift. See
