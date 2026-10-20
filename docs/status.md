@@ -100,8 +100,9 @@
   and Unicode decimal digits. The Gateway also forwards User-Agent so Identity session
   metadata matches direct request context. Unicode 15.0 case-fold mappings in
   Core now provide indexed email identity keys for login, recovery, account creation, and email updates;
-  migration rejects case-fold-equivalent duplicate addresses before building
-  the unique index. The Gateway overwrites and signs the client socket address;
+  email normalization uses Python's Unicode whitespace stripping rules before
+  case folding. Migration rejects case-fold-equivalent duplicate addresses
+  before building the unique index. The Gateway overwrites and signs the client socket address;
   Identity verifies it before using it for login rate limits and security-event
   audit metadata.
   Identity startup also creates the configured bootstrap

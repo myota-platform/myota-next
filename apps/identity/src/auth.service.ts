@@ -18,6 +18,7 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import { DEFAULT_ROLE_SCOPES } from './role-catalog.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
@@ -149,7 +150,9 @@ export class IdentityAuthService {
     let failure: Error | undefined;
     try {
       await client.query('BEGIN');
-      const normalizedEmail = unicodeCaseFold(input.email.trim());
+      const normalizedEmail = unicodeCaseFold(
+        trimPythonWhitespace(input.email),
+      );
       const accountResult = await client.query<AccountRow>(
         `SELECT a.id, a.display_name, a.email::text AS email, a.updated_at,
                 a.participation_type, a.status, c.password_hash,
@@ -315,7 +318,7 @@ export class IdentityAuthService {
   }
 
   async requestRecovery(email: string): Promise<Record<string, unknown>> {
-    const normalizedEmail = unicodeCaseFold(email.trim());
+    const normalizedEmail = unicodeCaseFold(trimPythonWhitespace(email));
     const client = await this.connect();
     try {
       await client.query('BEGIN');

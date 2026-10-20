@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { writeOutboxEvent, writeSecurityEvent } from '@app/platform/outbox.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import { hashPassword } from './auth.service.js';
 
@@ -29,7 +30,7 @@ export class IdentityBootstrapService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     const email = unicodeCaseFold(
-      process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL?.trim() ?? '',
+      trimPythonWhitespace(process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL ?? ''),
     );
     const password = process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD ?? '';
     if (!email || !password) return;

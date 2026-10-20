@@ -11,6 +11,7 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import type { IdentityAuthService } from './auth.service.js';
 import type { ServiceTokenRequestDto } from './auth.dto.js';
 
@@ -131,7 +132,7 @@ export class IdentityCredentialService {
         [accountId],
       );
       const email = result.rows[0]?.email;
-      if (!email?.trim()) {
+      if (!email || !trimPythonWhitespace(email)) {
         throw new NotFoundException('recipient is unavailable');
       }
       return { deliverableAddress: email };

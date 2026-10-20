@@ -11,6 +11,7 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { writeOutboxEvent, writeSecurityEvent } from '@app/platform/outbox.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import {
   IdentityAuthService,
@@ -82,7 +83,7 @@ export class IdentityAccountService {
         'passwords cannot be set during account creation; use the invitation setup flow',
       );
     }
-    const normalizedEmail = unicodeCaseFold(body.email.trim());
+    const normalizedEmail = unicodeCaseFold(trimPythonWhitespace(body.email));
     if (!normalizedEmail.includes('@')) {
       throw new BadRequestException('email must be a valid address');
     }
@@ -838,7 +839,9 @@ export class IdentityAccountService {
       let emailKey: string | null = null;
       if ('email' in body) {
         email = body.email || null;
-        emailKey = email?.trim() ? unicodeCaseFold(email.trim()) : null;
+        const normalizedEmail =
+          typeof email === 'string' ? trimPythonWhitespace(email) : '';
+        emailKey = normalizedEmail ? unicodeCaseFold(normalizedEmail) : null;
         if (emailKey) {
           const duplicate = await client.query(
             `SELECT 1 FROM public.account
