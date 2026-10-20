@@ -96,9 +96,10 @@ compatibility coverage before they count as parity complete.
 Profile-image uploads accept JPEG, PNG, or WebP up to 5 MiB, reject animation
 and dimensions above 4096 pixels, honor EXIF orientation, center-crop to 512 by
 512, remove source metadata, and try WebP qualities 85, 75, 65, and 55 under a
-256 KiB output cap in both the Pillow and Sharp paths. Sharp ignores embedded
-ICC profiles during normalization to match Pillow's direct channel conversion.
-Byte-level rendition equivalence across resizing and WebP encoding still needs
+256 KiB output cap in both the Pillow and Sharp paths. Both paths use centered
+Lanczos-3 resizing; Sharp selects the kernel explicitly and ignores embedded
+ICC profiles to match Pillow's direct channel conversion. Byte-level rendition
+equivalence across crop rounding, alpha handling, and WebP encoding still needs
 representative fixtures. Profile-image and account update timestamps are
 assigned independently, matching the reference's two clock reads.
 The current-account and login/refresh account projections include account

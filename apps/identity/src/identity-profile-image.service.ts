@@ -318,6 +318,7 @@ export class IdentityProfileImageService {
           .rotate()
           .resize(OUTPUT_DIMENSION, OUTPUT_DIMENSION, {
             fit: 'cover',
+            kernel: sharp.kernel.lanczos3,
             position: 'centre',
           })
           .webp({ quality, effort: 4 })
