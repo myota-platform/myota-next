@@ -215,7 +215,9 @@
   members and 1 GiB expanded. Matching .shp, .shx, and .dbf sidecars are
   required; DBF text uses PyShp's UTF-8 default and `.cpg` files are ignored,
   matching the reference loader.
-  Pasted-import creation also decodes bounded KML and GPX to GeoJSON. OSM PBF
+  Pasted-import creation also decodes bounded KML and GPX to GeoJSON, applying
+  the 250,000 coordinate ceiling per emitted geometry or GPX track segment.
+  OSM PBF
   uploads now decode in the Geodata worker with osmium-tool. The converter
   preserves OSM tags and stable type/id source references, filters the current
   hiking-path and protected-area tag catalogue, and assembles closed-way and

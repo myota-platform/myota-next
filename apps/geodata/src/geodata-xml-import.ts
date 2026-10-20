@@ -41,7 +41,6 @@ export function parseXmlImport(
   let gpxPoint:
     { coordinates: number[]; properties: Record<string, unknown> } | undefined;
   let trackPoints: number[][] | undefined;
-  let coordinatesSeen = 0;
 
   const fail = (message: string) => {
     failure ??= new Error(message);
@@ -66,9 +65,6 @@ export function parseXmlImport(
       fail('XML import contains an invalid coordinate');
       return undefined;
     }
-    coordinatesSeen++;
-    if (coordinatesSeen > maximumCoordinates)
-      fail('XML import exceeds the 250000 coordinate limit');
     return [longitude, latitude];
   };
 
@@ -115,9 +111,8 @@ export function parseXmlImport(
         fail('GPX track point has invalid longitude or latitude');
       else {
         trackPoints.push([longitude, latitude]);
-        coordinatesSeen++;
-        if (coordinatesSeen > maximumCoordinates)
-          fail('XML import exceeds the 250000 coordinate limit');
+        if (trackPoints.length > maximumCoordinates)
+          fail('XML import exceeds the 250000 coordinate limit per feature');
       }
     }
     if (
@@ -175,6 +170,11 @@ export function parseXmlImport(
         geometry ??= points.length
           ? { type: 'LineString', coordinates: points }
           : undefined;
+        if (
+          geometry &&
+          countCoordinatePairs(geometry.coordinates) > maximumCoordinates
+        )
+          fail('XML import exceeds the 250000 coordinate limit per feature');
         if (geometry)
           addFeature({
             type: 'Feature',
@@ -224,4 +224,20 @@ export function parseXmlImport(
   if (!features.length)
     throw new BadRequestException(`${format} contains no supported features`);
   return features;
+}
+
+function countCoordinatePairs(value: unknown): number {
+  if (!Array.isArray(value)) return 0;
+  if (
+    value.length >= 2 &&
+    typeof value[0] === 'number' &&
+    typeof value[1] === 'number'
+  )
+    return 1;
+  let count = 0;
+  for (const item of value) {
+    count += countCoordinatePairs(item);
+    if (count > maximumCoordinates) return count;
+  }
+  return count;
 }
