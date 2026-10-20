@@ -55,7 +55,11 @@ export class GeodataImportMutationRepository {
         }
       }
       const selected = await client.query(
-        'SELECT * FROM conflation_candidate WHERE id=$1 FOR UPDATE',
+        `SELECT c.*,l.programme_slug,
+           to_char(c.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_iso
+         FROM conflation_candidate c
+         JOIN geodata_entity l ON l.id=c.left_entity_id
+         WHERE c.id=$1 FOR UPDATE OF c`,
         [candidateId],
       );
       const previous = selected.rows[0];
@@ -74,10 +78,11 @@ export class GeodataImportMutationRepository {
         occurredAt,
       };
       history.push(entry);
-      await client.query(
+      const updated = await client.query(
         `UPDATE conflation_candidate SET resolution=$2,survivor_entity_id=$3,
-         resolution_history=$4::jsonb,resolved_by=$5,resolved_at=now()
-         WHERE id=$1`,
+         resolution_history=$4::jsonb,resolved_by=$5,resolved_at=now(),updated_at=now()
+         WHERE id=$1
+         RETURNING to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at_iso`,
         [
           candidateId,
           decision,
@@ -90,19 +95,21 @@ export class GeodataImportMutationRepository {
       );
       const item = {
         id: responseId,
+        programmeSlug: previous.programme_slug,
         leftEntityId: String(previous.left_entity_id),
         rightEntityId: String(previous.right_entity_id),
         score: Number(previous.similarity),
         signals: previous.reason,
         resolution: decision,
         resolutionHistory: history,
+        createdAt: previous.created_at_iso,
+        updatedAt: updated.rows[0]?.updated_at_iso,
         survivorEntityId:
           typeof body.survivorEntityId === 'string'
             ? body.survivorEntityId
             : null,
         reviewerId,
         resolvedAt: occurredAt,
-        updatedAt: occurredAt,
       };
       await client.query(
         `INSERT INTO outbox_event

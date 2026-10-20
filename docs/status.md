@@ -375,10 +375,11 @@
   requests at the candidate staging checkpoint and clear temporary source data.
   A worker restart recovers runs left in the CANCELLING state.
   Persisted conflation candidates can be paged by resolution and resolved with
-  reviewer history, idempotency, and a transactional outbox fact. Their IDs are
-  the first 32 hexadecimal characters of SHA-256 over the sorted entity pair,
-  matching the reference. Decision values retain the reference's case-sensitive
-  enum validation, and review notes are stored without truncation. The Admin
+  reviewer history, idempotency, and a transactional outbox fact. Candidate
+  IDs use the first 32 hexadecimal characters of SHA-256 over the sorted entity
+  pair; list and resolution records retain the programme and creation/update
+  timestamps from the reference. Decision values retain case-sensitive enum
+  validation, and review notes are stored without truncation. The Admin
   includes a role-gated conflation workspace for filtering candidates, inspecting
   match signals and prior decisions, and recording resolutions. Entity import
   promotion now searches overlapping PostGIS bounding boxes, computes the

@@ -173,8 +173,11 @@ export class GeodataRepository {
         `SELECT jsonb_build_object(
           'id',replace(c.id::text,'-',''),'leftEntityId',c.left_entity_id::text,
           'rightEntityId',c.right_entity_id::text,'score',c.similarity,
+          'programmeSlug',c.programme_slug,
           'signals',c.reason,'resolution',c.resolution,
           'resolutionHistory',c.resolution_history,
+          'createdAt',to_char(c.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+          'updatedAt',to_char(c.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
           'survivorEntityId',c.survivor_entity_id::text,
           'reviewerId',c.resolved_by::text,'resolvedAt',c.resolved_at,
           'leftEntity',jsonb_build_object('id',l.id::text,'name',l.name,

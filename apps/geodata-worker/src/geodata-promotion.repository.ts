@@ -357,7 +357,8 @@ export class GeodataPromotionRepository {
     entityId: string,
   ) {
     const matches = await client.query(
-      `SELECT candidate.id::text AS candidate_id,candidate.name AS candidate_name,
+      `SELECT candidate.id::text AS candidate_id,candidate.programme_slug,
+         candidate.name AS candidate_name,
          candidate.public_properties->>'sourceRef' AS candidate_source_ref,
          candidate.jurisdiction AS candidate_jurisdiction,
          ST_XMin(Box3D(candidate.geom)) AS candidate_min_x,
@@ -415,14 +416,16 @@ export class GeodataPromotionRepository {
         .slice(0, 32);
       await client.query(
         `INSERT INTO conflation_candidate
-          (id,left_entity_id,right_entity_id,similarity,reason,resolution,resolution_history)
-         VALUES ($1,$2,$3,$4,$5::jsonb,'OPEN','[]'::jsonb)`,
+          (id,left_entity_id,right_entity_id,similarity,reason,resolution,resolution_history,
+           programme_slug,created_at,updated_at)
+         VALUES ($1,$2,$3,$4,$5::jsonb,'OPEN','[]'::jsonb,$6,now(),now())`,
         [
           conflationId,
           leftId,
           rightId,
           score.score,
           JSON.stringify(score.signals),
+          row.programme_slug ?? null,
         ],
       );
     }
