@@ -232,7 +232,8 @@
   retaining every feature summary in the worker heap.
   Direct JSON imports and durable source-object references honor the configured
   body and upload limits. The direct JSON import path still materializes the
-  normalized collection; multipart GeoJSON remains the streaming path. Shapefile
+  normalized collection; multipart GeoJSON FeatureCollections and top-level
+  feature arrays stream one feature at a time. Shapefile
   source bytes and decoded
   records now stream via bounded temporary files, matching the reference's 1
   GiB expanded-size default and reproject coordinates using `.prj` metadata.

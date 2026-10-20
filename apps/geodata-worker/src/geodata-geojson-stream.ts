@@ -7,6 +7,10 @@ const MAX_FEATURE_VERTICES = 250_000;
 const MAX_NESTING_DEPTH = 128;
 const PARSER_CHUNK_BYTES = 64 * 1024;
 const MAX_ROOT_KEY_BYTES = 1024;
+// @streamparser/json exports these enum values as a const enum, unavailable
+// under this project's isolated module compilation.
+const TOKEN_PARSER_OBJECT_MODE = 0;
+const TOKEN_PARSER_ARRAY_MODE = 1;
 
 type ContainerFrame = {
   kind: 'object' | 'array';
@@ -18,9 +22,8 @@ type ContainerFrame = {
 };
 
 /**
- * Stream a GeoJSON FeatureCollection from its object-store body. Only the
- * current feature is assembled by the JSON parser; completed features are
- * yielded to the worker before more source bytes are consumed.
+ * Stream GeoJSON features from a FeatureCollection or top-level feature array.
+ * Only the current feature is assembled by the parser before it is yielded.
  */
 export async function* streamGeoJsonFeatures(
   source: AsyncIterable<Uint8Array>,
@@ -28,11 +31,6 @@ export async function* streamGeoJsonFeatures(
   featureLimit: number,
   heartbeat: () => Promise<void>,
 ): AsyncGenerator<unknown> {
-  const parser = new JSONParser({
-    paths: ['$.features.*'],
-    keepStack: false,
-    stringBufferSize: 64 * 1024,
-  });
   const guard = new GeoJsonResourceGuard();
   const pending: unknown[] = [];
   let featureCount = 0;
@@ -44,20 +42,12 @@ export async function* streamGeoJsonFeatures(
     MAX_SOURCE_BYTES,
   );
 
-  parser.onValue = ({ value }) => {
-    featureCount += 1;
-    if (featureCount > featureLimit)
-      throw new Error(
-        `geodata import contains more than ${featureLimit} features`,
-      );
-    if (countFeatureVertices(value) > MAX_FEATURE_VERTICES)
-      throw new Error(
-        `a source geometry exceeds the configured vertex limit (${MAX_FEATURE_VERTICES})`,
-      );
-    pending.push(value);
-  };
-
-  for await (const incoming of source) {
+  const iterator = source[Symbol.asyncIterator]();
+  let parser: JSONParser | undefined;
+  while (true) {
+    const next = await iterator.next();
+    if (next.done) break;
+    const incoming = next.value;
     const chunk = Buffer.isBuffer(incoming) ? incoming : Buffer.from(incoming);
     sourceBytes += chunk.length;
     if (sourceBytes > sourceLimit)
@@ -66,7 +56,49 @@ export async function* streamGeoJsonFeatures(
     for (let offset = 0; offset < chunk.length; offset += PARSER_CHUNK_BYTES) {
       const part = chunk.subarray(offset, offset + PARSER_CHUNK_BYTES);
       guard.write(part);
-      parser.write(part);
+      let parserPart = part;
+      if (!parser) {
+        let firstTokenOffset = 0;
+        while (
+          firstTokenOffset < part.length &&
+          isJsonWhitespace(part[firstTokenOffset]!)
+        )
+          firstTokenOffset++;
+        if (firstTokenOffset < part.length) {
+          const rootIsArray = part[firstTokenOffset] === 0x5b;
+          parser = new JSONParser({
+            paths: rootIsArray ? ['$.*'] : ['$.features.*'],
+            keepStack: false,
+            stringBufferSize: 64 * 1024,
+          });
+          parser.onValue = ({ value, stack }) => {
+            const isTopLevelArrayItem =
+              rootIsArray &&
+              stack.length === 1 &&
+              stack[0]?.mode === TOKEN_PARSER_ARRAY_MODE;
+            const isFeatureCollectionItem =
+              !rootIsArray &&
+              stack.length === 2 &&
+              stack[0]?.mode === TOKEN_PARSER_OBJECT_MODE &&
+              stack[1]?.mode === TOKEN_PARSER_ARRAY_MODE &&
+              stack[1]?.key === 'features';
+            if (!isTopLevelArrayItem && !isFeatureCollectionItem) return;
+
+            featureCount += 1;
+            if (featureCount > featureLimit)
+              throw new Error(
+                `geodata import contains more than ${featureLimit} features`,
+              );
+            if (countFeatureVertices(value) > MAX_FEATURE_VERTICES)
+              throw new Error(
+                `a source geometry exceeds the configured vertex limit (${MAX_FEATURE_VERTICES})`,
+              );
+            pending.push(value);
+          };
+          parserPart = part.subarray(firstTokenOffset);
+        }
+      }
+      parser?.write(parserPart);
       while (pending.length) yield pending.shift();
       if (sourceBytes - lastHeartbeatBytes >= 32 * 1024 * 1024) {
         await heartbeat();
@@ -75,7 +107,7 @@ export async function* streamGeoJsonFeatures(
     }
   }
 
-  parser.end();
+  parser?.end();
   while (pending.length) yield pending.shift();
   guard.finish();
   if (!sourceBytes) throw new Error('GeoJSON source object is empty');
@@ -98,6 +130,7 @@ class GeoJsonResourceGuard {
   private activeFeatureStart: number | undefined;
   private rootType: unknown;
   private sawFeaturesArray = false;
+  private sawRootArray = false;
 
   write(chunk: Uint8Array) {
     for (const byte of chunk) {
@@ -165,6 +198,7 @@ class GeoJsonResourceGuard {
       throw new Error(
         'GeoJSON source ended before the FeatureCollection was complete',
       );
+    if (this.sawRootArray) return;
     if (this.rootType !== 'FeatureCollection' || !this.sawFeaturesArray)
       throw new Error('stored GeoJSON source is not a FeatureCollection');
   }
@@ -213,9 +247,11 @@ class GeoJsonResourceGuard {
     if (this.frames.length >= MAX_NESTING_DEPTH)
       throw new Error(`GeoJSON nesting exceeds ${MAX_NESTING_DEPTH} levels`);
     const isRoot = this.frames.length === 0 && kind === 'object';
+    const isRootArray = this.frames.length === 0 && kind === 'array';
     const isFeaturesArray =
       kind === 'array' && parent?.root === true && parent.key === 'features';
     const isFeatureItem = parent?.features === true;
+    if (isRootArray) this.sawRootArray = true;
     if (isFeaturesArray) this.sawFeaturesArray = true;
     if (isFeatureItem) this.activeFeatureStart = position;
     if (parent?.root && parent.key === 'type') this.rootType = null;
@@ -223,7 +259,7 @@ class GeoJsonResourceGuard {
     this.frames.push({
       kind,
       ...(isRoot ? { root: true } : {}),
-      ...(isFeaturesArray ? { features: true } : {}),
+      ...(isFeaturesArray || isRootArray ? { features: true } : {}),
       ...(isFeatureItem ? { featureItem: true } : {}),
       ...(kind === 'object' ? { expectKey: true } : {}),
     });
