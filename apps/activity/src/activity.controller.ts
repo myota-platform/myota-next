@@ -9,6 +9,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { firstQueryValue } from '@app/platform/query.js';
 import { ActivityService } from './activity.service.js';
 
 @Controller('activations')
@@ -37,13 +38,18 @@ export class ActivityController {
     @Headers('authorization') authorization: string | undefined,
     @Query()
     query: {
-      programme?: string;
-      operatorId?: string;
-      page?: string;
-      pageSize?: string;
+      programme?: string | string[];
+      operatorId?: string | string[];
+      page?: string | string[];
+      pageSize?: string | string[];
     },
   ) {
-    return this.activity.list(authorization, query);
+    return this.activity.list(authorization, {
+      programme: firstQueryValue(query.programme),
+      operatorId: firstQueryValue(query.operatorId),
+      page: firstQueryValue(query.page),
+      pageSize: firstQueryValue(query.pageSize),
+    });
   }
 
   @Post()
