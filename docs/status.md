@@ -128,7 +128,7 @@
   and aliases, including `PARKSERVE_US` and `SHP`, and lists Shapefile support
   for manual imports. Pending candidates can be paged, confirmed, or rejected
   through authorized, idempotent review writes. Selected candidates can be
-  queued for CANDIDATE or scope-gated APPROVED promotion; the worker writes
+  queued for CANDIDATE or role-scoped APPROVED promotion; the worker writes
   entities, category and source links, audit/outbox events, and per-candidate
   queue outcomes. Entity lifecycle review and If-Match protected name, website,
   and description edits are transactional and audited. If-Match protected

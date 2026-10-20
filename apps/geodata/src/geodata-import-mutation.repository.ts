@@ -8,6 +8,8 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import type { AccessTokenClaims } from '@app/platform/access-token.js';
+import { assertReviewCoverage } from './geodata-entity-mutation.repository.js';
 
 @Injectable()
 export class GeodataImportMutationRepository {
@@ -433,6 +435,7 @@ export class GeodataImportMutationRepository {
     runId: string,
     key: string | undefined,
     body: Record<string, unknown>,
+    claims: AccessTokenClaims,
   ) {
     const rawIds = body.candidateIds;
     if (
@@ -466,17 +469,10 @@ export class GeodataImportMutationRepository {
           "SELECT pg_advisory_xact_lock(hashtextextended('geodata-import-promotion:' || $1,0))",
           [key],
         );
-        const previous = await client.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-          ['geodata-import-promotion', key],
-        );
-        if (previous.rows[0]) {
-          await client.query('COMMIT');
-          return previous.rows[0].response;
-        }
       }
       const selected = await client.query(
-        `SELECT c.id,c.validation_status,c.processing_queue_id,
+        `SELECT c.id,c.programme_slug,c.entity_type_codes,c.entity_payload,
+          c.validation_status,c.processing_queue_id,
           previous_queue.status AS previous_queue_status,
           EXISTS (
             SELECT 1 FROM jsonb_array_elements(
@@ -496,6 +492,28 @@ export class GeodataImportMutationRepository {
         throw new BadRequestException(
           'one or more candidates do not belong to this import run',
         );
+      if (targetStatus === 'APPROVED')
+        for (const row of selected.rows) {
+          const properties = isRecord(row.entity_payload)
+            ? row.entity_payload
+            : {};
+          assertReviewCoverage(claims, {
+            programme_slug: row.programme_slug,
+            jurisdiction: properties.jurisdiction,
+            entity_type_codes: row.entity_type_codes,
+            public_properties: properties,
+          });
+        }
+      if (key) {
+        const previous = await client.query(
+          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          ['geodata-import-promotion', key],
+        );
+        if (previous.rows[0]) {
+          await client.query('COMMIT');
+          return previous.rows[0].response;
+        }
+      }
       if (
         selected.rows.some(
           (row) =>

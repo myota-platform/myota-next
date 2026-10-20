@@ -216,16 +216,7 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
   ) {
     const claims = authorizeImport(authorization);
-    if (
-      (typeof body.targetStatus === 'string'
-        ? body.targetStatus.toUpperCase()
-        : '') === 'APPROVED' &&
-      !claims.scp.some((scope) => scope === '*' || scope === 'geodata.review')
-    )
-      throw new ForbiddenException(
-        'geodata.review scope is required to approve imported entities',
-      );
-    return this.importMutations.queueImportProcessing(runId, key, body);
+    return this.importMutations.queueImportProcessing(runId, key, body, claims);
   }
 
   @Post('imports/:runId/processed')

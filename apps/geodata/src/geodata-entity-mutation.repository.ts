@@ -1112,7 +1112,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function assertReviewCoverage(
+export function assertReviewCoverage(
   claims: AccessTokenClaims,
   entity: Record<string, unknown>,
 ) {
@@ -1126,6 +1126,7 @@ function assertReviewCoverage(
     properties.entityTypes,
     properties.entityTypeCodes,
     properties.entityType,
+    entity.entity_type_codes,
     entity.entity_type_code,
   ]);
   const categories = normalizeEntityTypeCodes(rawCategories);
