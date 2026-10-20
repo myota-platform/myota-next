@@ -397,7 +397,9 @@ map renders point, line, polygon, and multipart entity geometries.
   Operational recovery evidence is not complete yet.
 - Runtime: preserve migrations, health/readiness, metrics, logs, traces,
   backups, restore paths, NATS topology, object storage buckets, and separate
-  service/worker deployment units.
+  service/worker deployment units. Activity database pools honor the
+  `MYOTA_ACTIVITY_DB_POOL_MAX` override before `MYOTA_DB_POOL_MAX`, defaulting
+  to 12 connections; Core and Geodata use the shared override and default to 10.
 
 ## Compatibility and completion evidence
 

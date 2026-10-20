@@ -6,6 +6,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { Pool, types as pgTypes } from 'pg';
+import { integerSetting } from './integer-setting.js';
 
 export const DATABASE_HEALTH_POOL = Symbol('DATABASE_HEALTH_POOL');
 
@@ -46,7 +47,7 @@ export class DatabaseHealthModule {
             return connectionString
               ? new Pool({
                   connectionString,
-                  max: Number(process.env.MYOTA_DB_POOL_MAX ?? 10),
+                  max: poolMaximum(environmentVariable),
                   connectionTimeoutMillis: 2_000,
                   idleTimeoutMillis: 30_000,
                   ...(parseJson
@@ -71,4 +72,15 @@ export class DatabaseHealthModule {
       exports: [DatabaseHealthService, DATABASE_HEALTH_POOL],
     };
   }
+}
+
+function poolMaximum(environmentVariable: string): number {
+  const activityDatabase = environmentVariable === 'ACTIVITY_DATABASE_URL';
+  const configuredMaximum = activityDatabase
+    ? (process.env.MYOTA_ACTIVITY_DB_POOL_MAX ?? process.env.MYOTA_DB_POOL_MAX)
+    : process.env.MYOTA_DB_POOL_MAX;
+  return Math.max(
+    1,
+    integerSetting(configuredMaximum, activityDatabase ? 12 : 10),
+  );
 }

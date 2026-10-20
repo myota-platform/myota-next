@@ -59,6 +59,10 @@
   with local JetStream, object storage, SMTP capture, and one-shot migration
   and topology setup. This is a development stack; production release and
   rollout qualification remain open.
+- Activity PostgreSQL pools honor `MYOTA_ACTIVITY_DB_POOL_MAX` before the shared
+  `MYOTA_DB_POOL_MAX`, with a default maximum of 12 connections. Core and
+  Geodata pools use the shared setting and default to 10; every pool keeps a
+  minimum size of one.
 - Three-owner database backup and restore commands write custom-format dumps
   with a SHA-256 manifest, require distinct PostgreSQL targets for Core,
   Activity, and Geodata, and verify all files before restore. Cross-version
