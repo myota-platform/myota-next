@@ -206,11 +206,12 @@
   worker inserts. Activation `allowedBands` and `allowedModes` default only
   when omitted and preserve Python iterable behavior and null/boolean string
   conversion.
-  QSO callsigns collapse
-  Python's Unicode whitespace set before validation, and worked locator keys
-  use Python's truthiness and Unicode whitespace stripping rules. QSO
-  timestamps use Python truthiness when falling back from `timestamp` to
-  `timeOn`. Activation close defaults `endedAt` to now only when omitted;
+  QSO callsigns collapse Python's Unicode whitespace set before validation.
+  Worked locator keys use Python's truthiness and Unicode whitespace stripping
+  rules; QSO deduplication keys use Python truthiness and scalar conversion for
+  optional hunter and entity IDs. QSO timestamps use Python truthiness when
+  falling back from `timestamp` to `timeOn`. Activation close defaults
+  `endedAt` to now only when omitted;
   supplied values are validated as timestamps. Default
   rule-evaluation times use the same
   six-digit UTC timestamp form as the reference. Minimum QSO

@@ -430,8 +430,10 @@ export function normalizeQso(
     timestamp.replace(/Z$/, '+00:00'),
     band ?? '',
     mode ?? '',
-    data.hunterId ?? '',
-    data.workedEntityId ?? '',
+    pythonTruthy(data.hunterId) ? pythonScalarString(data.hunterId) : '',
+    pythonTruthy(data.workedEntityId)
+      ? pythonScalarString(data.workedEntityId)
+      : '',
   ].join('|');
   const deduplicationKey = createHash('sha256').update(canonical).digest('hex');
   return {
