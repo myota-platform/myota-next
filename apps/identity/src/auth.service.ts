@@ -844,7 +844,10 @@ export class IdentityAuthService {
     for (const row of result.rows) {
       resultMap.get(row.accountId)?.push({
         ...row,
-        scopes: DEFAULT_ROLE_SCOPES[row.role] ?? row.scopes,
+        scopes:
+          row.role === 'GLOBAL_OPERATOR' && row.scopes.length > 1
+            ? row.scopes
+            : (DEFAULT_ROLE_SCOPES[row.role] ?? row.scopes),
       });
     }
     return resultMap;

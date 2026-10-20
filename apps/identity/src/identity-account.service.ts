@@ -1236,7 +1236,10 @@ export class IdentityAccountService {
     );
     return result.rows.map((role) => ({
       ...role,
-      scopes: DEFAULT_ROLE_SCOPES[role.role] ?? role.scopes,
+      scopes:
+        role.role === 'GLOBAL_OPERATOR' && role.scopes.length > 1
+          ? role.scopes
+          : (DEFAULT_ROLE_SCOPES[role.role] ?? role.scopes),
     }));
   }
 

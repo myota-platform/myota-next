@@ -13,6 +13,10 @@ cp deploy/.env.example deploy/.env
 docker compose --env-file deploy/.env -f deploy/compose.yaml up --build
 ```
 
+Set `MYOTA_BOOTSTRAP_ADMIN_EMAIL` and `MYOTA_BOOTSTRAP_ADMIN_PASSWORD` in
+`deploy/.env` before startup. Identity creates that administrator on first
+startup and does not replace a password once one exists.
+
 The stack applies the checked-in database migrations and provisions finite,
 development-sized JetStream limits from `deploy/.env`. Those settings are
 local examples, not production capacity recommendations. The provisioner

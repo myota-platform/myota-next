@@ -27,6 +27,9 @@ creation, evidence, verification, primary selection, and retirement also write
 to the relational Core model and outbox.
 These are the first implemented slices; they still need automated
 compatibility coverage before they count as parity complete.
+Identity startup now idempotently provisions the configured bootstrap account,
+sets its password only when no credential exists, ensures its global operator
+role, and writes the corresponding Core outbox and security events.
 Administrator account search now uses full default Unicode 15.0 case folding,
 matching the Python 3.12 reference. It scans only IDs, names, email addresses,
 and status for eligible accounts, folds names and email addresses before
