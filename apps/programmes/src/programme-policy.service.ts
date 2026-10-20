@@ -92,14 +92,14 @@ export class ProgrammePolicyService {
           'only draft policy versions can be edited',
         );
       }
-      const now = new Date().toISOString();
+      const createdAt = previous?.createdAt ?? new Date().toISOString();
       const draft: ProgrammePolicyDraft = {
         ...(previous ?? {
           id: draftId,
           programmeSlug: slug,
           status: 'DRAFT',
           reviewHistory: [],
-          createdAt: now,
+          createdAt,
         }),
         type: body.type,
         name: body.name,
@@ -107,7 +107,7 @@ export class ProgrammePolicyService {
         effectiveFrom: body.effectiveFrom
           ? normalizeUtcTimestamp(body.effectiveFrom)
           : null,
-        updatedAt: now,
+        updatedAt: new Date().toISOString(),
       };
       await this.policies.save(client, draft);
       await this.policies.recordEvent(
@@ -136,11 +136,13 @@ export class ProgrammePolicyService {
       ) {
         throw new BadRequestException('only draft policies can be submitted');
       }
-      const now = new Date().toISOString();
       draft.status = 'UNDER_REVIEW';
-      draft.submittedAt = now;
-      draft.updatedAt = now;
-      draft.reviewHistory.push({ action: 'SUBMITTED', occurredAt: now });
+      draft.submittedAt = new Date().toISOString();
+      draft.updatedAt = new Date().toISOString();
+      draft.reviewHistory.push({
+        action: 'SUBMITTED',
+        occurredAt: draft.submittedAt,
+      });
       await this.policies.save(client, draft);
       return draft;
     });
@@ -162,15 +164,14 @@ export class ProgrammePolicyService {
           'only policies under review can be decided',
         );
       }
-      const now = new Date().toISOString();
       draft.status = body.decision;
-      draft.reviewedAt = now;
-      draft.updatedAt = now;
+      draft.reviewedAt = new Date().toISOString();
+      draft.updatedAt = new Date().toISOString();
       draft.reviewHistory.push({
         action: body.decision,
         reviewerId: body.reviewerId,
         note: body.note ?? null,
-        occurredAt: now,
+        occurredAt: draft.reviewedAt,
       });
       await this.policies.save(client, draft);
       return draft;
@@ -196,17 +197,16 @@ export class ProgrammePolicyService {
       }
       const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');
-      const now = new Date().toISOString();
       draft.status = 'PUBLISHED';
       draft.effectiveFrom = effectiveFrom;
-      draft.publishedAt = now;
+      draft.publishedAt = new Date().toISOString();
       draft.publisherId = body.publisherId;
-      draft.updatedAt = now;
+      draft.updatedAt = new Date().toISOString();
       draft.reviewHistory.push({
         action: 'PUBLISHED',
         publisherId: body.publisherId,
         effectiveFrom,
-        occurredAt: now,
+        occurredAt: draft.publishedAt,
       });
       if (draft.type === 'RULES') {
         programme.rules = Object.hasOwn(draft.schema, 'rules')
@@ -224,7 +224,7 @@ export class ProgrammePolicyService {
         });
         programme.awards = awards;
       }
-      programme.updatedAt = now;
+      programme.updatedAt = new Date().toISOString();
       await this.programmes.save(client, programme);
       await this.policies.save(client, draft);
       await this.mutations.recordEvent(
