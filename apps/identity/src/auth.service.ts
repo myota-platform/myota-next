@@ -295,7 +295,7 @@ export class IdentityAuthService {
                 p.profile_image_media_type, p.profile_image_updated_at
            FROM public.account a
            LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
-          WHERE a.id = $1 AND a.status = 'ACTIVE'
+          WHERE a.id = $1
           FOR UPDATE OF a`,
         [claims.sub],
       );

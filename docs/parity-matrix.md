@@ -37,7 +37,8 @@ partial updates are backed by Core transactions and security/outbox events.
 Administrative account updates now preserve profile, password, status,
 anonymization, and role replacement behavior in Core transactions. As in the
 reference handler, changing status alone does not anonymize the account or
-revoke its sessions; both happen when `anonymize` is true. Callsign
+revoke its sessions; existing refresh sessions also remain rotatable, and both
+session revocation and anonymization happen when `anonymize` is true. Callsign
 creation, evidence, verification, primary selection, and retirement also write
 to the relational Core model and outbox.
 These are the first implemented slices; they still need automated
