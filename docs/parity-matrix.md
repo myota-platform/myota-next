@@ -132,9 +132,8 @@ public result exports remain complete exports.
 Public leaderboard category values are uppercased and passed through to the
 aggregate query, matching the reference: unrecognized categories return an
 empty `items` array instead of a validation error.
-The notifications endpoint now supports the contract's optional `page` and
-`pageSize` parameters with database-bounded reads; requests without paging
-parameters retain the prior unpaged response shape.
+The notifications endpoint preserves the reference's unpaged `{ items }`
+response and ignores `page` and `pageSize` query parameters.
 Statistics rebuild requests deduplicate by programme and UTC day, ignoring a
 caller-supplied `Idempotency-Key`, as in the reference implementation.
 The Admin Activity page opens activation details and normalized QSOs, lists

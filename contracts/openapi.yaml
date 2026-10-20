@@ -1552,8 +1552,19 @@ paths:
       tags: [Activity]
       security: [{ bearerAuth: [] }]
       summary: List notifications for the authenticated account
-      parameters: [{ in: query, name: recipientId, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' }]
-      responses: { '200': { description: Notification page } }
+      parameters: [{ in: query, name: recipientId, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: Notification list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { type: object, additionalProperties: true }
   /v1/awards/{awardId}/recalculation-jobs:
     post:
       tags: [Awards]

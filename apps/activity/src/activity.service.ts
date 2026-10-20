@@ -492,7 +492,7 @@ export class ActivityService {
 
   async listNotifications(
     authorization: string | undefined,
-    query: { recipientId?: string; page?: string; pageSize?: string } = {},
+    query: { recipientId?: string } = {},
   ) {
     const claims = this.authorize(authorization, [
       'activity.read',
@@ -506,11 +506,7 @@ export class ActivityService {
       throw new ForbiddenException(
         'activity.admin scope is required to read another recipient',
       );
-    if (query.page === undefined && query.pageSize === undefined)
-      return { items: await this.repository.listNotifications(recipient) };
-    const page = parsePageInteger(query.page, 1);
-    const pageSize = parsePageInteger(query.pageSize, 50, 100);
-    return this.repository.listNotificationPage(recipient, page, pageSize);
+    return { items: await this.repository.listNotifications(recipient) };
   }
 
   private authorize(authorization: string | undefined, scopes: string[]) {

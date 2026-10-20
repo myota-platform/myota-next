@@ -193,56 +193,6 @@ export class ActivityRepository {
     }
   }
 
-  async listNotificationPage(
-    recipientId: string,
-    page: number,
-    pageSize: number,
-  ): Promise<{
-    items: JsonRecord[];
-    page: number;
-    pageSize: number;
-    total: number;
-    nextPage: number | null;
-  }> {
-    const client = await this.connect();
-    try {
-      const count = await client.query(
-        'SELECT count(*) AS total FROM activity_notification WHERE recipient_id=$1',
-        [recipientId],
-      );
-      const total = Number(count.rows[0]?.total ?? 0);
-      const result = await client.query(
-        `SELECT id,recipient_id,notification_type,payload,status,created_at,delivered_at,
-                ${notificationTimestampProjection}
-         FROM activity_notification WHERE recipient_id=$1
-         ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`,
-        [
-          recipientId,
-          pageSize,
-          Math.min((page - 1) * pageSize, Number.MAX_SAFE_INTEGER),
-        ],
-      );
-      const items = result.rows.map((row) => ({
-        id: String(row.id),
-        recipientId: row.recipient_id,
-        type: row.notification_type,
-        payload: row.payload,
-        status: row.status,
-        createdAt: timestamp(row.created_at_iso ?? row.created_at),
-        deliveredAt: timestamp(row.delivered_at_iso ?? row.delivered_at),
-      }));
-      return {
-        items,
-        page,
-        pageSize,
-        total,
-        nextPage: page * pageSize < total ? page + 1 : null,
-      };
-    } finally {
-      client.release();
-    }
-  }
-
   async get(id: string): Promise<JsonRecord> {
     const client = await this.connect();
     try {

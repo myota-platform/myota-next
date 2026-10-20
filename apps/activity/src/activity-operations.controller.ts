@@ -55,14 +55,10 @@ export class ActivityOperationsController {
     @Query()
     query: {
       recipientId?: string | string[];
-      page?: string | string[];
-      pageSize?: string | string[];
     },
   ) {
     return this.activity.listNotifications(authorization, {
       recipientId: firstQueryValue(query.recipientId),
-      page: firstQueryValue(query.page),
-      pageSize: firstQueryValue(query.pageSize),
     });
   }
 
