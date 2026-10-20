@@ -294,7 +294,7 @@
   implemented; outage/recovery evidence remains outstanding.
 - Baseline Admin Vue application and static Participant application now live
   under `web/` as separate deployable artifacts. Admin local checks/build are
-  part of CI. A static source scan resolves 56 concrete Admin HTTP method/path
+  part of CI. A static source scan resolves 62 concrete Admin HTTP method/path
   pairs, all present in the OpenAPI contract. This does not establish payload
   or workflow parity; visual/accessibility review and deployment integration
   also remain open.

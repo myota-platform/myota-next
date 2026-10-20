@@ -157,7 +157,7 @@ workflows remain outstanding.
 
 The baseline Admin and Participant applications are carried forward under
 `web/` with separate deployment artifacts. The Admin build is checked in CI;
-a static source scan resolves 56 concrete Admin HTTP method/path pairs, all
+a static source scan resolves 62 concrete Admin HTTP method/path pairs, all
 present in the OpenAPI contract. This does not establish payload or workflow
 parity. Remaining work includes workflow completion, accessibility/visual
 review, and deployment integration.
