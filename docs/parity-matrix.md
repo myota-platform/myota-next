@@ -363,8 +363,9 @@ map renders point, line, polygon, and multipart entity geometries.
 - Activity notification consumption: exact durable validation, transactional
   processed-event/checkpoint and notification writes, deduplication, bounded
   retry, redacted poison-event dead-lettering, and audited CLI redrive are
-  implemented, with outcome and unresolved-dead-letter metrics. Recovery
-  evidence remains open.
+  implemented, with outcome and unresolved-dead-letter metrics. Named replay
+  durables require an explicit start sequence, and optional message limits allow
+  bounded replay runs. Recovery evidence remains open.
 - Geodata workers: registered JetStream consumers for import preprocessing and
   promotion, confirmed entity deletion, and location enrichment are implemented.
   `/healthz` and `/readyz` expose liveness and Geodata PostgreSQL/NATS

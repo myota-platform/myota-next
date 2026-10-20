@@ -614,7 +614,10 @@
   Prometheus metrics for bounded delivery outcomes and unresolved dead letters;
   readiness checks Activity PostgreSQL and the NATS connection. An audited CLI
   redrive reuses pending audit records and a stable JetStream message ID. Worker
-  recovery evidence remains outstanding.
+  replay can bind `ACTIVITY_NOTIFICATION_DURABLE` at the explicit
+  `ACTIVITY_NOTIFICATION_START_SEQUENCE`; `ACTIVITY_NOTIFICATION_MAX_MESSAGES`
+  stops the process after that many successfully handled or duplicate events.
+  Recovery evidence remains outstanding.
 
 ## Not implemented yet
 

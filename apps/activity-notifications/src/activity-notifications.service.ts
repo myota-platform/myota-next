@@ -7,17 +7,31 @@ import {
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { createServer, type Server, type ServerResponse } from 'node:http';
-import { jetstream, jetstreamManager } from '@nats-io/jetstream';
-import type { Consumer, JsMsg } from '@nats-io/jetstream';
+import {
+  AckPolicy,
+  DeliverPolicy,
+  jetstream,
+  jetstreamManager,
+  ReplayPolicy,
+} from '@nats-io/jetstream';
+import type { Consumer, ConsumerConfig, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { integerSetting } from '@app/platform/integer-setting.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 
 const CONSUMER = 'activity-notifications';
 const STREAM = 'MYOTA_EVENTS';
 const DURABLE =
   process.env.ACTIVITY_NOTIFICATION_DURABLE ?? 'activity-notifications-v1';
+const DEFAULT_DURABLE = 'activity-notifications-v1';
+const START_SEQUENCE = optionalPositiveSetting(
+  'ACTIVITY_NOTIFICATION_START_SEQUENCE',
+);
+const MAX_MESSAGES = optionalPositiveSetting(
+  'ACTIVITY_NOTIFICATION_MAX_MESSAGES',
+);
 const MAX_DELIVERIES = 8;
 const METRICS_PORT = Math.max(
   0,
@@ -78,6 +92,7 @@ export class ActivityNotificationsService
   private natsUp = false;
   private outcomes = new Map<string, number>();
   private unresolvedDeadLetters = 0;
+  private completedMessages = 0;
 
   constructor(
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
@@ -94,8 +109,23 @@ export class ActivityNotificationsService
     });
     const js = jetstream(this.connection);
     const manager = await jetstreamManager(this.connection);
-    const consumerInfo = await manager.consumers.info(STREAM, DURABLE);
-    this.validateConsumer(consumerInfo.config);
+    if (DURABLE !== DEFAULT_DURABLE && START_SEQUENCE === undefined)
+      throw new Error(
+        'ACTIVITY_NOTIFICATION_START_SEQUENCE is required for replay durables',
+      );
+    if (DURABLE === DEFAULT_DURABLE && START_SEQUENCE !== undefined)
+      throw new Error(
+        'ACTIVITY_NOTIFICATION_START_SEQUENCE requires a replay durable name',
+      );
+    let consumerInfo;
+    try {
+      consumerInfo = await manager.consumers.info(STREAM, DURABLE);
+    } catch (error) {
+      if (DURABLE === DEFAULT_DURABLE || !isNotFound(error)) throw error;
+      await manager.consumers.add(STREAM, replayConsumerConfig());
+      consumerInfo = await manager.consumers.info(STREAM, DURABLE);
+    }
+    this.validateConsumer(consumerInfo.config, START_SEQUENCE);
     this.messages = await js.consumers.get(STREAM, DURABLE);
     this.natsUp = true;
     void this.monitorNats();
@@ -218,18 +248,22 @@ export class ActivityNotificationsService
     this.unresolvedDeadLetters = Number(result.rows[0]?.count ?? 0);
   }
 
-  private validateConsumer(config: {
-    filter_subjects?: string[];
-    ack_policy?: unknown;
-    deliver_policy?: unknown;
-    replay_policy?: unknown;
-    ack_wait?: number;
-    max_deliver?: number;
-    max_ack_pending?: number;
-    max_waiting?: number;
-    backoff?: number[];
-    deliver_subject?: string;
-  }): void {
+  private validateConsumer(
+    config: {
+      filter_subjects?: string[];
+      ack_policy?: unknown;
+      deliver_policy?: unknown;
+      replay_policy?: unknown;
+      ack_wait?: number;
+      max_deliver?: number;
+      max_ack_pending?: number;
+      max_waiting?: number;
+      backoff?: number[];
+      deliver_subject?: string;
+      opt_start_seq?: number;
+    },
+    startSequence?: number,
+  ): void {
     const backoff = [60, 120, 300, 300, 300, 300, 300, 300].map(
       (seconds) => seconds * 1_000_000_000,
     );
@@ -237,8 +271,10 @@ export class ActivityNotificationsService
       JSON.stringify(config.filter_subjects ?? []) !==
         JSON.stringify(SUBJECTS) ||
       String(config.ack_policy).toLowerCase() !== 'explicit' ||
-      String(config.deliver_policy).toLowerCase() !== 'all' ||
+      String(config.deliver_policy).toLowerCase() !==
+        (startSequence === undefined ? 'all' : 'by_start_sequence') ||
       String(config.replay_policy).toLowerCase() !== 'instant' ||
+      (startSequence !== undefined && config.opt_start_seq !== startSequence) ||
       Number(config.ack_wait) !== 60_000_000_000 ||
       config.max_deliver !== MAX_DELIVERIES ||
       config.max_ack_pending !== 64 ||
@@ -301,11 +337,22 @@ export class ActivityNotificationsService
       const processed = await this.processEvent(envelope, eventType);
       message.ack();
       this.countOutcome(processed ? 'processed' : 'duplicate');
+      this.completedMessages += 1;
       void this.refreshDeadLetterGauge().catch((error: unknown) =>
         this.logger.warn(
           `Unable to refresh dead-letter metrics: ${this.safeError(error)}`,
         ),
       );
+      if (
+        MAX_MESSAGES !== undefined &&
+        this.completedMessages >= MAX_MESSAGES
+      ) {
+        this.logger.log(
+          `Notification replay reached its ${MAX_MESSAGES}-message limit`,
+        );
+        this.stopping = true;
+        setImmediate(() => process.kill(process.pid, 'SIGTERM'));
+      }
     } catch (error) {
       if (permanent || delivered >= MAX_DELIVERIES) {
         await this.persistDeadLetter(
@@ -522,4 +569,50 @@ function redact(value: unknown, key = ''): unknown {
     );
   }
   return value;
+}
+
+function optionalPositiveSetting(name: string): number | undefined {
+  const raw = process.env[name];
+  if (raw === undefined) return undefined;
+  const value = integerSetting(raw, 0);
+  if (value === 0) return undefined;
+  if (value < 0) throw new Error(`${name} must be non-negative`);
+  return value;
+}
+
+function replayConsumerConfig(): ConsumerConfig {
+  if (START_SEQUENCE === undefined)
+    throw new Error('Replay durable requires a start sequence');
+  return {
+    durable_name: DURABLE,
+    filter_subjects: SUBJECTS,
+    ack_policy: AckPolicy.Explicit,
+    deliver_policy: DeliverPolicy.StartSequence,
+    opt_start_seq: START_SEQUENCE,
+    replay_policy: ReplayPolicy.Instant,
+    ack_wait: 60_000_000_000,
+    max_deliver: MAX_DELIVERIES,
+    max_ack_pending: 64,
+    max_waiting: 32,
+    backoff: [60, 120, 300, 300, 300, 300, 300, 300].map(
+      (seconds) => seconds * 1_000_000_000,
+    ),
+    num_replicas: 0,
+  } as ConsumerConfig;
+}
+
+function isNotFound(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const value = error as {
+    code?: unknown;
+    status?: unknown;
+    api_error?: { code?: unknown };
+    apiError?: () => { code?: unknown };
+  };
+  return (
+    value.status === 404 ||
+    value.code === '404' ||
+    value.api_error?.code === 404 ||
+    value.apiError?.().code === 404
+  );
 }
