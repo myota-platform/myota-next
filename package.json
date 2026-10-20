@@ -43,7 +43,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "lint": "oxlint --type-aware apps libs tools && node tools/check-nest-observability.mjs && node tools/check-openapi-nest-routes.mjs",
+    "lint": "oxlint --type-aware apps libs tools && node tools/check-nest-observability.mjs && node tools/check-openapi-nest-routes.mjs && node tools/check-geodata-json-integers.mjs",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.{ts,mjs}\" \"web/admin/*.{ts,html,json}\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
     "format:check": "prettier --check \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.{ts,mjs}\" \"web/admin/*.{ts,html,json}\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
     "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-owner-config.ts tools/db-migrate.ts tools/db-backup.ts tools/db-restore.ts tools/db-transfer-preflight.ts tools/db-transfer-stage.ts tools/db-transfer-adopt-ledger.ts tools/db-transfer-apply.ts tools/db-transfer-validate.ts tools/provision-jetstream.ts tools/outbox-admin.ts tools/render-seaweedfs-s3-config.ts"
