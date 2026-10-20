@@ -6,13 +6,14 @@ import {
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
+  ValidationPipe,
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { IdentityAuthService } from './auth.service.js';
-import type { AdminRoleDefinitionDto } from './auth.dto.js';
+import { AdminRoleDefinitionDto } from './auth.dto.js';
 import {
   ADMIN_PERMISSION_CATALOG,
   DEFAULT_ROLE_DEFINITIONS,
@@ -95,13 +96,14 @@ export class IdentityRoleService {
 
   async createAdminRole(
     authorization: string,
-    body: AdminRoleDefinitionDto,
+    rawBody: unknown,
   ): Promise<RoleDefinition> {
     await this.authorize(
       authorization,
       ['identity.roles.manage'],
       'identity.roles.manage scope is required',
     );
+    const body = await validateAdminRoleDefinitionBody(rawBody);
     if (!body.code || !body.name) {
       throw new BadRequestException('code and name are required');
     }
@@ -165,7 +167,7 @@ export class IdentityRoleService {
   async updateAdminRole(
     authorization: string,
     roleCode: string,
-    body: AdminRoleDefinitionDto,
+    rawBody: unknown,
   ): Promise<RoleDefinition> {
     await this.authorize(
       authorization,
@@ -205,6 +207,7 @@ export class IdentityRoleService {
           'built-in role definitions cannot be edited',
         );
       }
+      const body = await validateAdminRoleDefinitionBody(rawBody);
       const name =
         body.name === undefined
           ? current.name
@@ -315,4 +318,18 @@ function isUniqueViolation(error: unknown): boolean {
     'code' in error &&
     error.code === '23505'
   );
+}
+
+const adminRoleValidationPipe = new ValidationPipe({
+  transform: true,
+  whitelist: true,
+});
+
+async function validateAdminRoleDefinitionBody(
+  body: unknown,
+): Promise<AdminRoleDefinitionDto> {
+  return (await adminRoleValidationPipe.transform(body, {
+    type: 'body',
+    metatype: AdminRoleDefinitionDto,
+  })) as AdminRoleDefinitionDto;
 }

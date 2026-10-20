@@ -30,7 +30,6 @@ import {
   SetPrimaryCallsignDto,
   VerifyCallsignDto,
   AdminAccountsQueryDto,
-  AdminRoleDefinitionDto,
   RecoveryRequestDto,
   RecoveryResetDto,
   RefreshTokenDto,
@@ -215,7 +214,7 @@ export class AuthController {
   @HttpCode(201)
   createAdminRole(
     @Headers('authorization') authorization: string | undefined,
-    @Body() body: AdminRoleDefinitionDto,
+    @Body() body: unknown,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
@@ -226,7 +225,7 @@ export class AuthController {
   @HttpCode(201)
   createRole(
     @Headers('authorization') authorization: string | undefined,
-    @Body() body: AdminRoleDefinitionDto,
+    @Body() body: unknown,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
@@ -237,7 +236,7 @@ export class AuthController {
   updateRole(
     @Headers('authorization') authorization: string | undefined,
     @Param('roleCode') roleCode: string,
-    @Body() body: AdminRoleDefinitionDto,
+    @Body() body: unknown,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
