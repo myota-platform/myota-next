@@ -91,6 +91,50 @@ export class ProgrammeStateRepository {
     }
   }
 
+  async listPolicyDraftPage(
+    programmeSlug: string,
+    type: string | undefined,
+    pageSize: number,
+    offset: number,
+  ): Promise<{ items: Record<string, unknown>[]; total: number }> {
+    const client = await this.connect();
+    try {
+      const result = await client.query<{
+        items: Record<string, unknown>[];
+        total: number;
+      }>(
+        `WITH filtered AS MATERIALIZED (
+           SELECT draft.value
+             FROM public.service_state AS snapshot
+             CROSS JOIN LATERAL jsonb_each(
+               CASE WHEN jsonb_typeof(snapshot.state #> '{data,policyDrafts}') = 'object'
+                 THEN snapshot.state #> '{data,policyDrafts}'
+                 ELSE '{}'::jsonb
+               END
+             ) AS draft(key, value)
+            WHERE snapshot.service = 'programmes'
+              AND draft.value->>'programmeSlug' = $1
+              AND ($2::text IS NULL OR draft.value->>'type' = $2)
+         ), page AS (
+           SELECT value FROM filtered
+            ORDER BY value->>'updatedAt' COLLATE "C" DESC
+            LIMIT $3 OFFSET $4
+         )
+         SELECT COALESCE(
+                  (SELECT jsonb_agg(page.value ORDER BY
+                    page.value->>'updatedAt' COLLATE "C" DESC) FROM page),
+                  '[]'::jsonb
+                ) AS items,
+                (SELECT count(*)::int FROM filtered) AS total`,
+        [programmeSlug, type ?? null, pageSize, offset],
+      );
+      const row = result.rows[0];
+      return { items: row?.items ?? [], total: row?.total ?? 0 };
+    } finally {
+      client.release();
+    }
+  }
+
   async mutate<T>(
     idempotencyKey: string | undefined,
     mutate: (client: PoolClient, state: ProgrammeState) => Promise<T>,

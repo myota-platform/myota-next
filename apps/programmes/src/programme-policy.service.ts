@@ -43,17 +43,15 @@ export class ProgrammePolicyService {
     this.authorizeAdmin(authorization, slug);
     const page = parsePageInteger(query.page, 1);
     const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
-    const state = await this.state.load();
-    const items = Object.values(policyDraftBucket(state)).filter(
-      (draft) =>
-        draft.programmeSlug === slug &&
-        (!query.type || draft.type === query.type),
-    );
-    items.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-    const total = items.length;
     const start = (page - 1) * pageSize;
+    const { items, total } = await this.state.listPolicyDraftPage(
+      slug,
+      query.type,
+      pageSize,
+      start,
+    );
     return {
-      items: items.slice(start, start + pageSize),
+      items,
       page,
       pageSize,
       total,
