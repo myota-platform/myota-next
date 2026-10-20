@@ -231,7 +231,7 @@ export class AddCallsignDto {
   @MinLength(1)
   callsign!: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @IsIn(['UNVERIFIED', 'VERIFIED', 'RETIRED'])
   status?: 'UNVERIFIED' | 'VERIFIED' | 'RETIRED';
