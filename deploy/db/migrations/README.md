@@ -22,6 +22,43 @@ The directories preserve three independent database owners:
 - `activity/` — Activity PostgreSQL for activations, QSOs, awards, and jobs.
 - `geo/` — Geodata PostgreSQL with PostGIS for spatial data and imports.
 
+## Backup and restore
+
+The owner databases can be backed up together into one timestamped directory
+with a SHA-256 manifest:
+
+```sh
+CORE_DATABASE_URL='postgresql://...' \
+ACTIVITY_DATABASE_URL='postgresql://...' \
+GEO_DATABASE_URL='postgresql://...' \
+npm run db:backup -- ./backups
+```
+
+The scripts require PostgreSQL 16 `pg_dump` and `pg_restore` client tools. The
+backup command stages all three custom-format dumps before publishing the
+manifest and final directory. It does not include NATS, object storage, or
+browser data. Protect backup directories as sensitive production data.
+
+Restore is destructive. It verifies all three files and checksums before
+changing a database, then requires confirmation matching the selected backup
+directory:
+
+```sh
+CORE_DATABASE_URL='postgresql://...' \
+ACTIVITY_DATABASE_URL='postgresql://...' \
+GEO_DATABASE_URL='postgresql://...' \
+MYOTA_RESTORE_CONFIRM='RESTORE myota-YYYYMMDDTHHMMSSmmmZ' \
+npm run db:restore -- ./backups/myota-YYYYMMDDTHHMMSSmmmZ
+```
+
+The target database names must match their corresponding manifest entries.
+Each database restore is transactional, but PostgreSQL cannot make the three
+independent databases one atomic restore. If a later owner fails, restore all
+three databases again from the same backup before resuming the application.
+Rehearse restores on disposable databases. These scripts restore a compatible
+schema snapshot; they do not migrate data between the Python and NestJS schema
+versions or replace the separate cutover and rollback plan.
+
 `001` is the initial schema snapshot for each database. It is suitable only for
 a new target database. The runner does not adopt an existing schema without a
 migration ledger, transfer production data, or provide rollback. Before cutover,
