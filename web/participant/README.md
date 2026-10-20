@@ -2,8 +2,9 @@
 
 This is the baseline static participant client, kept as a separate deployable
 artifact from the Admin application. It presents programme content, entity
-catalogue/map views, profile editing and images, and award workflows through
-the Gateway. Domain data and eligibility decisions remain owned by the APIs.
+catalogue/map views, candidate proposals, profile editing and images, award
+requests, and activation/QSO workflows through the Gateway. Domain data,
+callsign authorization, and eligibility decisions remain owned by the APIs.
 
 The source is under `web/`. Build its image from this directory with:
 
@@ -11,5 +12,6 @@ The source is under `web/`. Build its image from this directory with:
 docker build -t myota/participant:dev .
 ```
 
-The current client does not expose activation or QSO entry workflows. Deployment
-integration and route-by-route API parity remain open.
+Deployment integration and route-by-route behavioral parity remain open. The
+current activation flow can start an activation, record a single QSO, and close
+an open activation; it still needs browser-level compatibility coverage.
