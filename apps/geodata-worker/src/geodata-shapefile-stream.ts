@@ -6,7 +6,7 @@ import { basename, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import proj4, { type Converter } from 'proj4';
 import yauzl from 'yauzl';
-import { open as openShapefile } from 'shapefile';
+import { open as openShapefile, openDbf } from 'shapefile';
 
 const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 1024 * 1024 * 1024;
@@ -134,11 +134,46 @@ export async function* streamShapefileFeatures(
       throw new Error(
         'Shapefile ZIP must include matching .shx and .dbf files',
       );
-    await validateShapeRecords(shape.path, shape.size);
+    const shapeInfo = await validateShapeRecords(shape.path, shape.size);
     const cpg = members.get(`${stem}.cpg`);
     const encoding = cpg
       ? (await readFile(cpg.path, 'utf8')).trim() || 'utf-8'
       : 'utf-8';
+    if (shapeInfo.shapeType === 31) {
+      // PyShp 2.x emits null geometry for MultiPatch; preserve row-level skips.
+      const reader = await openDbf(dbf.path, {
+        encoding,
+        highWaterMark: 64 * 1024,
+      });
+      let featureCount = 0;
+      try {
+        while (featureCount < shapeInfo.recordCount) {
+          const result = await reader.read();
+          if (result.done) break;
+          featureCount += 1;
+          if (featureCount > featureLimit)
+            throw new Error(
+              `geodata import contains more than ${featureLimit} features`,
+            );
+          const feature = {
+            type: 'Feature',
+            geometry: null,
+            properties: result.value ?? {},
+          };
+          if (Buffer.byteLength(JSON.stringify(feature)) > MAX_RECORD_BYTES)
+            throw new Error(
+              'a Shapefile feature exceeds the 16 MiB size limit',
+            );
+          if (featureCount % 100 === 0) await heartbeat();
+          yield feature;
+        }
+      } finally {
+        await reader.cancel().catch(() => undefined);
+      }
+      if (!featureCount)
+        throw new Error('Shapefile archive contains no features');
+      return;
+    }
     const prj = members.get(`${stem}.prj`);
     const projectionText = prj ? (await readFile(prj.path, 'utf8')).trim() : '';
     const projection = projectionText
@@ -235,7 +270,13 @@ async function validateShapeRecords(path: string, fileBytes: number) {
   if (fileBytes < 100) throw new Error('shapefile header is truncated');
   const file = await open(path, 'r');
   try {
+    const header = Buffer.alloc(100);
+    const { bytesRead } = await file.read(header, 0, header.length, 0);
+    if (bytesRead !== header.length)
+      throw new Error('shapefile header is truncated');
+    const shapeType = header.readInt32LE(32);
     let position = 100;
+    let recordCount = 0;
     while (position < fileBytes) {
       const header = Buffer.alloc(8);
       const { bytesRead } = await file.read(header, 0, header.length, position);
@@ -247,7 +288,9 @@ async function validateShapeRecords(path: string, fileBytes: number) {
       position += header.length + contentBytes;
       if (position > fileBytes)
         throw new Error('shapefile record data is truncated');
+      recordCount += 1;
     }
+    return { shapeType, recordCount };
   } finally {
     await file.close();
   }
