@@ -58,7 +58,9 @@ Owner profile updates authenticate and check revocation and account availability
 before validating submitted fields, matching the Python handler's response
 precedence. Website URL normalization also removes empty trailing query and
 fragment delimiters, matching Python's `urlunsplit` behavior, and rejects
-URLs without a syntactic authority, matching `urlsplit` validation.
+URLs without a syntactic authority, matching `urlsplit` validation. Non-control
+internal URL whitespace retains the reference's URL-specific error detail,
+while control characters and overlong values use its invalid-or-too-long detail.
 Role arrays preserve assignment order, including multi-role replacements that
 share a creation timestamp.
 Role replacement also shares one timestamp between expiring prior assignments

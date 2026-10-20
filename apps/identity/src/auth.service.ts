@@ -1039,11 +1039,7 @@ export function validateWebsiteUrl(
     throw new BadRequestException('websiteUrl is invalid or too long');
   }
   for (const character of website) {
-    if (
-      character.charCodeAt(0) < 0x20 ||
-      character.charCodeAt(0) === 0x7f ||
-      isPythonWhitespace(character.codePointAt(0)!)
-    ) {
+    if (character.charCodeAt(0) < 0x20 || character.charCodeAt(0) === 0x7f) {
       throw new BadRequestException('websiteUrl is invalid or too long');
     }
   }
@@ -1056,7 +1052,10 @@ export function validateWebsiteUrl(
       !parsed.hostname ||
       !authorityMatch ||
       !authority ||
-      authority.includes('@')
+      authority.includes('@') ||
+      Array.from(website).some((character) =>
+        isPythonWhitespace(character.codePointAt(0)!),
+      )
     ) {
       throw new Error('unsupported URL');
     }
