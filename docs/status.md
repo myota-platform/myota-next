@@ -191,7 +191,9 @@
   `validityDays` value takes precedence over the programme rule, including null,
   and non-empty values use Python-compatible float parsing, including Python's
   numeric whitespace and Unicode decimal digit handling. Activation payload
-  normalization and required-field checks precede operator authorization, as in
+  `requireLocation` and `allowUnverifiedCallsign` flags use Python truthiness.
+  Payload normalization and required-field checks precede operator
+  authorization, as in
   the reference. Falsey `location` and `rules` alias values normalize to empty
   objects as in Python; rule evaluation also defaults falsey persisted rules to
   an empty object. `authorizedCallsigns` defaults only when omitted and uses

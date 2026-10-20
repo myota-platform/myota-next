@@ -286,7 +286,7 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
         : {};
   const location = pythonTruthy(data.location) ? data.location : {};
   if (
-    rules.requireLocation &&
+    pythonTruthy(rules.requireLocation) &&
     (location.latitude == null || location.longitude == null)
   ) {
     throw new BadRequestException(
@@ -317,7 +317,7 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
     callsign &&
     data.callsignLifecycleStatus != null &&
     data.callsignLifecycleStatus !== 'VERIFIED' &&
-    !rules.allowUnverifiedCallsign
+    !pythonTruthy(rules.allowUnverifiedCallsign)
   ) {
     throw new BadRequestException(
       'a verified callsign is required by this programme',
