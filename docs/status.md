@@ -654,6 +654,9 @@
   renew independently at one third of each durable's ACK wait. Failed progress acknowledgements do not fail
   the active owner operation. Cancellation reconciliation follows
   `GEODATA_CANCELLATION_RECONCILE_SECONDS` (30 seconds by default, at least 5).
+  `GEODATA_WORKER_ACK_WAIT_SECONDS`, `GEODATA_WORKER_MAX_ACK_PENDING`, and
+  `GEODATA_WORKER_MAX_DELIVERIES` override the registered Geodata durable
+  policies consistently in provisioning and runtime validation.
   Work IDs accept all canonical UUID version and
   variant bits; `causationId` is optional, and exhausted invalid deliveries use
   the reference's UUID fallback and payload event-type precedence. Stale

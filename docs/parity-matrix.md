@@ -376,7 +376,9 @@ map renders point, line, polygon, and multipart entity geometries.
   `MYOTA_IMPORT_LEASE_SECONDS` and `MYOTA_IMPORT_HEARTBEAT_SECONDS` settings;
   cancellation reconciliation uses `GEODATA_CANCELLATION_RECONCILE_SECONDS`
   (default 30 seconds, minimum 5); JetStream ACK extensions follow one third of
-  the registered durable ACK wait.
+  the registered durable ACK wait. Optional `GEODATA_WORKER_ACK_WAIT_SECONDS`,
+  `GEODATA_WORKER_MAX_ACK_PENDING`, and `GEODATA_WORKER_MAX_DELIVERIES` settings
+  are shared by JetStream provisioning and worker policy validation.
   Stale queued and expired work is re-enqueued through the owner outbox.
   Scheduled import and upload-session retention is implemented; outage/recovery
   evidence remains open.

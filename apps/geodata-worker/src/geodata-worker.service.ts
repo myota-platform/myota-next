@@ -12,6 +12,7 @@ import type { Consumer, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { geodataConsumerPolicy } from '@app/platform/geodata-consumer-policy.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { IMPORT_RUN_HEARTBEAT_SECONDS } from '@app/platform/import-limits.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
@@ -27,10 +28,6 @@ import { GeodataDeletionRepository } from './geodata-deletion.repository.js';
 import { GeodataRetentionRepository } from './geodata-retention.repository.js';
 
 const STREAM = 'MYOTA_GEODATA_WORK';
-const MAX_DELIVERIES = Math.max(
-  1,
-  Number(process.env.GEODATA_WORKER_MAX_DELIVERIES ?? 100),
-);
 const MAX_WORK_WAIT_SECONDS = 30;
 const WORK_RECONCILE_SECONDS = Math.max(
   5,
@@ -672,16 +669,7 @@ function validateEnvelope(
 function workPolicy(
   durable: string,
 ): Pick<WorkDefinition, 'ackWaitSeconds' | 'maxPending' | 'maxDeliveries'> {
-  const policies: Record<string, [number, number, number]> = {
-    'geodata-preprocessing-v1': [300, 1, MAX_DELIVERIES],
-    'geodata-import-promotion-v1': [300, 1, MAX_DELIVERIES],
-    'geodata-entity-deletion-v1': [120, 1, MAX_DELIVERIES],
-    'geodata-location-enrichment-v1': [120, 4, 8],
-  };
-  const [ackWaitSeconds, maxPending, maxDeliveries] = policies[durable] ?? [];
-  if (!ackWaitSeconds)
-    throw new Error(`No Geodata policy registered for ${durable}`);
-  return { ackWaitSeconds, maxPending, maxDeliveries };
+  return geodataConsumerPolicy(durable);
 }
 
 function isTerminal(

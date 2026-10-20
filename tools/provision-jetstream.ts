@@ -11,6 +11,7 @@ import {
 } from '@nats-io/jetstream';
 import type { ConsumerConfig, StreamConfig } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
+import { geodataConsumerPolicy } from '../libs/platform/src/geodata-consumer-policy.ts';
 
 type WorkRoute = {
   owner: string;
@@ -60,13 +61,6 @@ const ACTIVITY_POLICY: Record<string, [number, number, number]> = {
   'activity-award-evaluation-v1': [120, 8, 2],
   'activity-pdf-render-v1': [300, 8, 1],
   'activity-statistics-rebuild-v1': [300, 8, 1],
-};
-
-const GEODATA_POLICY: Record<string, [number, number, number]> = {
-  'geodata-preprocessing-v1': [300, 100, 1],
-  'geodata-import-promotion-v1': [300, 100, 1],
-  'geodata-entity-deletion-v1': [120, 100, 1],
-  'geodata-location-enrichment-v1': [120, 8, 4],
 };
 
 const EMAIL_POLICY: Record<string, [number, number, number]> = {
@@ -210,33 +204,45 @@ function consumerSpecs(registry: EventRegistry, scope: string): ConsumerSpec[] {
 }
 
 function workConsumers(registry: EventRegistry, scope: string): ConsumerSpec[] {
-  const expected =
+  const stream =
     scope === 'activity-work'
-      ? [registry.activityWorkStream, ACTIVITY_POLICY]
+      ? registry.activityWorkStream
       : scope === 'geodata-work'
-        ? [registry.geodataWorkStream, GEODATA_POLICY]
+        ? registry.geodataWorkStream
         : scope === 'email-work'
-          ? [registry.emailWorkStream, EMAIL_POLICY]
+          ? registry.emailWorkStream
           : undefined;
-  if (!expected) throw new Error(`Unsupported work scope: ${scope}`);
-  const [stream, policies] = expected as [
-    string,
-    Record<string, [number, number, number]>,
-  ];
+  if (!stream) throw new Error(`Unsupported work scope: ${scope}`);
+  const policies =
+    scope === 'activity-work'
+      ? ACTIVITY_POLICY
+      : scope === 'email-work'
+        ? EMAIL_POLICY
+        : undefined;
   return registry.work
     .filter((work) => work.stream === stream)
     .map((work) => {
-      const policy = policies[work.durable];
-      if (!policy || work.subject.startsWith('myota.work.') === false)
+      const values =
+        scope === 'geodata-work'
+          ? (() => {
+              const policy = geodataConsumerPolicy(work.durable);
+              return [
+                policy.ackWaitSeconds,
+                policy.maxDeliveries,
+                policy.maxPending,
+              ] as const;
+            })()
+          : policies?.[work.durable];
+      if (!values || work.subject.startsWith('myota.work.') === false)
         throw new Error(`Missing reviewed policy for ${work.durable}`);
       return {
         stream,
         durable: work.durable,
         filterSubject: work.subject,
-        ackWaitSeconds: policy[0],
-        maxDeliveries: policy[1],
-        maxAckPending: policy[2],
-        maxWaiting: policy[2],
+        ackWaitSeconds: values[0],
+        maxDeliveries: values[1],
+        maxAckPending: values[2],
+        maxWaiting: values[2],
       };
     });
 }
