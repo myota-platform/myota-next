@@ -12,6 +12,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
+import { pythonFloatString } from '@app/platform/python-number.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import type { AccessTokenClaims } from '@app/platform/access-token.js';
 import {
@@ -1315,9 +1316,15 @@ function normalizeManualLocationValue(field: string, value: unknown) {
     throw new BadRequestException(
       `location field ${field} must be scalar or null`,
     );
-  const normalized = trimPythonWhitespace(
-    typeof value === 'boolean' ? (value ? 'True' : 'False') : String(value),
-  );
+  const text =
+    typeof value === 'boolean'
+      ? value
+        ? 'True'
+        : 'False'
+      : typeof value === 'number' && !Number.isInteger(value)
+        ? pythonFloatString(value)
+        : String(value);
+  const normalized = trimPythonWhitespace(text);
   return field.endsWith('Code') ? normalized.toUpperCase() : normalized || null;
 }
 

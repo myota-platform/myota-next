@@ -389,7 +389,8 @@
   category edits, and entity reads.
   Location
   names, entity names, location values, websites, and descriptions now use
-  Python whitespace stripping and code-point length rules. Metadata patches
+  Python whitespace stripping and code-point length rules; manual boolean and
+  non-integral numeric values use Python string forms. Metadata patches
   apply `manualFields` only alongside a location object; omission defaults to
   the location keys, while explicit null is rejected as a non-list value.
   Website validation rejects credential syntax even when the username is empty.
