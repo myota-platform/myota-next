@@ -431,7 +431,9 @@
   schedule runs preserve the reference timestamp updates, while the importer
   uses `lastRunAt + intervalSeconds` to determine the next automatic run. It
   reads the complete allowlisted response and shares the configured feature cap
-  with the API and worker, matching the reference fetch and import limits.
+  with the API and worker, matching the reference fetch and import limits. It
+  also accepts `GEODATA_IMPORT_SPEC` for one-shot complete snapshots and writes
+  the resulting import response as JSON to stdout.
   Deployment and live-source qualification remain outstanding.
   Candidate-level failures from a FAILED promotion queue can be resubmitted
   through the promotion API, and failed queues can now be redriven as a whole

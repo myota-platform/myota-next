@@ -36,8 +36,16 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     this.resolveStop = resolve;
   });
   private readonly retryAfter = new Map<string, number>();
+  private oneShotResult: unknown;
 
   async onModuleInit() {
+    const importSpec = process.env.GEODATA_IMPORT_SPEC;
+    if (importSpec !== undefined) {
+      this.oneShotResult = await this.runImportSpec(
+        JSON.parse(importSpec) as unknown,
+      );
+      return;
+    }
     if (process.env.GEODATA_IMPORTER_ENABLED?.toLowerCase() !== 'true') {
       this.logger.log('Scheduled Geodata imports are disabled');
       return;
@@ -49,6 +57,10 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     this.logger.log('Scheduled Geodata imports are enabled');
     await this.poll();
     void this.runLoop();
+  }
+
+  getOneShotResult(): unknown {
+    return this.oneShotResult;
   }
 
   async onModuleDestroy() {
@@ -170,6 +182,74 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     });
     if (!response.ok)
       throw new Error(`schedule run API returned HTTP ${response.status}`);
+  }
+
+  private async runImportSpec(value: unknown): Promise<unknown> {
+    if (!isRecord(value) || !isRecord(value.source))
+      throw new Error('GEODATA_IMPORT_SPEC must contain a source object');
+    const spec = value;
+    const source = spec.source;
+    if (typeof source.url !== 'string')
+      throw new Error('GEODATA_IMPORT_SPEC source.url must be a string');
+    const { document, rawJson } = await this.fetchSource(source.url);
+    const format =
+      typeof source.format === 'string' && source.format
+        ? source.format.toUpperCase()
+        : 'GEOJSON';
+    const features = featuresFromDocument(document, format);
+    if (features.length > MAX_IMPORT_FEATURES)
+      throw new Error(
+        `source exceeds the ${MAX_IMPORT_FEATURES} feature limit`,
+      );
+
+    const rawApiUrl = Object.hasOwn(spec, 'geodataUrl')
+      ? spec.geodataUrl
+      : this.apiBase();
+    if (typeof rawApiUrl !== 'string')
+      throw new Error('GEODATA_IMPORT_SPEC geodataUrl must be a string');
+    this.assertApiUrl(rawApiUrl);
+    const apiUrl = `${rawApiUrl.replace(/\/$/, '')}/v1/geodata/imports`;
+    const requestedKey =
+      spec.idempotencyKey !== undefined
+        ? spec.idempotencyKey
+        : source.sourceKey !== undefined
+          ? source.sourceKey
+          : source.url;
+    if (typeof requestedKey !== 'string')
+      throw new Error('GEODATA_IMPORT_SPEC idempotency key must be a string');
+    const token = Object.hasOwn(spec, 'accessToken')
+      ? spec.accessToken
+      : this.accessToken();
+    if (typeof token !== 'string')
+      throw new Error('GEODATA_IMPORT_SPEC accessToken must be a string');
+    const disappearancePolicy = Object.hasOwn(spec, 'disappearancePolicy')
+      ? spec.disappearancePolicy
+      : 'REVIEW_REQUIRED';
+    const sourceFeatureHashOverrides = scheduledFeatureHashOverrides(
+      rawJson,
+      format,
+    );
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'idempotency-key': requestedKey,
+      },
+      body: stringifyJsonWithBigInts({
+        programmeSlug: spec.programmeSlug,
+        adapter: spec.adapter,
+        source,
+        features,
+        completeSnapshot: true,
+        disappearancePolicy,
+        ...(sourceFeatureHashOverrides ? { sourceFeatureHashOverrides } : {}),
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok)
+      throw new Error(`import API returned HTTP ${response.status}`);
+    return parseJsonWithExactIntegers(await response.text());
   }
 
   private async fetchSource(rawUrl: string): Promise<{
