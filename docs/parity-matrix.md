@@ -346,7 +346,9 @@ The baseline Admin and Participant applications are carried forward under
 `web/` with separate deployment artifacts. The Admin build is checked in CI;
 a static source scan resolves 62 concrete Admin HTTP method/path pairs, all
 present in the OpenAPI contract. This does not establish payload or workflow
-parity. The Participant client includes localized published programme content,
+parity. The Admin Awards screen uses independent bounded paging for award
+definitions, requests, and issuances; the asset catalogue follows its API pages
+for design selection. The Participant client includes localized published programme content,
 paged approved/candidate entity catalogue and map, map-picked point proposals and existing-candidate proposals, published award and level catalogue with eligible-level requests, activation creation,
 single-QSO entry, profile editing and image management, but those workflows lack
 browser-level compatibility coverage. The award catalogue follows all API pages.

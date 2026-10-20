@@ -35,6 +35,13 @@ interface Award {
   printSpec?: Record<string, unknown>;
   template?: { elements?: TemplateElement[] };
 }
+interface AwardPage<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+  nextPage: number | null;
+}
 
 const store = useAppStore();
 const canManage = computed(() => hasAnyScope(store.account, 'awards.admin'));
@@ -48,6 +55,13 @@ const selected = ref<Award | null>(null);
 const assets = ref<any[]>([]);
 const requests = ref<any[]>([]);
 const issuances = ref<any[]>([]);
+const pageSize = 50;
+const definitionPage = ref(1);
+const definitionTotal = ref(0);
+const requestPage = ref(1);
+const requestTotal = ref(0);
+const issuancePage = ref(1);
+const issuanceTotal = ref(0);
 const message = ref('');
 const templateElements = ref<TemplateElement[]>(defaultElements());
 const error = ref('');
@@ -414,20 +428,36 @@ async function load(selectedId?: string | Event): Promise<void> {
     const [awardData, assetData, requestData, issuanceData] = await Promise.all(
       [
         programme.value
-          ? apiRequest<{ items: Award[] }>(
-              `/v1/awards?programme=${encodeURIComponent(programme.value)}&pageSize=100`,
+          ? apiRequest<AwardPage<Award>>(
+              `/v1/awards?programme=${encodeURIComponent(programme.value)}&page=${definitionPage.value}&pageSize=${pageSize}`,
             )
-          : Promise.resolve({ items: [] }),
+          : Promise.resolve({
+              items: [],
+              page: definitionPage.value,
+              pageSize,
+              total: 0,
+              nextPage: null,
+            }),
         loadAssets(),
-        apiRequest<{ items: any[] }>('/v1/awards/requests?pageSize=100'),
-        apiRequest<{ items: any[] }>('/v1/awards/issuances?pageSize=100'),
+        apiRequest<AwardPage<any>>(
+          `/v1/awards/requests?page=${requestPage.value}&pageSize=${pageSize}`,
+        ),
+        apiRequest<AwardPage<any>>(
+          `/v1/awards/issuances?page=${issuancePage.value}&pageSize=${pageSize}`,
+        ),
       ],
     );
     if (generation !== loadGeneration) return;
     items.value = awardData.items || [];
+    definitionPage.value = awardData.page;
+    definitionTotal.value = awardData.total;
     assets.value = assetData.items || [];
     requests.value = requestData.items || [];
+    requestPage.value = requestData.page;
+    requestTotal.value = requestData.total;
     issuances.value = issuanceData.items || [];
+    issuancePage.value = issuanceData.page;
+    issuanceTotal.value = issuanceData.total;
     if (id)
       edit(await apiRequest<Award>(`/v1/awards/${encodeURIComponent(id)}`));
   } catch (cause) {
@@ -435,6 +465,39 @@ async function load(selectedId?: string | Event): Promise<void> {
   } finally {
     if (generation === loadGeneration) loading.value = false;
   }
+}
+function previousDefinitionPage(): void {
+  if (definitionPage.value <= 1 || loading.value) return;
+  definitionPage.value -= 1;
+  void load();
+}
+function nextDefinitionPage(): void {
+  if (definitionPage.value * pageSize >= definitionTotal.value || loading.value)
+    return;
+  definitionPage.value += 1;
+  void load();
+}
+function previousRequestPage(): void {
+  if (requestPage.value <= 1 || loading.value) return;
+  requestPage.value -= 1;
+  void load();
+}
+function nextRequestPage(): void {
+  if (requestPage.value * pageSize >= requestTotal.value || loading.value)
+    return;
+  requestPage.value += 1;
+  void load();
+}
+function previousIssuancePage(): void {
+  if (issuancePage.value <= 1 || loading.value) return;
+  issuancePage.value -= 1;
+  void load();
+}
+function nextIssuancePage(): void {
+  if (issuancePage.value * pageSize >= issuanceTotal.value || loading.value)
+    return;
+  issuancePage.value += 1;
+  void load();
 }
 async function save(): Promise<void> {
   if (!editable.value || saving.value) return;
@@ -583,6 +646,7 @@ async function registerAsset(): Promise<void> {
 }
 watch(programme, () => {
   store.currentProgramme = programme.value;
+  definitionPage.value = 1;
   edit(null);
   load();
 });
@@ -611,7 +675,12 @@ onMounted(() => {
   <div v-if="error" class="error-card" role="alert">{{ error }}</div>
   <div class="split-layout">
     <article class="panel">
-      <div class="panel-heading"><h2>Award definitions</h2></div>
+      <div class="panel-heading">
+        <div>
+          <h2>Award definitions</h2>
+          <small class="muted">{{ definitionTotal }} awards</small>
+        </div>
+      </div>
       <div class="table-list">
         <button
           v-for="item in items"
@@ -636,6 +705,25 @@ onMounted(() => {
           No awards configured for this programme.
         </p>
       </div>
+      <nav class="toolbar" aria-label="Award definition pages">
+        <button
+          class="secondary"
+          :disabled="definitionPage <= 1 || loading"
+          @click="previousDefinitionPage"
+        >
+          Previous
+        </button>
+        <span aria-live="polite"
+          >Page {{ definitionPage }} · {{ definitionTotal }} awards</span
+        >
+        <button
+          class="secondary"
+          :disabled="definitionPage * pageSize >= definitionTotal || loading"
+          @click="nextDefinitionPage"
+        >
+          Next
+        </button>
+      </nav>
     </article>
     <article class="panel">
       <div class="panel-heading">
@@ -965,6 +1053,7 @@ onMounted(() => {
     <article class="panel">
       <div class="panel-heading"><h2>Requests and issuances</h2></div>
       <div class="table-list">
+        <h3>Requests · {{ requestTotal }}</h3>
         <div v-for="request in requests" :key="request.id" class="table-row">
           <span
             ><strong>{{ request.callsign }} · {{ request.personName }}</strong
@@ -973,6 +1062,27 @@ onMounted(() => {
             ></span
           ><span class="status-pill">{{ request.status }}</span>
         </div>
+        <p v-if="!requests.length" class="muted empty">No award requests.</p>
+        <nav class="toolbar" aria-label="Award request pages">
+          <button
+            class="secondary"
+            :disabled="requestPage <= 1 || loading"
+            @click="previousRequestPage"
+          >
+            Previous
+          </button>
+          <span aria-live="polite"
+            >Page {{ requestPage }} · {{ requestTotal }} requests</span
+          >
+          <button
+            class="secondary"
+            :disabled="requestPage * pageSize >= requestTotal || loading"
+            @click="nextRequestPage"
+          >
+            Next
+          </button>
+        </nav>
+        <h3>Issuances · {{ issuanceTotal }}</h3>
         <div v-for="issuance in issuances" :key="issuance.id" class="table-row">
           <span
             ><strong>{{ issuance.awardName }}</strong
@@ -981,9 +1091,26 @@ onMounted(() => {
             ></span
           ><span>{{ issuance.dateObtained }}</span>
         </div>
-        <p v-if="!requests.length && !issuances.length" class="muted empty">
-          No requests or issuances yet.
-        </p>
+        <p v-if="!issuances.length" class="muted empty">No award issuances.</p>
+        <nav class="toolbar" aria-label="Award issuance pages">
+          <button
+            class="secondary"
+            :disabled="issuancePage <= 1 || loading"
+            @click="previousIssuancePage"
+          >
+            Previous
+          </button>
+          <span aria-live="polite"
+            >Page {{ issuancePage }} · {{ issuanceTotal }} issuances</span
+          >
+          <button
+            class="secondary"
+            :disabled="issuancePage * pageSize >= issuanceTotal || loading"
+            @click="nextIssuancePage"
+          >
+            Next
+          </button>
+        </nav>
       </div>
     </article>
   </div>
