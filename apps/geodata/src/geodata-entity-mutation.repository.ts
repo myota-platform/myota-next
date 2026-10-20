@@ -871,21 +871,34 @@ export class GeodataEntityMutationRepository {
   ) {
     const editorId = typeof body.editorId === 'string' ? body.editorId : '';
     if (!editorId) throw new BadRequestException('editorId is required');
+    const geometryInput = isRecord(body.geometry) ? body.geometry : null;
+    const rawGeometryType =
+      typeof geometryInput?.type === 'string' ? geometryInput.type : '';
+    const geometryTypeAliases: Record<string, string> = {
+      way: 'LineString',
+      linestring: 'LineString',
+      multilinestring: 'MultiLineString',
+    };
+    const geometryType =
+      geometryTypeAliases[rawGeometryType.toLowerCase()] ?? rawGeometryType;
     if (
-      !isRecord(body.geometry) ||
       ![
         'Point',
         'LineString',
         'MultiLineString',
         'Polygon',
         'MultiPolygon',
-      ].includes(String(body.geometry.type)) ||
-      !('coordinates' in body.geometry)
+      ].includes(geometryType) ||
+      !geometryInput ||
+      !('coordinates' in geometryInput)
     )
       throw new BadRequestException(
         'geometry must be a supported GeoJSON geometry',
       );
-    const geometry = JSON.stringify(body.geometry);
+    const geometry = JSON.stringify({
+      type: geometryType,
+      coordinates: geometryInput.coordinates,
+    });
     if (Buffer.byteLength(geometry) > 5 * 1024 * 1024)
       throw new BadRequestException('geometry exceeds the 5 MiB limit');
     const note =
