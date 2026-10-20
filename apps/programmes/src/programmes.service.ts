@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import type { ProgrammeRecord } from './programme.types.js';
 import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
 import { ProgrammeRepository } from './programme.repository.js';
@@ -146,7 +147,9 @@ export class ProgrammesService {
         const codes: string[] = [];
         for (const item of body.entityTypes) {
           const code =
-            typeof item.code === 'string' ? item.code.trim().toUpperCase() : '';
+            typeof item.code === 'string'
+              ? trimPythonWhitespace(item.code).toUpperCase()
+              : '';
           const normalized = normalizeEntityType(item, catalog[code]);
           if (!catalog[code]) {
             catalog[code] = normalized;
@@ -206,7 +209,7 @@ export class ProgrammesService {
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programmes = await this.programmes.listAll(client);
       const catalog = await this.entityTypes.listAll(client);
-      const code = body.code.trim().toUpperCase();
+      const code = trimPythonWhitespace(body.code).toUpperCase();
       const previous = catalog[code];
       const entityType = normalizeEntityType(body, previous);
       catalog[code] = entityType;
@@ -245,7 +248,7 @@ export class ProgrammesService {
       const programme = programmes.find((item) => item.slug === slug);
       if (!programme) throw new NotFoundException('programme not found');
       const catalog = await this.entityTypes.listAll(client);
-      const code = body.code.trim().toUpperCase();
+      const code = trimPythonWhitespace(body.code).toUpperCase();
       const previous = catalog[code];
       const entityType = normalizeEntityType(body, previous);
       catalog[code] = entityType;
@@ -283,7 +286,7 @@ export class ProgrammesService {
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
-    const code = codeValue.trim().toUpperCase();
+    const code = trimPythonWhitespace(codeValue).toUpperCase();
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');
@@ -306,7 +309,7 @@ export class ProgrammesService {
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
-    const code = codeValue.trim().toUpperCase();
+    const code = trimPythonWhitespace(codeValue).toUpperCase();
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');
@@ -408,18 +411,18 @@ function normalizeEntityType(
   existing?: Record<string, unknown>,
 ): Record<string, unknown> & { code: string } {
   const code =
-    typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
+    typeof body.code === 'string'
+      ? trimPythonWhitespace(body.code).toUpperCase()
+      : '';
   const originalCodeValue = body.originalCode || code;
-  const originalCode = (
+  const originalCode = trimPythonWhitespace(
     typeof originalCodeValue === 'string'
       ? originalCodeValue
       : typeof originalCodeValue === 'number' ||
           typeof originalCodeValue === 'boolean'
         ? String(originalCodeValue)
-        : ''
-  )
-    .trim()
-    .toUpperCase();
+        : '',
+  ).toUpperCase();
   if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(code)) {
     throw new BadRequestException(
       'category code must start with a letter and contain only A-Z, 0-9, and underscores',
@@ -442,7 +445,9 @@ function normalizeEntityType(
     ...new Set(
       geometryList.map((value) => {
         const geometry =
-          typeof value === 'string' ? value.trim().toUpperCase() : '';
+          typeof value === 'string'
+            ? trimPythonWhitespace(value).toUpperCase()
+            : '';
         return geometry === 'WAY' ? 'LINESTRING' : geometry;
       }),
     ),
@@ -455,7 +460,8 @@ function normalizeEntityType(
       'geometryTypes must contain supported GeoJSON geometry types',
     );
   }
-  const label = typeof body.label === 'string' ? body.label.trim() : '';
+  const label =
+    typeof body.label === 'string' ? trimPythonWhitespace(body.label) : '';
   if (!label) throw new BadRequestException('category label must not be empty');
   const now = new Date().toISOString();
   const activeValue = Object.hasOwn(body, 'active')
@@ -470,7 +476,9 @@ function normalizeEntityType(
     geometry: geometryTypes[0],
     geometryTypes,
     description:
-      typeof body.description === 'string' ? body.description.trim() : '',
+      typeof body.description === 'string'
+        ? trimPythonWhitespace(body.description)
+        : '',
     active: Boolean(activeValue),
     updatedAt: now,
   };

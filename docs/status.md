@@ -127,6 +127,8 @@
   types, and rules, matching the Python reference. Global entity-type catalogue
   management uses its own Core table; assignments are persisted in the
   relational Programme record and commit with catalogue and outbox changes.
+  Entity-type code, geometry, label, and description cleanup use Python's
+  Unicode whitespace stripping rules.
   Programme content supports draft editing,
   review submission and decisions, publication, paginated filtering, and locale
   coverage reporting with Python-compatible half-to-even percentage rounding;
