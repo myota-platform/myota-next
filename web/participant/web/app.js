@@ -2,6 +2,12 @@ const $ = (id) => document.getElementById(id);
 const profileUtils = window.MyotaProfileUtils;
 let programmes = [];
 let entities = [];
+let entityPage = 1;
+let entityHasNext = false;
+let entityPageRequest = 0;
+let programmeLoadGeneration = 0;
+const entityPageSize = 50;
+let activationEntityOptions = new Map();
 let publicAwards = [];
 let awardAccount = null;
 let awardAccessToken = localStorage.getItem('myota_public_access') || '';
@@ -45,9 +51,17 @@ async function loadProgrammes() {
   await loadProgramme($('programme-select').value);
 }
 async function loadProgramme(slug) {
+  const generation = ++programmeLoadGeneration;
+  entityPageRequest += 1;
+  entityPage = 1;
+  entityHasNext = false;
+  $('entity-prev').disabled = true;
+  $('entity-next').disabled = true;
+  activationEntityOptions = new Map();
   const programme =
     programmes.find((p) => p.slug === slug) ||
     (await api(`/v1/programmes/${encodeURIComponent(slug)}`));
+  if (generation !== programmeLoadGeneration) return;
   document.documentElement.style.setProperty(
     '--primary',
     programme.theme.primary,
@@ -88,22 +102,62 @@ async function loadProgramme(slug) {
     .join('');
   $('new-proposal-form').hidden = proposalTypes.length === 0;
   await loadProgrammeContent(slug);
-  entities = (
-    await api(`/v1/geodata/entities?programme=${encodeURIComponent(slug)}`)
-  ).items;
-  $('entity-count').textContent = entities.length;
-  $('loading').textContent = `${entities.length} loaded`;
-  renderEntities();
-  $('activation-entity').innerHTML = entities
-    .filter((entity) => ['ACTIVE', 'APPROVED'].includes(entity.status))
-    .map(
-      (entity) =>
-        `<option value="${escapeHtml(entity.id)}">${escapeHtml(entity.name)} · ${escapeHtml(entity.entityType)}</option>`,
-    )
-    .join('');
-  renderMarkers();
+  if (generation !== programmeLoadGeneration) return;
+  await loadProgrammeEntities(slug, 1, generation);
+  if (generation !== programmeLoadGeneration) return;
   await loadPublicAwards(slug);
   await loadActivations();
+}
+
+async function loadProgrammeEntities(
+  slug,
+  page,
+  generation = programmeLoadGeneration,
+) {
+  const request = ++entityPageRequest;
+  $('entity-prev').disabled = true;
+  $('entity-next').disabled = true;
+  $('loading').textContent = 'Loading entities…';
+  try {
+    const result = await api(
+      `/v1/geodata/entities?programme=${encodeURIComponent(slug)}&status=APPROVED,CANDIDATE&page=${page}&pageSize=${entityPageSize}`,
+    );
+    if (generation !== programmeLoadGeneration || request !== entityPageRequest)
+      return;
+    entities = result.items || [];
+    entityPage = result.page || page;
+    entityHasNext = Boolean(result.nextPage);
+    const total = Number(result.total || 0);
+    $('entity-count').textContent = total;
+    const first = total ? (entityPage - 1) * entityPageSize + 1 : 0;
+    const last = Math.min(entityPage * entityPageSize, total);
+    $('loading').textContent =
+      total === 0 ? 'No entities' : `Showing ${first}–${last} of ${total}`;
+    renderEntities();
+    for (const entity of entities)
+      if (['ACTIVE', 'APPROVED'].includes(entity.status))
+        activationEntityOptions.set(entity.id, entity);
+    const previousEntityId = $('activation-entity').value;
+    $('activation-entity').innerHTML = [...activationEntityOptions.values()]
+      .map(
+        (entity) =>
+          `<option value="${escapeHtml(entity.id)}">${escapeHtml(entity.name)} · ${escapeHtml(entity.entityType)}</option>`,
+      )
+      .join('');
+    if (activationEntityOptions.has(previousEntityId))
+      $('activation-entity').value = previousEntityId;
+    renderMarkers();
+    $('entity-page-status').textContent =
+      `Page ${entityPage} · ${total} entities`;
+  } finally {
+    if (
+      generation === programmeLoadGeneration &&
+      request === entityPageRequest
+    ) {
+      $('entity-prev').disabled = entityPage <= 1;
+      $('entity-next').disabled = !entityHasNext;
+    }
+  }
 }
 
 async function loadProgrammeContent(slug, locale) {
@@ -258,6 +312,18 @@ $('programme-select').onchange = async (e) => {
   location.hash = e.target.value;
   await loadProgramme(e.target.value);
 };
+$('entity-prev').onclick = () =>
+  loadProgrammeEntities($('programme-select').value, entityPage - 1).catch(
+    (error) => {
+      $('loading').textContent = error.message;
+    },
+  );
+$('entity-next').onclick = () =>
+  loadProgrammeEntities($('programme-select').value, entityPage + 1).catch(
+    (error) => {
+      $('loading').textContent = error.message;
+    },
+  );
 $('content-locale').onchange = () =>
   loadProgrammeContent($('programme-select').value, $('content-locale').value);
 $('refresh').onclick = () => loadProgramme($('programme-select').value);

@@ -533,6 +533,17 @@ a {
   max-width: 36rem;
   padding: 20px 0 0;
 }
+.entity-pagination {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 14px 20px 0;
+}
+.entity-pagination span {
+  min-width: 10rem;
+  text-align: center;
+}
 .proposal-form h4,
 .proposal-form p {
   margin: 0;

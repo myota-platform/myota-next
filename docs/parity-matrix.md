@@ -166,7 +166,7 @@ The baseline Admin and Participant applications are carried forward under
 a static source scan resolves 62 concrete Admin HTTP method/path pairs, all
 present in the OpenAPI contract. This does not establish payload or workflow
 parity. The Participant client includes localized published programme content,
-map-picked point proposals and existing-candidate proposals, activation creation,
+paged approved/candidate entity catalogue and map, map-picked point proposals and existing-candidate proposals, activation creation,
 single-QSO entry, profile editing and image management, and award requests, but
 those workflows lack browser-level compatibility coverage. Remaining work
 includes accessibility/visual review and deployment integration. Its public
