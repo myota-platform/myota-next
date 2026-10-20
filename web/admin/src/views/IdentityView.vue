@@ -60,6 +60,9 @@ const accountTotal = ref(0);
 const roles = ref<Role[]>([]);
 const permissions = ref<Permission[]>([]);
 const securityEvents = ref<SecurityEvent[]>([]);
+const securityEventPage = ref(1);
+const securityEventNextPage = ref<number | null>(null);
+const securityEventTotal = ref(0);
 const selectedAccount = ref<User | null>(null);
 const selectedRole = ref<Role | null>(null);
 const search = ref('');
@@ -198,10 +201,15 @@ async function fetchData(page = accountPage.value): Promise<void> {
         )
       : Promise.resolve({ items: [], permissions: [] }),
     canManageUsers.value
-      ? apiRequest<{ items: SecurityEvent[] }>(
-          '/v1/identity/admin/security-events?pageSize=20',
+      ? apiRequest<Page<SecurityEvent>>(
+          `/v1/identity/admin/security-events?page=${securityEventPage.value}&pageSize=20`,
         )
-      : Promise.resolve({ items: [] }),
+      : Promise.resolve({
+          items: [],
+          page: securityEventPage.value,
+          total: 0,
+          nextPage: null,
+        }),
   ]);
   accounts.value = accountData.items || [];
   accountPage.value = accountData.page || page;
@@ -210,6 +218,9 @@ async function fetchData(page = accountPage.value): Promise<void> {
   roles.value = roleData.items || [];
   permissions.value = roleData.permissions || [];
   securityEvents.value = events.items || [];
+  securityEventPage.value = events.page || securityEventPage.value;
+  securityEventTotal.value = events.total || 0;
+  securityEventNextPage.value = events.nextPage ?? null;
 }
 async function load(): Promise<void> {
   await feedback.run(fetchData);
@@ -224,6 +235,18 @@ async function changeAccountPage(page: number): Promise<void> {
   await feedback.run(async () => {
     await fetchData(page);
     selectedAccount.value = null;
+  });
+}
+async function changeSecurityEventPage(page: number): Promise<void> {
+  if (page < 1 || loading.value) return;
+  await feedback.run(async () => {
+    const result = await apiRequest<Page<SecurityEvent>>(
+      `/v1/identity/admin/security-events?page=${page}&pageSize=20`,
+    );
+    securityEvents.value = result.items || [];
+    securityEventPage.value = result.page || page;
+    securityEventTotal.value = result.total || 0;
+    securityEventNextPage.value = result.nextPage ?? null;
   });
 }
 async function createAccount(): Promise<void> {
@@ -748,7 +771,9 @@ onMounted(load);
   </div>
   <article v-if="activeTab === 'security'" class="panel">
     <h2>Recent security events</h2>
-    <p class="muted">Latest 20 events, in UTC.</p>
+    <p class="muted">
+      {{ securityEventTotal }} audit events · page {{ securityEventPage }} · UTC
+    </p>
     <div class="table-list">
       <div
         v-for="event in securityEvents"
@@ -769,6 +794,24 @@ onMounted(load);
       >
         No recent security events.
       </p>
+    </div>
+    <div class="toolbar security-event-pagination">
+      <button
+        class="secondary"
+        :disabled="securityEventPage <= 1 || loading"
+        @click="changeSecurityEventPage(securityEventPage - 1)"
+      >
+        Previous
+      </button>
+      <button
+        class="secondary"
+        :disabled="securityEventNextPage === null || loading"
+        @click="
+          changeSecurityEventPage(securityEventNextPage || securityEventPage)
+        "
+      >
+        Next
+      </button>
     </div>
   </article>
 </template>
