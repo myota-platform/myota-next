@@ -294,6 +294,11 @@ export class IdentityProfileImageService {
           'animated profile images are not supported',
         );
       }
+      if (format === 'png' && hasAnimatedPng(content)) {
+        throw new BadRequestException(
+          'animated profile images are not supported',
+        );
+      }
       if (
         !metadata.width ||
         !metadata.height ||
@@ -406,6 +411,40 @@ function isMissingObject(error: unknown): boolean {
   return (
     'name' in error && ['NoSuchKey', 'NotFound'].includes(String(error.name))
   );
+}
+
+function hasAnimatedPng(content: Buffer): boolean {
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  if (
+    content.length < signature.length ||
+    !content.subarray(0, 8).equals(signature)
+  )
+    return false;
+
+  let animationFrames: number | undefined;
+  let hasFrameControl = false;
+  let offset = signature.length;
+  while (offset + 12 <= content.length) {
+    const length = content.readUInt32BE(offset);
+    if (length > content.length - offset - 12) return false;
+    const chunkType = content.toString('ascii', offset + 4, offset + 8);
+    if (chunkType === 'acTL') {
+      if (length < 8) return false;
+      animationFrames = content.readUInt32BE(offset + 8);
+      if (animationFrames === 0) return false;
+    } else if (chunkType === 'fcTL') {
+      hasFrameControl = true;
+    } else if (chunkType === 'IDAT') {
+      return (
+        animationFrames !== undefined &&
+        (animationFrames > 1 || !hasFrameControl)
+      );
+    } else if (chunkType === 'IEND') {
+      return false;
+    }
+    offset += length + 12;
+  }
+  return false;
 }
 
 function accountIdOf(actor: Record<string, unknown>): string {
