@@ -189,7 +189,7 @@ export class GeodataRepository {
          JOIN geodata_entity l ON l.id=c.left_entity_id
          JOIN geodata_entity r ON r.id=c.right_entity_id
          WHERE ($1::text IS NULL OR c.resolution=$1)
-         ORDER BY c.resolution,c.similarity DESC,c.id
+         ORDER BY c.id
          LIMIT $2 OFFSET $3`,
         [resolution, pageSize, (page - 1) * pageSize],
       );

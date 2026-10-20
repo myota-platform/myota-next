@@ -377,8 +377,9 @@
   Persisted conflation candidates can be paged by resolution and resolved with
   reviewer history, idempotency, and a transactional outbox fact. Candidate
   IDs use the first 32 hexadecimal characters of SHA-256 over the sorted entity
-  pair; list and resolution records retain the programme and creation/update
-  timestamps from the reference. Decision values retain case-sensitive enum
+  pair; pages preserve the reference's ID order, and list and resolution records
+  retain the programme and creation/update timestamps. Decision values retain
+  case-sensitive enum
   validation, and review notes are stored without truncation. The Admin
   includes a role-gated conflation workspace for filtering candidates, inspecting
   match signals and prior decisions, and recording resolutions. Entity import
