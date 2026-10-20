@@ -20,6 +20,7 @@ import {
   MAX_IMPORT_FEATURES,
   MAX_UPLOAD_BYTES,
 } from '@app/platform/import-limits.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   firstPythonTruthy,
   normalizeEntityTypeCodes,
@@ -377,8 +378,10 @@ function prepareImport(body: Record<string, unknown>) {
     } else {
       try {
         const parsed: unknown = JSON.parse(body.content);
-        if (!isRecord(parsed)) throw new Error('expected an object');
-        document = parsed;
+        if (Array.isArray(parsed))
+          document = { type: 'FeatureCollection', features: parsed };
+        else if (isRecord(parsed)) document = parsed;
+        else throw new Error('expected an object or feature array');
       } catch {
         throw new BadRequestException(`${format} content must be valid JSON`);
       }
@@ -398,18 +401,37 @@ function prepareImport(body: Record<string, unknown>) {
   } else if (document.type === 'Feature') {
     features = [document];
     document = { type: 'FeatureCollection', features };
+  } else if (isRecord(document.geometry)) {
+    const feature: Record<string, unknown> = {
+      type: 'Feature',
+      geometry: document.geometry,
+      properties: pythonTruthy(document.properties) ? document.properties : {},
+    };
+    if (document.id !== null && document.id !== undefined)
+      feature.id = document.id;
+    features = [feature];
+    document = { type: 'FeatureCollection', features };
+  } else if (
+    [
+      'Point',
+      'LineString',
+      'MultiLineString',
+      'Polygon',
+      'MultiPolygon',
+    ].includes(String(document.type))
+  ) {
+    features = [{ type: 'Feature', geometry: document, properties: {} }];
+    document = { type: 'FeatureCollection', features };
   } else {
     throw new BadRequestException(
-      'GEOJSON must be a Feature or FeatureCollection',
+      'GEOJSON must be a FeatureCollection, Feature, geometry, or feature array',
     );
   }
   if (
-    (!features.length && body.completeSnapshot !== true) ||
-    features.some((feature) => !isRecord(feature) || feature.type !== 'Feature')
+    Array.isArray(body.features) &&
+    features.some((feature) => !isRecord(feature))
   )
-    throw new BadRequestException(
-      'GEOJSON features must be non-empty Feature objects',
-    );
+    throw new BadRequestException('features must contain objects');
   if (features.length > MAX_IMPORT_FEATURES)
     throw new BadRequestException(
       `an import may contain at most ${MAX_IMPORT_FEATURES} features`,

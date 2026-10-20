@@ -286,7 +286,9 @@ use the reference domain error; the reference's Web Mercator special case
 emits XY only. Hash and feature
 parity still requires fixtures for binary formats and uncommon geometries or
 CRS definitions. The direct JSON import path materializes
-the normalized collection, while multipart GeoJSON streams source features.
+the normalized collection and accepts the reference's feature arrays, single
+geometries, geometry wrappers, and empty collections, while multipart GeoJSON
+streams source features.
 Shapefile multipart uploads stream to
 temporary disk and decode records one at a time, with the same shared API/worker
 1 GiB upload cap or optional format-specific override, a 1 GiB expanded-size cap, 16 MiB
