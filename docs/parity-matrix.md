@@ -93,7 +93,13 @@ review, publish, and retire APIs are implemented. Award progress reads and
 evaluation/recalculation job APIs persist versioned progress and qualification
 notifications through the Activity worker. Award requests validate eligibility,
 issuance is transactional and permanent, and PDF render jobs store artifacts in
-S3-compatible storage with authorized presigned download URLs. The Admin can
+S3-compatible storage with authorized presigned download URLs. Qualification
+notice payloads and deduplication also preserve the worker split: recalculation
+notices include `awardCode` and eligible-level IDs in dedupe keys; direct
+evaluation notices omit `awardCode` and key by award, version, and subject.
+Cross-service notices resolve Identity events to account IDs and Geodata
+decisions to proposer IDs. Their stored payloads contain only event type and ID.
+The Admin can
 render transient PDF previews from mock data and registered assets without
 creating an issuance or object; preview and issuance use the same renderer.
 Award definition saves and eligible award requests return HTTP 201 when created
