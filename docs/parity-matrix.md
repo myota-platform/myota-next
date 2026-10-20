@@ -105,10 +105,15 @@ and dimensions above 4096 pixels, honor EXIF orientation, center-crop to 512 by
 512, remove source metadata, and try WebP qualities 85, 75, 65, and 55 under a
 256 KiB output cap in both the Pillow and Sharp paths. Both paths use centered
 Lanczos-3 resizing; Sharp selects the kernel explicitly and ignores embedded
-ICC profiles to match Pillow's direct channel conversion. Byte-level rendition
-equivalence across crop rounding, alpha handling, and WebP encoding still needs
-representative fixtures; Sharp explicitly matches Pillow's shared WebP quality,
-alpha quality, effort, lossless, preset, and transparent-pixel options.
+ICC profiles to match Pillow's direct channel conversion. A transparent
+gradient fixture generated with the pinned Python profile-image normalizer
+(Pillow 12.3.0) is checked against the Nest output after WebP decoding: mean
+visible RGB difference is 1.20/255, the 99th percentile is 5/255, mean alpha
+difference is 0.013/255, and maximum alpha difference is 2/255. The encoded
+WebP files are not byte-identical (10,050 bytes from Sharp and 9,994 from
+Pillow); the compatibility test therefore guards decoded image appearance and
+size limits. Sharp explicitly matches Pillow's shared WebP quality, alpha
+quality, effort, lossless, preset, and transparent-pixel options.
 Sharp inspects all WebP frames and reads APNG animation-control chunks before
 applying the reference's animation rejection rule, including APNG files with a
 separate default image. Pixel decoding remains limited to one frame and 4096
