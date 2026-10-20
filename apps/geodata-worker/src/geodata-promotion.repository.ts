@@ -6,6 +6,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { pythonRound } from '@app/platform/python-number.js';
 import { pythonStrip } from '@app/platform/python-string.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import {
@@ -1094,5 +1095,5 @@ function haversineKm(
 }
 
 function round6(value: number) {
-  return Math.round(value * 1_000_000) / 1_000_000;
+  return pythonRound(value, 6);
 }

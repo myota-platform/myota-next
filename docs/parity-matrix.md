@@ -176,7 +176,8 @@ geometries, stages candidates with provenance and 50 m duplicate
 warnings, records errors, and emits the preprocessing fact. Conflation name
 similarity uses Python Unicode casefolding and whitespace stripping, plus the
 `SequenceMatcher` popularity heuristic for reference names of 200 or more code
-points. Community proposals
+points; signal values use Python's ties-to-even rounding to six decimal places.
+Community proposals
 join this pipeline, and community proposals and imported features preserve
 validated attachment metadata before promotion. Multipart/resumable
 uploads are implemented with owner-scoped durable sessions, bounded binary
