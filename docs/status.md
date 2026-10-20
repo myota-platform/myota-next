@@ -168,7 +168,8 @@
   and non-empty values use Python-compatible float parsing, including Python's
   numeric whitespace and Unicode decimal digit handling. Activation payload
   normalization and required-field checks precede operator authorization, as in
-  the reference. It persists
+  the reference. Falsey `location` values normalize to an empty object as in
+  Python. It persists
   normalized activations and QSOs in Activity PostgreSQL with UTC microsecond
   timestamp precision preserved through normalization, validity checks,
   persistence, deduplication, and reads. QSO `source` defaults to `manual` only

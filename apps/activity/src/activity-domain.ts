@@ -281,7 +281,7 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
     programmeRules && Object.keys(programmeRules).length > 0
       ? programmeRules
       : (data.rules ?? {});
-  const location = data.location ?? {};
+  const location = pythonTruthy(data.location) ? data.location : {};
   if (
     rules.requireLocation &&
     (location.latitude == null || location.longitude == null)
