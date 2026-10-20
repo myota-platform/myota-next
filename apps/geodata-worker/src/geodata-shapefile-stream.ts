@@ -144,8 +144,9 @@ export async function* streamShapefileFeatures(
       ? (await readFile(cpg.path, 'utf8')).trim() || 'windows-1252'
       : 'windows-1252';
     const prj = members.get(`${stem}.prj`);
-    const projection = prj
-      ? createWgs84Projection((await readFile(prj.path, 'utf8')).trim())
+    const projectionText = prj ? (await readFile(prj.path, 'utf8')).trim() : '';
+    const projection = projectionText
+      ? createWgs84Projection(projectionText)
       : undefined;
     const reader = await openShapefile(shape.path, dbf.path, {
       encoding,
