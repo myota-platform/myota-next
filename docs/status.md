@@ -294,7 +294,10 @@
   to remove entities with Activity impact.
   Owner-scoped resumable S3 multipart uploads now support idempotent session
   creation, bounded binary parts, progress reads, completion, checksum and
-  malware scanning, abort, and transactional import-run/outbox creation. This
+  malware scanning, abort, and transactional import-run/outbox creation.
+  Upload adapter values are matched exactly, format values are uppercased
+  without trimming, filenames preserve submitted whitespace, and idempotency
+  keys remain unmodified. This
   path streams GeoJSON sources and decoded features; its upload default is 256
   MiB and can be raised to 512 MiB with `MYOTA_GEOJSON_MAX_UPLOAD_BYTES`.
   Shapefile ZIP uploads stream to temporary disk, then decode one shape/DBF

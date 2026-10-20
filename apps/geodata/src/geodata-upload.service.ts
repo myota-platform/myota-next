@@ -60,7 +60,7 @@ export class GeodataUploadService {
     body: Record<string, unknown>,
   ) {
     const input = validateCreate(body);
-    const idempotencyKey = key?.trim() || randomUUID();
+    const idempotencyKey = key || randomUUID();
     const bucket =
       process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports';
     const id = randomUUID();
@@ -587,8 +587,7 @@ export class GeodataUploadService {
 }
 
 function validateCreate(body: Record<string, unknown>) {
-  const adapter =
-    typeof body.adapter === 'string' ? body.adapter.trim().toUpperCase() : '';
+  const adapter = typeof body.adapter === 'string' ? body.adapter : '';
   if (!['PARKSERVE_US', 'OSM', 'GOVERNMENT_GIS', 'MANUAL'].includes(adapter))
     throw new BadRequestException('unsupported import adapter');
   if (
@@ -598,14 +597,14 @@ function validateCreate(body: Record<string, unknown>) {
   )
     throw new BadRequestException('source must be an object');
   const filename =
-    typeof body.filename === 'string'
-      ? body.filename.split(/[\\/]/).pop()?.trim()
-      : '';
+    typeof body.filename === 'string' ? body.filename.split(/[\\/]/).pop() : '';
   if (!filename) throw new BadRequestException('filename must not be empty');
-  const format =
-    typeof body.format === 'string'
-      ? body.format.trim().toUpperCase()
-      : 'GEOJSON';
+  const fallbackFormat = filename.slice(filename.lastIndexOf('.') + 1);
+  const formatValue =
+    typeof body.format === 'string' && body.format
+      ? body.format
+      : fallbackFormat;
+  const format = formatValue.toUpperCase();
   const sourceLimit =
     format === 'OSM_PBF'
       ? maxOsmPbfUploadBytes
