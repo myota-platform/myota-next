@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   Inject,
   Injectable,
@@ -497,7 +498,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
         const recovered = await this.repository.recoverExpiredWorkDispatches();
         if (Object.values(recovered).some((count) => count > 0))
           this.logger.warn(
-            `Re-enqueued stale Geodata work: ${JSON.stringify(recovered)}`,
+            `Re-enqueued stale Geodata work: ${stringifyJsonWithBigInts(recovered)}`,
           );
       } catch (error) {
         this.logger.error(`Geodata work recovery failed: ${safeError(error)}`);
@@ -512,7 +513,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
         const result = await this.retention.purgeSweep();
         if (result.eligible || result.uploadsExpired)
           this.logger.log(
-            `Geodata retention sweep completed: ${JSON.stringify(result)}`,
+            `Geodata retention sweep completed: ${stringifyJsonWithBigInts(result)}`,
           );
       } catch (error) {
         this.logger.error(

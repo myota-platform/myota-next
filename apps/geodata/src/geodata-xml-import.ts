@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { BadRequestException } from '@nestjs/common';
 import { SAXParser, type SAXOptions } from 'sax';
 import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
@@ -50,7 +51,7 @@ export function parseXmlImport(
   const local = (name: string) => name.split(':').at(-1) ?? name;
   const addFeature = (feature: Feature) => {
     if (
-      Buffer.byteLength(JSON.stringify(feature), 'utf8') >
+      Buffer.byteLength(stringifyJsonWithBigInts(feature), 'utf8') >
       MAX_IMPORT_FEATURE_BYTES
     )
       fail(

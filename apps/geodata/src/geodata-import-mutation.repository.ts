@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   BadRequestException,
   Inject,
@@ -105,7 +106,7 @@ export class GeodataImportMutationRepository {
           typeof body.survivorEntityId === 'string'
             ? body.survivorEntityId
             : null,
-          JSON.stringify(history),
+          stringifyJsonWithBigInts(history),
           isUuid(reviewerId) ? reviewerId : null,
         ],
       );
@@ -131,7 +132,12 @@ export class GeodataImportMutationRepository {
         `INSERT INTO outbox_event
          (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
          VALUES ($1,'geodata.conflation.resolved.v1','geodata-service','conflation_candidate',$2,$3::jsonb,now(),$4)`,
-        [randomUUID(), responseId, JSON.stringify(item), randomUUID()],
+        [
+          randomUUID(),
+          responseId,
+          stringifyJsonWithBigInts(item),
+          randomUUID(),
+        ],
       );
       if (key)
         await client.query(
@@ -139,7 +145,7 @@ export class GeodataImportMutationRepository {
           [
             'geodata-conflation',
             key,
-            JSON.stringify(requestResponse(item, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(item, requestHash)),
           ],
         );
       await client.query('COMMIT');
@@ -236,7 +242,7 @@ export class GeodataImportMutationRepository {
           [
             randomUUID(),
             runId,
-            JSON.stringify({
+            stringifyJsonWithBigInts({
               importRunId: runId,
               processedBy,
               stagedRecordsDiscarded,
@@ -260,7 +266,7 @@ export class GeodataImportMutationRepository {
           [
             'geodata-import-finalize',
             key,
-            JSON.stringify(requestResponse(response, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(response, requestHash)),
           ],
         );
       await client.query('COMMIT');
@@ -335,7 +341,7 @@ export class GeodataImportMutationRepository {
           randomUUID(),
           eventType,
           runId,
-          JSON.stringify({
+          stringifyJsonWithBigInts({
             importRunId: runId,
             ...(active ? { requestedBy: actor } : {}),
           }),
@@ -445,7 +451,12 @@ export class GeodataImportMutationRepository {
           `UPDATE geodata_import_candidate SET validation_status='CONFIRMED',
            validation_note=$3::jsonb,validated_by=$4,validated_at=now(),updated_at=now()
            WHERE import_run_id=$1 AND id=ANY($2::uuid[]) AND validation_status<>'PROCESSED'`,
-          [runId, uniqueCandidateIds, JSON.stringify(note), reviewerId],
+          [
+            runId,
+            uniqueCandidateIds,
+            stringifyJsonWithBigInts(note),
+            reviewerId,
+          ],
         );
       }
       const eventType = rejected
@@ -459,7 +470,11 @@ export class GeodataImportMutationRepository {
           randomUUID(),
           eventType,
           runId,
-          JSON.stringify({ importRunId: runId, candidateIds, reviewerId }),
+          stringifyJsonWithBigInts({
+            importRunId: runId,
+            candidateIds,
+            reviewerId,
+          }),
           randomUUID(),
         ],
       );
@@ -474,7 +489,7 @@ export class GeodataImportMutationRepository {
           [
             'geodata-candidate-validation',
             key,
-            JSON.stringify(requestResponse(response, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(response, requestHash)),
           ],
         );
       await client.query('COMMIT');
@@ -613,10 +628,10 @@ export class GeodataImportMutationRepository {
         [
           queueId,
           runId,
-          JSON.stringify(candidateIds),
+          stringifyJsonWithBigInts(candidateIds),
           targetStatus,
           requestedBy,
-          JSON.stringify({ note }),
+          stringifyJsonWithBigInts({ note }),
         ],
       );
       await client.query(
@@ -632,7 +647,7 @@ export class GeodataImportMutationRepository {
         [
           randomUUID(),
           queueId,
-          JSON.stringify({
+          stringifyJsonWithBigInts({
             queueId,
             importRunId: runId,
             candidateIds,
@@ -659,7 +674,7 @@ export class GeodataImportMutationRepository {
           [
             'geodata-import-promotion',
             key,
-            JSON.stringify(requestResponse(response, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(response, requestHash)),
           ],
         );
       await client.query('COMMIT');
@@ -752,7 +767,12 @@ export class GeodataImportMutationRepository {
           attempt_count=0,heartbeat_at=NULL,lease_until=NULL,error=NULL,
           result='{}'::jsonb,job_metadata=$4::jsonb,work_dispatched_at=now()
          WHERE id=$1 AND import_run_id=$2 AND status='FAILED'`,
-        [queueId, runId, requestedBy, JSON.stringify(updatedMetadata)],
+        [
+          queueId,
+          runId,
+          requestedBy,
+          stringifyJsonWithBigInts(updatedMetadata),
+        ],
       );
       const candidateIds = Array.isArray(previous.candidate_ids)
         ? previous.candidate_ids
@@ -771,7 +791,12 @@ export class GeodataImportMutationRepository {
         `INSERT INTO outbox_event
          (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
          VALUES ($1,'geodata.import.processing.queued.v1','geodata-service','import_processing_queue',$2,$3::jsonb,now(),$4)`,
-        [randomUUID(), queueId, JSON.stringify({ queueId }), randomUUID()],
+        [
+          randomUUID(),
+          queueId,
+          stringifyJsonWithBigInts({ queueId }),
+          randomUUID(),
+        ],
       );
       if (key)
         await client.query(
@@ -779,7 +804,7 @@ export class GeodataImportMutationRepository {
           [
             'geodata-import-redrive',
             key,
-            JSON.stringify(requestResponse(response, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(response, requestHash)),
           ],
         );
       await client.query('COMMIT');
@@ -818,7 +843,7 @@ function pythonString(value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'bigint')
     return String(value);
-  if (typeof value === 'object') return JSON.stringify(value);
+  if (typeof value === 'object') return stringifyJsonWithBigInts(value);
   return '';
 }
 

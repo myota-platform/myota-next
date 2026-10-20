@@ -2,9 +2,11 @@ import { INestApplication, Type, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { RequestMethod } from '@nestjs/common';
 import express from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { integerSetting } from './integer-setting.js';
 import { ApiProblemFilter, parserProblem, requestIds } from './http-problem.js';
 import { ObserveInstrument } from './observe.js';
+import { containsBigInt, stringifyJsonWithBigInts } from './json-bigint.js';
 
 export async function bootstrapHttpService(
   rootModule: Type<unknown>,
@@ -15,6 +17,7 @@ export async function bootstrapHttpService(
   ),
   rawBodyRoutes: string[] = [],
   globalPrefixExclusions: { path: string; method: RequestMethod }[] = [],
+  preserveBigIntJson = false,
 ): Promise<INestApplication> {
   const app = await NestFactory.create(rootModule, {
     bodyParser: false,
@@ -65,6 +68,17 @@ export async function bootstrapHttpService(
     }),
   );
   app.use(express.urlencoded({ extended: true, limit: jsonLimit }));
+  if (preserveBigIntJson)
+    app.use((_request: Request, response: Response, next: NextFunction) => {
+      const originalJson = response.json.bind(response);
+      response.json = (body: unknown) => {
+        if (!containsBigInt(body)) return originalJson(body);
+        const serialized = stringifyJsonWithBigInts(body);
+        response.type('application/json');
+        return response.send(serialized ?? 'null');
+      };
+      next();
+    });
   app.use(parserProblem);
   app.setGlobalPrefix('v1', {
     exclude: [

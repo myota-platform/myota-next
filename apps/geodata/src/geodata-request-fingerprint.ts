@@ -23,6 +23,26 @@ export function canonicalPythonJson(rawBody: string): string {
   return canonicalJsonValue(new JsonParser(rawBody).parse());
 }
 
+export function parseJsonWithExactIntegers(rawBody: string): unknown {
+  const materialize = (value: unknown): unknown => {
+    if (value instanceof JsonNumber) {
+      if (value.floating) return value.value;
+      const integer = value.value as bigint;
+      return integer >= BigInt(Number.MIN_SAFE_INTEGER) &&
+        integer <= BigInt(Number.MAX_SAFE_INTEGER)
+        ? Number(integer)
+        : integer;
+    }
+    if (Array.isArray(value)) return value.map(materialize);
+    if (isRecord(value)) {
+      for (const [key, item] of Object.entries(value))
+        value[key] = materialize(item);
+    }
+    return value;
+  };
+  return materialize(new JsonParser(rawBody).parse());
+}
+
 export function canonicalPythonGeneratedJson(
   value: unknown,
   isFloat: (path: readonly (string | number)[], value: number) => boolean,

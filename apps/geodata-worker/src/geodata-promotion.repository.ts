@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   Inject,
   Injectable,
@@ -152,7 +153,7 @@ export class GeodataPromotionRepository {
       await client.query(
         `UPDATE geodata_import_processing_queue SET status=$2,result=$3::jsonb,
          completed_at=now(),heartbeat_at=now(),lease_until=NULL,error=NULL WHERE id=$1`,
-        [queue.id, status, JSON.stringify(result)],
+        [queue.id, status, stringifyJsonWithBigInts(result)],
       );
       const totals = await client.query(
         `SELECT count(*) FILTER (WHERE validation_status='PROCESSED' AND existing_entity_id IS NULL)::integer AS created,
@@ -198,7 +199,7 @@ export class GeodataPromotionRepository {
          WHERE id=$1`,
         [
           queue.import_run_id,
-          JSON.stringify({
+          stringifyJsonWithBigInts({
             created: counts.created,
             updated: counts.updated,
             processed: Number(counts.created) + Number(counts.updated),
@@ -270,7 +271,7 @@ export class GeodataPromotionRepository {
           sourceKey,
           run.adapter_code,
           run.source_hash,
-          JSON.stringify(source),
+          stringifyJsonWithBigInts(source),
         ],
       );
     await client.query(
@@ -328,7 +329,7 @@ export class GeodataPromotionRepository {
                THEN public_properties->'reviewHistory' ELSE '[]'::jsonb END) || jsonb_build_array($3::jsonb),true
            ) || jsonb_build_object('updatedAt',$4::text),
            updated_at=$4,revision=revision+1 WHERE id=$1`,
-          [row.id, sourceState, JSON.stringify(event), occurredAt],
+          [row.id, sourceState, stringifyJsonWithBigInts(event), occurredAt],
         );
         await this.writeFact(
           client,
@@ -414,7 +415,7 @@ export class GeodataPromotionRepository {
       );
       if (prior.rows[0]) continue;
       const conflationId = createHash('sha256')
-        .update(JSON.stringify([leftId, rightId]), 'utf8')
+        .update(stringifyJsonWithBigInts([leftId, rightId]), 'utf8')
         .digest('hex')
         .slice(0, 32);
       await client.query(
@@ -427,7 +428,7 @@ export class GeodataPromotionRepository {
           leftId,
           rightId,
           score.score,
-          JSON.stringify(score.signals),
+          stringifyJsonWithBigInts(score.signals),
           row.programme_slug ?? null,
         ],
       );
@@ -675,11 +676,11 @@ export class GeodataPromotionRepository {
           categories[0],
           candidate.name,
           queue.target_status,
-          JSON.stringify(publicProperties),
+          stringifyJsonWithBigInts(publicProperties),
           sourceKey,
           candidate.source_hash,
           textValue(properties.jurisdiction),
-          JSON.stringify(attachments),
+          stringifyJsonWithBigInts(attachments),
           candidate.programme_slug,
           String(entityTypes[0]),
           website,
@@ -699,7 +700,7 @@ export class GeodataPromotionRepository {
           locationValue('city'),
           locationValue('municipality'),
           locationValue('locality'),
-          JSON.stringify(properties.geometry),
+          stringifyJsonWithBigInts(properties.geometry),
         ],
       );
       await client.query(
@@ -737,7 +738,10 @@ export class GeodataPromotionRepository {
           textValue(runSource.license),
           textValue(runSource.attribution),
           runSource.retrievedAt ?? null,
-          JSON.stringify({ ...properties, geometry: properties.geometry }),
+          stringifyJsonWithBigInts({
+            ...properties,
+            geometry: properties.geometry,
+          }),
         ],
       );
       await this.createConflationCandidates(client, entityId);
@@ -766,7 +770,7 @@ export class GeodataPromotionRepository {
             await client.query(
               `UPDATE geodata_entity SET public_properties=$2::jsonb,
                 location_work_dispatched_at=now() WHERE id=$1`,
-              [entityId, JSON.stringify(enrichment.properties)],
+              [entityId, stringifyJsonWithBigInts(enrichment.properties)],
             );
             await this.writeFact(
               client,
@@ -796,7 +800,7 @@ export class GeodataPromotionRepository {
         [
           randomUUID(),
           entityId,
-          JSON.stringify({ eventType, ...eventPayload }),
+          stringifyJsonWithBigInts({ eventType, ...eventPayload }),
           now,
         ],
       );
@@ -871,7 +875,7 @@ export class GeodataPromotionRepository {
         type,
         aggregateType,
         aggregateId,
-        JSON.stringify(payload),
+        stringifyJsonWithBigInts(payload),
         occurredAt,
         randomUUID(),
       ],

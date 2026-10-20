@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   ConflictException,
   Inject,
@@ -59,7 +60,7 @@ export class GeodataDeletionRepository {
       await client.query(
         `UPDATE geodata_control_record SET payload=$2::jsonb,updated_at=now()
          WHERE kind='entityDeletionJobs' AND id=$1`,
-        [row.id, JSON.stringify(claimed)],
+        [row.id, stringifyJsonWithBigInts(claimed)],
       );
       await client.query('COMMIT');
       return claimed;
@@ -174,7 +175,7 @@ export class GeodataDeletionRepository {
           'content-type': 'application/json',
           'idempotency-key': `geodata-delete:${job.id}`,
         },
-        body: JSON.stringify({
+        body: stringifyJsonWithBigInts({
           entityId: job.entityId,
           deletedBy: job.confirmedBy ?? job.requestedBy,
         }),
@@ -257,12 +258,17 @@ export class GeodataDeletionRepository {
       await client.query(
         `INSERT INTO geodata_audit_event(event_id,aggregate_type,aggregate_id,event,occurred_at)
          VALUES ($1,'entity',$2,$3::jsonb,$4)`,
-        [randomUUID(), job.entityId, JSON.stringify(event), deletedAt],
+        [
+          randomUUID(),
+          job.entityId,
+          stringifyJsonWithBigInts(event),
+          deletedAt,
+        ],
       );
       await client.query(
         `UPDATE geodata_control_record SET payload=$2::jsonb,updated_at=now()
          WHERE kind='entityDeletionJobs' AND id=$1`,
-        [job.id, JSON.stringify(completed)],
+        [job.id, stringifyJsonWithBigInts(completed)],
       );
       await this.outbox(
         client,
@@ -326,7 +332,7 @@ export class GeodataDeletionRepository {
         randomUUID(),
         eventType,
         aggregateId,
-        JSON.stringify(payload),
+        stringifyJsonWithBigInts(payload),
         randomUUID(),
       ],
     );

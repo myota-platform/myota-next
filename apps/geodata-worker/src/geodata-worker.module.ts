@@ -6,11 +6,15 @@ import { GeodataEnrichmentRepository } from './geodata-enrichment.repository.js'
 import { GeodataDeletionRepository } from './geodata-deletion.repository.js';
 import { GeodataRetentionRepository } from './geodata-retention.repository.js';
 import { GeodataWorkerService } from './geodata-worker.service.js';
+import { parseJsonWithExactIntegers } from '../../geodata/src/geodata-request-fingerprint.js';
 
 @Module({
   imports: [
     observeRoot('geodata-worker'),
-    DatabaseHealthModule.forEnvironment('GEO_DATABASE_URL'),
+    DatabaseHealthModule.forEnvironment(
+      'GEO_DATABASE_URL',
+      parseJsonWithExactIntegers,
+    ),
   ],
   providers: [
     GeodataWorkRepository,

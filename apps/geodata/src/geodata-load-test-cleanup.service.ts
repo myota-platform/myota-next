@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   BadRequestException,
   ForbiddenException,
@@ -341,7 +342,12 @@ export class GeodataLoadTestCleanupService {
       `INSERT INTO outbox_event
        (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
        VALUES ($1,'geodata.loadtest.cleaned.v1','geodata-service','load_test_run',$2,$3::jsonb,now(),$4)`,
-      [randomUUID(), testRunId, JSON.stringify(payload), randomUUID()],
+      [
+        randomUUID(),
+        testRunId,
+        stringifyJsonWithBigInts(payload),
+        randomUUID(),
+      ],
     );
   }
 

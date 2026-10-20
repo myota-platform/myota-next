@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -96,7 +97,7 @@ export async function* decodeOsmPbfStream(
       );
     await writeFile(
       configPath,
-      JSON.stringify({
+      stringifyJsonWithBigInts({
         attributes: { type: 'featureType', id: 'osm_id' },
         area_tags: [...AREA_TAGS],
         linear_tags: [...LINE_TAGS],

@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { createHash, randomUUID } from 'node:crypto';
 
 const requiredGroups = [
@@ -41,7 +42,7 @@ export function queueLocationEnrichment(
   if (onlyMissing && !missingLocationFields(location, manualFields).length)
     return undefined;
   const geometryHash = createHash('sha256')
-    .update(JSON.stringify(geometry))
+    .update(stringifyJsonWithBigInts(geometry))
     .digest('hex');
   if (
     properties.locationEnrichmentStatus === 'QUEUED' &&

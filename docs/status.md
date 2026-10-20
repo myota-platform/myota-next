@@ -419,10 +419,9 @@
   float values and include the source `.prj` text in the decoded feature.
   DBF integer fields with zero decimal places are read exactly and staged as
   numeric JSON tokens, including values beyond JavaScript's safe integer range.
-  The default PostgreSQL JSONB parser still converts those large values to
-  JavaScript numbers on reads, so API round-trip parity remains open. Binary
-  format hashes and uncommon geometries or CRS definitions still need fixture
-  qualification.
+  Geodata PostgreSQL pools preserve large JSON/JSONB integers as `bigint`, and
+  the API writes those values back as numeric JSON tokens. Binary format hashes
+  and uncommon geometries or CRS definitions still need fixture qualification.
   Candidate creation, queue creation, status, hashes, and outbox events
   finalize in one transaction. The final event is assembled in PostgreSQL to avoid
   retaining every feature summary in the worker heap.

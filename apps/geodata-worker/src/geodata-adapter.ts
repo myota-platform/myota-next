@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import proj4 from 'proj4';
 import {
   normalizeAttachmentMetadata,
@@ -268,7 +269,7 @@ function sourceCrs(value: unknown): string {
     typeof value === 'number' ||
     typeof value === 'boolean'
       ? String(value).trim()
-      : (JSON.stringify(value) ?? '').trim();
+      : (stringifyJsonWithBigInts(value) ?? '').trim();
   const upper = text.toUpperCase();
   if (['CRS84', 'OGC:CRS84', 'URN:OGC:DEF:CRS:OGC:1.3:CRS84'].includes(upper))
     return 'CRS84';

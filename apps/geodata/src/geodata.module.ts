@@ -14,11 +14,15 @@ import { GeodataDeletionService } from './geodata-deletion.service.js';
 import { GeodataScheduleService } from './geodata-schedule.service.js';
 import { GeodataProposalService } from './geodata-proposal.service.js';
 import { GeodataLoadTestCleanupService } from './geodata-load-test-cleanup.service.js';
+import { parseJsonWithExactIntegers } from './geodata-request-fingerprint.js';
 
 @Module({
   imports: [
     observeRoot('geodata-api'),
-    DatabaseHealthModule.forEnvironment('GEO_DATABASE_URL'),
+    DatabaseHealthModule.forEnvironment(
+      'GEO_DATABASE_URL',
+      parseJsonWithExactIntegers,
+    ),
   ],
   controllers: [HealthController, GeodataController],
   providers: [

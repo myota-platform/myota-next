@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   BadRequestException,
   ConflictException,
@@ -110,7 +111,7 @@ export class GeodataDeletionService {
       await transaction.query(
         `INSERT INTO geodata_control_record(kind,id,payload)
          VALUES ('entityDeletionJobs',$1,$2::jsonb)`,
-        [id, JSON.stringify(job)],
+        [id, stringifyJsonWithBigInts(job)],
       );
       await this.outbox(
         transaction,
@@ -124,7 +125,7 @@ export class GeodataDeletionService {
           [
             'geodata-entity-deletion',
             key,
-            JSON.stringify(requestResponse(response, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(response, requestHash)),
           ],
         );
       await transaction.query('COMMIT');
@@ -225,7 +226,7 @@ export class GeodataDeletionService {
             [
               'geodata-entity-deletion-confirm',
               key,
-              JSON.stringify(requestResponse(response, requestHash)),
+              stringifyJsonWithBigInts(requestResponse(response, requestHash)),
             ],
           );
         await client.query('COMMIT');
@@ -257,7 +258,7 @@ export class GeodataDeletionService {
       await client.query(
         `UPDATE geodata_control_record SET payload=$2::jsonb,updated_at=now()
          WHERE kind='entityDeletionJobs' AND id=$1`,
-        [jobId, JSON.stringify(updated)],
+        [jobId, stringifyJsonWithBigInts(updated)],
       );
       await this.outbox(
         client,
@@ -272,7 +273,7 @@ export class GeodataDeletionService {
           [
             'geodata-entity-deletion-confirm',
             key,
-            JSON.stringify(requestResponse(response, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(response, requestHash)),
           ],
         );
       await client.query('COMMIT');
@@ -324,7 +325,7 @@ export class GeodataDeletionService {
         randomUUID(),
         eventType,
         aggregateId,
-        JSON.stringify(payload),
+        stringifyJsonWithBigInts(payload),
         randomUUID(),
       ],
     );

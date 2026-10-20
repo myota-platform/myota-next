@@ -7,4 +7,6 @@ await bootstrapHttpService(
   8003,
   integerSetting(process.env.MYOTA_MAX_BODY_BYTES, 1024 * 1024 * 1024),
   ['/v1/geodata/import-uploads/:uploadId/parts/:partNumber'],
+  [],
+  true,
 );

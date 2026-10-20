@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   BadRequestException,
   ConflictException,
@@ -112,7 +113,7 @@ export class GeodataScheduleService {
       await client.query(
         `INSERT INTO geodata_control_record(kind,id,payload)
          VALUES ('schedules',$1,$2::jsonb)`,
-        [schedule.id, JSON.stringify(schedule)],
+        [schedule.id, stringifyJsonWithBigInts(schedule)],
       );
       await this.outbox(
         client,
@@ -126,7 +127,7 @@ export class GeodataScheduleService {
           [
             'geodata-schedule-create',
             key,
-            JSON.stringify(requestResponse(schedule, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(schedule, requestHash)),
           ],
         );
       await client.query('COMMIT');
@@ -244,7 +245,7 @@ export class GeodataScheduleService {
           [
             'geodata-schedule-run',
             key,
-            JSON.stringify(requestResponse(response, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(response, requestHash)),
           ],
         );
       await update.query('COMMIT');
@@ -271,7 +272,7 @@ export class GeodataScheduleService {
         randomUUID(),
         eventType,
         aggregateId,
-        JSON.stringify(payload),
+        stringifyJsonWithBigInts(payload),
         randomUUID(),
       ],
     );

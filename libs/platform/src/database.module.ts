@@ -5,7 +5,7 @@ import {
   Module,
   OnModuleDestroy,
 } from '@nestjs/common';
-import { Pool } from 'pg';
+import { Pool, types as pgTypes } from 'pg';
 
 export const DATABASE_HEALTH_POOL = Symbol('DATABASE_HEALTH_POOL');
 
@@ -32,7 +32,10 @@ export class DatabaseHealthService implements OnModuleDestroy {
 
 @Module({})
 export class DatabaseHealthModule {
-  static forEnvironment(environmentVariable: string): DynamicModule {
+  static forEnvironment(
+    environmentVariable: string,
+    parseJson?: (value: string) => unknown,
+  ): DynamicModule {
     return {
       module: DatabaseHealthModule,
       providers: [
@@ -46,6 +49,19 @@ export class DatabaseHealthModule {
                   max: Number(process.env.MYOTA_DB_POOL_MAX ?? 10),
                   connectionTimeoutMillis: 2_000,
                   idleTimeoutMillis: 30_000,
+                  ...(parseJson
+                    ? {
+                        types: {
+                          getTypeParser: (
+                            oid: number,
+                            format?: 'text' | 'binary',
+                          ) =>
+                            (oid === 114 || oid === 3802) && format !== 'binary'
+                              ? parseJson
+                              : pgTypes.getTypeParser(oid, format),
+                        },
+                      }
+                    : {}),
                 })
               : null;
           },

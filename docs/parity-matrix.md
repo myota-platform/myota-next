@@ -180,10 +180,10 @@ Generated PBF hashes now retain Python float formatting for geometry
 coordinates. Shapefile hashes use DBF numeric field types to distinguish integer
 and floating-point attributes and include the source `.prj` text. Binary-format
 integer attributes are staged without precision loss, including values beyond
-JavaScript's safe integer range. PostgreSQL JSONB reads still convert those
-large values to JavaScript numbers, so API round-trip parity remains open. Hash
-and feature parity still requires fixtures for binary formats and uncommon
-geometries or CRS definitions. The direct JSON import path materializes
+JavaScript's safe integer range. Geodata PostgreSQL pools preserve those values
+on reads, and the API returns them as numeric JSON tokens. Hash and feature
+parity still requires fixtures for binary formats and uncommon geometries or
+CRS definitions. The direct JSON import path materializes
 the normalized collection, while multipart GeoJSON streams source features.
 Shapefile multipart uploads stream to
 temporary disk and decode records one at a time, with a 256 MiB default upload

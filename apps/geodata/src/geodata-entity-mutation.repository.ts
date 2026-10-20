@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   BadRequestException,
   ConflictException,
@@ -192,7 +193,12 @@ export class GeodataEntityMutationRepository {
         await client.query(
           `UPDATE geodata_entity SET lifecycle_status=$2,public_properties=$3::jsonb,updated_at=$4
            WHERE id=$1`,
-          [id, targetStatus, JSON.stringify(nextProperties), changedAt],
+          [
+            id,
+            targetStatus,
+            stringifyJsonWithBigInts(nextProperties),
+            changedAt,
+          ],
         );
         const payload = {
           entityId: id,
@@ -207,7 +213,7 @@ export class GeodataEntityMutationRepository {
           [
             randomUUID(),
             id,
-            JSON.stringify({
+            stringifyJsonWithBigInts({
               eventType: 'geodata.entity.status-changed.v1',
               ...payload,
             }),
@@ -218,7 +224,13 @@ export class GeodataEntityMutationRepository {
           `INSERT INTO outbox_event
            (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
            VALUES ($1,'geodata.entity.status-changed.v1','geodata-service','entity',$2,$3::jsonb,$4,$5)`,
-          [randomUUID(), id, JSON.stringify(payload), changedAt, randomUUID()],
+          [
+            randomUUID(),
+            id,
+            stringifyJsonWithBigInts(payload),
+            changedAt,
+            randomUUID(),
+          ],
         );
         if (enrichmentEvent)
           await this.writeEntityEvent(
@@ -240,7 +252,7 @@ export class GeodataEntityMutationRepository {
           [
             'geodata-entity-review',
             key,
-            JSON.stringify(requestResponse(response, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(response, requestHash)),
           ],
         );
       await client.query('COMMIT');
@@ -420,8 +432,10 @@ export class GeodataEntityMutationRepository {
         Object.assign(nextLocation, codes);
         for (const field of released) nextLocation[field] = null;
         locationChanged =
-          JSON.stringify(previousLocation) !== JSON.stringify(nextLocation) ||
-          JSON.stringify(previousManual) !== JSON.stringify(nextManual);
+          stringifyJsonWithBigInts(previousLocation) !==
+            stringifyJsonWithBigInts(nextLocation) ||
+          stringifyJsonWithBigInts(previousManual) !==
+            stringifyJsonWithBigInts(nextManual);
       }
       if (Object.keys(changed).length || locationChanged) {
         await client.query(
@@ -499,7 +513,7 @@ export class GeodataEntityMutationRepository {
           website ?? null,
           'description' in body,
           description ?? null,
-          JSON.stringify(enrichment?.properties ?? propertyDelta),
+          stringifyJsonWithBigInts(enrichment?.properties ?? propertyDelta),
           changedAt,
         ];
         let updateSql = `UPDATE geodata_entity SET name=COALESCE($2,name),website=CASE WHEN $3 THEN $4 ELSE website END,
@@ -512,7 +526,7 @@ export class GeodataEntityMutationRepository {
             updateParams.push(value);
             updateSql += `,${locationColumns[field]}=$${updateParams.length}`;
           }
-          updateParams.push(JSON.stringify(nextManual), changedAt);
+          updateParams.push(stringifyJsonWithBigInts(nextManual), changedAt);
           updateSql += `,manual_location_fields=$${updateParams.length - 1}::jsonb,manual_location_updated_at=$${updateParams.length}`;
         }
         updateSql += ' WHERE id=$1';
@@ -576,7 +590,7 @@ export class GeodataEntityMutationRepository {
           [
             'geodata-entity-metadata',
             key,
-            JSON.stringify(requestResponse(response, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(response, requestHash)),
           ],
         );
       await client.query('COMMIT');
@@ -666,7 +680,7 @@ export class GeodataEntityMutationRepository {
       if (!missing.length)
         throw new ConflictException('location metadata is already complete');
       const geometryHash = createHash('sha256')
-        .update(JSON.stringify(row.geometry))
+        .update(stringifyJsonWithBigInts(row.geometry))
         .digest('hex');
       if (
         properties.locationEnrichmentStatus === 'QUEUED' &&
@@ -685,7 +699,7 @@ export class GeodataEntityMutationRepository {
             [
               'geodata-location-enrichment',
               key,
-              JSON.stringify(requestResponse(receipt, requestHash)),
+              stringifyJsonWithBigInts(requestResponse(receipt, requestHash)),
             ],
           );
         await client.query('COMMIT');
@@ -707,7 +721,7 @@ export class GeodataEntityMutationRepository {
       await client.query(
         `UPDATE geodata_entity SET public_properties=$2::jsonb,
           location_work_dispatched_at=now(),updated_at=$3 WHERE id=$1`,
-        [id, JSON.stringify(nextProperties), requestedAt],
+        [id, stringifyJsonWithBigInts(nextProperties), requestedAt],
       );
       const event = {
         entityId: id,
@@ -738,7 +752,7 @@ export class GeodataEntityMutationRepository {
           [
             'geodata-location-enrichment',
             key,
-            JSON.stringify(requestResponse(receipt, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(receipt, requestHash)),
           ],
         );
       await client.query('COMMIT');
@@ -821,7 +835,10 @@ export class GeodataEntityMutationRepository {
       const previousTypes = currentCategories.rows.map((category) =>
         String(category.category_code),
       );
-      if (JSON.stringify(previousTypes) !== JSON.stringify(entityTypes)) {
+      if (
+        stringifyJsonWithBigInts(previousTypes) !==
+        stringifyJsonWithBigInts(entityTypes)
+      ) {
         await client.query(
           "SELECT set_config('myota.geodata_writer','row-v1',true)",
         );
@@ -870,7 +887,7 @@ export class GeodataEntityMutationRepository {
             id,
             categoryIds[0],
             entityTypes[0],
-            JSON.stringify({
+            stringifyJsonWithBigInts({
               entityType: entityTypes[0],
               entityTypes,
               entityTypeCodes: entityTypes,
@@ -911,7 +928,7 @@ export class GeodataEntityMutationRepository {
           [
             'geodata-entity-categories',
             key,
-            JSON.stringify(requestResponse(response, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(response, requestHash)),
           ],
         );
       await client.query('COMMIT');
@@ -978,7 +995,7 @@ export class GeodataEntityMutationRepository {
         error instanceof Error ? error.message : 'invalid geometry coordinates',
       );
     }
-    const geometry = JSON.stringify({
+    const geometry = stringifyJsonWithBigInts({
       type: geometryType,
       coordinates: geometryInput.coordinates,
     });
@@ -1038,7 +1055,8 @@ export class GeodataEntityMutationRepository {
         throw new BadRequestException('geometry must be within WGS84 bounds');
       if (
         canonicalGeometry &&
-        JSON.stringify(row.geometry) !== JSON.stringify(canonicalGeometry)
+        stringifyJsonWithBigInts(row.geometry) !==
+          stringifyJsonWithBigInts(canonicalGeometry)
       ) {
         await client.query(
           "SELECT set_config('myota.geodata_writer','row-v1',true)",
@@ -1076,7 +1094,7 @@ export class GeodataEntityMutationRepository {
           `UPDATE geodata_entity SET geom=ST_SetSRID(ST_GeomFromGeoJSON($2),4326),
            centroid=ST_Centroid(ST_SetSRID(ST_GeomFromGeoJSON($2),4326))::geography,
            public_properties=$3::jsonb,location_work_dispatched_at=now(),updated_at=$4 WHERE id=$1`,
-          [id, geometry, JSON.stringify(nextProperties), changedAt],
+          [id, geometry, stringifyJsonWithBigInts(nextProperties), changedAt],
         );
         await this.writeEntityEvent(
           client,
@@ -1101,7 +1119,7 @@ export class GeodataEntityMutationRepository {
           [
             'geodata-entity-geometry',
             key,
-            JSON.stringify(requestResponse(response, requestHash)),
+            stringifyJsonWithBigInts(requestResponse(response, requestHash)),
           ],
         );
       await client.query('COMMIT');
@@ -1127,7 +1145,7 @@ export class GeodataEntityMutationRepository {
       [
         randomUUID(),
         entityId,
-        JSON.stringify({ eventType, ...payload }),
+        stringifyJsonWithBigInts({ eventType, ...payload }),
         occurredAt,
       ],
     );
@@ -1139,7 +1157,7 @@ export class GeodataEntityMutationRepository {
         randomUUID(),
         eventType,
         entityId,
-        JSON.stringify(payload),
+        stringifyJsonWithBigInts(payload),
         occurredAt,
         randomUUID(),
       ],

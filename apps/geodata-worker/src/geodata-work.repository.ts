@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   Inject,
   Injectable,
@@ -107,7 +108,7 @@ export class GeodataWorkRepository {
           [
             randomUUID(),
             pendingCancellation.id,
-            JSON.stringify({ importRunId: pendingCancellation.id }),
+            stringifyJsonWithBigInts({ importRunId: pendingCancellation.id }),
             randomUUID(),
           ],
         );
@@ -370,7 +371,7 @@ export class GeodataWorkRepository {
         eventType,
         aggregateType,
         aggregateId,
-        JSON.stringify(payload),
+        stringifyJsonWithBigInts(payload),
       ],
     );
   }
@@ -397,7 +398,7 @@ export class GeodataWorkRepository {
         [
           eventId,
           workType,
-          JSON.stringify(envelope),
+          stringifyJsonWithBigInts(envelope),
           Math.max(1, attempts),
           error instanceof Error
             ? error.message.slice(0, 1000)
@@ -593,7 +594,7 @@ export class GeodataWorkRepository {
             typeof properties.name === 'string'
               ? properties.name
               : 'Unnamed candidate';
-          const geometry = JSON.stringify(normalized.geometry);
+          const geometry = stringifyJsonWithBigInts(normalized.geometry);
           const client = await this.connect();
           try {
             const checked = await client.query(
@@ -714,7 +715,7 @@ export class GeodataWorkRepository {
           [
             randomUUID(),
             run.id,
-            JSON.stringify({ importRunId: run.id }),
+            stringifyJsonWithBigInts({ importRunId: run.id }),
             randomUUID(),
           ],
         );
@@ -789,7 +790,7 @@ export class GeodataWorkRepository {
         [
           randomUUID(),
           run.id,
-          JSON.stringify({ importRunId: run.id }),
+          stringifyJsonWithBigInts({ importRunId: run.id }),
           randomUUID(),
         ],
       );
@@ -864,7 +865,7 @@ export class GeodataWorkRepository {
               run.id,
               run.attempt_count,
               record.ordinal,
-              JSON.stringify(record.skipped),
+              stringifyJsonWithBigInts(record.skipped),
             ],
           );
         } else {
@@ -876,7 +877,7 @@ export class GeodataWorkRepository {
               run.id,
               run.attempt_count,
               record.ordinal,
-              JSON.stringify(record.error),
+              stringifyJsonWithBigInts(record.error),
             ],
           );
         }
@@ -964,8 +965,8 @@ export class GeodataWorkRepository {
           run.id,
           run.attempt_count,
           programmeSlug,
-          JSON.stringify(entityTypes),
-          JSON.stringify(run.source_metadata.source ?? {}),
+          stringifyJsonWithBigInts(entityTypes),
+          stringifyJsonWithBigInts(run.source_metadata.source ?? {}),
           run.adapter_code,
         ],
       );
@@ -992,7 +993,7 @@ export class GeodataWorkRepository {
             run.id,
             run.attempt_count,
             promotionActor,
-            JSON.stringify({
+            stringifyJsonWithBigInts({
               note: textValue(autoPromote?.note) ?? 'Community proposal',
             }),
           ],
@@ -1076,7 +1077,7 @@ export class GeodataWorkRepository {
           run.adapter_code,
           manifestSourceHash,
           manifestRecordCount,
-          JSON.stringify(source),
+          stringifyJsonWithBigInts(source),
         ],
       );
       await client.query(
@@ -1108,7 +1109,7 @@ export class GeodataWorkRepository {
       await client.query(
         `UPDATE import_run SET status=$2,stats=$3::jsonb,completed_at=now(),
          heartbeat_at=now(),lease_until=NULL,last_error=NULL WHERE id=$1`,
-        [run.id, status, JSON.stringify(statsPayload)],
+        [run.id, status, stringifyJsonWithBigInts(statsPayload)],
       );
 
       const preprocessedCandidates = `COALESCE((SELECT jsonb_agg(candidate_id::text ORDER BY ordinal)
@@ -1151,14 +1152,14 @@ export class GeodataWorkRepository {
           run.id,
           run.attempt_count,
           run.adapter_code,
-          JSON.stringify(source),
+          stringifyJsonWithBigInts(source),
           manifestSourceHash,
           manifestRecordCount,
           sourceChanged,
           featureCount,
-          JSON.stringify(statsPayload),
+          stringifyJsonWithBigInts(statsPayload),
           randomUUID(),
-          JSON.stringify(disappearedIds),
+          stringifyJsonWithBigInts(disappearedIds),
         ],
       );
       await client.query(
@@ -1259,7 +1260,7 @@ export class GeodataWorkRepository {
              THEN public_properties->'reviewHistory' ELSE '[]'::jsonb END) || jsonb_build_array($3::jsonb),true
          ) || jsonb_build_object('updatedAt',$4::text),
          updated_at=$4,revision=revision+1 WHERE id=$1`,
-        [row.id, sourceState, JSON.stringify(event), occurredAt],
+        [row.id, sourceState, stringifyJsonWithBigInts(event), occurredAt],
       );
       await client.query(
         `INSERT INTO outbox_event
@@ -1269,7 +1270,7 @@ export class GeodataWorkRepository {
         [
           randomUUID(),
           row.id,
-          JSON.stringify({
+          stringifyJsonWithBigInts({
             entityId: row.id,
             policy,
             previousStatus: row.lifecycle_status,
@@ -1362,7 +1363,7 @@ function sourceKeyFromMetadata(source: Record<string, unknown>): string {
   if (value === true) return 'True';
   if (value === false) return 'False';
   if (typeof value === 'string') return value;
-  if (typeof value === 'object') return JSON.stringify(value) ?? '';
+  if (typeof value === 'object') return stringifyJsonWithBigInts(value) ?? '';
   if (typeof value === 'number' || typeof value === 'bigint')
     return value.toString();
   return '';
@@ -1373,7 +1374,7 @@ function pythonSourceRef(value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'bigint')
     return String(value);
-  return JSON.stringify(value) ?? String(value);
+  return stringifyJsonWithBigInts(value) ?? String(value);
 }
 
 function resolveLegacyManualSourceRef(
@@ -1430,7 +1431,7 @@ function hashCanonicalJson(
   const canonical = (item: unknown): string => {
     if (Array.isArray(item)) return `[${item.map(canonical).join(',')}]`;
     if (item === null) return 'null';
-    if (typeof item === 'string') return JSON.stringify(item);
+    if (typeof item === 'string') return stringifyJsonWithBigInts(item);
     if (typeof item === 'boolean') return item ? 'true' : 'false';
     if (typeof item === 'number')
       return Number.isInteger(item) && !Object.is(item, -0)
@@ -1439,7 +1440,9 @@ function hashCanonicalJson(
     if (isRecord(item))
       return `{${Object.keys(item)
         .sort(comparePythonStrings)
-        .map((key) => `${JSON.stringify(key)}:${canonical(item[key])}`)
+        .map(
+          (key) => `${stringifyJsonWithBigInts(key)}:${canonical(item[key])}`,
+        )
         .join(',')}}`;
     return 'null';
   };

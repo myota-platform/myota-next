@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdtemp, open, readFile, rm } from 'node:fs/promises';
@@ -190,7 +191,7 @@ export async function* streamShapefileFeatures(
                   typeof path[1] === 'string' &&
                   dbfRecords.floatingProperties.has(path[1])),
             )
-          : JSON.stringify(feature);
+          : stringifyJsonWithBigInts(feature);
         const encodedBytes = Buffer.byteLength(canonical, 'utf8');
         if (encodedBytes > MAX_RECORD_BYTES)
           throw new Error(

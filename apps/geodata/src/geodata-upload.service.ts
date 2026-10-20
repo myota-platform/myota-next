@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
@@ -99,7 +100,7 @@ export class GeodataUploadService {
             owner,
             idempotencyKey,
             input.filename,
-            JSON.stringify(input.metadata),
+            stringifyJsonWithBigInts(input.metadata),
             bucket,
             objectKey,
             created.UploadId,
@@ -357,7 +358,7 @@ export class GeodataUploadService {
           [
             id,
             metadata.adapter,
-            JSON.stringify(importMetadata),
+            stringifyJsonWithBigInts(importMetadata),
             session.object_key,
             scan.sha256,
           ],
@@ -369,7 +370,7 @@ export class GeodataUploadService {
           [
             randomUUID(),
             id,
-            JSON.stringify({
+            stringifyJsonWithBigInts({
               importRunId: id,
               uploadId: id,
               filename: session.filename,

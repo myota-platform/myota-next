@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   BadRequestException,
   Inject,
@@ -94,7 +95,7 @@ export class GeodataImportService {
       const id = randomUUID();
       objectKey = `geodata/imports/${id}/source.geojson`;
       const raw = Buffer.from(
-        options.rawDocumentJson ?? JSON.stringify(prepared.document),
+        options.rawDocumentJson ?? stringifyJsonWithBigInts(prepared.document),
       );
       const sourceHash = createHash('sha256').update(raw).digest('hex');
 
@@ -140,10 +141,10 @@ export class GeodataImportService {
         [
           id,
           prepared.adapter,
-          JSON.stringify(metadata),
+          stringifyJsonWithBigInts(metadata),
           objectKey,
           sourceHash,
-          JSON.stringify({ featureCount: prepared.features.length }),
+          stringifyJsonWithBigInts({ featureCount: prepared.features.length }),
           prepared.completeSnapshot,
           prepared.disappearancePolicy,
         ],
@@ -170,7 +171,7 @@ export class GeodataImportService {
         [
           randomUUID(),
           id,
-          JSON.stringify({
+          stringifyJsonWithBigInts({
             importRunId: id,
             programmeSlug: prepared.programmeSlug,
             adapter: prepared.adapter,
@@ -189,7 +190,9 @@ export class GeodataImportService {
           [
             'geodata-service',
             key,
-            JSON.stringify(requestResponse(response, options.requestHash)),
+            stringifyJsonWithBigInts(
+              requestResponse(response, options.requestHash),
+            ),
           ],
         );
       await client.query('COMMIT');

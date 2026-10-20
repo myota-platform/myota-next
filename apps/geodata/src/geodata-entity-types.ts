@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { firstPythonTruthy } from '@app/platform/python-truthiness.js';
 
@@ -38,7 +39,7 @@ function pythonString(value: unknown): string {
   if (value == null) return 'None';
   if (value === true) return 'True';
   if (value === false) return 'False';
-  if (typeof value === 'object') return JSON.stringify(value);
+  if (typeof value === 'object') return stringifyJsonWithBigInts(value);
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'bigint')
     return String(value);

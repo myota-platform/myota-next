@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   Inject,
   Injectable,
@@ -105,7 +106,10 @@ export class GeodataEnrichmentRepository {
         `UPDATE geodata_entity SET public_properties=public_properties || $2::jsonb,
           location_work_dispatched_at=now()+interval '5 minutes'
          WHERE id=$1`,
-        [job.id, JSON.stringify({ locationEnrichmentStatus: 'PROCESSING' })],
+        [
+          job.id,
+          stringifyJsonWithBigInts({ locationEnrichmentStatus: 'PROCESSING' }),
+        ],
       );
       await client.query('COMMIT');
       return job;
@@ -177,7 +181,7 @@ export class GeodataEnrichmentRepository {
         };
         await client.query(
           'UPDATE geodata_entity SET public_properties=$2::jsonb,updated_at=$3 WHERE id=$1',
-          [job.id, JSON.stringify(stale), completedAt],
+          [job.id, stringifyJsonWithBigInts(stale), completedAt],
         );
         await this.writeEvent(
           client,
@@ -250,8 +254,8 @@ export class GeodataEnrichmentRepository {
         result.status,
         result.lookupSource,
         result.geocodedAt,
-        JSON.stringify(result.payload ?? {}),
-        JSON.stringify(nextProps),
+        stringifyJsonWithBigInts(result.payload ?? {}),
+        stringifyJsonWithBigInts(nextProps),
         completedAt,
       );
       const start = params.length - 6;
@@ -307,7 +311,7 @@ export class GeodataEnrichmentRepository {
         randomUUID(),
         type,
         id,
-        JSON.stringify(payload),
+        stringifyJsonWithBigInts(payload),
         occurredAt,
         randomUUID(),
       ],
@@ -452,7 +456,9 @@ async function reverseGeocode(
 }
 
 function geometryHash(value: unknown) {
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  return createHash('sha256')
+    .update(stringifyJsonWithBigInts(value))
+    .digest('hex');
 }
 function record(value: unknown): Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

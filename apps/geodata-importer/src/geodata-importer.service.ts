@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   Injectable,
   Logger,
@@ -159,7 +160,7 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
         'content-type': 'application/json',
         'idempotency-key': idempotencyKey,
       },
-      body: JSON.stringify({
+      body: stringifyJsonWithBigInts({
         features,
         ...(sourceFeatureHashOverrides ? { sourceFeatureHashOverrides } : {}),
       }),
