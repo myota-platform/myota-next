@@ -40,27 +40,24 @@ export class ProgrammeReadRepository {
     try {
       const result = await client.query<SnapshotPage>(
         `WITH filtered AS MATERIALIZED (
-           SELECT content.value
-             FROM public.service_state AS snapshot
-             CROSS JOIN LATERAL jsonb_each(
-               CASE WHEN jsonb_typeof(snapshot.state #> '{data,content}') = 'object'
-                 THEN snapshot.state #> '{data,content}'
-                 ELSE '{}'::jsonb
-               END
-             ) AS content(key, value)
-            WHERE snapshot.service = 'programmes'
-              AND content.value->>'programmeSlug' = $1
-              AND ($2::text IS NULL OR content.value->>'locale' = $2)
-              AND ($3::text IS NULL OR content.value->>'status' = $3)
+           SELECT content.payload AS value,
+                  content.content_key,
+                  content.locale,
+                  content.id
+             FROM public.programme_content AS content
+            WHERE content.programme_slug = $1
+              AND ($2::text IS NULL OR content.locale = $2)
+              AND ($3::text IS NULL OR content.status = $3)
          ), page AS (
-           SELECT value FROM filtered
-            ORDER BY value->>'key' COLLATE "C", value->>'locale' COLLATE "C"
+           SELECT value, content_key, locale, id FROM filtered
+            ORDER BY content_key COLLATE "C", locale COLLATE "C", id COLLATE "C"
             LIMIT $4 OFFSET $5
          )
          SELECT COALESCE(
                   (SELECT jsonb_agg(page.value ORDER BY
-                    page.value->>'key' COLLATE "C",
-                    page.value->>'locale' COLLATE "C") FROM page),
+                    page.content_key COLLATE "C",
+                    page.locale COLLATE "C",
+                    page.id COLLATE "C") FROM page),
                   '[]'::jsonb
                 ) AS items,
                 (SELECT count(*)::int FROM filtered) AS total`,
@@ -132,18 +129,9 @@ export class ProgrammeReadRepository {
              FROM public.service_state
             WHERE service = 'programmes'
          ), content AS MATERIALIZED (
-           SELECT entry.value->>'key' AS content_key,
-                  entry.value->>'locale' AS locale,
-                  entry.value->>'status' AS status
-             FROM public.service_state AS snapshot
-             CROSS JOIN LATERAL jsonb_each(
-               CASE WHEN jsonb_typeof(snapshot.state #> '{data,content}') = 'object'
-                 THEN snapshot.state #> '{data,content}'
-                 ELSE '{}'::jsonb
-               END
-             ) AS entry(id, value)
-            WHERE snapshot.service = 'programmes'
-              AND entry.value->>'programmeSlug' = $1
+           SELECT content_key, locale, status
+             FROM public.programme_content
+            WHERE programme_slug = $1
          ), content_keys AS (
            SELECT DISTINCT content_key
              FROM content

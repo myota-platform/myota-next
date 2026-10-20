@@ -7,9 +7,11 @@ import {
 import { randomUUID } from 'node:crypto';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
-import { ProgrammeStateRepository } from './programme-state.repository.js';
 import { ProgrammeReadRepository } from './programme-read.repository.js';
-import type { ProgrammeState } from './programme-state.repository.js';
+import {
+  ProgrammeContentRepository,
+  type ProgrammeContentRecord,
+} from './programme-content.repository.js';
 import type {
   PatchProgrammeContentDto,
   PublishProgrammeContentDto,
@@ -21,20 +23,10 @@ import {
   normalizeUtcTimestamp,
 } from './programme-domain.js';
 
-type ContentRecord = Record<string, unknown> & {
-  id: string;
-  programmeSlug: string;
-  key: string;
-  locale: string;
-  status: string;
-  reviewHistory: Record<string, unknown>[];
-  updatedAt: string;
-};
-
 @Injectable()
 export class ProgrammeContentService {
   constructor(
-    private readonly state: ProgrammeStateRepository,
+    private readonly contents: ProgrammeContentRepository,
     private readonly reads: ProgrammeReadRepository,
   ) {}
 
@@ -88,10 +80,10 @@ export class ProgrammeContentService {
   ) {
     this.authorizeAdmin(authorization, slug);
     this.requireContent(body.key, body.locale, body.value);
-    return this.state.mutate(idempotencyKey, async (client, state) => {
-      const content = contentBucket(state);
+    return this.contents.mutate(idempotencyKey, async (client) => {
       const contentId = body.contentId ?? randomUUID();
-      const previous = content[contentId];
+      await this.contents.lockRecord(client, contentId);
+      const previous = await this.contents.find(client, contentId);
       if (previous && previous.programmeSlug !== slug) {
         throw new BadRequestException('content does not belong to programme');
       }
@@ -102,7 +94,7 @@ export class ProgrammeContentService {
         throw new BadRequestException('only draft content can be edited');
       }
       const now = new Date().toISOString();
-      const record: ContentRecord = {
+      const record: ProgrammeContentRecord = {
         ...(previous ?? {
           id: contentId,
           programmeSlug: slug,
@@ -116,12 +108,10 @@ export class ProgrammeContentService {
         fallbackLocale: body.fallbackLocale ?? null,
         updatedAt: now,
       };
-      content[contentId] = record;
-      await this.state.recordEvent(
+      await this.contents.save(client, record);
+      await this.contents.recordEvent(
         client,
-        state,
         'programme.content.saved.v1',
-        'content',
         contentId,
         record,
       );
@@ -136,8 +126,9 @@ export class ProgrammeContentService {
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
-    return this.state.mutate(idempotencyKey, async (client, state) => {
-      const content = requireContentRecord(contentBucket(state), contentId);
+    return this.contents.mutate(idempotencyKey, async (client) => {
+      await this.contents.lockRecord(client, contentId);
+      const content = await this.requireContentRecord(client, contentId);
       if (
         content.programmeSlug !== slug ||
         !['DRAFT', 'CHANGES_REQUESTED'].includes(content.status)
@@ -149,11 +140,10 @@ export class ProgrammeContentService {
       content.submittedAt = now;
       content.updatedAt = now;
       content.reviewHistory.push({ action: 'SUBMITTED', occurredAt: now });
-      await this.state.recordEvent(
+      await this.contents.save(client, content);
+      await this.contents.recordEvent(
         client,
-        state,
         'programme.content.submitted.v1',
-        'content',
         content.id,
         content,
       );
@@ -169,8 +159,9 @@ export class ProgrammeContentService {
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
-    return this.state.mutate(idempotencyKey, async (client, state) => {
-      const content = requireContentRecord(contentBucket(state), contentId);
+    return this.contents.mutate(idempotencyKey, async (client) => {
+      await this.contents.lockRecord(client, contentId);
+      const content = await this.requireContentRecord(client, contentId);
       if (content.programmeSlug !== slug || content.status !== 'UNDER_REVIEW') {
         throw new BadRequestException(
           'only content under review can be decided',
@@ -186,11 +177,10 @@ export class ProgrammeContentService {
         note: body.note ?? null,
         occurredAt: now,
       });
-      await this.state.recordEvent(
+      await this.contents.save(client, content);
+      await this.contents.recordEvent(
         client,
-        state,
         'programme.content.reviewed.v1',
-        'content',
         content.id,
         content,
       );
@@ -207,8 +197,9 @@ export class ProgrammeContentService {
   ) {
     this.authorizeAdmin(authorization, slug);
     const effectiveFrom = normalizeUtcTimestamp(body.effectiveFrom);
-    return this.state.mutate(idempotencyKey, async (client, state) => {
-      const content = requireContentRecord(contentBucket(state), contentId);
+    return this.contents.mutate(idempotencyKey, async (client) => {
+      await this.contents.lockRecord(client, contentId);
+      const content = await this.requireContentRecord(client, contentId);
       if (content.programmeSlug !== slug || content.status !== 'APPROVED') {
         throw new BadRequestException('only approved content can be published');
       }
@@ -224,11 +215,10 @@ export class ProgrammeContentService {
         effectiveFrom,
         occurredAt: now,
       });
-      await this.state.recordEvent(
+      await this.contents.save(client, content);
+      await this.contents.recordEvent(
         client,
-        state,
         'programme.content.published.v1',
-        'content',
         content.id,
         content,
       );
@@ -276,8 +266,7 @@ export class ProgrammeContentService {
         idempotencyKey,
       );
     }
-    const state = await this.state.load();
-    const current = contentBucket(state)[contentId];
+    const current = await this.contents.get(contentId);
     if (!current) throw new BadRequestException('content not found');
     return this.save(
       authorization,
@@ -302,6 +291,16 @@ export class ProgrammeContentService {
     }
   }
 
+  private async requireContentRecord(
+    client: import('pg').PoolClient,
+    contentId: string,
+  ): Promise<ProgrammeContentRecord> {
+    const content = await this.contents.find(client, contentId);
+    if (!content) throw new NotFoundException('content not found');
+    content.reviewHistory ??= [];
+    return content;
+  }
+
   private authorizeAdmin(authorization: string | undefined, slug: string) {
     const scopes = new Set(verifyAccessToken(authorization).scp);
     if (
@@ -313,25 +312,4 @@ export class ProgrammeContentService {
     }
     throw new ForbiddenException('programme administration scope is required');
   }
-}
-
-function contentBucket(state: ProgrammeState): Record<string, ContentRecord> {
-  state.data ??= {};
-  const value = state.data.content;
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, ContentRecord>;
-  }
-  const bucket: Record<string, ContentRecord> = {};
-  state.data.content = bucket;
-  return bucket;
-}
-
-function requireContentRecord(
-  bucket: Record<string, ContentRecord>,
-  contentId: string,
-): ContentRecord {
-  const content = bucket[contentId];
-  if (!content) throw new NotFoundException('content not found');
-  content.reviewHistory ??= [];
-  return content;
 }

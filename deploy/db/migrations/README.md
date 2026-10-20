@@ -76,7 +76,10 @@ snapshot has checksums and must not be used as an additional migration source.
 callsign projection after the initial Core baseline. `core/005` adds the
 redacted email delivery ledger to the Core owner, so email delivery does not
 introduce a fourth database. The JSONB Identity snapshot remains intact;
-runtime cutover is a separate gated change.
+runtime cutover is a separate gated change. `core/006` backfills Programme
+content records into an indexed Core table and removes the duplicate content
+bucket from the Programme snapshot; lifecycle writes and outbox events then
+commit together against that table.
 
 `geo/002` adds attempt-scoped import feature staging so workers can process
 large inputs without retaining all prepared candidates and validation errors
