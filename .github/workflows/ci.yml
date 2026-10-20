@@ -31,3 +31,5 @@ jobs:
       - run: npm run lint --prefix web/admin
       - run: npm run typecheck --prefix web/admin
       - run: npm run build --prefix web/admin
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser

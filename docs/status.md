@@ -20,6 +20,8 @@ this page summarizes the current state and remaining release gates.
   the documented workflows.
 - **Web applications:** Admin and Participant applications are separate
   deployable artifacts and use the NestJS APIs. The Admin build is part of CI.
+  Chromium browser checks cover Admin sign-in, session bootstrap, and denial of
+  a workspace outside the signed-in account's scopes.
 - **Build and deployment:** CI builds the NestJS applications and container
   images. Helm charts describe the applications and optional single-instance
   PostgreSQL for the three owners. Local Compose provisions the development
@@ -35,8 +37,10 @@ behavioral parity or production readiness.
   and redrive against disposable infrastructure.
 - Complete the semantic review and rehearsal for cross-version database
   transfer, backup, restore, and rollback.
-- Review browser workflows for payload parity, accessibility, responsive
-  behavior, and failure states.
+- Expand browser workflow checks across Admin and Participant payload parity,
+  accessibility, responsive behavior, and failure states. Current Admin
+  authentication browser checks use intercepted API responses and do not test
+  deployment or service integration.
 - Qualify production deployment, persistent database operations, NATS topology,
   object storage, secrets, observability, and release automation.
 - Compare Geodata worker throughput and resource limits with the reference under
