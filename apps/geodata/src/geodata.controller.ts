@@ -335,12 +335,20 @@ export class GeodataController {
     @Headers('idempotency-key') key: string | undefined,
     @Param('runId') runId: string,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
-    authorizeImport(authorization);
+    const claims = authorizeImport(authorization);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
     const finalization = await this.importMutations.finalizeImport(
       runId,
-      key,
+      idempotency.key,
       body,
+      idempotency.requestHash,
     );
     return {
       ...(await this.repository.getImport(runId)),

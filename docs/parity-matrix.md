@@ -235,7 +235,8 @@ and outbox write. Refresh schedule creation and manual runs also scope keys by
 owner and path, check the request fingerprint before validation, and reject
 changed-body reuse; a run replay preserves the prior import and schedule result.
 Deletion-job creation and confirmation also replay by owner, path, and body,
-including a confirmation retry against an already completed job.
+including a confirmation retry against an already completed job. Import
+finalization uses the same request fingerprint and successful-result replay.
 Candidate validation notes are stored as JSONB with existing text values
 preserved as JSON strings. If-Match protected name, website,
 description, geometry, and
