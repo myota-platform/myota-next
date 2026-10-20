@@ -145,7 +145,9 @@ export function evaluateAwardCondition(
   condition: JsonRecord,
   facts: JsonRecord,
 ): boolean {
-  const kind = String(condition.kind ?? '').toUpperCase();
+  const kind = pythonConditionString(
+    Object.hasOwn(condition, 'kind') ? condition.kind : '',
+  ).toUpperCase();
   if (kind === 'AND' || kind === 'ALL') {
     const children = condition.conditions;
     return (
@@ -169,7 +171,9 @@ export function evaluateAwardCondition(
       .includes(String(facts.entityType ?? ''));
   const field =
     kind === 'FIELD'
-      ? String(condition.field ?? '')
+      ? pythonConditionString(
+          Object.hasOwn(condition, 'field') ? condition.field : '',
+        )
       : {
           QSO_COUNT: 'qsoCount',
           ACTIVATION_COUNT: 'activationCount',
@@ -188,7 +192,10 @@ export function evaluateAwardCondition(
     Object.hasOwn(condition, 'value') ? condition.value : 0,
     'condition.value',
   );
-  switch (String(condition.operator ?? 'GTE').toUpperCase()) {
+  const operator = Object.hasOwn(condition, 'operator')
+    ? condition.operator
+    : 'GTE';
+  switch (pythonConditionString(operator).toUpperCase()) {
     case 'GTE':
       return actual >= expected;
     case 'GT':
@@ -202,6 +209,19 @@ export function evaluateAwardCondition(
     default:
       return false;
   }
+}
+
+function pythonConditionString(value: unknown): string {
+  if (value === null) return 'None';
+  if (value === true) return 'True';
+  if (value === false) return 'False';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return value.toString();
+  if (typeof value === 'bigint' || typeof value === 'symbol')
+    return value.toString();
+  if (typeof value === 'undefined') return 'undefined';
+  if (typeof value === 'object') return JSON.stringify(value) ?? 'None';
+  return '[function]';
 }
 
 export function evaluateAward(

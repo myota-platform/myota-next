@@ -87,7 +87,9 @@ issuance is transactional and permanent, and PDF render jobs store artifacts in
 S3-compatible storage with authorized presigned download URLs. The Admin can
 render transient PDF previews from mock data and registered assets without
 creating an issuance or object; preview and issuance use the same renderer.
-Registered award assets and bounded content storage are implemented. ADIF uploads now pass
+Registered award assets and bounded content storage are implemented. Award
+condition operators default to `GTE` only when omitted; an explicit `null` is
+an unknown operator and evaluates false, matching the Python handler. ADIF uploads now pass
 authorization, malware checks, and object storage before durable queueing; the
 Activity worker parses records, records successes and rejects, updates
 aggregates, and reports import status. CSV file uploads now validate bounded
