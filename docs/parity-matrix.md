@@ -62,6 +62,11 @@ Core-owned order values. Existing rows are backfilled chronologically with IDs
 as deterministic tie-breakers.
 These are the first implemented slices; they still need automated
 compatibility coverage before they count as parity complete.
+Profile-image uploads accept JPEG, PNG, or WebP up to 5 MiB, reject animation
+and dimensions above 4096 pixels, honor EXIF orientation, center-crop to 512 by
+512, remove source metadata, and try WebP qualities 85, 75, 65, and 55 under a
+256 KiB output cap in both the Pillow and Sharp paths. Byte-level rendition
+equivalence between the two encoders still needs representative fixtures.
 Identity startup now idempotently provisions the configured bootstrap account,
 sets its password only when no credential exists, ensures its global operator
 role, and writes the corresponding Core outbox and security events.
