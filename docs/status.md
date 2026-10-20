@@ -356,9 +356,11 @@
   GeoData PostgreSQL/NATS readiness on `GEODATA_WORKER_HEALTH_PORT`. The service
   also has PostGIS-backed public entity
   list/detail reads with bounded paging, status/category/location filters, and
-  bounding-box queries. Catalogue filters and conflation resolution select the
-  first nonblank repeated value; catalogue text filters are case-insensitive,
-  while resolution is case-sensitive. Repeated status filters combine values.
+  bounding-box queries whose coordinate parsing follows Python float syntax,
+  including Unicode decimal digits and numeric underscores. Catalogue filters
+  and conflation resolution select the first nonblank repeated value;
+  catalogue text filters are case-insensitive, while resolution is
+  case-sensitive. Repeated status filters combine values.
   The adapter catalogue retains baseline format names
   and aliases, including `PARKSERVE_US` and `SHP`, and lists Shapefile support
   for manual imports. Feature-name alias matching uses Python-compatible Unicode

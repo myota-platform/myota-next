@@ -10,6 +10,7 @@ import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { firstQueryValue } from '@app/platform/query.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import { parsePythonFloatText } from '@app/platform/python-numeric.js';
 
 @Injectable()
 export class GeodataRepository {
@@ -418,21 +419,18 @@ function parseBounds(query: Record<string, unknown>) {
       throw new BadRequestException(
         'bbox must contain minLon,minLat,maxLon,maxLat',
       );
-    raw = values.map(Number);
-    if (
-      values.some((value) => !value) ||
-      raw.some((value) => !Number.isFinite(value))
-    )
+    raw = parseBoundsValues(values, 'bbox must contain numeric coordinates');
+    if (raw.some((value) => !Number.isFinite(value)))
       throw new BadRequestException('bbox must contain numeric coordinates');
   } else if (hasLegacyBounds) {
     const values = legacyValues.map((value) =>
       value === undefined ? '' : trimPythonWhitespace(value),
     );
-    raw = values.map(Number);
-    if (
-      values.some((value) => !value) ||
-      raw.some((value) => !Number.isFinite(value))
-    )
+    raw = parseBoundsValues(
+      values,
+      'minLon, minLat, maxLon and maxLat must be numbers',
+    );
+    if (raw.some((value) => !Number.isFinite(value)))
       throw new BadRequestException(
         'minLon, minLat, maxLon and maxLat must be numbers',
       );
@@ -444,4 +442,12 @@ function parseBounds(query: Record<string, unknown>) {
       'map bounds must have minimum values below maximum values',
     );
   return raw;
+}
+
+function parseBoundsValues(values: string[], message: string): number[] {
+  try {
+    return values.map(parsePythonFloatText);
+  } catch {
+    throw new BadRequestException(message);
+  }
 }

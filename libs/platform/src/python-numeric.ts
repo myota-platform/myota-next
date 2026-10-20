@@ -27,6 +27,24 @@ export function normalizePythonNumericText(value: string): string {
   }).join('');
 }
 
+export function parsePythonFloatText(value: string): number {
+  const normalized = normalizePythonNumericText(value);
+  if (
+    !/^[+-]?(?:(?:\d(?:_?\d)*(?:\.(?:\d(?:_?\d)*)?)?|\.\d(?:_?\d)*)(?:e[+-]?\d(?:_?\d)*)?|inf(?:inity)?|nan)$/i.test(
+      normalized,
+    )
+  )
+    throw new TypeError('value is not a valid Python float');
+  const withoutSeparators = normalized.replaceAll('_', '');
+  const token = withoutSeparators.replace(/^[+-]/, '').toLowerCase();
+  if (token === 'nan') return Number.NaN;
+  if (token === 'inf' || token === 'infinity')
+    return withoutSeparators.startsWith('-')
+      ? Number.NEGATIVE_INFINITY
+      : Number.POSITIVE_INFINITY;
+  return Number(withoutSeparators);
+}
+
 function trimPythonNumericWhitespace(value: string): string {
   const characters = Array.from(value);
   let start = 0;
