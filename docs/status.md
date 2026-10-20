@@ -91,8 +91,9 @@
   reference order.
   Login and recovery accept any non-empty email string and resolve it through
   the normalized Identity email key, matching the Python handler.
-  Callsign evidence metadata, verification source, and retirement `validTo`
-  preserve explicitly submitted `null` values where the Python handler does.
+  Callsign source, evidence metadata, verification source, and retirement
+  `validTo` preserve explicitly submitted `null` values where the Python
+  handler does.
   Recovery responses expose the development reset token unless `MYOTA_ENV` is
   exactly `production`, matching the reference's case-sensitive check.
   Recovery reset checks token validity before enforcing the 12-character

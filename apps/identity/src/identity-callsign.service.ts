@@ -83,7 +83,7 @@ export class IdentityCallsignService {
       }
       const id = randomUUID();
       const status = body.status ?? 'UNVERIFIED';
-      const source = body.source ?? 'self-asserted';
+      const source = body.source === undefined ? 'self-asserted' : body.source;
       const createdAt = new Date();
       const verifiedAt = status === 'VERIFIED' ? createdAt : null;
       await client.query(

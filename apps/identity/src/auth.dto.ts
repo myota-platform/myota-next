@@ -238,7 +238,7 @@ export class AddCallsignDto {
 
   @IsOptional()
   @IsString()
-  source?: string;
+  source?: string | null;
 
   @IsOptional()
   @IsDateString()
