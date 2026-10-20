@@ -130,7 +130,7 @@ export function normalizeCallsign(value: unknown): string {
   ) {
     throw new BadRequestException('callsign is invalid');
   }
-  const normalized = String(value).toUpperCase().trim().replace(/\s+/g, ' ');
+  const normalized = collapsePythonWhitespace(String(value).toUpperCase());
   if (
     !normalized ||
     normalized.length > 32 ||
@@ -139,6 +139,34 @@ export function normalizeCallsign(value: unknown): string {
     throw new BadRequestException('callsign is invalid');
   }
   return normalized;
+}
+
+function collapsePythonWhitespace(value: string): string {
+  const output: string[] = [];
+  let pendingSpace = false;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0)!;
+    const whitespace =
+      (codePoint >= 0x09 && codePoint <= 0x0d) ||
+      (codePoint >= 0x1c && codePoint <= 0x20) ||
+      codePoint === 0x85 ||
+      codePoint === 0xa0 ||
+      codePoint === 0x1680 ||
+      (codePoint >= 0x2000 && codePoint <= 0x200a) ||
+      codePoint === 0x2028 ||
+      codePoint === 0x2029 ||
+      codePoint === 0x202f ||
+      codePoint === 0x205f ||
+      codePoint === 0x3000;
+    if (whitespace) {
+      pendingSpace ||= output.length > 0;
+      continue;
+    }
+    if (pendingSpace) output.push(' ');
+    output.push(character);
+    pendingSpace = false;
+  }
+  return output.join('');
 }
 
 export function normalizeActivation(data: JsonRecord): JsonRecord {

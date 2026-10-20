@@ -131,10 +131,11 @@
   retrieval, closure, and single-QSO recording. Activation creation enforces
   programme location requirements and configured entity bounds. An explicit
   `validityDays` value takes precedence over the programme rule, including null,
-  and non-empty values use Python-compatible float parsing. It persists normalized
-  activations and QSOs in Activity PostgreSQL with UTC microsecond timestamp
-  precision preserved through normalization, validity checks, persistence,
-  deduplication, and reads. Default activation-close and rule-evaluation times
+  and non-empty values use Python-compatible float parsing. It persists
+  normalized activations and QSOs in Activity PostgreSQL with UTC microsecond
+  timestamp precision preserved through normalization, validity checks,
+  persistence, deduplication, and reads. QSO callsigns collapse Python's Unicode
+  whitespace set before validation. Default activation-close and rule-evaluation times
   use the same six-digit UTC timestamp form as the reference. It writes domain
   events and idempotency responses transactionally, updates subject aggregates,
   and queues award recalculation work through the Activity outbox. High-volume QSO
