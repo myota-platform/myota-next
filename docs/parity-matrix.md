@@ -226,7 +226,8 @@ changed-body reuse while preserving integer versus float values. The request
 lock spans proposal/import validation and source-object, import, and outbox
 creation. Import candidate validation now uses the same owner/path-scoped key
 and request fingerprint, replays successful results before body validation,
-and rejects changed-body key reuse.
+and rejects changed-body key reuse. Import promotion applies the same request
+contract while retaining scope checks and atomic queue/outbox writes.
 Candidate validation notes are stored as JSONB with existing text values
 preserved as JSON strings. If-Match protected name, website,
 description, geometry, and

@@ -277,8 +277,9 @@
   direct-import idempotency is scoped to owner and actual request path and
   rejects reuse with a changed body before validation. Fingerprints preserve
   JSON integer versus float values, and the request lock spans validation,
-  source storage, and import/outbox creation. Candidate validation now follows
-  the same owner/path/body request contract and replays before body validation.
+  source storage, and import/outbox creation. Candidate validation and
+  promotion now follow the same owner/path/body request contract and replay
+  before body validation.
   `/healthz` and `/readyz` expose worker liveness and
   GeoData PostgreSQL/NATS readiness on `GEODATA_WORKER_HEALTH_PORT`. The service
   also has PostGIS-backed public entity
