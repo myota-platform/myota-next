@@ -57,8 +57,9 @@ revoke its sessions; existing refresh sessions also remain rotatable, and both
 session revocation and anonymization happen when `anonymize` is true. Callsign
 creation, evidence, verification, primary selection, and retirement also write
 to the relational Core model and outbox. Account reads and exports preserve the
-reference's callsign insertion order, using Core `created_at` with ID as a
-stable tie-breaker.
+reference's callsign, evidence, and security-event insertion order through
+Core-owned order values. Existing rows are backfilled chronologically with IDs
+as deterministic tie-breakers.
 These are the first implemented slices; they still need automated
 compatibility coverage before they count as parity complete.
 Identity startup now idempotently provisions the configured bootstrap account,

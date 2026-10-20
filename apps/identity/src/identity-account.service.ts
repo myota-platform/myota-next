@@ -383,14 +383,14 @@ export class IdentityAccountService {
                 c.verified_at AS "verifiedAt", c.valid_from AS "validFrom",
                 c.valid_to AS "validTo", c.created_at AS "createdAt",
                 c.updated_at AS "updatedAt",
-                coalesce(array_agg(e.id ORDER BY e.submitted_at, e.id)
+                coalesce(array_agg(e.id ORDER BY e.evidence_order)
                   FILTER (WHERE e.id IS NOT NULL), '{}')
                   AS "evidenceIds"
            FROM public.callsign c
            LEFT JOIN public.callsign_evidence e ON e.callsign_id = c.id
           WHERE c.account_id = $1
           GROUP BY c.id
-          ORDER BY c.created_at, c.id`,
+          ORDER BY c.created_order`,
         [accountId],
       );
       return {
@@ -629,7 +629,7 @@ export class IdentityAccountService {
            LEFT JOIN public.callsign_evidence e ON e.callsign_id = c.id
           WHERE c.account_id = $1
           GROUP BY c.id
-          ORDER BY c.created_at, c.id`,
+          ORDER BY c.created_order`,
         [accountId],
       );
       await client.query('COMMIT');
@@ -672,7 +672,7 @@ export class IdentityAccountService {
            FROM public.callsign_evidence e
            JOIN public.callsign c ON c.id = e.callsign_id
           WHERE c.account_id = $1
-          ORDER BY e.submitted_at, e.id`,
+          ORDER BY e.evidence_order`,
         [accountId],
       );
       const securityEvents = await client.query(
@@ -680,7 +680,7 @@ export class IdentityAccountService {
                 payload
            FROM public.security_event
           WHERE payload ->> 'accountId' = $1
-          ORDER BY occurred_at, id`,
+          ORDER BY event_order`,
         [accountId],
       );
       await client.query('COMMIT');
@@ -1066,7 +1066,7 @@ export class IdentityAccountService {
          LEFT JOIN public.callsign_evidence e ON e.callsign_id = c.id
         WHERE c.account_id = $1
         GROUP BY c.id
-        ORDER BY c.created_at, c.id`,
+        ORDER BY c.created_order`,
       [accountId],
     );
     return { ...this.accountView(account), callsigns: callsigns.rows };

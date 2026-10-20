@@ -93,7 +93,8 @@ updates and assigned Programme record changes commit in the same transaction.
 and event publication have moved to relational tables and the transactional
 outbox. `core/014` preserves account-role insertion order when reads return role
 arrays. Existing assignments are backfilled by creation timestamp and ID; new
-assignments receive a Core-owned monotonic ordering value.
+assignments receive a Core-owned monotonic ordering value. `core/015` does the
+same for callsigns, callsign evidence, and security events in account exports.
 
 `geo/002` adds attempt-scoped import feature staging so workers can process
 large inputs without retaining all prepared candidates and validation errors
