@@ -251,7 +251,7 @@ function prepareSchedule(body: Record<string, unknown>): RefreshSchedule {
   }
   if (!entityTypes.length)
     throw new BadRequestException('one or more valid entityTypes are required');
-  const intervalSeconds = Number(body.intervalSeconds);
+  const intervalSeconds = referenceInteger(body.intervalSeconds);
   if (!Number.isInteger(intervalSeconds) || intervalSeconds < 300)
     throw new BadRequestException(
       'refresh interval must be at least 300 seconds',
@@ -290,4 +290,13 @@ function referenceTruthy(value: unknown): boolean {
   if (Array.isArray(value)) return value.length > 0;
   if (typeof value === 'object') return Object.keys(value).length > 0;
   return true;
+}
+
+function referenceInteger(value: unknown): number {
+  if (typeof value === 'number') return Math.trunc(value);
+  if (typeof value === 'boolean') return Number(value);
+  if (typeof value !== 'string') return Number.NaN;
+  const normalized = value.trim();
+  if (!/^[+-]?\d(?:_?\d)*$/.test(normalized)) return Number.NaN;
+  return Number(normalized.replaceAll('_', ''));
 }
