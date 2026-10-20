@@ -452,17 +452,37 @@ export class IdentityAuthService {
           // Logout is idempotent; malformed or expired refresh tokens are ignored.
         }
       }
-      if (authorization?.startsWith('Bearer ')) {
+      if (authorization) {
+        if (!authorization.startsWith('Bearer '))
+          throw new UnauthorizedException('Bearer authentication is required');
+        const token = authorization.slice(7);
+        let claims: TokenClaims | ServiceTokenClaims;
         try {
-          const claims = verifyToken(authorization.slice(7), 'access');
-          await client.query(
-            `INSERT INTO public.auth_revocation (jti, expires_at)
-             VALUES ($1, to_timestamp($2)) ON CONFLICT (jti) DO NOTHING`,
-            [claims.jti, claims.exp],
-          );
+          claims = verifyToken(token, 'access');
         } catch {
-          // Logout remains safe to repeat with an expired access token.
+          claims = verifyToken(token, 'service');
         }
+        const revoked = await client.query(
+          'SELECT 1 FROM public.auth_revocation WHERE jti = $1 AND expires_at > now()',
+          [claims.jti],
+        );
+        if (revoked.rowCount)
+          throw new UnauthorizedException('token has been revoked');
+        if (claims.tokenType === 'access') {
+          const account = await client.query(
+            "SELECT 1 FROM public.account WHERE id = $1 AND status = 'ACTIVE'",
+            [claims.sub],
+          );
+          if (!account.rowCount)
+            throw new UnauthorizedException(
+              'account is inactive or unavailable',
+            );
+        }
+        await client.query(
+          `INSERT INTO public.auth_revocation (jti, expires_at)
+           VALUES ($1, to_timestamp($2)) ON CONFLICT (jti) DO NOTHING`,
+          [claims.jti, claims.exp],
+        );
       }
       await client.query('COMMIT');
       return { status: 'logged_out' };

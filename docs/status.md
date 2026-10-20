@@ -93,6 +93,8 @@
   exactly `production`, matching the reference's case-sensitive check.
   Recovery reset checks token validity before enforcing the 12-character
   password minimum, matching the reference validation order.
+  Logout ignores invalid refresh tokens but validates any supplied bearer token
+  and accepts access or service tokens for revocation, matching the reference.
   The Core migration removes the retired `operations.read` scope from persisted
   custom role definitions and advances their update timestamp, matching the
   reference when it materializes the role catalogue.
