@@ -294,6 +294,9 @@ per-feature size by default, 250,000 vertices, and the configured feature
 count. Less
 common geometry types and uncommon CRS definitions still need compatibility
 qualification against the reference parser.
+Geodata coordinate validation also preserves Python's `bool`-as-number
+behavior, including numeric-equivalent polygon ring closure; projected
+coordinates convert those values before transformation.
 Import adapters infer feature names from the reference alias catalogue before
 validation, using Python-compatible Unicode casefolding, whitespace collapse,
 and 300-code-point truncation. The worker validates WGS84

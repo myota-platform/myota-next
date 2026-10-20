@@ -2,10 +2,10 @@ export function collectCoordinatePairs(value: unknown): [number, number][] {
   if (
     Array.isArray(value) &&
     value.length >= 2 &&
-    typeof value[0] === 'number' &&
-    typeof value[1] === 'number'
+    isPythonNumber(value[0]) &&
+    isPythonNumber(value[1])
   )
-    return [[value[0], value[1]]];
+    return [[Number(value[0]), Number(value[1])]];
   if (!Array.isArray(value)) return [];
   return value.flatMap(collectCoordinatePairs);
 }
@@ -62,9 +62,26 @@ function isRing(value: unknown): boolean {
   return (
     Array.isArray(value) &&
     value.length >= 4 &&
-    JSON.stringify(value[0]) === JSON.stringify(value[value.length - 1]) &&
+    pythonEqual(value[0], value[value.length - 1]) &&
     value.every((point) => Array.isArray(point) && point.length >= 2)
   );
+}
+
+function isPythonNumber(value: unknown): value is number | boolean {
+  return typeof value === 'number' || typeof value === 'boolean';
+}
+
+function pythonEqual(left: unknown, right: unknown): boolean {
+  if (typeof left === 'boolean' && typeof right === 'number')
+    return Number(left) === right;
+  if (typeof right === 'boolean' && typeof left === 'number')
+    return left === Number(right);
+  if (Array.isArray(left) && Array.isArray(right))
+    return (
+      left.length === right.length &&
+      left.every((value, index) => pythonEqual(value, right[index]))
+    );
+  return left === right;
 }
 
 function isPolygon(value: unknown): boolean {

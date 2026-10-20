@@ -220,13 +220,13 @@ function normalizeCoordinates(value: unknown, source: string): unknown {
   if (
     Array.isArray(value) &&
     value.length >= 2 &&
-    typeof value[0] === 'number' &&
-    typeof value[1] === 'number'
+    isPythonNumber(value[0]) &&
+    isPythonNumber(value[1])
   ) {
+    const x = Number(value[0]);
+    const y = Number(value[1]);
     if (source === 'EPSG:4326' || source === 'CRS84') return value;
     if (source === 'EPSG:3857' || source === 'EPSG:900913') {
-      const x = value[0];
-      const y = value[1];
       const longitude = (x / 20037508.34) * 180;
       const latitude = (y / 20037508.34) * 180;
       const exponential = Math.exp((latitude * Math.PI) / 180);
@@ -238,7 +238,7 @@ function normalizeCoordinates(value: unknown, source: string): unknown {
     let longitude: number;
     let latitude: number;
     try {
-      [longitude, latitude] = proj4(source, 'EPSG:4326', [value[0], value[1]]);
+      [longitude, latitude] = proj4(source, 'EPSG:4326', [x, y]);
     } catch (error) {
       throw new Error(`unsupported CRS ${source}`, { cause: error });
     }
@@ -248,6 +248,10 @@ function normalizeCoordinates(value: unknown, source: string): unknown {
   if (Array.isArray(value))
     return value.map((child) => normalizeCoordinates(child, source));
   return value;
+}
+
+function isPythonNumber(value: unknown): value is number | boolean {
+  return typeof value === 'number' || typeof value === 'boolean';
 }
 
 function sourceCrs(value: unknown): string {
