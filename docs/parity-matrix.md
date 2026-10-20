@@ -319,7 +319,9 @@ returned a payload, matching the Python result shape for success and failure.
 The city field falls back to locality using Python truthiness, and administrative
 name/code selection follows the same first-truthy-value rule.
 `geocodedAt` is assigned after the provider response is parsed, matching the
-Python lookup timestamp.
+Python lookup timestamp. Positive fractional `BIGDATACLOUD_TIMEOUT_SECONDS`
+values up to 60 seconds are preserved to millisecond precision, allowing
+subsecond timeouts.
 The worker caches successful and failed provider results by rounded coordinates
 and locality language, with a 2,048-entry per-process LRU limit.
 JSON GeoJSON, WFS GeoJSON, and ArcGIS FeatureServer JSON import creation stores

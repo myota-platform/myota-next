@@ -546,8 +546,8 @@ function record(value: unknown): Record<string, any> {
 }
 function boundedTimeout(value: string | undefined) {
   const seconds = Number(value ?? 10);
-  return Number.isFinite(seconds) && seconds >= 1 && seconds <= 60
-    ? seconds * 1000
+  return Number.isFinite(seconds) && seconds > 0 && seconds <= 60
+    ? Math.max(1, Math.ceil(seconds * 1000))
     : 10000;
 }
 
