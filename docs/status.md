@@ -134,7 +134,8 @@
   and non-empty values use Python-compatible float parsing. It persists
   normalized activations and QSOs in Activity PostgreSQL with UTC microsecond
   timestamp precision preserved through normalization, validity checks,
-  persistence, deduplication, and reads. QSO callsigns collapse Python's Unicode
+  persistence, deduplication, and reads. Optional `sourceImportId` provenance
+  is retained on direct and worker QSO inserts. QSO callsigns collapse Python's Unicode
   whitespace set before validation. Default activation-close and rule-evaluation times
   use the same six-digit UTC timestamp form as the reference. Minimum QSO
   thresholds use Python integer conversion. It writes domain
