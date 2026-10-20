@@ -66,40 +66,14 @@ export class ProgrammeContentService {
 
   async coverage(authorization: string | undefined, slug: string) {
     this.authorizeAdmin(authorization, slug);
-    const state = await this.state.load();
-    const programme = state.items?.[slug];
-    if (!programme) throw new NotFoundException('programme not found');
-    const content = Object.values(contentBucket(state)).filter(
-      (item) => item.programmeSlug === slug,
-    );
-    const keys = [...new Set(content.map((item) => item.key))].sort();
-    const programmeLocales = programme.locales;
-    const locales =
-      Array.isArray(programmeLocales) && programmeLocales.length > 0
-        ? programmeLocales.filter(
-            (locale): locale is string => typeof locale === 'string',
-          )
-        : [...new Set(content.map((item) => item.locale))].sort();
-    const effectiveLocales = locales.length ? locales : ['en'];
-    const byLocale = effectiveLocales.map((locale) => {
-      const published = new Set(
-        content
-          .filter(
-            (item) => item.locale === locale && item.status === 'PUBLISHED',
-          )
-          .map((item) => item.key),
-      );
-      return {
-        locale,
-        published: published.size,
-        total: keys.length,
-        coveragePercent: keys.length
-          ? Math.round((published.size / keys.length) * 100)
-          : 0,
-        missingKeys: keys.filter((key) => !published.has(key)),
-      };
-    });
-    return { programmeSlug: slug, locales: byLocale, totalKeys: keys.length };
+    const coverage = await this.state.getContentCoverage(slug);
+    if (!coverage.programmeFound)
+      throw new NotFoundException('programme not found');
+    return {
+      programmeSlug: slug,
+      locales: coverage.locales,
+      totalKeys: coverage.totalKeys,
+    };
   }
 
   async save(
