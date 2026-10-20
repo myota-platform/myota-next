@@ -189,7 +189,7 @@ export class GeodataImportService {
     const objectKey = body.source.objectKey;
     if (
       requestedBucket !== bucket ||
-      !objectKey.trim() ||
+      !objectKey ||
       objectKey.includes('..') ||
       objectKey.includes('\\')
     )
