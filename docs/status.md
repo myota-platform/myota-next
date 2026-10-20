@@ -542,10 +542,12 @@
   paged import-run status reads are also exposed. Import finalization now
   discards staged candidates and queues, marks terminal runs processed, and
   records a transactional outbox fact. Authenticated entity audit
-  reads combine the entity's review histories with durable audit events. Vector
-  tile reads serve approved entity geometry as Mapbox vector tiles and parse
-  z/x/y path values with Python integer syntax, including Unicode decimal digits
-  and numeric underscores, before applying Web Mercator range checks.
+  reads combine the entity's review histories with durable audit events. Tile
+  reads return the legacy GeoJSON FeatureCollection shape, including its
+  feature cap, cache metadata, and tile metadata; they include all lifecycle
+  statuses as the reference handler does. Tile bounds use the reference
+  Web Mercator conversion, and z/x/y path values use Python integer syntax,
+  including Unicode decimal digits and numeric underscores.
   A separate scheduled importer can poll due refresh schedules and fetch
   GeoJSON or ArcGIS FeatureServer data from explicitly allowlisted HTTPS hosts.
   It remains disabled unless `GEODATA_IMPORTER_ENABLED=true`; deployment and

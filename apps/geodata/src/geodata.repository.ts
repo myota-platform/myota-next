@@ -5,12 +5,15 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { firstQueryValue } from '@app/platform/query.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { parsePythonFloatText } from '@app/platform/python-numeric.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
+import { canonicalPythonGeneratedJson } from './geodata-request-fingerprint.js';
 
 @Injectable()
 export class GeodataRepository {
@@ -309,23 +312,78 @@ export class GeodataRepository {
       throw new BadRequestException(
         'tile coordinates are outside the valid range',
       );
+    const count = 2 ** zoom;
+    const minLon = (x / count) * 360 - 180;
+    const maxLon = ((x + 1) / count) * 360 - 180;
+    const latitude = (tileRow: number) =>
+      (Math.atan(Math.sinh(Math.PI * (1 - (2 * tileRow) / count))) * 180) /
+      Math.PI;
+    const bounds = [minLon, latitude(y + 1), maxLon, latitude(y)];
     const client = await this.connect();
     try {
       const result = await client.query(
-        `WITH bounds AS (SELECT ST_TileEnvelope($1,$2,$3) AS geom),
-         tile_features AS (
-           SELECT e.id,e.name,e.lifecycle_status AS status,e.programme_slug,
-             e.entity_type_code,ST_AsMVTGeom(ST_Transform(e.geom,3857),bounds.geom) AS geom
-           FROM geodata_entity e CROSS JOIN bounds
-           WHERE e.lifecycle_status='APPROVED'
-             AND ST_Transform(e.geom,3857) && bounds.geom
-         )
-         SELECT ST_AsMVT(tile_features,'geodata',4096,'geom') AS tile FROM tile_features`,
-        [zoom, x, y],
+        `SELECT id::text,programme_slug,entity_type_code,name,
+          lifecycle_status AS status,ST_AsGeoJSON(geom)::jsonb AS geometry,
+          public_properties,website,description
+         FROM geodata_entity
+         WHERE geom && ST_MakeEnvelope($1,$2,$3,$4,4326)
+           AND ST_Intersects(geom,ST_MakeEnvelope($1,$2,$3,$4,4326))
+         ORDER BY name,id LIMIT 501`,
+        bounds,
       );
-      return result.rows[0]?.tile
-        ? Buffer.from(result.rows[0].tile)
-        : Buffer.alloc(0);
+      const truncated = result.rows.length > 500;
+      const features = result.rows.slice(0, 500).map((row) => {
+        const properties = isRecord(row.public_properties)
+          ? row.public_properties
+          : {};
+        return {
+          type: 'Feature',
+          id: row.id,
+          geometry: row.geometry,
+          properties: {
+            name: row.name,
+            website: row.website,
+            description: row.description,
+            programmeSlug: row.programme_slug,
+            status: row.status,
+            entityType: row.entity_type_code,
+            entityTypes: pythonTruthy(properties.entityTypes)
+              ? properties.entityTypes
+              : row.entity_type_code,
+            sourceRef: properties.sourceRef ?? null,
+            continentCode: properties.continentCode ?? null,
+            countryCode: properties.countryCode ?? null,
+            regionCode: properties.regionCode ?? null,
+            city: properties.city ?? null,
+          },
+        };
+      });
+      const cacheInput = {
+        bbox: bounds,
+        programme: null,
+        status: null,
+        minute: Math.floor(Date.now() / 60_000),
+      };
+      const cacheKey = createHash('sha256')
+        .update(
+          canonicalPythonGeneratedJson(
+            cacheInput,
+            (path) => path[0] === 'bbox',
+          ),
+        )
+        .digest('hex');
+      return {
+        type: 'FeatureCollection',
+        bbox: bounds,
+        features,
+        count: features.length,
+        truncated,
+        cacheTtlSeconds: 60,
+        cacheKey,
+        performanceBudgetMs: 250,
+        tile: { z: zoom, x, y },
+        format: 'geojson-vector',
+      };
     } finally {
       client.release();
     }
@@ -450,4 +508,8 @@ function parseBoundsValues(values: string[], message: string): number[] {
   } catch {
     throw new BadRequestException(message);
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

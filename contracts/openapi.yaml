@@ -1240,12 +1240,17 @@ paths:
   /v1/geodata/tiles/{z}/{x}/{y}:
     get:
       tags: [Geodata]
-      summary: Get a vector tile for geodata display
+      summary: Get a GeoJSON vector collection for a Web Mercator tile
       parameters:
         - { in: path, name: z, required: true, schema: { type: integer } }
         - { in: path, name: x, required: true, schema: { type: integer } }
         - { in: path, name: y, required: true, schema: { type: integer } }
-      responses: { '200': { description: Vector tile } }
+      responses:
+        '200':
+          description: GeoJSON FeatureCollection with tile metadata, capped at 500 features
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GeodataTileCollection' }
   /v1/geodata/refresh-schedules:
     get:
       tags: [Geodata]
@@ -2253,6 +2258,42 @@ components:
         locationEnrichmentRequestedAt: { type: string, format: date-time, nullable: true, readOnly: true }
         locationEnrichmentCompletedAt: { type: string, format: date-time, nullable: true, readOnly: true }
         provenance: { type: object, additionalProperties: true }
+    GeodataTileCollection:
+      type: object
+      required: [type, bbox, features, count, truncated, cacheTtlSeconds, cacheKey, performanceBudgetMs, tile, format]
+      properties:
+        type: { const: FeatureCollection }
+        bbox:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: { type: number }
+          description: 'minLon, minLat, maxLon, maxLat'
+        features:
+          type: array
+          items:
+            type: object
+            required: [type, id, geometry, properties]
+            properties:
+              type: { const: Feature }
+              id: { type: string }
+              geometry: { type: object, additionalProperties: true }
+              properties:
+                type: object
+                additionalProperties: true
+        count: { type: integer, minimum: 0, maximum: 500 }
+        truncated: { type: boolean }
+        cacheTtlSeconds: { type: integer, const: 60 }
+        cacheKey: { type: string, pattern: '^[a-f0-9]{64}$' }
+        performanceBudgetMs: { type: integer, const: 250 }
+        tile:
+          type: object
+          required: [z, x, y]
+          properties:
+            z: { type: integer, minimum: 0, maximum: 22 }
+            x: { type: integer, minimum: 0 }
+            y: { type: integer, minimum: 0 }
+        format: { const: geojson-vector }
     GeodataEntityMetadataPatch:
       type: object
       required: [editorId]

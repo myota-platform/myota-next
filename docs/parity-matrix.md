@@ -161,7 +161,8 @@ and a no-Activity-impact check before deletion.
 Geodata provides PostGIS-backed public
 entity list/detail reads with filters and bounds, the import adapter catalogue,
 provider-derived location options, and authorized import-run list/status reads;
-authenticated audit reads and approved-entity vector tiles are also implemented.
+authenticated audit reads and GeoJSON vector tile collections are also
+implemented with the legacy tile metadata and feature selection behavior.
 JSON GeoJSON, WFS GeoJSON, and ArcGIS FeatureServer JSON import creation stores
 normalized GeoJSON source documents in S3-compatible storage and queues
 idempotent import runs transactionally. ArcGIS geometries with WGS84 and

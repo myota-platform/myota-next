@@ -560,13 +560,9 @@ export class GeodataController {
     @Param('z') zoom: string,
     @Param('x') x: string,
     @Param('y') y: string,
-    @Res() response: Response,
   ) {
     const coordinates = parseTileCoordinates(zoom, x, y);
-    const tile = await this.repository.getTile(...coordinates);
-    response.setHeader('content-type', 'application/vnd.mapbox-vector-tile');
-    response.setHeader('cache-control', 'public, max-age=60');
-    response.status(200).send(tile);
+    return this.repository.getTile(...coordinates);
   }
 
   @Get('entities/:entityId')
