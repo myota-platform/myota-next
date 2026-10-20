@@ -54,12 +54,9 @@ export class GeodataEntityMutationRepository {
   ) {
     const reviewerId =
       typeof body.reviewerId === 'string' ? body.reviewerId.trim() : '';
+    const requestedStatus = body.status || body.decision;
     const targetStatus =
-      typeof body.status === 'string'
-        ? body.status.toUpperCase()
-        : typeof body.decision === 'string'
-          ? body.decision.toUpperCase()
-          : '';
+      typeof requestedStatus === 'string' ? requestedStatus : '';
     const note =
       typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
     if (!reviewerId) throw new BadRequestException('reviewerId is required');
