@@ -9,6 +9,7 @@ import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { firstQueryValue } from '@app/platform/query.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 
 @Injectable()
 export class GeodataRepository {
@@ -27,7 +28,7 @@ export class GeodataRepository {
     if (programme) add('programme_slug=?', programme);
     const statuses = listValues(query.status)
       .flatMap((value) => value.split(','))
-      .map((value) => value.trim().toUpperCase())
+      .map((value) => trimPythonWhitespace(value).toUpperCase())
       .filter(Boolean);
     if (statuses.length && !statuses.includes('ALL'))
       add('lifecycle_status=ANY(?::text[])', statuses);
@@ -406,7 +407,7 @@ function parseBounds(query: Record<string, unknown>) {
   const bbox = firstQueryValue(query.bbox) ?? '';
   let raw: number[];
   if (bbox && !hasLegacyBounds) {
-    const values = bbox.split(',').map((value) => value.trim());
+    const values = bbox.split(',').map((value) => trimPythonWhitespace(value));
     if (values.length !== 4)
       throw new BadRequestException(
         'bbox must contain minLon,minLat,maxLon,maxLat',
@@ -418,7 +419,9 @@ function parseBounds(query: Record<string, unknown>) {
     )
       throw new BadRequestException('bbox must contain numeric coordinates');
   } else if (hasLegacyBounds) {
-    const values = legacyValues.map((value) => value?.trim() ?? '');
+    const values = legacyValues.map((value) =>
+      value === undefined ? '' : trimPythonWhitespace(value),
+    );
     raw = values.map(Number);
     if (
       values.some((value) => !value) ||

@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { SAXParser, type SAXOptions } from 'sax';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 
 type Feature = {
   type: 'Feature';
@@ -64,8 +65,8 @@ export function parseXmlImport(
     const longitude = Number(values[0]);
     const latitude = Number(values[1]);
     if (
-      !values[0]?.trim() ||
-      !values[1]?.trim() ||
+      !trimPythonWhitespace(values[0] ?? '') ||
+      !trimPythonWhitespace(values[1] ?? '') ||
       !Number.isFinite(longitude) ||
       !Number.isFinite(latitude)
     ) {
@@ -141,7 +142,9 @@ export function parseXmlImport(
   parser.onclosetag = (qualifiedName) => {
     const name = local(qualifiedName);
     const value =
-      textCapture?.name === name ? textCapture.chunks.join('').trim() : '';
+      textCapture?.name === name
+        ? trimPythonWhitespace(textCapture.chunks.join(''))
+        : '';
     if (format === 'KML' && placemark) {
       if (name === 'name' && value && placemark.name === undefined)
         placemark.name = value;

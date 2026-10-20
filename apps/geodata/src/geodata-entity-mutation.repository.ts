@@ -257,11 +257,11 @@ export class GeodataEntityMutationRepository {
     if ('name' in body) {
       if (
         typeof body.name !== 'string' ||
-        !body.name.trim() ||
-        body.name.trim().length > 240
+        !trimPythonWhitespace(body.name) ||
+        Array.from(trimPythonWhitespace(body.name)).length > 240
       )
         throw new BadRequestException('name must contain 1 to 240 characters');
-      name = body.name.trim();
+      name = trimPythonWhitespace(body.name);
     }
     const website =
       'website' in body ? normalizeWebsite(body.website) : undefined;
@@ -1218,7 +1218,7 @@ function normalizeManualLocationValue(field: string, value: unknown) {
     throw new BadRequestException(
       `location field ${field} must be scalar or null`,
     );
-  const normalized = String(value).trim();
+  const normalized = trimPythonWhitespace(String(value));
   return field.endsWith('Code') ? normalized.toUpperCase() : normalized || null;
 }
 
@@ -1365,7 +1365,7 @@ function flattenLocationNodes(
 }
 
 function textValue(value: unknown) {
-  return typeof value === 'string' ? value.trim() : '';
+  return typeof value === 'string' ? trimPythonWhitespace(value) : '';
 }
 
 function normalizedLocationCode(value: unknown) {
@@ -1389,9 +1389,9 @@ function normalizeWebsite(value: unknown) {
   if (value === null) return null;
   if (typeof value !== 'string')
     throw new BadRequestException('website must be a string or null');
-  const website = value.trim();
+  const website = trimPythonWhitespace(value);
   if (!website) return null;
-  if (website.length > 2048)
+  if (Array.from(website).length > 2048)
     throw new BadRequestException('website must be 2048 characters or fewer');
   let parsed: URL;
   try {
@@ -1417,8 +1417,8 @@ function normalizeDescription(value: unknown) {
   if (value === null) return null;
   if (typeof value !== 'string')
     throw new BadRequestException('description must be a string or null');
-  const description = value.trim();
-  if (description.length > 2000)
+  const description = trimPythonWhitespace(value);
+  if (Array.from(description).length > 2000)
     throw new BadRequestException(
       'description must be 2000 characters or fewer',
     );
