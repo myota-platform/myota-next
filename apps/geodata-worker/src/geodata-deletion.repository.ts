@@ -14,7 +14,7 @@ type DeletionJob = Record<string, any> & {
   id: string;
   entityId: string;
   status: string;
-  requestedBy: string;
+  requestedBy: unknown;
   executionClaims: {
     sub: string;
     scp: string[];

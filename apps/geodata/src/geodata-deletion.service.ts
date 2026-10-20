@@ -21,6 +21,7 @@ import {
   replayRequest,
   requestResponse,
 } from './geodata-request-idempotency.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 
 @Injectable()
 export class GeodataDeletionService {
@@ -45,9 +46,8 @@ export class GeodataDeletionService {
       if (replay.found) return replay.response;
     }
     const entityId = typeof body.entityId === 'string' ? body.entityId : '';
-    const requestedBy =
-      typeof body.requestedBy === 'string' ? body.requestedBy : '';
-    if (!entityId || !requestedBy)
+    const requestedBy = body.requestedBy;
+    if (!entityId || !pythonTruthy(requestedBy))
       throw new BadRequestException('entityId and requestedBy are required');
     const client = await this.connect();
     let entity: Record<string, unknown>;
@@ -183,8 +183,8 @@ export class GeodataDeletionService {
       typeof body.confirmation === 'string'
         ? body.confirmation.toUpperCase()
         : '';
-    const deletedBy = typeof body.deletedBy === 'string' ? body.deletedBy : '';
-    if (confirmation !== 'DELETE' || !deletedBy)
+    const deletedBy = body.deletedBy;
+    if (confirmation !== 'DELETE' || !pythonTruthy(deletedBy))
       throw new BadRequestException(
         'confirmation must be DELETE and deletedBy is required',
       );
