@@ -47,8 +47,10 @@ export class IdentityIntegrationService {
         updated_at: Date;
       }>(
         `INSERT INTO public.identity_oidc_provider_mapping
-               (id, programme_slug, issuer, client_id, scopes, enabled)
-             VALUES ($1, $2, $3, $4, $5, $6)
+               (id, programme_slug, issuer, client_id, scopes, enabled,
+                created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6,
+                     clock_timestamp(), clock_timestamp())
              RETURNING id, programme_slug, issuer, client_id, scopes, enabled,
                        created_at, updated_at`,
         [
@@ -71,10 +73,11 @@ export class IdentityIntegrationService {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       };
-      await writeSecurityEvent(client, 'identity.oidc.mapping.updated.v1', {
-        ...mapping,
-        actorId: actor.id,
-      });
+      await writeSecurityEvent(
+        client,
+        'identity.oidc.mapping.updated.v1',
+        mapping,
+      );
       await client.query('COMMIT');
       return mapping;
     } catch (error) {

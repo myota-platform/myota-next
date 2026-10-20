@@ -120,7 +120,8 @@ same optional `Idempotency-Key`. Mapping field values are stored verbatim;
 non-empty whitespace-only strings and explicit `null` values for optional
 `scopes` and `enabled` fields are preserved as by the reference. Its runtime
 response is `201` even though the preserved upstream OpenAPI contract declares
-`200`.
+`200`. Creation and update timestamps are separate reads, and the audit event
+retains the reference payload without adding an actor field.
 
 Programme RULES policy publication uses `schema.rules` when the key is present,
 including explicit `null`; it falls back to the full schema only when the key
