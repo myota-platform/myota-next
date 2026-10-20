@@ -148,7 +148,8 @@ Import adapters infer feature names from
 the reference alias catalogue before validation. The worker validates WGS84
 geometries, stages candidates with provenance and 50 m duplicate
 warnings, records errors, and emits the preprocessing fact. Community proposals
-join this pipeline and automatically queue promotion to CANDIDATE. Multipart/resumable
+join this pipeline, preserve validated attachment metadata, and automatically
+queue promotion to CANDIDATE. Multipart/resumable
 uploads are implemented with owner-scoped durable sessions, bounded binary
 parts, checksum and malware scanning, and transactional completion up to the
 worker's configured source limits. GeoJSON, Shapefile, and PBF multipart

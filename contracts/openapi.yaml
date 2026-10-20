@@ -2027,6 +2027,24 @@ components:
         source: { type: object, additionalProperties: true }
         entityTypes: { type: array, minItems: 1, uniqueItems: true, items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' } }
         proposerId: { type: string }
+        attachments:
+          type: array
+          maxItems: 20
+          description: Optional attachment metadata preserved on the proposed entity.
+          items:
+            type: object
+            required: [name, mediaType]
+            properties:
+              name: { type: string }
+              mediaType: { type: string }
+              sizeBytes: { type: integer, minimum: 0, maximum: 26214400, default: 0 }
+              uri: { type: string }
+              sha256: { type: string }
+              license: { type: string }
+              caption: { type: string }
+            anyOf:
+              - required: [uri]
+              - required: [sha256]
     GeoImportRun:
       type: object
       required: [id, status, adapter, format, entityTypes]
