@@ -61,6 +61,15 @@ export const adminPages: AdminPage[] = [
     allowed: scope('geodata.import'),
   },
   {
+    path: '/conflation',
+    title: 'Conflation review',
+    group: 'Entities',
+    icon: '⇄',
+    description:
+      'Compare likely duplicate entities and record an auditable resolution.',
+    allowed: scope('geodata.review'),
+  },
+  {
     path: '/master-data',
     title: 'Entity categories',
     group: 'Entities',

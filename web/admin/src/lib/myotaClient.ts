@@ -183,6 +183,13 @@ export const myotaClient = {
   postGeodataProposal<T = unknown>(body: unknown) {
     return write<T>('/v1/geodata/proposals', 'POST', body);
   },
+  resolveGeodataConflation<T = unknown>(id: string, body: unknown) {
+    return write<T>(
+      `/v1/geodata/conflation/${encodeURIComponent(id)}/resolve`,
+      'POST',
+      body,
+    );
+  },
   createGeodataEntityDeletionJob<T = unknown>(
     body: unknown,
     idempotencyKey?: string,

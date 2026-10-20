@@ -10,6 +10,7 @@ import IdentityView from './views/IdentityView.vue';
 import ActivityView from './views/ActivityView.vue';
 import AwardsView from './views/AwardsView.vue';
 import GeodataImportsView from './views/GeodataImportsView.vue';
+import ConflationView from './views/ConflationView.vue';
 import GeodataWorkspaceView from './views/GeodataWorkspaceView.vue';
 import EntityMapView from './views/EntityMapView.vue';
 import SeaweedFsMonitoringRedirectView from './views/SeaweedFsMonitoringRedirectView.vue';
@@ -82,6 +83,11 @@ const routes = [
     path: '/geodata-imports',
     component: GeodataImportsView,
     meta: { title: 'Geodata imports' },
+  },
+  {
+    path: '/conflation',
+    component: ConflationView,
+    meta: { title: 'Conflation review' },
   },
   {
     path: '/object-storage',

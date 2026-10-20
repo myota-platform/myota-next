@@ -221,7 +221,9 @@
   requests at the candidate staging checkpoint and clear temporary source data.
   A worker restart recovers runs left in the CANCELLING state.
   Persisted conflation candidates can be paged by resolution and resolved with
-  reviewer history, idempotency, and a transactional outbox fact. Entity import
+  reviewer history, idempotency, and a transactional outbox fact. The Admin
+  includes a role-gated conflation workspace for filtering candidates, inspecting
+  match signals and prior decisions, and recording resolutions. Entity import
   promotion now searches overlapping PostGIS bounding boxes, computes the
   baseline name/containment/overlap/distance/jurisdiction score, and stores
   deduplicated candidates at the existing 0.55 threshold.
