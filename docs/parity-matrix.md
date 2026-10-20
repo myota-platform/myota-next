@@ -316,6 +316,8 @@ representative coordinates to five decimal places before lookup, as the Python
 worker does. The persisted `provenance.reverseGeocoding` record uses the
 normalized location fields and includes the raw response only when the provider
 returned a payload, matching the Python result shape for success and failure.
+The city field falls back to locality using Python truthiness, and administrative
+name/code selection follows the same first-truthy-value rule.
 The worker caches successful and failed provider results by rounded coordinates
 and locality language, with a 2,048-entry per-process LRU limit.
 JSON GeoJSON, WFS GeoJSON, and ArcGIS FeatureServer JSON import creation stores

@@ -448,7 +448,11 @@ async function reverseGeocode(
       throw new Error('reverse geocoding response was not an object');
     const data = payload as Record<string, any>;
     const region = data.principalSubdivision ?? null;
-    const city = data.city ?? data.locality ?? null;
+    const city = pythonTruthy(data.city)
+      ? data.city
+      : pythonTruthy(data.locality)
+        ? data.locality
+        : null;
     const administrative = record(data.localityInfo).administrative;
     const entries = (Array.isArray(administrative) ? administrative : [])
       .map(record)
@@ -460,7 +464,7 @@ async function reverseGeocode(
       .filter(
         (entry) =>
           !(
-            data.principalSubdivisionCode &&
+            pythonTruthy(data.principalSubdivisionCode) &&
             entry.isoCode === data.principalSubdivisionCode
           ) &&
           !(
@@ -481,7 +485,7 @@ async function reverseGeocode(
     let countyName = firstValue(county, 'name', 'isoName');
     const provinceName = firstValue(province, 'name', 'isoName');
     if (
-      countyName &&
+      pythonTruthy(countyName) &&
       [provinceName, city].some(
         (value) =>
           unicodeCaseFold(text(value)) === unicodeCaseFold(text(countyName)),
@@ -570,13 +574,31 @@ function roundToFiveDecimals(value: number) {
   return Number(value.toFixed(5));
 }
 function text(value: unknown) {
-  return typeof value === 'string' ? value : '';
+  if (!pythonTruthy(value)) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'boolean') return value ? 'True' : 'False';
+  if (typeof value === 'number' || typeof value === 'bigint')
+    return String(value);
+  return '';
 }
 function firstValue(entry: Record<string, any> | undefined, ...keys: string[]) {
   if (!entry) return undefined;
-  return keys
-    .map((key) => entry[key])
-    .find((value) => value !== null && value !== undefined && value !== '');
+  return keys.map((key) => entry[key]).find(pythonTruthy);
+}
+function pythonTruthy(value: unknown) {
+  if (
+    value === undefined ||
+    value === null ||
+    value === false ||
+    value === '' ||
+    value === 0 ||
+    value === 0n
+  )
+    return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'object' && value !== null)
+    return Object.keys(value).length > 0;
+  return true;
 }
 function pickAdministrative(
   entries: Record<string, any>[],
