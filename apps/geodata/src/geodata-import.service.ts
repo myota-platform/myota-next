@@ -12,6 +12,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { createHash, randomUUID } from 'node:crypto';
+import proj4 from 'proj4';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
@@ -422,7 +423,7 @@ function normalizeArcGisDocument(
         ? geometry.spatialReference
         : undefined);
     const wkid = Number(reference?.latestWkid ?? reference?.wkid ?? 4326);
-    if (![4326, 3857, 102100, 102113, 900913].includes(wkid))
+    if (!Number.isInteger(wkid) || wkid <= 0)
       throw new BadRequestException(
         `unsupported ArcGIS spatial reference WKID ${String(wkid)}`,
       );
@@ -443,8 +444,15 @@ function normalizeArcGisDocument(
     else
       throw new BadRequestException('ArcGIS feature geometry is unsupported');
 
-    if ([3857, 102100, 102113, 900913].includes(wkid))
-      normalized.coordinates = reprojectCoordinates(normalized.coordinates);
+    if (wkid !== 4326) {
+      const projectionWkid = [102100, 102113, 900913].includes(wkid)
+        ? 3857
+        : wkid;
+      normalized.coordinates = reprojectCoordinates(
+        normalized.coordinates,
+        projectionWkid,
+      );
+    }
     properties.sourceFormat = 'ARCGIS_FEATURESERVER';
     properties.sourceRef ??=
       properties.objectId ?? properties.OBJECTID ?? properties.id;
@@ -453,17 +461,31 @@ function normalizeArcGisDocument(
   return { type: 'FeatureCollection', features };
 }
 
-function reprojectCoordinates(value: unknown): unknown {
+function reprojectCoordinates(value: unknown, sourceWkid: number): unknown {
   if (!Array.isArray(value)) return value;
   if (value.length >= 2 && value.slice(0, 2).every(Number.isFinite)) {
     const x = Number(value[0]);
     const y = Number(value[1]);
-    const longitude = (x / 6378137) * (180 / Math.PI);
-    const latitude =
-      (2 * Math.atan(Math.exp(y / 6378137)) - Math.PI / 2) * (180 / Math.PI);
-    return [longitude, latitude, ...value.slice(2)];
+    if (sourceWkid === 3857) {
+      const longitude = (x / 6378137) * (180 / Math.PI);
+      const latitude =
+        (2 * Math.atan(Math.exp(y / 6378137)) - Math.PI / 2) * (180 / Math.PI);
+      return [longitude, latitude, ...value.slice(2)];
+    }
+    try {
+      const [longitude, latitude] = proj4(`EPSG:${sourceWkid}`, 'EPSG:4326', [
+        x,
+        y,
+      ]);
+      return [longitude, latitude, ...value.slice(2)];
+    } catch (error) {
+      throw new BadRequestException(
+        `unsupported ArcGIS spatial reference WKID ${sourceWkid}`,
+        { cause: error },
+      );
+    }
   }
-  return value.map(reprojectCoordinates);
+  return value.map((child) => reprojectCoordinates(child, sourceWkid));
 }
 
 function boundedInteger(value: string | undefined, fallback: number) {
