@@ -414,7 +414,9 @@
   `t` separators supported by the reference checker. It resolves recipients
   through Identity, accepts schema-valid producer names and UUID version and
   variant bits, and applies the schema's Unicode code-point lengths to bounded
-  envelope and template text. It sends through TLS-configured SMTP and records
+  envelope and template text. Address validation follows the reference's
+  254-character, nonempty local/domain, space, and CR/LF rules. It sends through
+  TLS-configured SMTP and records
   deduplication, attempts, and redacted dead letters in the Core database. The
   former fourth email database is removed from the target. Identity production,
   OpenTelemetry export, and deployment integration remain outstanding. The

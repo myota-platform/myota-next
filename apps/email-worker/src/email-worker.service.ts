@@ -654,7 +654,7 @@ function readSecret(name: string) {
 }
 
 function senderConfig(): Sender {
-  const address = process.env.EMAIL_SENDER_ADDRESS?.trim() ?? '';
+  const address = process.env.EMAIL_SENDER_ADDRESS ?? '';
   const displayName = process.env.EMAIL_SENDER_DISPLAY_NAME ?? 'MyOTA';
   validateEmail(address);
   if (/[\r\n]/.test(displayName)) throw new Error('invalid email sender name');
@@ -676,10 +676,13 @@ function identityBaseUrl() {
 }
 
 function validateEmail(address: string) {
+  const separator = address.lastIndexOf('@');
   if (
-    address.length > 254 ||
-    /[\r\n\s]/.test(address) ||
-    !/^[^@]+@[^@]+\.[^@]+$/.test(address)
+    Array.from(address).length > 254 ||
+    /[\r\n]/.test(address) ||
+    address.includes(' ') ||
+    separator <= 0 ||
+    separator === address.length - 1
   )
     throw new Error('invalid email address');
   return address;
