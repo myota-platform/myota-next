@@ -22,9 +22,9 @@ type EnrichmentJob = {
 type GeocodeResult = {
   provider: string;
   status: string;
-  lookupSource: string | null;
+  lookupSource?: string | null;
   geocodedAt: string;
-  payload: Record<string, unknown>;
+  payload?: Record<string, unknown>;
   location: Record<string, unknown>;
   error?: string;
 };
@@ -289,17 +289,18 @@ export class GeodataEnrichmentRepository {
         locationEnrichmentReason: job.reason,
         geocodeProvider: result.provider,
         geocodeStatus: result.status,
-        geocodeLookupSource: result.lookupSource,
         geocodedAt: result.geocodedAt,
+        ...(result.lookupSource !== undefined
+          ? { geocodeLookupSource: result.lookupSource }
+          : {}),
         provenance: {
           ...record(props.provenance),
-          reverseGeocoding: { ...result, response: result.payload },
+          reverseGeocoding: reverseGeocodingProvenance(result),
         },
       };
-      delete nextProps.geocodeError;
       delete nextProps.locationEnrichmentError;
+      if (result.error !== undefined) nextProps.geocodeError = result.error;
       if (result.error) {
-        nextProps.geocodeError = result.error;
         nextProps.locationEnrichmentError = result.error;
       }
       const params: unknown[] = [job.id];
@@ -394,15 +395,19 @@ async function reverseGeocode(
 ): Promise<GeocodeResult> {
   const key = process.env.BIGDATACLOUD_API_KEY?.trim();
   const geocodedAt = new Date().toISOString();
-  if (!key || !coordinates)
+  if (!coordinates)
     return {
       provider: 'BIGDATACLOUD',
-      status: key ? 'FAILED' : 'NOT_CONFIGURED',
-      lookupSource: null,
+      status: 'SKIPPED_NO_CENTROID',
       geocodedAt,
-      payload: {},
       location: {},
-      ...(key ? { error: 'Geometry has no representative point.' } : {}),
+    };
+  if (!key)
+    return {
+      provider: 'BIGDATACLOUD',
+      status: 'NOT_CONFIGURED',
+      geocodedAt,
+      location: {},
     };
   const endpoint =
     process.env.BIGDATACLOUD_REVERSE_GEOCODE_URL ??
@@ -505,9 +510,7 @@ async function reverseGeocode(
     return {
       provider: 'BIGDATACLOUD',
       status: 'FAILED',
-      lookupSource: null,
       geocodedAt,
-      payload: {},
       location: {},
       error: error instanceof Error ? error.message : String(error),
     };
@@ -530,6 +533,25 @@ function boundedTimeout(value: string | undefined) {
     ? seconds * 1000
     : 10000;
 }
+
+function reverseGeocodingProvenance(result: GeocodeResult) {
+  const normalized = {
+    ...result.location,
+    geocodeProvider: result.provider,
+    geocodeStatus: result.status,
+    ...(result.lookupSource !== undefined
+      ? { geocodeLookupSource: result.lookupSource }
+      : {}),
+    ...(result.error !== undefined ? { geocodeError: result.error } : {}),
+    geocodedAt: result.geocodedAt,
+    ...(result.payload !== undefined ? { geocodePayload: result.payload } : {}),
+  };
+  const { geocodePayload, ...provenance } = normalized;
+  return geocodePayload === undefined
+    ? provenance
+    : { ...provenance, response: geocodePayload };
+}
+
 function roundToFiveDecimals(value: number) {
   return Number(value.toFixed(5));
 }
