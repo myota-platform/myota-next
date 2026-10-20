@@ -26,9 +26,10 @@ The target also edits eight shared operation definitions:
 - `POST /v1/geodata/proposals` documents optional attachment metadata accepted
   by the Python handler and preserved on the proposed entity.
 - `POST /v1/identity/oidc/providers` declares `201`, while the upstream
-  OpenAPI declares `200`. The reference Python handler returns `201`, and the
-  NestJS handler also returns `201`; resolve this contract/runtime discrepancy
-  against deployed behavior before treating either response as canonical.
+  OpenAPI declares `200`. The pinned Python handler and NestJS handler both
+  return `201`; the target contract follows the executable reference behavior.
+  The upstream OpenAPI response remains recorded in the preserved reference
+  contract.
 
 Target-only operations:
 

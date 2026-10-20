@@ -1027,7 +1027,7 @@ paths:
     post:
       tags: [Identity]
       security: [{ bearerAuth: [] }]
-      summary: Register or update programme-scoped OIDC provider mapping
+      summary: Register a programme-scoped OIDC provider mapping
       operationId: saveOidcMapping
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
