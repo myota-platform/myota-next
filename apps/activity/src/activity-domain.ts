@@ -278,9 +278,11 @@ export function normalizeCallsign(value: unknown): string {
 export function normalizeActivation(data: JsonRecord): JsonRecord {
   const programmeRules = data.programmeRules;
   const rules =
-    programmeRules && Object.keys(programmeRules).length > 0
+    pythonTruthy(programmeRules) && Object.keys(programmeRules).length > 0
       ? programmeRules
-      : (data.rules ?? {});
+      : pythonTruthy(data.rules)
+        ? data.rules
+        : {};
   const location = pythonTruthy(data.location) ? data.location : {};
   if (
     rules.requireLocation &&
