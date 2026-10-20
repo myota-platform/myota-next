@@ -309,6 +309,9 @@ entity list/detail reads with filters and bounds, the import adapter catalogue,
 provider-derived location options, and authorized import-run list/status reads;
 authenticated audit reads and GeoJSON vector tile collections are also
 implemented with the legacy tile metadata and feature selection behavior.
+Entity responses source both top-level and nested location fields from the
+current relational columns, so manual edits and provider enrichment appear in
+the same locations as the Python entity projection.
 Bounding-box coordinates use Python-compatible float conversion and ordering
 checks; accepted non-finite values reach PostGIS as in the reference handler.
 Reverse-geocoder subdivision and county deduplication uses the shared Unicode
