@@ -200,7 +200,8 @@
   timestamp precision preserved through normalization, validity checks,
   persistence, deduplication, and reads. QSO `source` defaults to `manual` only
   when absent; optional `sourceImportId` provenance is retained on direct and
-  worker inserts. QSO callsigns collapse Python's
+  worker inserts. Activation `allowedBands` and `allowedModes` default only
+  when omitted and preserve Python iterable behavior. QSO callsigns collapse Python's
   Unicode whitespace set before validation, and worked locator keys use Python's
   Unicode whitespace stripping rules. Activation close defaults `endedAt` to
   now only when omitted; supplied values are validated as timestamps. Default

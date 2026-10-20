@@ -302,7 +302,7 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
     ? normalizeCallsign(data.operatorCallsign)
     : null;
   const authorizedCallsigns = Object.hasOwn(data, 'authorizedCallsigns')
-    ? pythonIterable(data.authorizedCallsigns)
+    ? pythonIterable(data.authorizedCallsigns, 'authorizedCallsigns')
     : [];
   const authorized = authorizedCallsigns.map(normalizeCallsign);
   if (callsign && authorized.length && !authorized.includes(callsign)) {
@@ -356,11 +356,11 @@ function pointInBounds(
   );
 }
 
-function pythonIterable(value: unknown): unknown[] {
+function pythonIterable(value: unknown, field: string): unknown[] {
   if (Array.isArray(value)) return value;
   if (typeof value === 'string') return Array.from(value);
   if (value !== null && typeof value === 'object') return Object.keys(value);
-  throw new TypeError('authorizedCallsigns is not iterable');
+  throw new TypeError(`${field} is not iterable`);
 }
 
 export function pythonFloat(value: unknown, field: string): number {
@@ -606,11 +606,17 @@ export function evaluateActivation(
     qsos.length < pythonInt(rules.minimumQsos, 'minimumQsos')
   )
     violations.push('minimum QSO requirement was not met');
+  const allowedBands = Object.hasOwn(rules, 'allowedBands')
+    ? pythonIterable(rules.allowedBands, 'allowedBands')
+    : [];
+  const allowedModes = Object.hasOwn(rules, 'allowedModes')
+    ? pythonIterable(rules.allowedModes, 'allowedModes')
+    : [];
   const bands = new Set(
-    (rules.allowedBands ?? []).map((v: unknown) => String(v).toUpperCase()),
+    allowedBands.map((v: unknown) => String(v).toUpperCase()),
   );
   const modes = new Set(
-    (rules.allowedModes ?? []).map((v: unknown) =>
+    allowedModes.map((v: unknown) =>
       String(v).toUpperCase().replaceAll('-', ''),
     ),
   );
