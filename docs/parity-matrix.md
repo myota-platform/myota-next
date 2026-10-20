@@ -222,7 +222,8 @@ using Python truthiness and preserves submitted whitespace. Proposal feature
 objects follow adapter normalization without an extra `type` requirement.
 Proposal idempotency scopes keys by owner and route, fingerprints the parsed
 request body before validation, and rejects changed-body reuse while preserving
-integer versus float values.
+integer versus float values. The request lock spans proposal validation and
+import, source-object, and outbox creation.
 Candidate validation notes are stored as JSONB with existing text values
 preserved as JSON strings. If-Match protected name, website,
 description, geometry, and

@@ -276,7 +276,8 @@
   same adapter normalization without an extra `type` requirement. Proposal
   idempotency is scoped to proposer and route and rejects reuse with a changed
   request body before proposal validation; its fingerprint preserves JSON
-  integer versus float values.
+  integer versus float values, and its transaction lock spans validation,
+  source storage, and import/outbox creation.
   `/healthz` and `/readyz` expose worker liveness and
   GeoData PostgreSQL/NATS readiness on `GEODATA_WORKER_HEALTH_PORT`. The service
   also has PostGIS-backed public entity

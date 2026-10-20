@@ -39,55 +39,24 @@ export class GeodataImportService {
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {}
 
-  async replayRequest(key: string, requestHash: string) {
-    const client = await this.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-        [key],
-      );
-      const previous = await client.query(
-        'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-        ['geodata-service', key],
-      );
-      if (!previous.rows[0]) {
-        await client.query('COMMIT');
-        return { found: false as const };
-      }
-      const saved = previous.rows[0].response;
-      if (
-        !isRecord(saved) ||
-        saved.requestHash !== requestHash ||
-        !Object.hasOwn(saved, 'result')
-      )
-        throw new ConflictException(
-          'Idempotency-Key was already used for another request',
-        );
-      await client.query('COMMIT');
-      return { found: true as const, response: saved.result };
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
   async create(
     key: string | undefined,
-    body: Record<string, unknown>,
+    body: Record<string, unknown> | (() => Record<string, unknown>),
     options: ImportOptions = {},
   ) {
-    const prepared = prepareImport(await this.resolveObjectReference(body));
+    const preparedBeforeTransaction =
+      typeof body === 'function' && options.requestHash
+        ? undefined
+        : prepareImport(
+            await this.resolveObjectReference(
+              typeof body === 'function' ? body() : body,
+            ),
+          );
     const bucket =
       process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports';
-    const id = randomUUID();
-    const objectKey = `geodata/imports/${id}/source.geojson`;
-    const raw = Buffer.from(JSON.stringify(prepared.document));
-    const sourceHash = createHash('sha256').update(raw).digest('hex');
     const client = await this.connect();
     let uploaded = false;
+    let objectKey: string | undefined;
     try {
       await client.query('BEGIN');
       if (key) {
@@ -119,6 +88,18 @@ export class GeodataImportService {
           return saved;
         }
       }
+
+      const prepared =
+        preparedBeforeTransaction ??
+        prepareImport(
+          await this.resolveObjectReference(
+            typeof body === 'function' ? body() : body,
+          ),
+        );
+      const id = randomUUID();
+      objectKey = `geodata/imports/${id}/source.geojson`;
+      const raw = Buffer.from(JSON.stringify(prepared.document));
+      const sourceHash = createHash('sha256').update(raw).digest('hex');
 
       await this.s3().send(
         new PutObjectCommand({
@@ -216,7 +197,7 @@ export class GeodataImportService {
       return response;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
-      if (uploaded)
+      if (uploaded && objectKey)
         await this.s3()
           .send(new DeleteObjectCommand({ Bucket: bucket, Key: objectKey }))
           .catch(() => undefined);
