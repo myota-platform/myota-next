@@ -98,6 +98,45 @@
             <tbody id="entities"></tbody>
           </table>
         </div>
+        <form id="new-proposal-form" class="profile-form proposal-form">
+          <h4>Suggest a new point location</h4>
+          <p class="small">
+            Proposals enter community review and are not active until approved.
+            Sign in below before submitting.
+          </p>
+          <label
+            >Location name
+            <input id="proposal-name" maxlength="200" required />
+          </label>
+          <label
+            >Entity type<select id="proposal-entity-type" required></select
+          ></label>
+          <div class="proposal-coordinates">
+            <label
+              >Latitude
+              <input
+                id="proposal-latitude"
+                type="number"
+                min="-90"
+                max="90"
+                step="any"
+                required
+              />
+            </label>
+            <label
+              >Longitude
+              <input
+                id="proposal-longitude"
+                type="number"
+                min="-180"
+                max="180"
+                step="any"
+                required
+              />
+            </label>
+          </div>
+          <button type="submit">Submit location proposal</button>
+        </form>
       </section>
       <section class="panel profile-panel">
         <div class="panel-head">

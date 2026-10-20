@@ -513,6 +513,21 @@ a {
 .profile-form textarea {
   resize: vertical;
 }
+.proposal-form {
+  border-top: 1px solid var(--line);
+  margin: 20px 0 0;
+  max-width: 36rem;
+  padding: 20px 0 0;
+}
+.proposal-form h4,
+.proposal-form p {
+  margin: 0;
+}
+.proposal-coordinates {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .profile-image-current {
   width: 96px;
   height: 96px;

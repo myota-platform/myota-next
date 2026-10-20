@@ -36,7 +36,10 @@ async function awardApi(path, options = {}) {
 async function loadProgrammes() {
   programmes = (await api('/v1/programmes')).items;
   $('programme-select').innerHTML = programmes
-    .map((p) => `<option value="${p.slug}">${p.name}</option>`)
+    .map(
+      (p) =>
+        `<option value="${escapeHtml(p.slug)}">${escapeHtml(p.name)}</option>`,
+    )
     .join('');
   $('programme-select').value = location.hash.slice(1) || programmes[0].slug;
   await loadProgramme($('programme-select').value);
@@ -44,7 +47,7 @@ async function loadProgrammes() {
 async function loadProgramme(slug) {
   const programme =
     programmes.find((p) => p.slug === slug) ||
-    (await api(`/v1/programmes/${slug}`));
+    (await api(`/v1/programmes/${encodeURIComponent(slug)}`));
   document.documentElement.style.setProperty(
     '--primary',
     programme.theme.primary,
@@ -56,7 +59,34 @@ async function loadProgramme(slug) {
   $('programme-name').textContent = programme.name;
   $('programme-description').textContent = programme.description;
   $('rules').innerHTML =
-    `<dt>Activation QSOs</dt><dd>${programme.rules.minimumQsos.activation}</dd><dt>Hunter QSOs</dt><dd>${programme.rules.minimumQsos.hunter}</dd><dt>Public access</dt><dd>${programme.rules.publicAccessRequired ? 'Required' : 'Programme-defined'}</dd>`;
+    `<dt>Activation QSOs</dt><dd>${escapeHtml(programme.rules.minimumQsos.activation)}</dd><dt>Hunter QSOs</dt><dd>${escapeHtml(programme.rules.minimumQsos.hunter)}</dd><dt>Public access</dt><dd>${programme.rules.publicAccessRequired ? 'Required' : 'Programme-defined'}</dd>`;
+  const proposalTypes = Array.isArray(programme.entityTypes)
+    ? programme.entityTypes
+        .map((item) =>
+          typeof item === 'string' ? { code: item, name: item } : item,
+        )
+        .filter((item) => {
+          if (typeof item?.code !== 'string') return false;
+          const geometries = Array.isArray(item.geometryTypes)
+            ? item.geometryTypes
+            : typeof item.geometry === 'string'
+              ? [item.geometry]
+              : [];
+          return (
+            !geometries.length ||
+            geometries.some((geometry) =>
+              ['POINT', 'MULTIPOINT'].includes(String(geometry).toUpperCase()),
+            )
+          );
+        })
+    : (programme.entityTypeCodes || []).map((code) => ({ code, name: code }));
+  $('proposal-entity-type').innerHTML = proposalTypes
+    .map(
+      (item) =>
+        `<option value="${escapeHtml(item.code)}">${escapeHtml(item.name || item.label || item.code)}</option>`,
+    )
+    .join('');
+  $('new-proposal-form').hidden = proposalTypes.length === 0;
   await loadProgrammeContent(slug);
   entities = (
     await api(`/v1/geodata/entities?programme=${encodeURIComponent(slug)}`)
@@ -139,7 +169,7 @@ function renderEntities() {
   $('entities').innerHTML = entities
     .map(
       (e) =>
-        `<tr><td><strong>${e.name}</strong><div class="small">${e.id.slice(0, 8)}…</div></td><td>${e.entityType}</td><td><span class="badge ${e.status.toLowerCase()}">${e.status}</span></td><td>${e.provenance?.adapter || '—'}</td><td>${e.status === 'CANDIDATE' ? `<button data-id="${e.id}" class="propose">Propose</button>` : '<span class="small">Reference active</span>'}</td></tr>`,
+        `<tr><td><strong>${escapeHtml(e.name)}</strong><div class="small">${escapeHtml(e.id.slice(0, 8))}…</div></td><td>${escapeHtml(e.entityType)}</td><td><span class="badge ${escapeHtml(e.status.toLowerCase())}">${escapeHtml(e.status)}</span></td><td>${escapeHtml(e.provenance?.adapter || '—')}</td><td>${e.status === 'CANDIDATE' ? `<button data-id="${escapeHtml(e.id)}" class="propose">Propose</button>` : '<span class="small">Reference active</span>'}</td></tr>`,
     )
     .join('');
   document.querySelectorAll('.propose').forEach(
@@ -147,35 +177,14 @@ function renderEntities() {
       (b.onclick = async () => {
         const entity = entities.find((item) => item.id === b.dataset.id);
         if (!entity) return;
-        if (!awardAccessToken || !awardAccount) {
-          $('proposal-status').textContent =
-            'Sign in below before submitting a proposal.';
-          $('award-email').focus();
-          return;
-        }
         b.disabled = true;
         $('proposal-status').textContent = 'Submitting proposal…';
         try {
-          await awardApi('/v1/geodata/proposals', {
-            method: 'POST',
-            headers: { 'Idempotency-Key': crypto.randomUUID() },
-            body: JSON.stringify({
-              proposerId: awardAccount.id,
-              programmeSlug: $('programme-select').value,
-              entityTypes: [entity.entityType],
-              source: {
-                name: 'Public programme proposal',
-                license: 'programme-supplied',
-              },
-              feature: {
-                type: 'Feature',
-                properties: { name: entity.name },
-                geometry: entity.geometry,
-              },
-            }),
+          await submitProposal(entity.entityType, {
+            type: 'Feature',
+            properties: { name: entity.name },
+            geometry: entity.geometry,
           });
-          $('proposal-status').textContent = 'Proposal submitted for review.';
-          await loadProgramme($('programme-select').value);
         } catch (error) {
           $('proposal-status').textContent = error.message;
           b.disabled = false;
@@ -183,6 +192,68 @@ function renderEntities() {
       }),
   );
 }
+async function submitProposal(entityType, feature) {
+  if (!awardAccessToken) {
+    $('proposal-status').textContent =
+      'Sign in below before submitting a proposal.';
+    $('award-email').focus();
+    throw new Error('Sign in is required to submit a proposal.');
+  }
+  if (!awardAccount) awardAccount = await awardApi('/v1/identity/me');
+  await awardApi('/v1/geodata/proposals', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': crypto.randomUUID() },
+    body: JSON.stringify({
+      programmeSlug: $('programme-select').value,
+      entityTypes: [entityType],
+      source: {
+        name: 'Participant community proposal',
+        license: 'programme-supplied',
+      },
+      feature,
+    }),
+  });
+  $('proposal-status').textContent = 'Proposal submitted for review.';
+  await loadProgramme($('programme-select').value);
+}
+$('new-proposal-form').onsubmit = async (event) => {
+  event.preventDefault();
+  const latitude = Number($('proposal-latitude').value);
+  const longitude = Number($('proposal-longitude').value);
+  const name = $('proposal-name').value.trim();
+  if (!name) {
+    $('proposal-status').textContent = 'Enter a name for the location.';
+    $('proposal-name').focus();
+    return;
+  }
+  if (
+    !Number.isFinite(latitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    !Number.isFinite(longitude) ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    $('proposal-status').textContent =
+      'Enter a latitude from -90 to 90 and longitude from -180 to 180.';
+    return;
+  }
+  const submit = $('new-proposal-form').querySelector('[type="submit"]');
+  submit.disabled = true;
+  $('proposal-status').textContent = 'Submitting proposal…';
+  try {
+    await submitProposal($('proposal-entity-type').value, {
+      type: 'Feature',
+      properties: { name },
+      geometry: { type: 'Point', coordinates: [longitude, latitude] },
+    });
+    $('new-proposal-form').reset();
+  } catch (error) {
+    $('proposal-status').textContent = error.message;
+  } finally {
+    submit.disabled = false;
+  }
+};
 $('programme-select').onchange = async (e) => {
   location.hash = e.target.value;
   await loadProgramme(e.target.value);
@@ -283,7 +354,7 @@ function publicTileMap() {
         geometry.type === 'Point'
           ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="8" class="public-entity-point ${entity.status.toLowerCase()}"/>`
           : `<polygon points="${points.map((point) => point.join(',')).join(' ')}" class="public-entity-polygon ${entity.status.toLowerCase()}"/>`;
-      return `<g><title>${entity.name} · ${entity.status}</title>${shape}<text x="${points[0][0] + 10}" y="${points[0][1] - 9}" class="public-map-label">${entity.name}</text></g>`;
+      return `<g><title>${escapeHtml(entity.name)} · ${escapeHtml(entity.status)}</title>${shape}<text x="${points[0][0] + 10}" y="${points[0][1] - 9}" class="public-map-label">${escapeHtml(entity.name)}</text></g>`;
     })
     .join('');
   document.querySelectorAll('[data-public-zoom]').forEach(

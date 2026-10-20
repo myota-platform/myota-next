@@ -2,8 +2,8 @@
 
 This is the baseline static participant client, kept as a separate deployable
 artifact from the Admin application. It presents programme content, entity
-catalogue/map views, candidate proposals, profile editing and images, award
-requests, and activation/QSO workflows through the Gateway. Domain data,
+catalogue/map views, new point and existing-candidate proposals, profile editing
+and images, award requests, and activation/QSO workflows through the Gateway. Domain data,
 callsign authorization, and eligibility decisions remain owned by the APIs.
 
 The source is under `web/`. Build its image from this directory with:
