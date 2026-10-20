@@ -1,7 +1,6 @@
 import {
   Allow,
   IsArray,
-  IsBoolean,
   IsIn,
   IsObject,
   IsOptional,
@@ -65,9 +64,8 @@ export class EntityTypeDto {
   @IsString()
   description?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  active?: boolean;
+  @Allow()
+  active?: unknown;
 }
 
 export class SaveProgrammeContentDto {

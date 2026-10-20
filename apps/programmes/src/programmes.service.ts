@@ -7,6 +7,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { verifyAccessToken } from '@app/platform/access-token.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   nextPageIfMore,
   pageOffset,
@@ -527,7 +528,7 @@ function normalizeEntityType(
       typeof body.description === 'string'
         ? trimPythonWhitespace(body.description)
         : '',
-    active: Boolean(activeValue),
+    active: pythonTruthy(activeValue),
     updatedAt: now,
   };
 }

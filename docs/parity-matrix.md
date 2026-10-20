@@ -105,6 +105,9 @@ separate clock reads.
 Programme list pages and shared-category `assignedProgrammes` arrays preserve
 the reference's insertion order through a Core-owned record sequence; existing
 rows are backfilled by creation timestamp and slug.
+Entity-type `active` inputs and stored values are coerced using Python
+truthiness rather than requiring a JSON boolean, including falsey legacy JSON
+values, before the normalized catalogue record is persisted.
 Programme PATCH requests with `status: "ARCHIVED"` follow the reference's
 archive action: other supplied update fields are ignored, the policy version
 is unchanged, and the archive event contains only the slug.
