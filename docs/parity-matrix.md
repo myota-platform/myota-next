@@ -184,6 +184,12 @@ an audited reason; long-running Activity jobs now extend their 120-second leases
 from a separate database connection while processing. Statistics listing and rebuild-job APIs,
 transactional snapshot rebuilds, and owner-scoped notification reads are
 implemented. ADIF import creation, processing, and status reads are implemented.
+The pinned Python handler returns QSO-ingestion and statistics-rebuild job
+status without checking authorization, despite bearer authentication being
+required by OpenAPI. Nest requires authentication, limits ingestion status to
+the activation owner or an Activity administrator, and limits rebuild status
+to Activity administrators. This is an intentional security correction to the
+reference behavior.
 The Nest worker addresses early ADIF failure notices to the activation owner;
 the pinned Python worker uses the activation ID as the recipient, so those
 notices do not appear in the owner's account feed. This is a documented
