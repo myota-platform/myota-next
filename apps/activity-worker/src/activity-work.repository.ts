@@ -12,7 +12,9 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { MAX_UPLOAD_BYTES } from '@app/platform/import-limits.js';
+import { parsePageTotal } from '@app/platform/pagination.js';
 import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
@@ -1077,10 +1079,10 @@ async function readSubjectFacts(
   const row = result.rows[0];
   return row
     ? {
-        qsoCount: Number(row.qso_count),
-        activationCount: Number(row.activation_count),
-        uniqueCallsignCount: Number(row.unique_callsign_count),
-        uniqueEntityCount: Number(row.unique_entity_count),
+        qsoCount: parsePageTotal(row.qso_count),
+        activationCount: parsePageTotal(row.activation_count),
+        uniqueCallsignCount: parsePageTotal(row.unique_callsign_count),
+        uniqueEntityCount: parsePageTotal(row.unique_entity_count),
         entityType: row.last_entity_type,
       }
     : {
@@ -1108,8 +1110,8 @@ async function saveAwardProgress(
       Number(award.version ?? 1),
       subjectId,
       award.category ?? 'HUNTER',
-      JSON.stringify(facts),
-      JSON.stringify(evaluation),
+      stringifyJsonWithBigInts(facts),
+      stringifyJsonWithBigInts(evaluation),
     ],
   );
 }

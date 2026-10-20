@@ -378,6 +378,7 @@ function pythonScalarString(value: unknown): string {
 export function pythonFloat(value: unknown, field: string): number {
   if (typeof value === 'number') return value;
   if (typeof value === 'boolean') return value ? 1 : 0;
+  if (typeof value === 'bigint') return Number(value);
   const text =
     typeof value === 'string' ? normalizePythonNumericText(value) : '';
   if (

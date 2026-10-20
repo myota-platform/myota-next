@@ -8,6 +8,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   nextPageIfMore,
   pageOffset,
@@ -426,10 +427,10 @@ export class ActivityRepository {
       const row = result.rows[0];
       return row
         ? {
-            qsoCount: Number(row.qso_count),
-            activationCount: Number(row.activation_count),
-            uniqueCallsignCount: Number(row.unique_callsign_count),
-            uniqueEntityCount: Number(row.unique_entity_count),
+            qsoCount: parsePageTotal(row.qso_count),
+            activationCount: parsePageTotal(row.activation_count),
+            uniqueCallsignCount: parsePageTotal(row.unique_callsign_count),
+            uniqueEntityCount: parsePageTotal(row.unique_entity_count),
             entityType: row.last_entity_type,
           }
         : {
@@ -461,8 +462,8 @@ export class ActivityRepository {
           Number(award.version ?? 1),
           subjectId,
           award.category,
-          JSON.stringify(facts),
-          JSON.stringify(evaluation),
+          stringifyJsonWithBigInts(facts),
+          stringifyJsonWithBigInts(evaluation),
         ],
       );
     } finally {

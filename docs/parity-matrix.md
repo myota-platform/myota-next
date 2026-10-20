@@ -316,6 +316,10 @@ entities. Activity deletion-impact counts preserve exact PostgreSQL integers
 through the Activity response and Geodata's stored confirmation job. Outage and
 recovery evidence remains outstanding. Activity lease extension is supported
 for long-running jobs.
+Activity subject aggregate counts preserve PostgreSQL bigint precision in API
+facts and persisted award progress; award comparisons apply Python-compatible
+float conversion without first truncating the database values to JavaScript
+safe integers.
 Location-enrichment workers check the request ID, geometry hash, and terminal
 status before calling the provider, so stale requests and redelivered completed
 or failed work do not repeat reverse-geocoding lookups.
