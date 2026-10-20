@@ -90,7 +90,25 @@ export function parserProblem(
   next: NextFunction,
 ) {
   if (!isRecord(error) || !('status' in error)) return next(error);
-  const status = typeof error.status === 'number' ? error.status : 400;
+  let status = typeof error.status === 'number' ? error.status : 400;
+  let detail =
+    typeof error.message === 'string' ? error.message : 'invalid request body';
+  const errorType = typeof error.type === 'string' ? error.type : '';
+  const isJson =
+    request.is('application/json') || request.is('application/*+json');
+  if (isJson && errorType === 'entity.parse.failed') {
+    status = 400;
+    detail = 'invalid JSON body';
+  } else if (
+    (isJson || request.is('application/x-www-form-urlencoded')) &&
+    errorType === 'entity.too.large'
+  ) {
+    status = 400;
+    detail =
+      typeof error.limit === 'number'
+        ? `request body exceeds ${error.limit} bytes`
+        : 'request body exceeds the configured limit';
+  }
   const code = problemCode(status);
   const problem: ApiProblem = {
     type: `https://myota.dev/problems/${code}`,
@@ -99,10 +117,7 @@ export function parserProblem(
       .replace(/\b\w/g, (letter) => letter.toUpperCase()),
     status,
     code,
-    detail:
-      typeof error.message === 'string'
-        ? error.message
-        : 'invalid request body',
+    detail,
     requestId: response.locals.requestId ?? randomUUID(),
     correlationId: response.locals.correlationId ?? randomUUID(),
   };

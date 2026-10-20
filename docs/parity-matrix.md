@@ -13,6 +13,8 @@ headers and in the problem body. `X-Trace-ID` follows the request ID used by
 Nest observability. Identity login preserves the reference status
 behavior: invalid credentials return 400, while permission and rate-limit
 failures return 403. Other NestJS 401 permission exceptions also map to 403.
+Malformed JSON and oversized JSON bodies use the reference's 400
+`invalid_request` response shape and details.
 The Gateway forwards W3C `traceparent` and `tracestate` headers to the owning
 API and passes trace headers back to clients when an upstream provides them.
 
