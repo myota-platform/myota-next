@@ -344,7 +344,8 @@ export class IdentityAccountService {
                 c.verified_at AS "verifiedAt", c.valid_from AS "validFrom",
                 c.valid_to AS "validTo", c.created_at AS "createdAt",
                 c.updated_at AS "updatedAt",
-                coalesce(array_agg(e.id) FILTER (WHERE e.id IS NOT NULL), '{}')
+                coalesce(array_agg(e.id ORDER BY e.submitted_at, e.id)
+                  FILTER (WHERE e.id IS NOT NULL), '{}')
                   AS "evidenceIds"
            FROM public.callsign c
            LEFT JOIN public.callsign_evidence e ON e.callsign_id = c.id
@@ -639,7 +640,8 @@ export class IdentityAccountService {
       const current = callsignResult.rows[0];
       if (!current) throw new NotFoundException('callsign not found');
       const evidence = await client.query(
-        'SELECT id FROM public.callsign_evidence WHERE callsign_id = $1',
+        `SELECT id FROM public.callsign_evidence
+          WHERE callsign_id = $1 ORDER BY submitted_at, id`,
         [callsignId],
       );
       if (!evidence.rowCount) {
@@ -726,6 +728,11 @@ export class IdentityAccountService {
       );
       const current = currentResult.rows[0];
       if (!current) throw new NotFoundException('callsign not found');
+      const evidence = await client.query<{ id: string }>(
+        `SELECT id FROM public.callsign_evidence
+          WHERE callsign_id = $1 ORDER BY submitted_at, id`,
+        [callsignId],
+      );
       if (account.rows[0].primary_callsign_id === callsignId) {
         const replacement = body.newPrimaryCallsignId;
         if (!replacement) {
@@ -774,6 +781,7 @@ export class IdentityAccountService {
         verifiedAt: current.verified_at,
         validFrom: current.valid_from,
         validTo,
+        evidenceIds: evidence.rows.map((item) => item.id),
         updatedAt: new Date(),
       };
       await writeOutboxEvent(client, {
