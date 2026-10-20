@@ -642,7 +642,11 @@
   job redrive is audited and available to
   administrators; the Activity worker now extends active job leases while
   long batches run and repairs missing queued-job outbox commands. Geodata import, promotion, and deletion work extends owner
-  leases during long jobs; failed NATS progress acknowledgements do not fail
+  leases during long jobs. Import run leases and database heartbeat cadence
+  follow `MYOTA_IMPORT_LEASE_SECONDS` (900 seconds by default) and
+  `MYOTA_IMPORT_HEARTBEAT_SECONDS` (30 seconds), with Python-compatible integer
+  parsing and the reference minimums. JetStream progress acknowledgements
+  renew independently at one third of each durable's ACK wait. Failed progress acknowledgements do not fail
   the active owner operation. Work IDs accept all canonical UUID version and
   variant bits; `causationId` is optional, and exhausted invalid deliveries use
   the reference's UUID fallback and payload event-type precedence. Stale

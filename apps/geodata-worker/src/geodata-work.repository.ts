@@ -18,6 +18,7 @@ import {
   MAX_IMPORT_BATCH_FEATURES,
   MAX_IMPORT_FEATURE_BYTES,
   MAX_IMPORT_FEATURES,
+  IMPORT_RUN_LEASE_SECONDS,
 } from '@app/platform/import-limits.js';
 import { pythonFloatString } from '@app/platform/python-number.js';
 import {
@@ -143,9 +144,9 @@ export class GeodataWorkRepository {
       );
       await client.query(
         `UPDATE import_run SET status='PROCESSING',attempt_count=attempt_count+1,
-         heartbeat_at=now(),lease_until=now()+interval '5 minutes',last_error=NULL
+         heartbeat_at=now(),lease_until=now()+make_interval(secs=>$2),last_error=NULL
          WHERE id=$1`,
-        [row.id],
+        [row.id, IMPORT_RUN_LEASE_SECONDS],
       );
       await client.query('COMMIT');
       return { ...row, attempt_count: Number(row.attempt_count) + 1 };
@@ -477,7 +478,6 @@ export class GeodataWorkRepository {
         filename,
         featureLimit,
         run.source_hash,
-        () => this.heartbeat(run),
       );
     } else if (format === 'GEOJSON') {
       const documentMetadata = await readGeoJsonDocumentMetadata(
@@ -1335,7 +1335,7 @@ export class GeodataWorkRepository {
     );
   }
 
-  private async heartbeat(run: ImportRun) {
+  async heartbeat(run: ImportRun): Promise<void> {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -1343,10 +1343,10 @@ export class GeodataWorkRepository {
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
       );
       const renewed = await client.query(
-        `UPDATE import_run SET heartbeat_at=now(),lease_until=now()+interval '5 minutes'
+        `UPDATE import_run SET heartbeat_at=now(),lease_until=now()+make_interval(secs=>$3)
          WHERE id=$1 AND status='PROCESSING' AND attempt_count=$2
          RETURNING id`,
-        [run.id, run.attempt_count],
+        [run.id, run.attempt_count, IMPORT_RUN_LEASE_SECONDS],
       );
       if (!renewed.rowCount)
         throw new Error(

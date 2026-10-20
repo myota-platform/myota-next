@@ -53,7 +53,6 @@ export async function* decodeOsmPbfStream(
   filename: string,
   featureLimit: number,
   sourceHash: string,
-  heartbeat: () => Promise<void>,
 ): AsyncGenerator<GeoJsonFeature> {
   const normalizedFilename = filename.toLowerCase();
   if (!normalizedFilename.endsWith('.pbf'))
@@ -103,7 +102,6 @@ export async function* decodeOsmPbfStream(
       sourcePath,
       configPath,
       locationIndexPath,
-      heartbeat,
       featureLimit,
     ))
       yield feature;
@@ -116,7 +114,6 @@ async function* parseOsmiumFeatures(
   sourcePath: string,
   configPath: string,
   locationIndexPath: string,
-  heartbeat: () => Promise<void>,
   featureLimit: number,
 ): AsyncGenerator<GeoJsonFeature> {
   let featureCount = 0;
@@ -124,7 +121,6 @@ async function* parseOsmiumFeatures(
     sourcePath,
     configPath,
     locationIndexPath,
-    heartbeat,
   )) {
     const parsed: unknown = JSON.parse(record);
     if (!isRecord(parsed) || parsed.type !== 'Feature') continue;
@@ -200,7 +196,6 @@ async function* runOsmium(
   sourcePath: string,
   configPath: string,
   locationIndexPath: string,
-  heartbeat: () => Promise<void>,
 ): AsyncGenerator<string> {
   const child = spawn(
     'osmium',
@@ -216,10 +211,7 @@ async function* runOsmium(
   );
   const stderr: Buffer[] = [];
   let stderrBytes = 0;
-  let heartbeatError: unknown;
   let spawnError: Error | undefined;
-  let heartbeatInFlight = false;
-  let heartbeatPromise = Promise.resolve();
   let exitCode: number | null = null;
   let closeSignal: NodeJS.Signals | null = null;
   const closed = new Promise<void>((resolve) => {
@@ -229,19 +221,6 @@ async function* runOsmium(
       resolve();
     });
   });
-  const heartbeatTimer = setInterval(() => {
-    if (heartbeatInFlight) return;
-    heartbeatInFlight = true;
-    heartbeatPromise = heartbeat()
-      .catch((error: unknown) => {
-        heartbeatError = error;
-        child.kill('SIGTERM');
-      })
-      .finally(() => {
-        heartbeatInFlight = false;
-      });
-  }, 60_000);
-  heartbeatTimer.unref();
   child.stderr.on('data', (chunk: Buffer) => {
     if (stderrBytes >= 64 * 1024) return;
     const remaining = 64 * 1024 - stderrBytes;
@@ -290,16 +269,13 @@ async function* runOsmium(
     streamError = error;
     child.kill('SIGTERM');
   } finally {
-    clearInterval(heartbeatTimer);
     if (child.exitCode === null && child.signalCode === null)
       child.kill('SIGTERM');
     await closed;
-    await heartbeatPromise;
   }
 
   if (spawnError)
     throw new Error(`OSM PBF decoder could not start: ${spawnError.message}`);
-  if (heartbeatError) throw heartbeatError;
   if (streamError) throw streamError;
   if (exitCode !== 0) {
     const details = Buffer.concat(stderr).toString('utf8').trim();

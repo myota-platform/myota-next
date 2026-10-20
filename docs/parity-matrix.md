@@ -368,7 +368,10 @@ map renders point, line, polygon, and multipart entity geometries.
 - Geodata workers: registered JetStream consumers for import preprocessing and
   promotion, confirmed entity deletion, and location enrichment are implemented.
   `/healthz` and `/readyz` expose liveness and Geodata PostgreSQL/NATS
-  readiness. Stale queued and expired work is re-enqueued through the owner outbox.
+  readiness. Import run leases and database heartbeats use the Python-compatible
+  `MYOTA_IMPORT_LEASE_SECONDS` and `MYOTA_IMPORT_HEARTBEAT_SECONDS` settings;
+  JetStream ACK extensions follow one third of the registered durable ACK wait.
+  Stale queued and expired work is re-enqueued through the owner outbox.
   Scheduled import and upload-session retention is implemented; outage/recovery
   evidence remains open.
 - Gateway: routes public API requests to their owning services, protects

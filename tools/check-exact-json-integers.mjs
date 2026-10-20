@@ -121,8 +121,23 @@ requirePattern(
   'Geodata worker must use the shared Python-compatible feature limit',
 );
 requirePattern(
+  'apps/geodata-worker/src/geodata-work.repository.ts',
+  /lease_until=now\(\)\+make_interval\(secs=>\$2\)[\s\S]*?IMPORT_RUN_LEASE_SECONDS[\s\S]*?async heartbeat\(run: ImportRun\): Promise<void>[\s\S]*?lease_until=now\(\)\+make_interval\(secs=>\$3\)/,
+  'Geodata import claims and heartbeats must use the configured lease duration',
+);
+requirePattern(
+  'apps/geodata-worker/src/geodata-worker.service.ts',
+  /heartbeatIntervalSeconds: IMPORT_RUN_HEARTBEAT_SECONDS[\s\S]*?this\.repository\.heartbeat\(job\)[\s\S]*?definition\.heartbeatIntervalSeconds \?\? 30/,
+  'Geodata imports must renew database leases at the configured Python-compatible heartbeat interval',
+);
+requirePattern(
+  'apps/geodata-worker/src/geodata-worker.service.ts',
+  /acknowledgementIntervalMs = Math\.max\([\s\S]*?definition\.ackWaitSeconds \* 1000\) \/ 3[\s\S]*?lastAcknowledgement/,
+  'Geodata JetStream acknowledgements must be extended independently at one third of the durable ACK wait',
+);
+requirePattern(
   'libs/platform/src/import-limits.ts',
-  /MAX_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_GEOJSON_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_OSM_PBF_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_SHAPEFILE_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_IMPORT_FEATURES = integerSetting\(\s*process\.env\.GEODATA_MAX_IMPORT_FEATURES,\s*5000,[\s\S]*?MAX_IMPORT_FEATURE_VERTICES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_FEATURE_VERTICES[\s\S]*?MAX_SHAPEFILE_EXPANDED_BYTES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES[\s\S]*?MAX_IMPORT_BATCH_BYTES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_BYTES[\s\S]*?MAX_IMPORT_BATCH_FEATURES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_SIZE/,
+  /MAX_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_GEOJSON_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_OSM_PBF_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_SHAPEFILE_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_IMPORT_FEATURES = integerSetting\(\s*process\.env\.GEODATA_MAX_IMPORT_FEATURES,\s*5000,[\s\S]*?IMPORT_RUN_LEASE_SECONDS = Math\.max\([\s\S]*?MYOTA_IMPORT_LEASE_SECONDS,[\s\S]*?IMPORT_RUN_HEARTBEAT_SECONDS = Math\.max\([\s\S]*?MYOTA_IMPORT_HEARTBEAT_SECONDS,[\s\S]*?MAX_IMPORT_FEATURE_VERTICES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_FEATURE_VERTICES[\s\S]*?MAX_SHAPEFILE_EXPANDED_BYTES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES[\s\S]*?MAX_IMPORT_BATCH_BYTES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_BYTES[\s\S]*?MAX_IMPORT_BATCH_FEATURES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_SIZE/,
   'Geodata upload, decoder, and batch limits must use Python-compatible integer settings',
 );
 for (const relativePath of [
@@ -220,6 +235,6 @@ if (errors.length) {
   process.exitCode = 1;
 } else {
   process.stdout.write(
-    'Exact JSON integers, Python-compatible Geodata multipart conversions, and import-limit settings are guarded across the API, workers, and scheduled importer.\n',
+    'Exact JSON integers, Python-compatible Geodata integer settings, and import batch, lease, and source limits are guarded across the API, workers, and scheduled importer.\n',
   );
 }

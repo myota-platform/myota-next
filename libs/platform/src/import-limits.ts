@@ -24,6 +24,14 @@ export const MAX_IMPORT_FEATURES = integerSetting(
   process.env.GEODATA_MAX_IMPORT_FEATURES,
   5000,
 );
+export const IMPORT_RUN_LEASE_SECONDS = Math.max(
+  60,
+  integerSetting(process.env.MYOTA_IMPORT_LEASE_SECONDS, 900),
+);
+export const IMPORT_RUN_HEARTBEAT_SECONDS = Math.max(
+  15,
+  integerSetting(process.env.MYOTA_IMPORT_HEARTBEAT_SECONDS, 30),
+);
 export const MAX_IMPORT_FEATURE_VERTICES = integerSetting(
   process.env.MYOTA_IMPORT_MAX_FEATURE_VERTICES,
   250_000,

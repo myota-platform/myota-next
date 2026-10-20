@@ -12,6 +12,7 @@ import type { Consumer, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { IMPORT_RUN_HEARTBEAT_SECONDS } from '@app/platform/import-limits.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
 import {
   WorkerProbeServer,
@@ -58,6 +59,7 @@ type WorkDefinition = {
   process(job: any, message: JsMsg): Promise<void>;
   onFailure?(job: unknown, error: unknown): Promise<void>;
   heartbeat?(job: any): Promise<boolean>;
+  heartbeatIntervalSeconds?: number;
   ackWaitSeconds: number;
   maxPending: number;
   maxDeliveries: number;
@@ -138,6 +140,9 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
           process: (job, message) => this.process(item.workType, job, message),
           onFailure: (job, error) => this.onFailure(item.workType, job, error),
           heartbeat: (job) => this.heartbeat(item.workType, job),
+          ...(item.workType === 'geodata.import-preprocess.v1'
+            ? { heartbeatIntervalSeconds: IMPORT_RUN_HEARTBEAT_SECONDS }
+            : {}),
           ...policy,
         });
       }
@@ -418,6 +423,10 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async heartbeat(workType: string, job: any): Promise<boolean> {
+    if (workType === 'geodata.import-preprocess.v1') {
+      await this.repository.heartbeat(job);
+      return true;
+    }
     return workType === 'geodata.entity-delete.v1'
       ? this.deletions.heartbeat(job)
       : true;
@@ -429,15 +438,38 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
     message: JsMsg,
   ): Promise<void> {
     const task = this.process(definition.workType, job, message);
+    const databaseHeartbeatMs =
+      (definition.heartbeatIntervalSeconds ?? 30) * 1000;
+    const acknowledgementIntervalMs = Math.max(
+      1000,
+      (definition.ackWaitSeconds * 1000) / 3,
+    );
+    let lastDatabaseHeartbeat = Date.now();
+    let lastAcknowledgement = Date.now();
     while (true) {
+      const now = Date.now();
+      const delay = Math.max(
+        1,
+        Math.min(
+          databaseHeartbeatMs - (now - lastDatabaseHeartbeat),
+          acknowledgementIntervalMs - (now - lastAcknowledgement),
+        ),
+      );
       const result = await Promise.race([
         task.then(() => 'done' as const),
-        pause(30_000).then(() => 'tick' as const),
+        pause(delay).then(() => 'tick' as const),
       ]);
       if (result === 'done') return;
-      if (definition.heartbeat && !(await definition.heartbeat(job)))
-        throw new Error('Geodata work lease was lost');
-      this.extendMessageAck(message, 'processing Geodata work');
+      const tickedAt = Date.now();
+      if (tickedAt - lastDatabaseHeartbeat >= databaseHeartbeatMs) {
+        if (definition.heartbeat && !(await definition.heartbeat(job)))
+          throw new Error('Geodata work lease was lost');
+        lastDatabaseHeartbeat = tickedAt;
+      }
+      if (tickedAt - lastAcknowledgement >= acknowledgementIntervalMs) {
+        this.extendMessageAck(message, 'processing Geodata work');
+        lastAcknowledgement = tickedAt;
+      }
     }
   }
 
