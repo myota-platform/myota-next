@@ -9,7 +9,10 @@ import { verifyAccessToken } from '@app/platform/access-token.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { ProgrammeStateRepository } from './programme-state.repository.js';
 import { ProgrammeReadRepository } from './programme-read.repository.js';
-import type { ProgrammeState } from './programme-state.repository.js';
+import {
+  ProgrammePolicyRepository,
+  type ProgrammePolicyDraft,
+} from './programme-policy.repository.js';
 import type {
   PatchProgrammePolicyDraftDto,
   PublishProgrammePolicyDraftDto,
@@ -21,22 +24,12 @@ import {
   normalizeUtcTimestamp,
 } from './programme-domain.js';
 
-type PolicyDraft = Record<string, unknown> & {
-  id: string;
-  programmeSlug: string;
-  type: 'RULES' | 'AWARD';
-  name: string;
-  schema: Record<string, unknown>;
-  status: string;
-  reviewHistory: Record<string, unknown>[];
-  updatedAt: string;
-};
-
 @Injectable()
 export class ProgrammePolicyService {
   constructor(
     private readonly state: ProgrammeStateRepository,
     private readonly reads: ProgrammeReadRepository,
+    private readonly policies: ProgrammePolicyRepository,
   ) {}
 
   async list(
@@ -80,10 +73,10 @@ export class ProgrammePolicyService {
         'type, name, and schema are required; schema must be an object',
       );
     }
-    return this.state.mutate(idempotencyKey, async (client, state) => {
-      const bucket = policyDraftBucket(state);
+    return this.policies.mutate(idempotencyKey, async (client) => {
       const draftId = body.draftId ?? randomUUID();
-      const previous = bucket[draftId];
+      await this.policies.lockRecord(client, draftId);
+      const previous = await this.policies.find(client, draftId);
       if (
         previous &&
         !['DRAFT', 'CHANGES_REQUESTED'].includes(previous.status)
@@ -93,7 +86,7 @@ export class ProgrammePolicyService {
         );
       }
       const now = new Date().toISOString();
-      const draft: PolicyDraft = {
+      const draft: ProgrammePolicyDraft = {
         ...(previous ?? {
           id: draftId,
           programmeSlug: slug,
@@ -109,12 +102,10 @@ export class ProgrammePolicyService {
           : null,
         updatedAt: now,
       };
-      bucket[draftId] = draft;
-      await this.state.recordEvent(
+      await this.policies.save(client, draft);
+      await this.policies.recordEvent(
         client,
-        state,
         'programme.policy-draft.saved.v1',
-        'policy_draft',
         draftId,
         draft,
       );
@@ -129,8 +120,9 @@ export class ProgrammePolicyService {
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
-    return this.state.mutate(idempotencyKey, async (_client, state) => {
-      const draft = requireDraft(policyDraftBucket(state), draftId);
+    return this.policies.mutate(idempotencyKey, async (client) => {
+      await this.policies.lockRecord(client, draftId);
+      const draft = await this.requireDraft(client, draftId);
       if (
         draft.programmeSlug !== slug ||
         !['DRAFT', 'CHANGES_REQUESTED'].includes(draft.status)
@@ -142,6 +134,7 @@ export class ProgrammePolicyService {
       draft.submittedAt = now;
       draft.updatedAt = now;
       draft.reviewHistory.push({ action: 'SUBMITTED', occurredAt: now });
+      await this.policies.save(client, draft);
       return draft;
     });
   }
@@ -154,8 +147,9 @@ export class ProgrammePolicyService {
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
-    return this.state.mutate(idempotencyKey, async (_client, state) => {
-      const draft = requireDraft(policyDraftBucket(state), draftId);
+    return this.policies.mutate(idempotencyKey, async (client) => {
+      await this.policies.lockRecord(client, draftId);
+      const draft = await this.requireDraft(client, draftId);
       if (draft.programmeSlug !== slug || draft.status !== 'UNDER_REVIEW') {
         throw new BadRequestException(
           'only policies under review can be decided',
@@ -171,6 +165,7 @@ export class ProgrammePolicyService {
         note: body.note ?? null,
         occurredAt: now,
       });
+      await this.policies.save(client, draft);
       return draft;
     });
   }
@@ -185,7 +180,8 @@ export class ProgrammePolicyService {
     this.authorizeAdmin(authorization, slug);
     const effectiveFrom = normalizeUtcTimestamp(body.effectiveFrom);
     return this.state.mutate(idempotencyKey, async (client, state) => {
-      const draft = requireDraft(policyDraftBucket(state), draftId);
+      await this.policies.lockRecord(client, draftId);
+      const draft = await this.requireDraft(client, draftId);
       if (draft.programmeSlug !== slug || draft.status !== 'APPROVED') {
         throw new BadRequestException(
           'only approved policies can be published',
@@ -220,6 +216,7 @@ export class ProgrammePolicyService {
         programme.awards = awards;
       }
       programme.updatedAt = now;
+      await this.policies.save(client, draft);
       await this.state.recordEvent(
         client,
         state,
@@ -272,7 +269,7 @@ export class ProgrammePolicyService {
         idempotencyKey,
       );
     }
-    const current = policyDraftBucket(await this.state.load())[draftId];
+    const current = await this.policies.get(draftId);
     if (!current) throw new BadRequestException('policy draft not found');
     return this.save(
       authorization,
@@ -302,25 +299,14 @@ export class ProgrammePolicyService {
     }
     throw new ForbiddenException('programme administration scope is required');
   }
-}
 
-function policyDraftBucket(state: ProgrammeState): Record<string, PolicyDraft> {
-  state.data ??= {};
-  const value = state.data.policyDrafts;
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, PolicyDraft>;
+  private async requireDraft(
+    client: import('pg').PoolClient,
+    draftId: string,
+  ): Promise<ProgrammePolicyDraft> {
+    const draft = await this.policies.find(client, draftId);
+    if (!draft) throw new NotFoundException('policy draft not found');
+    draft.reviewHistory ??= [];
+    return draft;
   }
-  const bucket: Record<string, PolicyDraft> = {};
-  state.data.policyDrafts = bucket;
-  return bucket;
-}
-
-function requireDraft(
-  bucket: Record<string, PolicyDraft>,
-  draftId: string,
-): PolicyDraft {
-  const draft = bucket[draftId];
-  if (!draft) throw new NotFoundException('policy draft not found');
-  draft.reviewHistory ??= [];
-  return draft;
 }

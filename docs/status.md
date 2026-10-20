@@ -68,9 +68,12 @@
   coverage reporting; content values and policy schemas follow the reference's
   non-empty JSON checks. Programme content now uses an indexed Core relational
   table with a migration backfill; content transitions, idempotency records,
-  and outbox events commit together. A dedicated read repository serves its
-  pages and locale coverage, while policy drafts and programme metadata remain
-  in the Core snapshot. Programme policy drafts support scoped authoring,
+  and outbox events commit together. Policy drafts now use a separate indexed
+  Core table; draft lifecycle writes and outbox events are atomic, and policy
+  publication remains atomic with the Programme snapshot update. A dedicated
+  read repository serves content pages, policy pages, and locale coverage;
+  programme metadata and entity catalogues remain in the Core snapshot.
+  Programme policy drafts support scoped authoring,
   submission, review, publishing, and effective policy updates. Effective
   publication timestamps accept Python-compatible basic and extended date and
   time forms, space-separated and comma-fraction input, and compact timezone

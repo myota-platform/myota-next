@@ -80,25 +80,18 @@ export class ProgrammeReadRepository {
     try {
       const result = await client.query<SnapshotPage>(
         `WITH filtered AS MATERIALIZED (
-           SELECT draft.value
-             FROM public.service_state AS snapshot
-             CROSS JOIN LATERAL jsonb_each(
-               CASE WHEN jsonb_typeof(snapshot.state #> '{data,policyDrafts}') = 'object'
-                 THEN snapshot.state #> '{data,policyDrafts}'
-                 ELSE '{}'::jsonb
-               END
-             ) AS draft(key, value)
-            WHERE snapshot.service = 'programmes'
-              AND draft.value->>'programmeSlug' = $1
-              AND ($2::text IS NULL OR draft.value->>'type' = $2)
+           SELECT draft.payload AS value, draft.updated_at, draft.id
+             FROM public.programme_policy_draft AS draft
+            WHERE draft.programme_slug = $1
+              AND ($2::text IS NULL OR draft.draft_type = $2)
          ), page AS (
-           SELECT value FROM filtered
-            ORDER BY value->>'updatedAt' COLLATE "C" DESC
+           SELECT value, updated_at, id FROM filtered
+            ORDER BY updated_at COLLATE "C" DESC, id COLLATE "C"
             LIMIT $3 OFFSET $4
          )
          SELECT COALESCE(
                   (SELECT jsonb_agg(page.value ORDER BY
-                    page.value->>'updatedAt' COLLATE "C" DESC) FROM page),
+                    page.updated_at COLLATE "C" DESC, page.id COLLATE "C") FROM page),
                   '[]'::jsonb
                 ) AS items,
                 (SELECT count(*)::int FROM filtered) AS total`,

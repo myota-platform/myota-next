@@ -79,7 +79,9 @@ introduce a fourth database. The JSONB Identity snapshot remains intact;
 runtime cutover is a separate gated change. `core/006` backfills Programme
 content records into an indexed Core table and removes the duplicate content
 bucket from the Programme snapshot; lifecycle writes and outbox events then
-commit together against that table.
+commit together against that table. `core/007` does the same for Programme
+policy drafts, keeping publication of a rules or awards draft atomic with the
+Programme snapshot update.
 
 `geo/002` adds attempt-scoped import feature staging so workers can process
 large inputs without retaining all prepared candidates and validation errors

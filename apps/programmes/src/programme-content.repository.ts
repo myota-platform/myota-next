@@ -3,9 +3,9 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
 
 export type ProgrammeContentRecord = Record<string, unknown> & {
   id: string;
@@ -21,53 +21,18 @@ export type ProgrammeContentRecord = Record<string, unknown> & {
 export class ProgrammeContentRepository {
   constructor(
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
+    private readonly mutations: ProgrammeMutationRepository,
   ) {}
 
   async mutate<T>(
     idempotencyKey: string | undefined,
     operation: (client: PoolClient) => Promise<T>,
   ): Promise<T> {
-    const client = await this.connect();
-    try {
-      await client.query('BEGIN');
-      if (idempotencyKey) {
-        await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('programmes:' || $1, 0))",
-          [idempotencyKey],
-        );
-        const previous = await client.query<{ response: T }>(
-          `SELECT response FROM public.idempotency_record
-            WHERE service = 'programmes' AND key = $1`,
-          [idempotencyKey],
-        );
-        if (previous.rows[0]) {
-          await client.query('COMMIT');
-          return previous.rows[0].response;
-        }
-      }
-      const response = await operation(client);
-      if (idempotencyKey) {
-        await client.query(
-          `INSERT INTO public.idempotency_record (service, key, response)
-           VALUES ('programmes', $1, $2::jsonb)`,
-          [idempotencyKey, JSON.stringify(response)],
-        );
-      }
-      await client.query('COMMIT');
-      return response;
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
-    }
+    return this.mutations.mutate(idempotencyKey, operation);
   }
 
   async lockRecord(client: PoolClient, id: string): Promise<void> {
-    await client.query(
-      "SELECT pg_advisory_xact_lock(hashtextextended('programme-content:' || $1, 0))",
-      [id],
-    );
+    await this.mutations.lockAggregate(client, 'programme-content', id);
   }
 
   async find(
@@ -124,21 +89,12 @@ export class ProgrammeContentRepository {
     contentId: string,
     payload: ProgrammeContentRecord,
   ) {
-    const eventId = randomUUID();
-    const occurredAt = new Date().toISOString();
-    await client.query(
-      `INSERT INTO public.outbox_event
-         (event_id, event_type, producer, aggregate_type, aggregate_id,
-          payload, occurred_at, correlation_id)
-       VALUES ($1, $2, 'programmes', 'content', $3, $4::jsonb, $5, $6)`,
-      [
-        eventId,
-        eventType,
-        contentId,
-        JSON.stringify(payload),
-        occurredAt,
-        randomUUID(),
-      ],
+    await this.mutations.recordEvent(
+      client,
+      eventType,
+      'content',
+      contentId,
+      payload,
     );
   }
 
