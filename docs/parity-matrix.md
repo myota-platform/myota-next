@@ -58,6 +58,8 @@ fragment delimiters, matching Python's `urlunsplit` behavior, and rejects
 URLs without a syntactic authority, matching `urlsplit` validation.
 Role arrays preserve assignment order, including multi-role replacements that
 share a creation timestamp.
+Role replacement also shares one timestamp between expiring prior assignments
+and creating their replacements, matching the Python handler.
 Administrative account updates now preserve profile, password, status,
 anonymization, and role replacement behavior in Core transactions. As in the
 reference handler, changing status alone does not anonymize the account or

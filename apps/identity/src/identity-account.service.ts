@@ -850,12 +850,22 @@ export class IdentityAccountService {
       }
     }
 
+    const changedAt = (
+      await client.query<{ timestamp: Date }>(
+        'SELECT clock_timestamp() AS timestamp',
+      )
+    ).rows[0].timestamp;
     await client.query(
-      `UPDATE public.account_role SET valid_to = now()
+      `UPDATE public.account_role SET valid_to = $2
         WHERE account_id = $1 AND valid_to IS NULL`,
-      [accountId],
+      [accountId, changedAt],
     );
-    const roles = await this.assignRoles(client, accountId, normalized);
+    const roles = await this.assignRoles(
+      client,
+      accountId,
+      normalized,
+      changedAt,
+    );
     await writeSecurityEvent(client, 'identity.roles.replaced.v1', {
       accountId,
       roles,
@@ -974,9 +984,16 @@ export class IdentityAccountService {
     client: PoolClient,
     accountId: string,
     assignments: RoleGrant[],
+    createdAt?: Date,
   ) {
     const result: Record<string, unknown>[] = [];
-    const createdAt = new Date();
+    const assignmentTime =
+      createdAt ??
+      (
+        await client.query<{ timestamp: Date }>(
+          'SELECT clock_timestamp() AS timestamp',
+        )
+      ).rows[0].timestamp;
     for (const assignment of assignments) {
       const id = randomUUID();
       await client.query(
@@ -993,7 +1010,7 @@ export class IdentityAccountService {
           assignment.entityType,
           JSON.stringify(assignment.scopes),
           assignment.jurisdiction,
-          createdAt,
+          assignmentTime,
         ],
       );
       result.push({
@@ -1004,7 +1021,7 @@ export class IdentityAccountService {
         jurisdiction: assignment.jurisdiction,
         entityType: assignment.entityType,
         scopes: assignment.scopes,
-        createdAt,
+        createdAt: assignmentTime,
         validTo: null,
       });
     }
