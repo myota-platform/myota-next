@@ -154,9 +154,9 @@ ADIF uploads now pass
 authorization, malware checks, and object storage before durable queueing; the
 Activity worker parses records, records successes and rejects, updates
 aggregates, and reports import status. CSV file uploads now validate bounded
-UTF-8 input and queue normalized rows through the same ingestion job. CSV QSO
-and ADIF uploads and award-asset content preserve Python's strict base64
-validation, including its acceptance of non-zero unused padding bits.
+UTF-8 input and queue normalized rows through the same ingestion job. Base64
+decoding for CSV and ADIF uploads matches Python's strict validation, which
+accepts non-zero unused padding bits.
 CSV QSO ingestion is an addition to the legacy behavior: the Python Activity service
 exports public results as CSV but has no CSV QSO ingestion route. Track it as an
 extension, not as parity evidence. Remaining
