@@ -388,9 +388,9 @@
   close; and point, line, polygon, and multipart map geometries. It lacks
   browser-level compatibility coverage. Visual/accessibility review and
   deployment integration also remain open.
-- Cross-version transfer tooling (read-only preflight, dump staging, and
-  migration-ledger adoption are implemented; data restore and rehearsal remain
-  open; see the
+- Cross-version transfer tooling now has read-only preflight, checksummed dump
+  staging, ledger adoption, and restore/migration steps. Disposable-database
+  rehearsal and data-level validation remain open; see the
   [database transfer plan](operations/cross-version-data-transfer.md)), image
   publication, deployment manifests, and
   production observability configuration. A reusable Docker recipe now builds

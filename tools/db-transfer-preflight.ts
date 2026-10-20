@@ -87,15 +87,64 @@ async function main() {
         );
       if (owner === 'geo')
         await assertPostgisAvailable(sourceClient, targetClient);
-      const relationCount = await targetClient.query<{ count: string }>(`
-        SELECT count(*)::text AS count
-          FROM pg_class AS c
-          JOIN pg_namespace AS n ON n.oid=c.relnamespace
-         WHERE n.nspname='public'
-           AND c.relkind IN ('r','p','v','m','S','f')
-           AND c.relname NOT IN (
-             'myota_schema_migration', 'myota_deployment_schema_state'
-           )
+      const objectCount = await targetClient.query<{ count: string }>(`
+        WITH application_objects AS (
+          SELECT n.nspname AS schema_name,c.relname AS object_name
+            FROM pg_class AS c
+            JOIN pg_namespace AS n ON n.oid=c.relnamespace
+           WHERE n.nspname NOT IN ('pg_catalog','information_schema')
+             AND n.nspname !~ '^pg_'
+             AND c.relkind IN ('r','p','v','m','S','f')
+             AND NOT (
+               n.nspname='public'
+               AND c.relname IN (
+                 'myota_schema_migration', 'myota_deployment_schema_state'
+               )
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM pg_depend AS d
+                WHERE d.classid='pg_class'::regclass
+                  AND d.objid=c.oid
+                  AND d.deptype='e'
+             )
+          UNION ALL
+          SELECT n.nspname,p.proname
+            FROM pg_proc AS p
+            JOIN pg_namespace AS n ON n.oid=p.pronamespace
+           WHERE n.nspname NOT IN ('pg_catalog','information_schema')
+             AND n.nspname !~ '^pg_'
+             AND NOT EXISTS (
+               SELECT 1 FROM pg_depend AS d
+                WHERE d.classid='pg_proc'::regclass
+                  AND d.objid=p.oid
+                  AND d.deptype='e'
+             )
+          UNION ALL
+          SELECT n.nspname,t.typname
+            FROM pg_type AS t
+            JOIN pg_namespace AS n ON n.oid=t.typnamespace
+           WHERE n.nspname NOT IN ('pg_catalog','information_schema')
+             AND n.nspname !~ '^pg_'
+             AND t.typrelid=0 AND t.typelem=0 AND t.typtype<>'p'
+             AND NOT EXISTS (
+               SELECT 1 FROM pg_depend AS d
+                WHERE d.classid='pg_type'::regclass
+                  AND d.objid=t.oid
+                  AND d.deptype='e'
+             )
+          UNION ALL
+          SELECT n.nspname,'<schema>'
+            FROM pg_namespace AS n
+           WHERE n.nspname NOT IN ('public','pg_catalog','information_schema')
+             AND n.nspname !~ '^pg_'
+             AND NOT EXISTS (
+               SELECT 1 FROM pg_depend AS d
+                WHERE d.classid='pg_namespace'::regclass
+                  AND d.objid=n.oid
+                  AND d.deptype='e'
+             )
+        )
+        SELECT count(*)::text AS count FROM application_objects
       `);
       reports.push({
         owner,
@@ -116,7 +165,7 @@ async function main() {
           database: target.database,
           host: target.host,
           port: Number(target.port),
-          publicApplicationRelations: Number(relationCount.rows[0]?.count ?? 0),
+          applicationObjects: Number(objectCount.rows[0]?.count ?? 0),
           migrationLedger: targetLedger.kind,
           aclRoles: targetAclRoles,
         },
@@ -185,16 +234,27 @@ async function aclRoles(client: Client): Promise<string[]> {
 }
 
 async function assertPostgisAvailable(source: Client, target: Client) {
-  const sourceInstalled = await source.query<{ installed: boolean }>(`
-    SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname='postgis') AS installed
+  const sourceInstalled = await source.query<{
+    version: string | null;
+  }>(`
+    SELECT extversion AS version FROM pg_extension WHERE extname='postgis'
   `);
-  const targetAvailable = await target.query<{ available: boolean }>(`
-    SELECT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name='postgis') AS available
-  `);
-  if (!sourceInstalled.rows[0]?.installed)
+  const sourceVersion = sourceInstalled.rows[0]?.version;
+  if (!sourceVersion)
     throw new Error('Geodata source database does not have PostGIS installed');
+  const targetAvailable = await target.query<{ available: boolean }>(
+    `
+    SELECT EXISTS (
+      SELECT 1 FROM pg_available_extension_versions
+       WHERE name='postgis' AND version=$1
+    ) AS available
+  `,
+    [sourceVersion],
+  );
   if (!targetAvailable.rows[0]?.available)
-    throw new Error('Geodata destination server does not provide PostGIS');
+    throw new Error(
+      `Geodata destination server does not provide PostGIS ${sourceVersion}`,
+    );
 }
 
 function endpoint(variable: string): Endpoint {

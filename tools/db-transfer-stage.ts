@@ -50,6 +50,10 @@ type TransferManifest = {
 
 async function main() {
   process.umask(0o077);
+  if (process.env.MYOTA_TRANSFER_SOURCE_FROZEN !== 'YES')
+    throw new Error(
+      'Set MYOTA_TRANSFER_SOURCE_FROZEN=YES after stopping all Python writers',
+    );
   const destination = parseArchiveDirectory(process.argv.slice(2));
   const stamp = new Date().toISOString().replaceAll(/[-:.]/g, '');
   const staging = join(
