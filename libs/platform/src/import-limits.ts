@@ -12,3 +12,11 @@ export const MAX_SHAPEFILE_EXPANDED_BYTES = integerSetting(
   process.env.MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES,
   1024 ** 3,
 );
+export const MAX_IMPORT_BATCH_BYTES = Math.max(
+  1,
+  integerSetting(process.env.MYOTA_IMPORT_BATCH_BYTES, 32 * 1024 * 1024),
+);
+export const MAX_IMPORT_BATCH_FEATURES = Math.max(
+  1,
+  integerSetting(process.env.MYOTA_IMPORT_BATCH_SIZE, 100),
+);

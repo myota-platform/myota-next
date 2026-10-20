@@ -103,8 +103,8 @@ requirePattern(
 );
 requirePattern(
   'libs/platform/src/import-limits.ts',
-  /MAX_IMPORT_FEATURE_VERTICES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_FEATURE_VERTICES[\s\S]*?MAX_SHAPEFILE_EXPANDED_BYTES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES/,
-  'Geodata vertex and expanded Shapefile limits must use Python-compatible integer settings',
+  /MAX_IMPORT_FEATURE_VERTICES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_FEATURE_VERTICES[\s\S]*?MAX_SHAPEFILE_EXPANDED_BYTES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES[\s\S]*?MAX_IMPORT_BATCH_BYTES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_BYTES[\s\S]*?MAX_IMPORT_BATCH_FEATURES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_SIZE/,
+  'Geodata decoder and batch limits must use Python-compatible integer settings',
 );
 for (const relativePath of [
   'apps/geodata/src/geodata-xml-import.ts',
@@ -121,6 +121,11 @@ requirePattern(
   'apps/geodata-worker/src/geodata-shapefile-stream.ts',
   /MAX_SHAPEFILE_EXPANDED_BYTES/,
   'Shapefile streaming must honor its configured expanded-size limit',
+);
+requirePattern(
+  'apps/geodata-worker/src/geodata-work.repository.ts',
+  /stagedBytes \+ featureBytes > MAX_IMPORT_BATCH_BYTES[\s\S]*?staged\.length >= MAX_IMPORT_BATCH_FEATURES[\s\S]*?stagedBytes >= MAX_IMPORT_BATCH_BYTES/,
+  'Geodata staging batches must honor configured feature-count and serialized-byte bounds',
 );
 requirePattern(
   'libs/platform/src/bootstrap.ts',

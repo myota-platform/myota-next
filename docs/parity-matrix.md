@@ -183,7 +183,9 @@ references, and emit the configured hiking, protected-area, point, path, and
 multipolygon features using a temporary disk-backed node-location index.
 PBF source bytes stream to disk with checksum verification; source upload size
 uses the shared 1 GiB default or the optional format-specific override. Decoded PBF output is capped at
-128 MiB and streamed one feature at a time into four-record staging batches,
+128 MiB and streamed one feature at a time into staged batches bounded by
+`MYOTA_IMPORT_BATCH_SIZE` and `MYOTA_IMPORT_BATCH_BYTES` (100 features and
+32 MiB by default),
 with the configured per-feature byte limit (16 MiB by default), 250,000 vertex
 limit, and configured feature cap. GeoJSON multipart uploads stream their
 source and yield one parsed

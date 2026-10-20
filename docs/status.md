@@ -476,8 +476,10 @@
   multipolygon areas using a temporary disk-backed node-location index. PBF
   source bytes stream to disk with checksum verification; upload size follows
   `MYOTA_OSM_PBF_MAX_UPLOAD_BYTES` or the shared upload limit. Decoded output is capped at 128 MiB, with
-  features streamed one at a time into four-record staging batches, 16 MiB and
-  the configured vertex ceiling per feature, plus the configured feature cap.
+  features stream one at a time into staged batches bounded by
+  `MYOTA_IMPORT_BATCH_SIZE` and `MYOTA_IMPORT_BATCH_BYTES` (100 features and
+  32 MiB by default), with 16 MiB and the configured vertex ceiling per
+  feature, plus the configured feature cap.
   GeoJSON, KML, GPX, Shapefile, and PBF parsing use the shared
   `MYOTA_IMPORT_MAX_FEATURE_BYTES` decoded-size limit (16 MiB by default) and
   enforce `MYOTA_IMPORT_MAX_FEATURE_VERTICES` (250,000 by default) through the

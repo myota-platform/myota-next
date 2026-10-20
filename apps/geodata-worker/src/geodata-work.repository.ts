@@ -13,7 +13,11 @@ import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
+import {
+  MAX_IMPORT_BATCH_BYTES,
+  MAX_IMPORT_BATCH_FEATURES,
+  MAX_IMPORT_FEATURE_BYTES,
+} from '@app/platform/import-limits.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { pythonFloatString } from '@app/platform/python-number.js';
 import {
@@ -536,12 +540,29 @@ export class GeodataWorkRepository {
     }
 
     const staged: StagedImportRecord[] = [];
+    let stagedBytes = 0;
+    const flushStaged = async () => {
+      if (!staged.length) return;
+      await this.stageFeatures(run, staged);
+      staged.length = 0;
+      stagedBytes = 0;
+    };
     const source = isRecord(run.source_metadata.source)
       ? run.source_metadata.source
       : {};
     const sourceKey = sourceKeyFromMetadata(source);
     let featureCount = 0;
     for await (const feature of features) {
+      const featureBytes = Buffer.byteLength(
+        canonicalPythonGeneratedJson(feature, () => true),
+        'utf8',
+      );
+      if (
+        staged.length > 0 &&
+        (staged.length >= MAX_IMPORT_BATCH_FEATURES ||
+          stagedBytes + featureBytes > MAX_IMPORT_BATCH_BYTES)
+      )
+        await flushStaged();
       const ordinal = featureCount;
       featureCount += 1;
       if (featureCount > featureLimit)
@@ -674,12 +695,14 @@ export class GeodataWorkRepository {
         };
       }
       staged.push(record);
-      if (staged.length >= 4) {
-        await this.stageFeatures(run, staged);
-        staged.length = 0;
-      }
+      stagedBytes += featureBytes;
+      if (
+        staged.length >= MAX_IMPORT_BATCH_FEATURES ||
+        stagedBytes >= MAX_IMPORT_BATCH_BYTES
+      )
+        await flushStaged();
     }
-    if (staged.length) await this.stageFeatures(run, staged);
+    await flushStaged();
     await this.saveCandidates(run, featureCount);
   }
 
