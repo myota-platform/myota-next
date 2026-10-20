@@ -7,6 +7,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parsePageTotal } from '@app/platform/pagination.js';
 import { pythonRound } from '@app/platform/python-number.js';
 import { pythonStrip } from '@app/platform/python-string.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
@@ -156,13 +157,16 @@ export class GeodataPromotionRepository {
         [queue.id, status, stringifyJsonWithBigInts(result)],
       );
       const totals = await client.query(
-        `SELECT count(*) FILTER (WHERE validation_status='PROCESSED' AND existing_entity_id IS NULL)::integer AS created,
-          count(*) FILTER (WHERE validation_status='PROCESSED' AND existing_entity_id IS NOT NULL)::integer AS updated,
-          count(*) FILTER (WHERE validation_status<>'PROCESSED')::integer AS remaining
+        `SELECT count(*) FILTER (WHERE validation_status='PROCESSED' AND existing_entity_id IS NULL) AS created,
+          count(*) FILTER (WHERE validation_status='PROCESSED' AND existing_entity_id IS NOT NULL) AS updated,
+          count(*) FILTER (WHERE validation_status<>'PROCESSED') AS remaining
          FROM geodata_import_candidate WHERE import_run_id=$1`,
         [queue.import_run_id],
       );
       const counts = totals.rows[0];
+      const createdCount = parsePageTotal(counts.created);
+      const updatedCount = parsePageTotal(counts.updated);
+      const remainingCount = parsePageTotal(counts.remaining);
       const importRun = await client.query(
         `SELECT status,complete_snapshot,adapter_code,source_hash,
           disappearance_policy,source_metadata
@@ -183,7 +187,7 @@ export class GeodataPromotionRepository {
       if (
         run?.complete_snapshot &&
         run.status === 'PREPROCESSED' &&
-        Number(counts.remaining) === 0 &&
+        BigInt(remainingCount) === 0n &&
         errors.length === 0 &&
         !run.source_metadata.snapshotReconciledAt
       )
@@ -194,19 +198,21 @@ export class GeodataPromotionRepository {
         );
       await client.query(
         `UPDATE import_run SET stats=stats || $2::jsonb,
-         status=CASE WHEN $3=0 AND $4=0 THEN 'COMPLETED' ELSE status END,
-         completed_at=CASE WHEN $3=0 AND $4=0 THEN now() ELSE completed_at END
+         status=CASE WHEN $3::bigint=0 AND $4=0 THEN 'COMPLETED' ELSE status END,
+         completed_at=CASE WHEN $3::bigint=0 AND $4=0 THEN now() ELSE completed_at END
          WHERE id=$1`,
         [
           queue.import_run_id,
           stringifyJsonWithBigInts({
-            created: counts.created,
-            updated: counts.updated,
-            processed: Number(counts.created) + Number(counts.updated),
+            created: createdCount,
+            updated: updatedCount,
+            processed: parsePageTotal(
+              BigInt(createdCount) + BigInt(updatedCount),
+            ),
             processingErrors: errors.length,
             disappeared,
           }),
-          counts.remaining,
+          remainingCount,
           errors.length,
         ],
       );
