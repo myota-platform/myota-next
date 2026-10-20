@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 
 export function parsePageInteger(value: unknown, fallback: number): number {
-  const raw = Array.isArray(value) ? value[0] : value;
+  const raw = Array.isArray(value) ? value.find((item) => item !== '') : value;
   if (raw === undefined || raw === '') return fallback;
   if (typeof raw !== 'string')
     throw new BadRequestException('page and pageSize must be integers');
