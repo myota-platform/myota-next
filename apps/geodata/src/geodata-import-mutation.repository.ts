@@ -29,7 +29,7 @@ export class GeodataImportMutationRepository {
         'decision must be MERGED, KEPT_SEPARATE, IGNORED, or OPEN',
       );
     const reviewerId =
-      typeof body.reviewerId === 'string' ? body.reviewerId.trim() : '';
+      typeof body.reviewerId === 'string' ? body.reviewerId : '';
     if (!reviewerId) throw new BadRequestException('reviewerId is required');
     if (
       body.survivorEntityId !== undefined &&
@@ -132,12 +132,9 @@ export class GeodataImportMutationRepository {
     body: Record<string, unknown>,
   ) {
     const processedBy =
-      typeof body.processedBy === 'string'
-        ? body.processedBy.trim()
-        : typeof body.actor === 'string'
-          ? body.actor.trim()
-          : '';
-    if (!processedBy) throw new BadRequestException('processedBy is required');
+      (typeof body.processedBy === 'string' && body.processedBy) ||
+      (typeof body.actor === 'string' && body.actor) ||
+      'administrator';
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -327,7 +324,7 @@ export class GeodataImportMutationRepository {
   ) {
     const candidateIds = body.candidateIds;
     const reviewerId =
-      typeof body.reviewerId === 'string' ? body.reviewerId.trim() : '';
+      typeof body.reviewerId === 'string' ? body.reviewerId : '';
     if (
       !Array.isArray(candidateIds) ||
       !candidateIds.length ||
@@ -456,7 +453,7 @@ export class GeodataImportMutationRepository {
         'targetStatus must be CANDIDATE or APPROVED',
       );
     const requestedBy =
-      typeof body.processorId === 'string' ? body.processorId.trim() : '';
+      typeof body.processorId === 'string' ? body.processorId : '';
     if (!requestedBy) throw new BadRequestException('processorId is required');
     const note =
       typeof body.note === 'string' ? body.note.slice(0, 2000) : null;

@@ -259,7 +259,10 @@
   geometry, category, and manual location edits are also audited. Category
   codes use Python's Unicode whitespace stripping rules. Location
   names, entity names, location values, websites, and descriptions now use
-  Python whitespace stripping and code-point length rules. Location names are
+  Python whitespace stripping and code-point length rules. Entity and import
+  audit actor IDs retain submitted values without trimming, and import
+  finalization defaults to `administrator` when no actor is supplied. Location
+  names are
   checked against the provider catalogue, provider codes cannot be
   manually set, and location edits require GIS administrator coverage or
   `geodata.location.manage`. Review writes require role coverage for the

@@ -54,7 +54,7 @@ export class GeodataEntityMutationRepository {
     claims: AccessTokenClaims,
   ) {
     const reviewerId =
-      typeof body.reviewerId === 'string' ? body.reviewerId.trim() : '';
+      typeof body.reviewerId === 'string' ? body.reviewerId : '';
     const requestedStatus = body.status || body.decision;
     const targetStatus =
       typeof requestedStatus === 'string' ? requestedStatus : '';
@@ -226,8 +226,7 @@ export class GeodataEntityMutationRepository {
     body: Record<string, unknown>,
     claims: AccessTokenClaims,
   ) {
-    const editorId =
-      typeof body.editorId === 'string' ? body.editorId.trim() : '';
+    const editorId = typeof body.editorId === 'string' ? body.editorId : '';
     if (!editorId) throw new BadRequestException('editorId is required');
     const supported = new Set([
       'editorId',
@@ -555,8 +554,7 @@ export class GeodataEntityMutationRepository {
     body: Record<string, unknown>,
     claims: AccessTokenClaims,
   ) {
-    const editorId =
-      typeof body.editorId === 'string' ? body.editorId.trim() : '';
+    const editorId = typeof body.editorId === 'string' ? body.editorId : '';
     if (!editorId) throw new BadRequestException('editorId is required');
     const expectedVersion = parseIfMatch(ifMatch);
     const client = await this.connect();
@@ -707,8 +705,7 @@ export class GeodataEntityMutationRepository {
     body: Record<string, unknown>,
     claims: AccessTokenClaims,
   ) {
-    const editorId =
-      typeof body.editorId === 'string' ? body.editorId.trim() : '';
+    const editorId = typeof body.editorId === 'string' ? body.editorId : '';
     if (!editorId) throw new BadRequestException('editorId is required');
     const rawTypes = firstTruthyCategoryInput([
       body.entityTypes,
@@ -872,8 +869,7 @@ export class GeodataEntityMutationRepository {
     body: Record<string, unknown>,
     claims: AccessTokenClaims,
   ) {
-    const editorId =
-      typeof body.editorId === 'string' ? body.editorId.trim() : '';
+    const editorId = typeof body.editorId === 'string' ? body.editorId : '';
     if (!editorId) throw new BadRequestException('editorId is required');
     if (
       !isRecord(body.geometry) ||
