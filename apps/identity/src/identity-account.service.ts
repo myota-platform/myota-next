@@ -18,6 +18,7 @@ import {
   validateWebsiteUrl,
 } from './auth.service.js';
 import { IdentityRoleService } from './identity-role.service.js';
+import { IdentityProfileImageService } from './identity-profile-image.service.js';
 import type {
   AddCallsignDto,
   CallsignEvidenceDto,
@@ -61,6 +62,7 @@ export class IdentityAccountService {
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
     private readonly auth: IdentityAuthService,
     private readonly roleService: IdentityRoleService,
+    private readonly profileImages: IdentityProfileImageService,
   ) {}
 
   async create(
@@ -996,6 +998,11 @@ export class IdentityAccountService {
         [accountId],
       );
       await client.query('COMMIT');
+      if (anonymize && account.profile_image_id)
+        this.profileImages.deleteObjectBestEffort(
+          accountId,
+          account.profile_image_id,
+        );
       return {
         ...this.accountView(updated.rows[0]),
         callsigns: callsigns.rows,

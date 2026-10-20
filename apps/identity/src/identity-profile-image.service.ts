@@ -357,7 +357,7 @@ export class IdentityProfileImageService {
     return `profiles/${accountId}/${imageId}.webp`;
   }
 
-  private deleteObjectBestEffort(accountId: string, imageId: string) {
+  deleteObjectBestEffort(accountId: string, imageId: string) {
     try {
       void this.s3()
         .send(

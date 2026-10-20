@@ -61,7 +61,9 @@
   listing, account creation, role-catalogue reads, role creation, and role
   updates, account reads and active role reads for the account owner or global
   operator, and administrative account updates including profile, credentials,
-  lifecycle, anonymization and role replacement. Callsign add, primary
+  lifecycle, anonymization and role replacement. Anonymizing an account clears
+  its profile-image reference transactionally and immediately attempts object
+  deletion; the maintenance orphan sweep remains the fallback. Callsign add, primary
   selection, evidence submission, verification, and retirement, plus paginated
   security-event reads for global administrators and owner-scoped account data
   export, scoped OIDC provider mapping creation/update, and five-minute service token
