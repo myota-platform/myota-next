@@ -140,7 +140,8 @@
   retrieval, closure, and single-QSO recording. Activation creation enforces
   programme location requirements and configured entity bounds. An explicit
   `validityDays` value takes precedence over the programme rule, including null,
-  and non-empty values use Python-compatible float parsing. It persists
+  and non-empty values use Python-compatible float parsing, including Python's
+  numeric whitespace handling. It persists
   normalized activations and QSOs in Activity PostgreSQL with UTC microsecond
   timestamp precision preserved through normalization, validity checks,
   persistence, deduplication, and reads. Optional `sourceImportId` provenance
@@ -148,7 +149,8 @@
   Unicode whitespace set before validation, and worked locator keys use Python's
   Unicode whitespace stripping rules. Default activation-close and rule-evaluation
   times use the same six-digit UTC timestamp form as the reference. Minimum QSO
-  thresholds use Python integer conversion. It writes domain
+  thresholds use Python integer conversion with matching numeric whitespace
+  handling. It writes domain
   events and idempotency responses transactionally, updates subject aggregates,
   and queues award recalculation work through the Activity outbox. High-volume QSO
   ingestion requests are authorized, bounded, persisted as Activity jobs, and

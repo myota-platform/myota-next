@@ -312,6 +312,29 @@ function isPythonWhitespace(codePoint: number): boolean {
   );
 }
 
+function trimPythonNumericWhitespace(value: string): string {
+  const characters = Array.from(value);
+  let start = 0;
+  let end = characters.length;
+  while (
+    start < end &&
+    isPythonNumericWhitespace(characters[start].codePointAt(0)!)
+  )
+    start += 1;
+  while (
+    end > start &&
+    isPythonNumericWhitespace(characters[end - 1].codePointAt(0)!)
+  )
+    end -= 1;
+  return characters.slice(start, end).join('');
+}
+
+function isPythonNumericWhitespace(codePoint: number): boolean {
+  return (
+    isPythonWhitespace(codePoint) && !(codePoint >= 0x1c && codePoint <= 0x1f)
+  );
+}
+
 export function normalizeActivation(data: JsonRecord): JsonRecord {
   const programmeRules = data.programmeRules;
   const rules =
@@ -390,7 +413,8 @@ function pointInBounds(
 export function pythonFloat(value: unknown, field: string): number {
   if (typeof value === 'number') return value;
   if (typeof value === 'boolean') return value ? 1 : 0;
-  const text = typeof value === 'string' ? value.trim() : '';
+  const text =
+    typeof value === 'string' ? trimPythonNumericWhitespace(value) : '';
   if (
     typeof value !== 'string' ||
     !/^[+-]?(?:(?:\d(?:_?\d)*(?:\.(?:\d(?:_?\d)*)?)?|\.\d(?:_?\d)*)(?:e[+-]?\d(?:_?\d)*)?|inf(?:inity)?|nan)$/i.test(
@@ -418,7 +442,7 @@ function pythonInt(value: unknown, field: string): number {
     return Math.trunc(value);
   }
   if (typeof value === 'string') {
-    const normalized = value.trim();
+    const normalized = trimPythonNumericWhitespace(value);
     if (!/^[+-]?\d(?:_?\d)*$/.test(normalized))
       throw new BadRequestException(`${field} must be an integer`);
     return Number(normalized.replaceAll('_', ''));
