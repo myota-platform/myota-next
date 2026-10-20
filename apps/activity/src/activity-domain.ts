@@ -10,7 +10,7 @@ import {
 export type JsonRecord = Record<string, any>;
 
 export function parseTimestamp(value: string): Date {
-  if (typeof value !== 'string')
+  if (typeof value !== 'string' || value.endsWith('z'))
     throw new BadRequestException('timestamp is invalid');
   let normalized = normalizeTimestampInput(value);
   normalized = normalizeExtendedTimezoneOffset(normalized) ?? normalized;

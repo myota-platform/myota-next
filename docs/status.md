@@ -260,7 +260,8 @@
   in the Python reference. Timestamp parsing preserves the Python reference's ISO week dates,
   one-character date/time separators, compact ISO date and time forms,
   slash-separated QSO dates with compact times, and UTC offsets with hours,
-  minutes, seconds, or fractional seconds.
+  minutes, seconds, or fractional seconds. Lowercase `t` separators are
+  accepted while lowercase `z` UTC suffixes are rejected, matching Python 3.12.
   Impossible calendar dates and clock fields
   are rejected;
   imports with no parsed QSO records retain the reference's
