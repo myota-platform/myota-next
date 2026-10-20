@@ -130,6 +130,6 @@ if (errors.length) {
   process.exitCode = 1;
 } else {
   process.stdout.write(
-    'Exact JSON integers are preserved in Programme creation, programme and outbox database reads, and Geodata API, worker, and scheduled-importer paths.\n',
+    'Exact JSON integers and Python-compatible Geodata multipart integer conversions are guarded across the API, workers, and scheduled importer.\n',
   );
 }

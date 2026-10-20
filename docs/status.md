@@ -433,7 +433,10 @@
   CANDIDATE lifecycle state. Imports, proposals, refresh schedules, and
   resumable upload sessions use the reference category normalizer: alias truthy
   fallback, category objects, trimming, uppercase codes, invalid-entry
-  filtering, and duplicate removal.
+  filtering, and duplicate removal. Upload part numbers and expected sizes use
+  Python-compatible integer parsing, including Unicode decimal digits and
+  underscores; sizes also preserve boolean and finite-float `int()` conversion
+  before the configured byte limits are applied.
   Tagged load-test cleanup is opt-in, confirmation
   protected, restricted to terminal runs and owned object storage, and refuses
   to remove entities with Activity impact. Direct and scheduled imports preserve
