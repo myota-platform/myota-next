@@ -280,6 +280,26 @@ export function pythonFloat(value: unknown, field: string): number {
   return Number(normalized);
 }
 
+function pythonInt(value: unknown, field: string): number {
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  if (typeof value === 'number') {
+    if (Number.isNaN(value))
+      throw new BadRequestException(`cannot convert float NaN to integer`);
+    if (!Number.isFinite(value))
+      throw new RangeError('cannot convert float infinity to integer');
+    return Math.trunc(value);
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (!/^[+-]?\d(?:_?\d)*$/.test(normalized))
+      throw new BadRequestException(`${field} must be an integer`);
+    return Number(normalized.replaceAll('_', ''));
+  }
+  throw new TypeError(
+    'int() argument must be a string, a real number, or a boolean',
+  );
+}
+
 export function normalizeQso(
   data: JsonRecord,
   activationId: string,
@@ -460,7 +480,10 @@ export function evaluateActivation(
     compareTimestamps(endedAt, activation.validityExpiresAt) > 0
   )
     violations.push('activation exceeded its validity window');
-  if (rules.minimumQsos != null && qsos.length < Number(rules.minimumQsos))
+  if (
+    rules.minimumQsos != null &&
+    qsos.length < pythonInt(rules.minimumQsos, 'minimumQsos')
+  )
     violations.push('minimum QSO requirement was not met');
   const bands = new Set(
     (rules.allowedBands ?? []).map((v: unknown) => String(v).toUpperCase()),

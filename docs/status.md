@@ -136,7 +136,8 @@
   timestamp precision preserved through normalization, validity checks,
   persistence, deduplication, and reads. QSO callsigns collapse Python's Unicode
   whitespace set before validation. Default activation-close and rule-evaluation times
-  use the same six-digit UTC timestamp form as the reference. It writes domain
+  use the same six-digit UTC timestamp form as the reference. Minimum QSO
+  thresholds use Python integer conversion. It writes domain
   events and idempotency responses transactionally, updates subject aggregates,
   and queues award recalculation work through the Activity outbox. High-volume QSO
   ingestion requests are authorized, bounded, persisted as Activity jobs, and
