@@ -22,8 +22,7 @@ const ACK_WAIT_SECONDS = 90;
 const MAX_DELIVERIES = 8;
 const LEASE_SECONDS = 60;
 const MAX_COMMAND_BYTES = 8192;
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TEMPLATES = new Set([
   'account-created-participant.v1',
   'account-created-administrator.v1',
