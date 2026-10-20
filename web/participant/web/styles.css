@@ -320,6 +320,16 @@ a {
   fill: #fbbf2455;
   stroke: #b7791f;
 }
+.public-entity-line {
+  fill: none;
+  stroke: #047857;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+.public-entity-line.candidate {
+  stroke: #b7791f;
+}
 .public-entity-point {
   fill: #10b981;
   stroke: #fff;

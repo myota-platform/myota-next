@@ -339,22 +339,70 @@ function publicTileMap() {
   const overlay = $('public-map-overlay');
   overlay.innerHTML = entities
     .map((entity) => {
-      const geometry = entity.geometry,
-        coords =
-          geometry?.type === 'Point'
-            ? [geometry.coordinates]
-            : geometry?.type === 'Polygon'
-              ? geometry.coordinates[0] || []
-              : geometry?.type === 'MultiPolygon'
-                ? geometry.coordinates[0]?.[0] || []
-                : [];
-      const points = coords.map((coord) => publicProject(coord, width, height));
-      if (!points.length) return '';
-      const shape =
-        geometry.type === 'Point'
-          ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="8" class="public-entity-point ${entity.status.toLowerCase()}"/>`
-          : `<polygon points="${points.map((point) => point.join(',')).join(' ')}" class="public-entity-polygon ${entity.status.toLowerCase()}"/>`;
-      return `<g><title>${escapeHtml(entity.name)} · ${escapeHtml(entity.status)}</title>${shape}<text x="${points[0][0] + 10}" y="${points[0][1] - 9}" class="public-map-label">${escapeHtml(entity.name)}</text></g>`;
+      const geometry = entity.geometry;
+      if (!geometry?.type || !Array.isArray(geometry.coordinates)) return '';
+      const status = escapeHtml(String(entity.status || '').toLowerCase());
+      const projectLine = (coordinates) =>
+        coordinates
+          .map((coordinate) => publicProject(coordinate, width, height))
+          .map(([x, y]) => `${x},${y}`)
+          .join(' ');
+      const projectRing = (coordinates) => {
+        const points = coordinates.map((coordinate) =>
+          publicProject(coordinate, width, height),
+        );
+        if (points.length < 3) return '';
+        return `M ${points.map(([x, y]) => `${x} ${y}`).join(' L ')} Z`;
+      };
+      const allPositions = (coordinates) => {
+        if (
+          Array.isArray(coordinates) &&
+          coordinates.length >= 2 &&
+          coordinates.slice(0, 2).every((value) => typeof value === 'number')
+        ) {
+          return [coordinates];
+        }
+        return Array.isArray(coordinates)
+          ? coordinates.flatMap(allPositions)
+          : [];
+      };
+      const positions = allPositions(geometry.coordinates);
+      if (!positions.length) return '';
+      const first = publicProject(positions[0], width, height);
+      let shape = '';
+      if (geometry.type === 'Point') {
+        shape = `<circle cx="${first[0]}" cy="${first[1]}" r="8" class="public-entity-point ${status}"/>`;
+      } else if (geometry.type === 'MultiPoint') {
+        shape = positions
+          .map(([lon, lat]) => {
+            const [x, y] = publicProject([lon, lat], width, height);
+            return `<circle cx="${x}" cy="${y}" r="7" class="public-entity-point ${status}"/>`;
+          })
+          .join('');
+      } else if (geometry.type === 'LineString') {
+        shape = `<polyline points="${projectLine(geometry.coordinates)}" class="public-entity-line ${status}"/>`;
+      } else if (geometry.type === 'MultiLineString') {
+        shape = geometry.coordinates
+          .map(
+            (line) =>
+              `<polyline points="${projectLine(line)}" class="public-entity-line ${status}"/>`,
+          )
+          .join('');
+      } else if (geometry.type === 'Polygon') {
+        const path = geometry.coordinates
+          .map(projectRing)
+          .filter(Boolean)
+          .join(' ');
+        shape = `<path d="${path}" fill-rule="evenodd" class="public-entity-polygon ${status}"/>`;
+      } else if (geometry.type === 'MultiPolygon') {
+        const path = geometry.coordinates
+          .flatMap((polygon) => polygon.map(projectRing))
+          .filter(Boolean)
+          .join(' ');
+        shape = `<path d="${path}" fill-rule="evenodd" class="public-entity-polygon ${status}"/>`;
+      }
+      if (!shape) return '';
+      return `<g><title>${escapeHtml(entity.name)} · ${escapeHtml(entity.status)}</title>${shape}<text x="${first[0] + 10}" y="${first[1] - 9}" class="public-map-label">${escapeHtml(entity.name)}</text></g>`;
     })
     .join('');
   document.querySelectorAll('[data-public-zoom]').forEach(

@@ -322,8 +322,9 @@
   or workflow parity. The Participant UI includes localized published programme
   content, new point and existing-candidate proposals, profile editing and image
   management, award requests, activation creation, QSO entry, and activation
-  close, but lacks browser-level compatibility coverage. Visual/accessibility
-  review and deployment integration also remain open.
+  close, and point, line, polygon, and multipart map geometries, but lacks
+  browser-level compatibility coverage. Visual/accessibility review and
+  deployment integration also remain open.
 - Data transfer tooling, image publication, deployment manifests, and
   production observability configuration. A reusable Docker recipe now builds
   one unprivileged runtime image per Nest application. An owner-scoped database

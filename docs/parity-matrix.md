@@ -169,7 +169,8 @@ parity. The Participant client includes localized published programme content,
 manual point proposals and existing-candidate proposals, activation creation,
 single-QSO entry, profile editing and image management, and award requests, but
 those workflows lack browser-level compatibility coverage. Remaining work
-includes accessibility/visual review and deployment integration.
+includes accessibility/visual review and deployment integration. Its public
+map renders point, line, polygon, and multipart entity geometries.
 
 ## Workers and operations
 
