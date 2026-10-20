@@ -57,7 +57,7 @@ export class GeodataScheduleService {
     try {
       const result = await client.query(
         `SELECT payload::text AS payload_json FROM geodata_control_record
-         WHERE kind='schedules' ORDER BY payload->>'createdAt' ASC NULLS LAST,id
+         WHERE kind='schedules' ORDER BY id COLLATE "C"
          LIMIT $1 OFFSET $2::bigint`,
         [pageSize, offset.toString()],
       );
