@@ -147,8 +147,9 @@
   numeric whitespace and Unicode decimal digit handling. It persists
   normalized activations and QSOs in Activity PostgreSQL with UTC microsecond
   timestamp precision preserved through normalization, validity checks,
-  persistence, deduplication, and reads. Optional `sourceImportId` provenance
-  is retained on direct and worker QSO inserts. QSO callsigns collapse Python's
+  persistence, deduplication, and reads. QSO `source` defaults to `manual` only
+  when absent; optional `sourceImportId` provenance is retained on direct and
+  worker inserts. QSO callsigns collapse Python's
   Unicode whitespace set before validation, and worked locator keys use Python's
   Unicode whitespace stripping rules. Activation close defaults `endedAt` to
   now only when omitted; supplied values are validated as timestamps. Default

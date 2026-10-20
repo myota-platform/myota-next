@@ -451,7 +451,7 @@ export function normalizeQso(
     ...normalized,
     id: randomUUID(),
     activationId,
-    source: data.source ?? 'manual',
+    source: Object.hasOwn(data, 'source') ? data.source : 'manual',
     workedStationKey,
     deduplicationKey,
   };
