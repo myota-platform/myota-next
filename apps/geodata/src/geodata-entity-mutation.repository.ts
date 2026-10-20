@@ -807,6 +807,8 @@ export class GeodataEntityMutationRepository {
           editorId,
           previousEntityTypes: previousTypes,
           entityTypes,
+          previousEntityType: previousTypes[0] ?? null,
+          entityType: entityTypes[0],
           note,
           occurredAt: changedAt.toISOString(),
         });

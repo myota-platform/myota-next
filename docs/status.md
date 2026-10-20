@@ -262,7 +262,9 @@
   and import workers share Python's structural validation and configured
   coordinate limit; edits enforce WGS84 bounds without an additional
   topology-validity rejection. Category
-  codes use Python's Unicode whitespace stripping rules. Location
+  codes use Python's Unicode whitespace stripping rules, and category edit
+  history records both the primary-code aliases and full category lists.
+  Location
   names, entity names, location values, websites, and descriptions now use
   Python whitespace stripping and code-point length rules. Entity, import, and
   deletion audit actor IDs retain submitted values without trimming; import
