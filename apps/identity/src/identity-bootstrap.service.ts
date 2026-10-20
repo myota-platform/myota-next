@@ -86,7 +86,9 @@ export class IdentityBootstrapService implements OnModuleInit {
       const account = selected.rows[0];
       if (!account) throw new Error('bootstrap account could not be resolved');
 
-      const credential = await client.query<{ password_hash: string }>(
+      const credential = await client.query<{
+        password_hash: string | null;
+      }>(
         `SELECT password_hash FROM public.account_credential
           WHERE account_id = $1 FOR UPDATE`,
         [account.id],
