@@ -8,6 +8,7 @@ import {
   IsUUID,
   IsIn,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
@@ -194,12 +195,12 @@ export class UpdateAccountDto {
   @IsString()
   email?: string | null;
 
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @IsIn(['OPERATOR', 'SWL'])
   participationType?: 'OPERATOR' | 'SWL';
 
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @IsIn(['ACTIVE', 'DEACTIVATED'])
   status?: 'ACTIVE' | 'DEACTIVATED';
