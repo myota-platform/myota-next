@@ -471,13 +471,46 @@ export class ActivityRepository {
     }
   }
 
-  async listAwardAssets(): Promise<JsonRecord[]> {
+  async listAwardAssetsPage(
+    offset: bigint,
+    pageSize: number,
+  ): Promise<{ items: JsonRecord[]; total: number }> {
     const client = await this.connect();
     try {
       const result = await client.query(
-        'SELECT metadata FROM activity_asset ORDER BY created_at',
+        `SELECT total.value,page_rows.metadata
+         FROM (SELECT count(*) AS value FROM activity_asset) total
+         LEFT JOIN LATERAL (
+           SELECT metadata FROM activity_asset
+           ORDER BY created_at,id
+           LIMIT $2 OFFSET $1::bigint
+         ) page_rows ON TRUE`,
+        [offset.toString(), pageSize],
       );
-      return result.rows.map((row) => row.metadata);
+      return {
+        items: result.rows
+          .filter((row) => row.metadata !== null)
+          .map((row) => row.metadata),
+        total: Number(result.rows[0]?.value ?? 0),
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async findAwardAsset(
+    kind: string,
+    objectKey: string,
+  ): Promise<JsonRecord | null> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT metadata FROM activity_asset
+         WHERE kind=$1 AND object_key=$2
+         ORDER BY created_at,id LIMIT 1`,
+        [kind, objectKey],
+      );
+      return result.rows[0]?.metadata ?? null;
     } finally {
       client.release();
     }
@@ -647,13 +680,28 @@ export class ActivityRepository {
     });
   }
 
-  async listAwardIssuances(): Promise<JsonRecord[]> {
+  async listAwardIssuancesPage(
+    offset: bigint,
+    pageSize: number,
+  ): Promise<{ items: JsonRecord[]; total: number }> {
     const client = await this.connect();
     try {
       const result = await client.query(
-        'SELECT issuance FROM activity_award_issuance ORDER BY created_at DESC',
+        `SELECT total.value,page_rows.issuance
+         FROM (SELECT count(*) AS value FROM activity_award_issuance) total
+         LEFT JOIN LATERAL (
+           SELECT issuance FROM activity_award_issuance
+           ORDER BY created_at DESC,id DESC
+           LIMIT $2 OFFSET $1::bigint
+         ) page_rows ON TRUE`,
+        [offset.toString(), pageSize],
       );
-      return result.rows.map((row) => row.issuance);
+      return {
+        items: result.rows
+          .filter((row) => row.issuance !== null)
+          .map((row) => row.issuance),
+        total: Number(result.rows[0]?.value ?? 0),
+      };
     } finally {
       client.release();
     }

@@ -266,8 +266,10 @@
   draft create/edit, review submission and decisions, print-readiness
   validation, publication, and retirement. Saved and published facts commit to
   the Activity outbox with their definition updates. Listing filters, counting,
-  and paging for definitions and requests now run in Activity PostgreSQL so the
-  API reads only one page. Award evaluation and
+  and paging for definitions, requests, assets, and issuances now run in
+  Activity PostgreSQL so the API reads only one page. Certificate preview
+  resolves its background asset by indexed metadata instead of reading the
+  entire asset catalogue. Award evaluation and
   historical recalculation jobs use service-owned facts, persist versioned
   progress, and create deduplicated qualification notifications. Participant
   progress reads evaluate and persist the current aggregate snapshot. Award
