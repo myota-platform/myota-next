@@ -10,7 +10,9 @@ import {
   IsString,
   MinLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 
 export class CreateProgrammeDto {
   @IsString()
@@ -173,7 +175,8 @@ export class SaveProgrammePolicyDraftDto {
   @IsObject()
   schema!: Record<string, unknown>;
 
-  @IsOptional()
+  @ValidateIf((_object, value) => pythonTruthy(value))
+  @IsString()
   @IsDateString()
   effectiveFrom?: string | null;
 }
@@ -217,7 +220,8 @@ export class PatchProgrammePolicyDraftDto {
   @IsObject()
   schema?: Record<string, unknown>;
 
-  @IsOptional()
+  @ValidateIf((_object, value) => pythonTruthy(value))
+  @IsString()
   @IsDateString()
   effectiveFrom?: string | null;
 
