@@ -1,5 +1,9 @@
 import proj4 from 'proj4';
-import { normalizeAttachmentMetadata } from '@app/geodata-domain';
+import {
+  collectCoordinatePairs,
+  normalizeAttachmentMetadata,
+} from '@app/geodata-domain';
+import { integerSetting } from '@app/platform/integer-setting.js';
 import { inferFeatureName } from './geodata-feature-name.js';
 
 const OSM_REQUIRED_TAGS = [
@@ -25,13 +29,10 @@ const ADAPTER_CODES = new Set([
   'GOVERNMENT_GIS',
   'MANUAL',
 ]);
-const configuredCoordinateLimit = Number.parseInt(
-  process.env.GEODATA_MAX_COORDINATES ?? '50000',
-  10,
+const MAX_COORDINATES = integerSetting(
+  process.env.GEODATA_MAX_COORDINATES,
+  50_000,
 );
-const MAX_COORDINATES = Number.isFinite(configuredCoordinateLimit)
-  ? configuredCoordinateLimit
-  : 50_000;
 
 export interface NormalizedAdapterFeature {
   properties: Record<string, unknown>;
@@ -231,18 +232,6 @@ function normalizeGeometry(value: unknown, crs: unknown) {
       'geometry coordinates must use WGS84 longitude/latitude ranges',
     );
   return { type, coordinates };
-}
-
-function collectCoordinatePairs(value: unknown): [number, number][] {
-  if (
-    Array.isArray(value) &&
-    value.length >= 2 &&
-    typeof value[0] === 'number' &&
-    typeof value[1] === 'number'
-  )
-    return [[value[0], value[1]]];
-  if (!Array.isArray(value)) return [];
-  return value.flatMap(collectCoordinatePairs);
 }
 
 function isLine(value: unknown): boolean {

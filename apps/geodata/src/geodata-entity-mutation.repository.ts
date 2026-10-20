@@ -10,14 +10,21 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { integerSetting } from '@app/platform/integer-setting.js';
 import type { AccessTokenClaims } from '@app/platform/access-token.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import { collectCoordinatePairs } from '@app/geodata-domain';
 import { entityProjection } from './geodata.repository.js';
 import {
   locationSnapshot,
   missingLocationFields,
   queueLocationEnrichment,
 } from './geodata-location-enrichment.js';
+
+const MAX_COORDINATES = integerSetting(
+  process.env.GEODATA_MAX_COORDINATES,
+  50_000,
+);
 
 const locationColumns: Record<string, string> = {
   continent: 'continent',
@@ -894,6 +901,13 @@ export class GeodataEntityMutationRepository {
     )
       throw new BadRequestException(
         'geometry must be a supported GeoJSON geometry',
+      );
+    const coordinateCount = collectCoordinatePairs(
+      geometryInput.coordinates,
+    ).length;
+    if (coordinateCount === 0 || coordinateCount > MAX_COORDINATES)
+      throw new BadRequestException(
+        `geometry must contain between 1 and ${MAX_COORDINATES} coordinates`,
       );
     const geometry = JSON.stringify({
       type: geometryType,
