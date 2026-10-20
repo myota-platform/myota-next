@@ -22,6 +22,30 @@ const activationTimestampProjection = `to_char(started_at AT TIME ZONE 'UTC','YY
   to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at_iso`;
 const qsoTimestampProjection = `to_char(occurred_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at_iso,
   to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_iso`;
+const statisticTimestampProjection = timestampProjection('generated_at');
+const notificationTimestampProjection = timestampProjection(
+  'created_at',
+  'delivered_at',
+);
+const importTimestampProjection = timestampProjection(
+  'created_at',
+  'started_at',
+  'completed_at',
+);
+const jobTimestampProjection = timestampProjection(
+  'available_at',
+  'started_at',
+  'completed_at',
+  'created_at',
+);
+const correctionTimestampProjection = timestampProjection(
+  'created_at',
+  'reviewed_at',
+);
+const awardRequestTimestampProjection = timestampProjection(
+  'requested_at',
+  'issued_at',
+);
 
 @Injectable()
 export class ActivityRepository {
@@ -118,7 +142,8 @@ export class ActivityRepository {
       );
       const total = Number(count.rows[0]?.total ?? 0);
       const result = await client.query(
-        `SELECT id,programme_slug,statistic_type,scope_key,metric_values,algorithm_version,generated_at
+        `SELECT id,programme_slug,statistic_type,scope_key,metric_values,algorithm_version,generated_at,
+                ${statisticTimestampProjection}
          FROM activity_statistic_snapshot${where} ORDER BY generated_at DESC
          LIMIT $${filters.length + 1} OFFSET $${filters.length + 2}`,
         [
@@ -135,7 +160,7 @@ export class ActivityRepository {
           scope: row.scope_key,
           values: row.metric_values,
           algorithmVersion: row.algorithm_version,
-          generatedAt: date(row.generated_at),
+          generatedAt: timestamp(row.generated_at_iso ?? row.generated_at),
         })),
         page,
         pageSize,
@@ -151,7 +176,8 @@ export class ActivityRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        `SELECT id,recipient_id,notification_type,payload,status,created_at,delivered_at
+        `SELECT id,recipient_id,notification_type,payload,status,created_at,delivered_at,
+                ${notificationTimestampProjection}
          FROM activity_notification WHERE recipient_id=$1 ORDER BY created_at DESC`,
         [recipientId],
       );
@@ -161,8 +187,8 @@ export class ActivityRepository {
         type: row.notification_type,
         payload: row.payload,
         status: row.status,
-        createdAt: date(row.created_at),
-        deliveredAt: date(row.delivered_at),
+        createdAt: timestamp(row.created_at_iso ?? row.created_at),
+        deliveredAt: timestamp(row.delivered_at_iso ?? row.delivered_at),
       }));
     } finally {
       client.release();
@@ -188,7 +214,8 @@ export class ActivityRepository {
       );
       const total = Number(count.rows[0]?.total ?? 0);
       const result = await client.query(
-        `SELECT id,recipient_id,notification_type,payload,status,created_at,delivered_at
+        `SELECT id,recipient_id,notification_type,payload,status,created_at,delivered_at,
+                ${notificationTimestampProjection}
          FROM activity_notification WHERE recipient_id=$1
          ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`,
         [
@@ -203,8 +230,8 @@ export class ActivityRepository {
         type: row.notification_type,
         payload: row.payload,
         status: row.status,
-        createdAt: date(row.created_at),
-        deliveredAt: date(row.delivered_at),
+        createdAt: timestamp(row.created_at_iso ?? row.created_at),
+        deliveredAt: timestamp(row.delivered_at_iso ?? row.delivered_at),
       }));
       return {
         items,
@@ -566,7 +593,8 @@ export class ActivityRepository {
         ],
       );
       const saved = await client.query(
-        'SELECT * FROM activity_award_request WHERE award_id=$1 AND level_id=$2 AND subject_id=$3',
+        `SELECT *, ${awardRequestTimestampProjection}
+         FROM activity_award_request WHERE award_id=$1 AND level_id=$2 AND subject_id=$3`,
         [record.awardId, record.levelId, record.subjectId],
       );
       const request = awardRequestRecord(saved.rows[0]);
@@ -607,7 +635,8 @@ export class ActivityRepository {
            ${where}
          ) total
          LEFT JOIN LATERAL (
-           SELECT * FROM activity_award_request
+           SELECT *, ${awardRequestTimestampProjection}
+           FROM activity_award_request
            ${where}
            ORDER BY requested_at DESC,id DESC
            LIMIT $${limitParameter} OFFSET $${offsetParameter}::bigint
@@ -629,7 +658,8 @@ export class ActivityRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        'SELECT * FROM activity_award_request WHERE id=$1',
+        `SELECT *, ${awardRequestTimestampProjection}
+         FROM activity_award_request WHERE id=$1`,
         [id],
       );
       if (!result.rows[0])
@@ -647,7 +677,8 @@ export class ActivityRepository {
   ): Promise<JsonRecord> {
     return this.mutate(key, async (client) => {
       const locked = await client.query(
-        'SELECT * FROM activity_award_request WHERE id=$1 FOR UPDATE',
+        `SELECT *, ${awardRequestTimestampProjection}
+         FROM activity_award_request WHERE id=$1 FOR UPDATE`,
         [requestId],
       );
       if (!locked.rows[0])
@@ -730,7 +761,8 @@ export class ActivityRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        'SELECT * FROM activity_import WHERE id=$1',
+        `SELECT *, ${importTimestampProjection}
+         FROM activity_import WHERE id=$1`,
         [id],
       );
       const row = result.rows[0];
@@ -749,9 +781,9 @@ export class ActivityRepository {
         recordsAccepted: row.records_accepted,
         recordsRejected: row.records_rejected,
         errors: row.errors,
-        createdAt: date(row.created_at),
-        startedAt: date(row.started_at),
-        completedAt: date(row.completed_at),
+        createdAt: timestamp(row.created_at_iso ?? row.created_at),
+        startedAt: timestamp(row.started_at_iso ?? row.started_at),
+        completedAt: timestamp(row.completed_at_iso ?? row.completed_at),
       };
     } finally {
       client.release();
@@ -892,7 +924,7 @@ export class ActivityRepository {
       if (!qso.rows[0]) throw new NotFoundException('QSO not found');
       const result = await client.query(
         `INSERT INTO activity_qso_correction(id,qso_id,requested_by,reason,proposed_values)
-         VALUES ($1,$2,$3,$4,$5::jsonb) RETURNING *`,
+         VALUES ($1,$2,$3,$4,$5::jsonb) RETURNING *, ${correctionTimestampProjection}`,
         [
           randomUUID(),
           qsoId,
@@ -913,7 +945,8 @@ export class ActivityRepository {
   ): Promise<JsonRecord> {
     return this.mutate(key, async (client) => {
       const correctionResult = await client.query(
-        'SELECT * FROM activity_qso_correction WHERE id=$1 FOR UPDATE',
+        `SELECT *, ${correctionTimestampProjection}
+         FROM activity_qso_correction WHERE id=$1 FOR UPDATE`,
         [correctionId],
       );
       const correction = correctionResult.rows[0];
@@ -965,7 +998,7 @@ export class ActivityRepository {
         );
       }
       const result = await client.query(
-        `UPDATE activity_qso_correction SET status=$1,reviewed_by=$2,review_note=$3,reviewed_at=now() WHERE id=$4 RETURNING *`,
+        `UPDATE activity_qso_correction SET status=$1,reviewed_by=$2,review_note=$3,reviewed_at=now() WHERE id=$4 RETURNING *, ${correctionTimestampProjection}`,
         [body.decision, body.reviewedBy, body.reviewNote ?? null, correctionId],
       );
       return correctionRecord(result.rows[0]);
@@ -1192,7 +1225,10 @@ export class ActivityRepository {
     return this.mutate(key, async (client) => {
       const id = randomUUID();
       const result = await client.query(
-        'INSERT INTO activity_job(id,kind,payload,idempotency_key) VALUES ($1,$2,$3::jsonb,$4) RETURNING id,kind,payload,status,attempts,available_at,started_at,completed_at,last_error,created_at',
+        `INSERT INTO activity_job(id,kind,payload,idempotency_key)
+         VALUES ($1,$2,$3::jsonb,$4)
+         RETURNING id,kind,payload,status,attempts,available_at,started_at,completed_at,last_error,created_at,
+                   ${jobTimestampProjection}`,
         [id, kind, JSON.stringify(payload), key ?? null],
       );
       await client.query(
@@ -1209,6 +1245,7 @@ export class ActivityRepository {
     try {
       const result = await client.query(
         `SELECT id,kind,payload,status,attempts,available_at,started_at,completed_at,last_error,created_at,
+         ${jobTimestampProjection},
          GREATEST(0,EXTRACT(EPOCH FROM (available_at-now()))) AS retry_after_seconds,
          GREATEST(0,EXTRACT(EPOCH FROM (lease_expires_at-now()))) AS lease_remaining_seconds
          FROM activity_job WHERE id=$1`,
@@ -1545,10 +1582,13 @@ function qsoRecord(row: any) {
   };
 }
 
-function date(value: unknown) {
-  return value == null
-    ? null
-    : new Date(value as string | number | Date).toISOString();
+function timestampProjection(...columns: string[]) {
+  return columns
+    .map(
+      (column) =>
+        `to_char(${column} AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS ${column}_iso`,
+    )
+    .join(',\n                   ');
 }
 
 function timestamp(value: unknown) {
@@ -1572,11 +1612,11 @@ function jobRecord(row: any) {
     payload: row.payload,
     status: row.status,
     attempts: row.attempts,
-    availableAt: date(row.available_at),
-    startedAt: date(row.started_at),
-    completedAt: date(row.completed_at),
+    availableAt: timestamp(row.available_at_iso ?? row.available_at),
+    startedAt: timestamp(row.started_at_iso ?? row.started_at),
+    completedAt: timestamp(row.completed_at_iso ?? row.completed_at),
     lastError: row.last_error,
-    createdAt: date(row.created_at),
+    createdAt: timestamp(row.created_at_iso ?? row.created_at),
   };
 }
 
@@ -1590,8 +1630,8 @@ function correctionRecord(row: any) {
     status: row.status,
     reviewedBy: row.reviewed_by,
     reviewNote: row.review_note,
-    createdAt: date(row.created_at),
-    reviewedAt: date(row.reviewed_at),
+    createdAt: timestamp(row.created_at_iso ?? row.created_at),
+    reviewedAt: timestamp(row.reviewed_at_iso ?? row.reviewed_at),
   };
 }
 
@@ -1609,7 +1649,7 @@ function awardRequestRecord(row: any): JsonRecord {
     facts: row.facts,
     status: row.status,
     issuedAwardId: row.issued_award_id ? String(row.issued_award_id) : null,
-    requestedAt: date(row.requested_at),
-    issuedAt: date(row.issued_at),
+    requestedAt: timestamp(row.requested_at_iso ?? row.requested_at),
+    issuedAt: timestamp(row.issued_at_iso ?? row.issued_at),
   };
 }
