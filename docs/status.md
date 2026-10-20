@@ -81,7 +81,8 @@
   issuance with the restricted email-recipient lookup, and normalized private
   profile-image upload/read/delete are also implemented. Email-service token
   authentication compares UTF-8 secret bytes in constant time and requires at
-  least 32 configured secret bytes, matching the Python handler.
+  least 32 configured secret bytes; caller-issued service tokens require a
+  non-empty scope list before authorization, matching the Python handler.
   Recovery responses expose the development reset token unless `MYOTA_ENV` is
   exactly `production`, matching the reference's case-sensitive check.
   The Core migration removes the retired `operations.read` scope from persisted

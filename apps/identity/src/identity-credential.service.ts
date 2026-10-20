@@ -55,7 +55,7 @@ export class IdentityCredentialService {
       scopes = [EMAIL_RESOLVE_SCOPE];
       claims = { sub: `service:${EMAIL_SERVICE}`, aud: 'myota-identity' };
     } else {
-      if (!body.scopes || body.clientSecret !== undefined) {
+      if (!body.scopes?.length || body.clientSecret !== undefined) {
         throw new BadRequestException(
           'service and scopes are required; clientSecret is reserved for email-service',
         );
