@@ -136,6 +136,10 @@ an audited reason; long-running Activity jobs now extend their 120-second leases
 from a separate database connection while processing. Statistics listing and rebuild-job APIs,
 transactional snapshot rebuilds, and owner-scoped notification reads are
 implemented. ADIF import creation, processing, and status reads are implemented.
+The Nest worker addresses early ADIF failure notices to the activation owner;
+the pinned Python worker uses the activation ID as the recipient, so those
+notices do not appear in the owner's account feed. This is a documented
+correction to a reference defect.
 Activity activation history, public activation history, and statistics pages
 apply database limits and offsets while retaining their existing page metadata;
 public result exports remain complete exports.
