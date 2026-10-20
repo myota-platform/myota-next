@@ -267,8 +267,9 @@
   through authorized, idempotent review writes. Selected candidates can be
   queued for CANDIDATE or role-scoped APPROVED promotion; the worker writes
   entities, category and source links, audit/outbox events, and per-candidate
-  queue outcomes. Entity lifecycle review preserves submitted review-note JSON
-  values without type coercion or truncation, as the Python handler does, and
+  queue outcomes. Entity review, metadata, category, and geometry changes
+  preserve submitted note JSON values without type coercion or truncation, as
+  the Python handlers do, and
   If-Match protected name, website, and description edits are transactional and
   audited. If-Match protected geometry, category, and manual location edits are
   also audited. Geometry

@@ -266,8 +266,7 @@ export class GeodataEntityMutationRepository {
       throw new BadRequestException(
         'at least one editable metadata field is required',
       );
-    const note =
-      typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
+    const note = body.note === undefined ? null : body.note;
     let name: string | undefined;
     if ('name' in body) {
       if (
@@ -734,8 +733,7 @@ export class GeodataEntityMutationRepository {
       throw new BadRequestException(
         'one or more valid entity type codes are required',
       );
-    const note =
-      typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
+    const note = body.note === undefined ? null : body.note;
     const expectedVersion = parseIfMatch(ifMatch);
     const client = await this.connect();
     try {
@@ -928,8 +926,7 @@ export class GeodataEntityMutationRepository {
     });
     if (Buffer.byteLength(geometry) > 5 * 1024 * 1024)
       throw new BadRequestException('geometry exceeds the 5 MiB limit');
-    const note =
-      typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
+    const note = body.note === undefined ? null : body.note;
     const expectedVersion = parseIfMatch(ifMatch);
     const client = await this.connect();
     try {

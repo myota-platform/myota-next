@@ -197,9 +197,10 @@ while preserving the import summary and materialized entities. Pending
 candidates can be paged; administrators can confirm or
 reject selected rows transactionally. Selected candidates can also be queued
 for CANDIDATE or scope-gated APPROVED promotion; the worker persists entities,
-category and source links, audit/outbox events, and queue outcomes. Lifecycle
-review preserves submitted note values without coercion or truncation, matching
-the Python handler. If-Match protected name, website, description, geometry, and
+category and source links, audit/outbox events, and queue outcomes. Entity
+review, metadata, category, and geometry changes preserve submitted note values
+without coercion or truncation, matching the Python handlers. If-Match protected
+name, website, description, geometry, and
 category and location edits are also implemented; other review
 workflows remain outstanding.
 
