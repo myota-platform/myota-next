@@ -1,4 +1,4 @@
-function isPythonWhitespace(codePoint: number): boolean {
+export function isPythonWhitespace(codePoint: number): boolean {
   return (
     (codePoint >= 0x09 && codePoint <= 0x0d) ||
     (codePoint >= 0x1c && codePoint <= 0x20) ||

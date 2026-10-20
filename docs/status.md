@@ -97,6 +97,8 @@
   `validTo` preserve explicitly submitted `null` values where the Python
   handler does. Callsign status remains a non-null enum as required by the Core
   schema; explicit `null` is rejected instead of defaulted to `UNVERIFIED`.
+  Website URL validation rejects embedded Unicode whitespace using Python's
+  `str.isspace()` set, including U+0085.
   Recovery responses expose the development reset token unless `MYOTA_ENV` is
   exactly `production`, matching the reference's case-sensitive check.
   Recovery reset checks token validity before enforcing the 12-character

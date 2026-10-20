@@ -18,7 +18,10 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
-import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import {
+  isPythonWhitespace,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import { DEFAULT_ROLE_SCOPES } from './role-catalog.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
@@ -984,7 +987,7 @@ export function validateWebsiteUrl(
     if (
       character.charCodeAt(0) < 0x20 ||
       character.charCodeAt(0) === 0x7f ||
-      /\s/u.test(character)
+      isPythonWhitespace(character.codePointAt(0)!)
     ) {
       throw new BadRequestException('websiteUrl is invalid or too long');
     }
