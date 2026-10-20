@@ -85,6 +85,8 @@
   non-empty scope list before authorization, matching the Python handler.
   Account creation uses the reference's non-empty email and `@` validation
   after Python-compatible trimming and case folding.
+  Login and recovery accept any non-empty email string and resolve it through
+  the normalized Identity email key, matching the Python handler.
   Callsign evidence metadata, verification source, and retirement `validTo`
   preserve explicitly submitted `null` values where the Python handler does.
   Recovery responses expose the development reset token unless `MYOTA_ENV` is

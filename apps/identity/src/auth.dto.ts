@@ -2,7 +2,6 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
-  IsEmail,
   IsOptional,
   IsString,
   IsObject,
@@ -15,10 +14,12 @@ import { Transform, Type } from 'class-transformer';
 import { firstQueryValue } from '@app/platform/query.js';
 
 export class LoginDto {
-  @IsEmail()
+  @IsString()
+  @MinLength(1)
   email!: string;
 
   @IsString()
+  @MinLength(1)
   password!: string;
 }
 
@@ -29,7 +30,8 @@ export class RefreshTokenDto {
 }
 
 export class RecoveryRequestDto {
-  @IsEmail()
+  @IsString()
+  @MinLength(1)
   email!: string;
 }
 
@@ -39,6 +41,7 @@ export class RecoveryResetDto {
   token!: string;
 
   @IsString()
+  @MinLength(1)
   newPassword!: string;
 }
 
