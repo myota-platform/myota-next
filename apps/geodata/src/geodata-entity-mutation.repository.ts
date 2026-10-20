@@ -443,7 +443,7 @@ export class GeodataEntityMutationRepository {
           stringifyJsonWithBigInts(previousManual) !==
             stringifyJsonWithBigInts(nextManual);
       }
-      if (Object.keys(changed).length || locationChanged) {
+      if (Object.keys(changed).length || locationInput !== undefined) {
         await client.query(
           "SELECT set_config('myota.geodata_writer','row-v1',true)",
         );
@@ -477,7 +477,7 @@ export class GeodataEntityMutationRepository {
             note,
             occurredAt: changedAt.toISOString(),
           });
-        if (locationChanged)
+        if (locationInput !== undefined)
           reviewHistory.push({
             action: 'LOCATION_UPDATED',
             editorId,
@@ -487,7 +487,7 @@ export class GeodataEntityMutationRepository {
             note,
             occurredAt: changedAt.toISOString(),
           });
-        if (locationChanged)
+        if (locationInput !== undefined)
           provenance.manualLocation = {
             fields: nextManual,
             editorId,
@@ -496,7 +496,7 @@ export class GeodataEntityMutationRepository {
           };
         const propertyDelta: Record<string, unknown> = {
           reviewHistory,
-          ...(locationChanged ? { provenance } : {}),
+          ...(locationInput !== undefined ? { provenance } : {}),
           updatedAt: changedAt.toISOString(),
         };
         const enrichment =
@@ -526,7 +526,7 @@ export class GeodataEntityMutationRepository {
           description=CASE WHEN $5 THEN $6 ELSE description END,
           public_properties=public_properties || $7::jsonb,updated_at=$8`;
         if (enrichment) updateSql += ',location_work_dispatched_at=now()';
-        if (locationChanged) {
+        if (locationInput !== undefined && requestedManual) {
           for (const [field, value] of Object.entries(nextLocation)) {
             if (!(field in locationColumns)) continue;
             updateParams.push(value);
@@ -537,7 +537,7 @@ export class GeodataEntityMutationRepository {
         }
         updateSql += ' WHERE id=$1';
         await client.query(updateSql, updateParams);
-        if (locationChanged) {
+        if (locationInput !== undefined) {
           await this.writeEntityEvent(
             client,
             id,
