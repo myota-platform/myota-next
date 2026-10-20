@@ -234,8 +234,6 @@
   source bytes and decoded
   records now stream via bounded temporary files, matching the reference's 1
   GiB expanded-size default and reproject coordinates using `.prj` metadata.
-  MultiPatch DBF rows are retained as per-record `MISSING_GEOMETRY` skips,
-  matching the reference decoder's unsupported GeoJSON geometry behavior.
   The streaming parser's less common geometry types and uncommon CRS
   definitions still need parity qualification before broad Shapefile parity can
   be claimed.
