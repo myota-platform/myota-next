@@ -258,8 +258,10 @@ schedule run API. The API retains the reference timestamp updates; the importer
 calculates automatic eligibility from `lastRunAt + intervalSeconds`.
 `GEODATA_IMPORTER_ENABLED` keeps it opt-in. Deployment, live-source
 qualification, and outage/recovery evidence are outstanding.
-Refresh interval parsing follows Python `int()` whitespace, Unicode decimal,
-underscore, boolean, and float-truncation behavior.
+Refresh intervals preserve arbitrary-precision integer values and follow
+Python `int()` whitespace, Unicode decimal, underscore, boolean, and
+float-truncation behavior through API parsing, persistence, and importer due-time
+calculation.
 Complete snapshot imports are also accepted on the ordinary import path; the
 worker applies disappearance policy after the final batch is staged, before
 candidate review or promotion, matching the reference worker lifecycle.

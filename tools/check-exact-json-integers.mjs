@@ -37,6 +37,11 @@ requirePattern(
   'Programme creation requests must preserve exact JSON integers',
 );
 requirePattern(
+  'libs/platform/src/bootstrap.ts',
+  /'\/v1\/geodata\/refresh-schedules'[\s\S]*?parseJsonWithExactIntegers/,
+  'Geodata schedule creation requests must preserve exact JSON integers',
+);
+requirePattern(
   'apps/outbox-worker/src/outbox-worker.module.ts',
   /DatabaseHealthModule\.forEnvironment\([\s\S]*?OUTBOX_DATABASE_URL[\s\S]*?parseJsonWithExactIntegers/,
   'Outbox worker pool must enable exact integer parsing',
@@ -60,6 +65,21 @@ requirePattern(
   'apps/geodata/src/main.ts',
   /bootstrapHttpService\([\s\S]*?^\s*\[\],\s*true,/m,
   'Geodata API bootstrap must enable BigInt JSON response serialization',
+);
+requirePattern(
+  'apps/geodata/src/geodata-schedule.service.ts',
+  /payload::text AS payload_json[\s\S]*?parseJsonWithExactIntegers\(String\(row\.payload_json\)\)/,
+  'Geodata schedules must preserve exact JSON integers when read from PostgreSQL',
+);
+requirePattern(
+  'apps/geodata-importer/src/geodata-importer.service.ts',
+  /parseJsonWithExactIntegers\(await response\.text\(\)\)/,
+  'Scheduled importer must preserve exact JSON integers from the API',
+);
+requirePattern(
+  'apps/geodata-importer/src/geodata-importer.service.ts',
+  /typeof schedule\.intervalSeconds === 'bigint'[\s\S]*?schedule\.intervalSeconds \* 1000n/,
+  'Scheduled importer must calculate arbitrary-precision intervals',
 );
 requirePattern(
   'libs/platform/src/bootstrap.ts',
@@ -100,6 +120,6 @@ if (errors.length) {
   process.exitCode = 1;
 } else {
   process.stdout.write(
-    'Exact JSON integers are preserved in Programme creation, programme and outbox database reads, and Geodata API and worker reads.\n',
+    'Exact JSON integers are preserved in Programme creation, programme and outbox database reads, and Geodata API, worker, and scheduled-importer paths.\n',
   );
 }

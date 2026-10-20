@@ -1,4 +1,5 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import {
   BadRequestException,
   ConflictException,
@@ -31,7 +32,7 @@ type RefreshSchedule = {
   entityTypes: string[];
   adapter: string;
   source: Record<string, unknown>;
-  intervalSeconds: number;
+  intervalSeconds: number | bigint;
   disappearancePolicy: unknown;
   enabled: boolean;
   lastRunAt: string | null;
@@ -55,7 +56,7 @@ export class GeodataScheduleService {
     const client = await this.connect();
     try {
       const result = await client.query(
-        `SELECT payload FROM geodata_control_record
+        `SELECT payload::text AS payload_json FROM geodata_control_record
          WHERE kind='schedules' ORDER BY payload->>'createdAt' ASC NULLS LAST,id
          LIMIT $1 OFFSET $2::bigint`,
         [pageSize, offset.toString()],
@@ -65,7 +66,9 @@ export class GeodataScheduleService {
       );
       const totalCount = total.rows[0].total as number;
       return {
-        items: result.rows.map((row) => row.payload),
+        items: result.rows.map((row) =>
+          parseJsonWithExactIntegers(String(row.payload_json)),
+        ),
         page,
         pageSize,
         total: totalCount,
@@ -311,7 +314,11 @@ function prepareSchedule(body: Record<string, unknown>): RefreshSchedule {
       'entityTypes must contain at least one shared entity category code',
     );
   const intervalSeconds = referenceInteger(body.intervalSeconds);
-  if (!Number.isInteger(intervalSeconds) || intervalSeconds < 300)
+  if (
+    (typeof intervalSeconds === 'number' &&
+      (!Number.isInteger(intervalSeconds) || intervalSeconds < 300)) ||
+    (typeof intervalSeconds === 'bigint' && intervalSeconds < 300n)
+  )
     throw new BadRequestException(
       'refresh interval must be at least 300 seconds',
     );
@@ -345,11 +352,22 @@ function referenceTruthy(value: unknown): boolean {
   return true;
 }
 
-function referenceInteger(value: unknown): number {
-  if (typeof value === 'number') return Math.trunc(value);
+function referenceInteger(value: unknown): number | bigint {
+  if (typeof value === 'bigint') return compactInteger(value);
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return Number.NaN;
+    return compactInteger(BigInt(Math.trunc(value)));
+  }
   if (typeof value === 'boolean') return Number(value);
   if (typeof value !== 'string') return Number.NaN;
   const normalized = normalizePythonNumericText(value);
   if (!/^[+-]?\d(?:_?\d)*$/.test(normalized)) return Number.NaN;
-  return Number(normalized.replaceAll('_', ''));
+  return compactInteger(BigInt(normalized.replaceAll('_', '')));
+}
+
+function compactInteger(value: bigint): number | bigint {
+  return value >= BigInt(Number.MIN_SAFE_INTEGER) &&
+    value <= BigInt(Number.MAX_SAFE_INTEGER)
+    ? Number(value)
+    : value;
 }

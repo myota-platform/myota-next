@@ -1,4 +1,5 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import {
   Injectable,
   Logger,
@@ -25,7 +26,7 @@ type RefreshSchedule = {
   adapter: string;
   source: Record<string, unknown>;
   entityTypes: string[];
-  intervalSeconds: number;
+  intervalSeconds: number | bigint;
   lastRunAt: string | null;
   disappearancePolicy: string;
   enabled: boolean;
@@ -81,13 +82,18 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
           ? Date.parse(schedule.lastRunAt)
           : Number.NaN;
         const dueAt = Number.isFinite(lastRunAt)
-          ? lastRunAt + schedule.intervalSeconds * 1000
+          ? typeof schedule.intervalSeconds === 'bigint'
+            ? BigInt(lastRunAt) + schedule.intervalSeconds * 1000n
+            : lastRunAt + schedule.intervalSeconds * 1000
           : Date.parse(schedule.nextRunAt);
+        const isDue =
+          typeof dueAt === 'bigint'
+            ? dueAt <= BigInt(Date.now())
+            : Number.isFinite(dueAt) && dueAt <= Date.now();
         if (
           this.stopping ||
           !schedule.enabled ||
-          !Number.isFinite(dueAt) ||
-          dueAt > Date.now() ||
+          !isDue ||
           (this.retryAfter.get(schedule.id) ?? 0) > Date.now()
         )
           continue;
@@ -119,7 +125,7 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
       });
       if (!response.ok)
         throw new Error(`schedule API returned HTTP ${response.status}`);
-      const body: unknown = await response.json();
+      const body: unknown = parseJsonWithExactIntegers(await response.text());
       if (
         !isRecord(body) ||
         !Array.isArray(body.items) ||
