@@ -41,12 +41,22 @@ interface SecurityEvent {
   eventType: string;
   payload?: { accountId?: string };
 }
+
+interface Page<T> {
+  items: T[];
+  page: number;
+  total: number;
+  nextPage: number | null;
+}
 const store = useAppStore();
 const route = useRoute();
 const router = useRouter();
 const feedback = usePageFeedback();
 const { loading, saving, error, message } = feedback;
 const accounts = ref<User[]>([]);
+const accountPage = ref(1);
+const accountNextPage = ref<number | null>(null);
+const accountTotal = ref(0);
 const roles = ref<Role[]>([]);
 const permissions = ref<Permission[]>([]);
 const securityEvents = ref<SecurityEvent[]>([]);
@@ -170,13 +180,18 @@ function editRole(role: Role | null): void {
     scopes: [...(role?.scopes || [])],
   });
 }
-async function fetchData(): Promise<void> {
+async function fetchData(page = accountPage.value): Promise<void> {
   const [accountData, roleData, events] = await Promise.all([
     canManageUsers.value
-      ? apiRequest<{ items: User[] }>(
-          `/v1/identity/admin/accounts?pageSize=100&q=${encodeURIComponent(search.value)}`,
+      ? apiRequest<Page<User>>(
+          `/v1/identity/admin/accounts?page=${page}&pageSize=50&q=${encodeURIComponent(search.value)}`,
         )
-      : Promise.resolve({ items: [] }),
+      : Promise.resolve({
+          items: [],
+          page,
+          total: 0,
+          nextPage: null,
+        }),
     canViewRoleDefinitions.value || canCreateAccounts.value
       ? apiRequest<{ items: Role[]; permissions: Permission[] }>(
           '/v1/identity/admin/roles',
@@ -189,12 +204,27 @@ async function fetchData(): Promise<void> {
       : Promise.resolve({ items: [] }),
   ]);
   accounts.value = accountData.items || [];
+  accountPage.value = accountData.page || page;
+  accountTotal.value = accountData.total || 0;
+  accountNextPage.value = accountData.nextPage ?? null;
   roles.value = roleData.items || [];
   permissions.value = roleData.permissions || [];
   securityEvents.value = events.items || [];
 }
 async function load(): Promise<void> {
   await feedback.run(fetchData);
+}
+async function searchAccounts(): Promise<void> {
+  accountPage.value = 1;
+  selectedAccount.value = null;
+  await load();
+}
+async function changeAccountPage(page: number): Promise<void> {
+  if (page < 1 || loading.value) return;
+  await feedback.run(async () => {
+    await fetchData(page);
+    selectedAccount.value = null;
+  });
 }
 async function createAccount(): Promise<void> {
   if (!canCreateAccounts.value) return;
@@ -456,7 +486,7 @@ onMounted(load);
         v-if="canManageUsers"
         class="toolbar"
         role="search"
-        @submit.prevent="load"
+        @submit.prevent="searchAccounts"
       >
         <label class="toolbar-field"
           >Search users<input
@@ -492,6 +522,25 @@ onMounted(load);
         <p v-if="!accounts.length && !loading && !error" class="empty muted">
           No users match this search.
         </p>
+        <div class="toolbar account-pagination">
+          <span class="muted"
+            >{{ accountTotal }} users · page {{ accountPage }}</span
+          >
+          <button
+            class="secondary"
+            :disabled="accountPage <= 1 || loading || saving"
+            @click="changeAccountPage(accountPage - 1)"
+          >
+            Previous
+          </button>
+          <button
+            class="secondary"
+            :disabled="accountNextPage === null || loading || saving"
+            @click="changeAccountPage(accountNextPage || accountPage)"
+          >
+            Next
+          </button>
+        </div>
       </div>
       <p v-else-if="!creatingAccount" class="empty muted">
         You can create accounts, but viewing existing accounts requires the

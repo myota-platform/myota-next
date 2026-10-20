@@ -52,9 +52,11 @@ Administrator account search now uses full default Unicode 15.0 case folding,
 matching the Python 3.12 reference. It scans only IDs, names, email addresses,
 and status for eligible accounts, folds names and email addresses before
 slicing the result page, then loads profile, role, and callsign details only
-for that page. Login, recovery, account creation, and account updates also use
-Unicode case-folded Core email keys with a unique index; the forward migration
-checks legacy JSONB emails for case-fold collisions before cutover.
+for that page. The Admin Identity view follows the returned page metadata and
+lets administrators move between matching account pages without loading the
+full account list. Login, recovery, account creation, and account updates also
+use Unicode case-folded Core email keys with a unique index; the forward
+migration checks legacy JSONB emails for case-fold collisions before cutover.
 OIDC provider registration remains create-only, matching the pinned Python
 handler; repeated requests create separate mappings even when they carry the
 same optional `Idempotency-Key`. Mapping field values are stored verbatim;
