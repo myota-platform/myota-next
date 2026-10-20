@@ -15,7 +15,7 @@ export async function bootstrapHttpService(
   defaultPort: number,
   jsonLimit: string | number = integerSetting(
     process.env.MYOTA_MAX_BODY_BYTES,
-    1024 * 1024,
+    1024 ** 3,
   ),
   rawBodyRoutes: string[] = [],
   globalPrefixExclusions: { path: string; method: RequestMethod }[] = [],

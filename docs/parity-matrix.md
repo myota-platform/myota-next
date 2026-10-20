@@ -160,8 +160,8 @@ ADIF uploads use the reference's shared `MYOTA_UPLOAD_MAX_BYTES` cap (1 GiB by
 default), then pass authorization, malware checks, and object storage before
 durable queueing; the Activity worker enforces the same cap, parses records,
 records successes and rejects, updates aggregates, and reports import status.
-The Activity API's default JSON body limit matches the reference's 1 GiB limit;
-`MYOTA_MAX_BODY_BYTES` can override it independently of the decoded upload cap.
+The shared Nest HTTP JSON body limit defaults to the reference's 1 GiB limit;
+`MYOTA_MAX_BODY_BYTES` can override it independently of decoded upload caps.
 CSV file uploads now validate bounded
 UTF-8 input and queue normalized rows through the same ingestion job. Base64
 decoding for CSV and ADIF uploads matches Python's strict validation, which

@@ -6,7 +6,7 @@ import { GatewayModule } from './gateway.module.js';
 await bootstrapHttpService(
   GatewayModule,
   8080,
-  integerSetting(process.env.MYOTA_MAX_BODY_BYTES, 35 * 1024 * 1024),
+  integerSetting(process.env.MYOTA_MAX_BODY_BYTES, 1024 ** 3),
   [],
   [{ path: '_internal/grafana/auth', method: RequestMethod.GET }],
   false,
