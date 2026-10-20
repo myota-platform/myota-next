@@ -82,7 +82,6 @@ export class ActivityController {
   @Patch(':activationId')
   close(
     @Headers('authorization') authorization: string | undefined,
-    @Headers('idempotency-key') key: string | undefined,
     @Param('activationId') id: string,
     @Body() body: Record<string, any>,
   ) {
@@ -90,6 +89,6 @@ export class ActivityController {
       throw new BadRequestException(
         'the activation resource currently supports status=CLOSED only',
       );
-    return this.activity.close(authorization, key, id, body);
+    return this.activity.close(authorization, id, body);
   }
 }

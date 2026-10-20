@@ -137,7 +137,6 @@ export class ActivityService {
 
   async close(
     authorization: string | undefined,
-    key: string | undefined,
     activationId: string,
     body: JsonRecord,
   ) {
@@ -147,7 +146,7 @@ export class ActivityService {
     const endedAt = Object.hasOwn(body, 'endedAt')
       ? body.endedAt
       : normalizeTimestamp(new Date());
-    return this.repository.close(activationId, endedAt, key);
+    return this.repository.close(activationId, endedAt);
   }
 
   async enqueueQsoIngestion(

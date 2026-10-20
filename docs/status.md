@@ -196,6 +196,9 @@
   handler's `body.get` behavior.
   Activation resource updates require `status=CLOSED`, including when the
   request body is empty, matching the Python transition handler.
+  Activation close ignores `Idempotency-Key`, matching the reference: a repeat
+  close is rejected after the first transition rather than replaying a cached
+  response.
   Requests store any
   truthy `proposedValues` JSON shape accepted by the reference. Review resolves the QSO through the
   correction record, as the reference does. Applying an object correction queues

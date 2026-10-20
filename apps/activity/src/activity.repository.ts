@@ -1190,8 +1190,8 @@ export class ActivityRepository {
     });
   }
 
-  async close(id: string, endedAt: string, key?: string): Promise<JsonRecord> {
-    return this.mutate(key, async (client) => {
+  async close(id: string, endedAt: string): Promise<JsonRecord> {
+    return this.mutate(undefined, async (client) => {
       const found = await client.query(
         `SELECT *, ${activationTimestampProjection} FROM activity_activation WHERE id=$1 FOR UPDATE`,
         [id],

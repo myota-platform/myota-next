@@ -63,7 +63,9 @@ response is `201` even though the preserved upstream OpenAPI contract declares
 Activity has an initial activation and single-QSO slice: activation list/create/read/close,
 normalized QSO writes, validity checks, ownership checks, subject aggregates,
 transactional event outbox records, idempotency responses, and award recalculation
-jobs. Activation resource updates require `status=CLOSED`. Timestamp normalization accepts lowercase `t`, ISO week dates,
+jobs. Activation resource updates require `status=CLOSED`, and close ignores
+`Idempotency-Key`, so repeated closes fail after the first transition as in the
+reference. Timestamp normalization accepts lowercase `t`, ISO week dates,
 one-character date/time separators, and fractional-second time-zone offsets
 supported by Python's
 `datetime.fromisoformat`. QSO ingestion requests also persist bounded,
