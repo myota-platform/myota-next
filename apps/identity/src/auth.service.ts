@@ -345,7 +345,7 @@ export class IdentityAuthService {
           accountId: account.id,
         });
         if (
-          process.env.MYOTA_ENV?.toLowerCase() !== 'production' ||
+          process.env.MYOTA_ENV !== 'production' ||
           process.env.MYOTA_EXPOSE_DEV_TOKENS === '1'
         ) {
           devResetToken = token;

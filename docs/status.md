@@ -77,6 +77,8 @@
   export, scoped OIDC provider mapping registration, and five-minute service token
   issuance with the restricted email-recipient lookup, and normalized private
   profile-image upload/read/delete are also implemented.
+  Recovery responses expose the development reset token unless `MYOTA_ENV` is
+  exactly `production`, matching the reference's case-sensitive check.
   The Core migration removes the retired `operations.read` scope from persisted
   custom role definitions and advances their update timestamp, matching the
   reference when it materializes the role catalogue.
