@@ -205,7 +205,8 @@ while preserving the import summary and materialized entities. Pending
 candidates can be paged; administrators can confirm or
 reject selected rows transactionally. Validation status uses Python truthiness
 and string conversion before checking supported values. Promotion selection
-sorts and deduplicates IDs without a separate 500-ID cap. Selected candidates can be queued
+applies required-field checks before type and status validation, then sorts and
+deduplicates IDs without a separate 500-ID cap. Selected candidates can be queued
 for CANDIDATE or scope-gated APPROVED promotion; the worker persists entities,
 category and source links, audit/outbox events, and queue outcomes. Entity
 review, metadata, category, and geometry changes, conflation decisions, and

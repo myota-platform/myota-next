@@ -445,27 +445,32 @@ export class GeodataImportMutationRepository {
     body: Record<string, unknown>,
     claims: AccessTokenClaims,
   ) {
-    const rawIds = body.candidateIds;
-    if (
-      !Array.isArray(rawIds) ||
-      !rawIds.length ||
-      rawIds.some((id) => typeof id !== 'string' || !isUuid(id))
-    )
-      throw new BadRequestException('candidateIds must be a non-empty list');
-    const candidateIds = [...new Set(rawIds)].sort((left, right) =>
-      left < right ? -1 : left > right ? 1 : 0,
+    const missing = ['candidateIds', 'targetStatus', 'processorId'].filter(
+      (field) => !pythonTruthy(body[field]),
     );
-    const targetStatus =
-      typeof body.targetStatus === 'string'
-        ? body.targetStatus.toUpperCase()
-        : '';
+    if (missing.length)
+      throw new BadRequestException(
+        `missing required fields: ${missing.join(', ')}`,
+      );
+    const targetStatus = pythonString(body.targetStatus).toUpperCase();
+    const rawIds = body.candidateIds;
+    if (!Array.isArray(rawIds) || !rawIds.length)
+      throw new BadRequestException('candidateIds must be a non-empty list');
+    const candidateIds = [...new Set(rawIds.map(pythonString))].sort(
+      (left, right) => (left < right ? -1 : left > right ? 1 : 0),
+    );
     if (!['CANDIDATE', 'APPROVED'].includes(targetStatus))
       throw new BadRequestException(
         'targetStatus must be CANDIDATE or APPROVED',
       );
-    const requestedBy =
-      typeof body.processorId === 'string' ? body.processorId : '';
-    if (!requestedBy) throw new BadRequestException('processorId is required');
+    const invalidId = candidateIds.find(
+      (id) => !isUuid(id) || id !== id.toLowerCase(),
+    );
+    if (invalidId)
+      throw new BadRequestException(
+        `candidate ${invalidId} does not belong to import run`,
+      );
+    const requestedBy = body.processorId;
     const note = body.note === undefined ? null : body.note;
     const queueId = randomUUID();
     const client = await this.connect();
@@ -730,6 +735,17 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+function pythonString(value: unknown): string {
+  if (value === null) return 'None';
+  if (value === true) return 'True';
+  if (value === false) return 'False';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'bigint')
+    return String(value);
+  if (typeof value === 'object') return JSON.stringify(value);
+  return '';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

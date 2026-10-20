@@ -281,9 +281,9 @@
   through authorized, idempotent review writes. Validation status coercion
   applies Python truthiness and string conversion before checking supported
   values. Selected candidates can be
-  queued for CANDIDATE or role-scoped APPROVED promotion. Promotion selection
-  sorts and deduplicates candidate IDs and has no extra 500-ID cap, matching
-  the Python handler; the worker writes
+  queued for CANDIDATE or role-scoped APPROVED promotion. Promotion validates
+  required fields in reference order; selection sorts and deduplicates candidate
+  IDs and has no extra 500-ID cap, matching the Python handler. The worker writes
   entities, category and source links, audit/outbox events, and per-candidate
   queue outcomes. Entity review, metadata, category, and geometry changes
   preserve submitted note JSON values without type coercion or truncation, as
