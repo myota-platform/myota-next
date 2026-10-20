@@ -30,7 +30,13 @@ export class IdentityMaintenanceRepository {
     profileImagesRemoved: number;
   }> {
     const databaseRecordsRemoved = await this.removeExpiredRecords();
-    const profileImagesRemoved = await this.removeOrphanProfileImages();
+    let profileImagesRemoved = 0;
+    try {
+      profileImagesRemoved = await this.removeOrphanProfileImages();
+    } catch (error) {
+      const errorType = error instanceof Error ? error.name : 'UnknownError';
+      this.logger.warn(`Identity profile image cleanup failed: ${errorType}`);
+    }
     return { databaseRecordsRemoved, profileImagesRemoved };
   }
 

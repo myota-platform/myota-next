@@ -7,9 +7,9 @@ import {
 import { IdentityMaintenanceRepository } from './identity-maintenance.repository.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 
-const INTERVAL_SECONDS = Math.max(
-  60,
-  integerSetting(process.env.MYOTA_IDENTITY_MAINTENANCE_SECONDS, 3600),
+const INTERVAL_SECONDS = integerSetting(
+  process.env.MYOTA_IDENTITY_MAINTENANCE_SECONDS,
+  3600,
 );
 
 @Injectable()
@@ -45,7 +45,10 @@ export class IdentityMaintenanceService
           );
       } catch (error) {
         this.logger.error(`Identity maintenance failed: ${safeError(error)}`);
+        throw error;
       }
+      if (INTERVAL_SECONDS < 0)
+        throw new RangeError('sleep length must be non-negative');
       await pause(INTERVAL_SECONDS * 1000, this.stopController.signal);
     }
   }

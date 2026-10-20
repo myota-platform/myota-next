@@ -85,7 +85,11 @@
   Authentication uses the existing scrypt hash format, HS256 token contract,
   persisted session, revocation, lockout and rate-limit tables. A separate
   Core-owned maintenance process expires Identity records and removes aged,
-  unreferenced profile-image objects. Token, recovery, lockout, and maintenance
+  unreferenced profile-image objects; it honors zero-second intervals and
+  rejects negative intervals after its initial sweep, matching Python's loop.
+  Database cleanup failures terminate the worker; profile-image cleanup
+  failures are logged and retried on the next sweep, matching the reference.
+  Token, recovery, lockout, and maintenance
   integer settings use the shared strict parser to match Python's environment
   value handling. The Gateway also forwards User-Agent so Identity session
   metadata matches direct request context. Unicode 15.0 case-fold mappings in
