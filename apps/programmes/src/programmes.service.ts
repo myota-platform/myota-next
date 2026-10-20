@@ -8,11 +8,8 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
-import { ProgrammeStateRepository } from './programme-state.repository.js';
-import type {
-  ProgrammeRecord,
-  ProgrammeState,
-} from './programme-state.repository.js';
+import type { ProgrammeRecord } from './programme.types.js';
+import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
 import { ProgrammeRepository } from './programme.repository.js';
 import { ProgrammeEntityTypeRepository } from './programme-entity-type.repository.js';
 import type {
@@ -24,7 +21,7 @@ import type {
 @Injectable()
 export class ProgrammesService {
   constructor(
-    private readonly state: ProgrammeStateRepository,
+    private readonly mutations: ProgrammeMutationRepository,
     private readonly programmes: ProgrammeRepository,
     private readonly entityTypes: ProgrammeEntityTypeRepository,
   ) {}
@@ -78,7 +75,7 @@ export class ProgrammesService {
     }
     const slug = body.slug.toLowerCase();
     this.authorizeAdmin(authorization, slug);
-    return this.state.mutate(idempotencyKey, async (client, state) => {
+    return this.mutations.mutate(idempotencyKey, async (client) => {
       if (await this.programmes.getInTransaction(client, slug)) {
         throw new BadRequestException('programme slug already exists');
       }
@@ -113,9 +110,8 @@ export class ProgrammesService {
         updatedAt: now,
       };
       await this.programmes.create(client, slug, programme);
-      await this.state.recordEvent(
+      await this.mutations.recordEvent(
         client,
-        state,
         'programme.created.v1',
         'programme',
         programme.id,
@@ -136,7 +132,7 @@ export class ProgrammesService {
     if (status !== undefined && status !== 'ACTIVE' && status !== 'ARCHIVED') {
       throw new BadRequestException('status must be ACTIVE or ARCHIVED');
     }
-    return this.state.mutate(idempotencyKey, async (client, state) => {
+    return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');
       if (body.name !== undefined) programme.name = body.name;
@@ -169,9 +165,8 @@ export class ProgrammesService {
       if (status === 'ARCHIVED') programme.status = 'ARCHIVED';
       programme.updatedAt = new Date().toISOString();
       await this.programmes.save(client, programme);
-      await this.state.recordEvent(
+      await this.mutations.recordEvent(
         client,
-        state,
         status === 'ARCHIVED'
           ? 'programme.archived.v1'
           : 'programme.updated.v1',
@@ -208,7 +203,7 @@ export class ProgrammesService {
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization);
-    return this.state.mutate(idempotencyKey, async (client, state) => {
+    return this.mutations.mutate(idempotencyKey, async (client) => {
       const programmes = await this.programmes.listAll(client);
       const catalog = await this.entityTypes.listAll(client);
       const code = body.code.trim().toUpperCase();
@@ -223,9 +218,8 @@ export class ProgrammesService {
       )) {
         await this.programmes.save(client, programme);
       }
-      await this.state.recordEvent(
+      await this.mutations.recordEvent(
         client,
-        state,
         'programme.entity-type.catalog-saved.v1',
         'entity_type',
         code,
@@ -246,7 +240,7 @@ export class ProgrammesService {
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
-    return this.state.mutate(idempotencyKey, async (client, state) => {
+    return this.mutations.mutate(idempotencyKey, async (client) => {
       const programmes = await this.programmes.listAll(client);
       const programme = programmes.find((item) => item.slug === slug);
       if (!programme) throw new NotFoundException('programme not found');
@@ -263,23 +257,15 @@ export class ProgrammesService {
       )) {
         await this.programmes.save(client, assigned);
       }
-      await this.state.recordEvent(
+      await this.mutations.recordEvent(
         client,
-        state,
         'programme.entity-type.catalog-saved.v1',
         'entity_type',
         code,
         { entityType, previous: previous ?? null },
       );
       if (!(programme.entityTypeCodes ?? []).includes(code)) {
-        await this.applyAssignment(
-          client,
-          state,
-          programme,
-          code,
-          catalog,
-          true,
-        );
+        await this.applyAssignment(client, programme, code, catalog, true);
       }
       return {
         statusCode: previous ? 200 : 201,
@@ -298,13 +284,13 @@ export class ProgrammesService {
   ) {
     this.authorizeAdmin(authorization, slug);
     const code = codeValue.trim().toUpperCase();
-    return this.state.mutate(idempotencyKey, async (client, state) => {
+    return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');
       const catalog = await this.entityTypes.listAll(client);
       if (!catalog[code])
         throw new BadRequestException('unknown entity category');
-      await this.applyAssignment(client, state, programme, code, catalog, true);
+      await this.applyAssignment(client, programme, code, catalog, true);
       return {
         programmeSlug: slug,
         items: programme.entityTypes ?? [],
@@ -321,18 +307,11 @@ export class ProgrammesService {
   ) {
     this.authorizeAdmin(authorization, slug);
     const code = codeValue.trim().toUpperCase();
-    return this.state.mutate(idempotencyKey, async (client, state) => {
+    return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');
       const catalog = await this.entityTypes.listAll(client);
-      await this.applyAssignment(
-        client,
-        state,
-        programme,
-        code,
-        catalog,
-        false,
-      );
+      await this.applyAssignment(client, programme, code, catalog, false);
       return { programmeSlug: slug, items: programme.entityTypes ?? [] };
     });
   }
@@ -376,7 +355,6 @@ export class ProgrammesService {
 
   private async applyAssignment(
     client: PoolClient,
-    state: ProgrammeState,
     programme: ProgrammeRecord,
     code: string,
     catalog: Record<string, Record<string, unknown>>,
@@ -392,9 +370,8 @@ export class ProgrammesService {
     programme.policyVersion = (programme.policyVersion ?? 1) + 1;
     programme.updatedAt = new Date().toISOString();
     await this.programmes.save(client, programme);
-    await this.state.recordEvent(
+    await this.mutations.recordEvent(
       client,
-      state,
       assign
         ? 'programme.entity-type.assigned.v1'
         : 'programme.entity-type.unassigned.v1',

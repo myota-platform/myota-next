@@ -7,7 +7,6 @@ import {
 import { ProgrammesController } from './programmes.controller.js';
 import { EntityTypesController } from './entity-types.controller.js';
 import { ProgrammesService } from './programmes.service.js';
-import { ProgrammeStateRepository } from './programme-state.repository.js';
 import { ProgrammeReadRepository } from './programme-read.repository.js';
 import { ProgrammeContentRepository } from './programme-content.repository.js';
 import { ProgrammePolicyRepository } from './programme-policy.repository.js';
@@ -33,7 +32,6 @@ import { ProgrammePolicyService } from './programme-policy.service.js';
   ],
   providers: [
     ProgrammesService,
-    ProgrammeStateRepository,
     ProgrammeReadRepository,
     ProgrammeContentRepository,
     ProgrammePolicyRepository,

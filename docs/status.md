@@ -26,8 +26,9 @@
   the SDK emits no telemetry. `MYOTA_BUILD_VERSION` or `GIT_SHA` labels the
   deployed version when provided.
 - Programme records, content, policy drafts, and entity-type catalogue now use
-  Core relational tables. The Programme snapshot retains only event history;
-  runtime adoption of the new migrations remains a separate deployment gate.
+  Core relational tables. Programme mutations now use the shared transaction
+  repository and outbox without persisting duplicate event history in a JSONB
+  snapshot; runtime adoption of the new migrations remains a separate gate.
 - A create-only JetStream provisioner consumes the event registry, requires
   explicit apply opt-in and measured finite stream limits, creates missing
   streams/durables, and rejects configuration drift. See
@@ -66,7 +67,7 @@
   creation, update, and archive transitions use the relational records with
   transactional outbox writes. Creation requires non-empty slug, name, entity
   types, and rules, matching the Python reference. Global entity-type catalogue
-  management remains in the Core snapshot; assignments are persisted in the
+  management uses its own Core table; assignments are persisted in the
   relational Programme record and commit with catalogue and outbox changes.
   Programme content supports draft editing,
   review submission and decisions, publication, paginated filtering, and locale
@@ -78,8 +79,7 @@
   publication remains atomic with the Programme record update. A dedicated
   read repository serves content pages, policy pages, and locale coverage;
   Programme metadata and policy-effective state are carried in relational
-  Programme records, while the shared entity-type catalogue remains in the
-  Core snapshot.
+  Programme records.
   Programme policy drafts support scoped authoring,
   submission, review, publishing, and effective policy updates. Effective
   publication timestamps accept Python-compatible basic and extended date and

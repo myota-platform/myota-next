@@ -87,6 +87,9 @@ record mutations and entity-type assignments in the same Core transaction.
 `core/009` moves the shared entity-type catalogue into its own Core table and
 removes the last Programme domain data bucket from the JSONB snapshot. Catalogue
 updates and assigned Programme record changes commit in the same transaction.
+`core/010` deletes the obsolete Programme snapshot row after all domain records
+and event publication have moved to relational tables and the transactional
+outbox.
 
 `geo/002` adds attempt-scoped import feature staging so workers can process
 large inputs without retaining all prepared candidates and validation errors

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import type { ProgrammeRecord } from './programme-state.repository.js';
+import type { ProgrammeRecord } from './programme.types.js';
 
 @Injectable()
 export class ProgrammeRepository {

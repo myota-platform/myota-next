@@ -7,7 +7,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
-import { ProgrammeStateRepository } from './programme-state.repository.js';
+import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
 import { ProgrammeReadRepository } from './programme-read.repository.js';
 import { ProgrammeRepository } from './programme.repository.js';
 import {
@@ -28,7 +28,7 @@ import {
 @Injectable()
 export class ProgrammePolicyService {
   constructor(
-    private readonly state: ProgrammeStateRepository,
+    private readonly mutations: ProgrammeMutationRepository,
     private readonly reads: ProgrammeReadRepository,
     private readonly policies: ProgrammePolicyRepository,
     private readonly programmes: ProgrammeRepository,
@@ -181,7 +181,7 @@ export class ProgrammePolicyService {
   ) {
     this.authorizeAdmin(authorization, slug);
     const effectiveFrom = normalizeUtcTimestamp(body.effectiveFrom);
-    return this.state.mutate(idempotencyKey, async (client, state) => {
+    return this.mutations.mutate(idempotencyKey, async (client) => {
       await this.policies.lockRecord(client, draftId);
       const draft = await this.requireDraft(client, draftId);
       if (draft.programmeSlug !== slug || draft.status !== 'APPROVED') {
@@ -220,9 +220,8 @@ export class ProgrammePolicyService {
       programme.updatedAt = now;
       await this.programmes.save(client, programme);
       await this.policies.save(client, draft);
-      await this.state.recordEvent(
+      await this.mutations.recordEvent(
         client,
-        state,
         'programme.policy-draft.published.v1',
         'policy_draft',
         draft.id,
