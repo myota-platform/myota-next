@@ -392,7 +392,10 @@ map renders point, line, polygon, and multipart entity geometries.
   registered durable policies and worker replica counts together.
   The Geodata API exposes `/metrics` with PostGIS tile-query duration and
   slow-query counters; `MYOTA_SLOW_QUERY_THRESHOLD_MS` retains its 250 ms
-  default and controls the slow-query counter.
+  default and controls the slow-query counter. The reference's `entity_upsert`
+  series timed a full-snapshot synchronization pass; the row-authoritative
+  implementation has no equivalent pass and does not reuse that label for
+  individual writes.
   Stale queued and expired work is re-enqueued through the owner outbox.
   Scheduled import and upload-session retention is implemented; outage/recovery
   evidence remains open.
