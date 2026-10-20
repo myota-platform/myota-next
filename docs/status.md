@@ -162,8 +162,10 @@
   read repository owns these queries separately from the snapshot mutation and
   transactional outbox repository.
 - Activity now has an initial API slice for activation listing, creation,
-  retrieval, closure, and single-QSO recording. Activation creation enforces
-  programme location requirements and configured entity bounds. An explicit
+  retrieval, closure, and single-QSO recording. Activation listing preserves
+  reference access semantics: `activity.read` can list activations across
+  operators and the optional `operatorId` filter is honored. Activation
+  creation enforces programme location requirements and configured entity bounds. An explicit
   `validityDays` value takes precedence over the programme rule, including null,
   and non-empty values use Python-compatible float parsing, including Python's
   numeric whitespace and Unicode decimal digit handling. Activation payload

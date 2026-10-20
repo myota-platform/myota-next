@@ -43,19 +43,12 @@ export class ActivityService {
       pageSize?: string;
     },
   ) {
-    const claims = this.authorize(authorization, [
-      'activity.read',
-      'activity.admin',
-    ]);
-    const operatorId =
-      claims.scp.includes('*') || claims.scp.includes('activity.admin')
-        ? query.operatorId
-        : claims.sub;
+    this.authorize(authorization, ['activity.read', 'activity.admin']);
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
     return this.repository.listPage(
       query.programme,
-      operatorId,
+      query.operatorId,
       page,
       pageSize,
     );
