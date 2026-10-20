@@ -48,15 +48,19 @@ export function validateAwardDraft(body: JsonRecord, existing?: JsonRecord) {
     Array.isArray(backgroundAsset)
   )
     throw new BadRequestException('backgroundAsset must be an object');
-  if ((backgroundAsset.kind ?? 'BACKGROUND') !== 'BACKGROUND')
+  if (
+    (Object.hasOwn(backgroundAsset, 'kind')
+      ? backgroundAsset.kind
+      : 'BACKGROUND') !== 'BACKGROUND'
+  )
     throw new BadRequestException('backgroundAsset.kind must be BACKGROUND');
   const template = body.template as JsonRecord;
   validateTemplate(template?.elements);
-  const printSpec = body.printSpec ?? {
-    page: 'A4',
-    orientation: 'PORTRAIT',
-    dpi: 300,
-  };
+  const printSpec = Object.hasOwn(body, 'printSpec')
+    ? body.printSpec
+    : { page: 'A4', orientation: 'PORTRAIT', dpi: 300 };
+  if (!printSpec || typeof printSpec !== 'object' || Array.isArray(printSpec))
+    throw new BadRequestException('printSpec must be an object');
   const printReadiness = calculatePrintReadiness(backgroundAsset, printSpec);
   const now = new Date().toISOString();
   const versionValue = Object.hasOwn(body, 'version')
@@ -309,8 +313,12 @@ function calculatePrintReadiness(
   background: JsonRecord,
   spec: JsonRecord,
 ): JsonRecord {
-  const page = String(spec.page ?? 'A4').toUpperCase();
-  const orientation = String(spec.orientation ?? 'PORTRAIT').toUpperCase();
+  const page = String(
+    Object.hasOwn(spec, 'page') ? spec.page : 'A4',
+  ).toUpperCase();
+  const orientation = String(
+    Object.hasOwn(spec, 'orientation') ? spec.orientation : 'PORTRAIT',
+  ).toUpperCase();
   if (
     !['A4', 'LETTER'].includes(page) ||
     !['PORTRAIT', 'LANDSCAPE'].includes(orientation)
@@ -320,7 +328,7 @@ function calculatePrintReadiness(
     );
   let [widthMm, heightMm] = page === 'A4' ? [210, 297] : [215.9, 279.4];
   if (orientation === 'LANDSCAPE') [widthMm, heightMm] = [heightMm, widthMm];
-  const dpi = Number(spec.dpi ?? 300);
+  const dpi = Number(Object.hasOwn(spec, 'dpi') ? spec.dpi : 300);
   if (!Number.isFinite(dpi) || dpi < 150)
     throw new BadRequestException(
       'print.dpi must be at least 150 for a printable certificate',
