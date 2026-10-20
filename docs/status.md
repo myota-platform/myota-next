@@ -263,7 +263,9 @@
   Geodata worker consumes registered preprocessing work and claims the named run,
   normalizes adapter-specific feature fields, source identifiers, and supported
   coordinate reference systems, enforces the reference's 50,000-coordinate
-  geometry limit and WGS84 bounds, filters nonmatching OSM tags as skipped
+  geometry limit and WGS84 bounds. CRS reprojection emits XY coordinates,
+  matching the Python transformer input; WGS84 input retains any extra
+  coordinate ordinates. It filters nonmatching OSM tags as skipped
   records, preserves scalar source IDs and scopes legacy manual row-number
   references to their import, hashes each normalized source record separately,
   stages candidates with provenance and 50 m duplicate warnings, records errors,
