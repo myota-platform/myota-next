@@ -5,6 +5,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { signAccessToken } from '@app/platform/access-token.js';
+import { scheduledFeatureHashOverrides } from '../../geodata/src/geodata-request-fingerprint.js';
 
 const DEFAULT_POLL_SECONDS = 60;
 const MAX_SOURCE_BYTES = 16 * 1024 * 1024;
@@ -136,13 +137,17 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     const sourceUrl = schedule.source.url;
     if (typeof sourceUrl !== 'string')
       throw new Error('schedule source.url must be a string');
-    const document = await this.fetchSource(sourceUrl);
+    const { document, rawJson } = await this.fetchSource(sourceUrl);
     const formatValue = schedule.source.format;
     const format =
       typeof formatValue === 'string' ? formatValue.toUpperCase() : 'GEOJSON';
     const features = featuresFromDocument(document, format);
     if (features.length > MAX_FEATURES)
       throw new Error(`source exceeds the ${MAX_FEATURES} feature limit`);
+    const sourceFeatureHashOverrides = scheduledFeatureHashOverrides(
+      rawJson,
+      format,
+    );
 
     const base = this.apiBase();
     const url = `${base}/v1/geodata/refresh-schedules/${encodeURIComponent(schedule.id)}/run`;
@@ -154,14 +159,20 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
         'content-type': 'application/json',
         'idempotency-key': idempotencyKey,
       },
-      body: JSON.stringify({ features }),
+      body: JSON.stringify({
+        features,
+        ...(sourceFeatureHashOverrides ? { sourceFeatureHashOverrides } : {}),
+      }),
       signal: AbortSignal.timeout(60_000),
     });
     if (!response.ok)
       throw new Error(`schedule run API returned HTTP ${response.status}`);
   }
 
-  private async fetchSource(rawUrl: string): Promise<unknown> {
+  private async fetchSource(rawUrl: string): Promise<{
+    document: unknown;
+    rawJson: string;
+  }> {
     const url = new URL(rawUrl);
     const allowedHosts = (process.env.GEODATA_SOURCE_ALLOWLIST ?? '')
       .split(',')
@@ -210,7 +221,7 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     }
     const text = Buffer.concat(chunks).toString('utf8');
     try {
-      return JSON.parse(text) as unknown;
+      return { document: JSON.parse(text) as unknown, rawJson: text };
     } catch {
       throw new Error('source did not return valid JSON');
     }

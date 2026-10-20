@@ -489,11 +489,11 @@ export class GeodataWorkRepository {
         featureLimit,
         {
           ...documentMetadata,
-          sourceFeatureHashOverrides:
-            run.source_metadata.sourceFormat === 'ARCGIS_FEATURESERVER' &&
-            Array.isArray(run.source_metadata.sourceFeatureHashOverrides)
-              ? run.source_metadata.sourceFeatureHashOverrides
-              : undefined,
+          sourceFeatureHashOverrides: Array.isArray(
+            run.source_metadata.sourceFeatureHashOverrides,
+          )
+            ? run.source_metadata.sourceFeatureHashOverrides
+            : undefined,
         },
         () => this.heartbeat(run),
       );

@@ -176,6 +176,16 @@ export class GeodataScheduleService {
     const importKey = key
       ? `schedule:${scheduleId}:${key}`
       : `schedule:${scheduleId}:${randomUUID()}`;
+    const hashOverrides = body.sourceFeatureHashOverrides;
+    const sourceFeatureHashOverrides =
+      requestedBy === 'service:geodata-importer' &&
+      Array.isArray(hashOverrides) &&
+      hashOverrides.length === body.features.length &&
+      hashOverrides.every(
+        (value) => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value),
+      )
+        ? (hashOverrides as string[])
+        : undefined;
     const run = (await this.imports.create(
       importKey,
       {
@@ -190,6 +200,7 @@ export class GeodataScheduleService {
       {
         autoPromote: { requestedBy, note: 'Scheduled source refresh' },
         requestHash,
+        sourceFeatureHashOverrides,
       },
     )) as Record<string, unknown>;
     const now = new Date();

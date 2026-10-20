@@ -112,7 +112,6 @@ export class GeodataImportService {
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
       );
       const sourceFeatureHashOverrides =
-        prepared.sourceFormat === 'ARCGIS_FEATURESERVER' &&
         options.sourceFeatureHashOverrides?.length === prepared.features.length
           ? options.sourceFeatureHashOverrides
           : undefined;

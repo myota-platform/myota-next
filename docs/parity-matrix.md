@@ -168,10 +168,11 @@ code-point key ordering. Streamed GeoJSON and direct GEOJSON/WFS JSON imports
 retain raw numeric tokens in features and injected root CRS values up to 16 MiB.
 Streamed root geometry documents converted into Features retain those tokens as
 well. Direct ArcGIS FeatureServer imports hash raw source records before API
-normalization. Oversized root CRS values, ArcGIS scheduled refreshes transformed
-by the Node importer, and generated Shapefile/PBF features can still lose
-integer-versus-float distinctions. The direct JSON import path materializes the
-normalized collection, while multipart GeoJSON streams source features.
+normalization. The scheduled Node importer preserves source numeric tokens in
+the generated Feature hashes it submits. Oversized root CRS values and
+generated Shapefile/PBF features can still lose integer-versus-float
+distinctions. The direct JSON import path materializes the normalized
+collection, while multipart GeoJSON streams source features.
 Shapefile multipart uploads stream to
 temporary disk and decode records one at a time, with a 256 MiB default upload
 cap (512 MiB maximum), 1 GiB expanded-size cap, 16 MiB

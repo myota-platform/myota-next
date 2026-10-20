@@ -114,6 +114,66 @@ export function rawImportSourceData(rawRequest: string): {
   };
 }
 
+export function scheduledFeatureHashOverrides(
+  rawDocument: string,
+  format: string,
+): string[] | undefined {
+  let document: unknown;
+  try {
+    document = new JsonParser(rawDocument).parse();
+  } catch {
+    return undefined;
+  }
+  let features: unknown[] | undefined;
+  if (
+    isRecord(document) &&
+    document.type === 'FeatureCollection' &&
+    Array.isArray(document.features) &&
+    document.features.every(isRecord)
+  ) {
+    features = document.features;
+  } else if (format === 'ARCGIS_FEATURESERVER' && isRecord(document)) {
+    if (!Array.isArray(document.features)) return undefined;
+    features = [];
+    for (const raw of document.features) {
+      if (!isRecord(raw)) return undefined;
+      const geometry = isRecord(raw.geometry) ? raw.geometry : {};
+      const properties = isRecord(raw.attributes) ? raw.attributes : {};
+      let normalizedGeometry: Record<string, unknown>;
+      if (Array.isArray(geometry.rings))
+        normalizedGeometry = {
+          type: 'Polygon',
+          coordinates: geometry.rings,
+        };
+      else if (Array.isArray(geometry.paths))
+        normalizedGeometry = {
+          type: 'MultiLineString',
+          coordinates: geometry.paths,
+        };
+      else if (
+        geometry.x instanceof JsonNumber &&
+        geometry.y instanceof JsonNumber
+      )
+        normalizedGeometry = {
+          type: 'Point',
+          coordinates: [geometry.x, geometry.y],
+        };
+      else return undefined;
+      features.push({
+        type: 'Feature',
+        properties,
+        geometry: normalizedGeometry,
+      });
+    }
+  }
+  if (!features) return undefined;
+  return features.map((feature) =>
+    createHash('sha256')
+      .update(canonicalJsonValue(feature), 'utf8')
+      .digest('hex'),
+  );
+}
+
 function canonicalJsonValue(value: unknown): string {
   if (value === null) return 'null';
   if (typeof value === 'string') return JSON.stringify(value);
