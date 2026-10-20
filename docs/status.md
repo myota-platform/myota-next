@@ -396,7 +396,7 @@
   restore/migration steps, the legacy Email merge into Core, and a read-only
   per-owner database validation report. Semantic parity review and
   disposable-database rehearsal remain open; see the
-  [database transfer plan](operations/cross-version-data-transfer.md)), image
+  [database transfer plan](operations/cross-version-data-transfer.md), image
   publication, deployment manifests, and
   production observability configuration. A reusable Docker recipe now builds
   one unprivileged runtime image per Nest application. An owner-scoped database
