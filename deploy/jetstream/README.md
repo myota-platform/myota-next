@@ -38,3 +38,8 @@ needs its own reviewed migration procedure.
 
 Set `NATS_TOPOLOGY_APPLY=1` only when applying the reviewed settings to the
 intended NATS account. Without it, the command exits before connecting.
+
+The NestJS Helm chart can run this tool as an opt-in pre-install/pre-upgrade
+Job after topology and capacity review. Keep it disabled until all finite
+limits are configured; see
+[`../helm/myota-next/README.md`](../helm/myota-next/README.md).

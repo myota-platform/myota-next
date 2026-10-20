@@ -1,6 +1,28 @@
 environment: production
 buildVersion: ''
 imagePullPolicy: IfNotPresent
+jetstreamProvisioner:
+  enabled: false
+  confirmedCapacityReview: false
+  image: { repository: '', tag: '', digest: '' }
+  backoffLimit: 4
+  activeDeadlineSeconds: 1800
+  capacity:
+    eventsMaxBytes: ''
+    eventsMaxMessages: ''
+    eventsMaxMessageBytes: ''
+    activityWorkMaxAgeSeconds: ''
+    activityWorkMaxBytes: ''
+    activityWorkMaxMessages: ''
+    activityWorkMaxMessageBytes: ''
+    geodataWorkMaxAgeSeconds: ''
+    geodataWorkMaxBytes: ''
+    geodataWorkMaxMessages: ''
+    geodataWorkMaxMessageBytes: ''
+    emailWorkMaxAgeSeconds: ''
+    emailWorkMaxBytes: ''
+    emailWorkMaxMessages: ''
+    emailWorkMaxMessageBytes: ''
 images:
   gateway: { repository: '', tag: '', digest: '' }
   identity: { repository: '', tag: '', digest: '' }
@@ -25,13 +47,13 @@ secrets:
   auth: myota-auth
   objectStorage: myota-object-storage
   smtp: myota-smtp
+  nats: myota-nats-credentials
 observe:
   enabled: false
   secretName: myota-observe
   appKeyKey: app-key
   appSecretKey: app-secret
 dependencies:
-  natsUrl: nats://myota-nats:4222
   objectStorageEndpoint: http://myota-s3:8333
   objectStoragePublicEndpoint: ''
   activityUrl: ''
@@ -147,7 +169,7 @@ components:
     env:
       ACTIVITY_DATABASE_URL:
         { secret: databaseUrls, key: activity-database-url }
-      NATS_URL: '{{ .Values.dependencies.natsUrl }}'
+      NATS_URL: { secret: nats, key: url }
       MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'
       MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: path
       MYOTA_OBJECT_STORAGE_ACCESS_KEY:
@@ -166,7 +188,7 @@ components:
     env:
       ACTIVITY_DATABASE_URL:
         { secret: databaseUrls, key: activity-database-url }
-      NATS_URL: '{{ .Values.dependencies.natsUrl }}'
+      NATS_URL: { secret: nats, key: url }
       ACTIVITY_NOTIFICATION_METRICS_PORT: '9110'
   geodata:
     enabled: true
@@ -197,7 +219,7 @@ components:
     terminationGracePeriodSeconds: 60
     env:
       GEO_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }
-      NATS_URL: '{{ .Values.dependencies.natsUrl }}'
+      NATS_URL: { secret: nats, key: url }
       MYOTA_ACTIVITY_URL: '{{ default (printf "http://%s-activity:8004" .Release.Name) .Values.dependencies.activityUrl }}'
       MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
       MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'
@@ -225,7 +247,7 @@ components:
     terminationGracePeriodSeconds: 75
     env:
       CORE_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
-      NATS_URL: '{{ .Values.dependencies.natsUrl }}'
+      NATS_URL: { secret: nats, key: url }
       MYOTA_IDENTITY_URL: '{{ default (printf "http://%s-identity:8001" .Release.Name) .Values.dependencies.identityUrl }}'
       MYOTA_EMAIL_SERVICE_CLIENT_SECRET:
         { secret: auth, key: email-service-client-secret }
@@ -247,7 +269,7 @@ components:
       OUTBOX_OWNER: core
       OUTBOX_WORKER: core-outbox
       OUTBOX_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
-      NATS_URL: '{{ .Values.dependencies.natsUrl }}'
+      NATS_URL: { secret: nats, key: url }
       OUTBOX_METRICS_PORT: '9108'
   outbox-activity:
     enabled: true
@@ -258,7 +280,7 @@ components:
       OUTBOX_OWNER: activity
       OUTBOX_WORKER: activity-outbox
       OUTBOX_DATABASE_URL: { secret: databaseUrls, key: activity-database-url }
-      NATS_URL: '{{ .Values.dependencies.natsUrl }}'
+      NATS_URL: { secret: nats, key: url }
       OUTBOX_METRICS_PORT: '9108'
   outbox-geodata:
     enabled: true
@@ -269,7 +291,7 @@ components:
       OUTBOX_OWNER: geodata
       OUTBOX_WORKER: geodata-outbox
       OUTBOX_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }
-      NATS_URL: '{{ .Values.dependencies.natsUrl }}'
+      NATS_URL: { secret: nats, key: url }
       OUTBOX_METRICS_PORT: '9108'
 ingress:
   enabled: false

@@ -44,3 +44,5 @@ images:
     }
 migrations:
   image: { repository: ghcr.io/myota-platform/myota-next-tools, tag: example }
+jetstreamProvisioner:
+  image: { repository: ghcr.io/myota-platform/myota-next-tools, tag: example }

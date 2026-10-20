@@ -2,8 +2,9 @@
 
 This chart deploys the NestJS APIs and background processes from this
 monorepo. It keeps Core, Activity, and Geodata as three separately configured
-PostgreSQL owners. It does not provision databases, NATS, or object storage;
-configure those services independently and provide their connection settings.
+PostgreSQL owners. It does not provision databases, a NATS server, or object
+storage. Configure those services independently. An opt-in Job can provision
+the registered streams and durable consumers on the configured NATS server.
 
 ## Images and install
 
@@ -33,6 +34,8 @@ Create Kubernetes Secrets before installation:
 - `myota-object-storage`: `access-key`, `secret-key`,
   `profile-image-access-key`, `profile-image-secret-key`.
 - `myota-smtp`: `password` when enabling `email-worker`.
+- `myota-nats-credentials`: `url`, the configured NATS connection URL,
+  including credentials when authentication is enabled.
 - `myota-observe`: `app-key` and `app-secret` when enabling Observe reporting.
 
 Database URLs must point to three distinct databases. Core is shared by
@@ -54,12 +57,19 @@ gate; review migration compatibility with currently running versions before
 using rolling upgrades. The chart does not migrate data from the Python
 deployment.
 
+The JetStream provisioner is disabled by default. Enable it only after
+reviewing stream topology and measured capacity, set
+`jetstreamProvisioner.confirmedCapacityReview=true`, and provide positive
+finite values for every `jetstreamProvisioner.capacity` field. The Job uses the
+same create-only, drift-rejecting tool as local provisioning and never updates
+existing stream or consumer configuration. See
+[`deploy/jetstream/README.md`](../../jetstream/README.md) for required limits.
+
 Workers expose internal health listeners only where their process supports
 them. The chart creates ClusterIP services for the four domain APIs and the
 Gateway; worker health ports are not exposed as Services.
 
 This is the initial Kubernetes deployment source for the NestJS monorepo. It
 does not yet reproduce the previous deployment's stateful infrastructure,
-JetStream provisioning, retention schedules, autoscaling, dashboards, alerts,
-or Fleet release automation. Those remain explicit deployment work before
-production rollout.
+retention schedules, autoscaling, dashboards, alerts, or Fleet release
+automation. Those remain explicit deployment work before production rollout.
