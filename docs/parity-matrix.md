@@ -256,9 +256,8 @@ fetches GeoJSON or ArcGIS FeatureServer data only from allowlisted HTTPS hosts;
 it rejects redirects and responses above 16 MiB, then submits data through the
 schedule run API. The API retains the reference timestamp updates; the importer
 calculates automatic eligibility from `lastRunAt + intervalSeconds`.
-`GEODATA_IMPORTER_ENABLED` keeps it opt-in. Deployment,
-live-source qualification, remaining review workflows, and outage/recovery
-evidence are outstanding.
+`GEODATA_IMPORTER_ENABLED` keeps it opt-in. Deployment, live-source
+qualification, and outage/recovery evidence are outstanding.
 Complete snapshot imports are also accepted on the ordinary import path; the
 worker applies disappearance policy after the final batch is staged, before
 candidate review or promotion, matching the reference worker lifecycle.
