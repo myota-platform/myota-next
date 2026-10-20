@@ -109,18 +109,16 @@ export class ProgrammeReadRepository {
     try {
       const result = await client.query<ContentCoverage>(
         `WITH programme AS (
-           SELECT state #> ARRAY['items', $1] AS value,
+           SELECT payload AS value,
                   CASE
-                    WHEN jsonb_typeof(
-                      (state #> ARRAY['items', $1])->'locales'
-                    ) = 'array'
+                    WHEN jsonb_typeof(payload->'locales') = 'array'
                     THEN jsonb_array_length(
-                      (state #> ARRAY['items', $1])->'locales'
+                      payload->'locales'
                     ) > 0
                     ELSE false
                   END AS has_configured_locales
-             FROM public.service_state
-            WHERE service = 'programmes'
+             FROM public.programme_record
+            WHERE slug = $1
          ), content AS MATERIALIZED (
            SELECT content_key, locale, status
              FROM public.programme_content

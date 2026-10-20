@@ -13,6 +13,7 @@ import type {
   ProgrammeRecord,
   ProgrammeState,
 } from './programme-state.repository.js';
+import { ProgrammeRepository } from './programme.repository.js';
 import type {
   CreateProgrammeDto,
   EntityTypeDto,
@@ -21,17 +22,18 @@ import type {
 
 @Injectable()
 export class ProgrammesService {
-  constructor(private readonly state: ProgrammeStateRepository) {}
+  constructor(
+    private readonly state: ProgrammeStateRepository,
+    private readonly programmes: ProgrammeRepository,
+  ) {}
 
   async list(query: { page?: string; pageSize?: string }) {
     const page = parsePageInteger(query.page, 1);
     const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
-    const state = await this.state.load();
-    const records = Object.values(state.items ?? {});
-    const total = records.length;
     const start = (page - 1) * pageSize;
+    const { items, total } = await this.programmes.listPage(pageSize, start);
     return {
-      items: records.slice(start, start + pageSize),
+      items,
       page,
       pageSize,
       total,
@@ -40,8 +42,7 @@ export class ProgrammesService {
   }
 
   async get(slug: string): Promise<ProgrammeRecord> {
-    const state = await this.state.load();
-    const programme = state.items?.[slug];
+    const programme = await this.programmes.get(slug);
     if (!programme) throw new NotFoundException('programme not found');
     return programme;
   }
@@ -76,12 +77,14 @@ export class ProgrammesService {
     const slug = body.slug.toLowerCase();
     this.authorizeAdmin(authorization, slug);
     return this.state.mutate(idempotencyKey, async (client, state) => {
-      if (state.items?.[slug]) {
+      if (await this.programmes.getInTransaction(client, slug)) {
         throw new BadRequestException('programme slug already exists');
       }
-      state.items ??= {};
       state.data ??= {};
-      const catalog = entityCatalog(state);
+      const catalog = backfillEntityTypeCatalog(
+        state,
+        await this.programmes.listAll(client),
+      );
       const normalizedTypes = body.entityTypes.map((entityType) =>
         normalizeEntityType(entityType),
       );
@@ -108,7 +111,7 @@ export class ProgrammesService {
         createdAt: now,
         updatedAt: now,
       };
-      state.items[slug] = programme;
+      await this.programmes.create(client, slug, programme);
       await this.state.recordEvent(
         client,
         state,
@@ -133,7 +136,7 @@ export class ProgrammesService {
       throw new BadRequestException('status must be ACTIVE or ARCHIVED');
     }
     return this.state.mutate(idempotencyKey, async (client, state) => {
-      const programme = state.items?.[slug];
+      const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');
       if (body.name !== undefined) programme.name = body.name;
       if (body.description !== undefined)
@@ -142,7 +145,10 @@ export class ProgrammesService {
       if (body.theme !== undefined) programme.theme = body.theme;
       if (body.oidc !== undefined) programme.oidc = body.oidc;
       if (body.entityTypes !== undefined) {
-        const catalog = entityCatalog(state);
+        const catalog = backfillEntityTypeCatalog(
+          state,
+          await this.programmes.listAll(client),
+        );
         const codes: string[] = [];
         for (const item of body.entityTypes) {
           const code =
@@ -161,6 +167,7 @@ export class ProgrammesService {
       }
       if (status === 'ARCHIVED') programme.status = 'ARCHIVED';
       programme.updatedAt = new Date().toISOString();
+      await this.programmes.save(client, programme);
       await this.state.recordEvent(
         client,
         state,
@@ -178,8 +185,11 @@ export class ProgrammesService {
   async listEntityTypeCatalog(authorization?: string) {
     this.authorizeAdmin(authorization);
     const state = await this.state.load();
-    const catalog = backfillEntityTypeCatalog(state);
-    return { items: this.catalogWithAssignments(state, catalog) };
+    const programmes = await this.programmes.all();
+    const catalog = backfillEntityTypeCatalog(state, programmes);
+    return {
+      items: this.catalogWithAssignments(catalog, programmes),
+    };
   }
 
   async listProgrammeEntityTypes(
@@ -188,9 +198,9 @@ export class ProgrammesService {
   ) {
     this.authorizeAdmin(authorization, slug);
     const state = await this.state.load();
-    const programme = state.items?.[slug];
+    const programme = await this.programmes.get(slug);
     if (!programme) throw new NotFoundException('programme not found');
-    backfillEntityTypeCatalog(state);
+    backfillEntityTypeCatalog(state, [programme]);
     return { programmeSlug: slug, items: programme.entityTypes ?? [] };
   }
 
@@ -201,12 +211,19 @@ export class ProgrammesService {
   ) {
     this.authorizeAdmin(authorization);
     return this.state.mutate(idempotencyKey, async (client, state) => {
-      const catalog = backfillEntityTypeCatalog(state);
+      const programmes = await this.programmes.listAll(client);
+      const catalog = backfillEntityTypeCatalog(state, programmes);
       const code = body.code.trim().toUpperCase();
       const previous = catalog[code];
       const entityType = normalizeEntityType(body, previous);
       catalog[code] = entityType;
-      this.refreshAssignedEntityTypes(state, catalog, code);
+      for (const programme of this.refreshAssignedEntityTypes(
+        programmes,
+        catalog,
+        code,
+      )) {
+        await this.programmes.save(client, programme);
+      }
       await this.state.recordEvent(
         client,
         state,
@@ -218,7 +235,7 @@ export class ProgrammesService {
       return {
         statusCode: previous ? 200 : 201,
         entityType,
-        items: this.catalogWithAssignments(state, catalog),
+        items: this.catalogWithAssignments(catalog, programmes),
       };
     });
   }
@@ -231,14 +248,21 @@ export class ProgrammesService {
   ) {
     this.authorizeAdmin(authorization, slug);
     return this.state.mutate(idempotencyKey, async (client, state) => {
-      const programme = state.items?.[slug];
+      const programmes = await this.programmes.listAll(client);
+      const programme = programmes.find((item) => item.slug === slug);
       if (!programme) throw new NotFoundException('programme not found');
-      const catalog = backfillEntityTypeCatalog(state);
+      const catalog = backfillEntityTypeCatalog(state, programmes);
       const code = body.code.trim().toUpperCase();
       const previous = catalog[code];
       const entityType = normalizeEntityType(body, previous);
       catalog[code] = entityType;
-      this.refreshAssignedEntityTypes(state, catalog, code);
+      for (const assigned of this.refreshAssignedEntityTypes(
+        programmes,
+        catalog,
+        code,
+      )) {
+        await this.programmes.save(client, assigned);
+      }
       await this.state.recordEvent(
         client,
         state,
@@ -275,9 +299,12 @@ export class ProgrammesService {
     this.authorizeAdmin(authorization, slug);
     const code = codeValue.trim().toUpperCase();
     return this.state.mutate(idempotencyKey, async (client, state) => {
-      const programme = state.items?.[slug];
+      const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');
-      const catalog = backfillEntityTypeCatalog(state);
+      const catalog = backfillEntityTypeCatalog(
+        state,
+        await this.programmes.listAll(client),
+      );
       if (!catalog[code])
         throw new BadRequestException('unknown entity category');
       await this.applyAssignment(client, state, programme, code, catalog, true);
@@ -298,9 +325,12 @@ export class ProgrammesService {
     this.authorizeAdmin(authorization, slug);
     const code = codeValue.trim().toUpperCase();
     return this.state.mutate(idempotencyKey, async (client, state) => {
-      const programme = state.items?.[slug];
+      const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');
-      const catalog = backfillEntityTypeCatalog(state);
+      const catalog = backfillEntityTypeCatalog(
+        state,
+        await this.programmes.listAll(client),
+      );
       await this.applyAssignment(
         client,
         state,
@@ -314,13 +344,13 @@ export class ProgrammesService {
   }
 
   private catalogWithAssignments(
-    state: ProgrammeState,
     catalog: Record<string, Record<string, unknown>>,
+    programmes: ProgrammeRecord[],
   ): Record<string, unknown>[] {
     const items: Record<string, unknown>[] = Object.values(catalog).map(
       (entityType): Record<string, unknown> => ({
         ...entityType,
-        assignedProgrammes: Object.values(state.items ?? {})
+        assignedProgrammes: programmes
           .filter((programme) =>
             programme.entityTypeCodes?.includes(String(entityType.code)),
           )
@@ -333,18 +363,21 @@ export class ProgrammesService {
   }
 
   private refreshAssignedEntityTypes(
-    state: ProgrammeState,
+    programmes: ProgrammeRecord[],
     catalog: Record<string, Record<string, unknown>>,
     code: string,
-  ) {
-    for (const programme of Object.values(state.items ?? {})) {
+  ): ProgrammeRecord[] {
+    const updated: ProgrammeRecord[] = [];
+    for (const programme of programmes) {
       if (programme.entityTypeCodes?.includes(code)) {
         programme.entityTypes = programme.entityTypeCodes.map(
           (assignedCode) => catalog[assignedCode],
         );
         programme.updatedAt = new Date().toISOString();
+        updated.push(programme);
       }
     }
+    return updated;
   }
 
   private async applyAssignment(
@@ -364,6 +397,7 @@ export class ProgrammesService {
     programme.entityTypes = nextCodes.map((current) => catalog[current]);
     programme.policyVersion = (programme.policyVersion ?? 1) + 1;
     programme.updatedAt = new Date().toISOString();
+    await this.programmes.save(client, programme);
     await this.state.recordEvent(
       client,
       state,
@@ -405,9 +439,10 @@ function entityCatalog(
 
 function backfillEntityTypeCatalog(
   state: ProgrammeState,
+  programmes: ProgrammeRecord[],
 ): Record<string, Record<string, unknown>> {
   const catalog = entityCatalog(state);
-  for (const programme of Object.values(state.items ?? {})) {
+  for (const programme of programmes) {
     const legacyTypes = Array.isArray(programme.entityTypes)
       ? programme.entityTypes
       : [];

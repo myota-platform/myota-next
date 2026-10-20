@@ -9,6 +9,7 @@ import { verifyAccessToken } from '@app/platform/access-token.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { ProgrammeStateRepository } from './programme-state.repository.js';
 import { ProgrammeReadRepository } from './programme-read.repository.js';
+import { ProgrammeRepository } from './programme.repository.js';
 import {
   ProgrammePolicyRepository,
   type ProgrammePolicyDraft,
@@ -30,6 +31,7 @@ export class ProgrammePolicyService {
     private readonly state: ProgrammeStateRepository,
     private readonly reads: ProgrammeReadRepository,
     private readonly policies: ProgrammePolicyRepository,
+    private readonly programmes: ProgrammeRepository,
   ) {}
 
   async list(
@@ -187,7 +189,7 @@ export class ProgrammePolicyService {
           'only approved policies can be published',
         );
       }
-      const programme = state.items?.[slug];
+      const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');
       const now = new Date().toISOString();
       draft.status = 'PUBLISHED';
@@ -216,6 +218,7 @@ export class ProgrammePolicyService {
         programme.awards = awards;
       }
       programme.updatedAt = now;
+      await this.programmes.save(client, programme);
       await this.policies.save(client, draft);
       await this.state.recordEvent(
         client,

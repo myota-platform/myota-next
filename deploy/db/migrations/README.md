@@ -81,7 +81,9 @@ content records into an indexed Core table and removes the duplicate content
 bucket from the Programme snapshot; lifecycle writes and outbox events then
 commit together against that table. `core/007` does the same for Programme
 policy drafts, keeping publication of a rules or awards draft atomic with the
-Programme snapshot update.
+Programme snapshot update. `core/008` backfills Programme records into a Core
+table, removes the duplicate `items` map from the Programme snapshot, and keeps
+record mutations and entity-type assignments in the same Core transaction.
 
 `geo/002` adds attempt-scoped import feature staging so workers can process
 large inputs without retaining all prepared candidates and validation errors
