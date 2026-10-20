@@ -166,9 +166,10 @@ The baseline Admin and Participant applications are carried forward under
 a static source scan resolves 62 concrete Admin HTTP method/path pairs, all
 present in the OpenAPI contract. This does not establish payload or workflow
 parity. The Participant client includes localized published programme content,
-paged approved/candidate entity catalogue and map, map-picked point proposals and existing-candidate proposals, activation creation,
-single-QSO entry, profile editing and image management, and award requests, but
-those workflows lack browser-level compatibility coverage. Remaining work
+paged approved/candidate entity catalogue and map, map-picked point proposals and existing-candidate proposals, published award and level catalogue with eligible-level requests, activation creation,
+single-QSO entry, profile editing and image management, but those workflows lack
+browser-level compatibility coverage. The award catalogue follows all API pages.
+Remaining work
 includes accessibility/visual review and deployment integration. Its public
 map renders point, line, polygon, and multipart entity geometries.
 

@@ -321,7 +321,8 @@
   pairs, all present in the OpenAPI contract. This does not establish payload
   or workflow parity. The Participant UI includes localized published programme
   content; paged approved/candidate entity catalogue and map; map-picked new point and existing-candidate proposals; profile editing
-  and image management; award requests; activation creation, QSO entry, and
+  and image management; published award and level catalogue with eligible-level
+  requests; activation creation, QSO entry, and
   close; and point, line, polygon, and multipart map geometries. It lacks
   browser-level compatibility coverage. Visual/accessibility review and
   deployment integration also remain open.

@@ -564,10 +564,23 @@ function renderMarkers() {
 }
 async function loadPublicAwards(slug) {
   try {
-    const data = await awardApi(
-      `/v1/awards?programme=${encodeURIComponent(slug)}&pageSize=100`,
-    );
-    publicAwards = data.items || [];
+    const items = [];
+    let page = 1;
+    while (page !== null) {
+      const data = await awardApi(
+        `/v1/awards?programme=${encodeURIComponent(slug)}&page=${page}&pageSize=100`,
+      );
+      items.push(...(data.items || []));
+      const nextPage = data.nextPage;
+      if (nextPage == null) {
+        page = null;
+      } else if (Number.isInteger(nextPage) && nextPage > page) {
+        page = nextPage;
+      } else {
+        throw new Error('The award catalogue returned invalid paging data.');
+      }
+    }
+    publicAwards = items;
     renderPublicAwards();
   } catch (error) {
     $('public-awards').innerHTML =
