@@ -611,7 +611,9 @@ function validateCreate(body: Record<string, unknown>) {
       ? maxOsmPbfUploadBytes
       : format === 'GEOJSON'
         ? maxGeoJsonUploadBytes
-        : format === 'SHAPEFILE' || format === 'SHP'
+        : format === 'SHAPEFILE' ||
+            format === 'SHP' ||
+            format === 'PARKSERVE_US'
           ? maxShapefileUploadBytes
           : maxUploadBytes;
   const expectedSize = Number(body.expectedSize);
@@ -641,11 +643,14 @@ function validateCreate(body: Record<string, unknown>) {
     throw new BadRequestException(
       'sha256 must be a 64-character hexadecimal digest',
     );
-  if (!['GEOJSON', 'SHAPEFILE', 'SHP', 'OSM_PBF'].includes(format))
+  if (
+    !['GEOJSON', 'SHAPEFILE', 'SHP', 'PARKSERVE_US', 'OSM_PBF'].includes(format)
+  )
     throw new BadRequestException(
       'this import path accepts GeoJSON, Shapefile ZIP archives, or OSM PBF files',
     );
-  const normalizedFormat = format === 'SHP' ? 'SHAPEFILE' : format;
+  const normalizedFormat =
+    format === 'SHP' || format === 'PARKSERVE_US' ? 'SHAPEFILE' : format;
   if (normalizedFormat === 'OSM_PBF' && adapter !== 'OSM')
     throw new BadRequestException('OSM PBF imports require the OSM adapter');
   if (

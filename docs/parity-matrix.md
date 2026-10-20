@@ -95,8 +95,9 @@ Web Mercator spatial references are normalized to WGS84; other EPSG WKIDs are
 reprojected when the installed `proj4` definitions support them. Pasted KML and GPX
 are also converted to GeoJSON with XML document types rejected and bounded
 feature/coordinate counts. Multipart uploads accept GeoJSON and bounded
-Shapefile ZIP archives with matching sidecars; Shapefile coordinates are
-reprojected from the supplied `.prj` to WGS84. OSM PBF uploads are decoded by
+Shapefile ZIP archives with matching sidecars (`SHAPEFILE`, `SHP`, and the
+legacy `PARKSERVE_US` format alias); Shapefile coordinates are reprojected from
+the supplied `.prj` to WGS84. OSM PBF uploads are decoded by
 `osmium-tool` in the Geodata worker image, preserve OSM tags and type/id source
 references, and emit the configured hiking, protected-area, point, path, and
 multipolygon features using a temporary disk-backed node-location index.
