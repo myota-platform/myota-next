@@ -206,7 +206,7 @@
   explicitly supplied value through job processing, matching the Python
   handler's `body.get` behavior.
   Activation resource updates require `status=CLOSED`, including when the
-  request body is empty, matching the Python transition handler.
+  request body is empty or null, matching the Python transition handler.
   Activation close ignores `Idempotency-Key`, matching the reference: a repeat
   close is rejected after the first transition rather than replaying a cached
   response.
