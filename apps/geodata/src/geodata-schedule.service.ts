@@ -230,19 +230,26 @@ function prepareSchedule(body: Record<string, unknown>): RefreshSchedule {
     Array.isArray(body.source)
   )
     throw new BadRequestException('source must be an object');
-  const rawTypes = body.entityTypes ?? body.entityTypeCodes ?? body.entityType;
-  const entityTypes = (Array.isArray(rawTypes) ? rawTypes : [rawTypes])
-    .map((value) =>
-      String(value ?? '')
-        .trim()
-        .toUpperCase(),
-    )
-    .filter(Boolean);
-  if (
-    !entityTypes.length ||
-    entityTypes.some((value) => !entityTypePattern.test(value)) ||
-    new Set(entityTypes).size !== entityTypes.length
-  )
+  let rawTypes = body.entityTypes || body.entityTypeCodes;
+  if (!rawTypes || (Array.isArray(rawTypes) && !rawTypes.length))
+    rawTypes = body.entityType;
+  if (rawTypes && typeof rawTypes === 'object' && !Array.isArray(rawTypes)) {
+    const category = rawTypes as Record<string, unknown>;
+    rawTypes = category.code || category.entityType;
+  }
+  const entityTypes: string[] = [];
+  for (const value of Array.isArray(rawTypes) ? rawTypes : [rawTypes]) {
+    const category =
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>).code
+        : value;
+    const code = String(category ?? '')
+      .trim()
+      .toUpperCase();
+    if (code && entityTypePattern.test(code) && !entityTypes.includes(code))
+      entityTypes.push(code);
+  }
+  if (!entityTypes.length)
     throw new BadRequestException('one or more valid entityTypes are required');
   const intervalSeconds = Number(body.intervalSeconds);
   if (!Number.isInteger(intervalSeconds) || intervalSeconds < 300)
