@@ -282,7 +282,8 @@
   before body validation. Entity review, metadata, category, geometry, and
   location-enrichment writes follow the same contract. Conflation resolution
   uses the same request contract and retains transactional history and outbox
-  writes.
+  writes. Refresh schedule creation also scopes idempotency by owner and path
+  and rejects changed-body reuse before validation.
   `/healthz` and `/readyz` expose worker liveness and
   GeoData PostgreSQL/NATS readiness on `GEODATA_WORKER_HEALTH_PORT`. The service
   also has PostGIS-backed public entity

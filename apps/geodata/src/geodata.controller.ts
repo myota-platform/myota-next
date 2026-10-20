@@ -89,9 +89,20 @@ export class GeodataController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') key: string | undefined,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
-    authorizeImport(authorization);
-    return this.schedules.create(key, body);
+    const claims = authorizeImport(authorization);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
+    return this.schedules.create(
+      idempotency.key,
+      body,
+      idempotency.requestHash,
+    );
   }
 
   @Post('refresh-schedules/:scheduleId/run')
