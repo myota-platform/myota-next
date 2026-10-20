@@ -705,9 +705,11 @@
 - An initial NestJS Helm chart now describes API and worker Deployments,
   per-owner Core/Activity/Geodata database URLs, migration credentials,
   readiness probes, internal API Services, and Gateway ingress. PostgreSQL,
-  NATS, S3-compatible storage, image publishing, and Fleet release automation
-  remain external or incomplete. An opt-in, capacity-gated Job provisions the
-  registered JetStream topology. The chart is not production-qualified. See
+  NATS and S3-compatible storage plus Fleet release automation remain external
+  or incomplete. CI-gated GHCR publication now builds each Nest application
+  image and the migration/topology tools image. An opt-in, capacity-gated Job
+  provisions the registered JetStream topology. The chart is not
+  production-qualified. See
   the [NestJS chart guide](../deploy/helm/myota-next/README.md).
 - Email delivery. The NestJS consumer rejects invalid UTF-8 and invalid UTC
   date-time values before validating `email.send.v1`, including lowercase `t`

@@ -38,9 +38,10 @@ you intend to delete the local databases, messages, and uploaded objects:
 docker compose --env-file deploy/.env -f deploy/compose.yaml down -v
 ```
 
-This Compose file is a development environment. Production image publication,
-immutable image pinning, data transfer, backups, restore, and rollout
-qualification remain separate work.
+This Compose file is a development environment. The image workflow publishes
+per-process GHCR images from qualified `main` and `v*` revisions. Immutable
+image pinning, data transfer, backups, restore, and rollout qualification
+remain separate work.
 
 The initial NestJS [Helm chart](helm/myota-next/README.md) deploys the APIs and
 background processes against external PostgreSQL, NATS, and S3-compatible
