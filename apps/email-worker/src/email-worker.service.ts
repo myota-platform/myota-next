@@ -514,17 +514,15 @@ function parseCommand(raw: Uint8Array): EmailCommand {
     ]) ||
     envelope.envelopeVersion !== 1 ||
     envelope.workType !== 'email.send.v1' ||
-    envelope.producer !== 'identity' ||
+    !isStringWithinLength(envelope.producer, 1, 80) ||
     !UUID.test(String(envelope.workId)) ||
     typeof envelope.createdAt !== 'string' ||
     !isValidUtcDateTime(envelope.createdAt) ||
     (envelope.aggregate !== undefined && !isRecord(envelope.aggregate)) ||
     (envelope.correlationId !== undefined &&
-      (typeof envelope.correlationId !== 'string' ||
-        envelope.correlationId.length > 200)) ||
+      !isStringWithinLength(envelope.correlationId, 0, 200)) ||
     (envelope.causationId !== undefined &&
-      (typeof envelope.causationId !== 'string' ||
-        envelope.causationId.length > 200)) ||
+      !isStringWithinLength(envelope.causationId, 0, 200)) ||
     !isRecord(envelope.payload)
   )
     throw new Error('invalid email command envelope');
@@ -699,9 +697,17 @@ function escapeHtml(value: string) {
 }
 
 function validText(value: unknown, maxLength: number): value is string {
+  return isStringWithinLength(value, 1, maxLength);
+}
+
+function isStringWithinLength(
+  value: unknown,
+  minLength: number,
+  maxLength: number,
+): value is string {
   if (typeof value !== 'string') return false;
   const characterCount = Array.from(value).length;
-  return characterCount >= 1 && characterCount <= maxLength;
+  return characterCount >= minLength && characterCount <= maxLength;
 }
 
 function hasOnly(record: Record<string, unknown>, keys: string[]) {
