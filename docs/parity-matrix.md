@@ -300,7 +300,8 @@ Geometry type aliases use Python-compatible Unicode case folding, and CRS
 metadata selects the first Python-truthy identifier field.
 Geodata coordinate validation also preserves Python's `bool`-as-number
 behavior, including numeric-equivalent polygon ring closure; projected
-coordinates convert those values before transformation.
+coordinates convert those values before transformation, and streamed vertex
+limits count them as coordinates.
 Import adapters infer feature names from the reference alias catalogue before
 validation, using Python-compatible Unicode casefolding, whitespace collapse,
 and 300-code-point truncation. The worker validates WGS84

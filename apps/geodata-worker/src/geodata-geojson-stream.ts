@@ -687,8 +687,8 @@ function countFeatureVertices(value: unknown): number {
     if (!Array.isArray(current)) continue;
     if (
       current.length >= 2 &&
-      typeof current[0] === 'number' &&
-      typeof current[1] === 'number'
+      isPythonNumber(current[0]) &&
+      isPythonNumber(current[1])
     ) {
       vertices += 1;
       if (vertices > MAX_IMPORT_FEATURE_VERTICES) return vertices;
@@ -697,6 +697,10 @@ function countFeatureVertices(value: unknown): number {
     }
   }
   return vertices;
+}
+
+function isPythonNumber(value: unknown): value is number | boolean {
+  return typeof value === 'number' || typeof value === 'boolean';
 }
 
 function isJsonWhitespace(byte: number) {
