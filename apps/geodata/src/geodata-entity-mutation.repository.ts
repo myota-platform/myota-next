@@ -1060,65 +1060,74 @@ export class GeodataEntityMutationRepository {
         Number(bounds.max_y) > 90
       )
         throw new BadRequestException('geometry must be within WGS84 bounds');
-      if (
+      const geometryChanged = Boolean(
         canonicalGeometry &&
         stringifyJsonWithBigInts(row.geometry) !==
-          stringifyJsonWithBigInts(canonicalGeometry)
-      ) {
-        await client.query(
-          "SELECT set_config('myota.geodata_writer','row-v1',true)",
-        );
-        const properties = isRecord(row.public_properties)
-          ? row.public_properties
-          : {};
-        const changedAt = new Date();
-        const geometryHistory = Array.isArray(properties.geometryHistory)
-          ? [...properties.geometryHistory]
-          : [];
-        geometryHistory.push({
-          editorId,
-          note,
-          geometry: row.geometry,
-          editedAt: changedAt.toISOString(),
-        });
-        let nextProperties: Record<string, unknown> = {
-          ...properties,
-          geometryHistory,
-          updatedAt: changedAt.toISOString(),
-        };
-        const enrichment = queueLocationEnrichment(
+          stringifyJsonWithBigInts(canonicalGeometry),
+      );
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      const properties = isRecord(row.public_properties)
+        ? row.public_properties
+        : {};
+      const changedAt = new Date();
+      const geometryHistory = Array.isArray(properties.geometryHistory)
+        ? [...properties.geometryHistory]
+        : [];
+      geometryHistory.push({
+        editorId,
+        note,
+        geometry: row.geometry,
+        editedAt: changedAt.toISOString(),
+      });
+      let nextProperties: Record<string, unknown> = {
+        ...properties,
+        geometryHistory,
+        updatedAt: changedAt.toISOString(),
+      };
+      const enrichment = geometryChanged
+        ? queueLocationEnrichment(
+            id,
+            nextProperties,
+            canonicalGeometry,
+            locationSnapshot(row),
+            row.manual_location_fields,
+            'GEOMETRY_CHANGED',
+            editorId,
+            false,
+          )
+        : undefined;
+      if (enrichment) nextProperties = enrichment.properties;
+      await client.query(
+        `UPDATE geodata_entity SET geom=ST_SetSRID(ST_GeomFromGeoJSON($2),4326),
+         centroid=ST_Centroid(ST_SetSRID(ST_GeomFromGeoJSON($2),4326))::geography,
+         public_properties=$3::jsonb,
+         location_work_dispatched_at=CASE WHEN $5 THEN now() ELSE location_work_dispatched_at END,
+         updated_at=$4 WHERE id=$1`,
+        [
           id,
-          nextProperties,
-          canonicalGeometry,
-          locationSnapshot(row),
-          row.manual_location_fields,
-          'GEOMETRY_CHANGED',
-          editorId,
-          false,
-        );
-        if (enrichment) nextProperties = enrichment.properties;
-        await client.query(
-          `UPDATE geodata_entity SET geom=ST_SetSRID(ST_GeomFromGeoJSON($2),4326),
-           centroid=ST_Centroid(ST_SetSRID(ST_GeomFromGeoJSON($2),4326))::geography,
-           public_properties=$3::jsonb,location_work_dispatched_at=now(),updated_at=$4 WHERE id=$1`,
-          [id, geometry, stringifyJsonWithBigInts(nextProperties), changedAt],
-        );
+          geometry,
+          stringifyJsonWithBigInts(nextProperties),
+          changedAt,
+          geometryChanged,
+        ],
+      );
+      await this.writeEntityEvent(
+        client,
+        id,
+        'geodata.entity.geometry-updated.v1',
+        { entityId: id, editorId, note, geometry: body.geometry },
+        changedAt,
+      );
+      if (enrichment)
         await this.writeEntityEvent(
           client,
           id,
-          'geodata.entity.geometry-updated.v1',
-          { entityId: id, editorId, note, geometry: body.geometry },
-          changedAt,
+          'geodata.entity.location-enrichment-requested.v1',
+          enrichment.event,
+          new Date(enrichment.requestedAt),
         );
-        if (enrichment)
-          await this.writeEntityEvent(
-            client,
-            id,
-            'geodata.entity.location-enrichment-requested.v1',
-            enrichment.event,
-            new Date(enrichment.requestedAt),
-          );
-      }
       const response = await this.readEntityWithClient(client, id);
       if (key)
         await client.query(

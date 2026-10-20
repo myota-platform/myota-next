@@ -408,8 +408,10 @@
   matching, deduplication, and sorting, with codes as tie-breakers. The
   Geodata worker applies results only to the matching geometry and protects
   manual fields. Missing metadata now queues enrichment automatically on
-  lifecycle promotion; geometry changes queue refreshes, and releasing manual
-  fields queues only missing values. Refresh schedules can be created, listed,
+  lifecycle promotion; geometry changes queue refreshes, and geometry edit
+  requests always append history and emit an update event, even when geometry is
+  unchanged. Releasing manual fields queues only missing values. Refresh
+  schedules can be created, listed,
   and manually run as complete snapshots. The Admin supports schedule creation,
   paging, and manual GeoJSON snapshot runs. Snapshot runs stage and promote the
   full validated candidate set, record source manifests, and apply configured
