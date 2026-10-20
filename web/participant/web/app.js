@@ -74,8 +74,8 @@ async function loadProgramme(slug) {
               : [];
           return (
             !geometries.length ||
-            geometries.some((geometry) =>
-              ['POINT', 'MULTIPOINT'].includes(String(geometry).toUpperCase()),
+            geometries.some(
+              (geometry) => String(geometry).toUpperCase() === 'POINT',
             )
           );
         })
@@ -266,6 +266,7 @@ loadProgrammes().catch((e) => {
 });
 
 let publicMapState = { lat: 37.395, lon: -5.995, zoom: 12 };
+let proposalLocationPickActive = false;
 function publicWorld(lon, lat, zoom) {
   const size = 256 * 2 ** zoom,
     x = ((Number(lon) + 180) / 360) * size,
@@ -293,11 +294,27 @@ function publicUnproject(x, y, width, height) {
     ),
     worldX = center.x + x - width / 2,
     worldY = center.y + y - height / 2,
-    lon = (worldX / center.size) * 360 - 180,
+    rawLon = (worldX / center.size) * 360 - 180,
+    lon = ((((rawLon + 180) % 360) + 360) % 360) - 180,
     n = Math.PI - (2 * Math.PI * worldY) / center.size,
-    lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+    rawLat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))),
+    lat = Math.max(-85.05112878, Math.min(85.05112878, rawLat));
   return [lon, lat];
 }
+function setProposalLocationPick(active) {
+  proposalLocationPickActive = active;
+  $('map').classList.toggle('picking-location', active);
+  const button = $('proposal-location-pick');
+  button.setAttribute('aria-pressed', String(active));
+  button.textContent = active
+    ? 'Cancel map selection'
+    : 'Pick coordinates on map';
+  if (active)
+    $('proposal-status').textContent =
+      'Click the map where the proposed point is located.';
+}
+$('#proposal-location-pick').onclick = () =>
+  setProposalLocationPick(!proposalLocationPickActive);
 function publicTileMap() {
   const map = $('map'),
     width = Math.max(map.clientWidth || 700, 300),
@@ -429,7 +446,9 @@ function publicTileMap() {
   });
   overlay.addEventListener('pointermove', (event) => {
     if (!drag) return;
-    drag.moved = true;
+    drag.moved ||=
+      Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 3;
+    if (!drag.moved) return;
     layer.style.transform = `translate(${event.clientX - drag.x}px,${event.clientY - drag.y}px)`;
     overlay.style.transform = `translate(${event.clientX - drag.x}px,${event.clientY - drag.y}px)`;
   });
@@ -437,14 +456,28 @@ function publicTileMap() {
     if (!drag) return;
     const dx = event.clientX - drag.x,
       dy = event.clientY - drag.y;
-    if (drag.moved)
+    if (proposalLocationPickActive && !drag.moved) {
+      const bounds = overlay.getBoundingClientRect();
+      const x = ((event.clientX - bounds.left) / bounds.width) * width;
+      const y = ((event.clientY - bounds.top) / bounds.height) * height;
+      const [longitude, latitude] = publicUnproject(x, y, width, height);
+      $('proposal-latitude').value = latitude.toFixed(6);
+      $('proposal-longitude').value = longitude.toFixed(6);
+      setProposalLocationPick(false);
+      $('proposal-status').textContent =
+        `Selected ${latitude.toFixed(6)}, ${longitude.toFixed(6)}.`;
+      drag = null;
+      return;
+    }
+    if (drag.moved) {
       [publicMapState.lon, publicMapState.lat] = publicUnproject(
         width / 2 - dx,
         height / 2 - dy,
         width,
         height,
       );
-    publicTileMap();
+      publicTileMap();
+    }
     drag = null;
   });
   overlay.addEventListener(

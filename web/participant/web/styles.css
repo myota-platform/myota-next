@@ -292,6 +292,10 @@ a {
   position: relative;
   touch-action: none;
 }
+.map.picking-location,
+.map.picking-location #public-map-overlay {
+  cursor: crosshair;
+}
 .public-tile-surface {
   height: 355px;
   inset: 0;
