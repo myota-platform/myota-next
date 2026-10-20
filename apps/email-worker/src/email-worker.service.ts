@@ -754,7 +754,7 @@ function escapeHtml(value: string) {
       '<': '&lt;',
       '>': '&gt;',
       '"': '&quot;',
-      "'": '&#39;',
+      "'": '&#x27;',
     };
     return entities[character];
   });

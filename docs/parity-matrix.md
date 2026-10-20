@@ -51,7 +51,8 @@ persistence, error, or workflow parity.
 The email worker accepts the schema's trailing uppercase `Z` timestamp with
 either `T` or `t` as the date/time separator, matching Python's RFC3339
 validation. It preserves a leading UTF-8 BOM for `JSON.parse` to reject,
-matching Python's `json.loads` behavior.
+matching Python's `json.loads` behavior. HTML templates use Python's apostrophe
+entity (`&#x27;`) when escaping user-provided names.
 
 Identity currently implements disabled public registration, password login,
 refresh rotation, logout revocation, recovery request/reset, current-account
