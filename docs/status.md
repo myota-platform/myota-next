@@ -192,9 +192,10 @@
   and non-empty values use Python-compatible float parsing, including Python's
   numeric whitespace and Unicode decimal digit handling. Activation payload
   `requireLocation` and `allowUnverifiedCallsign` flags use Python truthiness.
-  Payload normalization and required-field checks precede operator
-  authorization, as in
-  the reference. Falsey `location` and `rules` alias values normalize to empty
+  Activation operator callsigns normalize only when truthy, preserving falsey
+  values as in Python. Payload normalization and required-field checks precede
+  operator authorization, as in the reference. Falsey `location` and `rules`
+  alias values normalize to empty
   objects as in Python; rule evaluation also defaults falsey persisted rules to
   an empty object. `authorizedCallsigns` defaults only when omitted and uses
   Python-compatible iteration. It persists

@@ -298,9 +298,12 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
       'activation location is outside the entity bounds',
     );
   }
-  const callsign = data.operatorCallsign
-    ? normalizeCallsign(data.operatorCallsign)
+  const rawCallsign = Object.hasOwn(data, 'operatorCallsign')
+    ? data.operatorCallsign
     : null;
+  const callsign = pythonTruthy(rawCallsign)
+    ? normalizeCallsign(rawCallsign)
+    : rawCallsign;
   const authorizedCallsigns = Object.hasOwn(data, 'authorizedCallsigns')
     ? pythonIterable(data.authorizedCallsigns, 'authorizedCallsigns')
     : [];
