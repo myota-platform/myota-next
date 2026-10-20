@@ -10,6 +10,12 @@ import type { NextFunction, Request, Response } from 'express';
 export const REQUEST_ID_HEADER = 'x-request-id';
 export const CORRELATION_ID_HEADER = 'x-correlation-id';
 
+export function safeRequestId(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(value)
+    ? value
+    : undefined;
+}
+
 type ApiProblem = {
   type: string;
   title: string;
@@ -25,12 +31,14 @@ export function requestIds(
   response: Response,
   next: NextFunction,
 ) {
-  const requestId = safeId(request.get(REQUEST_ID_HEADER)) ?? randomUUID();
+  const requestId =
+    safeRequestId(request.get(REQUEST_ID_HEADER)) ?? randomUUID();
   const correlationId =
     safeId(request.get(CORRELATION_ID_HEADER)) ?? randomUUID();
   request.headers[REQUEST_ID_HEADER] = requestId;
   request.headers[CORRELATION_ID_HEADER] = correlationId;
   response.setHeader('X-Request-ID', requestId);
+  response.setHeader('X-Trace-ID', requestId);
   response.setHeader('X-Correlation-ID', correlationId);
   response.setHeader(
     'Access-Control-Expose-Headers',
