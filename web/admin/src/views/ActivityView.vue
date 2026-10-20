@@ -80,11 +80,6 @@ const statisticsPage = ref(1);
 const statisticsNextPage = ref<number | null>(null);
 const statisticsTotal = ref(0);
 const notifications = ref<ActivityNotification[]>([]);
-const notificationPage = ref(1);
-const notificationNextPage = ref<number | null>(null);
-const notificationTotal = ref(0);
-const notificationError = ref('');
-const notificationLoading = ref(false);
 const selected = ref<Activation | null>(null);
 const detailLoading = ref(false);
 const detailError = ref('');
@@ -126,7 +121,7 @@ async function load(): Promise<void> {
     statisticsPage.value = statisticPage.page || statisticsPage.value;
     statisticsTotal.value = statisticPage.total || 0;
     statisticsNextPage.value = statisticPage.nextPage ?? null;
-    await loadNotifications(notificationPage.value);
+    await loadNotifications();
     if (selected.value) {
       const fresh = items.value.find((item) => item.id === selected.value?.id);
       if (!fresh) selected.value = null;
@@ -161,37 +156,11 @@ async function changeStatisticsPage(page: number): Promise<void> {
   });
 }
 
-async function loadNotifications(page: number): Promise<void> {
-  notificationError.value = '';
-  notificationLoading.value = true;
-  const query = new URLSearchParams({ page: String(page), pageSize: '100' });
-  try {
-    const result = await apiRequest<{
-      items: ActivityNotification[];
-      page: number;
-      total: number;
-      nextPage: number | null;
-    }>(`/v1/notifications?${query.toString()}`);
-    notifications.value = result.items || [];
-    notificationPage.value = result.page || page;
-    notificationTotal.value = result.total || 0;
-    notificationNextPage.value = result.nextPage ?? null;
-  } finally {
-    notificationLoading.value = false;
-  }
-}
-
-async function changeNotificationPage(page: number): Promise<void> {
-  if (page < 1) return;
-  notificationError.value = '';
-  try {
-    await loadNotifications(page);
-  } catch (cause) {
-    notificationError.value =
-      cause instanceof Error
-        ? cause.message
-        : 'Unable to load Activity notifications.';
-  }
+async function loadNotifications(): Promise<void> {
+  const result = await apiRequest<{ items: ActivityNotification[] }>(
+    '/v1/notifications',
+  );
+  notifications.value = result.items || [];
 }
 
 async function openActivation(item: Activation): Promise<void> {
@@ -462,10 +431,7 @@ watch(programme, () => {
         <h2>My Activity notifications</h2>
         <p class="muted">Notification records addressed to your account.</p>
       </div>
-      <span class="muted"
-        >{{ notifications.length }} of {{ notificationTotal }} loaded · page
-        {{ notificationPage }}</span
-      >
+      <span class="muted">{{ notifications.length }} loaded</span>
     </div>
     <div class="table-list">
       <div
@@ -487,27 +453,6 @@ watch(programme, () => {
       <p v-if="!notifications.length && !loading" class="muted empty">
         No Activity notifications for this account.
       </p>
-    </div>
-    <div class="toolbar notification-pagination">
-      <p v-if="notificationError" class="error-text" role="alert">
-        {{ notificationError }}
-      </p>
-      <button
-        class="secondary"
-        :disabled="notificationPage <= 1 || notificationLoading"
-        @click="changeNotificationPage(notificationPage - 1)"
-      >
-        Previous
-      </button>
-      <button
-        class="secondary"
-        :disabled="notificationNextPage === null || notificationLoading"
-        @click="
-          changeNotificationPage(notificationNextPage || notificationPage)
-        "
-      >
-        Next
-      </button>
     </div>
   </article>
 </template>
