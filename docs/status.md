@@ -412,7 +412,8 @@
 - Email delivery. The NestJS consumer rejects invalid UTF-8 and invalid UTC
   date-time values before validating `email.send.v1`. It resolves recipients
   through Identity, accepts all UUID version and variant bits allowed by the
-  reference format checker, sends through TLS-configured SMTP, and records
+  reference format checker, and applies the schema's Unicode code-point lengths
+  to template text. It sends through TLS-configured SMTP and records
   deduplication, attempts, and redacted dead letters in the Core database. The
   former fourth email database is removed from the target. Identity production,
   OpenTelemetry export, and deployment integration remain outstanding. The

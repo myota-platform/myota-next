@@ -699,11 +699,9 @@ function escapeHtml(value: string) {
 }
 
 function validText(value: unknown, maxLength: number): value is string {
-  return (
-    typeof value === 'string' &&
-    value.trim().length > 0 &&
-    value.length <= maxLength
-  );
+  if (typeof value !== 'string') return false;
+  const characterCount = Array.from(value).length;
+  return characterCount >= 1 && characterCount <= maxLength;
 }
 
 function hasOnly(record: Record<string, unknown>, keys: string[]) {
