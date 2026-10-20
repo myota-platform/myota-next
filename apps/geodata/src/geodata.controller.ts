@@ -350,9 +350,21 @@ export class GeodataController {
     @Headers('idempotency-key') key: string | undefined,
     @Param('runId') runId: string,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
-    authorizeImport(authorization);
-    return this.importMutations.validateImportCandidates(runId, key, body);
+    const claims = authorizeImport(authorization);
+    const rawBody = (
+      request as Request & { rawBody?: Buffer }
+    ).rawBody?.toString('utf8');
+    const scopedKey = key
+      ? `http:${claims.sub}:${request.originalUrl}:${key}`
+      : undefined;
+    return this.importMutations.validateImportCandidates(
+      runId,
+      scopedKey,
+      body,
+      key ? fingerprintJsonRequest(body, rawBody) : undefined,
+    );
   }
 
   @Get('entities')

@@ -224,7 +224,9 @@ Proposal and direct-import idempotency scopes keys by owner and actual request
 path, fingerprints the parsed request body before validation, and rejects
 changed-body reuse while preserving integer versus float values. The request
 lock spans proposal/import validation and source-object, import, and outbox
-creation.
+creation. Import candidate validation now uses the same owner/path-scoped key
+and request fingerprint, replays successful results before body validation,
+and rejects changed-body key reuse.
 Candidate validation notes are stored as JSONB with existing text values
 preserved as JSON strings. If-Match protected name, website,
 description, geometry, and
