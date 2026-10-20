@@ -6,6 +6,8 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { pythonStrip } from '@app/platform/python-string.js';
+import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import {
   locationSnapshot,
   queueLocationEnrichment,
@@ -931,8 +933,8 @@ function scoreConflation(
   existingJurisdiction: string | null,
   existingBox: BoundingBox,
 ) {
-  const normalizedCandidate = candidateName.toLowerCase().trim();
-  const normalizedExisting = existingName.toLowerCase().trim();
+  const normalizedCandidate = unicodeCaseFold(pythonStrip(candidateName));
+  const normalizedExisting = unicodeCaseFold(pythonStrip(existingName));
   const nameScore =
     normalizedCandidate && normalizedExisting
       ? sequenceMatcherRatio(normalizedCandidate, normalizedExisting)
