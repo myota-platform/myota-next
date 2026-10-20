@@ -35,6 +35,7 @@
     "db:transfer:stage": "node --experimental-strip-types tools/db-transfer-stage.ts",
     "db:transfer:adopt-ledger": "node --experimental-strip-types tools/db-transfer-adopt-ledger.ts",
     "db:transfer:apply": "node --experimental-strip-types tools/db-transfer-apply.ts",
+    "db:transfer:validate": "node --experimental-strip-types tools/db-transfer-validate.ts",
     "provision:jetstream": "node --experimental-strip-types tools/provision-jetstream.ts",
     "outbox:admin": "node --experimental-strip-types tools/outbox-admin.ts",
     "redrive:email": "node --experimental-strip-types apps/email-worker/src/redrive-email.ts",
@@ -45,7 +46,7 @@
     "lint": "oxlint --type-aware apps libs tools && node tools/check-nest-observability.mjs && node tools/check-openapi-nest-routes.mjs",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.{ts,mjs}\" \"web/admin/*.{ts,html,json}\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
     "format:check": "prettier --check \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.{ts,mjs}\" \"web/admin/*.{ts,html,json}\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
-    "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-owner-config.ts tools/db-migrate.ts tools/db-backup.ts tools/db-restore.ts tools/db-transfer-preflight.ts tools/db-transfer-stage.ts tools/db-transfer-adopt-ledger.ts tools/db-transfer-apply.ts tools/provision-jetstream.ts tools/outbox-admin.ts tools/render-seaweedfs-s3-config.ts"
+    "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-owner-config.ts tools/db-migrate.ts tools/db-backup.ts tools/db-restore.ts tools/db-transfer-preflight.ts tools/db-transfer-stage.ts tools/db-transfer-adopt-ledger.ts tools/db-transfer-apply.ts tools/db-transfer-validate.ts tools/provision-jetstream.ts tools/outbox-admin.ts tools/render-seaweedfs-s3-config.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",

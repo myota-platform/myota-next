@@ -389,8 +389,10 @@
   browser-level compatibility coverage. Visual/accessibility review and
   deployment integration also remain open.
 - Cross-version transfer tooling now has read-only preflight, checksummed dump
-  staging, ledger adoption, and restore/migration steps. Disposable-database
-  rehearsal and data-level validation remain open; see the
+  staging for four legacy sources and three targets, ledger adoption,
+  restore/migration steps, the legacy Email merge into Core, and a read-only
+  per-owner database validation report. Semantic parity review and
+  disposable-database rehearsal remain open; see the
   [database transfer plan](operations/cross-version-data-transfer.md)), image
   publication, deployment manifests, and
   production observability configuration. A reusable Docker recipe now builds

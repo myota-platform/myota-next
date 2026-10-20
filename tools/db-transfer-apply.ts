@@ -35,7 +35,7 @@ type DumpEntry = {
   sha256: string;
 };
 type TransferManifest = {
-  transferVersion: 1;
+  transferVersion: 2;
   format: 'postgres-custom';
   sourceBaseline: string;
   createdAt: string;
@@ -43,10 +43,22 @@ type TransferManifest = {
     mode: 'read-only';
     sourceRepositoryBaseline: string;
     ownerCount: number;
+    legacyEmailSource: {
+      database: string;
+      host: string;
+      port: number;
+      repositoryBaseline: string;
+      migrationSha256: string;
+    };
     owners: Array<{
       owner: Owner;
       target: { applicationObjects: number; migrationLedger: string };
     }>;
+  };
+  legacyEmailSource: {
+    repositoryBaseline: string;
+    migrationSha256: string;
+    source: DumpEntry;
   };
   owners: Record<Owner, { source: DumpEntry; targetBackup: DumpEntry }>;
 };
@@ -57,16 +69,18 @@ type RecoveryManifest = {
   databases: Record<Owner, { database: string; file: string; sha256: string }>;
 };
 type ApplyReport = {
-  transferVersion: 1;
+  transferVersion: 2;
   status:
     | 'ready-to-restore'
     | 'restoring'
     | 'adopting-ledgers'
     | 'applying-migrations'
+    | 'merging-email-data'
     | 'migration-complete-validation-required'
     | 'failed';
   archiveDirectory: string;
   sourceBaseline: string;
+  emailSourceEndpoint: string;
   sourceFrozenAcknowledged: true;
   targetConfirmation: string;
   startedAt: string;
@@ -81,6 +95,8 @@ type ApplyReport = {
 
 const baseline =
   'myota-platform/myota@7f904a5130e59006765cf882956a4adbfecb17ec';
+const emailMigrationSha256 =
+  '58b6e627141c37bbacf196f786bdc992bdb315c9d16d50b50139b4073c85c11a';
 
 async function main() {
   process.umask(0o077);
@@ -114,6 +130,13 @@ async function main() {
       manifest.owners[owner].targetBackup,
     );
   }
+  const emailSource = endpoint('LEGACY_EMAIL_DATABASE_URL', 'source', 'email');
+  assertEndpointMatches(
+    'email',
+    'source',
+    emailSource,
+    manifest.legacyEmailSource.source,
+  );
   const confirmation = transferConfirmation(endpoints);
   if (process.env.MYOTA_TRANSFER_CONFIRM !== confirmation)
     throw new Error(`Set MYOTA_TRANSFER_CONFIRM to exactly: ${confirmation}`);
@@ -129,7 +152,7 @@ async function main() {
   await verifyStagedArchives(archive, manifest, pgRestore);
 
   const preflight = await runPreflight();
-  assertPreflightForApply(preflight, manifest);
+  assertPreflightForApply(preflight, manifest, emailSource);
 
   await mkdir(recoveryDirectory, { mode: 0o700 });
   const recoveryEntries = {} as RecoveryManifest['databases'];
@@ -167,10 +190,11 @@ async function main() {
   }
 
   const report: ApplyReport = {
-    transferVersion: 1,
+    transferVersion: 2,
     status: 'ready-to-restore',
     archiveDirectory: archive,
     sourceBaseline: baseline,
+    emailSourceEndpoint: endpointId(emailSource),
     sourceFrozenAcknowledged: true,
     targetConfirmation: confirmation,
     startedAt: new Date().toISOString(),
@@ -225,8 +249,17 @@ async function main() {
       ]);
     }
 
+    report.status = 'merging-email-data';
+    report.currentOwner = undefined;
+    await updateReport(applyReportPath, report);
+    await restoreLegacyEmail(
+      pgRestore,
+      endpoints.core.target,
+      join(archive, manifest.legacyEmailSource.source.file),
+    );
+
     const postflight = await runPreflight();
-    assertPostflight(postflight);
+    assertPostflight(postflight, manifest, emailSource);
     report.status = 'migration-complete-validation-required';
     report.currentOwner = undefined;
     report.postflight = postflight;
@@ -263,7 +296,7 @@ async function readManifest(archive: string): Promise<TransferManifest> {
     throw new Error('Transfer manifest is invalid');
   const manifest = value as Partial<TransferManifest>;
   if (
-    manifest.transferVersion !== 1 ||
+    manifest.transferVersion !== 2 ||
     manifest.format !== 'postgres-custom' ||
     manifest.sourceBaseline !== baseline ||
     !manifest.owners ||
@@ -271,7 +304,14 @@ async function readManifest(archive: string): Promise<TransferManifest> {
     manifest.preflight.mode !== 'read-only' ||
     manifest.preflight.sourceRepositoryBaseline !== baseline ||
     manifest.preflight.ownerCount !== 3 ||
-    !Array.isArray(manifest.preflight.owners)
+    !Array.isArray(manifest.preflight.owners) ||
+    manifest.preflight.legacyEmailSource?.repositoryBaseline !==
+      'myota-platform/myota-email-worker@be5a4d965fb8465fd0ce3c3172bde8a0af38aec1' ||
+    manifest.preflight.legacyEmailSource.migrationSha256 !==
+      emailMigrationSha256 ||
+    manifest.legacyEmailSource?.repositoryBaseline !==
+      manifest.preflight.legacyEmailSource.repositoryBaseline ||
+    manifest.legacyEmailSource.migrationSha256 !== emailMigrationSha256
   )
     throw new Error('Transfer manifest does not match the verified baseline');
   for (const owner of Object.keys(owners) as Owner[]) {
@@ -281,6 +321,18 @@ async function readManifest(archive: string): Promise<TransferManifest> {
     assertDumpEntry(ownerManifest.source, `${owner}-source.dump`);
     assertDumpEntry(ownerManifest.targetBackup, `${owner}-target-before.dump`);
   }
+  assertDumpEntry(manifest.legacyEmailSource.source, 'email-source.dump');
+  if (
+    manifest.legacyEmailSource.source.database !==
+      manifest.preflight.legacyEmailSource.database ||
+    manifest.legacyEmailSource.source.host !==
+      manifest.preflight.legacyEmailSource.host ||
+    manifest.legacyEmailSource.source.port !==
+      manifest.preflight.legacyEmailSource.port
+  )
+    throw new Error(
+      'Email source dump endpoint differs from its staged preflight report',
+    );
   return manifest as TransferManifest;
 }
 
@@ -303,7 +355,7 @@ function assertDumpEntry(
 function endpoint(
   variable: string,
   side: 'source' | 'target',
-  owner: Owner,
+  owner: Owner | 'email',
 ): Endpoint {
   const raw = process.env[variable];
   if (!raw) throw new Error(`${variable} is required`);
@@ -346,7 +398,7 @@ function endpoint(
 }
 
 function assertEndpointMatches(
-  owner: Owner,
+  owner: string,
   side: 'source' | 'target',
   endpoint: Endpoint,
   entry: DumpEntry,
@@ -390,6 +442,14 @@ async function verifyStagedArchives(
       await assertArchiveReadable(pgRestore, path);
     }
   }
+  const emailEntry = manifest.legacyEmailSource.source;
+  const emailPath = join(archive, emailEntry.file);
+  const emailInfo = await lstat(emailPath);
+  if (!emailInfo.isFile() || emailInfo.isSymbolicLink())
+    throw new Error(`${emailEntry.file} must be a regular archive file`);
+  if ((await sha256(emailPath)) !== emailEntry.sha256)
+    throw new Error(`${emailEntry.file} checksum differs from manifest`);
+  await assertArchiveReadable(pgRestore, emailPath);
 }
 
 async function runPreflight() {
@@ -407,6 +467,7 @@ async function runPreflight() {
 function assertPreflightForApply(
   report: TransferManifest['preflight'],
   manifest: TransferManifest,
+  emailSource: Endpoint,
 ) {
   if (
     report.mode !== 'read-only' ||
@@ -426,9 +487,23 @@ function assertPreflightForApply(
     );
     if (!staged) throw new Error(`Staged preflight is missing ${owner}`);
   }
+  if (
+    report.legacyEmailSource.database !== emailSource.database ||
+    report.legacyEmailSource.host !== emailSource.host ||
+    report.legacyEmailSource.port !== Number(emailSource.port) ||
+    report.legacyEmailSource.repositoryBaseline !==
+      manifest.legacyEmailSource.repositoryBaseline ||
+    report.legacyEmailSource.migrationSha256 !==
+      manifest.preflight.legacyEmailSource.migrationSha256
+  )
+    throw new Error('Live legacy email source differs from staged preflight');
 }
 
-function assertPostflight(report: TransferManifest['preflight']) {
+function assertPostflight(
+  report: TransferManifest['preflight'],
+  manifest: TransferManifest,
+  emailSource: Endpoint,
+) {
   if (
     report.mode !== 'read-only' ||
     report.sourceRepositoryBaseline !== baseline ||
@@ -443,6 +518,38 @@ function assertPostflight(report: TransferManifest['preflight']) {
         `${owner} postflight did not find the NestJS migration ledger`,
       );
   }
+  if (
+    report.legacyEmailSource.database !== emailSource.database ||
+    report.legacyEmailSource.host !== emailSource.host ||
+    report.legacyEmailSource.port !== Number(emailSource.port) ||
+    report.legacyEmailSource.repositoryBaseline !==
+      manifest.legacyEmailSource.repositoryBaseline ||
+    report.legacyEmailSource.migrationSha256 !== emailMigrationSha256
+  )
+    throw new Error(
+      'Postflight legacy email source differs from the staged source',
+    );
+}
+
+async function restoreLegacyEmail(
+  binary: string,
+  coreTarget: Endpoint,
+  emailArchive: string,
+) {
+  await run(
+    binary,
+    [
+      '--data-only',
+      '--exit-on-error',
+      '--single-transaction',
+      '--no-owner',
+      '--no-privileges',
+      `--dbname=${coreTarget.database}`,
+      emailArchive,
+    ],
+    coreTarget.environment,
+  );
+  process.stdout.write('Merged legacy email delivery state into Core\n');
 }
 
 async function dump(

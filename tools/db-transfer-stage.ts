@@ -21,6 +21,8 @@ const owners = {
   },
 } as const;
 type Owner = keyof typeof owners;
+const emailMigrationSha256 =
+  '58b6e627141c37bbacf196f786bdc992bdb315c9d16d50b50139b4073c85c11a';
 type Endpoint = {
   database: string;
   host: string;
@@ -35,7 +37,7 @@ type DumpEntry = {
   sha256: string;
 };
 type TransferManifest = {
-  transferVersion: 1;
+  transferVersion: 2;
   format: 'postgres-custom';
   sourceBaseline: string;
   createdAt: string;
@@ -44,6 +46,19 @@ type TransferManifest = {
     sourceRepositoryBaseline: string;
     ownerCount: number;
     owners: unknown[];
+    legacyEmailSource: {
+      database: string;
+      host: string;
+      port: number;
+      repositoryBaseline: string;
+      migrationSha256: string;
+      tables: Array<{ table: string; rows: string }>;
+    };
+  };
+  legacyEmailSource: {
+    repositoryBaseline: string;
+    migrationSha256: string;
+    source: DumpEntry;
   };
   owners: Record<Owner, { source: DumpEntry; targetBackup: DumpEntry }>;
 };
@@ -74,6 +89,7 @@ async function main() {
       target: endpoint(config.targetVariable, 'target', owner),
     };
   }
+  const emailSource = endpoint('LEGACY_EMAIL_DATABASE_URL', 'source', 'email');
 
   const { stdout: preflightOutput } = await execFileAsync(
     process.execPath,
@@ -110,13 +126,32 @@ async function main() {
       };
     }
 
+    const emailFile = 'email-source.dump';
+    await dump(
+      pgDump,
+      emailSource,
+      join(staging, emailFile),
+      'email',
+      'source',
+    );
+    await assertArchiveReadable(pgRestore, join(staging, emailFile));
+
     const manifest: TransferManifest = {
-      transferVersion: 1,
+      transferVersion: 2,
       format: 'postgres-custom',
       sourceBaseline:
         'myota-platform/myota@7f904a5130e59006765cf882956a4adbfecb17ec',
       createdAt: new Date().toISOString(),
       preflight,
+      legacyEmailSource: {
+        repositoryBaseline: preflight.legacyEmailSource.repositoryBaseline,
+        migrationSha256: preflight.legacyEmailSource.migrationSha256,
+        source: await dumpEntry(
+          emailSource,
+          emailFile,
+          join(staging, emailFile),
+        ),
+      },
       owners: ownerEntries,
     };
     const manifestFile = await open(
@@ -149,7 +184,10 @@ function parsePreflight(output: string): TransferManifest['preflight'] {
       'myota-platform/myota@7f904a5130e59006765cf882956a4adbfecb17ec' ||
     report.ownerCount !== 3 ||
     !Array.isArray(report.owners) ||
-    report.owners.length !== 3
+    report.owners.length !== 3 ||
+    report.legacyEmailSource?.repositoryBaseline !==
+      'myota-platform/myota-email-worker@be5a4d965fb8465fd0ce3c3172bde8a0af38aec1' ||
+    report.legacyEmailSource.migrationSha256 !== emailMigrationSha256
   )
     throw new Error(
       'Preflight report does not match the expected three owners',
@@ -171,7 +209,7 @@ function parseArchiveDirectory(args: string[]): string {
 function endpoint(
   variable: string,
   side: 'source' | 'target',
-  owner: Owner,
+  owner: Owner | 'email',
 ): Endpoint {
   const raw = process.env[variable];
   if (!raw) throw new Error(`${variable} is required`);
@@ -217,7 +255,7 @@ async function dump(
   binary: string,
   endpoint: Endpoint,
   output: string,
-  owner: Owner,
+  owner: string,
   side: string,
 ) {
   await run(

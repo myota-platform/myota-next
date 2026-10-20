@@ -26,6 +26,52 @@ const owners = {
   },
 } as const;
 type Owner = keyof typeof owners;
+const legacyEmail = {
+  sourceVariable: 'LEGACY_EMAIL_DATABASE_URL',
+  repositoryBaseline:
+    'myota-platform/myota-email-worker@be5a4d965fb8465fd0ce3c3172bde8a0af38aec1',
+  migrationSha256:
+    '58b6e627141c37bbacf196f786bdc992bdb315c9d16d50b50139b4073c85c11a',
+  tables: {
+    email_delivery: [
+      'work_id',
+      'template_id',
+      'status',
+      'attempts',
+      'lease_until',
+      'last_error_code',
+      'received_at',
+      'delivered_at',
+      'created_at',
+      'updated_at',
+    ],
+    email_delivery_attempt: [
+      'id',
+      'work_id',
+      'outcome',
+      'error_code',
+      'attempted_at',
+    ],
+    email_dead_letter: [
+      'id',
+      'work_id',
+      'error_code',
+      'recorded_at',
+      'redrive_requested_at',
+      'redrive_actor',
+      'redrive_reason',
+      'resolved_at',
+    ],
+    email_dead_letter_redrive: [
+      'id',
+      'work_id',
+      'error_code',
+      'actor',
+      'reason',
+      'requested_at',
+    ],
+  },
+} as const;
 type Endpoint = {
   database: string;
   host: string;
@@ -54,7 +100,8 @@ async function main() {
       target: endpoint(config.targetVariable),
     };
   }
-  assertSixDistinctEndpoints(endpoints);
+  const emailSource = endpoint(legacyEmail.sourceVariable);
+  assertSevenDistinctEndpoints(endpoints, emailSource);
 
   const reports = [];
   for (const owner of Object.keys(owners) as Owner[]) {
@@ -72,6 +119,7 @@ async function main() {
     try {
       await sourceClient.connect();
       await targetClient.connect();
+      if (owner === 'core') await assertNoLegacyEmailTables(sourceClient);
       const sourceLedger = await inspectLedger(sourceClient, owner);
       const targetLedger = await inspectLedger(targetClient, owner);
       const expectedMigrations = await expectedSourceMigrations(owner);
@@ -175,18 +223,22 @@ async function main() {
     }
   }
 
+  const emailReport = await inspectLegacyEmailSource(emailSource);
+
   process.stdout.write(
     `${JSON.stringify(
       {
         mode: 'read-only',
-        dataCopyImplemented: false,
+        thisCommandCopiesData: false,
         dumpStagingImplemented: true,
+        transferApplyImplemented: true,
         sourceRepositoryBaseline:
           'myota-platform/myota@7f904a5130e59006765cf882956a4adbfecb17ec',
         ownerCount: reports.length,
         owners: reports,
+        legacyEmailSource: emailReport,
         nextStep:
-          'Review source ledgers and destination state. This command does not copy or change data.',
+          'Review all four source databases and three destinations. This command does not copy or change data.',
       },
       null,
       2,
@@ -285,6 +337,102 @@ async function assertGeoExtensionsAvailable(source: Client, target: Client) {
     );
 }
 
+async function inspectLegacyEmailSource(source: Endpoint) {
+  const client = new Client({
+    connectionString: source.url,
+    application_name: 'myota-transfer-preflight-email-source',
+    connectionTimeoutMillis: 10_000,
+  });
+  try {
+    await client.connect();
+    const tables = await client.query<{ table_name: string }>(`
+      SELECT c.relname AS table_name
+        FROM pg_class AS c
+        JOIN pg_namespace AS n ON n.oid=c.relnamespace
+       WHERE n.nspname='public' AND c.relkind IN ('r','p') AND NOT c.relispartition
+       ORDER BY c.relname
+    `);
+    const expectedNames = Object.keys(legacyEmail.tables).sort();
+    const actualNames = tables.rows.map(({ table_name }) => table_name);
+    if (JSON.stringify(actualNames) !== JSON.stringify(expectedNames))
+      throw new Error(
+        `Legacy email database tables differ from the verified schema: ${actualNames.join(', ')}`,
+      );
+    const tableReports = [];
+    for (const [table, expectedColumns] of Object.entries(legacyEmail.tables)) {
+      const columnResult = await client.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns
+          WHERE table_schema='public' AND table_name=$1 ORDER BY ordinal_position`,
+        [table],
+      );
+      const actualColumns = columnResult.rows.map(
+        ({ column_name }) => column_name,
+      );
+      if (JSON.stringify(actualColumns) !== JSON.stringify(expectedColumns))
+        throw new Error(
+          `Legacy email table ${table} columns differ from the verified schema`,
+        );
+      const countResult = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM public.${quoteIdentifier(table)}`,
+      );
+      tableReports.push({
+        table,
+        rows: countResult.rows[0]?.count ?? '0',
+      });
+    }
+    const emailMigration = await readFile(
+      join(
+        repositoryRoot,
+        'docs/reference/migrations/app-migrations/email/001_email_delivery.sql',
+      ),
+    );
+    const coreEmailMigration = await readFile(
+      join(
+        repositoryRoot,
+        'deploy/db/migrations/core/005_identity_email_delivery.sql',
+      ),
+    );
+    const emailMigrationSha256 = createHash('sha256')
+      .update(emailMigration)
+      .digest('hex');
+    if (
+      emailMigrationSha256 !== legacyEmail.migrationSha256 ||
+      createHash('sha256').update(coreEmailMigration).digest('hex') !==
+        legacyEmail.migrationSha256
+    )
+      throw new Error(
+        'Email migration does not match the pinned legacy email schema',
+      );
+    return {
+      database: source.database,
+      host: source.host,
+      port: Number(source.port),
+      repositoryBaseline: legacyEmail.repositoryBaseline,
+      migrationSha256: emailMigrationSha256,
+      tables: tableReports,
+    };
+  } finally {
+    await client.end();
+  }
+}
+
+async function assertNoLegacyEmailTables(client: Client) {
+  const result = await client.query<{ table_name: string }>(
+    `
+    SELECT table_name
+      FROM information_schema.tables
+     WHERE table_schema='public'
+       AND table_name=ANY($1::text[])
+     ORDER BY table_name
+  `,
+    [Object.keys(legacyEmail.tables)],
+  );
+  if (result.rows.length)
+    throw new Error(
+      `Legacy Core already contains email delivery tables (${result.rows.map(({ table_name }) => table_name).join(', ')}); reconcile those rows before transfer`,
+    );
+}
+
 function endpoint(variable: string): Endpoint {
   const value = process.env[variable];
   if (!value) throw new Error(`${variable} is required`);
@@ -302,8 +450,13 @@ function endpoint(variable: string): Endpoint {
   };
 }
 
-function assertSixDistinctEndpoints(
+function quoteIdentifier(value: string) {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+function assertSevenDistinctEndpoints(
   endpoints: Record<Owner, { source: Endpoint; target: Endpoint }>,
+  emailSource: Endpoint,
 ) {
   const seen = new Map<string, string>();
   for (const owner of Object.keys(owners) as Owner[]) {
@@ -318,6 +471,12 @@ function assertSixDistinctEndpoints(
       seen.set(key, label);
     }
   }
+  const emailKey = `${emailSource.host}:${emailSource.port}/${emailSource.database}`;
+  const previous = seen.get(emailKey);
+  if (previous)
+    throw new Error(
+      `${previous} and legacy email source target the same PostgreSQL database`,
+    );
 }
 
 async function inspectLedger(

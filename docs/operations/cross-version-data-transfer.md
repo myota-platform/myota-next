@@ -2,28 +2,32 @@
 
 This document records verified migration inputs and the work needed to transfer
 the running Python platform into the NestJS monorepo. A read-only preflight
-command checks source migration history and all six database targets. The
-transfer workflow stages source and destination dumps, restores the three
-source databases into empty NestJS destinations, adopts the verified migration
-ledgers, and applies NestJS forward migrations. Data-level parity validation
-and a disposable-database rehearsal remain outstanding.
+command checks the three application database owners and the legacy Email
+database. The transfer stages four source dumps and three destination recovery
+dumps, restores the three owner databases, merges legacy Email data into Core,
+adopts the verified migration ledgers, and applies NestJS forward migrations.
+Disposable-database rehearsal and full parity review remain outstanding.
 
-Set `LEGACY_CORE_DATABASE_URL`, `LEGACY_ACTIVITY_DATABASE_URL`, and
-`LEGACY_GEO_DATABASE_URL` to the Python source databases, and set
-`CORE_DATABASE_URL`, `ACTIVITY_DATABASE_URL`, and `GEO_DATABASE_URL` to the
-NestJS destinations. Then run:
+Set `LEGACY_CORE_DATABASE_URL`, `LEGACY_ACTIVITY_DATABASE_URL`,
+`LEGACY_GEO_DATABASE_URL`, and `LEGACY_EMAIL_DATABASE_URL` to the frozen
+Python source databases. Set `CORE_DATABASE_URL`, `ACTIVITY_DATABASE_URL`, and
+`GEO_DATABASE_URL` to the three NestJS destinations. The legacy email database
+is merged into Core; the target remains exactly three owner databases. Then
+run:
 
 ```sh
 npm run db:transfer:preflight
 ```
 
-The command makes read-only PostgreSQL connections. It requires six distinct
-host/port/database targets, verifies the source migration ledger and known
-checksums for each owner, checks that source ACL roles exist on the matching
-destination, verifies that the Geodata destination provides each required
-extension at the source version, and reports destination migration-ledger
-shape and non-extension application object counts. It does not modify either
-side.
+The command makes read-only PostgreSQL connections. It requires seven
+distinct host/port/database endpoints, verifies the source migration ledger and
+known checksums for each of the three owners, checks that source ACL roles
+exist on the matching destination, verifies that the Geodata destination
+provides each required extension at the source version, and reports
+destination migration-ledger shape and non-extension application object
+counts. It also checks the legacy email database against the pinned email
+schema, confirms its four delivery tables are absent from legacy Core, and
+reports their row counts. It does not modify either side.
 
 Stage source dumps and destination recovery dumps in a new private directory:
 
@@ -33,12 +37,12 @@ MYOTA_TRANSFER_SOURCE_FROZEN=YES \
 ```
 
 Set `MYOTA_TRANSFER_SOURCE_FROZEN=YES` after stopping all Python APIs, workers,
-scheduled importers, and other writers before staging. The command runs
-preflight again, writes six PostgreSQL custom-format dumps and a SHA-256
-manifest containing the preflight report, and verifies each archive is
-readable. It refuses an existing output directory. The files contain database
-data; protect and retain them as sensitive backups. Staging does not restore
-or modify a database.
+scheduled importers, the Email worker, and other writers before staging. The
+command runs preflight again, writes four source and three destination PostgreSQL
+custom-format dumps, and records their SHA-256 checksums in a manifest with
+the preflight report. It verifies each archive is readable and refuses an
+existing output directory. The files contain database data; protect and retain
+them as sensitive backups. Staging does not restore or modify a database.
 
 ## Database owners
 
@@ -46,9 +50,13 @@ Transfer each owner independently and keep the three destinations distinct:
 
 | Owner    | Source contents                              | NestJS destination              |
 | -------- | -------------------------------------------- | ------------------------------- |
-| Core     | Identity and Programme data                  | Core PostgreSQL                 |
+| Core     | Identity, Programme, and Email delivery data | Core PostgreSQL                 |
 | Activity | Activations, QSOs, awards, and Activity work | Activity PostgreSQL             |
 | Geodata  | Entities, imports, reviews, and Geodata work | Geodata PostgreSQL with PostGIS |
+
+Email is a legacy source database only. Its delivery ledger and audit tables
+are copied into Core after the Core Email migration runs; it does not create a
+fourth target database.
 
 Application IDs and event references remain opaque across owners. The transfer
 must not create cross-database foreign keys or join data across these targets.
@@ -77,15 +85,24 @@ owning database. In particular, Core migrations move Programme records and
 catalogues out of the legacy JSON snapshot, while Identity's legacy snapshot
 remains archived.
 
+The Python Email worker uses a separate `myota_email` source database. Its
+four delivery tables use the pinned
+`myota-platform/myota-email-worker@be5a4d965fb8465fd0ce3c3172bde8a0af38aec1`
+schema. The migration is byte-identical to Core migration
+`005_identity_email_delivery.sql`; transfer copies only its table data into
+Core after that migration creates the target tables.
+
 ## Required transfer workflow
 
-1. Pin both repository commits and record each source database's migration
-   ledger, schema version, database name, and row counts for owner tables.
-2. Stop Python APIs, workers, scheduled importers, and other writers. Confirm
-   queued work and outbox state. Keep the source databases read-only from
-   staging through cutover. A three-database copy is not globally atomic.
+1. Pin the Python monorepo, Email worker, and NestJS monorepo commits. Record
+   each source database's schema version, database name, and row counts. The
+   three owner databases must also match their verified migration ledgers.
+2. Stop Python APIs, workers, scheduled importers, the Email worker, and other
+   writers. Confirm queued work and outbox state. Keep the source databases
+   read-only from staging through cutover. Four legacy sources feed three
+   target databases; transfer is not globally atomic.
 3. Run `db:transfer:preflight`, then `db:transfer:stage` as documented above.
-   Staging backs up all three source databases and all three destinations,
+   Staging backs up all four source databases and all three destinations,
    validates checksums and archive readability, and records the preflight
    result.
 4. Stop any NestJS writers and ensure each destination has no non-extension
@@ -102,9 +119,10 @@ remains archived.
    ```
 
    Apply verifies all staged checksums and endpoints, creates fresh recovery
-   dumps for the three destinations, restores all source databases, converts
-   the verified Python migration ledgers, and applies the NestJS owner
-   migrations. It records progress in `apply-report.json`. Its completion
+   dumps for the three destinations, restores Core, Activity, and Geodata,
+   converts the verified Python migration ledgers, applies the NestJS owner
+   migrations, and merges the legacy email delivery tables into Core in one
+   transaction. It records progress in `apply-report.json`. Its completion
    status is `migration-complete-validation-required`; this does not establish
    data-level parity.
 
@@ -119,10 +137,29 @@ remains archived.
    The recovery manifest uses the existing `db:restore` format. Recreating the
    destinations removes objects from a partial source restore before recovery.
 
-6. Compare source and destination counts and domain invariants for each owner.
-   Validate Core Identity and Programme reads, Activity aggregates and jobs,
-   and Geodata geometry validity, entity links, import state, and PostGIS
-   indexes. Record exceptions with owner and table names.
+6. With all four sources frozen and the three targets offline, run the
+   read-only database validation report:
+
+   ```sh
+   MYOTA_TRANSFER_SOURCE_FROZEN=YES \
+   MYOTA_TRANSFER_TARGET_OFFLINE=YES \
+   MYOTA_TRANSFER_VALIDATION_CONFIRM='VALIDATE core=core-host:5432/myota_core activity=activity-host:5432/myota_activity geo=geo-host:5432/myota_geo' \
+     npm run db:transfer:validate -- --archive-dir=./backups/myota-transfer-20261020
+   ```
+
+   The command requires a successful apply report for the same targets. It
+   compares row counts and PostgreSQL row fingerprints for preserved tables,
+   checks the Core Programme snapshot transformations and Identity email
+   normalization, compares all four legacy email tables and their identity
+   sequences against Core, and checks Activity and Geodata references,
+   geometry, and indexes.
+   It writes a private `validation-report-*.json` file in the archive. The
+   fingerprints use PostgreSQL's 64-bit `hashtextextended` and require matching
+   server major versions. They are a transfer check, not a cryptographic proof
+   or complete parity sign-off. Review source and destination counts, domain
+   reads, object-store keys and content, NATS streams and pending work, and
+   record exceptions with owner and table names.
+
 7. Copy or verify object-store objects separately and preserve their keys.
    Reconcile NATS streams and pending work separately; database transfer does
    not move JetStream messages.
@@ -134,13 +171,15 @@ remains archived.
 
 ## Implementation gates
 
-The restore/apply command, ledger adoption, and dump staging are implemented.
-The workflow has not been rehearsed against disposable PostgreSQL databases,
-and per-owner data validation reports are not implemented. The apply command
-does not move object-store data or JetStream messages.
+The restore/apply command, ledger adoption, four-source/three-target dump
+staging, Core Email data merge, and read-only per-owner database validation
+report are implemented. The report does not establish complete function
+parity and does not compare object-store data or JetStream messages. The
+workflow has not been rehearsed against disposable PostgreSQL databases.
 
 Do not run a production transfer until the tool has been rehearsed on
-disposable copies of all three databases, destination role and grant handling
-is verified, validation reports match the source, and rollback has been
-rehearsed. The current database backup and restore tools remain useful for
-same-schema recovery and are not a substitute for this workflow.
+disposable copies of all four source databases and three target databases,
+destination role and grant handling is verified, validation reports match the
+source, and rollback has been rehearsed. The current database backup and
+restore tools remain useful for same-schema recovery and are not a substitute
+for this workflow.
