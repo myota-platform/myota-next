@@ -151,15 +151,18 @@ export class ActivityService {
     key: string | undefined,
     body: JsonRecord,
   ) {
-    const claims = verifyAccessToken(authorization);
-    if (
-      !pythonTruthy(body.activationId) ||
-      !Array.isArray(body.qsos) ||
-      body.qsos.length === 0
-    )
+    const missing = ['activationId', 'qsos'].filter(
+      (field) => !pythonTruthy(body[field]),
+    );
+    if (missing.length)
       throw new BadRequestException(
-        'activationId and a non-empty qsos array are required',
+        `missing required fields: ${missing.join(', ')}`,
       );
+    const claims = verifyAccessToken(authorization);
+    const activation = await this.repository.get(body.activationId);
+    this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
+    if (!Array.isArray(body.qsos) || body.qsos.length === 0)
+      throw new BadRequestException('qsos must be a non-empty array');
     const maximum = integerSetting(process.env.MYOTA_MAX_BATCH_QSOS, 5000);
     if (body.qsos.length > maximum)
       throw new BadRequestException(
@@ -168,8 +171,6 @@ export class ActivityService {
     const sourceFormat = body.sourceFormat ?? 'JSON';
     if (!['JSON', 'CSV', 'ADIF'].includes(sourceFormat))
       throw new BadRequestException('sourceFormat must be JSON, CSV, or ADIF');
-    const activation = await this.repository.get(body.activationId);
-    this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
     const payload = {
       activationId: body.activationId,
       records: body.qsos,
