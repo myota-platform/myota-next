@@ -426,8 +426,8 @@ export class IdentityAuthService {
         [tokenHash],
       );
       await client.query(
-        `UPDATE public.auth_session SET revoked_at = coalesce(revoked_at, now())
-          WHERE account_id = $1 AND revoked_at IS NULL`,
+        `UPDATE public.auth_session SET revoked_at = clock_timestamp()
+          WHERE account_id = $1`,
         [recovery.account_id],
       );
       await this.writeAudit(client, 'identity.recovery.completed.v1', {

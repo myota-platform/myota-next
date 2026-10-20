@@ -84,6 +84,8 @@ the Python account projection.
 Account creation assigns `createdAt` and `updatedAt` independently, and an
 initial callsign advances the account's `updatedAt`, matching the reference's
 separate clock reads.
+Password recovery refreshes the revocation time on every session row for the
+account, including sessions already revoked, matching the Python handler.
 Login audit events preserve the reference's `actorId` payload and account
 aggregate for known accounts, while unknown-account events remain associated
 with the `system` aggregate.
