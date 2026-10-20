@@ -8,7 +8,12 @@ import { signAccessToken } from '@app/platform/access-token.js';
 
 const DEFAULT_POLL_SECONDS = 60;
 const MAX_SOURCE_BYTES = 16 * 1024 * 1024;
-const MAX_FEATURES = 100_000;
+const MAX_FEATURES = boundedInteger(
+  process.env.GEODATA_MAX_IMPORT_FEATURES,
+  5000,
+  1,
+  100_000,
+);
 const SERVICE_SUBJECT = 'service:geodata-importer';
 const IMPORT_SCOPES = ['geodata.import'];
 

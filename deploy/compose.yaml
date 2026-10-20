@@ -304,6 +304,7 @@ services:
       MYOTA_GEODATA_IMPORT_BUCKET: myota-geodata-imports
       MYOTA_CLAMAV_URL: tcp://clamav:3310
       MYOTA_MAX_BODY_BYTES: '1073741824'
+      GEODATA_MAX_IMPORT_FEATURES: ${GEODATA_MAX_IMPORT_FEATURES:-5000}
     depends_on:
       migrations: { condition: service_completed_successfully }
       object-buckets: { condition: service_completed_successfully }
@@ -371,6 +372,7 @@ services:
       MYOTA_OBJECT_STORAGE_SECRET_KEY: ${MYOTA_OBJECT_STORAGE_SECRET_KEY:-myota-s3-dev-only}
       MYOTA_GEODATA_IMPORT_BUCKET: myota-geodata-imports
       MYOTA_CLAMAV_URL: tcp://clamav:3310
+      GEODATA_MAX_IMPORT_FEATURES: ${GEODATA_MAX_IMPORT_FEATURES:-5000}
     depends_on:
       migrations: { condition: service_completed_successfully }
       jetstream-provisioner: { condition: service_completed_successfully }
@@ -388,6 +390,7 @@ services:
     environment:
       <<: *observe-env
       GEODATA_IMPORTER_ENABLED: ${GEODATA_IMPORTER_ENABLED:-false}
+      GEODATA_MAX_IMPORT_FEATURES: ${GEODATA_MAX_IMPORT_FEATURES:-5000}
       GEODATA_SOURCE_ALLOWLIST: ${GEODATA_SOURCE_ALLOWLIST:-}
       MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
       MYOTA_GEODATA_URL: http://geodata:8003

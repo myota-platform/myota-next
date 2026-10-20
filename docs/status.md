@@ -149,8 +149,8 @@
   creation stores the normalized source document in S3-compatible object
   storage and creates an idempotent queued import run (configurable
   `MYOTA_MAX_BODY_BYTES` request limit, 1 GiB default, and 5,000 feature
-  default, adjustable with
-  `GEODATA_MAX_IMPORT_FEATURES`) with a transactional outbox event. The
+  default, adjustable with `GEODATA_MAX_IMPORT_FEATURES`, shared by the API,
+  worker, and scheduled importer) with a transactional outbox event. The
   Geodata worker consumes registered preprocessing work and claims the named run,
   normalizes adapter-specific feature fields, source identifiers, and supported
   coordinate reference systems, enforces the reference's 50,000-coordinate
