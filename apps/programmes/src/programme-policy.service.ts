@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { ProgrammeStateRepository } from './programme-state.repository.js';
+import { ProgrammeReadRepository } from './programme-read.repository.js';
 import type { ProgrammeState } from './programme-state.repository.js';
 import type {
   PatchProgrammePolicyDraftDto,
@@ -33,7 +34,10 @@ type PolicyDraft = Record<string, unknown> & {
 
 @Injectable()
 export class ProgrammePolicyService {
-  constructor(private readonly state: ProgrammeStateRepository) {}
+  constructor(
+    private readonly state: ProgrammeStateRepository,
+    private readonly reads: ProgrammeReadRepository,
+  ) {}
 
   async list(
     authorization: string | undefined,
@@ -44,7 +48,7 @@ export class ProgrammePolicyService {
     const page = parsePageInteger(query.page, 1);
     const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const start = (page - 1) * pageSize;
-    const { items, total } = await this.state.listPolicyDraftPage(
+    const { items, total } = await this.reads.listPolicyDraftPage(
       slug,
       query.type,
       pageSize,

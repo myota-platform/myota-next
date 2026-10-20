@@ -74,9 +74,9 @@
   microsecond precision.
   Programme content and policy-draft filtering, sorting, counting, and page
   selection, plus locale coverage aggregation, run in Core PostgreSQL; the API
-  transfers only the requested page or aggregate into Node.js.
-  These operations
-  share a dedicated Core snapshot repository and transactional outbox boundary.
+  transfers only the requested page or aggregate into Node.js. A dedicated
+  read repository owns these queries separately from the snapshot mutation and
+  transactional outbox repository.
 - Activity now has an initial API slice for activation listing, creation,
   retrieval, closure, and single-QSO recording. Activation creation enforces
   programme location requirements and configured entity bounds. It persists normalized

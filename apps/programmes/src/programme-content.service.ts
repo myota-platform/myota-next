@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { ProgrammeStateRepository } from './programme-state.repository.js';
+import { ProgrammeReadRepository } from './programme-read.repository.js';
 import type { ProgrammeState } from './programme-state.repository.js';
 import type {
   PatchProgrammeContentDto,
@@ -32,7 +33,10 @@ type ContentRecord = Record<string, unknown> & {
 
 @Injectable()
 export class ProgrammeContentService {
-  constructor(private readonly state: ProgrammeStateRepository) {}
+  constructor(
+    private readonly state: ProgrammeStateRepository,
+    private readonly reads: ProgrammeReadRepository,
+  ) {}
 
   async list(
     authorization: string | undefined,
@@ -48,7 +52,7 @@ export class ProgrammeContentService {
     const page = parsePageInteger(query.page, 1);
     const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
     const start = (page - 1) * pageSize;
-    const { items, total } = await this.state.listContentPage(
+    const { items, total } = await this.reads.listContentPage(
       slug,
       query.locale,
       query.status,
@@ -66,7 +70,7 @@ export class ProgrammeContentService {
 
   async coverage(authorization: string | undefined, slug: string) {
     this.authorizeAdmin(authorization, slug);
-    const coverage = await this.state.getContentCoverage(slug);
+    const coverage = await this.reads.getContentCoverage(slug);
     if (!coverage.programmeFound)
       throw new NotFoundException('programme not found');
     return {
