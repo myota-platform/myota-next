@@ -321,7 +321,16 @@ export class IdentityProfileImageService {
             kernel: sharp.kernel.lanczos3,
             position: 'centre',
           })
-          .webp({ quality, effort: 4 })
+          .webp({
+            quality,
+            alphaQuality: 100,
+            effort: 4,
+            preset: 'default',
+            lossless: false,
+            nearLossless: false,
+            exact: false,
+            smartSubsample: false,
+          })
           .toBuffer();
         if (output.byteLength <= MAX_OUTPUT_BYTES) return output;
       }

@@ -100,8 +100,10 @@ and dimensions above 4096 pixels, honor EXIF orientation, center-crop to 512 by
 Lanczos-3 resizing; Sharp selects the kernel explicitly and ignores embedded
 ICC profiles to match Pillow's direct channel conversion. Byte-level rendition
 equivalence across crop rounding, alpha handling, and WebP encoding still needs
-representative fixtures. Profile-image and account update timestamps are
-assigned independently, matching the reference's two clock reads.
+representative fixtures; Sharp explicitly matches Pillow's shared WebP quality,
+alpha quality, effort, lossless, preset, and transparent-pixel options.
+Profile-image and account update timestamps are assigned independently,
+matching the reference's two clock reads.
 The current-account and login/refresh account projections include account
 creation time, primary callsign ID, and callsigns as separate fields, matching
 the Python account projection.
