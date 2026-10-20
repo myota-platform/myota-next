@@ -27,7 +27,7 @@ import {
 import { IdentityRoleService } from './identity-role.service.js';
 import { IdentityProfileImageService } from './identity-profile-image.service.js';
 import type { CreateAccountDto, RoleGrantDto } from './auth.dto.js';
-import { UpdateAccountDto } from './auth.dto.js';
+import { ReplaceAccountRolesDto, UpdateAccountDto } from './auth.dto.js';
 import type { RoleDefinition } from './role-catalog.js';
 import { DEFAULT_ROLE_SCOPES } from './role-catalog.js';
 
@@ -436,6 +436,7 @@ export class IdentityAccountService {
     authorization: string,
     accountId: string,
     rawBody: unknown,
+    rolesOnly = false,
   ): Promise<Record<string, unknown>> {
     const actor = await this.auth.currentAccount(authorization);
     const actorScopes = new Set(actor.scopes as string[]);
@@ -461,7 +462,11 @@ export class IdentityAccountService {
       const account = result.rows[0];
       if (!account) throw new NotFoundException('account not found');
 
-      const body = await validateUpdateAccountBody(rawBody);
+      const body = rolesOnly
+        ? {
+            roles: (await validateRoleAssignmentBody(rawBody)).roles,
+          }
+        : await validateUpdateAccountBody(rawBody);
       const hasRoleUpdate =
         body.roles !== undefined || body.roleCodes !== undefined;
       const requestedRoles = body.roles?.length
@@ -1123,6 +1128,10 @@ const updateAccountValidationPipe = new ValidationPipe({
   transform: true,
   whitelist: true,
 });
+const roleAssignmentValidationPipe = new ValidationPipe({
+  transform: true,
+  whitelist: true,
+});
 
 async function validateUpdateAccountBody(
   body: unknown,
@@ -1131,4 +1140,13 @@ async function validateUpdateAccountBody(
     type: 'body',
     metatype: UpdateAccountDto,
   })) as UpdateAccountDto;
+}
+
+async function validateRoleAssignmentBody(
+  body: unknown,
+): Promise<ReplaceAccountRolesDto> {
+  return (await roleAssignmentValidationPipe.transform(body, {
+    type: 'body',
+    metatype: ReplaceAccountRolesDto,
+  })) as ReplaceAccountRolesDto;
 }

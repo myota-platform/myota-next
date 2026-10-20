@@ -75,7 +75,8 @@ the target account before validating the request body, matching the reference's
 response precedence. When role replacement is requested, Nest checks
 `identity.roles.assign` at the replacement step, after Core-backed account and
 email-conflict handling; the encompassing Core transaction rolls back earlier
-writes if role authorization fails.
+writes if role authorization fails. The PUT retains its roles-only request
+shape while deferring DTO validation to that authorized sequence.
 These are the first implemented slices; they still need automated
 compatibility coverage before they count as parity complete.
 Profile-image uploads accept JPEG, PNG, or WebP up to 5 MiB, reject animation

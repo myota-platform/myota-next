@@ -317,7 +317,7 @@ export class AuthController {
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
-    return this.accounts.updateAccount(authorization, accountId, body);
+    return this.accounts.updateAccount(authorization, accountId, body, true);
   }
 
   @Post('accounts/:accountId/callsigns')
