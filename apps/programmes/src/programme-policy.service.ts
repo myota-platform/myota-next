@@ -205,7 +205,9 @@ export class ProgrammePolicyService {
         occurredAt: now,
       });
       if (draft.type === 'RULES') {
-        programme.rules = draft.schema.rules ?? draft.schema;
+        programme.rules = Object.hasOwn(draft.schema, 'rules')
+          ? draft.schema.rules
+          : draft.schema;
         programme.policyVersion = nextPolicyVersion(programme.policyVersion);
       } else {
         const awards = Array.isArray(programme.awards)

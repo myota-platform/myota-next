@@ -67,6 +67,10 @@ non-empty whitespace-only strings and explicit `null` values for optional
 response is `201` even though the preserved upstream OpenAPI contract declares
 `200`.
 
+Programme RULES policy publication uses `schema.rules` when the key is present,
+including explicit `null`; it falls back to the full schema only when the key
+is omitted, matching Python's `dict.get` behavior.
+
 Activity has an initial activation and single-QSO slice: activation list/create/read/close,
 normalized QSO writes, validity checks, ownership checks, subject aggregates,
 transactional event outbox records, idempotency responses, and award recalculation
