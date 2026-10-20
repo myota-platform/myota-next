@@ -281,7 +281,7 @@ export class GeodataPromotionRepository {
       await client.query(
         `INSERT INTO source_snapshot_manifest
           (id,import_run_id,source_key,adapter_code,source_hash,record_count,source_metadata,retrieved_at)
-         SELECT $1,$2,$3,$4,$5,count(*)::integer,$6::jsonb,now()
+         SELECT $1,$2,$3,$4,$5,count(*),$6::jsonb,now()
          FROM geodata_import_candidate WHERE import_run_id=$2`,
         [
           manifestId,

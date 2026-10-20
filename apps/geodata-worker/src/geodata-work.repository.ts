@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parsePageTotal } from '@app/platform/pagination.js';
 import {
   MAX_IMPORT_BATCH_BYTES,
   MAX_IMPORT_BATCH_FEATURES,
@@ -945,23 +946,23 @@ export class GeodataWorkRepository {
       const promotionActor =
         textValue(proposal?.proposerId) ?? textValue(autoPromote?.requestedBy);
       const stagedCounts = await client.query(
-        `SELECT count(*) FILTER (WHERE candidate_id IS NOT NULL)::integer AS candidates,
-                count(*) FILTER (WHERE error_payload IS NOT NULL)::integer AS errors,
-                count(*) FILTER (WHERE skipped_payload IS NOT NULL)::integer AS skipped
+        `SELECT count(*) FILTER (WHERE candidate_id IS NOT NULL) > 0 AS candidates,
+                count(*) FILTER (WHERE error_payload IS NOT NULL) > 0 AS errors,
+                count(*) FILTER (WHERE skipped_payload IS NOT NULL) > 0 AS skipped
          FROM geodata_import_candidate_stage
          WHERE import_run_id=$1 AND attempt_count=$2`,
         [run.id, run.attempt_count],
       );
-      const candidateCount = Number(stagedCounts.rows[0]?.candidates ?? 0);
-      const errorCount = Number(stagedCounts.rows[0]?.errors ?? 0);
-      const skippedCount = Number(stagedCounts.rows[0]?.skipped ?? 0);
+      const hasCandidates = stagedCounts.rows[0]?.candidates === true;
+      const hasErrors = stagedCounts.rows[0]?.errors === true;
+      const hasSkipped = stagedCounts.rows[0]?.skipped === true;
       const promotionQueueId =
         promotionActor &&
-        (candidateCount > 0 ||
+        (hasCandidates ||
           (run.complete_snapshot &&
             featureCount === 0 &&
-            errorCount === 0 &&
-            skippedCount === 0))
+            !hasErrors &&
+            !hasSkipped))
           ? randomUUID()
           : null;
 
@@ -1042,19 +1043,21 @@ export class GeodataWorkRepository {
       }
 
       const stats = await client.query(
-        `SELECT count(*) FILTER (WHERE candidate_id IS NOT NULL)::integer AS preprocessed,
-                count(*) FILTER (WHERE error_payload IS NOT NULL)::integer AS errors,
-                count(*) FILTER (WHERE skipped_payload IS NOT NULL)::integer AS skipped,
+        `SELECT count(*) FILTER (WHERE candidate_id IS NOT NULL) AS preprocessed,
+                count(*) FILTER (WHERE error_payload IS NOT NULL) AS errors,
+                count(*) FILTER (WHERE skipped_payload IS NOT NULL) AS skipped,
                 count(*) FILTER (WHERE candidate_id IS NOT NULL
-                  AND candidate_payload->'possibleDuplicates' <> '[]'::jsonb)::integer AS conflation
+                  AND candidate_payload->'possibleDuplicates' <> '[]'::jsonb) AS conflation
          FROM geodata_import_candidate_stage
          WHERE import_run_id=$1 AND attempt_count=$2`,
         [run.id, run.attempt_count],
       );
-      const preprocessedCount = Number(stats.rows[0]?.preprocessed ?? 0);
-      const errorsCount = Number(stats.rows[0]?.errors ?? 0);
-      const skippedFeatures = Number(stats.rows[0]?.skipped ?? 0);
-      const conflationCount = Number(stats.rows[0]?.conflation ?? 0);
+      const preprocessedCount = parsePageTotal(
+        stats.rows[0]?.preprocessed ?? '0',
+      );
+      const errorsCount = parsePageTotal(stats.rows[0]?.errors ?? '0');
+      const skippedFeatures = parsePageTotal(stats.rows[0]?.skipped ?? '0');
+      const conflationCount = parsePageTotal(stats.rows[0]?.conflation ?? '0');
       const source = isRecord(run.source_metadata.source)
         ? run.source_metadata.source
         : {};
@@ -1066,7 +1069,7 @@ export class GeodataWorkRepository {
            WHERE import_run_id=$1 AND source_ref IS NOT NULL
            ORDER BY source_ref COLLATE "C",ordinal DESC
          ), manifest AS (
-           SELECT (SELECT count(*)::integer FROM geodata_import_candidate
+           SELECT (SELECT count(*) FROM geodata_import_candidate
              WHERE import_run_id=$1 AND source_ref IS NOT NULL) AS record_count,
              encode(public.digest(convert_to('{' || COALESCE(string_agg(
                to_json(source_ref)::text || ':' || to_json(source_hash)::text,
@@ -1080,8 +1083,8 @@ export class GeodataWorkRepository {
          FROM manifest`,
         [run.id, sourceKey, run.adapter_code],
       );
-      const manifestRecordCount = Number(
-        manifestSummary.rows[0]?.record_count ?? 0,
+      const manifestRecordCount = parsePageTotal(
+        manifestSummary.rows[0]?.record_count ?? '0',
       );
       const manifestSourceHash = String(
         manifestSummary.rows[0]?.source_hash ?? '',
@@ -1163,7 +1166,7 @@ export class GeodataWorkRepository {
              'errors',${errorSummaries},'disappeared',$12::jsonb,
              'conflationCandidates',${conflationSummaries},
              'manifest',jsonb_build_object('runId',$2::text,'adapter',$4,
-               'source',$5::jsonb,'sourceHash',$6,'recordCount',$7,
+               'source',$5::jsonb,'sourceHash',$6,'recordCount',$7::bigint,
                'records',${sourceRecordMap},
                'retrievedAt',$5::jsonb->>'retrievedAt',
                'license',$5::jsonb->>'license',

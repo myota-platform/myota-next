@@ -399,7 +399,8 @@ compatible outbox event are finalized atomically, with event arrays assembled
 in the database. Finalization's discarded-record and processing-queue totals
 preserve exact PostgreSQL integers through the response and outbox payload.
 Import promotion summaries also preserve exact PostgreSQL created, updated,
-and remaining counts in persisted statistics. Import status reads parse the
+and remaining counts in persisted statistics. Import staging counts and
+source-manifest record totals avoid 32-bit casts. Import status reads parse the
 JSONB projection as exact-integer JSON, preserving large candidate totals and
 statistics through the API response.
 Record hashes use Python float formatting and Unicode

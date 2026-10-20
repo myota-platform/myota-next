@@ -107,6 +107,9 @@ events still commit atomically.
 `geo/006` stores import candidate validation notes as JSONB, converting
 existing text values to JSON strings so arbitrary submitted JSON note values
 round-trip through candidate reads.
+`geo/007` widens source snapshot manifest record counts to `bigint`, matching
+PostgreSQL aggregate counts and allowing configured large imports to retain
+their exact record totals.
 
 `activity/002` adds an owner-scoped ordering index for bounded notification
 pages without changing the existing three-database ownership model.
