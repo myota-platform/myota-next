@@ -312,8 +312,10 @@ deletion work extends owner-database leases and JetStream acknowledgements. A
 bounded reconciler republishes stale queued work and expired leases through the
 transactional outbox. Scheduled retention removes eligible import history and
 owned source objects, expires stale multipart uploads, and preserves materialized
-entities. Outage/recovery evidence remains outstanding. Activity lease extension
-is supported for long-running jobs.
+entities. Activity deletion-impact counts preserve exact PostgreSQL integers
+through the Activity response and Geodata's stored confirmation job. Outage and
+recovery evidence remains outstanding. Activity lease extension is supported
+for long-running jobs.
 Location-enrichment workers check the request ID, geometry hash, and terminal
 status before calling the provider, so stale requests and redelivered completed
 or failed work do not repeat reverse-geocoding lookups.

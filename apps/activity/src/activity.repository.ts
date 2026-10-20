@@ -205,11 +205,11 @@ export class ActivityRepository {
     try {
       const result = await client.query(
         `SELECT
-          (SELECT count(*)::integer FROM activity_qso q
+          (SELECT count(*) FROM activity_qso q
            JOIN activity_activation a ON a.id=q.activation_id
            WHERE q.status<>'VOID' AND (q.worked_entity_id=$1 OR a.entity_id=$1)) AS qso_count,
-          (SELECT count(*)::integer FROM activity_activation WHERE entity_id=$1) AS activation_count,
-          (SELECT count(*)::integer FROM activity_award_progress p
+          (SELECT count(*) FROM activity_activation WHERE entity_id=$1) AS activation_count,
+          (SELECT count(*) FROM activity_award_progress p
            JOIN activity_award_definition d ON d.id=p.award_id
            WHERE p.subject_id IN (SELECT DISTINCT operator_id FROM activity_activation WHERE entity_id=$1)
               OR p.subject_id IN (SELECT DISTINCT hunter_id FROM activity_qso WHERE worked_entity_id=$1 AND hunter_id IS NOT NULL)) AS award_progress_count`,
@@ -218,9 +218,9 @@ export class ActivityRepository {
       const row = result.rows[0];
       return {
         entityId,
-        qsoCount: Number(row.qso_count),
-        activationCount: Number(row.activation_count),
-        awardProgressCount: Number(row.award_progress_count),
+        qsoCount: parsePageTotal(row.qso_count),
+        activationCount: parsePageTotal(row.activation_count),
+        awardProgressCount: parsePageTotal(row.award_progress_count),
       };
     } finally {
       client.release();

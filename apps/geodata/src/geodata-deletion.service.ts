@@ -11,6 +11,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import {
   verifyAccessToken,
   type AccessTokenClaims,
@@ -302,7 +303,10 @@ export class GeodataDeletionService {
         );
       if (!response.ok)
         throw new Error(`Activity returned HTTP ${response.status}`);
-      return (await response.json()) as Record<string, unknown>;
+      const impact = parseJsonWithExactIntegers(await response.text());
+      if (!isRecord(impact))
+        throw new Error('Activity impact was not an object');
+      return impact;
     } catch (error) {
       if (error instanceof ForbiddenException) throw error;
       throw new ServiceUnavailableException(
@@ -342,6 +346,10 @@ export class GeodataDeletionService {
       throw new ServiceUnavailableException('Geodata database is unavailable');
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function authorizeDelete(
