@@ -134,21 +134,29 @@ export class IdentityCredentialService {
     accountId: string,
   ): Promise<{ deliverableAddress: string }> {
     const claims = this.auth.verifyServiceToken(authorization);
-    if (
-      !claims.scp.includes(EMAIL_RESOLVE_SCOPE) ||
-      claims.sub !== `service:${EMAIL_SERVICE}` ||
-      claims.aud !== 'myota-identity'
-    ) {
-      throw new ForbiddenException('email service identity is required');
-    }
-
     const client = await this.connect();
     try {
+      const revoked = await client.query(
+        'SELECT 1 FROM public.auth_revocation WHERE jti = $1 AND expires_at > now()',
+        [claims.jti],
+      );
+      if (revoked.rowCount)
+        throw new UnauthorizedException('token has been revoked');
+      if (
+        !claims.scp.includes(EMAIL_RESOLVE_SCOPE) ||
+        claims.sub !== `service:${EMAIL_SERVICE}` ||
+        claims.aud !== 'myota-identity'
+      ) {
+        throw new ForbiddenException('email service identity is required');
+      }
+      const normalizedAccountId = normalizePythonUuid(accountId);
+      if (!normalizedAccountId)
+        throw new NotFoundException('recipient is unavailable');
       const result = await client.query<{ email: string | null }>(
         `SELECT email::text AS email
            FROM public.account
           WHERE id = $1 AND status = 'ACTIVE'`,
-        [accountId],
+        [normalizedAccountId],
       );
       const email = result.rows[0]?.email;
       if (!email || !trimPythonWhitespace(email)) {
@@ -172,4 +180,16 @@ export class IdentityCredentialService {
       throw new ServiceUnavailableException('Identity database is unavailable');
     }
   }
+}
+
+function normalizePythonUuid(value: string): string | null {
+  let hex = value;
+  if (hex.startsWith('urn:uuid:')) hex = hex.slice('urn:uuid:'.length);
+  if (hex.startsWith('{') && hex.endsWith('}')) {
+    hex = hex.slice(1, -1);
+  }
+  hex = hex.replaceAll('-', '');
+  if (!/^[\da-f]{32}$/i.test(hex)) return null;
+  const normalized = hex.toLowerCase();
+  return `${normalized.slice(0, 8)}-${normalized.slice(8, 12)}-${normalized.slice(12, 16)}-${normalized.slice(16, 20)}-${normalized.slice(20)}`;
 }

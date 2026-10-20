@@ -99,6 +99,9 @@ account, including sessions already revoked, matching the Python handler.
 Login audit events preserve the reference's `actorId` payload and account
 aggregate for known accounts, while unknown-account events remain associated
 with the `system` aggregate.
+The internal email-recipient resolver rejects revoked service tokens before
+scope checks and maps malformed UUID forms to the same unavailable-recipient
+response as the Python handler.
 Identity startup now idempotently provisions the configured bootstrap account,
 sets its password only when no credential exists, ensures its global operator
 role, and writes the corresponding Core outbox and security events.
