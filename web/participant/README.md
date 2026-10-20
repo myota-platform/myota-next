@@ -16,5 +16,5 @@ Deployment integration and route-by-route behavioral parity remain open. The
 public programme selector, content, and entity catalogue have an initial
 Chromium browser check with intercepted API responses. The current activation
 flow is also browser-checked through sign-in, activation start, QSO entry, and
-close, plus profile details editing. Profile image and award workflows still
-need browser-level compatibility coverage.
+close, profile details editing, and an eligible award request. Profile image
+handling still needs browser-level compatibility coverage.
