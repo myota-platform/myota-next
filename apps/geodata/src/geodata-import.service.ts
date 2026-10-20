@@ -478,7 +478,9 @@ function normalizeArcGisDocument(
       (candidate) =>
         candidate && (candidate.latestWkid != null || candidate.wkid != null),
     );
-    const wkid = Number(reference?.wkid ?? reference?.latestWkid ?? 4326);
+    const wkid = Number(
+      [reference?.wkid, reference?.latestWkid].find(pythonTruthy) ?? 4326,
+    );
     if (!Number.isInteger(wkid))
       throw new BadRequestException(`unsupported CRS EPSG:${String(wkid)}`);
     const properties = isRecord(raw.attributes) ? { ...raw.attributes } : {};
