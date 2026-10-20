@@ -11,6 +11,7 @@ import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import {
   evaluateActivation,
   normalizeTimestamp,
+  pythonFloat,
   type JsonRecord,
 } from './activity-domain.js';
 
@@ -971,12 +972,13 @@ export class ActivityRepository {
   async create(data: JsonRecord, key?: string): Promise<JsonRecord> {
     return this.mutate(key, async (client) => {
       const id = randomUUID();
-      const validity =
-        data.validityDays ?? data.programmeRules?.activationValidityDays;
+      const validity = Object.hasOwn(data, 'validityDays')
+        ? data.validityDays
+        : data.programmeRules?.activationValidityDays;
       const validityDays =
         validity == null || ['', 'unlimited', 'UNLIMITED'].includes(validity)
           ? null
-          : Number(validity);
+          : pythonFloat(validity, 'validityDays');
       const inserted = await client.query(
         `INSERT INTO activity_activation
         (id,programme_slug,entity_id,entity_type,jurisdiction_code,operator_id,operator_callsign,started_at,validity_expires_at,location,programme_rules)

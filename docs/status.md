@@ -129,7 +129,9 @@
   transactional outbox repository.
 - Activity now has an initial API slice for activation listing, creation,
   retrieval, closure, and single-QSO recording. Activation creation enforces
-  programme location requirements and configured entity bounds. It persists normalized
+  programme location requirements and configured entity bounds. An explicit
+  `validityDays` value takes precedence over the programme rule, including null,
+  and non-empty values use Python-compatible float parsing. It persists normalized
   activations and QSOs in Activity PostgreSQL with UTC microsecond timestamp
   precision preserved through normalization, validity checks, persistence,
   deduplication, and reads. Default activation-close and rule-evaluation times
