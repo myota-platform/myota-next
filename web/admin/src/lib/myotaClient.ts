@@ -190,6 +190,16 @@ export const myotaClient = {
       body,
     );
   },
+  createGeodataRefreshSchedule<T = unknown>(body: unknown) {
+    return write<T>('/v1/geodata/refresh-schedules', 'POST', body);
+  },
+  runGeodataRefreshSchedule<T = unknown>(id: string, body: unknown) {
+    return write<T>(
+      `/v1/geodata/refresh-schedules/${encodeURIComponent(id)}/run`,
+      'POST',
+      body,
+    );
+  },
   createGeodataEntityDeletionJob<T = unknown>(
     body: unknown,
     idempotencyKey?: string,

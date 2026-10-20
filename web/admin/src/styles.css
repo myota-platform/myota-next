@@ -1806,6 +1806,86 @@ select:disabled {
 .conflation-pagination {
   margin-top: 14px;
 }
+.schedule-form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.schedule-form > label {
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 5px;
+}
+.schedule-form input:not([type='checkbox']),
+.schedule-form select,
+.schedule-form textarea,
+.snapshot-picker input {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 38px;
+  padding: 7px 9px;
+  width: 100%;
+}
+.schedule-form textarea {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  resize: vertical;
+}
+.schedule-categories {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  grid-column: 1 / -1;
+  padding: 10px;
+}
+.schedule-categories label {
+  align-items: center;
+  display: flex;
+  gap: 5px;
+}
+.schedule-source {
+  grid-column: 1 / -1;
+}
+.schedule-form > button {
+  justify-self: start;
+}
+.snapshot-picker {
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+  max-width: 620px;
+}
+.schedule-list {
+  margin-top: 12px;
+}
+.schedule-row {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 14px 4px;
+}
+.schedule-summary {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.schedule-summary small,
+.schedule-summary code {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.schedule-pagination {
+  margin-top: 12px;
+}
 @media (max-width: 1000px) {
   .top-actions .status-dot {
     display: none;
@@ -1815,6 +1895,17 @@ select:disabled {
   }
 }
 @media (max-width: 700px) {
+  .schedule-form {
+    grid-template-columns: 1fr;
+  }
+  .schedule-categories,
+  .schedule-source {
+    grid-column: auto;
+  }
+  .schedule-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
   .conflation-controls {
     grid-template-columns: 1fr;
   }

@@ -130,7 +130,9 @@ PostGIS bounding boxes using the baseline 0.55 scoring threshold. Failed
 promotion queues can be redriven with a required reason recorded in queue
 metadata and the outbox. The Admin now lists filtered, paged conflation
 candidates and records decisions, optional survivor selection, reviewer, and
-note through the audited API. A separate Node importer polls due schedules and
+note through the audited API. Admin users with import scope can also create and
+page refresh schedules, then queue a complete GeoJSON snapshot manually. A
+separate Node importer polls due schedules and
 fetches GeoJSON or ArcGIS FeatureServer data only from allowlisted HTTPS hosts;
 it rejects redirects and responses above 16 MiB, then submits data through the
 schedule run API. `GEODATA_IMPORTER_ENABLED` keeps it opt-in. Deployment,

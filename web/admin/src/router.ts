@@ -11,6 +11,7 @@ import ActivityView from './views/ActivityView.vue';
 import AwardsView from './views/AwardsView.vue';
 import GeodataImportsView from './views/GeodataImportsView.vue';
 import ConflationView from './views/ConflationView.vue';
+import RefreshSchedulesView from './views/RefreshSchedulesView.vue';
 import GeodataWorkspaceView from './views/GeodataWorkspaceView.vue';
 import EntityMapView from './views/EntityMapView.vue';
 import SeaweedFsMonitoringRedirectView from './views/SeaweedFsMonitoringRedirectView.vue';
@@ -88,6 +89,11 @@ const routes = [
     path: '/conflation',
     component: ConflationView,
     meta: { title: 'Conflation review' },
+  },
+  {
+    path: '/refresh-schedules',
+    component: RefreshSchedulesView,
+    meta: { title: 'Refresh schedules' },
   },
   {
     path: '/object-storage',

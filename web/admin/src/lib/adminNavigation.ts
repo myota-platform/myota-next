@@ -70,6 +70,15 @@ export const adminPages: AdminPage[] = [
     allowed: scope('geodata.review'),
   },
   {
+    path: '/refresh-schedules',
+    title: 'Refresh schedules',
+    group: 'Entities',
+    icon: '◷',
+    description:
+      'Manage complete-snapshot refresh schedules and queue manual source runs.',
+    allowed: scope('geodata.import'),
+  },
+  {
     path: '/master-data',
     title: 'Entity categories',
     group: 'Entities',
