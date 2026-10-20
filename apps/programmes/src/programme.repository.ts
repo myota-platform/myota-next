@@ -25,13 +25,12 @@ export class ProgrammeRepository {
         total: number;
       }>(
         `WITH page AS (
-           SELECT payload, slug, created_at FROM public.programme_record
-            ORDER BY created_at COLLATE "C", slug COLLATE "C"
+           SELECT payload, record_order FROM public.programme_record
+            ORDER BY record_order
             LIMIT $1 OFFSET $2
          )
          SELECT COALESCE(
-                  (SELECT jsonb_agg(page.payload ORDER BY
-                    page.created_at COLLATE "C", page.slug COLLATE "C")
+                  (SELECT jsonb_agg(page.payload ORDER BY page.record_order)
                      FROM page),
                   '[]'::jsonb
                 ) AS items,
@@ -47,8 +46,7 @@ export class ProgrammeRepository {
 
   async listAll(client: PoolClient): Promise<ProgrammeRecord[]> {
     const result = await client.query<{ payload: ProgrammeRecord }>(
-      `SELECT payload FROM public.programme_record
-        ORDER BY created_at COLLATE "C", slug COLLATE "C"`,
+      `SELECT payload FROM public.programme_record ORDER BY record_order`,
     );
     return result.rows.map((row) => row.payload);
   }
@@ -57,8 +55,7 @@ export class ProgrammeRepository {
     const client = await this.connect();
     try {
       const result = await client.query<{ payload: ProgrammeRecord }>(
-        `SELECT payload FROM public.programme_record
-          ORDER BY created_at COLLATE "C", slug COLLATE "C"`,
+        `SELECT payload FROM public.programme_record ORDER BY record_order`,
       );
       return result.rows.map((row) => row.payload);
     } finally {
