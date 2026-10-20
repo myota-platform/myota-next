@@ -35,7 +35,7 @@ export function queueLocationEnrichment(
   location: Record<string, unknown>,
   manualFields: unknown,
   reason: string,
-  requestedBy: string | null,
+  requestedBy: unknown,
   onlyMissing: boolean,
 ) {
   if (!isRecord(geometry)) return undefined;

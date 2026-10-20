@@ -14,7 +14,7 @@ type EnrichmentJob = {
   geometryHash: string;
   onlyMissing: boolean;
   reason: string;
-  requestedBy: string | null;
+  requestedBy: unknown;
   geometry: Record<string, unknown>;
   point: [number, number] | null;
 };
@@ -92,10 +92,7 @@ export class GeodataEnrichmentRepository {
         geometryHash: String(props.locationEnrichmentGeometryHash ?? ''),
         onlyMissing: props.locationEnrichmentOnlyMissing === true,
         reason: String(props.locationEnrichmentReason ?? 'UNSPECIFIED'),
-        requestedBy:
-          typeof props.locationEnrichmentRequestedBy === 'string'
-            ? props.locationEnrichmentRequestedBy
-            : null,
+        requestedBy: props.locationEnrichmentRequestedBy,
         geometry: record(row.geometry),
         point:
           Number.isFinite(Number(row.lon)) && Number.isFinite(Number(row.lat))

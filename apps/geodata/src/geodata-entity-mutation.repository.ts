@@ -14,7 +14,10 @@ import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import type { AccessTokenClaims } from '@app/platform/access-token.js';
-import { firstPythonTruthy } from '@app/platform/python-truthiness.js';
+import {
+  firstPythonTruthy,
+  pythonTruthy,
+} from '@app/platform/python-truthiness.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { validateGeometryCoordinates } from '@app/geodata-domain';
 import { entityProjection } from './geodata.repository.js';
@@ -88,13 +91,13 @@ export class GeodataEntityMutationRepository {
       );
       if (replay.found) return replay.response;
     }
-    const reviewerId =
-      typeof body.reviewerId === 'string' ? body.reviewerId : '';
+    const reviewerId = body.reviewerId;
     const requestedStatus = firstPythonTruthy(body.status, body.decision);
     const targetStatus =
       typeof requestedStatus === 'string' ? requestedStatus : '';
     const note = body.note === undefined ? null : body.note;
-    if (!reviewerId) throw new BadRequestException('reviewerId is required');
+    if (!pythonTruthy(reviewerId))
+      throw new BadRequestException('reviewerId is required');
     if (
       !['APPROVED', 'CANDIDATE', 'RETIRED', 'REJECTED'].includes(targetStatus)
     )
