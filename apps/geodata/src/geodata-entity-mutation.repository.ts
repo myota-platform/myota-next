@@ -692,13 +692,12 @@ export class GeodataEntityMutationRepository {
     const editorId =
       typeof body.editorId === 'string' ? body.editorId.trim() : '';
     if (!editorId) throw new BadRequestException('editorId is required');
-    const rawTypes =
-      body.entityTypes ?? body.entityTypeCodes ?? body.entityType;
-    const entityTypes = (Array.isArray(rawTypes) ? rawTypes : [rawTypes])
-      .map((value) =>
-        typeof value === 'string' ? value.trim().toUpperCase() : '',
-      )
-      .filter(Boolean);
+    const rawTypes = firstTruthyCategoryInput([
+      body.entityTypes,
+      body.entityTypeCodes,
+      body.entityType,
+    ]);
+    const entityTypes = normalizeEntityTypeCodes(rawTypes);
     if (
       !entityTypes.length ||
       entityTypes.some((code) => !/^[A-Z][A-Z0-9_]{1,63}$/.test(code))
@@ -706,8 +705,6 @@ export class GeodataEntityMutationRepository {
       throw new BadRequestException(
         'one or more valid entity type codes are required',
       );
-    if (new Set(entityTypes).size !== entityTypes.length)
-      throw new BadRequestException('entityTypes must be unique');
     const note =
       typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
     const expectedVersion = parseIfMatch(ifMatch);
@@ -1084,6 +1081,36 @@ export class GeodataEntityMutationRepository {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeEntityTypeCodes(value: unknown): string[] {
+  let raw = value;
+  if (isRecord(raw)) raw = raw.code || raw.entityType;
+  const values = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string'
+      ? [raw]
+      : [];
+  const result: string[] = [];
+  for (const item of values) {
+    const candidate = isRecord(item) ? item.code : item;
+    const code =
+      typeof candidate === 'string' ? candidate.trim().toUpperCase() : '';
+    if (/^[A-Z][A-Z0-9_]{1,63}$/.test(code) && !result.includes(code))
+      result.push(code);
+  }
+  return result;
+}
+
+function firstTruthyCategoryInput(values: unknown[]) {
+  return values.find((value) => {
+    if (value === null || value === undefined || value === false || value === 0)
+      return false;
+    if (typeof value === 'string') return value.length > 0;
+    if (Array.isArray(value)) return value.length > 0;
+    if (isRecord(value)) return Object.keys(value).length > 0;
+    return true;
+  });
 }
 
 function normalizeManualLocationValue(field: string, value: unknown) {

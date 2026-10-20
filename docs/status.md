@@ -134,8 +134,10 @@
   and description edits are transactional and audited. If-Match protected
   geometry, category, and manual location edits are also audited. Location
   names are checked against the provider catalogue, provider codes cannot be
-  manually set, and location edits require `geodata.location.manage`. An
-  authorized, idempotent request can queue BigDataCloud reverse geocoding; the
+  manually set, and location edits require `geodata.location.manage`. Entity
+  category updates accept scalar codes and category objects, remove duplicate
+  codes while preserving order, and keep the first code primary. An authorized,
+  idempotent request can queue BigDataCloud reverse geocoding; the
   provider-derived location hierarchy sorts case-insensitively with codes as
   tie-breakers. The
   Geodata worker applies results only to the matching geometry and protects
