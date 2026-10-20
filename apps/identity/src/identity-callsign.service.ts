@@ -84,13 +84,24 @@ export class IdentityCallsignService {
       const id = randomUUID();
       const status = body.status ?? 'UNVERIFIED';
       const source = body.source === undefined ? 'self-asserted' : body.source;
-      const createdAt = new Date();
-      const verifiedAt = status === 'VERIFIED' ? createdAt : null;
-      await client.query(
+      const verifiedAt =
+        status === 'VERIFIED'
+          ? (
+              await client.query<{ verified_at: Date }>(
+                'SELECT clock_timestamp() AS verified_at',
+              )
+            ).rows[0].verified_at
+          : null;
+      const callsignResult = await client.query<{
+        created_at: Date;
+        updated_at: Date;
+      }>(
         `INSERT INTO public.callsign
            (id, account_id, value, lifecycle_status, source, verification_source,
             verified_at, valid_from, valid_to, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+                 clock_timestamp(), clock_timestamp())
+         RETURNING created_at, updated_at`,
         [
           id,
           accountId,
@@ -101,7 +112,6 @@ export class IdentityCallsignService {
           verifiedAt,
           body.validFrom ?? null,
           body.validTo ?? null,
-          createdAt,
         ],
       );
       if (
@@ -115,7 +125,7 @@ export class IdentityCallsignService {
         );
       }
       await client.query(
-        'UPDATE public.account SET updated_at = now() WHERE id = $1',
+        'UPDATE public.account SET updated_at = clock_timestamp() WHERE id = $1',
         [accountId],
       );
       const callsign = {
@@ -128,8 +138,8 @@ export class IdentityCallsignService {
         validFrom: body.validFrom ?? null,
         validTo: body.validTo ?? null,
         evidenceIds: [],
-        createdAt,
-        updatedAt: createdAt,
+        createdAt: callsignResult.rows[0].created_at,
+        updatedAt: callsignResult.rows[0].updated_at,
       };
       await writeOutboxEvent(client, {
         eventType: 'identity.callsign.added.v1',

@@ -86,6 +86,8 @@ initial callsign advances the account's `updatedAt`, matching the reference's
 separate clock reads.
 Initial callsigns trim only surrounding Python whitespace before uppercasing;
 internal whitespace is preserved as by the reference.
+Direct callsign creation also reads `verifiedAt`, `createdAt`, and `updatedAt`
+independently and advances the account update time afterward.
 Password recovery refreshes the revocation time on every session row for the
 account, including sessions already revoked, matching the Python handler.
 Login audit events preserve the reference's `actorId` payload and account
