@@ -35,13 +35,15 @@ export function normalizeUtcTimestamp(value: string): string {
         `${sign}${hours}:${minutes ?? '00'}`,
     );
   normalized = normalized.replace(
-    /T(\d{2}:\d{2})(?=(?:Z|[+-]\d{2}:\d{2})?$)/i,
+    /T(\d{2}:\d{2})(?=(?:Z|[+-]\d{2}(?::?\d{2})?(?::?\d{2}(?:[.,]\d+)?)?)?$)/i,
     '$1:00',
   );
   normalized = normalized.replace(
-    /T(\d{2})(?=(?:Z|[+-]\d{2}:\d{2})?$)/i,
+    /T(\d{2})(?=(?:Z|[+-]\d{2}(?::?\d{2})?(?::?\d{2}(?:[.,]\d+)?)?)?$)/i,
     '$1:00:00',
   );
+  const extendedOffset = normalizeExtendedTimezoneOffset(normalized);
+  if (extendedOffset) return extendedOffset;
   if (/^\d{8}$/.test(normalized))
     normalized = `${normalized.slice(0, 4)}-${normalized.slice(4, 6)}-${normalized.slice(6, 8)}`;
   if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
@@ -52,7 +54,9 @@ export function normalizeUtcTimestamp(value: string): string {
     const year = Number(dateParts[1]);
     const month = Number(dateParts[2]);
     const day = Number(dateParts[3]);
-    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const monthEnd = new Date(0);
+    monthEnd.setUTCFullYear(year, month, 0);
+    const daysInMonth = monthEnd.getUTCDate();
     if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth)
       throw new BadRequestException('effectiveFrom must be a valid timestamp');
   }
@@ -68,4 +72,89 @@ export function normalizeUtcTimestamp(value: string): string {
   return microseconds === '000000'
     ? `${utcSeconds}Z`
     : `${utcSeconds}.${microseconds}Z`;
+}
+
+function normalizeExtendedTimezoneOffset(value: string): string | undefined {
+  const offset =
+    /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:[.,](\d+))?)?([+-])(?:(\d{2}):(\d{2}):(\d{2})|(\d{2})(\d{2})(\d{2}))(?:[.,](\d+))?$/.exec(
+      value,
+    );
+  if (!offset) return undefined;
+
+  const [
+    ,
+    dateText,
+    hourText,
+    minuteText,
+    secondText,
+    localFraction,
+    sign,
+    extendedHours,
+    extendedMinutes,
+    extendedSeconds,
+    basicHours,
+    basicMinutes,
+    basicSeconds,
+    offsetFraction,
+  ] = offset;
+  const [year, month, day] = dateText.split('-').map(Number);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText ?? 0);
+  const offsetHours = Number(extendedHours ?? basicHours);
+  const offsetMinutes = Number(extendedMinutes ?? basicMinutes);
+  const offsetSeconds = Number(extendedSeconds ?? basicSeconds);
+  if (
+    year < 1 ||
+    year > 9999 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59 ||
+    offsetHours > 23 ||
+    offsetMinutes > 59 ||
+    offsetSeconds > 59
+  )
+    throw new BadRequestException('effectiveFrom must be a valid timestamp');
+
+  const localDate = new Date(0);
+  localDate.setUTCFullYear(year, month - 1, day);
+  localDate.setUTCHours(hour, minute, second, 0);
+  if (
+    localDate.getUTCFullYear() !== year ||
+    localDate.getUTCMonth() + 1 !== month ||
+    localDate.getUTCDate() !== day
+  )
+    throw new BadRequestException('effectiveFrom must be a valid timestamp');
+
+  const localMicroseconds = BigInt(
+    (localFraction ?? '').slice(0, 6).padEnd(6, '0') || '0',
+  );
+  const offsetMicroseconds =
+    BigInt(offsetHours * 3600 + offsetMinutes * 60 + offsetSeconds) *
+      1_000_000n +
+    BigInt((offsetFraction ?? '').slice(0, 6).padEnd(6, '0') || '0');
+  const localInstant = BigInt(localDate.getTime()) * 1000n + localMicroseconds;
+  const utcMicroseconds =
+    sign === '+'
+      ? localInstant - offsetMicroseconds
+      : localInstant + offsetMicroseconds;
+  let utcMilliseconds = utcMicroseconds / 1000n;
+  let subMillisecondMicroseconds = utcMicroseconds % 1000n;
+  if (subMillisecondMicroseconds < 0n) {
+    utcMilliseconds--;
+    subMillisecondMicroseconds += 1000n;
+  }
+  const utcDate = new Date(Number(utcMilliseconds));
+  const utcYear = utcDate.getUTCFullYear();
+  if (!Number.isFinite(utcDate.getTime()) || utcYear < 1 || utcYear > 9999)
+    throw new BadRequestException('effectiveFrom must be a valid timestamp');
+  const microseconds =
+    BigInt(utcDate.getUTCMilliseconds() * 1000) + subMillisecondMicroseconds;
+  const utcSeconds = utcDate.toISOString().slice(0, 19);
+  return microseconds === 0n
+    ? `${utcSeconds}Z`
+    : `${utcSeconds}.${microseconds.toString().padStart(6, '0')}Z`;
 }

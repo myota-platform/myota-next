@@ -2,7 +2,6 @@ import {
   Allow,
   IsArray,
   IsBoolean,
-  IsDateString,
   IsIn,
   IsInt,
   IsObject,
@@ -110,7 +109,8 @@ export class ReviewProgrammeContentDto {
 }
 
 export class PublishProgrammeContentDto {
-  @IsDateString()
+  @IsString()
+  @MinLength(1)
   effectiveFrom!: string;
 
   @IsString()
@@ -152,7 +152,7 @@ export class PatchProgrammeContentDto {
   note?: string | null;
 
   @IsOptional()
-  @IsDateString()
+  @IsString()
   effectiveFrom?: string;
 
   @IsOptional()
@@ -177,7 +177,6 @@ export class SaveProgrammePolicyDraftDto {
 
   @ValidateIf((_object, value) => pythonTruthy(value))
   @IsString()
-  @IsDateString()
   effectiveFrom?: string | null;
 }
 
@@ -195,7 +194,8 @@ export class ReviewProgrammePolicyDraftDto {
 }
 
 export class PublishProgrammePolicyDraftDto {
-  @IsDateString()
+  @IsString()
+  @MinLength(1)
   effectiveFrom!: string;
 
   @IsString()
@@ -222,7 +222,6 @@ export class PatchProgrammePolicyDraftDto {
 
   @ValidateIf((_object, value) => pythonTruthy(value))
   @IsString()
-  @IsDateString()
   effectiveFrom?: string | null;
 
   @IsOptional()
