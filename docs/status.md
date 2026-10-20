@@ -147,8 +147,10 @@
   persistence, deduplication, and reads. Optional `sourceImportId` provenance
   is retained on direct and worker QSO inserts. QSO callsigns collapse Python's
   Unicode whitespace set before validation, and worked locator keys use Python's
-  Unicode whitespace stripping rules. Default activation-close and rule-evaluation
-  times use the same six-digit UTC timestamp form as the reference. Minimum QSO
+  Unicode whitespace stripping rules. Activation close defaults `endedAt` to
+  now only when omitted; supplied values are validated as timestamps. Default
+  rule-evaluation times use the same
+  six-digit UTC timestamp form as the reference. Minimum QSO
   thresholds use Python integer conversion with matching numeric whitespace
   and Unicode decimal digit handling. It writes domain
   events and idempotency responses transactionally, updates subject aggregates,

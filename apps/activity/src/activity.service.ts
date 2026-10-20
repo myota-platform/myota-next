@@ -134,7 +134,9 @@ export class ActivityService {
     const claims = verifyAccessToken(authorization);
     const activation = await this.repository.get(activationId);
     this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
-    const endedAt = body.endedAt ?? normalizeTimestamp(new Date());
+    const endedAt = Object.hasOwn(body, 'endedAt')
+      ? body.endedAt
+      : normalizeTimestamp(new Date());
     return this.repository.close(activationId, endedAt, key);
   }
 
