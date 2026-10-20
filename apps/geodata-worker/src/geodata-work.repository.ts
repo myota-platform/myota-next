@@ -1181,7 +1181,7 @@ export class GeodataWorkRepository {
       `SELECT e.id::text,e.lifecycle_status
          FROM geodata_entity e
         WHERE e.programme_slug IS NOT DISTINCT FROM $1
-          AND e.source_key=$3 AND e.source_state='CURRENT'
+          AND e.source_key=$3
           AND EXISTS (
             SELECT 1 FROM source_reference r
              WHERE r.entity_id=e.id AND r.adapter_code=$2
