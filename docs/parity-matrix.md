@@ -274,6 +274,8 @@ proposal identity remains in `candidateSource`, and `sourceRef` uses the normal
 import fallback. Import source identity selects `sourceKey`, `url`, then `name`
 using Python truthiness and preserves submitted whitespace. Proposal feature
 objects follow adapter normalization without an extra `type` requirement.
+Falsey feature properties default to an empty object, while truthy non-object
+properties are rejected as malformed input.
 Proposal and direct-import idempotency scopes keys by owner and actual request
 path, fingerprints the parsed request body before validation, and rejects
 changed-body reuse while preserving integer versus float values. The request

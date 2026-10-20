@@ -35,8 +35,11 @@ export class GeodataProposalService {
           throw new BadRequestException('source must be an object');
         const source = isRecord(suppliedSource) ? suppliedSource : {};
         const feature = { ...body.feature };
-        const properties = isRecord(feature.properties)
-          ? { ...feature.properties }
+        const suppliedProperties = firstPythonTruthy(feature.properties);
+        if (suppliedProperties !== undefined && !isRecord(suppliedProperties))
+          throw new BadRequestException('feature properties must be an object');
+        const properties = isRecord(suppliedProperties)
+          ? { ...suppliedProperties }
           : {};
         const requestEntityTypes = firstPythonTruthy(
           body.entityTypes,
