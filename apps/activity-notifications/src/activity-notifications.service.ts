@@ -12,6 +12,7 @@ import type { Consumer, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 
 const CONSUMER = 'activity-notifications';
 const STREAM = 'MYOTA_EVENTS';
@@ -61,8 +62,8 @@ const SENSITIVE = [
 type Envelope = {
   eventId?: unknown;
   eventType?: unknown;
-  aggregate?: { id?: unknown };
-  payload?: Record<string, unknown>;
+  aggregate?: unknown;
+  payload?: unknown;
 };
 
 @Injectable()
@@ -353,7 +354,7 @@ export class ActivityNotificationsService
         return false;
       }
       const [recipient, kind] = recipientAndKind(event, eventType);
-      if (recipient && kind) {
+      if (pythonTruthy(recipient) && kind) {
         const notificationEventId = String(event.eventId);
         await client.query(
           `INSERT INTO public.activity_notification
@@ -362,7 +363,7 @@ export class ActivityNotificationsService
            ON CONFLICT DO NOTHING`,
           [
             randomUUID(),
-            recipient,
+            String(recipient),
             kind,
             JSON.stringify({ eventType, eventId: notificationEventId }),
             `event:${notificationEventId}`,
@@ -447,41 +448,46 @@ export class ActivityNotificationsService
 function recipientAndKind(
   event: Envelope,
   eventType: string,
-): [string | undefined, string | null] {
-  const payload = event.payload ?? {};
+): [unknown, string | null] {
   if (
     eventType.startsWith('geodata.entity.reviewed') ||
     eventType.startsWith('geodata.entity.status-changed')
   ) {
-    const review = asRecord(payload.review);
-    const provenance = asRecord(payload.provenance);
-    return [
-      nonEmptyString(payload.proposerId) ||
-        nonEmptyString(review?.proposerId) ||
-        nonEmptyString(provenance?.proposerId),
-      'GEODATA_PROPOSAL_DECISION',
-    ];
+    const payload = pythonTruthy(event.payload)
+      ? requireRecord(event.payload, 'payload')
+      : {};
+    let recipient = payload.proposerId;
+    if (!pythonTruthy(recipient))
+      recipient = optionalMappingValue(payload.review, 'proposerId');
+    if (!pythonTruthy(recipient))
+      recipient = optionalMappingValue(payload.provenance, 'proposerId');
+    return [recipient, 'GEODATA_PROPOSAL_DECISION'];
   }
   if (eventType.startsWith('identity.')) {
-    const account = asRecord(payload.account);
-    return [
-      nonEmptyString(payload.accountId) ||
-        nonEmptyString(account?.id) ||
-        nonEmptyString(asRecord(event.aggregate)?.id),
-      'ACCOUNT_SECURITY_EVENT',
-    ];
+    const payload = pythonTruthy(event.payload)
+      ? requireRecord(event.payload, 'payload')
+      : {};
+    let recipient = payload.accountId;
+    if (!pythonTruthy(recipient))
+      recipient = optionalMappingValue(payload.account, 'id');
+    if (!pythonTruthy(recipient))
+      recipient = requireRecord(
+        event.aggregate === undefined ? {} : event.aggregate,
+        'aggregate',
+      ).id;
+    return [recipient, 'ACCOUNT_SECURITY_EVENT'];
   }
   return [undefined, null];
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
+function optionalMappingValue(value: unknown, key: string): unknown {
+  return pythonTruthy(value) ? requireRecord(value, key)[key] : undefined;
 }
 
-function nonEmptyString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
+function requireRecord(value: unknown, field: string): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value))
+    return value as Record<string, unknown>;
+  throw new TypeError(`${field} must be an object`);
 }
 
 function normalizeUuid(value: unknown): string | undefined {

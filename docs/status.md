@@ -555,6 +555,9 @@
   event ID spelling, while consumer checkpoints use normalized UUIDs. Its
   UUID parsing accepts nil IDs and all version/variant bit patterns supported
   by Python's UUID parser.
+  Recipient extraction follows Python truthiness and mapping fallbacks so
+  malformed truthy recipient fields retry and dead-letter instead of silently
+  dropping a notification.
   metrics listener exposes `/healthz`, `/readyz`, and
   Prometheus metrics for bounded delivery outcomes and unresolved dead letters;
   readiness checks Activity PostgreSQL and the NATS connection. An audited CLI
