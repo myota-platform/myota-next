@@ -58,9 +58,21 @@ export const useAppStore = defineStore('app', () => {
 
   async function loadProgrammes(): Promise<void> {
     const revision = sessionRevision;
-    const data = await apiRequest<{ items: Programme[] }>('/v1/programmes');
+    const items: Programme[] = [];
+    let page = 1;
+    while (true) {
+      const data = await apiRequest<{
+        items: Programme[];
+        nextPage: number | null;
+      }>(`/v1/programmes?page=${page}&pageSize=100`);
+      items.push(...(data.items || []));
+      if (data.nextPage === null) break;
+      if (data.nextPage <= page)
+        throw new Error('Programme catalogue pagination did not advance.');
+      page = data.nextPage;
+    }
     if (revision !== sessionRevision) return;
-    programmes.value = data.items || [];
+    programmes.value = items;
     bootstrapWarning.value = '';
     apiStatus.value = 'connected';
   }

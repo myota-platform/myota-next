@@ -40,7 +40,17 @@ async function awardApi(path, options = {}) {
   return body;
 }
 async function loadProgrammes() {
-  programmes = (await api('/v1/programmes')).items;
+  const catalogue = [];
+  let nextPage = 1;
+  while (nextPage !== null) {
+    const page = nextPage;
+    const response = await api(`/v1/programmes?page=${page}&pageSize=100`);
+    catalogue.push(...(response.items || []));
+    nextPage = response.nextPage ?? null;
+    if (nextPage !== null && nextPage <= page)
+      throw new Error('Programme catalogue pagination did not advance.');
+  }
+  programmes = catalogue;
   $('programme-select').innerHTML = programmes
     .map(
       (p) =>

@@ -65,12 +65,15 @@ function resetForm(programme: Programme | null = null): void {
   });
 }
 
-async function load(): Promise<void> {
+async function load(refreshProgrammes = false): Promise<void> {
   error.value = '';
-  const data = await apiRequest<{ items: Programme[] }>('/v1/programmes');
-  programmes.value = data.items || [];
-  store.programmes = programmes.value;
   await Promise.all([
+    (refreshProgrammes || !store.programmes.length
+      ? store.loadProgrammes()
+      : Promise.resolve()
+    ).then(() => {
+      programmes.value = store.programmes;
+    }),
     apiRequest<{ items: EntityCategory[] }>('/v1/entity-types')
       .then((data) => {
         categories.value = data.items || [];
@@ -188,7 +191,7 @@ async function save(): Promise<void> {
           body: JSON.stringify(payload),
           headers: { 'Idempotency-Key': crypto.randomUUID() },
         });
-    await load();
+    await load(true);
     resetForm(saved);
     message.value = 'Programme saved.';
   } catch (cause) {
@@ -204,7 +207,7 @@ async function archive(): Promise<void> {
   if (!selected.value || !window.confirm(`Archive ${selected.value.slug}?`))
     return;
   await myotaClient.patchProgramme(selected.value.slug, { status: 'ARCHIVED' });
-  await load();
+  await load(true);
   resetForm();
 }
 
@@ -217,7 +220,7 @@ onMounted(() =>
 </script>
 
 <template>
-  <PageHeader :refresh="() => load()" :busy="saving || loadingEditor"
+  <PageHeader :refresh="() => load(true)" :busy="saving || loadingEditor"
     ><button
       class="primary"
       :disabled="saving"
