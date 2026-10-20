@@ -30,10 +30,7 @@ export class IdentityCredentialService {
     body: ServiceTokenRequestDto,
     authorization?: string,
   ): Promise<Record<string, unknown>> {
-    const service = body.service.trim();
-    if (!service || service.length > 80) {
-      throw new BadRequestException('service must be 1 to 80 characters');
-    }
+    const service = body.service;
 
     let scopes: string[];
     let claims: { sub: string; aud?: string };

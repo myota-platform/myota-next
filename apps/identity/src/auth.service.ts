@@ -956,7 +956,7 @@ export function validateWebsiteUrl(
   if (typeof value !== 'string') {
     throw new BadRequestException('websiteUrl must be a string or null');
   }
-  const website = value.trim();
+  const website = trimPythonWhitespace(value);
   if (Array.from(website).length > 2048) {
     throw new BadRequestException('websiteUrl is invalid or too long');
   }
