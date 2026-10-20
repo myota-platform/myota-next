@@ -16,5 +16,12 @@
   redrive behavior.
 - Keep secrets out of Git. Never use local-memory persistence as a durable
   production fallback.
+- Keep `@nestjs/observe` in the root runtime dependencies so every Nest CLI
+  application includes it in the shared deployment install. Initialize Observe
+  at each application root and pass `ObserveInstrument` to every Nest
+  application or application-context factory, including workers. Give each
+  process a stable, unique `serviceId`; provide credentials through environment
+  variables or deployment secrets, never source control. Reporting must remain
+  disabled when Observe is not configured.
 - Do not declare parity from compilation alone. Require contract, database,
   worker, browser, and recovery evidence for each completed slice.
