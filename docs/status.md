@@ -91,6 +91,8 @@
   preserve explicitly submitted `null` values where the Python handler does.
   Recovery responses expose the development reset token unless `MYOTA_ENV` is
   exactly `production`, matching the reference's case-sensitive check.
+  Recovery reset checks token validity before enforcing the 12-character
+  password minimum, matching the reference validation order.
   The Core migration removes the retired `operations.read` scope from persisted
   custom role definitions and advances their update timestamp, matching the
   reference when it materializes the role catalogue.

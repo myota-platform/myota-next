@@ -371,11 +371,6 @@ export class IdentityAuthService {
     token: string,
     newPassword: string,
   ): Promise<{ status: string }> {
-    if (Array.from(newPassword).length < 12) {
-      throw new BadRequestException(
-        'password must contain at least 12 characters',
-      );
-    }
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -389,6 +384,11 @@ export class IdentityAuthService {
       const recovery = recoveryResult.rows[0];
       if (!recovery) {
         throw new BadRequestException('recovery token is invalid or expired');
+      }
+      if (Array.from(newPassword).length < 12) {
+        throw new BadRequestException(
+          'password must contain at least 12 characters',
+        );
       }
       const passwordHash = await hashPassword(newPassword);
       await client.query(
