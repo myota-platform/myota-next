@@ -409,8 +409,9 @@
   migration runner applies the checked-in SQL baseline and forward migrations
   with checksums and per-file transactions; production cutover and rollback
   rehearsals remain outstanding.
-- Email delivery. The NestJS consumer now validates `email.send.v1`, resolves
-  recipients through Identity, sends through TLS-configured SMTP, and records
+- Email delivery. The NestJS consumer rejects invalid UTF-8 before validating
+  `email.send.v1`, resolves recipients through Identity, sends through
+  TLS-configured SMTP, and records
   deduplication, attempts, and redacted dead letters in the Core database. The
   former fourth email database is removed from the target. Identity production,
   OpenTelemetry export, and deployment integration remain outstanding. The
