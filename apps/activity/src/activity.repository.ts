@@ -17,8 +17,11 @@ import {
 
 const activationTimestampProjection = `to_char(started_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS started_at_iso,
   to_char(ended_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS ended_at_iso,
-  to_char(validity_expires_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS validity_expires_at_iso`;
-const qsoTimestampProjection = `to_char(occurred_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at_iso`;
+  to_char(validity_expires_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS validity_expires_at_iso,
+  to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_iso,
+  to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at_iso`;
+const qsoTimestampProjection = `to_char(occurred_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at_iso,
+  to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_iso`;
 
 @Injectable()
 export class ActivityRepository {
@@ -1501,10 +1504,11 @@ function activationRecord(row: any, qsos?: any[]) {
     jurisdiction: row.jurisdiction_code,
     operatorId: row.operator_id,
     operatorCallsign: row.operator_callsign,
-    startedAt: row.started_at_iso ?? date(row.started_at),
-    endedAt: row.ended_at_iso ?? date(row.ended_at),
-    validityExpiresAt:
-      row.validity_expires_at_iso ?? date(row.validity_expires_at),
+    startedAt: normalizeTimestamp(row.started_at_iso ?? row.started_at),
+    endedAt: timestamp(row.ended_at_iso ?? row.ended_at),
+    validityExpiresAt: timestamp(
+      row.validity_expires_at_iso ?? row.validity_expires_at,
+    ),
     status: row.status,
     location: row.location ?? {},
     programmeRules: row.programme_rules ?? {},
@@ -1512,8 +1516,8 @@ function activationRecord(row: any, qsos?: any[]) {
     qsoCount: row.qso_count,
     uniqueCallsignCount: row.unique_callsign_count,
     uniqueEntityCount: row.unique_entity_count,
-    createdAt: date(row.created_at),
-    updatedAt: date(row.updated_at),
+    createdAt: timestamp(row.created_at_iso ?? row.created_at),
+    updatedAt: timestamp(row.updated_at_iso ?? row.updated_at),
   };
   return qsos ? { ...record, qsos: qsos.map(qsoRecord) } : record;
 }
@@ -1537,7 +1541,7 @@ function qsoRecord(row: any) {
     source: row.source,
     status: row.status,
     deduplicationKey: row.deduplication_key,
-    createdAt: date(row.created_at),
+    createdAt: timestamp(row.created_at_iso ?? row.created_at),
   };
 }
 
@@ -1545,6 +1549,10 @@ function date(value: unknown) {
   return value == null
     ? null
     : new Date(value as string | number | Date).toISOString();
+}
+
+function timestamp(value: unknown) {
+  return value == null ? null : normalizeTimestamp(value as string | Date);
 }
 
 function workEventType(kind: string) {
