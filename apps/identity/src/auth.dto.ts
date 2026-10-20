@@ -105,9 +105,7 @@ export class ServiceTokenRequestDto {
   service!: string;
 
   @IsOptional()
-  @IsString()
-  @MinLength(32)
-  clientSecret?: string;
+  clientSecret?: unknown;
 
   @IsOptional()
   @IsArray()

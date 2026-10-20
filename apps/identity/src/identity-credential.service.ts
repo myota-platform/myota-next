@@ -37,12 +37,16 @@ export class IdentityCredentialService {
     if (service === EMAIL_SERVICE) {
       const expectedSecret =
         process.env.MYOTA_EMAIL_SERVICE_CLIENT_SECRET ?? '';
-      const suppliedSecret = body.clientSecret ?? '';
       const expected = Buffer.from(expectedSecret, 'utf8');
-      const supplied = Buffer.from(suppliedSecret, 'utf8');
       if (
         body.scopes !== undefined ||
         expected.length < 32 ||
+        typeof body.clientSecret !== 'string'
+      ) {
+        throw new ForbiddenException('service client authentication failed');
+      }
+      const supplied = Buffer.from(body.clientSecret, 'utf8');
+      if (
         expected.length !== supplied.length ||
         !timingSafeEqual(expected, supplied)
       ) {
