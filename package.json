@@ -37,7 +37,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "lint": "oxlint --type-aware apps libs tools && node tools/check-nest-observability.mjs",
+    "lint": "oxlint --type-aware apps libs tools && node tools/check-nest-observability.mjs && node tools/check-openapi-nest-routes.mjs",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.{ts,mjs}\" \"web/admin/*.{ts,html,json}\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
     "format:check": "prettier --check \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.{ts,mjs}\" \"web/admin/*.{ts,html,json}\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
     "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-migrate.ts tools/db-backup.ts tools/db-restore.ts tools/provision-jetstream.ts tools/render-seaweedfs-s3-config.ts"
