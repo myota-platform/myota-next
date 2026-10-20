@@ -574,11 +574,12 @@ paged approved/candidate entity catalogue and map, map-picked point proposals an
 single-QSO entry, profile editing and image management. Chromium browser checks
 exercise Admin sign-in, identity session bootstrap, scope denial, Participant
 programme selection and public content, and its activation, QSO, and close
-workflow with intercepted API responses. The remaining Admin workflows and
-Participant profile and award workflows still lack browser-level compatibility
-coverage. The award catalogue follows all API pages. Remaining work includes
-accessibility/visual review and deployment integration. Its public map renders
-point, line, polygon, and multipart entity geometries.
+workflow plus profile details editing with intercepted API responses. The
+remaining Admin workflows and Participant profile image and award workflows
+still lack browser-level compatibility coverage. The award catalogue follows
+all API pages. Remaining work includes accessibility/visual review and
+deployment integration. Its public map renders point, line, polygon, and
+multipart entity geometries.
 
 ## Workers and operations
 

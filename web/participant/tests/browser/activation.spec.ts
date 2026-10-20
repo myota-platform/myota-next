@@ -6,6 +6,7 @@ test('signs in, records an activation contact, and closes the activation', async
   const activationPayloads: unknown[] = [];
   const qsoPayloads: unknown[] = [];
   const closePayloads: unknown[] = [];
+  const profilePayloads: unknown[] = [];
   const authenticatedRequests: string[] = [];
   let activation: {
     id: string;
@@ -101,6 +102,12 @@ test('signs in, records an activation contact, and closes the activation', async
       return;
     }
 
+    if (url.pathname === '/v1/identity/me/profile' && method === 'PATCH') {
+      profilePayloads.push(body);
+      await route.fulfill({ json: body });
+      return;
+    }
+
     if (url.pathname === '/v1/activations' && method === 'GET') {
       await route.fulfill({
         json: { items: activation ? [activation] : [], nextPage: null },
@@ -168,6 +175,15 @@ test('signs in, records an activation contact, and closes the activation', async
     'Activation closed.',
   );
   await expect(page.locator('#qso-form')).toBeHidden();
+  await expect(page.locator('#profile-form')).toBeVisible();
+
+  await page.locator('#profile-website').fill('https://radio.example.test');
+  await page.locator('#profile-biography').fill('I enjoy **mountain radio**.');
+  await expect(page.locator('#profile-biography-preview strong')).toHaveText(
+    'mountain radio',
+  );
+  await page.getByRole('button', { name: 'Save profile details' }).click();
+  await expect(page.locator('#profile-status')).toHaveText('Profile saved.');
 
   expect(activationPayloads).toHaveLength(1);
   expect(activationPayloads[0]).toMatchObject({
@@ -187,6 +203,12 @@ test('signs in, records an activation contact, and closes the activation', async
   });
   expect(closePayloads).toHaveLength(1);
   expect(closePayloads[0]).toMatchObject({ status: 'CLOSED' });
+  expect(profilePayloads).toEqual([
+    {
+      websiteUrl: 'https://radio.example.test',
+      biographyMarkdown: 'I enjoy **mountain radio**.',
+    },
+  ]);
   expect(authenticatedRequests.length).toBeGreaterThan(3);
   expect(
     authenticatedRequests.every(
