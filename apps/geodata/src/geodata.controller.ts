@@ -438,23 +438,14 @@ export class GeodataController {
     @Param('entityId') id: string,
     @Body() body: Record<string, unknown>,
   ) {
-    const claims = verifyAccessToken(authorization);
-    if ('location' in body || 'manualFields' in body) {
-      if (
-        !claims.scp.some(
-          (scope) => scope === '*' || scope === 'geodata.location.manage',
-        )
-      )
-        throw new ForbiddenException(
-          'geodata.location.manage scope is required',
-        );
-    }
-    if (
-      ['name', 'website', 'description'].some((field) => field in body) &&
-      !claims.scp.some((scope) => scope === '*' || scope === 'geodata.review')
-    )
-      throw new ForbiddenException('geodata.review scope is required');
-    return this.entityMutations.patchEntityMetadata(id, key, ifMatch, body);
+    const claims = authorizeReview(authorization);
+    return this.entityMutations.patchEntityMetadata(
+      id,
+      key,
+      ifMatch,
+      body,
+      claims,
+    );
   }
 
   @Post('entities/:entityId/location-enrichment-requests')
@@ -467,17 +458,12 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
   ) {
     const claims = verifyAccessToken(authorization);
-    if (
-      !claims.scp.some(
-        (scope) => scope === '*' || scope === 'geodata.location.manage',
-      )
-    )
-      throw new ForbiddenException('geodata.location.manage scope is required');
     return this.entityMutations.requestLocationEnrichment(
       id,
       key,
       ifMatch,
       body,
+      claims,
     );
   }
 
@@ -489,8 +475,8 @@ export class GeodataController {
     @Param('entityId') id: string,
     @Body() body: Record<string, unknown>,
   ) {
-    authorizeReview(authorization);
-    return this.entityMutations.reviewEntity(id, key, ifMatch, body);
+    const claims = authorizeReview(authorization);
+    return this.entityMutations.reviewEntity(id, key, ifMatch, body, claims);
   }
 
   @Put('entities/:entityId/categories')
@@ -501,8 +487,14 @@ export class GeodataController {
     @Param('entityId') id: string,
     @Body() body: Record<string, unknown>,
   ) {
-    authorizeReview(authorization);
-    return this.entityMutations.replaceEntityCategories(id, key, ifMatch, body);
+    const claims = authorizeReview(authorization);
+    return this.entityMutations.replaceEntityCategories(
+      id,
+      key,
+      ifMatch,
+      body,
+      claims,
+    );
   }
 
   @Put('entities/:entityId/geometry')
@@ -513,8 +505,14 @@ export class GeodataController {
     @Param('entityId') id: string,
     @Body() body: Record<string, unknown>,
   ) {
-    authorizeReview(authorization);
-    return this.entityMutations.replaceEntityGeometry(id, key, ifMatch, body);
+    const claims = authorizeReview(authorization);
+    return this.entityMutations.replaceEntityGeometry(
+      id,
+      key,
+      ifMatch,
+      body,
+      claims,
+    );
   }
 }
 

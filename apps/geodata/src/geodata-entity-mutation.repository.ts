@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -9,6 +10,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import type { AccessTokenClaims } from '@app/platform/access-token.js';
 import { entityProjection } from './geodata.repository.js';
 import {
   locationSnapshot,
@@ -48,6 +50,7 @@ export class GeodataEntityMutationRepository {
     key: string | undefined,
     ifMatch: string | undefined,
     body: Record<string, unknown>,
+    claims: AccessTokenClaims,
   ) {
     const reviewerId =
       typeof body.reviewerId === 'string' ? body.reviewerId.trim() : '';
@@ -73,17 +76,10 @@ export class GeodataEntityMutationRepository {
           "SELECT pg_advisory_xact_lock(hashtextextended('geodata-entity-review:' || $1,0))",
           [key],
         );
-        const previous = await client.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-          ['geodata-entity-review', key],
-        );
-        if (previous.rows[0]) {
-          await client.query('COMMIT');
-          return previous.rows[0].response;
-        }
       }
       const result = await client.query(
-        `SELECT id,revision,lifecycle_status,public_properties,
+        `SELECT id,revision,lifecycle_status,programme_slug,jurisdiction,
+          entity_type_code,public_properties,
           ST_AsGeoJSON(geom)::jsonb AS geometry,continent,continent_code,
           country,country_code,region,region_code,subdivision,subdivision_code,
           province,province_code,county,county_code,city,municipality,locality,
@@ -93,6 +89,17 @@ export class GeodataEntityMutationRepository {
       );
       const row = result.rows[0];
       if (!row) throw new NotFoundException('geodata entity not found');
+      assertReviewCoverage(claims, row);
+      if (key) {
+        const previous = await client.query(
+          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          ['geodata-entity-review', key],
+        );
+        if (previous.rows[0]) {
+          await client.query('COMMIT');
+          return previous.rows[0].response;
+        }
+      }
       if (expectedVersion !== null && Number(row.revision) !== expectedVersion)
         throw new ConflictException('entity version is stale');
       const previousStatus = String(row.lifecycle_status);
@@ -219,6 +226,7 @@ export class GeodataEntityMutationRepository {
     key: string | undefined,
     ifMatch: string | undefined,
     body: Record<string, unknown>,
+    claims: AccessTokenClaims,
   ) {
     const editorId =
       typeof body.editorId === 'string' ? body.editorId.trim() : '';
@@ -300,17 +308,10 @@ export class GeodataEntityMutationRepository {
           "SELECT pg_advisory_xact_lock(hashtextextended('geodata-entity-metadata:' || $1,0))",
           [key],
         );
-        const previous = await client.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-          ['geodata-entity-metadata', key],
-        );
-        if (previous.rows[0]) {
-          await client.query('COMMIT');
-          return previous.rows[0].response;
-        }
       }
       const result = await client.query(
-        `SELECT id,revision,name,website,description,lifecycle_status,public_properties,
+        `SELECT id,revision,name,website,description,lifecycle_status,
+          programme_slug,jurisdiction,entity_type_code,public_properties,
           ST_AsGeoJSON(geom)::jsonb AS geometry,
           continent,continent_code,country,country_code,region,region_code,
           subdivision,subdivision_code,province,province_code,county,county_code,
@@ -320,6 +321,19 @@ export class GeodataEntityMutationRepository {
       );
       const row = result.rows[0];
       if (!row) throw new NotFoundException('geodata entity not found');
+      assertReviewCoverage(claims, row);
+      if ('location' in body)
+        assertGisAdminCoverage(claims, row, 'geodata.location.manage');
+      if (key) {
+        const previous = await client.query(
+          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          ['geodata-entity-metadata', key],
+        );
+        if (previous.rows[0]) {
+          await client.query('COMMIT');
+          return previous.rows[0].response;
+        }
+      }
       if (expectedVersion !== null && Number(row.revision) !== expectedVersion)
         throw new ConflictException('entity version is stale');
       const changed: Record<string, { previous: unknown; value: unknown }> = {};
@@ -541,6 +555,7 @@ export class GeodataEntityMutationRepository {
     key: string | undefined,
     ifMatch: string | undefined,
     body: Record<string, unknown>,
+    claims: AccessTokenClaims,
   ) {
     const editorId =
       typeof body.editorId === 'string' ? body.editorId.trim() : '';
@@ -554,6 +569,19 @@ export class GeodataEntityMutationRepository {
           "SELECT pg_advisory_xact_lock(hashtextextended('geodata-location-enrichment:' || $1,0))",
           [key],
         );
+      }
+      const selected = await client.query(
+        `SELECT id,revision,geom,programme_slug,jurisdiction,entity_type_code,
+          ST_AsGeoJSON(geom)::jsonb AS geometry,
+          continent,continent_code,country,country_code,region,region_code,subdivision,subdivision_code,
+          city,municipality,manual_location_fields,public_properties
+         FROM geodata_entity WHERE id=$1 FOR UPDATE`,
+        [id],
+      );
+      const row = selected.rows[0];
+      if (!row) throw new NotFoundException('geodata entity not found');
+      assertGisAdminCoverage(claims, row, 'geodata.location.manage');
+      if (key) {
         const previous = await client.query(
           'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
           ['geodata-location-enrichment', key],
@@ -563,15 +591,6 @@ export class GeodataEntityMutationRepository {
           return previous.rows[0].response;
         }
       }
-      const selected = await client.query(
-        `SELECT id,revision,geom,ST_AsGeoJSON(geom)::jsonb AS geometry,
-          continent,continent_code,country,country_code,region,region_code,subdivision,subdivision_code,
-          city,municipality,manual_location_fields,public_properties
-         FROM geodata_entity WHERE id=$1 FOR UPDATE`,
-        [id],
-      );
-      const row = selected.rows[0];
-      if (!row) throw new NotFoundException('geodata entity not found');
       if (expectedVersion !== null && Number(row.revision) !== expectedVersion)
         throw new ConflictException('entity version is stale');
       if (!row.geometry)
@@ -688,6 +707,7 @@ export class GeodataEntityMutationRepository {
     key: string | undefined,
     ifMatch: string | undefined,
     body: Record<string, unknown>,
+    claims: AccessTokenClaims,
   ) {
     const editorId =
       typeof body.editorId === 'string' ? body.editorId.trim() : '';
@@ -716,6 +736,17 @@ export class GeodataEntityMutationRepository {
           "SELECT pg_advisory_xact_lock(hashtextextended('geodata-entity-categories:' || $1,0))",
           [key],
         );
+      }
+      const selected = await client.query(
+        `SELECT id,revision,lifecycle_status,programme_slug,jurisdiction,
+          entity_type_code,public_properties
+         FROM geodata_entity WHERE id=$1 FOR UPDATE`,
+        [id],
+      );
+      const row = selected.rows[0];
+      if (!row) throw new NotFoundException('geodata entity not found');
+      assertReviewCoverage(claims, row);
+      if (key) {
         const previous = await this.idempotentResponse(
           client,
           'geodata-entity-categories',
@@ -726,13 +757,6 @@ export class GeodataEntityMutationRepository {
           return previous.response;
         }
       }
-      const selected = await client.query(
-        `SELECT id,revision,lifecycle_status,entity_type_code,public_properties
-         FROM geodata_entity WHERE id=$1 FOR UPDATE`,
-        [id],
-      );
-      const row = selected.rows[0];
-      if (!row) throw new NotFoundException('geodata entity not found');
       if (expectedVersion !== null && Number(row.revision) !== expectedVersion)
         throw new ConflictException('entity version is stale');
       if (row.lifecycle_status === 'RETIRED')
@@ -848,6 +872,7 @@ export class GeodataEntityMutationRepository {
     key: string | undefined,
     ifMatch: string | undefined,
     body: Record<string, unknown>,
+    claims: AccessTokenClaims,
   ) {
     const editorId =
       typeof body.editorId === 'string' ? body.editorId.trim() : '';
@@ -880,6 +905,20 @@ export class GeodataEntityMutationRepository {
           "SELECT pg_advisory_xact_lock(hashtextextended('geodata-entity-geometry:' || $1,0))",
           [key],
         );
+      }
+      const selected = await client.query(
+        `SELECT id,revision,programme_slug,jurisdiction,entity_type_code,
+          ST_AsGeoJSON(geom)::jsonb AS geometry,public_properties,
+          continent,continent_code,country,country_code,region,region_code,
+          subdivision,subdivision_code,province,province_code,county,county_code,
+          city,municipality,locality,manual_location_fields
+         FROM geodata_entity WHERE id=$1 FOR UPDATE`,
+        [id],
+      );
+      const row = selected.rows[0];
+      if (!row) throw new NotFoundException('geodata entity not found');
+      assertReviewCoverage(claims, row);
+      if (key) {
         const previous = await this.idempotentResponse(
           client,
           'geodata-entity-geometry',
@@ -890,16 +929,6 @@ export class GeodataEntityMutationRepository {
           return previous.response;
         }
       }
-      const selected = await client.query(
-        `SELECT id,revision,ST_AsGeoJSON(geom)::jsonb AS geometry,public_properties,
-          continent,continent_code,country,country_code,region,region_code,
-          subdivision,subdivision_code,province,province_code,county,county_code,
-          city,municipality,locality,manual_location_fields
-         FROM geodata_entity WHERE id=$1 FOR UPDATE`,
-        [id],
-      );
-      const row = selected.rows[0];
-      if (!row) throw new NotFoundException('geodata entity not found');
       if (expectedVersion !== null && Number(row.revision) !== expectedVersion)
         throw new ConflictException('entity version is stale');
       const checked = await client.query(
@@ -1081,6 +1110,71 @@ export class GeodataEntityMutationRepository {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function assertReviewCoverage(
+  claims: AccessTokenClaims,
+  entity: Record<string, unknown>,
+) {
+  if (claims.scp.includes('*')) return;
+  if (!claims.scp.includes('geodata.review'))
+    throw new ForbiddenException('geodata.review scope is required');
+  const properties = isRecord(entity.public_properties)
+    ? entity.public_properties
+    : {};
+  const rawCategories = firstTruthyCategoryInput([
+    properties.entityTypes,
+    properties.entityTypeCodes,
+    properties.entityType,
+    entity.entity_type_code,
+  ]);
+  const categories = normalizeEntityTypeCodes(rawCategories);
+  const roles = claims.roles ?? [];
+  const scopedRoles = roles.filter((role) => {
+    const scopes = Array.isArray(role.scopes) ? role.scopes : [];
+    return scopes.includes('geodata.review') || role.role === 'GLOBAL_OPERATOR';
+  });
+  for (const role of scopedRoles) {
+    if (role.programmeSlug && role.programmeSlug !== entity.programme_slug)
+      continue;
+    if (role.entityType) {
+      if (
+        typeof role.entityType !== 'string' ||
+        !categories.includes(role.entityType.toUpperCase())
+      )
+        continue;
+    }
+    if (role.jurisdiction && role.jurisdiction !== entity.jurisdiction)
+      continue;
+    return;
+  }
+  if (!roles.some((role) => role.role === 'GLOBAL_OPERATOR'))
+    throw new ForbiddenException('approver scope does not cover this entity');
+}
+
+function assertGisAdminCoverage(
+  claims: AccessTokenClaims,
+  entity: Record<string, unknown>,
+  permission: string,
+) {
+  if (claims.scp.includes('*')) return;
+  const roles = claims.roles ?? [];
+  if (
+    roles.some((role) => {
+      if (!['GIS_ADMIN', 'GLOBAL_OPERATOR'].includes(String(role.role)))
+        return false;
+      if (role.programmeSlug && role.programmeSlug !== entity.programme_slug)
+        return false;
+      if (role.jurisdiction && role.jurisdiction !== entity.jurisdiction)
+        return false;
+      return true;
+    })
+  )
+    return;
+  if (claims.scp.includes(permission)) return;
+  throw new ForbiddenException(
+    'global or GIS administrator access is required',
+  );
 }
 
 function normalizeEntityTypeCodes(value: unknown): string[] {
