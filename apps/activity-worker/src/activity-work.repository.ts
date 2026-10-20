@@ -214,7 +214,7 @@ export class ActivityWorkRepository {
         const records = job.payload.records;
         if (!Array.isArray(records) || records.length === 0)
           throw new Error('ingestion records are empty');
-        let accepted = 0;
+        const normalized: JsonRecord[] = [];
         for (const input of records) {
           const qso = normalizeQso(
             { ...input, source: job.payload.sourceFormat ?? 'JSON' },
@@ -229,34 +229,53 @@ export class ActivityWorkRepository {
               ) > 0)
           )
             throw new Error('QSO is outside the activation validity window');
-          const id = randomUUID();
-          const inserted = await client.query(
-            `INSERT INTO activity_qso(id,activation_id,programme_slug,operator_id,operator_callsign,hunter_id,hunter_callsign,worked_callsign,worked_station_key,worked_entity_id,occurred_at,band,mode,rst,source,deduplication_key,raw_payload)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz,$12,$13,$14,$15,$16,$17::jsonb)
-           ON CONFLICT (deduplication_key) DO NOTHING RETURNING *, ${qsoTimestampProjection}`,
-            [
-              id,
-              job.payload.activationId,
-              activation.programme_slug,
-              activation.operator_id,
-              activation.operator_callsign,
-              qso.hunterId ?? null,
-              qso.hunterCallsign ?? null,
-              qso.workedCallsign,
-              qso.workedStationKey,
-              qso.workedEntityId ?? null,
-              qso.timestamp,
-              qso.band,
-              qso.mode,
-              qso.rst ?? null,
-              qso.source,
-              qso.deduplicationKey,
-              JSON.stringify(qso),
-            ],
-          );
-          const row = inserted.rows[0];
-          if (!row) continue;
-          accepted++;
+          normalized.push(qso);
+        }
+        const inserted = await client.query(
+          `INSERT INTO activity_qso
+           (id,activation_id,programme_slug,operator_id,operator_callsign,hunter_id,hunter_callsign,
+            worked_callsign,worked_station_key,worked_entity_id,occurred_at,band,mode,rst,source,
+            source_import_id,deduplication_key,raw_payload)
+           SELECT qso.id,$2,$3,$4,$5::public.citext,qso.hunter_id::text,
+             qso.hunter_callsign::public.citext,qso.worked_callsign::public.citext,
+             qso.worked_station_key,qso.worked_entity_id,qso.occurred_at,qso.band,qso.mode,
+             qso.rst,qso.source,qso.source_import_id,qso.deduplication_key,qso.raw_payload
+           FROM jsonb_to_recordset($1::jsonb) AS qso(
+             id uuid,hunter_id text,hunter_callsign text,worked_callsign text,
+             worked_station_key text,worked_entity_id text,occurred_at timestamptz,
+             band text,mode text,rst text,source text,source_import_id uuid,
+             deduplication_key text,raw_payload jsonb
+           )
+           ON CONFLICT (deduplication_key) DO NOTHING
+           RETURNING *, ${qsoTimestampProjection}`,
+          [
+            JSON.stringify(
+              normalized.map((qso) => ({
+                id: qso.id,
+                hunter_id: qso.hunterId ?? null,
+                hunter_callsign: qso.hunterCallsign ?? null,
+                worked_callsign: qso.workedCallsign,
+                worked_station_key: qso.workedStationKey,
+                worked_entity_id: qso.workedEntityId ?? null,
+                occurred_at: qso.timestamp,
+                band: qso.band,
+                mode: qso.mode,
+                rst: qso.rst ?? null,
+                source: qso.source,
+                source_import_id: qso.sourceImportId ?? null,
+                deduplication_key: qso.deduplicationKey,
+                raw_payload: qso,
+              })),
+            ),
+            job.payload.activationId,
+            activation.programme_slug,
+            activation.operator_id,
+            activation.operator_callsign,
+          ],
+        );
+        const acceptedRows = inserted.rows;
+        for (const row of acceptedRows) {
+          const qso = qsoRecord(row);
           await upsertSubject(
             client,
             activation.programme_slug,
@@ -279,14 +298,10 @@ export class ActivityWorkRepository {
           await client.query(
             `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
            VALUES ($1,'activity.qso.recorded.v1','activity-service','qso',$2,$3::jsonb,now(),$4)`,
-            [
-              randomUUID(),
-              String(row.id),
-              JSON.stringify(qsoRecord(row)),
-              randomUUID(),
-            ],
+            [randomUUID(), String(row.id), JSON.stringify(qso), randomUUID()],
           );
         }
+        const accepted = acceptedRows.length;
         if (accepted) {
           await client.query(
             `UPDATE activity_activation SET qso_count=qso_count+$2,
@@ -309,13 +324,16 @@ export class ActivityWorkRepository {
                 programmeSlug: activation.programme_slug,
                 subjectIds,
               }),
-              `ingestion:${job.id}`,
+              `batch:${job.payload.activationId}:${normalized[0].deduplicationKey}`,
             ],
           );
           await client.query(
             `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at,correlation_id)
            SELECT id,'activity.award-recalculate.v1','activity-service','activity_job',id,jsonb_build_object('jobId',id),now(),now(),$2 FROM activity_job WHERE idempotency_key=$1 ON CONFLICT DO NOTHING`,
-            [`ingestion:${job.id}`, randomUUID()],
+            [
+              `batch:${job.payload.activationId}:${normalized[0].deduplicationKey}`,
+              randomUUID(),
+            ],
           );
         }
       } else if (job.kind === 'AWARD_EVALUATION') {
