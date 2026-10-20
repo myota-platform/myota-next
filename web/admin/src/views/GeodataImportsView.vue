@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import PageHeader from '../components/PageHeader.vue';
+import PageNavigation from '../components/PageNavigation.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { apiRequest } from '../lib/api';
 import {
@@ -1335,23 +1336,16 @@ onBeforeUnmount(() => {
             No pending records for this import.
           </p>
         </div>
-        <div class="pagination">
-          <button
-            class="secondary"
-            :disabled="page <= 1 || actionBusy"
-            @click="setCandidatePage(page - 1)"
-          >
-            Previous
-          </button>
-          <span>Page {{ page }} · {{ totalCandidates }} pending records</span>
-          <button
-            class="secondary"
-            :disabled="page * pageSize >= totalCandidates || actionBusy"
-            @click="setCandidatePage(page + 1)"
-          >
-            Next
-          </button>
-        </div>
+        <PageNavigation
+          class="pagination"
+          :page="page"
+          :next-page="page * pageSize < totalCandidates ? page + 1 : null"
+          :total="totalCandidates"
+          count-label="pending records"
+          :busy="actionBusy"
+          label="import candidates"
+          @change="setCandidatePage"
+        />
       </template>
     </article>
     <article v-else class="panel empty-state import-detail-empty">
@@ -1403,23 +1397,18 @@ onBeforeUnmount(() => {
         No imports have been queued.
       </p>
     </div>
-    <div class="pagination">
-      <button
-        class="secondary"
-        :disabled="importPage <= 1 || refreshing"
-        @click="setImportPage(importPage - 1)"
-      >
-        Previous
-      </button>
-      <span>Page {{ importPage }} · {{ importTotal }} imports</span>
-      <button
-        class="secondary"
-        :disabled="importPage * importPageSize >= importTotal || refreshing"
-        @click="setImportPage(importPage + 1)"
-      >
-        Next
-      </button>
-    </div>
+    <PageNavigation
+      class="pagination"
+      :page="importPage"
+      :next-page="
+        importPage * importPageSize < importTotal ? importPage + 1 : null
+      "
+      :total="importTotal"
+      count-label="imports"
+      :busy="refreshing"
+      label="imports"
+      @change="setImportPage"
+    />
   </article>
 
   <div

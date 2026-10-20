@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import PageFeedback from '../components/PageFeedback.vue';
 import PageHeader from '../components/PageHeader.vue';
+import PageNavigation from '../components/PageNavigation.vue';
 import { usePageFeedback } from '../composables/usePageFeedback';
 import { apiRequest } from '../lib/api';
 import { myotaClient } from '../lib/myotaClient';
@@ -227,22 +228,15 @@ watch(resolution, () => {
       </p>
     </div>
 
-    <div class="toolbar conflation-pagination">
-      <span class="muted">Page {{ page }} · {{ total }} total</span>
-      <button
-        class="secondary"
-        :disabled="page <= 1 || loading"
-        @click="load(page - 1)"
-      >
-        Previous
-      </button>
-      <button
-        class="secondary"
-        :disabled="nextPage === null || loading"
-        @click="load(nextPage || page)"
-      >
-        Next
-      </button>
-    </div>
+    <PageNavigation
+      class="conflation-pagination"
+      :page="page"
+      :next-page="nextPage"
+      :total="total"
+      count-label="candidates"
+      :busy="loading"
+      label="conflation candidates"
+      @change="load"
+    />
   </article>
 </template>

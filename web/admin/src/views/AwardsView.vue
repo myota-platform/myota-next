@@ -2,6 +2,7 @@
 import ProgrammeScope from '../components/ProgrammeScope.vue';
 import { hasAnyScope } from '../lib/adminAccess';
 import PageHeader from '../components/PageHeader.vue';
+import PageNavigation from '../components/PageNavigation.vue';
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { apiRequest } from '../lib/api';
 import { myotaClient } from '../lib/myotaClient';
@@ -466,37 +467,26 @@ async function load(selectedId?: string | Event): Promise<void> {
     if (generation === loadGeneration) loading.value = false;
   }
 }
-function previousDefinitionPage(): void {
-  if (definitionPage.value <= 1 || loading.value) return;
-  definitionPage.value -= 1;
-  void load();
-}
-function nextDefinitionPage(): void {
-  if (definitionPage.value * pageSize >= definitionTotal.value || loading.value)
+function setDefinitionPage(page: number): void {
+  if (
+    page < 1 ||
+    (page - 1) * pageSize >= definitionTotal.value ||
+    loading.value
+  )
     return;
-  definitionPage.value += 1;
+  definitionPage.value = page;
   void load();
 }
-function previousRequestPage(): void {
-  if (requestPage.value <= 1 || loading.value) return;
-  requestPage.value -= 1;
-  void load();
-}
-function nextRequestPage(): void {
-  if (requestPage.value * pageSize >= requestTotal.value || loading.value)
+function setRequestPage(page: number): void {
+  if (page < 1 || (page - 1) * pageSize >= requestTotal.value || loading.value)
     return;
-  requestPage.value += 1;
+  requestPage.value = page;
   void load();
 }
-function previousIssuancePage(): void {
-  if (issuancePage.value <= 1 || loading.value) return;
-  issuancePage.value -= 1;
-  void load();
-}
-function nextIssuancePage(): void {
-  if (issuancePage.value * pageSize >= issuanceTotal.value || loading.value)
+function setIssuancePage(page: number): void {
+  if (page < 1 || (page - 1) * pageSize >= issuanceTotal.value || loading.value)
     return;
-  issuancePage.value += 1;
+  issuancePage.value = page;
   void load();
 }
 async function save(): Promise<void> {
@@ -705,25 +695,19 @@ onMounted(() => {
           No awards configured for this programme.
         </p>
       </div>
-      <nav class="toolbar" aria-label="Award definition pages">
-        <button
-          class="secondary"
-          :disabled="definitionPage <= 1 || loading"
-          @click="previousDefinitionPage"
-        >
-          Previous
-        </button>
-        <span aria-live="polite"
-          >Page {{ definitionPage }} · {{ definitionTotal }} awards</span
-        >
-        <button
-          class="secondary"
-          :disabled="definitionPage * pageSize >= definitionTotal || loading"
-          @click="nextDefinitionPage"
-        >
-          Next
-        </button>
-      </nav>
+      <PageNavigation
+        :page="definitionPage"
+        :next-page="
+          definitionPage * pageSize < definitionTotal
+            ? definitionPage + 1
+            : null
+        "
+        :total="definitionTotal"
+        count-label="awards"
+        :busy="loading"
+        label="award definitions"
+        @change="setDefinitionPage"
+      />
     </article>
     <article class="panel">
       <div class="panel-heading">
@@ -1063,25 +1047,17 @@ onMounted(() => {
           ><span class="status-pill">{{ request.status }}</span>
         </div>
         <p v-if="!requests.length" class="muted empty">No award requests.</p>
-        <nav class="toolbar" aria-label="Award request pages">
-          <button
-            class="secondary"
-            :disabled="requestPage <= 1 || loading"
-            @click="previousRequestPage"
-          >
-            Previous
-          </button>
-          <span aria-live="polite"
-            >Page {{ requestPage }} · {{ requestTotal }} requests</span
-          >
-          <button
-            class="secondary"
-            :disabled="requestPage * pageSize >= requestTotal || loading"
-            @click="nextRequestPage"
-          >
-            Next
-          </button>
-        </nav>
+        <PageNavigation
+          :page="requestPage"
+          :next-page="
+            requestPage * pageSize < requestTotal ? requestPage + 1 : null
+          "
+          :total="requestTotal"
+          count-label="requests"
+          :busy="loading"
+          label="award requests"
+          @change="setRequestPage"
+        />
         <h3>Issuances · {{ issuanceTotal }}</h3>
         <div v-for="issuance in issuances" :key="issuance.id" class="table-row">
           <span
@@ -1092,25 +1068,17 @@ onMounted(() => {
           ><span>{{ issuance.dateObtained }}</span>
         </div>
         <p v-if="!issuances.length" class="muted empty">No award issuances.</p>
-        <nav class="toolbar" aria-label="Award issuance pages">
-          <button
-            class="secondary"
-            :disabled="issuancePage <= 1 || loading"
-            @click="previousIssuancePage"
-          >
-            Previous
-          </button>
-          <span aria-live="polite"
-            >Page {{ issuancePage }} · {{ issuanceTotal }} issuances</span
-          >
-          <button
-            class="secondary"
-            :disabled="issuancePage * pageSize >= issuanceTotal || loading"
-            @click="nextIssuancePage"
-          >
-            Next
-          </button>
-        </nav>
+        <PageNavigation
+          :page="issuancePage"
+          :next-page="
+            issuancePage * pageSize < issuanceTotal ? issuancePage + 1 : null
+          "
+          :total="issuanceTotal"
+          count-label="issuances"
+          :busy="loading"
+          label="award issuances"
+          @change="setIssuancePage"
+        />
       </div>
     </article>
   </div>

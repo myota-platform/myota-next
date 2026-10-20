@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import PageHeader from '../components/PageHeader.vue';
+import PageNavigation from '../components/PageNavigation.vue';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { ApiError, apiRequest } from '../lib/api';
@@ -1670,22 +1671,16 @@ onMounted(async () => {
         No entities match these filters.
       </p>
     </div>
-    <div class="pagination">
-      <button
-        class="secondary"
-        :disabled="page <= 1"
-        @click="setPage(page - 1)"
-      >
-        Previous</button
-      ><span>{{ page }} / {{ Math.max(1, Math.ceil(total / pageSize)) }}</span
-      ><button
-        class="secondary"
-        :disabled="page * pageSize >= total"
-        @click="setPage(page + 1)"
-      >
-        Next
-      </button>
-    </div>
+    <PageNavigation
+      class="pagination"
+      :page="page"
+      :next-page="page * pageSize < total ? page + 1 : null"
+      :total="total"
+      count-label="entities"
+      :busy="loading"
+      label="Geodata entities"
+      @change="setPage"
+    />
   </article>
   <article v-if="!isManagement || creating" class="panel map-panel">
     <div class="panel-heading">

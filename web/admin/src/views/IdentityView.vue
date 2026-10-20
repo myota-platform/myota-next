@@ -14,6 +14,7 @@ import { useAppStore } from '../stores/app';
 import { usePageFeedback } from '../composables/usePageFeedback';
 import PageHeader from '../components/PageHeader.vue';
 import PageFeedback from '../components/PageFeedback.vue';
+import PageNavigation from '../components/PageNavigation.vue';
 
 interface Role {
   code: string;
@@ -545,25 +546,16 @@ onMounted(load);
         <p v-if="!accounts.length && !loading && !error" class="empty muted">
           No users match this search.
         </p>
-        <div class="toolbar account-pagination">
-          <span class="muted"
-            >{{ accountTotal }} users · page {{ accountPage }}</span
-          >
-          <button
-            class="secondary"
-            :disabled="accountPage <= 1 || loading || saving"
-            @click="changeAccountPage(accountPage - 1)"
-          >
-            Previous
-          </button>
-          <button
-            class="secondary"
-            :disabled="accountNextPage === null || loading || saving"
-            @click="changeAccountPage(accountNextPage || accountPage)"
-          >
-            Next
-          </button>
-        </div>
+        <PageNavigation
+          class="account-pagination"
+          :page="accountPage"
+          :next-page="accountNextPage"
+          :total="accountTotal"
+          count-label="users"
+          :busy="loading || saving"
+          label="accounts"
+          @change="changeAccountPage"
+        />
       </div>
       <p v-else-if="!creatingAccount" class="empty muted">
         You can create accounts, but viewing existing accounts requires the
@@ -771,9 +763,7 @@ onMounted(load);
   </div>
   <article v-if="activeTab === 'security'" class="panel">
     <h2>Recent security events</h2>
-    <p class="muted">
-      {{ securityEventTotal }} audit events · page {{ securityEventPage }} · UTC
-    </p>
+    <p class="muted">Audit history in UTC.</p>
     <div class="table-list">
       <div
         v-for="event in securityEvents"
@@ -795,23 +785,15 @@ onMounted(load);
         No recent security events.
       </p>
     </div>
-    <div class="toolbar security-event-pagination">
-      <button
-        class="secondary"
-        :disabled="securityEventPage <= 1 || loading"
-        @click="changeSecurityEventPage(securityEventPage - 1)"
-      >
-        Previous
-      </button>
-      <button
-        class="secondary"
-        :disabled="securityEventNextPage === null || loading"
-        @click="
-          changeSecurityEventPage(securityEventNextPage || securityEventPage)
-        "
-      >
-        Next
-      </button>
-    </div>
+    <PageNavigation
+      class="security-event-pagination"
+      :page="securityEventPage"
+      :next-page="securityEventNextPage"
+      :total="securityEventTotal"
+      count-label="audit events"
+      :busy="loading"
+      label="security events"
+      @change="changeSecurityEventPage"
+    />
   </article>
 </template>

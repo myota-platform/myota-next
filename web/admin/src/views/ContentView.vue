@@ -6,6 +6,7 @@ import { useAppStore } from '../stores/app';
 import { utcInput, utcInputValue } from '../lib/utc';
 import PageHeader from '../components/PageHeader.vue';
 import PageFeedback from '../components/PageFeedback.vue';
+import PageNavigation from '../components/PageNavigation.vue';
 import ProgrammeScope from '../components/ProgrammeScope.vue';
 import { usePageFeedback } from '../composables/usePageFeedback';
 interface ContentItem {
@@ -225,22 +226,15 @@ onMounted(() => {
         </button>
         <p v-if="!items.length" class="muted empty">No content drafts yet.</p>
       </div>
-      <div class="toolbar content-pagination">
-        <button
-          class="secondary"
-          :disabled="contentPage <= 1 || loading || saving"
-          @click="changeContentPage(contentPage - 1)"
-        >
-          Previous
-        </button>
-        <button
-          class="secondary"
-          :disabled="contentNextPage === null || loading || saving"
-          @click="changeContentPage(contentNextPage || contentPage)"
-        >
-          Next
-        </button>
-      </div>
+      <PageNavigation
+        class="content-pagination"
+        :page="contentPage"
+        :next-page="contentNextPage"
+        :busy="loading || saving"
+        :show-summary="false"
+        label="content versions"
+        @change="changeContentPage"
+      />
     </article>
     <article class="panel">
       <div class="panel-heading">

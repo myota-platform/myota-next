@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from 'vue';
 import PageFeedback from '../components/PageFeedback.vue';
 import PageHeader from '../components/PageHeader.vue';
+import PageNavigation from '../components/PageNavigation.vue';
 import { usePageFeedback } from '../composables/usePageFeedback';
 import { apiRequest } from '../lib/api';
 import { myotaClient } from '../lib/myotaClient';
@@ -149,14 +150,9 @@ async function runSchedule(schedule: RefreshSchedule): Promise<void> {
   }
 }
 
-function previousPage(): void {
-  if (offset.value <= 0) return;
-  void load(Math.max(0, offset.value - pageSize));
-}
-
-function nextPage(): void {
-  if (offset.value + schedules.value.length >= total.value) return;
-  void load(offset.value + pageSize);
+function changePage(page: number): void {
+  if (page < 1) return;
+  void load((page - 1) * pageSize);
 }
 
 function formatEntityTypes(schedule: RefreshSchedule): string {
@@ -310,21 +306,19 @@ onMounted(() => void load(0));
         No refresh schedules have been created.
       </p>
     </div>
-    <div class="toolbar schedule-pagination">
-      <button
-        class="secondary"
-        :disabled="offset === 0 || loading"
-        @click="previousPage"
-      >
-        Previous
-      </button>
-      <button
-        class="secondary"
-        :disabled="offset + schedules.length >= total || loading"
-        @click="nextPage"
-      >
-        Next
-      </button>
-    </div>
+    <PageNavigation
+      class="schedule-pagination"
+      :page="Math.floor(offset / pageSize) + 1"
+      :next-page="
+        offset + schedules.length < total
+          ? Math.floor(offset / pageSize) + 2
+          : null
+      "
+      :total="total"
+      count-label="schedules"
+      :busy="loading"
+      label="refresh schedules"
+      @change="changePage"
+    />
   </article>
 </template>

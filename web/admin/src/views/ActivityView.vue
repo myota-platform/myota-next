@@ -4,6 +4,7 @@ import { apiRequest } from '../lib/api';
 import { hasAnyScope } from '../lib/adminAccess';
 import PageHeader from '../components/PageHeader.vue';
 import PageFeedback from '../components/PageFeedback.vue';
+import PageNavigation from '../components/PageNavigation.vue';
 import { usePageFeedback } from '../composables/usePageFeedback';
 import { utcDisplay } from '../lib/utc';
 import { useAppStore } from '../stores/app';
@@ -312,22 +313,16 @@ watch(programme, () => {
         No activations recorded.
       </p>
     </div>
-    <div class="toolbar activity-pagination">
-      <button
-        class="secondary"
-        :disabled="activationPage <= 1 || loading"
-        @click="changeActivationPage(activationPage - 1)"
-      >
-        Previous activations
-      </button>
-      <button
-        class="secondary"
-        :disabled="activationNextPage === null || loading"
-        @click="changeActivationPage(activationNextPage || activationPage)"
-      >
-        Next activations
-      </button>
-    </div>
+    <PageNavigation
+      :page="activationPage"
+      :next-page="activationNextPage"
+      :busy="loading"
+      :show-summary="false"
+      label="activations"
+      previous-label="Previous activations"
+      next-label="Next activations"
+      @change="changeActivationPage"
+    />
     <section v-if="selected" class="activity-detail" aria-live="polite">
       <p v-if="detailLoading" class="muted">Loading activation details…</p>
       <p v-else-if="detailError" class="error-text" role="alert">
@@ -407,22 +402,16 @@ watch(programme, () => {
         No statistics snapshots available.
       </p>
     </div>
-    <div class="toolbar activity-pagination">
-      <button
-        class="secondary"
-        :disabled="statisticsPage <= 1 || loading"
-        @click="changeStatisticsPage(statisticsPage - 1)"
-      >
-        Previous statistics
-      </button>
-      <button
-        class="secondary"
-        :disabled="statisticsNextPage === null || loading"
-        @click="changeStatisticsPage(statisticsNextPage || statisticsPage)"
-      >
-        Next statistics
-      </button>
-    </div>
+    <PageNavigation
+      :page="statisticsPage"
+      :next-page="statisticsNextPage"
+      :busy="loading"
+      :show-summary="false"
+      label="statistics snapshots"
+      previous-label="Previous statistics"
+      next-label="Next statistics"
+      @change="changeStatisticsPage"
+    />
   </article>
 
   <article class="panel">

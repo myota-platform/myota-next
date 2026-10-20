@@ -7,6 +7,7 @@ import { utcInput, utcInputValue } from '../lib/utc';
 
 import PageHeader from '../components/PageHeader.vue';
 import PageFeedback from '../components/PageFeedback.vue';
+import PageNavigation from '../components/PageNavigation.vue';
 import ProgrammeScope from '../components/ProgrammeScope.vue';
 import { usePageFeedback } from '../composables/usePageFeedback';
 interface Policy {
@@ -205,22 +206,15 @@ onMounted(() => {
         </button>
         <p v-if="!policies.length" class="muted empty">No drafts yet.</p>
       </div>
-      <div class="toolbar policy-pagination">
-        <button
-          class="secondary"
-          :disabled="policyPage <= 1 || loading || saving"
-          @click="changePolicyPage(policyPage - 1)"
-        >
-          Previous
-        </button>
-        <button
-          class="secondary"
-          :disabled="policyNextPage === null || loading || saving"
-          @click="changePolicyPage(policyNextPage || policyPage)"
-        >
-          Next
-        </button>
-      </div>
+      <PageNavigation
+        class="policy-pagination"
+        :page="policyPage"
+        :next-page="policyNextPage"
+        :busy="loading || saving"
+        :show-summary="false"
+        label="policy drafts"
+        @change="changePolicyPage"
+      />
     </article>
     <article class="panel">
       <div class="panel-heading">
