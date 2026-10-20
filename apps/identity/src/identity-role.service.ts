@@ -39,7 +39,21 @@ export class IdentityRoleService {
       );
     }
 
-    const result = await this.pool.query<{
+    const client = await this.pool.connect();
+    try {
+      return {
+        items: await this.readRoleDefinitionsForTransaction(client),
+        permissions: ADMIN_PERMISSION_CATALOG,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async readRoleDefinitionsForTransaction(
+    client: PoolClient,
+  ): Promise<RoleDefinition[]> {
+    const result = await client.query<{
       code: string;
       name: string;
       description: string;
@@ -74,10 +88,9 @@ export class IdentityRoleService {
         updatedAt: row.updated_at,
       });
     }
-    const roles = [...definitions.values()].sort((left, right) =>
+    return [...definitions.values()].sort((left, right) =>
       left.code.localeCompare(right.code),
     );
-    return { items: roles, permissions: ADMIN_PERMISSION_CATALOG };
   }
 
   async createAdminRole(

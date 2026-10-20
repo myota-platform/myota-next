@@ -28,14 +28,12 @@ import {
   CallsignEvidenceDto,
   RetireCallsignDto,
   SetPrimaryCallsignDto,
-  UpdateAccountDto,
   VerifyCallsignDto,
   AdminAccountsQueryDto,
   AdminRoleDefinitionDto,
   RecoveryRequestDto,
   RecoveryResetDto,
   RefreshTokenDto,
-  ReplaceAccountRolesDto,
   SecurityEventsQueryDto,
   OidcProviderMappingDto,
 } from './auth.dto.js';
@@ -304,7 +302,7 @@ export class AuthController {
   updateAccount(
     @Headers('authorization') authorization: string | undefined,
     @Param('accountId', new ParseUUIDPipe()) accountId: string,
-    @Body() body: UpdateAccountDto,
+    @Body() body: unknown,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
@@ -315,13 +313,11 @@ export class AuthController {
   replaceAccountRoleAssignments(
     @Headers('authorization') authorization: string | undefined,
     @Param('accountId', new ParseUUIDPipe()) accountId: string,
-    @Body() body: ReplaceAccountRolesDto,
+    @Body() body: unknown,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
-    return this.accounts.updateAccount(authorization, accountId, {
-      roles: body.roles,
-    });
+    return this.accounts.updateAccount(authorization, accountId, body);
   }
 
   @Post('accounts/:accountId/callsigns')

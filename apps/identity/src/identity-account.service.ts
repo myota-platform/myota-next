@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
+  ValidationPipe,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
@@ -25,11 +26,8 @@ import {
 } from './auth.service.js';
 import { IdentityRoleService } from './identity-role.service.js';
 import { IdentityProfileImageService } from './identity-profile-image.service.js';
-import type {
-  CreateAccountDto,
-  RoleGrantDto,
-  UpdateAccountDto,
-} from './auth.dto.js';
+import type { CreateAccountDto, RoleGrantDto } from './auth.dto.js';
+import { UpdateAccountDto } from './auth.dto.js';
 import type { RoleDefinition } from './role-catalog.js';
 import { DEFAULT_ROLE_SCOPES } from './role-catalog.js';
 
@@ -437,25 +435,13 @@ export class IdentityAccountService {
   async updateAccount(
     authorization: string,
     accountId: string,
-    body: UpdateAccountDto,
+    rawBody: unknown,
   ): Promise<Record<string, unknown>> {
     const actor = await this.auth.currentAccount(authorization);
     const actorScopes = new Set(actor.scopes as string[]);
     if (!actorScopes.has('*') && !actorScopes.has('identity.admin')) {
       throw new ForbiddenException('identity.admin scope is required');
     }
-    const hasRoleUpdate =
-      body.roles !== undefined || body.roleCodes !== undefined;
-    const requestedRoles = body.roles?.length
-      ? body.roles
-      : (body.roleCodes ?? []).map((code) => ({ code }));
-    let definitions: RoleDefinition[] = [];
-    if (hasRoleUpdate && requestedRoles.length > 0) {
-      const catalogue = await this.roleService.listAdminRoles(authorization);
-      definitions = catalogue.items as RoleDefinition[];
-    }
-
-    const profile = this.normalizeProfile(body);
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -475,6 +461,13 @@ export class IdentityAccountService {
       const account = result.rows[0];
       if (!account) throw new NotFoundException('account not found');
 
+      const body = await validateUpdateAccountBody(rawBody);
+      const hasRoleUpdate =
+        body.roles !== undefined || body.roleCodes !== undefined;
+      const requestedRoles = body.roles?.length
+        ? body.roles
+        : (body.roleCodes ?? []).map((code) => ({ code }));
+      const profile = this.normalizeProfile(body);
       const nextStatus = body.status ?? account.status;
       const anonymize = Boolean(body.anonymize && nextStatus === 'DEACTIVATED');
       let email: string | null | undefined;
@@ -606,6 +599,10 @@ export class IdentityAccountService {
             'actors cannot change their own role assignments',
           );
         }
+        const definitions =
+          requestedRoles.length > 0
+            ? await this.roleService.readRoleDefinitionsForTransaction(client)
+            : [];
         roles = await this.replaceRoles(
           client,
           accountId,
@@ -1120,4 +1117,18 @@ function isUniqueViolation(error: unknown): boolean {
     'code' in error &&
     error.code === '23505'
   );
+}
+
+const updateAccountValidationPipe = new ValidationPipe({
+  transform: true,
+  whitelist: true,
+});
+
+async function validateUpdateAccountBody(
+  body: unknown,
+): Promise<UpdateAccountDto> {
+  return (await updateAccountValidationPipe.transform(body, {
+    type: 'body',
+    metatype: UpdateAccountDto,
+  })) as UpdateAccountDto;
 }
