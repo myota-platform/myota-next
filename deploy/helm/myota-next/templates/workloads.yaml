@@ -1,6 +1,10 @@
 {{- range $name, $component := .Values.components }}
 {{- if $component.enabled }}
 {{- $imageName := $component.app }}
+{{- $usesObserve := true }}
+{{- if hasKey $component "observe" }}
+{{- $usesObserve = $component.observe }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -38,13 +42,13 @@ spec:
               protocol: TCP
           {{- end }}
           env:
-            {{- include "myota-next.env" (dict "root" $ "env" $component.env) | nindent 12 }}
+            {{- include "myota-next.env" (dict "root" $ "env" $component.env "observe" (and $.Values.observe.enabled $usesObserve)) | nindent 12 }}
           resources:
             {{- toYaml (default $.Values.commonResources $component.resources) | nindent 12 }}
           {{- if or $component.port $component.healthPort }}
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: {{ default "/healthz" $component.livenessPath }}
               port: {{ ternary "http" "health" (hasKey $component "port") }}
             initialDelaySeconds: 10
             periodSeconds: 10
@@ -52,7 +56,7 @@ spec:
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /readyz
+              path: {{ default "/readyz" $component.readinessPath }}
               port: {{ ternary "health" "http" (hasKey $component "healthPort") }}
             initialDelaySeconds: 5
             periodSeconds: 5

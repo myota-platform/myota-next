@@ -36,6 +36,8 @@ images:
   geodata-importer: { repository: '', tag: '', digest: '' }
   email-worker: { repository: '', tag: '', digest: '' }
   outbox-worker: { repository: '', tag: '', digest: '' }
+  admin-web: { repository: '', tag: '', digest: '' }
+  participant-web: { repository: '', tag: '', digest: '' }
 migrations:
   enabled: true
   image: { repository: '', tag: '', digest: '' }
@@ -61,6 +63,8 @@ dependencies:
   programmesUrl: ''
   geodataUrl: ''
   clamavUrl: tcp://myota-clamav:3310
+  gatewayUpstream: ''
+  grafanaUpstream: grafana:3000
   profileImageBucket: myota-user-profile-images
   adifBucket: myota-adif
   awardAssetBucket: myota-award-assets
@@ -293,10 +297,34 @@ components:
       OUTBOX_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }
       NATS_URL: { secret: nats, key: url }
       OUTBOX_METRICS_PORT: '9108'
+  admin-web:
+    enabled: true
+    app: admin-web
+    observe: false
+    replicas: 1
+    port: 8080
+    service: true
+    livenessPath: /
+    readinessPath: /
+    env:
+      MYOTA_GATEWAY_UPSTREAM: '{{ default (printf "%s-gateway:8080" .Release.Name) .Values.dependencies.gatewayUpstream }}'
+      MYOTA_GRAFANA_UPSTREAM: '{{ .Values.dependencies.grafanaUpstream }}'
+  participant-web:
+    enabled: true
+    app: participant-web
+    observe: false
+    replicas: 1
+    port: 8080
+    service: true
+    livenessPath: /
+    readinessPath: /
+    env: {}
 ingress:
   enabled: false
   className: ''
   host: api.myota.top
+  adminHost: ''
+  participantHost: ''
   tlsSecretName: ''
 commonResources:
   requests: { cpu: 100m, memory: 128Mi }

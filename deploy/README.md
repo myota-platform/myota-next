@@ -39,13 +39,13 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml down -v
 ```
 
 This Compose file is a development environment. The image workflow publishes
-per-process GHCR images from qualified `main` and `v*` revisions. Immutable
-image pinning, data transfer, backups, restore, and rollout qualification
-remain separate work.
+per-process and browser-app GHCR images from qualified `main` and `v*` revisions.
+Immutable image pinning, data transfer, backups, restore, and rollout
+qualification remain separate work.
 
-The initial NestJS [Helm chart](helm/myota-next/README.md) deploys the APIs and
-background processes against external PostgreSQL, NATS, and S3-compatible
-services. Its opt-in JetStream Job provisions reviewed stream topology but does
-not install a NATS server. The chart does not provision the other stateful
-infrastructure or replace the prior Fleet release process, and is not qualified
-for production rollout.
+The initial NestJS [Helm chart](helm/myota-next/README.md) deploys the APIs,
+background processes, and separate Admin and Participant apps against external
+PostgreSQL, NATS, and S3-compatible services. Its opt-in JetStream Job
+provisions reviewed stream topology but does not install a NATS server. The
+chart does not provision the other stateful infrastructure or replace the
+prior Fleet release process, and is not qualified for production rollout.

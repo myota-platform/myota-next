@@ -1,4 +1,6 @@
 {{- if .Values.ingress.enabled }}
+{{- $admin := index .Values.components "admin-web" }}
+{{- $participant := index .Values.components "participant-web" }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -11,7 +13,14 @@ spec:
   {{- end }}
   {{- if .Values.ingress.tlsSecretName }}
   tls:
-    - hosts: [{{ .Values.ingress.host | quote }}]
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+        {{- if and .Values.ingress.adminHost $admin.enabled }}
+        - {{ .Values.ingress.adminHost | quote }}
+        {{- end }}
+        {{- if and .Values.ingress.participantHost $participant.enabled }}
+        - {{ .Values.ingress.participantHost | quote }}
+        {{- end }}
       secretName: {{ .Values.ingress.tlsSecretName }}
   {{- end }}
   rules:
@@ -25,4 +34,28 @@ spec:
                 name: {{ printf "%s-gateway" (include "myota-next.name" .) }}
                 port:
                   number: {{ .Values.components.gateway.port }}
+    {{- if and .Values.ingress.adminHost $admin.enabled }}
+    - host: {{ .Values.ingress.adminHost | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ printf "%s-admin-web" (include "myota-next.name" .) }}
+                port:
+                  number: {{ $admin.port }}
+    {{- end }}
+    {{- if and .Values.ingress.participantHost $participant.enabled }}
+    - host: {{ .Values.ingress.participantHost | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ printf "%s-participant-web" (include "myota-next.name" .) }}
+                port:
+                  number: {{ $participant.port }}
+    {{- end }}
 {{- end }}

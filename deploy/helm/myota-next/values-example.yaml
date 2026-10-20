@@ -42,6 +42,13 @@ images:
       repository: ghcr.io/myota-platform/myota-next-outbox-worker,
       tag: example,
     }
+  admin-web:
+    { repository: ghcr.io/myota-platform/myota-next-admin-web, tag: example }
+  participant-web:
+    {
+      repository: ghcr.io/myota-platform/myota-next-participant-web,
+      tag: example,
+    }
 migrations:
   image: { repository: ghcr.io/myota-platform/myota-next-tools, tag: example }
 jetstreamProvisioner:

@@ -1,10 +1,11 @@
 # MyOTA NestJS chart
 
-This chart deploys the NestJS APIs and background processes from this
-monorepo. It keeps Core, Activity, and Geodata as three separately configured
-PostgreSQL owners. It does not provision databases, a NATS server, or object
-storage. Configure those services independently. An opt-in Job can provision
-the registered streams and durable consumers on the configured NATS server.
+This chart deploys the NestJS APIs, background processes, Admin app, and
+Participant app from this monorepo. It keeps Core, Activity, and Geodata as
+three separately configured PostgreSQL owners. It does not provision
+databases, a NATS server, or object storage. Configure those services
+independently. An opt-in Job can provision the registered streams and durable
+consumers on the configured NATS server.
 
 ## Images and install
 
@@ -20,8 +21,9 @@ docker build -f deploy/Dockerfile.tools \
   -t ghcr.io/myota-platform/myota-next-tools:VERSION .
 ```
 
-Repeat the application build for every enabled Nest CLI project. The image
-names in `values-example.yaml` match the repository image workflow. Pushes to
+Repeat the application build for every enabled Nest CLI project. The workflow
+also builds the Admin and Participant images from their own Docker contexts.
+Image names in `values-example.yaml` match the repository workflow. Pushes to
 `main` and `v*` tags publish per-image SHA and release tags after the quality
 job passes; pull requests run the quality checks and build all container images
 without publishing. Use the digest printed in the workflow summary for

@@ -42,7 +42,7 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
 - name: MYOTA_BUILD_VERSION
   value: {{ $root.Values.buildVersion | quote }}
 {{- end }}
-{{- if $root.Values.observe.enabled }}
+{{- if .observe }}
 - name: OBSERVE_APP_KEY
   valueFrom:
     secretKeyRef:
