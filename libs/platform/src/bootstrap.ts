@@ -7,6 +7,7 @@ import { integerSetting } from './integer-setting.js';
 import { ApiProblemFilter, parserProblem, requestIds } from './http-problem.js';
 import { ObserveInstrument } from './observe.js';
 import { containsBigInt, stringifyJsonWithBigInts } from './json-bigint.js';
+import { parseJsonWithExactIntegers } from './json-exact.js';
 
 export async function bootstrapHttpService(
   rootModule: Type<unknown>,
@@ -61,12 +62,24 @@ export async function bootstrapHttpService(
           /^\/v1\/geodata\/entity-deletion-jobs(?:\/[^/]+\/confirm)?$/.test(
             request.url?.split('?', 1)[0] ?? '',
           ) ||
-          request.url?.split('?', 1)[0] === '/v1/geodata/refresh-schedules'
+          request.url?.split('?', 1)[0] === '/v1/geodata/refresh-schedules' ||
+          request.url?.split('?', 1)[0] === '/v1/programmes'
         )
           Object.assign(request, { rawBody: buffer });
       },
     }),
   );
+  app.use((request: Request, _response: Response, next: NextFunction) => {
+    if (
+      request.method === 'POST' &&
+      request.url?.split('?', 1)[0] === '/v1/programmes' &&
+      Buffer.isBuffer((request as Request & { rawBody?: Buffer }).rawBody)
+    )
+      request.body = parseJsonWithExactIntegers(
+        (request as Request & { rawBody: Buffer }).rawBody.toString('utf8'),
+      );
+    next();
+  });
   app.use(express.urlencoded({ extended: true, limit: jsonLimit }));
   if (preserveBigIntJson)
     app.use((_request: Request, response: Response, next: NextFunction) => {

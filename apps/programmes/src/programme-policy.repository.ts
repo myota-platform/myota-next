@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
 
 export type ProgrammePolicyDraft = Record<string, unknown> & {
@@ -77,7 +78,7 @@ export class ProgrammePolicyRepository {
         draft.type,
         draft.status,
         draft.updatedAt,
-        JSON.stringify(draft),
+        stringifyJsonWithBigInts(draft),
       ],
     );
   }

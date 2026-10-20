@@ -14,7 +14,7 @@ import { GeodataDeletionService } from './geodata-deletion.service.js';
 import { GeodataScheduleService } from './geodata-schedule.service.js';
 import { GeodataProposalService } from './geodata-proposal.service.js';
 import { GeodataLoadTestCleanupService } from './geodata-load-test-cleanup.service.js';
-import { parseJsonWithExactIntegers } from './geodata-request-fingerprint.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 
 @Module({
   imports: [

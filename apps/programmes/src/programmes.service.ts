@@ -10,7 +10,7 @@ import { verifyAccessToken } from '@app/platform/access-token.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
-import type { ProgrammeRecord } from './programme.types.js';
+import { nextPolicyVersion, type ProgrammeRecord } from './programme.types.js';
 import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
 import { ProgrammeRepository } from './programme.repository.js';
 import { ProgrammeEntityTypeRepository } from './programme-entity-type.repository.js';
@@ -170,7 +170,7 @@ export class ProgrammesService {
         );
       }
       if (body.rules !== undefined || body.entityTypes !== undefined) {
-        programme.policyVersion = (programme.policyVersion ?? 1) + 1;
+        programme.policyVersion = nextPolicyVersion(programme.policyVersion);
       }
       if (status === 'ARCHIVED') programme.status = 'ARCHIVED';
       programme.updatedAt = new Date().toISOString();
@@ -377,7 +377,7 @@ export class ProgrammesService {
     if (nextCodes.length === currentCodes.length) return;
     programme.entityTypeCodes = nextCodes;
     programme.entityTypes = nextCodes.map((current) => catalog[current]);
-    programme.policyVersion = (programme.policyVersion ?? 1) + 1;
+    programme.policyVersion = nextPolicyVersion(programme.policyVersion);
     programme.updatedAt = new Date().toISOString();
     await this.programmes.save(client, programme);
     await this.mutations.recordEvent(
@@ -405,24 +405,26 @@ export class ProgrammesService {
   }
 }
 
-function parsePythonPolicyVersion(value: unknown): number {
+function parsePythonPolicyVersion(value: unknown): number | bigint {
   if (typeof value === 'boolean') return Number(value);
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    const integer = Math.trunc(value);
-    if (Number.isSafeInteger(integer)) return integer;
-  }
+  if (typeof value === 'bigint') return safeInteger(value);
+  if (typeof value === 'number' && Number.isFinite(value))
+    return safeInteger(BigInt(Math.trunc(value)));
   if (typeof value === 'string') {
     const normalized = normalizePythonNumericText(value);
     if (/^[+-]?\d(?:_?\d)*$/.test(normalized)) {
       const integer = BigInt(normalized.replaceAll('_', ''));
-      if (
-        integer <= BigInt(Number.MAX_SAFE_INTEGER) &&
-        integer >= BigInt(Number.MIN_SAFE_INTEGER)
-      )
-        return Number(integer);
+      return safeInteger(integer);
     }
   }
   throw new BadRequestException('policyVersion must be an integer');
+}
+
+function safeInteger(value: bigint): number | bigint {
+  return value <= BigInt(Number.MAX_SAFE_INTEGER) &&
+    value >= BigInt(Number.MIN_SAFE_INTEGER)
+    ? Number(value)
+    : value;
 }
 
 const GEOMETRY_TYPES = new Set([

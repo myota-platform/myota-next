@@ -1,13 +1,7 @@
 import { createHash } from 'node:crypto';
 import { pythonFloatString } from '@app/platform/python-number.js';
 import { comparePythonStrings } from '@app/platform/python-string.js';
-
-class JsonNumber {
-  constructor(
-    readonly value: number | bigint,
-    readonly floating: boolean,
-  ) {}
-}
+import { JsonNumber, JsonParser } from '@app/platform/json-exact.js';
 
 export function fingerprintJsonRequest(
   body: unknown,
@@ -21,26 +15,6 @@ export function fingerprintJsonRequest(
 /** Canonicalize raw JSON with Python's compact, sorted, Unicode-preserving form. */
 export function canonicalPythonJson(rawBody: string): string {
   return canonicalJsonValue(new JsonParser(rawBody).parse());
-}
-
-export function parseJsonWithExactIntegers(rawBody: string): unknown {
-  const materialize = (value: unknown): unknown => {
-    if (value instanceof JsonNumber) {
-      if (value.floating) return value.value;
-      const integer = value.value as bigint;
-      return integer >= BigInt(Number.MIN_SAFE_INTEGER) &&
-        integer <= BigInt(Number.MAX_SAFE_INTEGER)
-        ? Number(integer)
-        : integer;
-    }
-    if (Array.isArray(value)) return value.map(materialize);
-    if (isRecord(value)) {
-      for (const [key, item] of Object.entries(value))
-        value[key] = materialize(item);
-    }
-    return value;
-  };
-  return materialize(new JsonParser(rawBody).parse());
 }
 
 export function canonicalPythonGeneratedJson(
@@ -290,119 +264,6 @@ function isPythonTruthyJson(value: unknown): boolean {
     return value !== 0;
   if (isRecord(value)) return Object.keys(value).length > 0;
   return true;
-}
-
-class JsonParser {
-  private index = 0;
-
-  constructor(private readonly source: string) {}
-
-  parse(): unknown {
-    const result = this.value();
-    this.whitespace();
-    if (this.index !== this.source.length)
-      throw new Error('invalid JSON request body');
-    return result;
-  }
-
-  private value(): unknown {
-    this.whitespace();
-    const character = this.source[this.index];
-    if (character === '{') return this.object();
-    if (character === '[') return this.array();
-    if (character === '"') return this.string();
-    if (character === 't') return this.literal('true', true);
-    if (character === 'f') return this.literal('false', false);
-    if (character === 'n') return this.literal('null', null);
-    return this.number();
-  }
-
-  private object(): Record<string, unknown> {
-    this.index += 1;
-    this.whitespace();
-    const result: Record<string, unknown> = Object.create(null);
-    if (this.source[this.index] === '}') {
-      this.index += 1;
-      return result;
-    }
-    while (true) {
-      this.whitespace();
-      const key = this.string();
-      this.whitespace();
-      this.expect(':');
-      result[key] = this.value();
-      this.whitespace();
-      if (this.source[this.index] === '}') {
-        this.index += 1;
-        return result;
-      }
-      this.expect(',');
-    }
-  }
-
-  private array(): unknown[] {
-    this.index += 1;
-    this.whitespace();
-    const result: unknown[] = [];
-    if (this.source[this.index] === ']') {
-      this.index += 1;
-      return result;
-    }
-    while (true) {
-      result.push(this.value());
-      this.whitespace();
-      if (this.source[this.index] === ']') {
-        this.index += 1;
-        return result;
-      }
-      this.expect(',');
-    }
-  }
-
-  private string(): string {
-    const start = this.index;
-    this.expect('"');
-    while (this.index < this.source.length) {
-      const character = this.source[this.index];
-      if (character === '"') {
-        this.index += 1;
-        return JSON.parse(this.source.slice(start, this.index)) as string;
-      }
-      if (character === '\\') this.index += 1;
-      this.index += 1;
-    }
-    throw new Error('invalid JSON request body');
-  }
-
-  private number(): JsonNumber {
-    const match = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(
-      this.source.slice(this.index),
-    );
-    if (!match) throw new Error('invalid JSON request body');
-    this.index += match[0].length;
-    const floating = /[.eE]/.test(match[0]);
-    return new JsonNumber(
-      floating ? Number(match[0]) : BigInt(match[0]),
-      floating,
-    );
-  }
-
-  private literal<T>(source: string, value: T): T {
-    if (!this.source.startsWith(source, this.index))
-      throw new Error('invalid JSON request body');
-    this.index += source.length;
-    return value;
-  }
-
-  private whitespace() {
-    while (/\s/.test(this.source[this.index] ?? '')) this.index += 1;
-  }
-
-  private expect(character: string) {
-    if (this.source[this.index] !== character)
-      throw new Error('invalid JSON request body');
-    this.index += 1;
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

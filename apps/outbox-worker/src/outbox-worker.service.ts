@@ -10,6 +10,7 @@ import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   loadOutboxRegistry,
   OutboxContractError,
@@ -460,7 +461,9 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
       routed = routeOutboxEvent(event, registry, OWNER);
       if (!routed.stream)
         throw new OutboxContractError('registered work stream is missing');
-      body = new TextEncoder().encode(JSON.stringify(routed.envelope));
+      body = new TextEncoder().encode(
+        stringifyJsonWithBigInts(routed.envelope),
+      );
       if (body.byteLength > MAX_MESSAGE_BYTES)
         throw new OutboxContractError(
           `serialized event exceeds ${MAX_MESSAGE_BYTES} bytes`,
@@ -533,7 +536,7 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
           [
             event.eventId,
             event.eventType,
-            JSON.stringify(event.payload),
+            stringifyJsonWithBigInts(event.payload),
             event.attempts,
             message,
           ],

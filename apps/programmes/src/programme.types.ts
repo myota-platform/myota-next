@@ -6,7 +6,12 @@ export interface ProgrammeRecord {
   entityTypeCodes?: string[];
   rules: unknown;
   entityTypes: unknown[];
-  policyVersion?: number;
+  policyVersion?: number | bigint;
   updatedAt?: string;
   [key: string]: unknown;
+}
+
+export function nextPolicyVersion(value: number | bigint | undefined) {
+  if (typeof value === 'bigint') return value + 1n;
+  return (value ?? 1) + 1;
 }

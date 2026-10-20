@@ -4,6 +4,7 @@ import {
   HealthController,
   observeRoot,
 } from '@app/platform';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { ProgrammesController } from './programmes.controller.js';
 import { EntityTypesController } from './entity-types.controller.js';
 import { ProgrammesService } from './programmes.service.js';
@@ -22,7 +23,10 @@ import { PublicProgrammeContentController } from './public-programme-content.con
 @Module({
   imports: [
     observeRoot('programmes-api'),
-    DatabaseHealthModule.forEnvironment('CORE_DATABASE_URL'),
+    DatabaseHealthModule.forEnvironment(
+      'CORE_DATABASE_URL',
+      parseJsonWithExactIntegers,
+    ),
   ],
   controllers: [
     HealthController,

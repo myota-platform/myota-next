@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 
 export type EntityTypeRecord = Record<string, unknown> & { code: string };
 
@@ -38,7 +39,7 @@ export class ProgrammeEntityTypeRepository {
       `INSERT INTO public.programme_entity_type (code, payload)
        VALUES ($1, $2::jsonb)
        ON CONFLICT (code) DO UPDATE SET payload = EXCLUDED.payload`,
-      [entityType.code, JSON.stringify(entityType)],
+      [entityType.code, stringifyJsonWithBigInts(entityType)],
     );
   }
 

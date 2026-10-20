@@ -20,6 +20,7 @@ import type {
   ReviewProgrammePolicyDraftDto,
   SaveProgrammePolicyDraftDto,
 } from './programmes.dto.js';
+import { nextPolicyVersion } from './programme.types.js';
 import {
   isTruthyJsonValue,
   normalizeUtcTimestamp,
@@ -205,7 +206,7 @@ export class ProgrammePolicyService {
       });
       if (draft.type === 'RULES') {
         programme.rules = draft.schema.rules ?? draft.schema;
-        programme.policyVersion = (programme.policyVersion ?? 1) + 1;
+        programme.policyVersion = nextPolicyVersion(programme.policyVersion);
       } else {
         const awards = Array.isArray(programme.awards)
           ? (programme.awards as Record<string, unknown>[])

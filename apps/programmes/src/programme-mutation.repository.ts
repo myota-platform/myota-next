@@ -6,6 +6,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 
 @Injectable()
 export class ProgrammeMutationRepository {
@@ -40,7 +41,7 @@ export class ProgrammeMutationRepository {
         await client.query(
           `INSERT INTO public.idempotency_record (service, key, response)
            VALUES ('programmes', $1, $2::jsonb)`,
-          [idempotencyKey, JSON.stringify(response)],
+          [idempotencyKey, stringifyJsonWithBigInts(response)],
         );
       }
       await client.query('COMMIT');
@@ -81,7 +82,7 @@ export class ProgrammeMutationRepository {
         eventType,
         aggregateType,
         aggregateId,
-        JSON.stringify(payload),
+        stringifyJsonWithBigInts(payload),
         new Date().toISOString(),
         randomUUID(),
       ],

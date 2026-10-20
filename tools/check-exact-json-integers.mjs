@@ -17,9 +17,29 @@ function requirePattern(relativePath, pattern, description) {
 }
 
 requirePattern(
-  'apps/geodata/src/geodata-request-fingerprint.ts',
+  'libs/platform/src/json-exact.ts',
   /export function parseJsonWithExactIntegers[\s\S]*?Number\.MAX_SAFE_INTEGER[\s\S]*?integer/,
-  'Geodata JSON parser must preserve integers outside the JavaScript safe range',
+  'Shared JSON parser must preserve integers outside the JavaScript safe range',
+);
+requirePattern(
+  'apps/programmes/src/programmes.module.ts',
+  /DatabaseHealthModule\.forEnvironment\([\s\S]*?CORE_DATABASE_URL[\s\S]*?parseJsonWithExactIntegers/,
+  'Programme API pool must enable exact integer parsing',
+);
+requirePattern(
+  'apps/programmes/src/main.ts',
+  /bootstrapHttpService\(ProgrammesModule,[\s\S]*?\[\],\s*\[\],\s*true\)/,
+  'Programme API bootstrap must enable BigInt JSON response serialization',
+);
+requirePattern(
+  'libs/platform/src/bootstrap.ts',
+  /request\.url\?\.split\('\?', 1\)\[0\] === '\/v1\/programmes'[\s\S]*?parseJsonWithExactIntegers/,
+  'Programme creation requests must preserve exact JSON integers',
+);
+requirePattern(
+  'apps/outbox-worker/src/outbox-worker.module.ts',
+  /DatabaseHealthModule\.forEnvironment\([\s\S]*?OUTBOX_DATABASE_URL[\s\S]*?parseJsonWithExactIntegers/,
+  'Outbox worker pool must enable exact integer parsing',
 );
 requirePattern(
   'libs/platform/src/database.module.ts',
@@ -80,6 +100,6 @@ if (errors.length) {
   process.exitCode = 1;
 } else {
   process.stdout.write(
-    'Geodata exact-integer database parsing is enabled for API and worker; BigInt-safe serialization is enforced across API, worker, and importer components.\n',
+    'Exact JSON integers are preserved in Programme creation, programme and outbox database reads, and Geodata API and worker reads.\n',
   );
 }

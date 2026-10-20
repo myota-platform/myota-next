@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
 
 export type ProgrammeContentRecord = Record<string, unknown> & {
@@ -78,7 +79,7 @@ export class ProgrammeContentRepository {
         record.locale,
         record.status,
         record.updatedAt,
-        JSON.stringify(record),
+        stringifyJsonWithBigInts(record),
       ],
     );
   }

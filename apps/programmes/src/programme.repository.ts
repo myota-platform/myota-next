@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import type { ProgrammeRecord } from './programme.types.js';
 
 @Injectable()
@@ -103,7 +104,7 @@ export class ProgrammeRepository {
         programme.status ?? 'ACTIVE',
         programme.createdAt ?? '',
         programme.updatedAt ?? '',
-        JSON.stringify(programme),
+        stringifyJsonWithBigInts(programme),
       ],
     );
   }
@@ -123,7 +124,7 @@ export class ProgrammeRepository {
         programme.status ?? 'ACTIVE',
         programme.createdAt ?? '',
         programme.updatedAt ?? '',
-        JSON.stringify(programme),
+        stringifyJsonWithBigInts(programme),
       ],
     );
   }

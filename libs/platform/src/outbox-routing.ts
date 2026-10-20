@@ -293,9 +293,15 @@ function matchesType(value: unknown, type: string): boolean {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
   if (type === 'array') return Array.isArray(value);
   if (type === 'integer')
-    return typeof value === 'number' && Number.isInteger(value);
+    return (
+      (typeof value === 'number' && Number.isInteger(value)) ||
+      typeof value === 'bigint'
+    );
   if (type === 'number')
-    return typeof value === 'number' && Number.isFinite(value);
+    return (
+      (typeof value === 'number' && Number.isFinite(value)) ||
+      typeof value === 'bigint'
+    );
   return typeof value === type;
 }
 
