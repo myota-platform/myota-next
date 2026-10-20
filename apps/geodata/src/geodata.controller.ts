@@ -51,8 +51,21 @@ export class GeodataController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') key: string | undefined,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
-    return this.deletions.create(authorization, key, body);
+    const claims = verifyAccessToken(authorization);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
+    return this.deletions.create(
+      authorization,
+      idempotency.key,
+      body,
+      idempotency.requestHash,
+    );
   }
 
   @Get('entity-deletion-jobs/:jobId')
@@ -70,8 +83,22 @@ export class GeodataController {
     @Headers('idempotency-key') key: string | undefined,
     @Param('jobId') jobId: string,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
-    return this.deletions.confirm(authorization, key, jobId, body);
+    const claims = verifyAccessToken(authorization);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
+    return this.deletions.confirm(
+      authorization,
+      idempotency.key,
+      jobId,
+      body,
+      idempotency.requestHash,
+    );
   }
 
   @Get('refresh-schedules')

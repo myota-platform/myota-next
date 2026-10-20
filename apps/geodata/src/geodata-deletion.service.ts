@@ -25,8 +25,17 @@ export class GeodataDeletionService {
     authorization: string | undefined,
     key: string | undefined,
     body: Record<string, unknown>,
+    requestHash?: string,
   ) {
     const claims = verifyAccessToken(authorization);
+    if (key && requestHash) {
+      const replay = await this.replayRequest(
+        'geodata-entity-deletion',
+        key,
+        requestHash,
+      );
+      if (replay.found) return replay.response;
+    }
     const entityId = typeof body.entityId === 'string' ? body.entityId : '';
     const requestedBy =
       typeof body.requestedBy === 'string' ? body.requestedBy : '';
@@ -49,16 +58,6 @@ export class GeodataDeletionService {
       throw new ForbiddenException(
         'only global administrators can delete non-rejected entities',
       );
-    if (key) {
-      const prior = await this.findIdempotent(key);
-      if (prior) {
-        if (prior.entityId !== entityId)
-          throw new ConflictException(
-            'Idempotency-Key was already used for another entity deletion',
-          );
-        return prior;
-      }
-    }
     const impact = await this.activityImpact(authorization as string, entityId);
     const id = randomUUID();
     const timestamp = new Date().toISOString();
@@ -87,7 +86,7 @@ export class GeodataDeletionService {
       await transaction.query('BEGIN');
       if (key) {
         await transaction.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-deletion-create:' || $1,0))",
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
           [key],
         );
         const existing = await transaction.query(
@@ -99,12 +98,19 @@ export class GeodataDeletionService {
             string,
             unknown
           >;
-          if (existingResponse.entityId !== entityId)
+          if (
+            requestHash &&
+            (!isRecord(existingResponse) ||
+              existingResponse.requestHash !== requestHash ||
+              !Object.hasOwn(existingResponse, 'result'))
+          )
             throw new ConflictException(
-              'Idempotency-Key was already used for another entity deletion',
+              'Idempotency-Key was already used for another request',
             );
           await transaction.query('COMMIT');
-          return existingResponse;
+          return requestHash && isRecord(existingResponse)
+            ? existingResponse.result
+            : existingResponse;
         }
       }
       await transaction.query(
@@ -124,7 +130,13 @@ export class GeodataDeletionService {
       if (key)
         await transaction.query(
           'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
-          ['geodata-entity-deletion', key, JSON.stringify(response)],
+          [
+            'geodata-entity-deletion',
+            key,
+            JSON.stringify(
+              requestHash ? { requestHash, result: response } : response,
+            ),
+          ],
         );
       await transaction.query('COMMIT');
       return response;
@@ -165,8 +177,17 @@ export class GeodataDeletionService {
     key: string | undefined,
     jobId: string,
     body: Record<string, unknown>,
+    requestHash?: string,
   ) {
     const claims = verifyAccessToken(authorization);
+    if (key && requestHash) {
+      const replay = await this.replayRequest(
+        'geodata-entity-deletion-confirm',
+        key,
+        requestHash,
+      );
+      if (replay.found) return replay.response;
+    }
     const confirmation =
       typeof body.confirmation === 'string'
         ? body.confirmation.toUpperCase()
@@ -181,7 +202,7 @@ export class GeodataDeletionService {
       await client.query('BEGIN');
       if (key) {
         await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata-deletion-confirm:' || $1,0))",
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
           [key],
         );
         const prior = await client.query(
@@ -189,8 +210,18 @@ export class GeodataDeletionService {
           ['geodata-entity-deletion-confirm', key],
         );
         if (prior.rows[0]) {
+          const saved = prior.rows[0].response;
+          if (
+            requestHash &&
+            (!isRecord(saved) ||
+              saved.requestHash !== requestHash ||
+              !Object.hasOwn(saved, 'result'))
+          )
+            throw new ConflictException(
+              'Idempotency-Key was already used for another request',
+            );
           await client.query('COMMIT');
-          return prior.rows[0].response;
+          return requestHash && isRecord(saved) ? saved.result : saved;
         }
       }
       const selected = await client.query(
@@ -208,8 +239,20 @@ export class GeodataDeletionService {
           ?.jurisdiction,
       });
       if (job.status === 'COMPLETED') {
+        const response = publicJob(job);
+        if (key)
+          await client.query(
+            'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+            [
+              'geodata-entity-deletion-confirm',
+              key,
+              JSON.stringify(
+                requestHash ? { requestHash, result: response } : response,
+              ),
+            ],
+          );
         await client.query('COMMIT');
-        return publicJob(job);
+        return response;
       }
       if (job.status !== 'AWAITING_CONFIRMATION')
         throw new ConflictException(
@@ -249,7 +292,13 @@ export class GeodataDeletionService {
       if (key)
         await client.query(
           'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
-          ['geodata-entity-deletion-confirm', key, JSON.stringify(response)],
+          [
+            'geodata-entity-deletion-confirm',
+            key,
+            JSON.stringify(
+              requestHash ? { requestHash, result: response } : response,
+            ),
+          ],
         );
       await client.query('COMMIT');
       return response;
@@ -261,14 +310,40 @@ export class GeodataDeletionService {
     }
   }
 
-  private async findIdempotent(key: string) {
+  private async replayRequest(
+    service: string,
+    key: string,
+    requestHash: string,
+  ) {
     const client = await this.connect();
     try {
+      await client.query('BEGIN');
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
+        [key],
+      );
       const result = await client.query(
         'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-        ['geodata-entity-deletion', key],
+        [service, key],
       );
-      return result.rows[0]?.response;
+      if (!result.rows[0]) {
+        await client.query('COMMIT');
+        return { found: false as const, response: undefined };
+      }
+      const saved = result.rows[0].response;
+      if (
+        !isRecord(saved) ||
+        saved.requestHash !== requestHash ||
+        !Object.hasOwn(saved, 'result')
+      )
+        throw new ConflictException(
+          'Idempotency-Key was already used for another request',
+        );
+      await client.query('COMMIT');
+      return { found: true as const, response: saved.result };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
     } finally {
       client.release();
     }
@@ -372,4 +447,8 @@ function publicJob(job: Record<string, unknown>) {
     ...result
   } = job;
   return result;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
