@@ -6,7 +6,7 @@ Use this command against one database at a time by setting
 The command does not connect to or modify the other database owners.
 
 List recent dead letters. Error text is limited to 500 characters in the
-output:
+output, so treat it as operational data and handle it accordingly:
 
 ```sh
 OUTBOX_DATABASE_URL="$CORE_DATABASE_URL" npm run outbox:admin -- list --limit 100

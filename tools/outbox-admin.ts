@@ -122,11 +122,12 @@ async function redrive(eventId: string, actor: string, reason: string) {
 }
 
 function normalizeUuid(value: string): string {
-  const match = value.match(
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  );
-  if (!match) throw new Error('event-id must be a UUID');
-  return value.toLowerCase();
+  let hex = value.toLowerCase();
+  if (hex.startsWith('urn:uuid:')) hex = hex.slice('urn:uuid:'.length);
+  if (hex.startsWith('{') && hex.endsWith('}')) hex = hex.slice(1, -1);
+  hex = hex.replaceAll('-', '');
+  if (!/^[0-9a-f]{32}$/.test(hex)) throw new Error('event-id must be a UUID');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function parseArgs(values: string[]) {

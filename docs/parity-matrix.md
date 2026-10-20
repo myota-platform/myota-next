@@ -225,7 +225,7 @@ map renders point, line, polygon, and multipart entity geometries.
   or work envelopes to JetStream with stable event IDs and validates existing
   stream and durable settings at startup, validates registered work payloads,
   and exposes Prometheus metrics.
-  `npm run outbox:admin` lists redacted dead-letter metadata and transactionally
+  `npm run outbox:admin` lists bounded dead-letter metadata and transactionally
   redrives one retained event against its owning database, recording the prior
   attempts and error. See [outbox recovery](operations/outbox-recovery.md).
   Operational recovery evidence is not complete yet.
