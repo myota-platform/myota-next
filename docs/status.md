@@ -204,7 +204,9 @@
   normalized into those ingestion jobs. The Activity worker consumes the
   registered JetStream work durables and processes jobs transactionally with
   database leases, message progress acknowledgements, bounded retries, and
-  dead-letter records. Work IDs accept canonical UUIDs with any version and
+  dead-letter records. Failed progress acknowledgements are logged while the
+  database lease protects the active job from duplicate execution. Work IDs
+  accept canonical UUIDs with any version and
   variant bits, and `causationId` remains optional as in the reference and
   shared contract. QSO ingestion batches use one JSONB recordset insert,
   database deduplication, per-record outbox events, and first-record keyed award

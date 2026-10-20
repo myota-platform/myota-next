@@ -318,7 +318,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
         Math.max(remaining, 0.25),
         MAX_WORK_WAIT_SECONDS,
       );
-      message.working();
+      this.extendMessageAck(message, 'waiting for an Activity job lease');
       await this.wait(seconds * 1000);
     }
     message.nak(1000);
@@ -338,7 +338,17 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
       if (state === 'done') return;
       const extended = await this.repository.heartbeat(job);
       if (!extended) throw new Error('worker lease was lost while processing');
+      this.extendMessageAck(message, 'processing an Activity job');
+    }
+  }
+
+  private extendMessageAck(message: JsMsg, context: string): void {
+    try {
       message.working();
+    } catch (error) {
+      this.logger.warn(
+        `Could not extend Activity work ACK while ${context}: ${safeError(error)}`,
+      );
     }
   }
 
