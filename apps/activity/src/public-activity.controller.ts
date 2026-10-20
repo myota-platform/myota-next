@@ -7,19 +7,26 @@ export class PublicActivityController {
 
   @Get('activations')
   history(
-    @Query('programme') programme?: string,
-    @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string,
+    @Query('programme') programme?: string | string[],
+    @Query('page') page?: string | string[],
+    @Query('pageSize') pageSize?: string | string[],
   ) {
-    return this.activity.publicHistory(programme, page, pageSize);
+    return this.activity.publicHistory(
+      firstNonBlankQueryValue(programme),
+      firstNonBlankQueryValue(page),
+      firstNonBlankQueryValue(pageSize),
+    );
   }
 
   @Get('leaderboards')
   leaderboard(
-    @Query('programme') programme = '',
-    @Query('category') category = 'HUNTER',
+    @Query('programme') programme?: string | string[],
+    @Query('category') category?: string | string[],
   ) {
-    return this.activity.leaderboard(programme, category);
+    return this.activity.leaderboard(
+      firstNonBlankQueryValue(programme) ?? '',
+      firstNonBlankQueryValue(category) ?? 'HUNTER',
+    );
   }
 
   @Get('results')

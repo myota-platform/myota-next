@@ -17,6 +17,8 @@
   Geodata probes PostGIS. Gateway readiness does not depend on a database.
 - Shared pagination parsing skips blank repeated query values before parsing
   `page` and `pageSize`, matching the reference query parser.
+- Public Activity history, leaderboard, and result filters select the first
+  nonblank repeated query value, matching the reference query parser.
 - The shared HTTP bootstrap honors `MYOTA_MAX_BODY_BYTES` as a strict integer.
   Identity and Programmes default to 1 MiB, Geodata to 1 GiB as in the Python
   reference, and Activity/Gateway to 35 MiB for encoded upload paths. Individual
