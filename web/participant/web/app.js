@@ -577,7 +577,7 @@ async function loadPublicAwards(slug) {
     const items = [];
     let page = 1;
     while (page !== null) {
-      const data = await awardApi(
+      const data = await api(
         `/v1/awards?programme=${encodeURIComponent(slug)}&page=${page}&pageSize=100`,
       );
       items.push(...(data.items || []));
