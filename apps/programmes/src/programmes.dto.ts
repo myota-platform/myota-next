@@ -265,5 +265,5 @@ export class UpdateProgrammeDto {
 
   @IsOptional()
   @IsString()
-  status?: string;
+  status?: string | null;
 }

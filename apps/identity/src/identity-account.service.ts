@@ -472,7 +472,7 @@ export class IdentityAccountService {
       const anonymize = Boolean(body.anonymize && nextStatus === 'DEACTIVATED');
       let email: string | null | undefined;
       let emailKey: string | null = null;
-      if ('email' in body) {
+      if (body.email !== undefined) {
         email = body.email || null;
         const normalizedEmail =
           typeof email === 'string' ? trimPythonWhitespace(email) : '';
@@ -500,7 +500,7 @@ export class IdentityAccountService {
         updates.push(`${column} = $${values.length}`);
       };
       if (nextDisplayName !== undefined) set('display_name', nextDisplayName);
-      if ('email' in body || anonymize) {
+      if (body.email !== undefined || anonymize) {
         set('email', nextEmail ?? null);
         set('identity_email_key', anonymize ? null : (emailKey ?? null));
       }
@@ -514,8 +514,8 @@ export class IdentityAccountService {
         values,
       );
 
-      const updateWebsite = 'websiteUrl' in body || anonymize;
-      const updateBiography = 'biographyMarkdown' in body || anonymize;
+      const updateWebsite = body.websiteUrl !== undefined || anonymize;
+      const updateBiography = body.biographyMarkdown !== undefined || anonymize;
       if (updateWebsite || updateBiography || anonymize) {
         await client.query(
           `INSERT INTO public.identity_account_profile
@@ -716,10 +716,10 @@ export class IdentityAccountService {
       websiteUrl?: string | null;
       biographyMarkdown?: string | null;
     } = {};
-    if ('websiteUrl' in body) {
+    if (body.websiteUrl !== undefined) {
       profile.websiteUrl = validateWebsiteUrl(body.websiteUrl);
     }
-    if ('biographyMarkdown' in body) {
+    if (body.biographyMarkdown !== undefined) {
       const value = body.biographyMarkdown;
       if (value !== null && typeof value !== 'string') {
         throw new BadRequestException(

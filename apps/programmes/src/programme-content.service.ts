@@ -280,11 +280,12 @@ export class ProgrammeContentService {
       slug,
       {
         contentId,
-        key: 'key' in body ? (body.key as string) : current.key,
-        locale: 'locale' in body ? (body.locale as string) : current.locale,
-        value: 'value' in body ? body.value : current.value,
+        key: body.key !== undefined ? (body.key as string) : current.key,
+        locale:
+          body.locale !== undefined ? (body.locale as string) : current.locale,
+        value: body.value !== undefined ? body.value : current.value,
         fallbackLocale:
-          'fallbackLocale' in body
+          body.fallbackLocale !== undefined
             ? body.fallbackLocale
             : (current.fallbackLocale as string | null),
       },

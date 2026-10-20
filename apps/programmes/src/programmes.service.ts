@@ -137,7 +137,12 @@ export class ProgrammesService {
   ): Promise<Record<string, unknown>> {
     this.authorizeAdmin(authorization, slug);
     const status = body.status;
-    if (status !== undefined && status !== 'ACTIVE' && status !== 'ARCHIVED') {
+    if (
+      status !== undefined &&
+      status !== null &&
+      status !== 'ACTIVE' &&
+      status !== 'ARCHIVED'
+    ) {
       throw new BadRequestException('status must be ACTIVE or ARCHIVED');
     }
     return this.mutations.mutate(idempotencyKey, async (client) => {
@@ -462,9 +467,8 @@ function normalizeEntityType(
       'category codes are stable identifiers and cannot be renamed',
     );
   }
-  const rawGeometry = Object.hasOwn(body, 'geometryTypes')
-    ? body.geometryTypes
-    : body.geometry;
+  const rawGeometry =
+    body.geometryTypes !== undefined ? body.geometryTypes : body.geometry;
   const geometryList = Array.isArray(rawGeometry)
     ? rawGeometry
     : typeof rawGeometry === 'string'
@@ -493,11 +497,12 @@ function normalizeEntityType(
     typeof body.label === 'string' ? trimPythonWhitespace(body.label) : '';
   if (!label) throw new BadRequestException('category label must not be empty');
   const now = new Date().toISOString();
-  const activeValue = Object.hasOwn(body, 'active')
-    ? body.active
-    : existing && Object.hasOwn(existing, 'active')
-      ? existing.active
-      : true;
+  const activeValue =
+    body.active !== undefined
+      ? body.active
+      : existing && existing.active !== undefined
+        ? existing.active
+        : true;
   return {
     ...(existing ?? { createdAt: now }),
     code,

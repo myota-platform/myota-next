@@ -155,6 +155,10 @@
   and outbox events commit together. Policy drafts now use a separate indexed
   Core table; draft creation retains truthy supplied string IDs, generates a
   UUID for omitted or empty IDs, and accepts those IDs on lifecycle routes.
+  Optional DTO fields on account, Programme-content, policy-draft, and shared
+  entity-type updates distinguish omission from explicit `null`; omitted
+  fields retain stored values, while null follows the reference-compatible
+  validation or clearing behavior.
   Falsey optional effective dates normalize to null on draft save and patch,
   matching the Python handler; falsey optional status values on content and
   policy PATCH requests remain ordinary draft edits. Draft lifecycle writes

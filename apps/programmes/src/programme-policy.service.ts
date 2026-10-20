@@ -279,11 +279,11 @@ export class ProgrammePolicyService {
       slug,
       {
         draftId,
-        type: body.type ?? current.type,
-        name: body.name ?? current.name,
-        schema: body.schema ?? current.schema,
+        type: body.type !== undefined ? body.type : current.type,
+        name: body.name !== undefined ? body.name : current.name,
+        schema: body.schema !== undefined ? body.schema : current.schema,
         effectiveFrom:
-          'effectiveFrom' in body
+          body.effectiveFrom !== undefined
             ? body.effectiveFrom
             : (current.effectiveFrom as string | null | undefined),
       },
