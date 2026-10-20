@@ -74,7 +74,7 @@
   deletion; the maintenance orphan sweep remains the fallback. Callsign add, primary
   selection, evidence submission, verification, and retirement, plus paginated
   security-event reads for global administrators and owner-scoped account data
-  export, scoped OIDC provider mapping creation/update, and five-minute service token
+  export, scoped OIDC provider mapping registration, and five-minute service token
   issuance with the restricted email-recipient lookup, and normalized private
   profile-image upload/read/delete are also implemented.
   Authentication uses the existing scrypt hash format, HS256 token contract,
