@@ -19,6 +19,7 @@ import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { ActivityRepository } from './activity.repository.js';
+import { ActivityAwardsRepository } from './activity-awards.repository.js';
 import {
   evaluateAward,
   validateAwardDraft,
@@ -32,7 +33,10 @@ export class AwardsService {
   private publicS3Client: S3Client | undefined;
   private previewBusy = false;
 
-  constructor(private readonly repository: ActivityRepository) {}
+  constructor(
+    private readonly repository: ActivityRepository,
+    private readonly awardsRepository: ActivityAwardsRepository,
+  ) {}
 
   async list(
     authorization: string | undefined,
@@ -48,7 +52,7 @@ export class AwardsService {
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const offset = (BigInt(page) - 1n) * BigInt(pageSize);
-    const result = await this.repository.listAwardDefinitionsPage(
+    const result = await this.awardsRepository.listAwardDefinitionsPage(
       query.programme,
       query.category?.toUpperCase(),
       !claims,
@@ -66,7 +70,7 @@ export class AwardsService {
   }
 
   async get(authorization: string | undefined, id: string) {
-    const award = await this.repository.getAwardDefinition(id);
+    const award = await this.awardsRepository.getAwardDefinition(id);
     const claims = authorization ? verifyAccessToken(authorization) : null;
     if (!claims && award.status !== 'PUBLISHED')
       throw new ForbiddenException('only published awards are public');
@@ -83,7 +87,7 @@ export class AwardsService {
     let existing: JsonRecord | undefined;
     if (body.awardId) {
       try {
-        existing = await this.repository.getAwardDefinition(body.awardId);
+        existing = await this.awardsRepository.getAwardDefinition(body.awardId);
       } catch (error) {
         if (!(error instanceof NotFoundException)) throw error;
       }
@@ -92,13 +96,13 @@ export class AwardsService {
     }
     const record = validateAwardDraft(body, existing);
     if (record.signatureAssetId) {
-      const asset = await this.repository.getAwardAsset(
+      const asset = await this.awardsRepository.getAwardAsset(
         String(record.signatureAssetId),
       );
       if (asset.kind !== 'SIGNATURE')
         throw new BadRequestException('choose a registered signature asset');
     }
-    return this.repository.saveAwardDefinition(
+    return this.awardsRepository.saveAwardDefinition(
       record,
       key,
       'awards.definition.saved.v1',
@@ -140,7 +144,7 @@ export class AwardsService {
       throw new BadRequestException('only draft awards can be submitted');
     award.status = 'UNDER_REVIEW';
     award.submittedAt = new Date().toISOString();
-    return this.repository.saveAwardDefinition(award, key);
+    return this.awardsRepository.saveAwardDefinition(award, key);
   }
 
   async review(
@@ -165,7 +169,7 @@ export class AwardsService {
       note: body.note,
       reviewedAt: new Date().toISOString(),
     };
-    return this.repository.saveAwardDefinition(award, key);
+    return this.awardsRepository.saveAwardDefinition(award, key);
   }
 
   async publish(
@@ -195,7 +199,7 @@ export class AwardsService {
       publisherId: body.publisherId,
       publishedAt: new Date().toISOString(),
     });
-    return this.repository.saveAwardDefinition(
+    return this.awardsRepository.saveAwardDefinition(
       award,
       key,
       'awards.definition.published.v1',
@@ -221,7 +225,7 @@ export class AwardsService {
       retiredAt: body.retiredAt,
       retiredBy: body.retiredBy,
     });
-    return this.repository.saveAwardDefinition(award, key);
+    return this.awardsRepository.saveAwardDefinition(award, key);
   }
 
   async createEvaluationJob(
@@ -379,7 +383,7 @@ export class AwardsService {
         'the requested award level is not currently eligible',
       );
     const now = new Date().toISOString();
-    return this.repository.createAwardRequest({
+    return this.awardsRepository.createAwardRequest({
       id: randomUUID(),
       awardId: award.id,
       programmeSlug: award.programmeSlug,
@@ -402,7 +406,7 @@ export class AwardsService {
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const offset = (BigInt(page) - 1n) * BigInt(pageSize);
-    const result = await this.repository.listAwardRequestsPage(
+    const result = await this.awardsRepository.listAwardRequestsPage(
       query.subjectId,
       offset,
       pageSize,
@@ -431,11 +435,11 @@ export class AwardsService {
         body[field] === ''
       )
         throw new BadRequestException(`${field} is required`);
-    const request = await this.repository.getAwardRequest(requestId);
+    const request = await this.awardsRepository.getAwardRequest(requestId);
     if (request.status !== 'REQUESTED')
       throw new BadRequestException('only requested awards can be issued');
     const award = await this.getAwardDefinitionOrThrow(String(request.awardId));
-    const signature = await this.repository.getAwardAsset(
+    const signature = await this.awardsRepository.getAwardAsset(
       String(body.signatureAssetId),
     );
     if (signature.kind !== 'SIGNATURE')
@@ -474,7 +478,7 @@ export class AwardsService {
         signatureAsset: signature,
       },
     };
-    return this.repository.issueAwardRequest(requestId, issuance, key);
+    return this.awardsRepository.issueAwardRequest(requestId, issuance, key);
   }
 
   async listIssuances(
@@ -485,7 +489,7 @@ export class AwardsService {
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const offset = (BigInt(page) - 1n) * BigInt(pageSize);
-    const result = await this.repository.listAwardIssuancesPage(
+    const result = await this.awardsRepository.listAwardIssuancesPage(
       offset,
       pageSize,
     );
@@ -505,7 +509,7 @@ export class AwardsService {
     issuanceId: string,
   ) {
     this.authorizeHeader(authorization, ['awards.admin']);
-    const issuance = await this.repository.getAwardIssuance(issuanceId);
+    const issuance = await this.awardsRepository.getAwardIssuance(issuanceId);
     const job = await this.repository.enqueueJob(
       'PDF_RENDER',
       { issuanceId: issuance.id },
@@ -519,7 +523,7 @@ export class AwardsService {
     issuanceId: string,
     jobId: string,
   ) {
-    const issuance = await this.repository.getAwardIssuance(issuanceId);
+    const issuance = await this.awardsRepository.getAwardIssuance(issuanceId);
     const job = await this.getAwardJob(authorization, jobId);
     if (job.kind !== 'PDF_RENDER' || job.payload?.issuanceId !== issuance.id)
       throw new NotFoundException('certificate render job not found');
@@ -533,7 +537,7 @@ export class AwardsService {
       'awards.request',
       'awards.admin',
     ]);
-    const issuance = await this.repository.getAwardIssuance(issuanceId);
+    const issuance = await this.awardsRepository.getAwardIssuance(issuanceId);
     if (
       claims.sub !== issuance.subjectId &&
       !claims.scp.some((scope) =>
@@ -568,7 +572,10 @@ export class AwardsService {
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const offset = (BigInt(page) - 1n) * BigInt(pageSize);
-    const result = await this.repository.listAwardAssetsPage(offset, pageSize);
+    const result = await this.awardsRepository.listAwardAssetsPage(
+      offset,
+      pageSize,
+    );
     return {
       items: result.items,
       page,
@@ -622,7 +629,7 @@ export class AwardsService {
         const requested = asRecord(body.backgroundAsset, 'backgroundAsset');
         const objectKey =
           typeof requested.objectKey === 'string' ? requested.objectKey : '';
-        const asset = await this.repository.findAwardAsset(
+        const asset = await this.awardsRepository.findAwardAsset(
           'BACKGROUND',
           objectKey,
         );
@@ -633,7 +640,7 @@ export class AwardsService {
 
       let signature: Buffer | undefined;
       if (body.signatureAssetId !== undefined) {
-        const asset = await this.repository.getAwardAsset(
+        const asset = await this.awardsRepository.getAwardAsset(
           String(body.signatureAssetId),
         );
         if (asset.kind !== 'SIGNATURE')
@@ -723,7 +730,7 @@ export class AwardsService {
       contentStatus: 'MISSING',
       createdAt: new Date().toISOString(),
     };
-    return this.repository.saveAwardAsset(asset);
+    return this.awardsRepository.saveAwardAsset(asset);
   }
 
   async putAssetContent(
@@ -733,7 +740,7 @@ export class AwardsService {
     content: Buffer,
   ) {
     this.authorizeHeader(authorization, ['awards.admin']);
-    const asset = await this.repository.getAwardAsset(id);
+    const asset = await this.awardsRepository.getAwardAsset(id);
     const metadata = await imageMetadata(content);
     if (metadata.mediaType !== declaredType)
       throw new BadRequestException(
@@ -765,12 +772,12 @@ export class AwardsService {
       contentSize: content.length,
       storedAt: new Date().toISOString(),
     });
-    return this.repository.saveAwardAsset(asset);
+    return this.awardsRepository.saveAwardAsset(asset);
   }
 
   async getAssetContent(authorization: string | undefined, id: string) {
     this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
-    const asset = await this.repository.getAwardAsset(id);
+    const asset = await this.awardsRepository.getAwardAsset(id);
     try {
       const response = await this.s3().send(
         new GetObjectCommand({ Bucket: asset.bucket, Key: asset.objectKey }),
@@ -850,7 +857,7 @@ export class AwardsService {
   }
 
   private async getAwardDefinitionOrThrow(id: string) {
-    return this.repository.getAwardDefinition(id);
+    return this.awardsRepository.getAwardDefinition(id);
   }
 
   private authorizeHeader(authorization: string | undefined, scopes: string[]) {

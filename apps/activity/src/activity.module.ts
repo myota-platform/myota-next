@@ -6,6 +6,7 @@ import {
 } from '@app/platform';
 import { ActivityController } from './activity.controller.js';
 import { ActivityRepository } from './activity.repository.js';
+import { ActivityAwardsRepository } from './activity-awards.repository.js';
 import { ActivityService } from './activity.service.js';
 import { QsoIngestionController } from './qso-ingestion.controller.js';
 import { PublicActivityController } from './public-activity.controller.js';
@@ -30,6 +31,11 @@ import { AdifImportController } from './adif-import.controller.js';
     AwardsController,
     AdifImportController,
   ],
-  providers: [ActivityRepository, ActivityService, AwardsService],
+  providers: [
+    ActivityRepository,
+    ActivityAwardsRepository,
+    ActivityService,
+    AwardsService,
+  ],
 })
 export class ActivityModule {}
