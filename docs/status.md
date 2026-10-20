@@ -77,6 +77,9 @@
   export, scoped OIDC provider mapping registration, and five-minute service token
   issuance with the restricted email-recipient lookup, and normalized private
   profile-image upload/read/delete are also implemented.
+  The Core migration removes the retired `operations.read` scope from persisted
+  custom role definitions and advances their update timestamp, matching the
+  reference when it materializes the role catalogue.
   Authentication uses the existing scrypt hash format, HS256 token contract,
   persisted session, revocation, lockout and rate-limit tables. A separate
   Core-owned maintenance process expires Identity records and removes aged,
