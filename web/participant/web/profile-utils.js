@@ -25,8 +25,10 @@
   function safeLink(value) {
     try {
       const parsed = new URL(value);
+      const authority =
+        value.match(/^[a-z][a-z\d+.-]*:\/\/([^/?#]*)/i)?.[1] ?? '';
       if (!['http:', 'https:'].includes(parsed.protocol)) return null;
-      if (parsed.username || parsed.password) return null;
+      if (!parsed.hostname || authority.includes('@')) return null;
       return parsed.href;
     } catch {
       return null;
