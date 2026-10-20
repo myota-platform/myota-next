@@ -243,7 +243,9 @@
   records, preserves scalar source IDs and scopes legacy manual row-number
   references to their import, hashes each normalized source record separately,
   stages candidates with provenance and 50 m duplicate warnings, records errors,
-  and emits preprocessing results with skipped reasons.
+  and emits preprocessing results with skipped reasons. Community proposal
+  promotion preserves the reference `candidateSource` shape and source
+  name/license fallback semantics, including explicitly supplied values.
   `/healthz` and `/readyz` expose worker liveness and
   GeoData PostgreSQL/NATS readiness on `GEODATA_WORKER_HEALTH_PORT`. The service
   also has PostGIS-backed public entity

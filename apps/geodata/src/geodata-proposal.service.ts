@@ -18,12 +18,10 @@ export class GeodataProposalService {
   ) {
     if (!isRecord(body.feature) || body.feature.type !== 'Feature')
       throw new BadRequestException('feature must be a GeoJSON Feature');
-    if (
-      body.source !== undefined &&
-      (!isRecord(body.source) || Array.isArray(body.source))
-    )
+    const suppliedSource = firstPythonTruthy(body.source);
+    if (suppliedSource !== undefined && !isRecord(suppliedSource))
       throw new BadRequestException('source must be an object');
-    const source = isRecord(body.source) ? body.source : {};
+    const source = isRecord(suppliedSource) ? suppliedSource : {};
     const proposalId = randomUUID();
     const feature = { ...body.feature };
     const properties = isRecord(feature.properties)
@@ -61,6 +59,11 @@ export class GeodataProposalService {
       );
     }
     properties.sourceRef = `community-proposal:${proposalId}`;
+    properties.candidateSource = {
+      type: 'COMMUNITY_PROPOSAL',
+      proposalId,
+      proposerId,
+    };
     feature.properties = properties;
     return this.imports.create(
       key ? `proposal:${proposerId}:${key}` : undefined,
@@ -70,12 +73,10 @@ export class GeodataProposalService {
         entityTypes,
         source: {
           ...source,
-          name:
-            typeof source.name === 'string' ? source.name : 'Manual proposal',
-          license:
-            typeof source.license === 'string'
-              ? source.license
-              : 'programme-supplied',
+          name: Object.hasOwn(source, 'name') ? source.name : 'Manual proposal',
+          license: Object.hasOwn(source, 'license')
+            ? source.license
+            : 'programme-supplied',
           type: 'COMMUNITY_PROPOSAL',
           proposalId,
           proposerId,

@@ -495,6 +495,9 @@ export class GeodataPromotionRepository {
       const source = isRecord(candidate.candidate_source)
         ? candidate.candidate_source
         : {};
+      const candidateSource = isRecord(properties.candidateSource)
+        ? properties.candidateSource
+        : source;
       const sourceRef =
         (typeof candidate.source_ref === 'string' && candidate.source_ref) ||
         `${String(source.sourceKey ?? source.url ?? source.name ?? 'unknown-source')}:import-${queue.import_run_id}:record-${candidate.ordinal}`;
@@ -608,7 +611,7 @@ export class GeodataPromotionRepository {
         entityTypeCodes: entityTypes,
         sourceRef,
         sourceState: 'CURRENT',
-        candidateSource: source,
+        candidateSource,
         provenance: {
           adapter,
           source: runSource,
