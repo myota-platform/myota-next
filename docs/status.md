@@ -391,7 +391,9 @@
   pair; pages preserve the reference's ID order, and list and resolution records
   retain the programme and creation/update timestamps. Decision values retain
   case-sensitive enum
-  validation, and review notes are stored without truncation. The Admin
+  validation, and review notes are stored without truncation. Import candidate
+  validation and promotion also preserve submitted note JSON values without
+  coercion or truncation. The Admin
   includes a role-gated conflation workspace for filtering candidates, inspecting
   match signals and prior decisions, and recording resolutions. Entity import
   promotion now searches overlapping PostGIS bounding boxes, computes the

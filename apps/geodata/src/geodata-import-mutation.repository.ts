@@ -351,8 +351,7 @@ export class GeodataImportMutationRepository {
         'validationStatus must be VALID or REJECTED',
       );
     const rejected = requested === 'REJECTED' || requested === 'INVALID';
-    const note =
-      typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
+    const note = body.note === undefined ? null : body.note;
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -461,8 +460,7 @@ export class GeodataImportMutationRepository {
     const requestedBy =
       typeof body.processorId === 'string' ? body.processorId : '';
     if (!requestedBy) throw new BadRequestException('processorId is required');
-    const note =
-      typeof body.note === 'string' ? body.note.slice(0, 2000) : null;
+    const note = body.note === undefined ? null : body.note;
     const queueId = randomUUID();
     const client = await this.connect();
     try {
