@@ -14,6 +14,7 @@ import {
   signClientAddress,
   createApiProblem,
 } from '@app/platform';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 
 const ROUTES: Array<[string, string]> = [
   ['/v1/identity/', 'IDENTITY'],
@@ -58,7 +59,10 @@ export class GatewayController {
     @Req() request: Request,
     @Res() response: Response,
   ) {
-    if (!authorization?.startsWith('Bearer ') || !authorization.slice(7).trim())
+    if (
+      !authorization?.startsWith('Bearer ') ||
+      !trimPythonWhitespace(authorization.slice(7))
+    )
       return this.grafanaError(
         request,
         response,

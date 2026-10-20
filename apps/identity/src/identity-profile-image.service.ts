@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import sharp from 'sharp';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
 import type { IdentityAuthService } from './auth.service.js';
 
@@ -256,7 +257,9 @@ export class IdentityProfileImageService {
     contentType: string | undefined,
     input: AsyncIterable<Uint8Array>,
   ): Promise<Buffer> {
-    const mediaType = (contentType ?? '').split(';', 1)[0].trim().toLowerCase();
+    const mediaType = trimPythonWhitespace(
+      (contentType ?? '').split(';', 1)[0],
+    );
     const format = INPUT_FORMATS[mediaType];
     if (!format) {
       throw new BadRequestException('profile image must be JPEG, PNG, or WebP');
