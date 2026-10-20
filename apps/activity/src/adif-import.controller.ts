@@ -17,10 +17,9 @@ export class AdifImportController {
   @HttpCode(202)
   create(
     @Headers('authorization') authorization: string | undefined,
-    @Headers('idempotency-key') key: string | undefined,
     @Body() body: Record<string, any>,
   ) {
-    return this.activity.createAdifImport(authorization, key, body);
+    return this.activity.createAdifImport(authorization, body);
   }
 
   @Get(':importId')

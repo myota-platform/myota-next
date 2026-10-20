@@ -421,9 +421,8 @@ export class ActivityRepository {
   async createAdifImport(
     activationId: string,
     metadata: JsonRecord,
-    key?: string,
   ): Promise<JsonRecord> {
-    return this.mutate(key ? `adif:${key}` : undefined, async (client) => {
+    return this.mutate(undefined, async (client) => {
       const id = randomUUID();
       const createdAt = new Date().toISOString();
       const record: JsonRecord = {

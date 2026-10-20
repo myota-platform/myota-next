@@ -268,11 +268,7 @@ export class ActivityService {
     return record;
   }
 
-  async createAdifImport(
-    authorization: string | undefined,
-    key: string | undefined,
-    body: JsonRecord,
-  ) {
+  async createAdifImport(authorization: string | undefined, body: JsonRecord) {
     const missing = ['activationId', 'filename', 'contentBase64'].filter(
       (field) => !pythonTruthy(body[field]),
     );
@@ -328,28 +324,20 @@ export class ActivityService {
     }
     let created: JsonRecord;
     try {
-      created = await this.repository.createAdifImport(
-        activationId,
-        {
-          filename,
-          objectKey,
-          bucket,
-          sha256,
-          contentSize: content.length,
-          scan: { status: 'CLEAN', sha256, size: content.length },
-        },
-        key,
-      );
+      created = await this.repository.createAdifImport(activationId, {
+        filename,
+        objectKey,
+        bucket,
+        sha256,
+        contentSize: content.length,
+        scan: { status: 'CLEAN', sha256, size: content.length },
+      });
     } catch (error) {
       await this.s3()
         .send(new DeleteObjectCommand({ Bucket: bucket, Key: objectKey }))
         .catch(() => undefined);
       throw error;
     }
-    if (created.objectKey !== objectKey)
-      await this.s3()
-        .send(new DeleteObjectCommand({ Bucket: bucket, Key: objectKey }))
-        .catch(() => undefined);
     return created;
   }
 
