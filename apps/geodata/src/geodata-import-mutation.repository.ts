@@ -449,12 +449,12 @@ export class GeodataImportMutationRepository {
     if (
       !Array.isArray(rawIds) ||
       !rawIds.length ||
-      rawIds.length > 500 ||
       rawIds.some((id) => typeof id !== 'string' || !isUuid(id))
     )
-      throw new BadRequestException('candidateIds must contain 1 to 500 UUIDs');
-    if (new Set(rawIds).size !== rawIds.length)
-      throw new BadRequestException('candidateIds must be unique');
+      throw new BadRequestException('candidateIds must be a non-empty list');
+    const candidateIds = [...new Set(rawIds)].sort((left, right) =>
+      left < right ? -1 : left > right ? 1 : 0,
+    );
     const targetStatus =
       typeof body.targetStatus === 'string'
         ? body.targetStatus.toUpperCase()
@@ -492,13 +492,17 @@ export class GeodataImportMutationRepository {
          LEFT JOIN geodata_import_processing_queue previous_queue
            ON previous_queue.id=c.processing_queue_id
          WHERE c.import_run_id=$1 AND c.id=ANY($2::uuid[])
+         ORDER BY c.id
          FOR UPDATE OF c`,
-        [runId, rawIds],
+        [runId, candidateIds],
       );
-      if (selected.rows.length !== rawIds.length)
+      if (selected.rows.length !== candidateIds.length) {
+        const selectedIds = new Set(selected.rows.map((row) => String(row.id)));
+        const missing = candidateIds.find((id) => !selectedIds.has(id));
         throw new BadRequestException(
-          'one or more candidates do not belong to this import run',
+          `candidate ${missing} does not belong to import run`,
         );
+      }
       if (targetStatus === 'APPROVED')
         for (const row of selected.rows) {
           const properties = isRecord(row.entity_payload)
@@ -547,7 +551,7 @@ export class GeodataImportMutationRepository {
         [
           queueId,
           runId,
-          JSON.stringify(rawIds),
+          JSON.stringify(candidateIds),
           targetStatus,
           requestedBy,
           JSON.stringify({ note }),
@@ -557,7 +561,7 @@ export class GeodataImportMutationRepository {
         `UPDATE geodata_import_candidate SET validation_status='CONFIRMED',
          validated_by=$3,validated_at=now(),target_status=$4,processing_queue_id=$5,updated_at=now()
          WHERE import_run_id=$1 AND id=ANY($2::uuid[])`,
-        [runId, rawIds, requestedBy, targetStatus, queueId],
+        [runId, candidateIds, requestedBy, targetStatus, queueId],
       );
       await client.query(
         `INSERT INTO outbox_event
@@ -569,7 +573,7 @@ export class GeodataImportMutationRepository {
           JSON.stringify({
             queueId,
             importRunId: runId,
-            candidateIds: rawIds,
+            candidateIds,
             targetStatus,
             requestedBy,
             natsSubject: 'myota.geodata.import.process.v1',
@@ -580,7 +584,7 @@ export class GeodataImportMutationRepository {
       const response = {
         id: queueId,
         importRunId: runId,
-        candidateIds: rawIds,
+        candidateIds,
         targetStatus,
         requestedBy,
         status: 'QUEUED',
