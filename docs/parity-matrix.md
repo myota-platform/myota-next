@@ -54,7 +54,9 @@ reference handler, changing status alone does not anonymize the account or
 revoke its sessions; existing refresh sessions also remain rotatable, and both
 session revocation and anonymization happen when `anonymize` is true. Callsign
 creation, evidence, verification, primary selection, and retirement also write
-to the relational Core model and outbox.
+to the relational Core model and outbox. Account reads and exports preserve the
+reference's callsign insertion order, using Core `created_at` with ID as a
+stable tie-breaker.
 These are the first implemented slices; they still need automated
 compatibility coverage before they count as parity complete.
 Identity startup now idempotently provisions the configured bootstrap account,

@@ -390,7 +390,7 @@ export class IdentityAccountService {
            LEFT JOIN public.callsign_evidence e ON e.callsign_id = c.id
           WHERE c.account_id = $1
           GROUP BY c.id
-          ORDER BY c.valid_from NULLS FIRST, c.value`,
+          ORDER BY c.created_at, c.id`,
         [accountId],
       );
       return {
@@ -629,7 +629,7 @@ export class IdentityAccountService {
            LEFT JOIN public.callsign_evidence e ON e.callsign_id = c.id
           WHERE c.account_id = $1
           GROUP BY c.id
-          ORDER BY c.valid_from NULLS FIRST, c.value`,
+          ORDER BY c.created_at, c.id`,
         [accountId],
       );
       await client.query('COMMIT');
@@ -1066,7 +1066,7 @@ export class IdentityAccountService {
          LEFT JOIN public.callsign_evidence e ON e.callsign_id = c.id
         WHERE c.account_id = $1
         GROUP BY c.id
-        ORDER BY c.valid_from NULLS FIRST, c.value`,
+        ORDER BY c.created_at, c.id`,
       [accountId],
     );
     return { ...this.accountView(account), callsigns: callsigns.rows };
