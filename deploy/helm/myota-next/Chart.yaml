@@ -1,0 +1,6 @@
+apiVersion: v2
+name: myota-next
+description: NestJS MyOTA APIs and background processes
+type: application
+version: 0.1.0
+appVersion: '0.1.0'

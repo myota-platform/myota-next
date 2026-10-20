@@ -1,0 +1,46 @@
+# Non-secret rendering example. Replace repositories and tags with published images.
+images:
+  gateway:
+    { repository: ghcr.io/myota-platform/myota-next-gateway, tag: example }
+  identity:
+    { repository: ghcr.io/myota-platform/myota-next-identity, tag: example }
+  identity-maintenance:
+    {
+      repository: ghcr.io/myota-platform/myota-next-identity-maintenance,
+      tag: example,
+    }
+  programmes:
+    { repository: ghcr.io/myota-platform/myota-next-programmes, tag: example }
+  activity:
+    { repository: ghcr.io/myota-platform/myota-next-activity, tag: example }
+  activity-worker:
+    {
+      repository: ghcr.io/myota-platform/myota-next-activity-worker,
+      tag: example,
+    }
+  activity-notifications:
+    {
+      repository: ghcr.io/myota-platform/myota-next-activity-notifications,
+      tag: example,
+    }
+  geodata:
+    { repository: ghcr.io/myota-platform/myota-next-geodata, tag: example }
+  geodata-worker:
+    {
+      repository: ghcr.io/myota-platform/myota-next-geodata-worker,
+      tag: example,
+    }
+  geodata-importer:
+    {
+      repository: ghcr.io/myota-platform/myota-next-geodata-importer,
+      tag: example,
+    }
+  email-worker:
+    { repository: ghcr.io/myota-platform/myota-next-email-worker, tag: example }
+  outbox-worker:
+    {
+      repository: ghcr.io/myota-platform/myota-next-outbox-worker,
+      tag: example,
+    }
+migrations:
+  image: { repository: ghcr.io/myota-platform/myota-next-tools, tag: example }

@@ -702,6 +702,12 @@
   migration runner applies the checked-in SQL baseline and forward migrations
   with checksums and per-file transactions; production cutover and rollback
   rehearsals remain outstanding.
+- An initial NestJS Helm chart now describes API and worker Deployments,
+  per-owner Core/Activity/Geodata database URLs, migration credentials,
+  readiness probes, internal API Services, and Gateway ingress. PostgreSQL,
+  NATS, S3-compatible storage, image publishing, JetStream provisioning, and
+  Fleet release automation remain external or incomplete; the chart is not
+  production-qualified. See the [NestJS chart guide](../deploy/helm/myota-next/README.md).
 - Email delivery. The NestJS consumer rejects invalid UTF-8 and invalid UTC
   date-time values before validating `email.send.v1`, including lowercase `t`
   separators rejected by the reference checker. It resolves recipients

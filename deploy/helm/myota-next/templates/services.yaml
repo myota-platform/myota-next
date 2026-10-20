@@ -1,0 +1,22 @@
+{{- range $name, $component := .Values.components }}
+{{- if and $component.enabled $component.service }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-%s" (include "myota-next.name" $) $name | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "myota-next.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: {{ $name }}
+  ports:
+    - name: http
+      port: {{ $component.port }}
+      targetPort: http
+      protocol: TCP
+---
+{{- end }}
+{{- end }}
