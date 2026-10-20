@@ -76,7 +76,7 @@ export class IdentityMaintenanceRepository {
       removed +=
         (
           await client.query(
-            'DELETE FROM public.identity_login_rate_limit WHERE expires_at<=now()',
+            'DELETE FROM public.identity_login_rate_limit WHERE expires_at<now()',
           )
         ).rowCount ?? 0;
       removed +=

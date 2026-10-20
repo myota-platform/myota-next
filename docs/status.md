@@ -88,7 +88,8 @@
   unreferenced profile-image objects; it honors zero-second intervals and
   rejects negative intervals after its initial sweep, matching Python's loop.
   Database cleanup failures terminate the worker; profile-image cleanup
-  failures are logged and retried on the next sweep, matching the reference.
+  failures are logged and retried on the next sweep. Rate-limit rows are
+  retained until their window has strictly passed, matching the reference.
   Token, recovery, lockout, and maintenance
   integer settings use the shared strict parser to match Python's environment
   value handling. The Gateway also forwards User-Agent so Identity session
