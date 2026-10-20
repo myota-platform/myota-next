@@ -207,7 +207,8 @@
   path streams GeoJSON sources and decoded features; its upload default is 256
   MiB and can be raised to 512 MiB with `MYOTA_GEOJSON_MAX_UPLOAD_BYTES`.
   Shapefile ZIP uploads stream to temporary disk, then decode one shape/DBF
-  record at a time. Their default upload cap is 256 MiB and can be raised to
+  record at a time, selecting the first `.shp` entry and its matching `.shx`
+  and `.dbf` files as the reference does. Their default upload cap is 256 MiB and can be raised to
   512 MiB with `MYOTA_SHAPEFILE_MAX_UPLOAD_BYTES`; archives are capped at 100
   members and 1 GiB expanded. Matching .shp, .shx, and .dbf sidecars are
   required; DBF text defaults to UTF-8 when no .cpg encoding is provided,

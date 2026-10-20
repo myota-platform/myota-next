@@ -124,12 +124,8 @@ export async function* streamShapefileFeatures(
       });
     }
 
-    const shapeNames = [...members.keys()].filter((name) =>
-      name.endsWith('.shp'),
-    );
-    if (shapeNames.length !== 1)
-      throw new Error('Shapefile ZIP must contain exactly one .shp file');
-    const shapeName = shapeNames[0];
+    const shapeName = [...members.keys()].find((name) => name.endsWith('.shp'));
+    if (!shapeName) throw new Error('Shapefile ZIP must contain a .shp file');
     const stem = shapeName.slice(0, -4);
     const shape = members.get(shapeName)!;
     const index = members.get(`${stem}.shx`);

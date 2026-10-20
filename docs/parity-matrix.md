@@ -125,7 +125,9 @@ parts, checksum and malware scanning, and transactional completion up to the
 worker's configured source limits. GeoJSON, Shapefile, and PBF multipart
 uploads use their larger configurable limits. Durable object references from the configured
 import bucket are bounded, hash-checked, validated, and staged as normalized
-worker inputs. Refresh schedules can be listed and created, and manual complete-
+worker inputs. Shapefile ZIP intake selects the first `.shp` member and requires
+matching `.shx` and `.dbf` sidecars, following the reference importer.
+Refresh schedules can be listed and created, and manual complete-
 snapshot runs queue GeoJSON imports, promote validated candidates, record
 manifests, and apply disappearance policy after successful preprocessing.
 Import promotion generates deduplicated conflation candidates from overlapping
