@@ -145,7 +145,7 @@ export class ActivityAwardsRepository {
          FROM (SELECT count(*) AS value FROM activity_asset) total
          LEFT JOIN LATERAL (
            SELECT metadata FROM activity_asset
-           ORDER BY created_at,id
+           ORDER BY created_at
            LIMIT $2 OFFSET $1::bigint
          ) page_rows ON TRUE`,
         [offset.toString(), pageSize],
@@ -272,7 +272,7 @@ export class ActivityAwardsRepository {
            SELECT *, ${awardRequestTimestampProjection}
            FROM activity_award_request
            ${where}
-           ORDER BY requested_at DESC,id DESC
+           ORDER BY requested_at DESC
            LIMIT $${limitParameter} OFFSET $${offsetParameter}::bigint
          ) page_rows ON TRUE`,
         values,
@@ -360,7 +360,7 @@ export class ActivityAwardsRepository {
          FROM (SELECT count(*) AS value FROM activity_award_issuance) total
          LEFT JOIN LATERAL (
            SELECT issuance FROM activity_award_issuance
-           ORDER BY created_at DESC,id DESC
+           ORDER BY created_at DESC
            LIMIT $2 OFFSET $1::bigint
          ) page_rows ON TRUE`,
         [offset.toString(), pageSize],
