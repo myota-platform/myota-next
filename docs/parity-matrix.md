@@ -20,6 +20,18 @@ Malformed JSON and oversized JSON bodies use the reference's 400
 The Gateway forwards W3C `traceparent` and `tracestate` headers to the owning
 API and passes trace headers back to clients when an upstream provides them.
 
+The route maps at the pinned Python reference revision contain 135 literal
+method/path pairs across Identity, Programmes, Activity, Awards, and Geodata.
+A source comparison against the Nest controller decorators found all 135 pairs
+present. The Nest implementation also exposes seven route pairs without a
+matching reference route: `GET /v1/_internal/grafana/auth`, `GET /v1/metrics`,
+`GET /v1/public/programmes/{slug}/content`,
+`POST /v1/activity/work-jobs/{jobId}/redrive`, `POST /v1/adif/imports`,
+`POST /v1/geodata/imports/{runId}/processing-queues/{queueId}/redrive`, and
+`POST /v1/qso-ingestions/csv`. These additions are not evidence of legacy
+parity. Route presence alone does not establish payload, authorization,
+persistence, error, or workflow parity.
+
 ## Domain functions
 
 | Area           | Required parity                                                                                                                                                                                                                                                                                                                                                                                                                                   |
