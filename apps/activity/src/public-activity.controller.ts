@@ -26,7 +26,7 @@ export class PublicActivityController {
   ) {
     return this.activity.leaderboard(
       firstQueryValue(programme) ?? '',
-      firstQueryValue(category) ?? 'HUNTER',
+      firstQueryValue(category) || 'HUNTER',
     );
   }
 

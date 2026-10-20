@@ -180,7 +180,8 @@ apply database limits and offsets while retaining their existing page metadata;
 public result exports remain complete exports.
 Public leaderboard category values are uppercased and passed through to the
 aggregate query, matching the reference: unrecognized categories return an
-empty `items` array instead of a validation error.
+empty `items` array instead of a validation error; an absent or blank category
+defaults to `HUNTER`.
 The notifications endpoint preserves the reference's unpaged `{ items }`
 response, falls back to the caller's subject when `recipientId` is absent or
 blank, and ignores `page` and `pageSize` query parameters. The Admin Activity
