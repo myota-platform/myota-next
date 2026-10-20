@@ -780,6 +780,7 @@ export class ActivityWorkRepository {
         award,
         evaluation.levels,
         `award-qualified:${award.id}:${award.version ?? 1}:${payload.subjectId}`,
+        false,
       );
   }
 
@@ -1005,16 +1006,14 @@ async function createAwardNotification(
   award: JsonRecord,
   levels: JsonRecord[],
   deduplicationKey: string,
+  includeAwardCode = true,
 ) {
+  const payload: JsonRecord = { awardId: award.id, levels };
+  if (includeAwardCode) payload.awardCode = award.code;
   await client.query(
     `INSERT INTO activity_notification(id,recipient_id,notification_type,payload,status,delivered_at,deduplication_key)
      VALUES ($1,$2,'AWARD_QUALIFIED',$3::jsonb,'DELIVERED',now(),$4) ON CONFLICT DO NOTHING`,
-    [
-      randomUUID(),
-      subjectId,
-      JSON.stringify({ awardId: award.id, awardCode: award.code, levels }),
-      deduplicationKey,
-    ],
+    [randomUUID(), subjectId, JSON.stringify(payload), deduplicationKey],
   );
 }
 
