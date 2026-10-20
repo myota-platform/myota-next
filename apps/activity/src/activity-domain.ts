@@ -20,6 +20,12 @@ export function parseTimestamp(value: string): Date {
       Number(dayText ?? 1),
     )}${time?.replace(/^t/, 'T') ?? ''}`;
   }
+  const arbitraryTimeSeparator =
+    /^(\d{4}(?:-\d{2}-\d{2}|\d{4}))([^0-9])(?=\d{2}:?\d{2})/u.exec(normalized);
+  if (arbitraryTimeSeparator) {
+    const [, date, separator] = arbitraryTimeSeparator;
+    normalized = `${date}T${normalized.slice(date.length + separator.length)}`;
+  }
   const compact =
     /^(\d{4})(\d{2})(\d{2})([T ])(\d{2})(\d{2})(\d{2})?([.,]\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?$/i.exec(
       normalized,

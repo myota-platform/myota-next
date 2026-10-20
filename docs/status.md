@@ -173,8 +173,9 @@
   file before row processing, so parser failures fail the import. Later
   per-record failures are reported alongside persisted QSOs and aggregate
   updates. Timestamp parsing preserves the Python reference's ISO week dates,
-  compact ISO date and time forms, slash-separated QSO dates with compact
-  times, and hour-only UTC offsets. Impossible calendar dates and clock fields
+  one-character date/time separators, compact ISO date and time forms,
+  slash-separated QSO dates with compact times, and hour-only UTC offsets.
+  Impossible calendar dates and clock fields
   are rejected;
   imports with no parsed QSO records retain the reference's
   successful zero-record outcome. Upload-size, QSO-batch, and ADIF retention
