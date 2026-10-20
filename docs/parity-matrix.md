@@ -277,10 +277,10 @@ The pinned Python handler returns QSO-ingestion and statistics-rebuild job
 status without checking authorization. Nest preserves that behavior. These
 reads therefore differ from the OpenAPI bearer declaration, as they do in the
 Python implementation.
-The Nest worker addresses early ADIF failure notices to the activation owner;
-the pinned Python worker uses the activation ID as the recipient, so those
-notices do not appear in the owner's account feed. This is a documented
-correction to a reference defect.
+For early ADIF failures, the worker writes the notification under the
+activation ID, as the pinned Python worker does; the notice therefore does not
+appear in the activation owner's account feed. Missing-object notices also
+retain the Python reason string `object unavailable`.
 Activity activation history, public activation history, and statistics pages
 apply database limits and offsets while retaining their existing page metadata;
 public result exports remain complete exports.

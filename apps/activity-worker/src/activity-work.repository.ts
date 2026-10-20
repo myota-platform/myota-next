@@ -694,10 +694,13 @@ export class ActivityWorkRepository {
          VALUES ($1,$2,'ADIF_IMPORT_FAILED',$3::jsonb,'DELIVERED',now(),$4) ON CONFLICT DO NOTHING`,
         [
           randomUUID(),
-          record.operator_id,
+          record.activation_id,
           JSON.stringify({
             importId: record.id,
-            reason: errors[0] ?? 'ADIF import failed',
+            reason:
+              errors[0] === 'uploaded object is not available'
+                ? 'object unavailable'
+                : (errors[0] ?? 'ADIF import failed'),
           }),
           `adif:${record.id}:failed`,
         ],
