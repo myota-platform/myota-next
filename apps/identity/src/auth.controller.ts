@@ -92,16 +92,11 @@ export class AuthController {
   @HttpCode(201)
   saveOidcMapping(
     @Headers('authorization') authorization: string | undefined,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Body() body: OidcProviderMappingDto,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
-    return this.integrations.saveOidcMapping(
-      authorization,
-      body,
-      idempotencyKey,
-    );
+    return this.integrations.saveOidcMapping(authorization, body);
   }
 
   @Post('auth/service-token')

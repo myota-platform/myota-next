@@ -21,7 +21,6 @@ export class IdentityIntegrationService {
   async saveOidcMapping(
     authorization: string,
     body: OidcProviderMappingDto,
-    idempotencyKey?: string,
   ): Promise<Record<string, unknown>> {
     const actor = await this.auth.currentAccount(authorization);
     const scopes = new Set(actor.scopes as string[]);
@@ -32,24 +31,6 @@ export class IdentityIntegrationService {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
-      if (idempotencyKey) {
-        await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('identity:' || $1, 0))",
-          [idempotencyKey],
-        );
-        const previous = await client.query<{
-          response: Record<string, unknown>;
-        }>(
-          `SELECT response FROM public.idempotency_record
-            WHERE service = 'identity' AND key = $1`,
-          [idempotencyKey],
-        );
-        if (previous.rows[0]) {
-          await client.query('COMMIT');
-          return previous.rows[0].response;
-        }
-      }
-
       const id = randomUUID();
       const scopes = body.scopes ?? ['openid', 'profile', 'email'];
       const mappingResult = await client.query<{
@@ -91,13 +72,6 @@ export class IdentityIntegrationService {
         ...mapping,
         actorId: actor.id,
       });
-      if (idempotencyKey) {
-        await client.query(
-          `INSERT INTO public.idempotency_record (service, key, response)
-           VALUES ('identity', $1, $2::jsonb)`,
-          [idempotencyKey, JSON.stringify(mapping)],
-        );
-      }
       await client.query('COMMIT');
       return mapping;
     } catch (error) {

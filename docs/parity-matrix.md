@@ -53,8 +53,9 @@ for that page. Login, recovery, account creation, and account updates also use
 Unicode case-folded Core email keys with a unique index; the forward migration
 checks legacy JSONB emails for case-fold collisions before cutover.
 OIDC provider registration remains create-only, matching the pinned Python
-handler; its runtime response is `201` even though the preserved upstream
-OpenAPI contract declares `200`.
+handler; repeated requests create separate mappings even when they carry the
+same optional `Idempotency-Key`. Its runtime response is `201` even though the
+preserved upstream OpenAPI contract declares `200`.
 
 Activity has an initial activation and single-QSO slice: activation list/create/read/close,
 normalized QSO writes, validity checks, ownership checks, subject aggregates,
