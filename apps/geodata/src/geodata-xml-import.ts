@@ -117,9 +117,12 @@ export function parseXmlImport(
       }
     }
     if (
-      (format === 'KML' && name === 'name') ||
+      (format === 'KML' && name === 'name' && stack.at(-2) === 'Placemark') ||
       (format === 'KML' && name === 'coordinates') ||
-      (format === 'GPX' && ['name', 'desc', 'type'].includes(name) && gpxPoint)
+      (format === 'GPX' &&
+        ['name', 'desc', 'type'].includes(name) &&
+        gpxPoint &&
+        ['wpt', 'rtept'].includes(stack.at(-2) ?? ''))
     )
       textCapture = { name, chunks: [] };
   };
@@ -163,7 +166,7 @@ export function parseXmlImport(
           if (lines.length > 1)
             geometry = { type: 'MultiLineString', coordinates: lines };
           else if (lines.length === 1)
-            geometry = { type: 'LineString', coordinates: lines[0] };
+            geometry = { type: 'MultiLineString', coordinates: lines };
         }
         geometry ??= points.length
           ? { type: 'LineString', coordinates: points }
