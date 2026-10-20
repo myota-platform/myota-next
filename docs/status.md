@@ -314,10 +314,11 @@
   region, subdivision, and province codes are provider-derived; `countyCode`
   remains manually editable as in the reference. Location edits require GIS
   administrator coverage or `geodata.location.manage`. Review writes require
-  role coverage for the entity's programme, category, and jurisdiction. Entity
-  category updates accept scalar codes and category objects, remove duplicate
-  codes while preserving order, and keep the first code primary. An authorized,
-  idempotent request can queue BigDataCloud reverse geocoding; the
+  role coverage for the entity's programme, category, and jurisdiction. Review
+  status falls back from `status` to legacy `decision` using Python truthiness.
+  Entity category updates accept scalar codes and category objects, remove
+  duplicate codes while preserving order, and keep the first code primary. An
+  authorized, idempotent request can queue BigDataCloud reverse geocoding; the
   provider-derived location hierarchy uses Python Unicode case folding for
   matching, deduplication, and sorting, with codes as tie-breakers. The
   Geodata worker applies results only to the matching geometry and protects

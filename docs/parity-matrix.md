@@ -213,8 +213,9 @@ deduplicates IDs without a separate 500-ID cap. Selected candidates can be queue
 for CANDIDATE or scope-gated APPROVED promotion; the worker persists entities,
 category and source links, audit/outbox events, and queue outcomes. Entity
 review, metadata, category, and geometry changes, conflation decisions, and
-import candidate validation and promotion preserve submitted note values
-without coercion or truncation, matching the Python handlers; candidate
+import candidate validation and promotion preserve submitted notes without
+coercion or truncation, matching the Python handlers. Entity review status
+falls back from `status` to legacy `decision` using Python truthiness; candidate
 validation notes are stored as JSONB with existing text values preserved as
 JSON strings. If-Match protected name, website,
 description, geometry, and

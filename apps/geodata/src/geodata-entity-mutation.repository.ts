@@ -13,6 +13,7 @@ import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import type { AccessTokenClaims } from '@app/platform/access-token.js';
+import { firstPythonTruthy } from '@app/platform/python-truthiness.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { validateGeometryCoordinates } from '@app/geodata-domain';
 import { entityProjection } from './geodata.repository.js';
@@ -72,7 +73,7 @@ export class GeodataEntityMutationRepository {
   ) {
     const reviewerId =
       typeof body.reviewerId === 'string' ? body.reviewerId : '';
-    const requestedStatus = body.status || body.decision;
+    const requestedStatus = firstPythonTruthy(body.status, body.decision);
     const targetStatus =
       typeof requestedStatus === 'string' ? requestedStatus : '';
     const note = body.note === undefined ? null : body.note;
