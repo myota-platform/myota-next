@@ -925,7 +925,11 @@ export class IdentityAuthService {
               c.verified_at AS "verifiedAt", c.valid_from AS "validFrom",
               c.valid_to AS "validTo", c.created_at AS "createdAt",
               c.updated_at AS "updatedAt",
-              coalesce(array_agg(e.id) FILTER (WHERE e.id IS NOT NULL), '{}') AS "evidenceIds",
+              coalesce(
+                array_agg(e.id ORDER BY e.evidence_order)
+                  FILTER (WHERE e.id IS NOT NULL),
+                '{}'
+              ) AS "evidenceIds",
               (primary_call.callsign_id = c.id) AS "primary"
          FROM public.callsign c
          LEFT JOIN public.account_primary_callsign primary_call

@@ -313,7 +313,7 @@ export class IdentityCallsignService {
       if (!current) throw new NotFoundException('callsign not found');
       const evidence = await client.query(
         `SELECT id FROM public.callsign_evidence
-          WHERE callsign_id = $1 ORDER BY submitted_at, id`,
+          WHERE callsign_id = $1 ORDER BY evidence_order`,
         [callsignId],
       );
       if (!evidence.rowCount) {
@@ -321,21 +321,30 @@ export class IdentityCallsignService {
           'at least one evidence record is required',
         );
       }
-      const verifiedAt = new Date();
+      const verifiedAt = (
+        await client.query<{ timestamp: Date }>(
+          'SELECT clock_timestamp() AS timestamp',
+        )
+      ).rows[0].timestamp;
+      const updatedAt = (
+        await client.query<{ timestamp: Date }>(
+          'SELECT clock_timestamp() AS timestamp',
+        )
+      ).rows[0].timestamp;
       const verificationSource =
         body.source === undefined ? 'manual-review' : body.source;
       await client.query(
         `UPDATE public.callsign
             SET lifecycle_status = 'VERIFIED', verification_source = $2,
-                verified_at = $3, updated_at = $3
+                verified_at = $3, updated_at = $4
           WHERE id = $1`,
-        [callsignId, verificationSource, verifiedAt],
+        [callsignId, verificationSource, verifiedAt, updatedAt],
       );
       await client.query(
         `UPDATE public.callsign_evidence
-            SET status = 'ACCEPTED', reviewed_at = $2
+            SET status = 'ACCEPTED', reviewed_at = clock_timestamp()
           WHERE callsign_id = $1`,
-        [callsignId, verifiedAt],
+        [callsignId],
       );
       const result = {
         id: callsignId,
@@ -347,7 +356,7 @@ export class IdentityCallsignService {
         validFrom: current.valid_from,
         validTo: current.valid_to,
         evidenceIds: evidence.rows.map((item) => item.id),
-        updatedAt: verifiedAt,
+        updatedAt,
       };
       await writeOutboxEvent(client, {
         eventType: 'identity.callsign.verified.v1',
@@ -402,7 +411,7 @@ export class IdentityCallsignService {
       if (!current) throw new NotFoundException('callsign not found');
       const evidence = await client.query<{ id: string }>(
         `SELECT id FROM public.callsign_evidence
-          WHERE callsign_id = $1 ORDER BY submitted_at, id`,
+          WHERE callsign_id = $1 ORDER BY evidence_order`,
         [callsignId],
       );
       if (account.rows[0].primary_callsign_id === callsignId) {
@@ -572,7 +581,11 @@ export class IdentityCallsignService {
               c.verified_at AS "verifiedAt", c.valid_from AS "validFrom",
               c.valid_to AS "validTo", c.created_at AS "createdAt",
               c.updated_at AS "updatedAt",
-              coalesce(array_agg(e.id) FILTER (WHERE e.id IS NOT NULL), '{}')
+              coalesce(
+                array_agg(e.id ORDER BY e.evidence_order)
+                  FILTER (WHERE e.id IS NOT NULL),
+                '{}'
+              )
                 AS "evidenceIds"
          FROM public.callsign c
          LEFT JOIN public.callsign_evidence e ON e.callsign_id = c.id

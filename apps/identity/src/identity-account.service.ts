@@ -637,7 +637,11 @@ export class IdentityAccountService {
                 c.verified_at AS "verifiedAt", c.valid_from AS "validFrom",
                 c.valid_to AS "validTo", c.created_at AS "createdAt",
                 c.updated_at AS "updatedAt",
-                coalesce(array_agg(e.id) FILTER (WHERE e.id IS NOT NULL), '{}')
+                coalesce(
+                  array_agg(e.id ORDER BY e.evidence_order)
+                    FILTER (WHERE e.id IS NOT NULL),
+                  '{}'
+                )
                   AS "evidenceIds"
            FROM public.callsign c
            LEFT JOIN public.callsign_evidence e ON e.callsign_id = c.id
@@ -1074,7 +1078,11 @@ export class IdentityAccountService {
               c.verified_at AS "verifiedAt", c.valid_from AS "validFrom",
               c.valid_to AS "validTo", c.created_at AS "createdAt",
               c.updated_at AS "updatedAt",
-              coalesce(array_agg(e.id) FILTER (WHERE e.id IS NOT NULL), '{}')
+              coalesce(
+                array_agg(e.id ORDER BY e.evidence_order)
+                  FILTER (WHERE e.id IS NOT NULL),
+                '{}'
+              )
                 AS "evidenceIds"
          FROM public.callsign c
          LEFT JOIN public.callsign_evidence e ON e.callsign_id = c.id
