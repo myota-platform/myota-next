@@ -628,8 +628,11 @@ export class AwardsService {
         );
 
       let background: Buffer | undefined;
-      if (body.backgroundAsset !== undefined) {
-        const requested = asRecord(body.backgroundAsset, 'backgroundAsset');
+      const backgroundAsset = pythonTruthy(body.backgroundAsset)
+        ? asRecord(body.backgroundAsset, 'backgroundAsset')
+        : {};
+      if (pythonTruthy(backgroundAsset.objectKey)) {
+        const requested = backgroundAsset;
         const objectKey =
           typeof requested.objectKey === 'string' ? requested.objectKey : '';
         const asset = await this.awardsRepository.findAwardAsset(
@@ -642,7 +645,7 @@ export class AwardsService {
       }
 
       let signature: Buffer | undefined;
-      if (body.signatureAssetId !== undefined) {
+      if (pythonTruthy(body.signatureAssetId)) {
         const asset = await this.awardsRepository.getAwardAsset(
           String(body.signatureAssetId),
         );

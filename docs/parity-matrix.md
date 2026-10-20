@@ -88,6 +88,8 @@ issuance is transactional and permanent, and PDF render jobs store artifacts in
 S3-compatible storage with authorized presigned download URLs. The Admin can
 render transient PDF previews from mock data and registered assets without
 creating an issuance or object; preview and issuance use the same renderer.
+Optional preview artwork and signature inputs use the reference's truthiness
+defaults, so falsey values behave as absent.
 Registered award assets and bounded content storage are implemented. Award
 condition operators default to `GTE` only when omitted; an explicit `null` is
 an unknown operator and evaluates false. Entity-type comparisons also preserve
