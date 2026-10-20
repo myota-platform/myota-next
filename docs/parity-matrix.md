@@ -140,10 +140,11 @@ The notifications endpoint preserves the reference's unpaged `{ items }`
 response and ignores `page` and `pageSize` query parameters.
 Statistics rebuild requests deduplicate by programme and UTC day, ignoring a
 caller-supplied `Idempotency-Key`, as in the reference implementation.
-The Admin Activity page opens activation details and normalized QSOs, lists
-statistics snapshots in programme scope, and allows Activity administrators to
-queue and inspect rebuild jobs. It also lists notifications for the signed-in
-account. These controls follow the read and admin scopes enforced by the API.
+The Admin Activity page opens activation details and normalized QSOs, provides
+independent bounded paging for activation history and programme-scoped
+statistics snapshots, and allows Activity administrators to queue and inspect
+rebuild jobs. It also lists notifications for the signed-in account. These
+controls follow the read and admin scopes enforced by the API.
 Activity entity-deletion impact reads and idempotent cascades also remove
 linked QSOs and correction rows, rebuild subject aggregates, invalidate affected
 activations, and enqueue award recalculation jobs.

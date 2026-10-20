@@ -61,11 +61,24 @@ interface ActivityJob {
   completedAt?: string | null;
 }
 
+interface Page<T> {
+  items: T[];
+  page: number;
+  total: number;
+  nextPage: number | null;
+}
+
 const store = useAppStore();
 const feedback = usePageFeedback();
 const { error, loading } = feedback;
 const items = ref<Activation[]>([]);
+const activationPage = ref(1);
+const activationNextPage = ref<number | null>(null);
+const activationTotal = ref(0);
 const statistics = ref<Statistic[]>([]);
+const statisticsPage = ref(1);
+const statisticsNextPage = ref<number | null>(null);
+const statisticsTotal = ref(0);
 const notifications = ref<ActivityNotification[]>([]);
 const notificationPage = ref(1);
 const notificationNextPage = ref<number | null>(null);
@@ -90,23 +103,61 @@ function scopedPath(path: string): string {
   return `${path}${separator}${new URLSearchParams({ programme: programme.value })}`;
 }
 
+function pagePath(path: string, page: number): string {
+  const query = new URLSearchParams({ page: String(page), pageSize: '50' });
+  return scopedPath(`${path}?${query.toString()}`);
+}
+
 async function load(): Promise<void> {
   await feedback.run(async () => {
     const [activations, statisticPage] = await Promise.all([
-      apiRequest<{ items: Activation[] }>(
-        scopedPath('/v1/activations?pageSize=100'),
+      apiRequest<Page<Activation>>(
+        pagePath('/v1/activations', activationPage.value),
       ),
-      apiRequest<{ items: Statistic[] }>(
-        scopedPath('/v1/statistics?pageSize=100'),
+      apiRequest<Page<Statistic>>(
+        pagePath('/v1/statistics', statisticsPage.value),
       ),
     ]);
     items.value = activations.items || [];
     statistics.value = statisticPage.items || [];
+    activationPage.value = activations.page || activationPage.value;
+    activationTotal.value = activations.total || 0;
+    activationNextPage.value = activations.nextPage ?? null;
+    statisticsPage.value = statisticPage.page || statisticsPage.value;
+    statisticsTotal.value = statisticPage.total || 0;
+    statisticsNextPage.value = statisticPage.nextPage ?? null;
     await loadNotifications(notificationPage.value);
     if (selected.value) {
       const fresh = items.value.find((item) => item.id === selected.value?.id);
       if (!fresh) selected.value = null;
     }
+  });
+}
+
+async function changeActivationPage(page: number): Promise<void> {
+  if (page < 1 || loading.value) return;
+  await feedback.run(async () => {
+    const result = await apiRequest<Page<Activation>>(
+      pagePath('/v1/activations', page),
+    );
+    items.value = result.items || [];
+    activationPage.value = result.page || page;
+    activationTotal.value = result.total || 0;
+    activationNextPage.value = result.nextPage ?? null;
+    selected.value = null;
+  });
+}
+
+async function changeStatisticsPage(page: number): Promise<void> {
+  if (page < 1 || loading.value) return;
+  await feedback.run(async () => {
+    const result = await apiRequest<Page<Statistic>>(
+      pagePath('/v1/statistics', page),
+    );
+    statistics.value = result.items || [];
+    statisticsPage.value = result.page || page;
+    statisticsTotal.value = result.total || 0;
+    statisticsNextPage.value = result.nextPage ?? null;
   });
 }
 
@@ -217,6 +268,9 @@ onMounted(() => {
   if (canRead.value) void load();
 });
 watch(programme, () => {
+  activationPage.value = 1;
+  statisticsPage.value = 1;
+  selected.value = null;
   if (canRead.value) void load();
 });
 </script>
@@ -254,7 +308,9 @@ watch(programme, () => {
   <article class="panel">
     <div class="panel-heading">
       <h2>Activation history</h2>
-      <span class="muted">{{ items.length }} loaded</span>
+      <span class="muted"
+        >{{ activationTotal }} total · page {{ activationPage }}</span
+      >
     </div>
     <div class="table-list">
       <button
@@ -286,6 +342,22 @@ watch(programme, () => {
       <p v-if="!items.length && !loading" class="muted empty">
         No activations recorded.
       </p>
+    </div>
+    <div class="toolbar activity-pagination">
+      <button
+        class="secondary"
+        :disabled="activationPage <= 1 || loading"
+        @click="changeActivationPage(activationPage - 1)"
+      >
+        Previous activations
+      </button>
+      <button
+        class="secondary"
+        :disabled="activationNextPage === null || loading"
+        @click="changeActivationPage(activationNextPage || activationPage)"
+      >
+        Next activations
+      </button>
     </div>
     <section v-if="selected" class="activity-detail" aria-live="polite">
       <p v-if="detailLoading" class="muted">Loading activation details…</p>
@@ -335,7 +407,9 @@ watch(programme, () => {
           {{ programme || 'all programmes' }}.
         </p>
       </div>
-      <span class="muted">{{ statistics.length }} loaded</span>
+      <span class="muted"
+        >{{ statisticsTotal }} total · page {{ statisticsPage }}</span
+      >
     </div>
     <div class="table-list">
       <div
@@ -363,6 +437,22 @@ watch(programme, () => {
       <p v-if="!statistics.length && !loading" class="muted empty">
         No statistics snapshots available.
       </p>
+    </div>
+    <div class="toolbar activity-pagination">
+      <button
+        class="secondary"
+        :disabled="statisticsPage <= 1 || loading"
+        @click="changeStatisticsPage(statisticsPage - 1)"
+      >
+        Previous statistics
+      </button>
+      <button
+        class="secondary"
+        :disabled="statisticsNextPage === null || loading"
+        @click="changeStatisticsPage(statisticsNextPage || statisticsPage)"
+      >
+        Next statistics
+      </button>
     </div>
   </article>
 
