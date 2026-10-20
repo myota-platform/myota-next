@@ -974,6 +974,8 @@ export class ActivityRepository {
           hunterCallsign: 'hunter_callsign',
         };
         const values = correction.proposed_values as JsonRecord;
+        if (!values || typeof values !== 'object' || Array.isArray(values))
+          throw new TypeError('correction proposedValues must be a mapping');
         const assignments = ["status='CORRECTED'", 'corrected_at=now()'];
         const parameters: unknown[] = [];
         for (const [field, column] of Object.entries(columns)) {
