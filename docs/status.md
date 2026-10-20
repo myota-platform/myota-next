@@ -121,7 +121,8 @@
   per-record failures are reported alongside persisted QSOs and aggregate
   updates. Timestamp parsing preserves the Python reference's compact ISO date
   and time forms, slash-separated QSO dates with compact times, and hour-only
-  UTC offsets; imports with no parsed QSO records retain the reference's
+  UTC offsets, while rejecting impossible calendar dates and clock fields;
+  imports with no parsed QSO records retain the reference's
   successful zero-record outcome. Upload-size, QSO-batch, and ADIF retention
   settings use one strict integer parser across Activity API and worker paths,
   consistent with the Python environment settings. Retention intervals retain

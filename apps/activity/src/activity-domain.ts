@@ -37,10 +37,59 @@ export function parseTimestamp(value: string): Date {
     !/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(normalized)
   )
     normalized += 'Z';
+  validateTimestampFields(normalized);
   const date = new Date(normalized);
   if (!Number.isFinite(date.getTime()))
     throw new BadRequestException('timestamp is invalid');
   return date;
+}
+
+function validateTimestampFields(value: string) {
+  const fields =
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:[.,]\d+)?)?)?/.exec(
+      value,
+    );
+  if (!fields) return;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText] =
+    fields;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const monthDays = [
+    31,
+    leapYear ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+  if (
+    year < 1 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > monthDays[month - 1]
+  )
+    throw new BadRequestException('timestamp is invalid');
+
+  if (hourText !== undefined) {
+    if (
+      Number(hourText) > 23 ||
+      Number(minuteText) > 59 ||
+      (secondText !== undefined && Number(secondText) > 59)
+    )
+      throw new BadRequestException('timestamp is invalid');
+    const offset = /([+-])(\d{2}):?(\d{2})?$/.exec(value);
+    if (offset && (Number(offset[2]) > 23 || Number(offset[3] ?? 0) > 59))
+      throw new BadRequestException('timestamp is invalid');
+  }
 }
 
 export function normalizeTimestamp(value: string | Date): string {
