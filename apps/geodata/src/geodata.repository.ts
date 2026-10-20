@@ -492,8 +492,6 @@ function parseBounds(query: Record<string, unknown>) {
         'bbox must contain minLon,minLat,maxLon,maxLat',
       );
     raw = parseBoundsValues(values, 'bbox must contain numeric coordinates');
-    if (raw.some((value) => !Number.isFinite(value)))
-      throw new BadRequestException('bbox must contain numeric coordinates');
   } else if (hasLegacyBounds) {
     const values = legacyValues.map((value) =>
       value === undefined ? '' : trimPythonWhitespace(value),
@@ -502,10 +500,6 @@ function parseBounds(query: Record<string, unknown>) {
       values,
       'minLon, minLat, maxLon and maxLat must be numbers',
     );
-    if (raw.some((value) => !Number.isFinite(value)))
-      throw new BadRequestException(
-        'minLon, minLat, maxLon and maxLat must be numbers',
-      );
   } else {
     return null;
   }
