@@ -199,7 +199,7 @@ export class IdentityCallsignService {
         [accountId, body.callsignId],
       );
       await client.query(
-        'UPDATE public.account SET updated_at = now() WHERE id = $1',
+        'UPDATE public.account SET updated_at = clock_timestamp() WHERE id = $1',
         [accountId],
       );
       await writeOutboxEvent(client, {
@@ -437,20 +437,32 @@ export class IdentityCallsignService {
           [accountId, replacement],
         );
       }
-      const validTo =
-        body.validTo === undefined
-          ? new Date()
-          : body.validTo === null
-            ? null
-            : new Date(body.validTo);
-      await client.query(
+      let validTo: Date | null;
+      let responseValidTo: string | Date | null;
+      if (body.validTo === undefined) {
+        validTo = (
+          await client.query<{ timestamp: Date }>(
+            'SELECT clock_timestamp() AS timestamp',
+          )
+        ).rows[0].timestamp;
+        responseValidTo = validTo;
+      } else if (body.validTo === null) {
+        validTo = null;
+        responseValidTo = null;
+      } else {
+        validTo = new Date(body.validTo);
+        responseValidTo = body.validTo;
+      }
+      const updatedAtResult = await client.query<{ updated_at: Date }>(
         `UPDATE public.callsign
-            SET lifecycle_status = 'RETIRED', valid_to = $2, updated_at = now()
-          WHERE id = $1`,
+            SET lifecycle_status = 'RETIRED', valid_to = $2,
+                updated_at = clock_timestamp()
+          WHERE id = $1 RETURNING updated_at`,
         [callsignId, validTo],
       );
+      const updatedAt = updatedAtResult.rows[0].updated_at;
       await client.query(
-        'UPDATE public.account SET updated_at = now() WHERE id = $1',
+        'UPDATE public.account SET updated_at = clock_timestamp() WHERE id = $1',
         [accountId],
       );
       const result = {
@@ -461,9 +473,9 @@ export class IdentityCallsignService {
         verificationSource: current.verification_source,
         verifiedAt: current.verified_at,
         validFrom: current.valid_from,
-        validTo,
+        validTo: responseValidTo,
         evidenceIds: evidence.rows.map((item) => item.id),
-        updatedAt: new Date(),
+        updatedAt,
       };
       await writeOutboxEvent(client, {
         eventType: 'identity.callsign.retired.v1',

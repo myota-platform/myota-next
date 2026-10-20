@@ -88,6 +88,8 @@ Initial callsigns trim only surrounding Python whitespace before uppercasing;
 internal whitespace is preserved as by the reference.
 Direct callsign creation also reads `verifiedAt`, `createdAt`, and `updatedAt`
 independently and advances the account update time afterward.
+Primary selection and retirement advance the account update time separately;
+retirement preserves an explicitly supplied `validTo` value in its response.
 Callsign verification assigns independent verification, update, and per-evidence
 review times; evidence ID arrays use the durable insertion-order value.
 Password recovery refreshes the revocation time on every session row for the
