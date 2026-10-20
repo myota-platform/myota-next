@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   Inject,
@@ -16,6 +17,7 @@ import {
   WorkerProbeServer,
   workerProbePort,
 } from '@app/platform/worker-probes.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
 import { GeodataPromotionRepository } from './geodata-promotion.repository.js';
 import { GeodataEnrichmentRepository } from './geodata-enrichment.repository.js';
@@ -36,8 +38,7 @@ const RETENTION_INTERVAL_SECONDS = Math.max(
   60,
   Number(process.env.GEODATA_IMPORT_RETENTION_INTERVAL_SECONDS ?? 86400),
 );
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 type State = {
   status: string | null;
@@ -258,13 +259,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
       envelope = decoded;
       validateEnvelope(definition, envelope, message.subject);
     } catch (error) {
-      await this.deadLetter(
-        definition,
-        message,
-        null,
-        'invalid_envelope',
-        error,
-      );
+      await this.deadLetter(message, null, 'invalid_envelope', error);
       return;
     }
 
@@ -290,7 +285,6 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
         }
         if (delivery >= definition.maxDeliveries) {
           await this.deadLetter(
-            definition,
             message,
             envelope,
             'delivery_attempts_exhausted',
@@ -329,7 +323,6 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
       const state = await definition.getState(envelope);
       if (!state) {
         await this.deadLetter(
-          definition,
           message,
           envelope,
           'work_row_missing',
@@ -459,25 +452,30 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async deadLetter(
-    definition: WorkDefinition,
     message: JsMsg,
     envelope: Record<string, unknown> | null,
     category: string,
     error: unknown,
   ): Promise<void> {
+    const suppliedId = pythonTruthy(envelope?.causationId)
+      ? envelope?.causationId
+      : pythonTruthy(envelope?.workId)
+        ? envelope?.workId
+        : pythonTruthy(envelope?.eventId)
+          ? envelope?.eventId
+          : 'unknown';
     const eventId =
-      envelope &&
-      typeof envelope.causationId === 'string' &&
-      UUID.test(envelope.causationId)
-        ? envelope.causationId
-        : envelope &&
-            typeof envelope.workId === 'string' &&
-            UUID.test(envelope.workId)
-          ? envelope.workId
-          : messageIdFallback(message.subject, message.info.streamSequence);
+      typeof suppliedId === 'string' && isPythonUuid(suppliedId)
+        ? suppliedId
+        : randomUUID();
+    const suppliedType = pythonTruthy(envelope?.workType)
+      ? envelope?.workType
+      : pythonTruthy(envelope?.eventType)
+        ? envelope?.eventType
+        : 'unknown';
     await this.repository.recordWorkDeadLetter(
       eventId,
-      definition.workType,
+      String(suppliedType),
       envelope ?? {},
       message.info.deliveryCount,
       error instanceof Error
@@ -568,8 +566,6 @@ function validateEnvelope(
     !definition.producers.includes(envelope.producer) ||
     typeof envelope.createdAt !== 'string' ||
     !envelope.createdAt.endsWith('Z') ||
-    typeof envelope.causationId !== 'string' ||
-    !UUID.test(envelope.causationId) ||
     typeof envelope.workId !== 'string' ||
     !UUID.test(envelope.workId) ||
     subject !== definition.subject ||
@@ -578,6 +574,12 @@ function validateEnvelope(
     Object.keys(envelope).some((key) => !allowed.has(key))
   )
     throw new Error('work_contract_mismatch');
+  if (
+    envelope.causationId !== undefined &&
+    (typeof envelope.causationId !== 'string' ||
+      envelope.causationId.length > 200)
+  )
+    throw new Error('invalid_causation_id');
   if (definition.workType === 'geodata.location-enrichment.v1') {
     if (
       Object.keys(payload).length !== 5 ||
@@ -671,12 +673,13 @@ function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID.test(value);
 }
 
-function messageIdFallback(subject: string, sequence: number): string {
-  const hex = Buffer.from(`${subject}:${sequence}`)
-    .toString('hex')
-    .padEnd(32, '0')
-    .slice(0, 32);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+function isPythonUuid(value: string): boolean {
+  const hex = value
+    .replaceAll('urn:', '')
+    .replaceAll('uuid:', '')
+    .replace(/^[{}]+|[{}]+$/g, '')
+    .replaceAll('-', '');
+  return /^[0-9a-f]{32}$/i.test(hex);
 }
 
 function safeError(error: unknown): string {
