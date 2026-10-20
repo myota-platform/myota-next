@@ -122,6 +122,26 @@ requirePattern(
 );
 requirePattern(
   'apps/geodata-worker/src/geodata-work.repository.ts',
+  /parsePageTotal\(\s*stats\.rows\[0\]\?\.preprocessed[\s\S]*?parsePageTotal\(stats\.rows\[0\]\?\.errors[\s\S]*?parsePageTotal\(stats\.rows\[0\]\?\.skipped[\s\S]*?parsePageTotal\(stats\.rows\[0\]\?\.conflation/,
+  'Geodata staging statistics must preserve exact PostgreSQL counts',
+);
+requirePattern(
+  'apps/geodata-worker/src/geodata-work.repository.ts',
+  /manifestRecordCount = parsePageTotal\([\s\S]*?recordCount',\$7::bigint/,
+  'Geodata snapshot manifest counts must remain exact through persistence and event construction',
+);
+requirePattern(
+  'deploy/db/migrations/geo/007_geodata_snapshot_count_bigint.sql',
+  /ALTER TABLE public\.source_snapshot_manifest[\s\S]*?record_count TYPE bigint/,
+  'Geodata snapshot manifest count storage must support PostgreSQL bigint totals',
+);
+requirePattern(
+  'apps/geodata/src/geodata.repository.ts',
+  /\(\$\{importProjection\}\)::text AS run[\s\S]*?parseJsonWithExactIntegers\(row\.run\)[\s\S]*?parseJsonWithExactIntegers\(\s*result\.rows\[0\]\.run/s,
+  'Geodata import status reads must preserve exact JSONB integers',
+);
+requirePattern(
+  'apps/geodata-worker/src/geodata-work.repository.ts',
   /lease_until=now\(\)\+make_interval\(secs=>\$2\)[\s\S]*?IMPORT_RUN_LEASE_SECONDS[\s\S]*?async heartbeat\(run: ImportRun\): Promise<void>[\s\S]*?lease_until=now\(\)\+make_interval\(secs=>\$3\)/,
   'Geodata import claims and heartbeats must use the configured lease duration',
 );
