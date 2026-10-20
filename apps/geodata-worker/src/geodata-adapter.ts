@@ -259,17 +259,19 @@ function sourceCrs(value: unknown): string {
   if (value == null || value === '') return 'EPSG:4326';
   if (isRecord(value)) {
     const properties = isRecord(value.properties) ? value.properties : {};
-    value =
-      value.name ??
-      value.href ??
-      value.wkid ??
-      value.latestWkid ??
-      properties.name ??
-      properties.href ??
-      properties.wkid ??
-      properties.latestWkid;
-    if (!value) return 'EPSG:4326';
+    value = [
+      value.name,
+      value.href,
+      value.wkid,
+      value.latestWkid,
+      properties.name,
+      properties.href,
+      properties.wkid,
+      properties.latestWkid,
+    ].find(isTruthy);
+    if (value === undefined) return 'EPSG:4326';
   }
+  if (typeof value === 'boolean') return `EPSG:${Number(value)}`;
   if (typeof value === 'number' && Number.isInteger(value))
     return `EPSG:${value}`;
   const text =

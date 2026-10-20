@@ -294,7 +294,8 @@ per-feature size by default, 250,000 vertices, and the configured feature
 count. Less
 common geometry types and uncommon CRS definitions still need compatibility
 qualification against the reference parser.
-Geometry type aliases use Python-compatible Unicode case folding.
+Geometry type aliases use Python-compatible Unicode case folding, and CRS
+metadata selects the first Python-truthy identifier field.
 Geodata coordinate validation also preserves Python's `bool`-as-number
 behavior, including numeric-equivalent polygon ring closure; projected
 coordinates convert those values before transformation.
