@@ -127,7 +127,7 @@ uploads use their larger configurable limits. Durable object references from the
 import bucket are bounded, hash-checked, validated, and staged as normalized
 worker inputs. Refresh schedules can be listed and created, and manual complete-
 snapshot runs queue GeoJSON imports, promote validated candidates, record
-manifests, and apply disappearance policy after successful promotion.
+manifests, and apply disappearance policy after successful preprocessing.
 Import promotion generates deduplicated conflation candidates from overlapping
 PostGIS bounding boxes using the baseline 0.55 scoring threshold. Failed
 promotion queues can be redriven with a required reason recorded in queue
@@ -141,6 +141,9 @@ it rejects redirects and responses above 16 MiB, then submits data through the
 schedule run API. `GEODATA_IMPORTER_ENABLED` keeps it opt-in. Deployment,
 live-source qualification, remaining review workflows, and outage/recovery
 evidence are outstanding.
+Complete snapshot imports are also accepted on the ordinary import path; the
+worker applies disappearance policy after the final batch is staged, before
+candidate review or promotion, matching the reference worker lifecycle.
 Finalization removes staged candidates and queues transactionally
 while preserving the import summary and materialized entities. Pending
 candidates can be paged; administrators can confirm or

@@ -22,7 +22,6 @@ const entityTypePattern = /^[A-Z][A-Z0-9_]{1,63}$/;
 
 type ImportOptions = {
   communityProposal?: { proposalId: string; proposerId: string };
-  allowCompleteSnapshot?: boolean;
   autoPromote?: { requestedBy: string; note: string };
 };
 
@@ -39,10 +38,7 @@ export class GeodataImportService {
     body: Record<string, unknown>,
     options: ImportOptions = {},
   ) {
-    const prepared = prepareImport(
-      await this.resolveObjectReference(body),
-      options.allowCompleteSnapshot === true,
-    );
+    const prepared = prepareImport(await this.resolveObjectReference(body));
     const bucket =
       process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports';
     const id = randomUUID();
@@ -287,10 +283,7 @@ export class GeodataImportService {
   }
 }
 
-function prepareImport(
-  body: Record<string, unknown>,
-  allowCompleteSnapshot = false,
-) {
+function prepareImport(body: Record<string, unknown>) {
   const adapter = (typeof body.adapter === 'string' ? body.adapter : '')
     .trim()
     .toUpperCase();
@@ -334,11 +327,6 @@ function prepareImport(
     )
   )
     throw new BadRequestException('unsupported disappearancePolicy');
-  if (body.completeSnapshot === true && !allowCompleteSnapshot)
-    throw new BadRequestException(
-      'complete snapshot reconciliation is not available for this import path yet',
-    );
-
   let document: Record<string, unknown>;
   if (Array.isArray(body.features)) {
     document = { type: 'FeatureCollection', features: body.features };

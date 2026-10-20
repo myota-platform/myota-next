@@ -187,7 +187,8 @@
   and manually run as complete snapshots. The Admin supports schedule creation,
   paging, and manual GeoJSON snapshot runs. Snapshot runs stage and promote the
   full validated candidate set, record source manifests, and apply configured
-  disappearance policies only after successful promotion. The opt-in
+  disappearance policies after successful preprocessing. Ordinary imports also
+  accept complete snapshots and apply disappearance policy at that stage. The opt-in
   allowlisted importer now executes due schedules through the Geodata API;
   deployment and live-source qualification remain outstanding.
   Candidate-level failures from a FAILED promotion queue can be resubmitted

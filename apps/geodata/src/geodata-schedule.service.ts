@@ -148,7 +148,6 @@ export class GeodataScheduleService {
         completeSnapshot: true,
       },
       {
-        allowCompleteSnapshot: true,
         autoPromote: { requestedBy, note: 'Scheduled source refresh' },
       },
     );
