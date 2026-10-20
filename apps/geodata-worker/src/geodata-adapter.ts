@@ -1,5 +1,5 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
-import proj4 from 'proj4';
+import proj4 from '@app/geodata-domain/proj4.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import {
   normalizeAttachmentMetadata,

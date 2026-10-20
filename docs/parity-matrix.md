@@ -363,9 +363,9 @@ and locality language, with a 2,048-entry per-process LRU limit.
 JSON GeoJSON, WFS GeoJSON, and ArcGIS FeatureServer JSON import creation stores
 normalized GeoJSON source documents in S3-compatible storage and queues
 idempotent import runs transactionally. ArcGIS geometries with WGS84 and
-Web Mercator spatial references are normalized to WGS84; other EPSG WKIDs are
-reprojected when the installed `proj4` definitions support them. Spatial
-reference selection prefers `wkid` over `latestWkid`, and unsupported
+Web Mercator spatial references are normalized to WGS84; other EPSG WKIDs use
+the bundled 4,758-entry Proj4 definition table. Spatial reference selection
+prefers `wkid` over `latestWkid`, and unsupported
 projections use the normalized `unsupported CRS EPSG:<id>` error. WGS84 input
 retains extra ordinates, the Web Mercator special case emits XY only, and other
 projected CRS transforms preserve ordinates beyond XY, matching the pinned
@@ -440,8 +440,9 @@ temporary disk and decode records one at a time, with the same shared API/worker
 1 GiB upload cap or optional format-specific override, a 1 GiB expanded-size cap, 16 MiB
 per-feature size by default, 250,000 vertices, and the configured feature
 count. Less
-common geometry types and uncommon CRS definitions still need compatibility
-qualification against the reference parser.
+common geometry types and CRS transformations that depend on datum grids still
+need compatibility qualification against the reference parser. Eight EPSG
+coordinate fixtures currently compare with PyProj 3.8.0 within `1e-7` degrees.
 Geometry type aliases use Python-compatible Unicode case folding, and CRS
 metadata selects the first Python-truthy identifier field.
 Geodata coordinate validation also preserves Python's `bool`-as-number

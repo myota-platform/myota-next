@@ -13,7 +13,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { createHash, randomUUID } from 'node:crypto';
-import proj4 from 'proj4';
+import proj4 from '@app/geodata-domain/proj4.js';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import {
