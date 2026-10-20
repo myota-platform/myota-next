@@ -278,7 +278,9 @@
   The adapter catalogue retains baseline format names
   and aliases, including `PARKSERVE_US` and `SHP`, and lists Shapefile support
   for manual imports. Pending candidates can be paged, confirmed, or rejected
-  through authorized, idempotent review writes. Selected candidates can be
+  through authorized, idempotent review writes. Validation status coercion
+  applies Python truthiness and string conversion before checking supported
+  values. Selected candidates can be
   queued for CANDIDATE or role-scoped APPROVED promotion; the worker writes
   entities, category and source links, audit/outbox events, and per-candidate
   queue outcomes. Entity review, metadata, category, and geometry changes

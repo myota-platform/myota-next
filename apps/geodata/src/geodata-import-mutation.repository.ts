@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import type { AccessTokenClaims } from '@app/platform/access-token.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { assertReviewCoverage } from './geodata-entity-mutation.repository.js';
 
 @Injectable()
@@ -342,10 +343,15 @@ export class GeodataImportMutationRepository {
     if (new Set(candidateIds).size !== candidateIds.length)
       throw new BadRequestException('candidateIds must be unique');
     if (!reviewerId) throw new BadRequestException('reviewerId is required');
+    const rawStatus = pythonTruthy(body.validationStatus)
+      ? body.validationStatus
+      : 'VALID';
     const requested =
-      typeof body.validationStatus === 'string'
-        ? body.validationStatus.toUpperCase()
-        : 'VALID';
+      typeof rawStatus === 'string'
+        ? rawStatus.toUpperCase()
+        : typeof rawStatus === 'number' || typeof rawStatus === 'boolean'
+          ? `${rawStatus}`.toUpperCase()
+          : (JSON.stringify(rawStatus) ?? '').toUpperCase();
     if (!['VALID', 'CONFIRMED', 'REJECTED', 'INVALID'].includes(requested))
       throw new BadRequestException(
         'validationStatus must be VALID or REJECTED',
