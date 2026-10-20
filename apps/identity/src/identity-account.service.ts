@@ -15,10 +15,7 @@ import {
   parsePageInteger,
 } from '@app/platform/pagination.js';
 import { writeOutboxEvent, writeSecurityEvent } from '@app/platform/outbox.js';
-import {
-  collapsePythonWhitespace,
-  trimPythonWhitespace,
-} from '@app/platform/python-strings.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import {
@@ -195,7 +192,7 @@ export class IdentityAccountService {
       let accountUpdatedAt = accountResult.rows[0].updated_at;
       let callsignValue: string | undefined;
       if (input.callsign) {
-        callsignValue = collapsePythonWhitespace(input.callsign.toUpperCase());
+        callsignValue = trimPythonWhitespace(input.callsign).toUpperCase();
         if (!callsignValue) {
           throw new BadRequestException('callsign cannot be empty');
         }
