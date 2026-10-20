@@ -204,8 +204,10 @@ candidate review or promotion, matching the reference worker lifecycle.
 Finalization removes staged candidates and queues transactionally
 while preserving the import summary and materialized entities. Pending
 candidates can be paged; administrators can confirm or
-reject selected rows transactionally. Validation status uses Python truthiness
-and string conversion before checking supported values. Promotion selection
+reject selected rows transactionally. Candidate validation checks required
+fields first and preserves duplicate IDs in submitted order; validation status
+uses Python truthiness and string conversion before checking supported values.
+Promotion selection
 applies required-field checks before type and status validation, then sorts and
 deduplicates IDs without a separate 500-ID cap. Selected candidates can be queued
 for CANDIDATE or scope-gated APPROVED promotion; the worker persists entities,

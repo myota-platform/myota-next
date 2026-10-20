@@ -329,32 +329,32 @@ export class GeodataImportMutationRepository {
     key: string | undefined,
     body: Record<string, unknown>,
   ) {
-    const candidateIds = body.candidateIds;
-    const reviewerId =
-      typeof body.reviewerId === 'string' ? body.reviewerId : '';
-    if (
-      !Array.isArray(candidateIds) ||
-      !candidateIds.length ||
-      candidateIds.some((id) => typeof id !== 'string' || !isUuid(id))
-    )
+    const missing = ['candidateIds', 'reviewerId'].filter(
+      (field) => !pythonTruthy(body[field]),
+    );
+    if (missing.length)
       throw new BadRequestException(
-        'candidateIds must be a non-empty list of UUIDs',
+        `missing required fields: ${missing.join(', ')}`,
       );
-    if (new Set(candidateIds).size !== candidateIds.length)
-      throw new BadRequestException('candidateIds must be unique');
-    if (!reviewerId) throw new BadRequestException('reviewerId is required');
-    const rawStatus = pythonTruthy(body.validationStatus)
-      ? body.validationStatus
-      : 'VALID';
-    const requested =
-      typeof rawStatus === 'string'
-        ? rawStatus.toUpperCase()
-        : typeof rawStatus === 'number' || typeof rawStatus === 'boolean'
-          ? `${rawStatus}`.toUpperCase()
-          : (JSON.stringify(rawStatus) ?? '').toUpperCase();
+    const rawIds = body.candidateIds;
+    if (!Array.isArray(rawIds) || !rawIds.length)
+      throw new BadRequestException('candidateIds must be a non-empty list');
+    const candidateIds = rawIds.map(pythonString);
+    const uniqueCandidateIds = [...new Set(candidateIds)];
+    const reviewerId = body.reviewerId;
+    const requested = pythonString(
+      pythonTruthy(body.validationStatus) ? body.validationStatus : 'VALID',
+    ).toUpperCase();
     if (!['VALID', 'CONFIRMED', 'REJECTED', 'INVALID'].includes(requested))
       throw new BadRequestException(
         'validationStatus must be VALID or REJECTED',
+      );
+    const invalidId = candidateIds.find(
+      (id) => !isUuid(id) || id !== id.toLowerCase(),
+    );
+    if (invalidId)
+      throw new BadRequestException(
+        `candidate ${invalidId} does not belong to import run`,
       );
     const rejected = requested === 'REJECTED' || requested === 'INVALID';
     const note = body.note === undefined ? null : body.note;
@@ -379,14 +379,17 @@ export class GeodataImportMutationRepository {
         `SELECT id,validation_status,processing_queue_id
          FROM geodata_import_candidate WHERE import_run_id=$1 AND id=ANY($2::uuid[])
          FOR UPDATE`,
-        [runId, candidateIds],
+        [runId, uniqueCandidateIds],
       );
-      if (selected.rows.length !== candidateIds.length)
+      if (selected.rows.length !== uniqueCandidateIds.length) {
+        const selectedIds = new Set(selected.rows.map((row) => String(row.id)));
+        const missing = candidateIds.find((id) => !selectedIds.has(id));
         throw new BadRequestException(
-          'one or more candidates do not belong to this import run',
+          `candidate ${missing} does not belong to import run`,
         );
+      }
       if (rejected && selected.rows.some((row) => row.processing_queue_id))
-        throw new BadRequestException('queued candidates cannot be rejected');
+        throw new BadRequestException('queued records cannot be rejected');
 
       await client.query(
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
@@ -394,14 +397,14 @@ export class GeodataImportMutationRepository {
       if (rejected) {
         await client.query(
           'DELETE FROM geodata_import_candidate WHERE import_run_id=$1 AND id=ANY($2::uuid[])',
-          [runId, candidateIds],
+          [runId, uniqueCandidateIds],
         );
       } else {
         await client.query(
           `UPDATE geodata_import_candidate SET validation_status='CONFIRMED',
            validation_note=$3::jsonb,validated_by=$4,validated_at=now(),updated_at=now()
            WHERE import_run_id=$1 AND id=ANY($2::uuid[]) AND validation_status<>'PROCESSED'`,
-          [runId, candidateIds, JSON.stringify(note), reviewerId],
+          [runId, uniqueCandidateIds, JSON.stringify(note), reviewerId],
         );
       }
       const eventType = rejected

@@ -280,9 +280,10 @@
   The adapter catalogue retains baseline format names
   and aliases, including `PARKSERVE_US` and `SHP`, and lists Shapefile support
   for manual imports. Pending candidates can be paged, confirmed, or rejected
-  through authorized, idempotent review writes. Validation status coercion
-  applies Python truthiness and string conversion before checking supported
-  values. Selected candidates can be
+  through authorized, idempotent review writes. Candidate validation checks
+  required fields first and preserves duplicate IDs in submitted order, matching
+  the Python handler. Validation status coercion applies Python truthiness and
+  string conversion before checking supported values. Selected candidates can be
   queued for CANDIDATE or role-scoped APPROVED promotion. Promotion validates
   required fields in reference order; selection sorts and deduplicates candidate
   IDs and has no extra 500-ID cap, matching the Python handler. The worker writes
