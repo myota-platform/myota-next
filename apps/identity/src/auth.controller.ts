@@ -39,7 +39,6 @@ import {
   ReplaceAccountRolesDto,
   SecurityEventsQueryDto,
   OidcProviderMappingDto,
-  ServiceTokenRequestDto,
 } from './auth.dto.js';
 import { IdentityAuthService } from './auth.service.js';
 import { IdentityRoleService } from './identity-role.service.js';
@@ -105,7 +104,7 @@ export class AuthController {
   @HttpCode(200)
   @Header('Cache-Control', 'private, no-store')
   issueServiceToken(
-    @Body() body: ServiceTokenRequestDto,
+    @Body() body: Record<string, unknown>,
     @Headers('authorization') authorization?: string,
   ) {
     return this.credentials.issueServiceToken(body, authorization);

@@ -81,7 +81,7 @@
   issuance with the restricted email-recipient lookup, and normalized private
   profile-image upload/read/delete are also implemented. Email-service token
   authentication compares UTF-8 secret bytes in constant time and requires at
-  least 32 configured secret bytes; caller-issued service tokens require a
+  least 32 configured secret characters; caller-issued service tokens require a
   non-empty scope list before authorization, matching the Python handler.
   Account creation uses the reference's non-empty email and `@` validation
   after Python-compatible trimming and case folding.

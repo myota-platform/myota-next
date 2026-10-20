@@ -12,8 +12,8 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import type { IdentityAuthService } from './auth.service.js';
-import type { ServiceTokenRequestDto } from './auth.dto.js';
 
 const SERVICE_TOKEN_SECONDS = 300;
 const EMAIL_SERVICE = 'email-service';
@@ -27,20 +27,32 @@ export class IdentityCredentialService {
   ) {}
 
   async issueServiceToken(
-    body: ServiceTokenRequestDto,
+    body: Record<string, unknown>,
     authorization?: string,
   ): Promise<Record<string, unknown>> {
-    const service = body.service;
+    if (!pythonTruthy(body.service))
+      throw new BadRequestException('missing required fields: service');
+    const service =
+      typeof body.service === 'string' ? body.service : String(body.service);
 
     let scopes: string[];
     let claims: { sub: string; aud?: string };
     if (service === EMAIL_SERVICE) {
+      if (!pythonTruthy(body.clientSecret))
+        throw new BadRequestException('missing required fields: clientSecret');
+      if (
+        Object.keys(body).some(
+          (key) => key !== 'service' && key !== 'clientSecret',
+        )
+      )
+        throw new BadRequestException(
+          'email service token requests accept no caller-selected scopes',
+        );
       const expectedSecret =
         process.env.MYOTA_EMAIL_SERVICE_CLIENT_SECRET ?? '';
       const expected = Buffer.from(expectedSecret, 'utf8');
       if (
-        body.scopes !== undefined ||
-        expected.length < 32 ||
+        Array.from(expectedSecret).length < 32 ||
         typeof body.clientSecret !== 'string'
       ) {
         throw new ForbiddenException('service client authentication failed');
@@ -55,11 +67,12 @@ export class IdentityCredentialService {
       scopes = [EMAIL_RESOLVE_SCOPE];
       claims = { sub: `service:${EMAIL_SERVICE}`, aud: 'myota-identity' };
     } else {
-      if (!body.scopes?.length || body.clientSecret !== undefined) {
+      if (!pythonTruthy(body.scopes))
+        throw new BadRequestException('missing required fields: scopes');
+      if (Object.hasOwn(body, 'clientSecret'))
         throw new BadRequestException(
-          'service and scopes are required; clientSecret is reserved for email-service',
+          'clientSecret is not accepted for this service',
         );
-      }
       if (!authorization) {
         throw new UnauthorizedException(
           'Bearer authentication is required for service token issuance',
@@ -72,6 +85,11 @@ export class IdentityCredentialService {
           'identity.service.issue scope is required',
         );
       }
+      if (
+        !Array.isArray(body.scopes) ||
+        !body.scopes.every((scope) => typeof scope === 'string')
+      )
+        throw new BadRequestException('scopes must be an array of strings');
       if (body.scopes.includes(EMAIL_RESOLVE_SCOPE)) {
         throw new ForbiddenException(
           'email recipient scope is reserved for email-service',
