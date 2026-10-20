@@ -27,7 +27,10 @@
   import and upload handlers may enforce smaller limits.
 - `@nestjs/observe` 0.3.16 is wired through the shared platform package into all
   12 NestJS components (five APIs and seven workers/importer), with a distinct
-  service ID for each and automatic instrumentation enabled at bootstrap. Set
+  service ID for each: `gateway`, `identity-api`, `programmes-api`,
+  `activity-api`, `geodata-api`, `identity-maintenance`, `activity-worker`,
+  `activity-notifications`, `geodata-worker`, `geodata-importer`, `email-worker`,
+  and `outbox-worker`. Automatic instrumentation is enabled at bootstrap. Set
   `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` to report telemetry; without them,
   the SDK emits no telemetry. `MYOTA_BUILD_VERSION` or `GIT_SHA` labels the
   deployed version when provided.
