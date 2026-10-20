@@ -247,8 +247,8 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
         this.logger.error('Email delivery exhausted its retry limit');
         return;
       }
-      await this.retry(command.workId);
-      message.nak(backoffMs(message.info.deliveryCount));
+      const attempts = await this.retry(command.workId);
+      message.nak(backoffMs(Math.max(message.info.deliveryCount, attempts)));
       this.telemetry.record(
         stage === 'smtp' ? 'smtp_failure' : 'identity_failure',
         command.templateId,
@@ -415,15 +415,19 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async retry(workId: string) {
+  private async retry(workId: string): Promise<number> {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
-      await client.query(
+      const result = await client.query<{ attempts: number }>(
         `UPDATE public.email_delivery SET status='PENDING',lease_until=NULL,
-         last_error_code='transient_delivery_failure',updated_at=now() WHERE work_id=$1`,
+         last_error_code='transient_delivery_failure',updated_at=now() WHERE work_id=$1
+         RETURNING attempts`,
         [workId],
       );
+      const attempts = result.rows[0]?.attempts;
+      if (attempts === undefined)
+        throw new Error('email delivery row disappeared during retry');
       await client.query(
         `UPDATE public.email_delivery_attempt SET outcome='retryable_failure',
          error_code='transient_delivery_failure' WHERE id=(
@@ -432,6 +436,7 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
         [workId],
       );
       await client.query('COMMIT');
+      return attempts;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;

@@ -415,7 +415,9 @@
   deduplication, attempts, and redacted dead letters in the Core database. The
   former fourth email database is removed from the target. Identity production,
   OpenTelemetry export, and deployment integration remain outstanding. The
-  worker exposes `/healthz`, `/readyz`, and Prometheus metrics. An audited
+  worker exposes `/healthz`, `/readyz`, and Prometheus metrics. Retry backoff
+  uses the greater of JetStream delivery count and the persisted attempt count,
+  including after audited redrive. An audited
   redrive CLI resets one dead-letter record and records the operator's reason
   before the original command is replayed from its producer outbox.
 
