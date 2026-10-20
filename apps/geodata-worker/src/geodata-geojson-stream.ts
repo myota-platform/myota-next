@@ -21,6 +21,59 @@ type ContainerFrame = {
   expectKey?: boolean;
 };
 
+/** Read the document CRS without retaining features, matching the reference's first parse pass. */
+export async function readGeoJsonDocumentCrs(
+  source: AsyncIterable<Uint8Array>,
+  heartbeat: () => Promise<void>,
+) {
+  const parser = new JSONParser({
+    paths: ['$.crs', '$.spatialReference'],
+    keepStack: false,
+    stringBufferSize: 64 * 1024,
+  });
+  let documentCrs: unknown;
+  let hasDocumentCrs = false;
+  let spatialReference: unknown;
+  let hasSpatialReference = false;
+  let sourceBytes = 0;
+  let lastHeartbeatBytes = 0;
+  const sourceLimit = Math.min(
+    positiveEnv(process.env.MYOTA_GEOJSON_MAX_UPLOAD_BYTES, 256 * 1024 * 1024),
+    MAX_SOURCE_BYTES,
+  );
+
+  parser.onValue = ({ value, key, stack }) => {
+    if (stack.length !== 1 || stack[0]?.mode !== TOKEN_PARSER_OBJECT_MODE)
+      return;
+    if (key === 'crs' && !hasDocumentCrs) {
+      documentCrs = value;
+      hasDocumentCrs = true;
+    } else if (key === 'spatialReference' && !hasSpatialReference) {
+      spatialReference = value;
+      hasSpatialReference = true;
+    }
+  };
+
+  for await (const incoming of source) {
+    const chunk = Buffer.isBuffer(incoming) ? incoming : Buffer.from(incoming);
+    sourceBytes += chunk.length;
+    if (sourceBytes > sourceLimit)
+      throw new Error('GeoJSON source exceeds the configured upload limit');
+    for (let offset = 0; offset < chunk.length; offset += PARSER_CHUNK_BYTES) {
+      parser.write(chunk.subarray(offset, offset + PARSER_CHUNK_BYTES));
+      if (sourceBytes - lastHeartbeatBytes >= 32 * 1024 * 1024) {
+        await heartbeat();
+        lastHeartbeatBytes = sourceBytes;
+      }
+    }
+  }
+
+  parser.end();
+  if (!hasDocumentCrs || documentCrs === null || documentCrs === undefined)
+    return spatialReference;
+  return documentCrs;
+}
+
 /**
  * Stream GeoJSON features from a FeatureCollection or top-level feature array.
  * Only the current feature is assembled by the parser before it is yielded.
@@ -29,6 +82,7 @@ export async function* streamGeoJsonFeatures(
   source: AsyncIterable<Uint8Array>,
   sourceHash: string,
   featureLimit: number,
+  documentCrs: unknown,
   heartbeat: () => Promise<void>,
 ): AsyncGenerator<unknown> {
   const guard = new GeoJsonResourceGuard();
@@ -93,6 +147,13 @@ export async function* streamGeoJsonFeatures(
               throw new Error(
                 `a source geometry exceeds the configured vertex limit (${MAX_FEATURE_VERTICES})`,
               );
+            if (
+              pythonTruthy(documentCrs) &&
+              isRecord(value) &&
+              !Object.hasOwn(value, 'crs')
+            ) {
+              (value as unknown as Record<string, unknown>).crs = documentCrs;
+            }
             pending.push(value);
           };
           parserPart = part.subarray(firstTokenOffset);
@@ -325,6 +386,15 @@ function countFeatureVertices(value: unknown): number {
 
 function isJsonWhitespace(byte: number) {
   return byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0d;
+}
+
+function pythonTruthy(value: unknown): boolean {
+  if (value === null || value === undefined || value === false) return false;
+  if (typeof value === 'number') return value !== 0 && !Number.isNaN(value);
+  if (typeof value === 'string' || Array.isArray(value))
+    return value.length > 0;
+  if (isRecord(value)) return Object.keys(value).length > 0;
+  return true;
 }
 
 function positiveEnv(value: string | undefined, fallback: number): number {
