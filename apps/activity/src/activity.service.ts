@@ -172,9 +172,9 @@ export class ActivityService {
       throw new BadRequestException(
         'QSO ingestion exceeds the configured limit',
       );
-    const sourceFormat = body.sourceFormat ?? 'JSON';
-    if (!['JSON', 'CSV', 'ADIF'].includes(sourceFormat))
-      throw new BadRequestException('sourceFormat must be JSON, CSV, or ADIF');
+    const sourceFormat = Object.hasOwn(body, 'sourceFormat')
+      ? body.sourceFormat
+      : 'JSON';
     const payload = {
       activationId: body.activationId,
       records: body.qsos,

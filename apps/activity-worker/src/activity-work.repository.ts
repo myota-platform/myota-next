@@ -218,7 +218,12 @@ export class ActivityWorkRepository {
         const normalized: JsonRecord[] = [];
         for (const input of records) {
           const qso = normalizeQso(
-            { ...input, source: job.payload.sourceFormat ?? 'JSON' },
+            {
+              ...input,
+              source: Object.hasOwn(job.payload, 'sourceFormat')
+                ? job.payload.sourceFormat
+                : 'JSON',
+            },
             job.payload.activationId,
           );
           if (

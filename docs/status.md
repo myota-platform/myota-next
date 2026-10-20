@@ -191,6 +191,9 @@
   precedes authentication where the reference does. QSO and close operations
   load the activation before operator authorization. QSO ingestion also checks
   record-array shape and batch size after activation authorization.
+  QSO ingestion defaults `sourceFormat` only when omitted and preserves an
+  explicitly supplied value through job processing, matching the Python
+  handler's `body.get` behavior.
   Requests store any
   truthy `proposedValues` JSON shape accepted by the reference. Review resolves the QSO through the
   correction record, as the reference does. Applying an object correction queues
