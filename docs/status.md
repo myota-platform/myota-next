@@ -199,6 +199,8 @@
   Activation close ignores `Idempotency-Key`, matching the reference: a repeat
   close is rejected after the first transition rather than replaying a cached
   response.
+  Falsey explicit `endedAt` values close with a null end timestamp, matching
+  the Python evaluation and database conversion behavior.
   Activation validity defaults use only the submitted `programmeRules` field,
   matching the reference even when validation uses the `rules` alias.
   Statistics rebuild requests always use the reference's programme-and-UTC-day

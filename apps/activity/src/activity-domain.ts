@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   collapsePythonWhitespace,
   trimPythonWhitespace,
@@ -559,16 +560,22 @@ export function parseAdif(text: string): JsonRecord[] {
 export function evaluateActivation(
   activation: JsonRecord,
   qsos: JsonRecord[],
-  endedAt: string,
+  endedAt: unknown,
 ): JsonRecord {
   const rules = activation.programmeRules ?? {};
   const violations: string[] = [];
-  normalizeTimestamp(endedAt);
-  if (compareTimestamps(endedAt, activation.startedAt) < 0)
+  const normalizedEndedAt = pythonTruthy(endedAt)
+    ? normalizeTimestamp(endedAt as string)
+    : null;
+  if (
+    normalizedEndedAt &&
+    compareTimestamps(normalizedEndedAt, activation.startedAt) < 0
+  )
     violations.push('endedAt must be after startedAt');
   if (
     activation.validityExpiresAt &&
-    compareTimestamps(endedAt, activation.validityExpiresAt) > 0
+    normalizedEndedAt &&
+    compareTimestamps(normalizedEndedAt, activation.validityExpiresAt) > 0
   )
     violations.push('activation exceeded its validity window');
   if (

@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   evaluateActivation,
   normalizeTimestamp,
@@ -1180,7 +1181,7 @@ export class ActivityRepository {
     });
   }
 
-  async close(id: string, endedAt: string): Promise<JsonRecord> {
+  async close(id: string, endedAt: unknown): Promise<JsonRecord> {
     return this.mutate(undefined, async (client) => {
       const found = await client.query(
         `SELECT *, ${activationTimestampProjection} FROM activity_activation WHERE id=$1 FOR UPDATE`,
@@ -1189,6 +1190,9 @@ export class ActivityRepository {
       if (!found.rows[0]) throw new NotFoundException('activation not found');
       if (found.rows[0].status !== 'OPEN')
         throw new BadRequestException('activation is not open');
+      const normalizedEndedAt = pythonTruthy(endedAt)
+        ? normalizeTimestamp(endedAt as string)
+        : null;
       const qsos = await client.query(
         `SELECT *, ${qsoTimestampProjection}
          FROM activity_qso WHERE activation_id=$1 AND status<>'VOID' ORDER BY occurred_at`,
@@ -1197,12 +1201,12 @@ export class ActivityRepository {
       const evaluation = evaluateActivation(
         activationRecord(found.rows[0]),
         qsos.rows.map(qsoRecord),
-        endedAt,
+        normalizedEndedAt,
       );
       const status = evaluation.valid ? 'CLOSED' : 'CLOSED_INVALID';
       const updated = await client.query(
         `UPDATE activity_activation SET status=$1,ended_at=$2::timestamptz,rule_evaluation=$3::jsonb,updated_at=now() WHERE id=$4 RETURNING *, ${activationTimestampProjection}`,
-        [status, endedAt, JSON.stringify(evaluation), id],
+        [status, normalizedEndedAt, JSON.stringify(evaluation), id],
       );
       const record = activationRecord(updated.rows[0], qsos.rows);
       await this.event(
