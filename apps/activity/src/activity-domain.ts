@@ -6,6 +6,16 @@ export type JsonRecord = Record<string, any>;
 export function parseTimestamp(value: string): Date {
   if (typeof value !== 'string')
     throw new BadRequestException('timestamp is invalid');
+  let normalized = normalizeTimestampInput(value);
+  normalized = normalizeExtendedTimezoneOffset(normalized) ?? normalized;
+  validateTimestampFields(normalized);
+  const date = new Date(normalized);
+  if (!Number.isFinite(date.getTime()))
+    throw new BadRequestException('timestamp is invalid');
+  return date;
+}
+
+function normalizeTimestampInput(value: string): string {
   let normalized = value
     .replace(/^(\d{4}(?:-\d{2}-\d{2}|\d{4}))t/i, '$1T')
     .replace(/([T ]\d{2}:\d{2}:\d{2}),(\d+)/, '$1.$2');
@@ -27,7 +37,7 @@ export function parseTimestamp(value: string): Date {
     normalized = `${date}T${normalized.slice(date.length + separator.length)}`;
   }
   const compact =
-    /^(\d{4})(\d{2})(\d{2})([T ])(\d{2})(\d{2})(\d{2})?([.,]\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?$/i.exec(
+    /^(\d{4})(\d{2})(\d{2})([T ])(\d{2})(\d{2})(\d{2})?([.,]\d+)?(Z|[+-]\d{2}(?::?\d{2})?(?::?\d{2}(?:[.,]\d+)?)?)?$/i.exec(
       normalized,
     );
   if (compact) {
@@ -53,14 +63,84 @@ export function parseTimestamp(value: string): Date {
     normalized = normalized.replace(/([+-]\d{2})$/i, '$1:00');
   if (
     /[T ]\d{2}:\d{2}/.test(normalized) &&
-    !/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(normalized)
+    !/(?:Z|[+-]\d{2}(?::?\d{2})?(?::?\d{2}(?:[.,]\d+)?)?)$/i.test(normalized)
   )
     normalized += 'Z';
-  validateTimestampFields(normalized);
-  const date = new Date(normalized);
-  if (!Number.isFinite(date.getTime()))
+  return normalized;
+}
+
+function normalizeExtendedTimezoneOffset(value: string): string | undefined {
+  const offset =
+    /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:[.,](\d+))?)?([+-])(?:(\d{2}):(\d{2}):(\d{2})|(\d{2})(\d{2})(\d{2}))(?:[.,](\d+))?$/.exec(
+      value,
+    );
+  if (!offset) return undefined;
+
+  const [
+    ,
+    dateText,
+    hourText,
+    minuteText,
+    secondText,
+    localFraction,
+    sign,
+    extendedHours,
+    extendedMinutes,
+    extendedSeconds,
+    basicHours,
+    basicMinutes,
+    basicSeconds,
+    offsetFraction,
+  ] = offset;
+  const offsetHours = Number(extendedHours ?? basicHours);
+  const offsetMinutes = Number(extendedMinutes ?? basicMinutes);
+  const offsetSeconds = Number(extendedSeconds ?? basicSeconds);
+  if (offsetHours > 23 || offsetMinutes > 59 || offsetSeconds > 59)
     throw new BadRequestException('timestamp is invalid');
-  return date;
+
+  const localTime = `${dateText}T${hourText}:${minuteText}:${secondText ?? '00'}${localFraction ? `.${localFraction}` : ''}Z`;
+  validateTimestampFields(localTime);
+  const [year, month, day] = dateText.split('-').map(Number);
+  const localDate = new Date(0);
+  localDate.setUTCFullYear(year, month - 1, day);
+  localDate.setUTCHours(
+    Number(hourText),
+    Number(minuteText),
+    Number(secondText ?? 0),
+    0,
+  );
+  const localMicroseconds = Number(
+    (localFraction ?? '').slice(0, 6).padEnd(6, '0'),
+  );
+  const offsetMicroseconds = Number(
+    (offsetFraction ?? '').slice(0, 6).padEnd(6, '0'),
+  );
+  const offsetTotalMicroseconds =
+    BigInt(offsetHours * 3600 + offsetMinutes * 60 + offsetSeconds) *
+      1_000_000n +
+    BigInt(offsetMicroseconds);
+  const signedOffsetMicroseconds =
+    sign === '+' ? offsetTotalMicroseconds : -offsetTotalMicroseconds;
+  const utcMicroseconds =
+    BigInt(localDate.getTime()) * 1000n +
+    BigInt(localMicroseconds) -
+    signedOffsetMicroseconds;
+  let utcMilliseconds = utcMicroseconds / 1000n;
+  let subMillisecondMicroseconds = utcMicroseconds % 1000n;
+  if (subMillisecondMicroseconds < 0n) {
+    utcMilliseconds--;
+    subMillisecondMicroseconds += 1000n;
+  }
+  const utcDate = new Date(Number(utcMilliseconds));
+  const utcYear = utcDate.getUTCFullYear();
+  if (!Number.isFinite(utcDate.getTime()) || utcYear < 1 || utcYear > 9999)
+    throw new BadRequestException('timestamp is invalid');
+  const microseconds =
+    utcDate.getUTCMilliseconds() * 1000 + Number(subMillisecondMicroseconds);
+  const seconds = utcDate.toISOString().slice(0, 19);
+  return microseconds === 0
+    ? `${seconds}Z`
+    : `${seconds}.${String(microseconds).padStart(6, '0')}Z`;
 }
 
 function isoWeekDate(year: number, week: number, day: number): string {
@@ -157,12 +237,12 @@ function validateTimestampFields(value: string) {
 export function normalizeTimestamp(value: string | Date): string {
   if (!(value instanceof Date) && typeof value !== 'string')
     throw new BadRequestException('timestamp is invalid');
-  const raw =
-    value instanceof Date
-      ? value.toISOString()
-      : value.replace(/^(\d{4}(?:-\d{2}-\d{2}|\d{4}))t/i, '$1T');
+  const raw = value instanceof Date ? value.toISOString() : value;
+  const normalized = normalizeTimestampInput(raw);
+  const extendedOffset = normalizeExtendedTimezoneOffset(normalized);
+  if (extendedOffset) return extendedOffset;
   const date = parseTimestamp(raw);
-  const fraction = /[T ]\d{2}:\d{2}:\d{2}[.,](\d+)/.exec(raw)?.[1] ?? '';
+  const fraction = /[T ]\d{2}:\d{2}:\d{2}[.,](\d+)/.exec(normalized)?.[1] ?? '';
   const microseconds = fraction.slice(0, 6).padEnd(6, '0');
   const seconds = date.toISOString().slice(0, 19);
   return microseconds === '000000'

@@ -59,8 +59,9 @@ OpenAPI contract declares `200`.
 Activity has an initial activation and single-QSO slice: activation list/create/read/close,
 normalized QSO writes, validity checks, ownership checks, subject aggregates,
 transactional event outbox records, idempotency responses, and award recalculation
-jobs. Timestamp normalization accepts lowercase `t`, ISO week dates, and
-one-character date/time separators supported by Python's
+jobs. Timestamp normalization accepts lowercase `t`, ISO week dates,
+one-character date/time separators, and fractional-second time-zone offsets
+supported by Python's
 `datetime.fromisoformat`. QSO ingestion requests also persist bounded,
 owner-scoped jobs with a status read path, and the
 separate Activity worker consumes its six registered JetStream
