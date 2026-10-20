@@ -461,7 +461,7 @@ function setProposalLocationPick(active) {
     $('proposal-status').textContent =
       'Click the map where the proposed point is located.';
 }
-$('#proposal-location-pick').onclick = () =>
+$('proposal-location-pick').onclick = () =>
   setProposalLocationPick(!proposalLocationPickActive);
 function publicTileMap() {
   const map = $('map'),
@@ -583,7 +583,7 @@ function publicTileMap() {
         publicTileMap();
       }),
   );
-  $('[data-public-reset]').onclick = () => {
+  document.querySelector('[data-public-reset]').onclick = () => {
     publicMapState = { lat: 37.395, lon: -5.995, zoom: 12 };
     publicTileMap();
   };
