@@ -71,7 +71,8 @@
   relational Programme record and commit with catalogue and outbox changes.
   Programme content supports draft editing,
   review submission and decisions, publication, paginated filtering, and locale
-  coverage reporting; content values and policy schemas follow the reference's
+  coverage reporting with Python-compatible half-to-even percentage rounding;
+  content values and policy schemas follow the reference's
   non-empty JSON checks. Programme content now uses an indexed Core relational
   table with a migration backfill; content transitions, idempotency records,
   and outbox events commit together. Policy drafts now use a separate indexed

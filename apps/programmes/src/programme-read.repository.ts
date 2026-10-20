@@ -222,6 +222,12 @@ export class ProgrammeReadRepository {
                          AND published.content_key = content_keys.content_key
                     )) AS missing_keys
              FROM effective_locales AS effective
+         ), coverage_values AS (
+           SELECT coverage.*,
+                  (SELECT count(*)::int FROM content_keys) AS total,
+                  coverage.published * 100.0 /
+                    NULLIF((SELECT count(*) FROM content_keys), 0) AS percentage
+             FROM coverage
          )
          SELECT EXISTS(
                   SELECT 1 FROM programme
@@ -233,17 +239,17 @@ export class ProgrammeReadRepository {
                     jsonb_build_object(
                       'locale', coverage.locale,
                       'published', coverage.published,
-                      'total', (SELECT count(*)::int FROM content_keys),
+                      'total', coverage.total,
                       'coveragePercent', CASE
-                        WHEN (SELECT count(*) FROM content_keys) = 0 THEN 0
-                        ELSE floor(
-                          coverage.published * 100.0 /
-                          (SELECT count(*) FROM content_keys) + 0.5
-                        )::int
+                        WHEN coverage.total = 0 THEN 0
+                        WHEN coverage.percentage - floor(coverage.percentage) = 0.5
+                          THEN (floor(coverage.percentage) +
+                                mod(floor(coverage.percentage), 2))::int
+                        ELSE round(coverage.percentage)::int
                       END,
                       'missingKeys', coverage.missing_keys
                     ) ORDER BY coverage.locale_order
-                  ) FROM coverage),
+                  ) FROM coverage_values AS coverage),
                   '[]'::jsonb
                 ) AS locales`,
         [slug],
