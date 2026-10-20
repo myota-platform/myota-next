@@ -104,20 +104,20 @@ export class ProgrammeContentService {
       ) {
         throw new BadRequestException('only draft content can be edited');
       }
-      const now = new Date().toISOString();
+      const createdAt = previous?.createdAt ?? new Date().toISOString();
       const record: ProgrammeContentRecord = {
         ...(previous ?? {
           id: contentId,
           programmeSlug: slug,
           status: 'DRAFT',
           reviewHistory: [],
-          createdAt: now,
+          createdAt,
         }),
         key: body.key,
         locale: body.locale,
         value: body.value,
         fallbackLocale: body.fallbackLocale ?? null,
-        updatedAt: now,
+        updatedAt: new Date().toISOString(),
       };
       await this.contents.save(client, record);
       await this.contents.recordEvent(
@@ -146,11 +146,13 @@ export class ProgrammeContentService {
       ) {
         throw new BadRequestException('only draft content can be submitted');
       }
-      const now = new Date().toISOString();
       content.status = 'UNDER_REVIEW';
-      content.submittedAt = now;
-      content.updatedAt = now;
-      content.reviewHistory.push({ action: 'SUBMITTED', occurredAt: now });
+      content.submittedAt = new Date().toISOString();
+      content.updatedAt = new Date().toISOString();
+      content.reviewHistory.push({
+        action: 'SUBMITTED',
+        occurredAt: content.submittedAt,
+      });
       await this.contents.save(client, content);
       await this.contents.recordEvent(
         client,
@@ -178,15 +180,14 @@ export class ProgrammeContentService {
           'only content under review can be decided',
         );
       }
-      const now = new Date().toISOString();
       content.status = body.decision;
-      content.reviewedAt = now;
-      content.updatedAt = now;
+      content.reviewedAt = new Date().toISOString();
+      content.updatedAt = new Date().toISOString();
       content.reviewHistory.push({
         action: body.decision,
         reviewerId: body.reviewerId,
         note: body.note ?? null,
-        occurredAt: now,
+        occurredAt: content.reviewedAt,
       });
       await this.contents.save(client, content);
       await this.contents.recordEvent(
@@ -214,17 +215,16 @@ export class ProgrammeContentService {
       if (content.programmeSlug !== slug || content.status !== 'APPROVED') {
         throw new BadRequestException('only approved content can be published');
       }
-      const now = new Date().toISOString();
       content.status = 'PUBLISHED';
       content.effectiveFrom = effectiveFrom;
-      content.publishedAt = now;
+      content.publishedAt = new Date().toISOString();
       content.publisherId = body.publisherId;
-      content.updatedAt = now;
+      content.updatedAt = new Date().toISOString();
       content.reviewHistory.push({
         action: 'PUBLISHED',
         publisherId: body.publisherId,
         effectiveFrom,
-        occurredAt: now,
+        occurredAt: content.publishedAt,
       });
       await this.contents.save(client, content);
       await this.contents.recordEvent(

@@ -99,9 +99,9 @@ response is `201` even though the preserved upstream OpenAPI contract declares
 Programme RULES policy publication uses `schema.rules` when the key is present,
 including explicit `null`; it falls back to the full schema only when the key
 is omitted, matching Python's `dict.get` behavior.
-Policy-draft creation, submission, review, and publication retain independent
-timestamps for lifecycle events and `updatedAt`, matching the reference's
-separate clock reads.
+Programme-content and policy-draft creation, submission, review, and
+publication retain independent timestamps for lifecycle events and
+`updatedAt`, matching the reference's separate clock reads.
 Programme list pages and shared-category `assignedProgrammes` arrays preserve
 the reference's insertion order through a Core-owned record sequence; existing
 rows are backfilled by creation timestamp and slug. Shared entity-type catalogue
