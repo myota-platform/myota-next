@@ -54,6 +54,8 @@ const codeParent: Record<string, string[]> = {
   provinceCode: ['province'],
   countyCode: ['county'],
 };
+const reverseGeocodeCache = new Map<string, GeocodeResult>();
+const reverseGeocodeCacheLimit = 2048;
 
 @Injectable()
 export class GeodataEnrichmentRepository {
@@ -393,36 +395,42 @@ export class GeodataEnrichmentRepository {
 async function reverseGeocode(
   coordinates: [number, number] | null,
 ): Promise<GeocodeResult> {
-  const key = process.env.BIGDATACLOUD_API_KEY?.trim();
-  const geocodedAt = new Date().toISOString();
   if (!coordinates)
     return {
       provider: 'BIGDATACLOUD',
       status: 'SKIPPED_NO_CENTROID',
-      geocodedAt,
+      geocodedAt: new Date().toISOString(),
       location: {},
     };
+  const latitude = roundToFiveDecimals(coordinates[1]);
+  const longitude = roundToFiveDecimals(coordinates[0]);
+  const language = process.env.BIGDATACLOUD_LOCALITY_LANGUAGE ?? 'en';
+  const cacheKey = `${latitude}\u0000${longitude}\u0000${language}`;
+  const cached = reverseGeocodeCache.get(cacheKey);
+  if (cached) {
+    reverseGeocodeCache.delete(cacheKey);
+    reverseGeocodeCache.set(cacheKey, cached);
+    return cached;
+  }
+
+  const key = process.env.BIGDATACLOUD_API_KEY?.trim();
   if (!key)
     return {
       provider: 'BIGDATACLOUD',
       status: 'NOT_CONFIGURED',
-      geocodedAt,
+      geocodedAt: new Date().toISOString(),
       location: {},
     };
+  const geocodedAt = new Date().toISOString();
   const endpoint =
     process.env.BIGDATACLOUD_REVERSE_GEOCODE_URL ??
     'https://api-bdc.net/data/reverse-geocode';
   const url = new URL(endpoint);
-  url.searchParams.set('latitude', String(roundToFiveDecimals(coordinates[1])));
-  url.searchParams.set(
-    'longitude',
-    String(roundToFiveDecimals(coordinates[0])),
-  );
-  url.searchParams.set(
-    'localityLanguage',
-    process.env.BIGDATACLOUD_LOCALITY_LANGUAGE ?? 'en',
-  );
+  url.searchParams.set('latitude', String(latitude));
+  url.searchParams.set('longitude', String(longitude));
+  url.searchParams.set('localityLanguage', language);
   url.searchParams.set('key', key);
+  let result: GeocodeResult;
   try {
     const response = await fetch(url, {
       headers: {
@@ -482,7 +490,7 @@ async function reverseGeocode(
       county = undefined;
       countyName = undefined;
     }
-    return {
+    result = {
       provider: 'BIGDATACLOUD',
       status: 'ENRICHED',
       lookupSource: data.lookupSource ?? null,
@@ -507,7 +515,7 @@ async function reverseGeocode(
       },
     };
   } catch (error) {
-    return {
+    result = {
       provider: 'BIGDATACLOUD',
       status: 'FAILED',
       geocodedAt,
@@ -515,6 +523,12 @@ async function reverseGeocode(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+  reverseGeocodeCache.set(cacheKey, result);
+  if (reverseGeocodeCache.size > reverseGeocodeCacheLimit) {
+    const oldest = reverseGeocodeCache.keys().next().value;
+    if (oldest !== undefined) reverseGeocodeCache.delete(oldest);
+  }
+  return result;
 }
 
 function geometryHash(value: unknown) {
