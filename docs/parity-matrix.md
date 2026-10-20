@@ -91,6 +91,8 @@ creating an issuance or object; preview and issuance use the same renderer.
 Optional preview artwork and signature inputs use the reference's truthiness
 defaults, so falsey values behave as absent.
 Registered award assets and bounded content storage are implemented. Award
+asset dimensions use Python integer conversion, including float truncation,
+boolean inputs, and strict parsing of numeric strings.
 condition operators default to `GTE` only when omitted; an explicit `null` is
 an unknown operator and evaluates false. Entity-type comparisons also preserve
 Python's absent-versus-null string conversion and iterable handling. `AND`,

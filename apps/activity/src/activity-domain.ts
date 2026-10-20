@@ -375,7 +375,7 @@ export function pythonFloat(value: unknown, field: string): number {
   return Number(normalized);
 }
 
-function pythonInt(value: unknown, field: string): number {
+export function pythonInt(value: unknown, field: string): number {
   if (typeof value === 'boolean') return value ? 1 : 0;
   if (typeof value === 'number') {
     if (Number.isNaN(value))

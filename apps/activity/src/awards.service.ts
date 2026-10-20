@@ -26,7 +26,7 @@ import {
   validateAwardDraft,
   validateTemplate,
 } from './award-domain.js';
-import type { JsonRecord } from './activity-domain.js';
+import { pythonInt, type JsonRecord } from './activity-domain.js';
 
 @Injectable()
 export class AwardsService {
@@ -706,8 +706,8 @@ export class AwardsService {
       throw new BadRequestException(
         'asset kind must be BACKGROUND or SIGNATURE and mediaType must be an image',
       );
-    const widthPx = positiveInt(String(body.widthPx), 0);
-    const heightPx = positiveInt(String(body.heightPx), 0);
+    const widthPx = pythonInt(body.widthPx, 'widthPx');
+    const heightPx = pythonInt(body.heightPx, 'heightPx');
     if (!widthPx || !heightPx)
       throw new BadRequestException(
         'asset dimensions must be positive integers',
@@ -881,11 +881,6 @@ function asRecord(value: unknown, field: string): JsonRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new BadRequestException(`${field} must be an object`);
   return value as JsonRecord;
-}
-
-function positiveInt(value: string | undefined, fallback: number) {
-  const parsed = Number.parseInt(value ?? '', 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 async function imageMetadata(content: Buffer) {
