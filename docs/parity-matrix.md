@@ -107,6 +107,11 @@ fields and clears the lockout state.
 The internal email-recipient resolver rejects revoked service tokens before
 scope checks and maps malformed UUID forms to the same unavailable-recipient
 response as the Python handler.
+Service-token issuance keeps the email client-credentials flow on its fixed
+`identity.email.resolve` scope and `myota-identity` audience with a five-minute
+expiry. Other service tokens require `identity.service.issue` and cannot claim
+the reserved email-recipient scope. Issuance audit events contain the service
+and granted scopes, never the client secret.
 Identity startup now idempotently provisions the configured bootstrap account,
 sets its password only when no credential exists, ensures its global operator
 role, and writes the corresponding Core outbox and security events.
