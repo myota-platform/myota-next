@@ -417,11 +417,13 @@ function normalizeArcGisDocument(
     if (!isRecord(raw))
       throw new BadRequestException('ArcGIS feature is invalid');
     const geometry = isRecord(raw.geometry) ? raw.geometry : {};
-    const reference =
-      documentReference ??
-      (isRecord(geometry.spatialReference)
-        ? geometry.spatialReference
-        : undefined);
+    const geometryReference = isRecord(geometry.spatialReference)
+      ? geometry.spatialReference
+      : undefined;
+    const reference = [documentReference, geometryReference].find(
+      (candidate) =>
+        candidate && (candidate.latestWkid != null || candidate.wkid != null),
+    );
     const wkid = Number(reference?.latestWkid ?? reference?.wkid ?? 4326);
     if (!Number.isInteger(wkid) || wkid <= 0)
       throw new BadRequestException(
