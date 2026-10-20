@@ -1,9 +1,11 @@
+import { normalizePythonNumericText } from './python-numeric.js';
+
 export function integerSetting(
   value: string | undefined,
   fallback: number,
 ): number {
   if (value === undefined) return fallback;
-  const normalized = value.trim();
+  const normalized = normalizePythonNumericText(value);
   if (!/^[+-]?\d(?:_?\d)*$/.test(normalized))
     throw new Error('Integer settings must be base-10 integers');
   const parsed = BigInt(normalized.replaceAll('_', ''));

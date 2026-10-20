@@ -96,8 +96,8 @@
   Profile-image orphan cleanup follows the reference's three-segment key shape
   without requiring UUID-formatted path segments.
   Token, recovery, lockout, and maintenance
-  integer settings use the shared strict parser to match Python's environment
-  value handling. The Gateway also forwards User-Agent so Identity session
+  integer settings use the shared strict parser with Python numeric whitespace
+  and Unicode decimal digits. The Gateway also forwards User-Agent so Identity session
   metadata matches direct request context. Unicode 15.0 case-fold mappings in
   Core now provide indexed email identity keys for login, recovery, account creation, and email updates;
   migration rejects case-fold-equivalent duplicate addresses before building
@@ -189,7 +189,7 @@
   imports with no parsed QSO records retain the reference's
   successful zero-record outcome. Upload-size, QSO-batch, and ADIF retention
   settings use one strict integer parser across Activity API and worker paths,
-  consistent with the Python environment settings. Retention intervals retain
+  including Python numeric whitespace and Unicode decimal digits. Retention intervals retain
   their 60-second minimum.
   Completion notices include the full final import result, matching the Python
   worker's notification payload. Successful imports also recalculate award
