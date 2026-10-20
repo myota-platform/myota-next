@@ -88,3 +88,8 @@ in `ActivityAwardsRepository`; activation, QSO, ingestion, statistics, and
 operational persistence stay in `ActivityRepository`. Both repositories use
 the same Activity database owner and write award facts to its transactional
 outbox.
+
+Within Identity, keep account, profile, and role administration in
+`IdentityAccountService`; callsign lifecycle operations belong in
+`IdentityCallsignService`. Both use the Core database owner and retain their
+existing authorization, transaction, idempotency, and outbox behavior.

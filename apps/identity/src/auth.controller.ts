@@ -44,6 +44,7 @@ import {
 import { IdentityAuthService } from './auth.service.js';
 import { IdentityRoleService } from './identity-role.service.js';
 import { IdentityAccountService } from './identity-account.service.js';
+import { IdentityCallsignService } from './identity-callsign.service.js';
 import { IdentityIntegrationService } from './identity-integration.service.js';
 import { IdentityCredentialService } from './identity-credential.service.js';
 import { IdentityProfileImageService } from './identity-profile-image.service.js';
@@ -54,6 +55,7 @@ export class AuthController {
     private readonly auth: IdentityAuthService,
     private readonly roles: IdentityRoleService,
     private readonly accounts: IdentityAccountService,
+    private readonly callsigns: IdentityCallsignService,
     private readonly integrations: IdentityIntegrationService,
     private readonly credentials: IdentityCredentialService,
     private readonly profileImages: IdentityProfileImageService,
@@ -332,7 +334,7 @@ export class AuthController {
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
-    return this.accounts.addCallsign(
+    return this.callsigns.addCallsign(
       authorization,
       accountId,
       body,
@@ -350,7 +352,7 @@ export class AuthController {
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
-    return this.accounts.submitCallsignEvidence(
+    return this.callsigns.submitCallsignEvidence(
       authorization,
       accountId,
       callsignId,
@@ -368,7 +370,7 @@ export class AuthController {
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
-    return this.accounts.verifyCallsign(
+    return this.callsigns.verifyCallsign(
       authorization,
       accountId,
       callsignId,
@@ -385,7 +387,7 @@ export class AuthController {
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
-    return this.accounts.setPrimaryCallsign(
+    return this.callsigns.setPrimaryCallsign(
       authorization,
       accountId,
       body,
@@ -403,7 +405,7 @@ export class AuthController {
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
-    return this.accounts.retireCallsign(
+    return this.callsigns.retireCallsign(
       authorization,
       accountId,
       callsignId,
