@@ -7,6 +7,10 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import {
+  firstPythonTruthy,
+  normalizeEntityTypeCodes,
+} from './geodata-entity-types.js';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
@@ -28,7 +32,6 @@ type RefreshSchedule = {
 };
 
 const adapters = new Set(['PARKSERVE_US', 'OSM', 'GOVERNMENT_GIS', 'MANUAL']);
-const entityTypePattern = /^[A-Z][A-Z0-9_]{1,63}$/;
 
 @Injectable()
 export class GeodataScheduleService {
@@ -226,27 +229,14 @@ function prepareSchedule(body: Record<string, unknown>): RefreshSchedule {
     Array.isArray(body.source)
   )
     throw new BadRequestException('source must be an object');
-  let rawTypes = body.entityTypes || body.entityTypeCodes;
-  if (!rawTypes || (Array.isArray(rawTypes) && !rawTypes.length))
-    rawTypes = body.entityType;
-  if (rawTypes && typeof rawTypes === 'object' && !Array.isArray(rawTypes)) {
-    const category = rawTypes as Record<string, unknown>;
-    rawTypes = category.code || category.entityType;
-  }
-  const entityTypes: string[] = [];
-  for (const value of Array.isArray(rawTypes) ? rawTypes : [rawTypes]) {
-    const category =
-      value && typeof value === 'object' && !Array.isArray(value)
-        ? (value as Record<string, unknown>).code
-        : value;
-    const code = String(category ?? '')
-      .trim()
-      .toUpperCase();
-    if (code && entityTypePattern.test(code) && !entityTypes.includes(code))
-      entityTypes.push(code);
-  }
+  const entityTypes = normalizeEntityTypeCodes(
+    firstPythonTruthy(body.entityTypes, body.entityTypeCodes),
+    body.entityType,
+  );
   if (!entityTypes.length)
-    throw new BadRequestException('one or more valid entityTypes are required');
+    throw new BadRequestException(
+      'entityTypes must contain at least one shared entity category code',
+    );
   const intervalSeconds = referenceInteger(body.intervalSeconds);
   if (!Number.isInteger(intervalSeconds) || intervalSeconds < 300)
     throw new BadRequestException(

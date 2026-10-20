@@ -16,10 +16,13 @@ import proj4 from 'proj4';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
+import {
+  firstPythonTruthy,
+  normalizeEntityTypeCodes,
+} from './geodata-entity-types.js';
 import { parseXmlImport } from './geodata-xml-import.js';
 
 const adapters = new Set(['PARKSERVE_US', 'OSM', 'GOVERNMENT_GIS', 'MANUAL']);
-const entityTypePattern = /^[A-Z][A-Z0-9_]{1,63}$/;
 
 type ImportOptions = {
   communityProposal?: { proposalId: string; proposerId: string };
@@ -300,21 +303,14 @@ function prepareImport(body: Record<string, unknown>) {
   if (!source || typeof source !== 'object' || Array.isArray(source))
     throw new BadRequestException('source must be an object');
 
-  const rawTypes = body.entityTypes ?? body.entityTypeCodes ?? body.entityType;
-  const entityTypes = (Array.isArray(rawTypes) ? rawTypes : [rawTypes])
-    .map((value) =>
-      String(value ?? '')
-        .trim()
-        .toUpperCase(),
-    )
-    .filter(Boolean);
-  if (
-    !entityTypes.length ||
-    entityTypes.some((value) => !entityTypePattern.test(value))
-  )
-    throw new BadRequestException('one or more valid entityTypes are required');
-  if (new Set(entityTypes).size !== entityTypes.length)
-    throw new BadRequestException('entityTypes must be unique');
+  const entityTypes = normalizeEntityTypeCodes(
+    firstPythonTruthy(body.entityTypes, body.entityTypeCodes),
+    body.entityType,
+  );
+  if (!entityTypes.length)
+    throw new BadRequestException(
+      'entityTypes must contain at least one shared entity category code',
+    );
   const disappearancePolicy =
     typeof body.disappearancePolicy === 'string'
       ? body.disappearancePolicy.toUpperCase()

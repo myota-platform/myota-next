@@ -300,10 +300,10 @@
   through the promotion API, and failed queues can now be redriven as a whole
   with a recorded reason. Community proposals now enter
   the same validated import pipeline and automatically queue promotion to the
-  CANDIDATE lifecycle state. Proposal categories accept request-level and
-  legacy feature-property aliases with reference-compatible truthy fallback;
-  category objects, trimming, normalization, and duplicate removal match the
-  reference.
+  CANDIDATE lifecycle state. Imports, proposals, refresh schedules, and
+  resumable upload sessions use the reference category normalizer: alias truthy
+  fallback, category objects, trimming, uppercase codes, invalid-entry
+  filtering, and duplicate removal.
   Tagged load-test cleanup is opt-in, confirmation
   protected, restricted to terminal runs and owned object storage, and refuses
   to remove entities with Activity impact. Direct and scheduled imports preserve

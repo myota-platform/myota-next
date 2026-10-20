@@ -20,6 +20,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { normalizeEntityTypeCodes } from './geodata-entity-types.js';
 
 // Bound source uploads; the worker applies tighter format-specific decode caps.
 const maxUploadBytes = Math.min(
@@ -624,17 +625,13 @@ function validateCreate(body: Record<string, unknown>) {
     throw new BadRequestException(
       `upload size must be between 1 and ${sourceLimit} bytes`,
     );
-  const entityTypes = Array.isArray(body.entityTypes) ? body.entityTypes : [];
-  if (
-    !entityTypes.length ||
-    entityTypes.some(
-      (type) =>
-        typeof type !== 'string' || !/^[A-Z][A-Z0-9_]{1,63}$/.test(type),
-    ) ||
-    new Set(entityTypes).size !== entityTypes.length
-  )
+  const entityTypes = normalizeEntityTypeCodes(
+    body.entityTypes,
+    body.entityType,
+  );
+  if (!entityTypes.length)
     throw new BadRequestException(
-      'entityTypes must contain unique valid category codes',
+      'entityTypes must contain at least one category',
     );
   const sha256 =
     typeof body.sha256 === 'string' ? body.sha256.toLowerCase() : null;
