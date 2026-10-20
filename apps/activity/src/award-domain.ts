@@ -165,10 +165,15 @@ export function evaluateAwardCondition(
   }
   if (kind === 'NOT')
     return !evaluateAwardCondition(condition.condition ?? {}, facts);
-  if (kind === 'ENTITY_TYPE')
-    return (condition.values ?? [])
-      .map(String)
-      .includes(String(facts.entityType ?? ''));
+  if (kind === 'ENTITY_TYPE') {
+    const values = Object.hasOwn(condition, 'values') ? condition.values : [];
+    const entityType = pythonConditionString(
+      Object.hasOwn(facts, 'entityType') ? facts.entityType : '',
+    );
+    return pythonConditionIterable(values)
+      .map(pythonConditionString)
+      .includes(entityType);
+  }
   const field =
     kind === 'FIELD'
       ? pythonConditionString(
@@ -222,6 +227,13 @@ function pythonConditionString(value: unknown): string {
   if (typeof value === 'undefined') return 'undefined';
   if (typeof value === 'object') return JSON.stringify(value) ?? 'None';
   return '[function]';
+}
+
+function pythonConditionIterable(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') return Array.from(value);
+  if (value !== null && typeof value === 'object') return Object.keys(value);
+  throw new TypeError('award condition values are not iterable');
 }
 
 export function evaluateAward(

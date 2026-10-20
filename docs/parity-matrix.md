@@ -89,7 +89,8 @@ render transient PDF previews from mock data and registered assets without
 creating an issuance or object; preview and issuance use the same renderer.
 Registered award assets and bounded content storage are implemented. Award
 condition operators default to `GTE` only when omitted; an explicit `null` is
-an unknown operator and evaluates false, matching the Python handler. ADIF uploads now pass
+an unknown operator and evaluates false. Entity-type comparisons also preserve
+Python's absent-versus-null string conversion and iterable handling. ADIF uploads now pass
 authorization, malware checks, and object storage before durable queueing; the
 Activity worker parses records, records successes and rejects, updates
 aggregates, and reports import status. CSV file uploads now validate bounded
