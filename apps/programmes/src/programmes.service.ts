@@ -101,7 +101,6 @@ export class ProgrammesService {
         ...new Set(normalizedTypes.map((item) => item.code)),
       ];
       const entityTypes = entityTypeCodes.map((code) => catalog[code]);
-      const now = new Date().toISOString();
       const programme: ProgrammeRecord = {
         id: randomUUID(),
         slug,
@@ -120,8 +119,8 @@ export class ProgrammesService {
             : { primary: '#0f766e', accent: '#f59e0b' },
         oidc: body.oidc ?? null,
         status: 'ACTIVE',
-        createdAt: now,
-        updatedAt: now,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
       await this.programmes.create(client, slug, programme);
       await this.mutations.recordEvent(
@@ -512,7 +511,6 @@ function normalizeEntityType(
   const label =
     typeof body.label === 'string' ? trimPythonWhitespace(body.label) : '';
   if (!label) throw new BadRequestException('category label must not be empty');
-  const now = new Date().toISOString();
   const activeValue =
     body.active !== undefined
       ? body.active
@@ -520,7 +518,7 @@ function normalizeEntityType(
         ? existing.active
         : true;
   return {
-    ...(existing ?? { createdAt: now }),
+    ...(existing ?? { createdAt: new Date().toISOString() }),
     code,
     label,
     geometry: geometryTypes[0],
@@ -530,6 +528,6 @@ function normalizeEntityType(
         ? trimPythonWhitespace(body.description)
         : '',
     active: pythonTruthy(activeValue),
-    updatedAt: now,
+    updatedAt: new Date().toISOString(),
   };
 }
