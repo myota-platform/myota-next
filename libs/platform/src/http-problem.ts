@@ -47,8 +47,9 @@ export class ApiProblemFilter implements ExceptionFilter {
     const context = host.switchToHttp();
     const request = context.getRequest<Request>();
     const response = context.getResponse<Response>();
-    const status =
+    const exceptionStatus =
       exception instanceof HttpException ? exception.getStatus() : 500;
+    const status = exceptionStatus === 401 ? 403 : exceptionStatus;
     const body =
       exception instanceof HttpException ? exception.getResponse() : undefined;
     const data = isRecord(body) ? body : undefined;

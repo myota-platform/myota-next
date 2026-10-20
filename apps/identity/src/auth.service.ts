@@ -1,7 +1,5 @@
 import {
   Inject,
-  HttpException,
-  HttpStatus,
   Injectable,
   ForbiddenException,
   BadRequestException,
@@ -194,9 +192,8 @@ export class IdentityAuthService {
           [rateKey, LOGIN_WINDOW_SECONDS],
         );
         if (limit.rows[0].request_count > MAX_LOGIN_ATTEMPTS) {
-          failure = new HttpException(
+          failure = new ForbiddenException(
             'too many authentication attempts; try again later',
-            HttpStatus.TOO_MANY_REQUESTS,
           );
         }
       }
@@ -234,7 +231,7 @@ export class IdentityAuthService {
           email: input.email,
           remoteAddr: context.remoteAddr,
         });
-        failure = new UnauthorizedException('invalid credentials');
+        failure = new BadRequestException('invalid credentials');
       }
 
       if (!failure && account) {
@@ -254,7 +251,7 @@ export class IdentityAuthService {
       }
 
       await client.query('COMMIT');
-      throw failure ?? new UnauthorizedException('invalid credentials');
+      throw failure ?? new BadRequestException('invalid credentials');
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;

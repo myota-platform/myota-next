@@ -29,8 +29,8 @@
   malformed JSON, and Gateway-generated route/upstream errors. Each request
   receives validated or generated request and correlation IDs in response
   headers and in the problem body. The OpenAPI contract defines the `Problem`
-  schema; status mapping for some legacy authentication and rate-limit errors
-  still needs endpoint-by-endpoint parity review.
+  schema. Authentication failures and login rate limits use the reference
+  service's 400/403 status behavior.
 - `@nestjs/observe` 0.3.16 is wired through the shared platform package into all
   12 NestJS components (five APIs and seven workers/importer), with a distinct
   service ID for each: `gateway`, `identity-api`, `programmes-api`,
