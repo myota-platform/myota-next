@@ -628,10 +628,23 @@ async function loadActivations() {
     return;
   }
   try {
-    const result = await awardApi(
-      `/v1/activations?programme=${encodeURIComponent($('programme-select').value)}&operatorId=${encodeURIComponent(awardAccount.id)}&page=1&pageSize=100`,
-    );
-    activations = result.items || [];
+    const items = [];
+    let page = 1;
+    while (page !== null) {
+      const result = await awardApi(
+        `/v1/activations?programme=${encodeURIComponent($('programme-select').value)}&operatorId=${encodeURIComponent(awardAccount.id)}&page=${page}&pageSize=100`,
+      );
+      items.push(...(result.items || []));
+      const nextPage = result.nextPage;
+      if (nextPage == null) {
+        page = null;
+      } else if (Number.isInteger(nextPage) && nextPage > page) {
+        page = nextPage;
+      } else {
+        throw new Error('Activation history returned invalid paging data.');
+      }
+    }
+    activations = items;
     const open = activations.filter(
       (activation) => activation.status === 'OPEN',
     );
