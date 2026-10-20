@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { RequestMethod } from '@nestjs/common';
 import express from 'express';
 import { integerSetting } from './integer-setting.js';
+import { ApiProblemFilter, parserProblem, requestIds } from './http-problem.js';
 import { ObserveInstrument } from './observe.js';
 
 export async function bootstrapHttpService(
@@ -19,6 +20,7 @@ export async function bootstrapHttpService(
     bodyParser: false,
     instrument: ObserveInstrument,
   });
+  app.use(requestIds);
   for (const route of rawBodyRoutes)
     app.use(
       route,
@@ -26,6 +28,7 @@ export async function bootstrapHttpService(
     );
   app.use(express.json({ limit: jsonLimit }));
   app.use(express.urlencoded({ extended: true, limit: jsonLimit }));
+  app.use(parserProblem);
   app.setGlobalPrefix('v1', {
     exclude: [
       { path: 'healthz', method: RequestMethod.GET },
@@ -34,6 +37,7 @@ export async function bootstrapHttpService(
     ],
   });
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+  app.useGlobalFilters(new ApiProblemFilter());
   app.enableShutdownHooks();
   await app.listen(Number(process.env.PORT ?? defaultPort), '0.0.0.0');
   return app;

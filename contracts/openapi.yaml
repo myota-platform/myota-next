@@ -8,6 +8,8 @@ info:
     logs and observability use UTC. Canonical API date-times carry Z or an explicit
     UTC offset; timezone-bearing inputs are normalized to UTC. Legacy unqualified
     date-times are interpreted as UTC, never the server or browser local timezone.
+    Error responses use the Problem schema and include X-Request-ID and
+    X-Correlation-ID response headers.
 servers:
   - url: http://localhost:8080
 tags:
@@ -1636,6 +1638,17 @@ components:
       name: pageSize
       schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
   schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code, detail, requestId, correlationId]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        code: { type: string, enum: [invalid_request, not_found, forbidden, conflict, internal_error] }
+        detail: { type: string }
+        requestId: { type: string, minLength: 1, maxLength: 128, pattern: '^[!-~]+$' }
+        correlationId: { type: string, minLength: 1, maxLength: 128, pattern: '^[!-~]+$' }
     ServiceTokenRequest:
       oneOf:
         - type: object

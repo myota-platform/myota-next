@@ -12,6 +12,7 @@ import {
   MYOTA_CLIENT_ADDRESS_HEADER,
   MYOTA_CLIENT_ADDRESS_SIGNATURE_HEADER,
   signClientAddress,
+  createApiProblem,
 } from '@app/platform';
 
 const ROUTES: Array<[string, string]> = [
@@ -38,6 +39,8 @@ const SAFE_RESPONSE_HEADERS = [
   'content-type',
   'deprecation',
   'etag',
+  'x-correlation-id',
+  'x-request-id',
   'sunset',
 ];
 
@@ -153,7 +156,7 @@ export class GatewayController {
       urlPath === '/v1/identity/internal' ||
       urlPath.startsWith('/v1/identity/internal/')
     )
-      return this.finish(response, request, 404, { error: 'route_not_found' });
+      return this.finish(response, request, 404, 'no route for ' + urlPath);
     if (request.method === 'OPTIONS') {
       response.setHeader('Access-Control-Allow-Origin', '*');
       response.setHeader(
@@ -167,11 +170,11 @@ export class GatewayController {
       return this.finish(response, request, 204);
     }
     if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method))
-      return this.finish(response, request, 404, { error: 'route_not_found' });
+      return this.finish(response, request, 404, `no route for ${urlPath}`);
 
     const route = ROUTES.find(([prefix]) => urlPath.startsWith(prefix));
     if (!route)
-      return this.finish(response, request, 404, { error: 'route_not_found' });
+      return this.finish(response, request, 404, `no route for ${urlPath}`);
     const [prefix, service] = route;
     const servicePath = `${process.env[`MYOTA_${service}_URL`] ?? defaultServiceUrl(service)}`;
     let target: URL;
@@ -183,9 +186,12 @@ export class GatewayController {
       );
     } catch {
       this.logger.error(`Invalid ${service} upstream URL`);
-      return this.finish(response, request, 503, {
-        error: 'service_unavailable',
-      });
+      return this.finish(
+        response,
+        request,
+        503,
+        'upstream service unavailable',
+      );
     }
 
     const headers = new globalThis.Headers();
@@ -264,7 +270,7 @@ export class GatewayController {
         `Gateway upstream request failed for ${service}: ${error instanceof Error ? error.name : 'request error'}`,
       );
       if (!response.headersSent)
-        this.finish(response, request, 503, { error: 'service_unavailable' });
+        this.finish(response, request, 503, 'upstream service unavailable');
       else response.destroy();
     }
   }
@@ -277,19 +283,25 @@ export class GatewayController {
   ) {
     this.count(request, '/_internal/grafana/auth', status);
     response.setHeader('Cache-Control', 'no-store');
-    response.status(status).json({ error });
+    response
+      .status(status)
+      .type('application/json; charset=utf-8')
+      .json(createApiProblem(request, response, status, error));
   }
 
   private finish(
     response: Response,
     request: Request,
     status: number,
-    body?: Record<string, unknown>,
+    detail?: string,
   ) {
     this.count(request, 'unmatched', status);
     response.setHeader('Access-Control-Allow-Origin', '*');
     response.status(status);
-    if (body) response.json(body);
+    if (detail)
+      response
+        .type('application/json; charset=utf-8')
+        .json(createApiProblem(request, response, status, detail));
     else response.end();
   }
 
