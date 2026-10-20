@@ -691,8 +691,10 @@
 - Cross-version transfer tooling now has read-only preflight, checksummed dump
   staging for four legacy sources and three targets, ledger adoption,
   restore/migration steps, the legacy Email merge into Core, and a read-only
-  per-owner database validation report. Semantic parity review and
-  disposable-database rehearsal remain open; see the
+  per-owner database validation report. The report checks Programme policy
+  drafts, Identity scope and callsign projections, and Geodata migration-added
+  category order, conflation fields, and JSON validation notes. Broader semantic
+  review and disposable-database rehearsal remain open; see the
   [database transfer plan](operations/cross-version-data-transfer.md), image
   publication, deployment manifests, and
   production observability configuration. A reusable Docker recipe now builds

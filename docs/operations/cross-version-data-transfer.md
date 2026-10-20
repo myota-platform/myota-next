@@ -149,10 +149,11 @@ Core after that migration creates the target tables.
 
    The command requires a successful apply report for the same targets. It
    compares row counts and PostgreSQL row fingerprints for preserved tables,
-   checks the Core Programme snapshot transformations and Identity email
-   normalization, compares all four legacy email tables and their identity
-   sequences against Core, and checks Activity and Geodata references,
-   geometry, and indexes.
+   checks Core Programme records, content, and policy-draft snapshot
+   transformations; Identity email, callsign, and role-scope migrations;
+   compares all four legacy email tables and their identity sequences against
+   Core; and checks Geodata category-order, conflation-field, and validation
+   note migrations alongside references, geometry, and indexes.
    It writes a private `validation-report-*.json` file in the archive. The
    fingerprints use PostgreSQL's 64-bit `hashtextextended` and require matching
    server major versions. They are a transfer check, not a cryptographic proof
@@ -175,7 +176,9 @@ The restore/apply command, ledger adoption, four-source/three-target dump
 staging, Core Email data merge, and read-only per-owner database validation
 report are implemented. The report does not establish complete function
 parity and does not compare object-store data or JetStream messages. The
-workflow has not been rehearsed against disposable PostgreSQL databases.
+report now compares known forward-migration transformations as well as stable
+table rows; the workflow has not been rehearsed against disposable PostgreSQL
+databases.
 
 Do not run a production transfer until the tool has been rehearsed on
 disposable copies of all four source databases and three target databases,

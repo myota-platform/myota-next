@@ -60,6 +60,7 @@ const coreChangedTables = new Set([
   'account',
   'account_role',
   'callsign',
+  'identity_role_definition',
   'service_state',
 ]);
 const coreStableProjections: Record<string, string> = {
@@ -68,6 +69,21 @@ const coreStableProjections: Record<string, string> = {
     'id,account_id,programme_id,role_code,jurisdiction_id,entity_type_code,scopes,created_at,valid_to',
   callsign:
     'id,account_id,value,lifecycle_status,verification_source,verified_at,valid_from,valid_to',
+  identity_role_definition:
+    'role_code,display_name,description,is_system,created_at',
+};
+const geoChangedTables = new Set([
+  'conflation_candidate',
+  'geodata_entity_category',
+  'geodata_import_candidate',
+]);
+const geoStableProjections: Record<string, string> = {
+  conflation_candidate:
+    'id,left_entity_id,right_entity_id,similarity,reason,resolution,survivor_entity_id,resolution_history,resolved_by,resolved_at',
+  geodata_entity_category:
+    'entity_id,category_id,category_code,is_primary,created_at',
+  geodata_import_candidate:
+    'id,import_run_id,ordinal,planned_entity_id,programme_slug,entity_type_codes,name,geom,candidate_source,source_ref,source_hash,provenance,entity_payload,validation_status,validated_by,validated_at,target_status,processed_entity_id,processed_at,created_at,updated_at,existing_entity_id,processing_queue_id',
 };
 const expectedTargetOnlyTables: Record<Owner, Set<string>> = {
   core: new Set([
@@ -185,7 +201,7 @@ async function main() {
       if (owner === 'core')
         await validateCoreTransforms(report, source, target);
       if (owner === 'activity') await validateActivity(report, target);
-      if (owner === 'geo') await validateGeodata(report, target);
+      if (owner === 'geo') await validateGeodata(report, source, target);
       await source.query('ROLLBACK');
       await target.query('ROLLBACK');
     } catch (error) {
@@ -542,6 +558,28 @@ async function compareTables(
   });
 
   for (const table of sourceTables.filter((name) => targetSet.has(name))) {
+    if (owner === 'geo' && geoChangedTables.has(table)) {
+      if (table === 'geodata_entity_category') {
+        await validateGeoCategoryOrder(report, source, target);
+      } else {
+        const projection = geoStableProjections[table];
+        const comparison = await compareFingerprints(
+          source,
+          `SELECT ${projection} FROM public.${quoteIdentifier(table)}`,
+          target,
+          `SELECT ${projection} FROM public.${quoteIdentifier(table)}`,
+        );
+        addCheck(report, owner, {
+          name: `stable-columns:${table}`,
+          status: comparison.matches ? 'passed' : 'failed',
+          source: comparison.source,
+          target: comparison.target,
+          detail:
+            'Columns changed by Geodata forward migrations are validated separately.',
+        });
+      }
+      continue;
+    }
     if (owner === 'core' && coreChangedTables.has(table)) {
       if (table === 'service_state') {
         await validateServiceStateMigration(report, source, target);
@@ -562,6 +600,10 @@ async function compareTables(
         detail:
           'Columns changed by Core forward migrations are validated separately.',
       });
+      if (table === 'identity_role_definition')
+        await validateIdentityRoleScopes(report, source, target);
+      if (table === 'callsign')
+        await validateIdentityCallsignProjection(report, source, target);
       continue;
     }
     const [sourceFingerprint, targetFingerprint] = await Promise.all([
@@ -666,6 +708,30 @@ async function validateCoreTransforms(
       'Legacy Programme content documents must match normalized target payloads.',
   });
 
+  const programmePolicyDrafts = await compareFingerprints(
+    source,
+    `
+      SELECT entry.key AS id,entry.value AS payload
+        FROM public.service_state AS snapshot
+        CROSS JOIN LATERAL jsonb_each(
+          CASE WHEN jsonb_typeof(snapshot.state #> '{data,policyDrafts}')='object'
+            THEN snapshot.state #> '{data,policyDrafts}' ELSE '{}'::jsonb END
+        ) AS entry(key,value)
+       WHERE snapshot.service='programmes'
+         AND jsonb_typeof(entry.value)='object'
+    `,
+    target,
+    'SELECT id,payload FROM public.programme_policy_draft',
+  );
+  addCheck(report, 'core', {
+    name: 'programme-policy-draft-payloads',
+    status: programmePolicyDrafts.matches ? 'passed' : 'failed',
+    source: programmePolicyDrafts.source,
+    target: programmePolicyDrafts.target,
+    detail:
+      'Legacy Programme policy drafts must match the normalized target payloads.',
+  });
+
   const [sourceCodes, targetCodes] = await Promise.all([
     expectedProgrammeEntityTypeCodes(source),
     target.query<{ code: string }>(
@@ -697,8 +763,8 @@ async function validateCoreTransforms(
          WHERE snapshot.service='identity'
       )
       SELECT account.id,
-             CASE WHEN legacy.id IS NOT NULL THEN legacy.email
-                  ELSE account.email::text END AS email
+             CASE WHEN legacy.id IS NOT NULL THEN lower(btrim(legacy.email))
+                  ELSE lower(btrim(account.email::text)) END AS email
         FROM public.account AS account
         LEFT JOIN legacy_emails AS legacy ON legacy.id=account.id
     `,
@@ -746,6 +812,82 @@ async function validateCoreTransforms(
     name: 'identity-email-normalization',
     status: identityPassed ? 'passed' : 'failed',
     target: identityRow,
+  });
+}
+
+async function validateIdentityCallsignProjection(
+  report: ValidationReport,
+  source: Client,
+  target: Client,
+) {
+  const projection = await compareFingerprints(
+    source,
+    `
+      SELECT id,coalesce(verification_source,'legacy') AS source
+        FROM public.callsign
+    `,
+    target,
+    'SELECT id,source FROM public.callsign',
+  );
+  const timestamps = await target.query<{
+    missingCreatedAt: string;
+    missingUpdatedAt: string;
+  }>(`
+    SELECT
+      count(*) FILTER (WHERE created_at IS NULL)::text AS "missingCreatedAt",
+      count(*) FILTER (WHERE updated_at IS NULL)::text AS "missingUpdatedAt"
+      FROM public.callsign
+  `);
+  const timestampRow = timestamps.rows[0];
+  const fieldsValid =
+    projection.matches &&
+    timestampRow?.missingCreatedAt === '0' &&
+    timestampRow?.missingUpdatedAt === '0';
+  addCheck(report, 'core', {
+    name: 'identity-callsign-projection-migration',
+    status: fieldsValid ? 'passed' : 'failed',
+    source: projection.source,
+    target: { projection: projection.target, timestamps: timestampRow },
+    detail:
+      'The new callsign source field must inherit verification_source or legacy, and new timestamps must be populated.',
+  });
+}
+
+async function validateIdentityRoleScopes(
+  report: ValidationReport,
+  source: Client,
+  target: Client,
+) {
+  const normalizedScopes = await compareFingerprints(
+    source,
+    `
+      SELECT role_code,display_name,description,
+             array_remove(scopes,'operations.read') AS scopes,
+             is_system,created_at
+        FROM public.identity_role_definition
+    `,
+    target,
+    `
+      SELECT role_code,display_name,description,scopes,is_system,created_at
+        FROM public.identity_role_definition
+    `,
+  );
+  const retiredScope = await target.query<{ remaining: string }>(`
+    SELECT count(*)::text AS remaining
+      FROM public.identity_role_definition
+     WHERE 'operations.read'=ANY(scopes)
+  `);
+  const remaining = retiredScope.rows[0]?.remaining ?? '0';
+  addCheck(report, 'core', {
+    name: 'identity-role-scope-retirement',
+    status: normalizedScopes.matches && remaining === '0' ? 'passed' : 'failed',
+    source: normalizedScopes.source,
+    target: {
+      fingerprint: normalizedScopes.target,
+      remainingRetiredScope: remaining,
+    },
+    detail:
+      'The Core migration removes operations.read from persisted custom role definitions.',
   });
 }
 
@@ -874,7 +1016,138 @@ async function validateActivity(report: ValidationReport, target: Client) {
   });
 }
 
-async function validateGeodata(report: ValidationReport, target: Client) {
+async function validateGeoCategoryOrder(
+  report: ValidationReport,
+  source: Client,
+  target: Client,
+) {
+  const sourceQuery = `
+    WITH category_positions AS (
+      SELECT c.entity_id,c.category_id,c.category_code,c.is_primary,c.created_at,
+        COALESCE(
+          (
+            SELECT item.ordinality::integer - 1
+              FROM jsonb_array_elements_text(
+                CASE WHEN jsonb_typeof(e.public_properties->'entityTypes')='array'
+                  THEN e.public_properties->'entityTypes' ELSE '[]'::jsonb END
+              ) WITH ORDINALITY AS item(code,ordinality)
+             WHERE item.code=c.category_code
+             LIMIT 1
+          ),
+          (
+            SELECT item.ordinality::integer - 1
+              FROM jsonb_array_elements_text(
+                CASE WHEN jsonb_typeof(e.public_properties->'entityTypeCodes')='array'
+                  THEN e.public_properties->'entityTypeCodes' ELSE '[]'::jsonb END
+              ) WITH ORDINALITY AS item(code,ordinality)
+             WHERE item.code=c.category_code
+             LIMIT 1
+          ),
+          CASE WHEN e.entity_type_code=c.category_code THEN 0 END
+        ) AS stored_ordinal
+      FROM public.geodata_entity_category AS c
+      JOIN public.geodata_entity AS e ON e.id=c.entity_id
+    ), category_fallbacks AS (
+      SELECT *,
+        max(stored_ordinal) FILTER (WHERE stored_ordinal IS NOT NULL)
+          OVER (PARTITION BY entity_id) AS max_stored_ordinal,
+        row_number() OVER (
+          PARTITION BY entity_id,is_primary ORDER BY category_code
+        ) AS fallback_ordinal
+      FROM category_positions
+    )
+    SELECT entity_id,category_id,category_code,is_primary,created_at,
+      COALESCE(
+        stored_ordinal,
+        CASE WHEN is_primary THEN 0
+          ELSE COALESCE(max_stored_ordinal,0)+fallback_ordinal END
+      ) AS ordinal
+    FROM category_fallbacks
+  `;
+  const comparison = await compareFingerprints(
+    source,
+    sourceQuery,
+    target,
+    `
+      SELECT entity_id,category_id,category_code,is_primary,created_at,ordinal
+        FROM public.geodata_entity_category
+    `,
+  );
+  addCheck(report, 'geo', {
+    name: 'entity-category-order-migration',
+    status: comparison.matches ? 'passed' : 'failed',
+    source: comparison.source,
+    target: comparison.target,
+    detail:
+      'Target category ordinals must follow the same stored-category preference and deterministic fallback as the migration.',
+  });
+}
+
+async function validateGeodata(
+  report: ValidationReport,
+  source: Client,
+  target: Client,
+) {
+  const validationNotes = await compareFingerprints(
+    source,
+    `
+      SELECT id,to_jsonb(validation_note) AS validation_note
+        FROM public.geodata_import_candidate
+    `,
+    target,
+    `
+      SELECT id,validation_note
+        FROM public.geodata_import_candidate
+    `,
+  );
+  addCheck(report, 'geo', {
+    name: 'import-validation-note-json-migration',
+    status: validationNotes.matches ? 'passed' : 'failed',
+    source: validationNotes.source,
+    target: validationNotes.target,
+    detail:
+      'Legacy text validation notes must be preserved as JSON string values by the forward migration.',
+  });
+
+  const conflationProgramme = await compareFingerprints(
+    source,
+    `
+      SELECT candidate.id,entity.programme_slug
+        FROM public.conflation_candidate AS candidate
+        LEFT JOIN public.geodata_entity AS entity
+          ON entity.id=candidate.left_entity_id
+    `,
+    target,
+    `
+      SELECT id,programme_slug FROM public.conflation_candidate
+    `,
+  );
+  const conflationTimestamps = await target.query<{
+    missingCreatedAt: string;
+    missingUpdatedAt: string;
+  }>(`
+    SELECT
+      count(*) FILTER (WHERE created_at IS NULL)::text AS "missingCreatedAt",
+      count(*) FILTER (WHERE updated_at IS NULL)::text AS "missingUpdatedAt"
+    FROM public.conflation_candidate
+  `);
+  const conflationTimestampRow = conflationTimestamps.rows[0];
+  const conflationFieldsValid =
+    conflationProgramme.matches &&
+    conflationTimestampRow?.missingCreatedAt === '0' &&
+    conflationTimestampRow?.missingUpdatedAt === '0';
+  addCheck(report, 'geo', {
+    name: 'conflation-candidate-migration-fields',
+    status: conflationFieldsValid ? 'passed' : 'failed',
+    source: conflationProgramme.source,
+    target: {
+      programme: conflationProgramme.target,
+      timestamps: conflationTimestampRow,
+    },
+    detail:
+      'Programme scope must follow the left entity and new timestamps must be populated.',
+  });
+
   const geometry = await target.query<{
     entities: string;
     invalidGeometry: string;
