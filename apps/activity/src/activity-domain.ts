@@ -434,7 +434,9 @@ export function normalizeQso(
 
 function normalizeQsoFields(data: JsonRecord): JsonRecord {
   const workedCallsign = normalizeCallsign(data.workedCallsign);
-  const timestamp = normalizeTimestamp(data.timestamp || data.timeOn);
+  const timestamp = normalizeTimestamp(
+    pythonTruthy(data.timestamp) ? data.timestamp : data.timeOn,
+  );
   const band = normalizeBand(data.band);
   const mode = normalizeMode(data.mode);
   const validBands = new Set([
@@ -483,7 +485,9 @@ function normalizeQsoFields(data: JsonRecord): JsonRecord {
   if (data.mode != null && data.mode !== '' && !mode)
     throw new BadRequestException(`unsupported mode: ${data.mode}`);
   const workedStationKey = `${workedCallsign}|${trimPythonWhitespace(
-    String(data.workedLocator || '').toUpperCase(),
+    String(
+      pythonTruthy(data.workedLocator) ? data.workedLocator : '',
+    ).toUpperCase(),
   )}`;
   return {
     ...data,
