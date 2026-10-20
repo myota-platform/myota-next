@@ -398,16 +398,21 @@ export class AwardsService {
     query: { subjectId?: string; page?: string; pageSize?: string },
   ) {
     this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
-    let items = await this.repository.listAwardRequests(query.subjectId);
     const page = parsePageInteger(query.page, 1);
     const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
-    const start = (page - 1) * pageSize;
+    const offset = (BigInt(page) - 1n) * BigInt(pageSize);
+    const result = await this.repository.listAwardRequestsPage(
+      query.subjectId,
+      offset,
+      pageSize,
+    );
     return {
-      items: items.slice(start, start + pageSize),
+      items: result.items,
       page,
       pageSize,
-      total: items.length,
-      nextPage: start + pageSize < items.length ? page + 1 : null,
+      total: result.total,
+      nextPage:
+        offset + BigInt(pageSize) < BigInt(result.total) ? page + 1 : null,
     };
   }
 

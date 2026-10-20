@@ -401,29 +401,36 @@ export class ActivityRepository {
   ): Promise<{ items: JsonRecord[]; total: number }> {
     const client = await this.connect();
     try {
+      const filters: string[] = [];
+      const values: unknown[] = [];
+      if (programme) {
+        values.push(programme);
+        filters.push(`programme_slug=$${values.length}`);
+      }
+      if (category) {
+        values.push(category);
+        filters.push(`definition->>'category'=$${values.length}`);
+      }
+      if (publishedOnly) filters.push("status='PUBLISHED'");
+      const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+      const offsetParameter = values.length + 1;
+      values.push(offset.toString());
+      const limitParameter = values.length + 1;
+      values.push(pageSize);
       const result = await client.query(
-        `WITH filtered AS MATERIALIZED (
-           SELECT definition,programme_slug,code,version
+        `SELECT total.value,page_rows.definition
+         FROM (
+           SELECT count(*) AS value
            FROM activity_award_definition
-           WHERE ($1::text IS NULL OR programme_slug=$1)
-             AND ($2::text IS NULL OR definition->>'category'=$2)
-             AND (NOT $3::boolean OR status='PUBLISHED')
-         ), page_rows AS MATERIALIZED (
-           SELECT definition FROM filtered
+           ${where}
+         ) total
+         LEFT JOIN LATERAL (
+           SELECT definition FROM activity_award_definition
+           ${where}
            ORDER BY programme_slug,code,version
-           LIMIT $5 OFFSET $4::bigint
-         ), total AS (
-           SELECT count(*) AS value FROM filtered
-         )
-         SELECT total.value,page_rows.definition
-         FROM total LEFT JOIN page_rows ON TRUE`,
-        [
-          programme ?? null,
-          category ?? null,
-          publishedOnly,
-          offset.toString(),
-          pageSize,
-        ],
+           LIMIT $${limitParameter} OFFSET $${offsetParameter}::bigint
+         ) page_rows ON TRUE`,
+        values,
       );
       return {
         items: result.rows
@@ -539,14 +546,43 @@ export class ActivityRepository {
     });
   }
 
-  async listAwardRequests(subjectId?: string): Promise<JsonRecord[]> {
+  async listAwardRequestsPage(
+    subjectId: string | undefined,
+    offset: bigint,
+    pageSize: number,
+  ): Promise<{ items: JsonRecord[]; total: number }> {
     const client = await this.connect();
     try {
+      const values: unknown[] = [];
+      let where = '';
+      if (subjectId) {
+        values.push(subjectId);
+        where = `WHERE subject_id=$${values.length}`;
+      }
+      const offsetParameter = values.length + 1;
+      values.push(offset.toString());
+      const limitParameter = values.length + 1;
+      values.push(pageSize);
       const result = await client.query(
-        `SELECT * FROM activity_award_request${subjectId ? ' WHERE subject_id=$1' : ''} ORDER BY requested_at DESC`,
-        subjectId ? [subjectId] : [],
+        `SELECT total.value,page_rows.*
+         FROM (
+           SELECT count(*) AS value FROM activity_award_request
+           ${where}
+         ) total
+         LEFT JOIN LATERAL (
+           SELECT * FROM activity_award_request
+           ${where}
+           ORDER BY requested_at DESC,id DESC
+           LIMIT $${limitParameter} OFFSET $${offsetParameter}::bigint
+         ) page_rows ON TRUE`,
+        values,
       );
-      return result.rows.map(awardRequestRecord);
+      return {
+        items: result.rows
+          .filter((row) => row.id !== null)
+          .map(awardRequestRecord),
+        total: Number(result.rows[0]?.value ?? 0),
+      };
     } finally {
       client.release();
     }
