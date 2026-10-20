@@ -18,6 +18,7 @@ import {
 import type { Request, Response } from 'express';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import { GeodataRepository } from './geodata.repository.js';
 import { GeodataImportService } from './geodata-import.service.js';
@@ -561,11 +562,8 @@ export class GeodataController {
     @Param('y') y: string,
     @Res() response: Response,
   ) {
-    const tile = await this.repository.getTile(
-      parseTileCoordinate(zoom),
-      parseTileCoordinate(x),
-      parseTileCoordinate(y),
-    );
+    const coordinates = parseTileCoordinates(zoom, x, y);
+    const tile = await this.repository.getTile(...coordinates);
     response.setHeader('content-type', 'application/vnd.mapbox-vector-tile');
     response.setHeader('cache-control', 'public, max-age=60');
     response.status(200).send(tile);
@@ -708,14 +706,28 @@ export class GeodataController {
   }
 }
 
-function parseTileCoordinate(value: string): number {
-  const normalized = value.trim();
-  if (!/^[+-]?\d(?:_?\d)*$/.test(normalized))
-    throw new BadRequestException('tile coordinates must be integers');
-  const parsed = Number(normalized.replaceAll('_', ''));
-  if (!Number.isSafeInteger(parsed))
-    throw new BadRequestException('tile coordinates must be integers');
-  return parsed;
+function parseTileCoordinates(
+  zoomText: string,
+  xText: string,
+  yText: string,
+): [number, number, number] {
+  const values = [zoomText, xText, yText].map((value) => {
+    const normalized = normalizePythonNumericText(value);
+    if (!/^[+-]?\d(?:_?\d)*$/.test(normalized))
+      throw new BadRequestException('tile coordinates must be integers');
+    return BigInt(normalized.replaceAll('_', ''));
+  });
+  const [zoom, x, y] = values;
+  if (
+    zoom < 0n ||
+    zoom > 22n ||
+    x < 0n ||
+    y < 0n ||
+    x >= 1n << zoom ||
+    y >= 1n << zoom
+  )
+    throw new BadRequestException('invalid Web Mercator tile coordinates');
+  return [Number(zoom), Number(x), Number(y)];
 }
 
 function scopedRequestIdempotency(

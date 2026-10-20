@@ -544,7 +544,8 @@
   records a transactional outbox fact. Authenticated entity audit
   reads combine the entity's review histories with durable audit events. Vector
   tile reads serve approved entity geometry as Mapbox vector tiles and parse
-  z/x/y path values as integers before applying Web Mercator range checks.
+  z/x/y path values with Python integer syntax, including Unicode decimal digits
+  and numeric underscores, before applying Web Mercator range checks.
   A separate scheduled importer can poll due refresh schedules and fetch
   GeoJSON or ArcGIS FeatureServer data from explicitly allowlisted HTTPS hosts.
   It remains disabled unless `GEODATA_IMPORTER_ENABLED=true`; deployment and
