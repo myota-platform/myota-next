@@ -262,6 +262,7 @@
   slash-separated QSO dates with compact times, and UTC offsets with hours,
   minutes, seconds, or fractional seconds. Lowercase `t` separators are
   accepted while lowercase `z` UTC suffixes are rejected, matching Python 3.12.
+  UTC offset conversion rejects results outside Python's year 1–9999 range.
   Impossible calendar dates and clock fields
   are rejected;
   imports with no parsed QSO records retain the reference's

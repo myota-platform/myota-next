@@ -16,7 +16,8 @@ export function parseTimestamp(value: string): Date {
   normalized = normalizeExtendedTimezoneOffset(normalized) ?? normalized;
   validateTimestampFields(normalized);
   const date = new Date(normalized);
-  if (!Number.isFinite(date.getTime()))
+  const utcYear = date.getUTCFullYear();
+  if (!Number.isFinite(date.getTime()) || utcYear < 1 || utcYear > 9999)
     throw new BadRequestException('timestamp is invalid');
   return date;
 }
