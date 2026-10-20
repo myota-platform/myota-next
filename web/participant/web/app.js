@@ -51,6 +51,12 @@ function clearParticipantSession() {
   if ($('activations-list')) $('activations-list').replaceChildren();
   if ($('qso-activation')) $('qso-activation').replaceChildren();
   if ($('activation-callsign')) $('activation-callsign').replaceChildren();
+  if ($('profile-form')) $('profile-form').hidden = true;
+  if ($('profile-image-editor')) $('profile-image-editor').hidden = true;
+  if ($('profile-status'))
+    $('profile-status').textContent = 'Sign in below to manage your profile.';
+  if (typeof revokeProfileSource === 'function') revokeProfileSource();
+  if (typeof clearProfileImage === 'function') clearProfileImage();
 }
 async function refreshParticipantSession() {
   if (!awardRefreshToken) return false;
