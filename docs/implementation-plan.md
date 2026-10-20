@@ -18,8 +18,10 @@ current reference.
 - Map the 135 upstream OpenAPI operations across 113 paths to service handlers
   and compatibility evidence. Track the five target-only API extensions listed
   in [`api-baseline.md`](api-baseline.md) separately from upstream parity.
-- Build a traceability table from each baseline behavior to target code and
-  tests. Resolve ambiguities against current source and contract tests.
+- Keep the [API operation traceability index](api-operation-traceability.md)
+  mapped to target controller sources, then link each operation to behavioral
+  compatibility evidence as it is established. Resolve ambiguities against
+  current reference source and contract behavior.
 
 ## 1. Establish the new runtime
 

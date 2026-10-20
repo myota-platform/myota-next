@@ -2,7 +2,9 @@
 
 This is the acceptance inventory for the new implementation. The copied
 `contracts/openapi.yaml` and event schemas are the first compatibility
-baseline. Current implementation reference:
+baseline. The [API operation traceability index](api-operation-traceability.md)
+maps contract operations to Nest controllers; it establishes source ownership,
+not behavioral completion. Current implementation reference:
 [`myota`](https://github.com/myota-platform/myota/tree/7f904a5130e59006765cf882956a4adbfecb17ec).
 
 ## HTTP compatibility
