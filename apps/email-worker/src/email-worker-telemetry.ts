@@ -1,5 +1,32 @@
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
+import { W3CTraceContextPropagator } from '@opentelemetry/core';
+import {
+  metrics,
+  propagation,
+  ROOT_CONTEXT,
+  SpanKind,
+  trace,
+} from '@opentelemetry/api';
+import type { Counter, Histogram, Span, Tracer } from '@opentelemetry/api';
+import { logs, SeverityNumber } from '@opentelemetry/api-logs';
+import type { Logger as OtelLogger } from '@opentelemetry/api-logs';
+import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-grpc';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-grpc';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import {
+  LoggerProvider,
+  BatchLogRecordProcessor,
+} from '@opentelemetry/sdk-logs';
+import {
+  MeterProvider,
+  PeriodicExportingMetricReader,
+} from '@opentelemetry/sdk-metrics';
+import {
+  BasicTracerProvider,
+  BatchSpanProcessor,
+} from '@opentelemetry/sdk-trace-base';
 
 const OUTCOMES = [
   'delivered',
@@ -42,6 +69,98 @@ export class EmailWorkerTelemetry {
     0,
     10_000_000,
   );
+  private spanTracer?: Tracer;
+  private otelLogger?: OtelLogger;
+  private otelAttempts?: Counter;
+  private otelDuration?: Histogram;
+  private otelSmtpDuration?: Histogram;
+  private traceProvider?: BasicTracerProvider;
+  private meterProvider?: MeterProvider;
+  private loggerProvider?: LoggerProvider;
+
+  async start() {
+    const enabled = (process.env.MYOTA_OTEL_ENABLED ?? '0')
+      .trim()
+      .toLowerCase();
+    if (['', '0', 'false', 'no', 'off'].includes(enabled)) return;
+
+    try {
+      const endpoint =
+        process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? 'http://otel-collector:4317';
+      const resource = resourceFromAttributes({
+        'service.name': process.env.OTEL_SERVICE_NAME ?? 'myota-email-service',
+        'service.namespace': 'myota',
+        'deployment.environment': process.env.MYOTA_ENV ?? 'development',
+        'service.instance.id': process.env.HOSTNAME ?? 'local',
+      });
+
+      this.traceProvider = new BasicTracerProvider({
+        resource,
+        spanProcessors: [
+          new BatchSpanProcessor(new OTLPTraceExporter({ url: endpoint })),
+        ],
+      });
+      trace.setGlobalTracerProvider(this.traceProvider);
+      propagation.setGlobalPropagator(new W3CTraceContextPropagator());
+      this.spanTracer = trace.getTracer('myota.email');
+
+      const metricInterval = boundedInt(
+        process.env.MYOTA_OTEL_METRIC_INTERVAL_MS,
+        15_000,
+        1_000,
+        3_600_000,
+      );
+      const metricReader = new PeriodicExportingMetricReader({
+        exporter: new OTLPMetricExporter({ url: endpoint }),
+        exportIntervalMillis: metricInterval,
+      });
+      this.meterProvider = new MeterProvider({
+        resource,
+        readers: [metricReader],
+      });
+      metrics.setGlobalMeterProvider(this.meterProvider);
+      const meter = this.meterProvider.getMeter('myota.email');
+      this.otelAttempts = meter.createCounter('myota.email.delivery.attempts', {
+        unit: '{attempt}',
+        description: 'Email delivery outcomes recorded by the worker',
+      });
+      this.otelDuration = meter.createHistogram(
+        'myota.email.delivery.duration',
+        {
+          unit: 's',
+          description: 'Time spent resolving and delivering one message',
+        },
+      );
+      this.otelSmtpDuration = meter.createHistogram(
+        'myota.email.smtp.delivery.duration',
+        {
+          unit: 's',
+          description: 'Time spent in one SMTP delivery operation',
+        },
+      );
+
+      this.loggerProvider = new LoggerProvider({
+        resource,
+        processors: [
+          new BatchLogRecordProcessor({
+            exporter: new OTLPLogExporter({ url: endpoint }),
+          }),
+        ],
+      });
+      logs.setGlobalLoggerProvider(this.loggerProvider);
+      this.otelLogger = this.loggerProvider.getLogger('myota.email');
+    } catch {
+      this.spanTracer = undefined;
+      this.otelLogger = undefined;
+      this.otelAttempts = undefined;
+      this.otelDuration = undefined;
+      this.otelSmtpDuration = undefined;
+      await this.shutdownOpenTelemetry();
+      process.stderr.write(
+        'OpenTelemetry setup failed; continuing with Prometheus metrics\n',
+      );
+    }
+  }
 
   async listen() {
     if (this.server) return;
@@ -83,14 +202,52 @@ export class EmailWorkerTelemetry {
     const template = labelTemplate(templateId);
     const key = `${outcome}\u0000${template}`;
     this.outcomes.set(key, (this.outcomes.get(key) ?? 0) + 1);
+    this.otelAttempts?.add(1, {
+      'email.outcome': outcome,
+      'email.template_id': template,
+    });
   }
 
   observeDuration(templateId: string, seconds: number) {
     this.observe(this.durations, templateId, seconds);
+    this.otelDuration?.record(Math.max(0, seconds), {
+      'email.template_id': labelTemplate(templateId),
+    });
   }
 
   observeSmtpDuration(templateId: string, seconds: number) {
     this.observe(this.smtpDurations, templateId, seconds);
+    this.otelSmtpDuration?.record(Math.max(0, seconds));
+  }
+
+  startDeliverySpan(
+    templateId: string,
+    carrier: Record<string, string>,
+  ): Span | undefined {
+    if (!this.spanTracer) return undefined;
+    const parent = propagation.extract(ROOT_CONTEXT, carrier);
+    return this.spanTracer.startSpan(
+      'email.delivery',
+      {
+        kind: SpanKind.INTERNAL,
+        attributes: { 'email.template_id': labelTemplate(templateId) },
+      },
+      parent,
+    );
+  }
+
+  recordLog(
+    severity: 'WARN' | 'ERROR',
+    message: string,
+    attributes: Record<string, string> = {},
+  ) {
+    this.otelLogger?.emit({
+      severityNumber:
+        severity === 'ERROR' ? SeverityNumber.ERROR : SeverityNumber.WARN,
+      severityText: severity,
+      body: message,
+      attributes,
+    });
   }
 
   private observe(
@@ -126,6 +283,19 @@ export class EmailWorkerTelemetry {
     this.ready = false;
     if (this.server)
       await new Promise<void>((resolve) => this.server?.close(() => resolve()));
+    await this.shutdownOpenTelemetry();
+  }
+
+  private async shutdownOpenTelemetry() {
+    const providers = [
+      this.traceProvider?.shutdown(),
+      this.meterProvider?.shutdown(),
+      this.loggerProvider?.shutdown(),
+    ].filter((value): value is Promise<void> => value !== undefined);
+    this.traceProvider = undefined;
+    this.meterProvider = undefined;
+    this.loggerProvider = undefined;
+    await Promise.allSettled(providers);
   }
 
   private renderMetrics() {

@@ -554,9 +554,11 @@
   is case-insensitive, and port/timeout values use decimal parsing consistent
   with Python's configuration parser. It sends through TLS-configured SMTP
   and records deduplication, attempts, and redacted dead letters in the Core
-  database. The former fourth email database is removed from the target. Identity production,
-  OpenTelemetry export, and deployment integration remain outstanding. The
-  worker exposes `/healthz`, `/readyz`, and Prometheus metrics. Retry backoff
+  database. The former fourth email database is removed from the target. Identity production
+  and deployment qualification remain outstanding. With `MYOTA_OTEL_ENABLED=1`,
+  the worker exports W3C-parented delivery spans, bounded outcome and duration
+  metrics, and privacy-safe delivery logs over OTLP; exporter setup is fail-open.
+  Prometheus metrics and `/healthz`/`/readyz` remain available independently. Retry backoff
   uses the greater of JetStream delivery count and the persisted attempt count,
   including after audited redrive. An audited
   redrive CLI resets one dead-letter record and records the operator's reason

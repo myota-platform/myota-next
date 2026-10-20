@@ -10,6 +10,7 @@ import type { Consumer, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import { createTransport } from 'nodemailer';
 import type { Pool, PoolClient } from 'pg';
+import { SpanStatusCode } from '@opentelemetry/api';
 import { readFileSync } from 'node:fs';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
@@ -75,6 +76,7 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
+    await this.telemetry.start();
     if (!this.pool) throw new Error('CORE_DATABASE_URL is required');
     await this.pool.query('SELECT 1');
     const registry = await loadOutboxRegistry();
@@ -176,7 +178,6 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async handle(message: JsMsg) {
-    const startedAt = Date.now();
     let command: EmailCommand;
     try {
       command = parseCommand(message.data);
@@ -197,8 +198,14 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
       message.nak(2000);
       return;
     }
-    let stage: 'identity' | 'smtp' = 'identity';
+    const startedAt = Date.now();
+    let stage: 'identity' | 'smtp' | 'delivery' = 'identity';
     let smtpStartedAt = 0;
+    const span = this.telemetry.startDeliverySpan(
+      command.templateId,
+      traceCarrier(message),
+    );
+    let spanEnded = false;
     try {
       const address = await this.resolveRecipient(command.recipientAccountId);
       const content = renderMessage(command);
@@ -216,6 +223,9 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
         command.templateId,
         (Date.now() - smtpStartedAt) / 1000,
       );
+      span?.end();
+      spanEnded = true;
+      stage = 'delivery';
       await this.markDelivered(command.workId);
       message.ack();
       this.telemetry.record('delivered', command.templateId);
@@ -224,6 +234,14 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
         (Date.now() - startedAt) / 1000,
       );
     } catch (error) {
+      if (stage !== 'delivery')
+        span?.setStatus({
+          code: SpanStatusCode.ERROR,
+          message:
+            error instanceof RecipientUnavailable
+              ? 'recipient unavailable'
+              : 'delivery failed',
+        });
       if (error instanceof RecipientUnavailable) {
         await this.deadLetter(command.workId, 'recipient_unavailable');
         message.term();
@@ -244,12 +262,21 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
           (Date.now() - startedAt) / 1000,
         );
         this.logger.error('Email delivery exhausted its retry limit');
+        this.telemetry.recordLog(
+          'WARN',
+          'Email delivery exhausted its retry limit',
+          { error_code: 'delivery_exhausted' },
+        );
         return;
       }
       const attempts = await this.retry(command.workId);
       message.nak(backoffMs(Math.max(message.info.deliveryCount, attempts)));
       this.telemetry.record(
-        stage === 'smtp' ? 'smtp_failure' : 'identity_failure',
+        stage === 'smtp'
+          ? 'smtp_failure'
+          : stage === 'identity'
+            ? 'identity_failure'
+            : 'delivery_failure',
         command.templateId,
       );
       this.telemetry.observeDuration(
@@ -264,6 +291,17 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
         );
       }
       this.logger.warn(`Email delivery will retry: ${safeError(error)}`);
+      this.telemetry.recordLog('WARN', 'Email delivery will retry', {
+        outcome:
+          stage === 'smtp'
+            ? 'smtp_failure'
+            : stage === 'identity'
+              ? 'identity_failure'
+              : 'delivery_failure',
+        error_code: 'transient_delivery_failure',
+      });
+    } finally {
+      if (!spanEnded) span?.end();
     }
   }
 
@@ -764,4 +802,13 @@ function safeError(error: unknown) {
 
 function pause(milliseconds: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function traceCarrier(message: JsMsg): Record<string, string> {
+  const carrier: Record<string, string> = {};
+  for (const name of ['traceparent', 'tracestate']) {
+    const value = message.headers?.get(name);
+    if (value) carrier[name] = value;
+  }
+  return carrier;
 }

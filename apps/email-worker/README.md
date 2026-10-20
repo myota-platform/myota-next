@@ -32,5 +32,12 @@ After the transaction succeeds, replay the original work command through its
 producer outbox using the same work ID. The worker does not retain commands,
 recipient addresses, or message content. `/healthz`, `/readyz`, and Prometheus
 metrics are exposed on `EMAIL_HEALTH_PORT` (default `9108`). Identity
-production, OpenTelemetry export, and production deployment remain separate
-qualification steps.
+production and deployment qualification remain separate steps.
+
+Set `MYOTA_OTEL_ENABLED=1` to enable OTLP export. The worker exports
+`email.delivery` spans with incoming W3C `traceparent`/`tracestate` context,
+bounded delivery outcome and duration metrics, and privacy-safe delivery logs.
+The default gRPC endpoint is `http://otel-collector:4317`; override it with
+`OTEL_EXPORTER_OTLP_ENDPOINT`. Metric export runs every 15 seconds by default;
+`MYOTA_OTEL_METRIC_INTERVAL_MS` changes that interval. Exporter setup failures
+leave the worker running with its Prometheus metrics and health endpoints.
