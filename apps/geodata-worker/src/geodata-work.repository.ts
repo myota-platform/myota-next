@@ -1193,8 +1193,22 @@ export class GeodataWorkRepository {
     run: ImportRun,
     manifestId: string,
   ): Promise<string[]> {
-    const policy =
-      textValue(run.source_metadata.disappearancePolicy) ?? 'REVIEW_REQUIRED';
+    const requestedPolicy = Object.hasOwn(
+      run.source_metadata,
+      'disappearancePolicy',
+    )
+      ? run.source_metadata.disappearancePolicy
+      : 'REVIEW_REQUIRED';
+    if (
+      typeof requestedPolicy !== 'string' ||
+      !['UNCHANGED', 'STALE', 'RETIRED', 'REVIEW_REQUIRED'].includes(
+        requestedPolicy,
+      )
+    )
+      throw new Error(
+        'disappearancePolicy must be UNCHANGED, STALE, RETIRED, or REVIEW_REQUIRED',
+      );
+    const policy = requestedPolicy;
     const source = isRecord(run.source_metadata.source)
       ? run.source_metadata.source
       : {};

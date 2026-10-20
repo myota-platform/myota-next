@@ -246,6 +246,18 @@ export class GeodataPromotionRepository {
     },
   ) {
     const metadata = run.source_metadata;
+    const requestedPolicy = Object.hasOwn(metadata, 'disappearancePolicy')
+      ? metadata.disappearancePolicy
+      : run.disappearance_policy;
+    if (
+      typeof requestedPolicy !== 'string' ||
+      !['UNCHANGED', 'STALE', 'RETIRED', 'REVIEW_REQUIRED'].includes(
+        requestedPolicy,
+      )
+    )
+      throw new Error(
+        'disappearancePolicy must be UNCHANGED, STALE, RETIRED, or REVIEW_REQUIRED',
+      );
     const source = isRecord(metadata.source) ? metadata.source : {};
     const sourceKey =
       textValue(source.sourceKey ?? source.url ?? source.name) ??
@@ -283,7 +295,7 @@ export class GeodataPromotionRepository {
       [manifestId, runId],
     );
     let disappeared = 0;
-    if (run.disappearance_policy !== 'UNCHANGED') {
+    if (requestedPolicy !== 'UNCHANGED') {
       const missing = await client.query(
         `SELECT e.id::text,e.lifecycle_status,e.public_properties
          FROM geodata_entity e
@@ -307,7 +319,7 @@ export class GeodataPromotionRepository {
         public_properties: Record<string, unknown>;
       }>) {
         const occurredAt = new Date().toISOString();
-        const policy = run.disappearance_policy;
+        const policy = requestedPolicy;
         const sourceState =
           policy === 'STALE'
             ? 'STALE'

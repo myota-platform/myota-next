@@ -261,6 +261,9 @@ qualification, and outage/recovery evidence are outstanding.
 Complete snapshot imports are also accepted on the ordinary import path; the
 worker applies disappearance policy after the final batch is staged, before
 candidate review or promotion, matching the reference worker lifecycle.
+Disappearance policy values retain their submitted casing and are checked at
+snapshot reconciliation time; malformed values therefore fail worker
+processing instead of being normalized or rejected at request creation.
 Finalization removes staged candidates and queues transactionally
 while preserving the import summary and materialized entities. Pending
 candidates can be paged; administrators can confirm or

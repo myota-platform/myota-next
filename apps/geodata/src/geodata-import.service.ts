@@ -146,7 +146,7 @@ export class GeodataImportService {
           sourceHash,
           stringifyJsonWithBigInts({ featureCount: prepared.features.length }),
           prepared.completeSnapshot,
-          prepared.disappearancePolicy,
+          prepared.databaseDisappearancePolicy,
         ],
       );
       const response: Record<string, unknown> = {
@@ -355,15 +355,16 @@ function prepareImport(body: Record<string, unknown>) {
       'entityTypes must contain at least one shared entity category code',
     );
   const disappearancePolicy =
-    typeof body.disappearancePolicy === 'string'
-      ? body.disappearancePolicy.toUpperCase()
-      : 'REVIEW_REQUIRED';
-  if (
-    !['UNCHANGED', 'STALE', 'RETIRED', 'REVIEW_REQUIRED'].includes(
+    body.disappearancePolicy === undefined
+      ? 'REVIEW_REQUIRED'
+      : body.disappearancePolicy;
+  const databaseDisappearancePolicy =
+    typeof disappearancePolicy === 'string' &&
+    ['UNCHANGED', 'STALE', 'RETIRED', 'REVIEW_REQUIRED'].includes(
       disappearancePolicy,
     )
-  )
-    throw new BadRequestException('unsupported disappearancePolicy');
+      ? disappearancePolicy
+      : 'REVIEW_REQUIRED';
   let document: Record<string, unknown>;
   if (Array.isArray(body.features)) {
     document = { type: 'FeatureCollection', features: body.features };
@@ -427,6 +428,7 @@ function prepareImport(body: Record<string, unknown>) {
       typeof body.programmeSlug === 'string' ? body.programmeSlug : null,
     completeSnapshot: body.completeSnapshot === true,
     disappearancePolicy,
+    databaseDisappearancePolicy,
     sourceFormat,
     document,
     features,

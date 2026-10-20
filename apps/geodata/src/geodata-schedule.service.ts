@@ -31,7 +31,7 @@ type RefreshSchedule = {
   adapter: string;
   source: Record<string, unknown>;
   intervalSeconds: number;
-  disappearancePolicy: string;
+  disappearancePolicy: unknown;
   enabled: boolean;
   lastRunAt: string | null;
   nextRunAt: string;
@@ -315,15 +315,9 @@ function prepareSchedule(body: Record<string, unknown>): RefreshSchedule {
       'refresh interval must be at least 300 seconds',
     );
   const disappearancePolicy =
-    typeof body.disappearancePolicy === 'string'
-      ? body.disappearancePolicy.toUpperCase()
-      : 'REVIEW_REQUIRED';
-  if (
-    !['UNCHANGED', 'STALE', 'RETIRED', 'REVIEW_REQUIRED'].includes(
-      disappearancePolicy,
-    )
-  )
-    throw new BadRequestException('unsupported disappearancePolicy');
+    body.disappearancePolicy === undefined
+      ? 'REVIEW_REQUIRED'
+      : body.disappearancePolicy;
   return {
     id: randomUUID(),
     programmeSlug:
