@@ -66,22 +66,26 @@ export class ActivityService {
     key: string | undefined,
     body: JsonRecord,
   ) {
+    const activation = normalizeActivation(body);
+    const missing = [
+      'programmeSlug',
+      'entityId',
+      'operatorId',
+      'startedAt',
+    ].filter((field) => !pythonTruthy(activation[field]));
+    if (missing.length)
+      throw new BadRequestException(
+        `missing required fields: ${missing.join(', ')}`,
+      );
     const claims = verifyAccessToken(authorization);
     if (
-      claims.sub !== body.operatorId &&
+      claims.sub !== activation.operatorId &&
       !claims.scp.some((scope) => ['*', 'activity.admin'].includes(scope))
     )
       throw new ForbiddenException(
         'activation operator does not match the authenticated account',
       );
-    for (const field of [
-      'programmeSlug',
-      'entityId',
-      'operatorId',
-      'startedAt',
-    ])
-      if (!body[field]) throw new BadRequestException(`${field} is required`);
-    return this.repository.create(normalizeActivation(body), key);
+    return this.repository.create(activation, key);
   }
 
   async get(authorization: string | undefined, id: string) {
