@@ -2,10 +2,11 @@
 
 This document records verified migration inputs and the work needed to transfer
 the running Python platform into the NestJS monorepo. A read-only preflight
-command checks source migration history and all six database targets. No
-cross-version data copy is implemented yet. The existing `db:backup` and
-`db:restore` commands preserve one schema version; they do not convert a Python
-deployment into the NestJS schema.
+command checks source migration history and all six database targets. Source
+and destination dump staging is implemented, but restoring the source data
+into the NestJS schema is not. The existing `db:backup` and `db:restore`
+commands preserve one schema version; they do not convert a Python deployment
+into the NestJS schema.
 
 Set `LEGACY_CORE_DATABASE_URL`, `LEGACY_ACTIVITY_DATABASE_URL`, and
 `LEGACY_GEO_DATABASE_URL` to the Python source databases, and set
@@ -18,8 +19,22 @@ npm run db:transfer:preflight
 
 The command makes read-only PostgreSQL connections. It requires six distinct
 host/port/database targets, verifies the source migration ledger and known
-checksums for each owner, and reports destination migration-ledger shape and
-application relation counts. It does not copy data or modify either side.
+checksums for each owner, checks that source ACL roles exist on the matching
+destination, verifies PostGIS availability, and reports destination
+migration-ledger shape and application relation counts. It does not modify
+either side.
+
+Stage source dumps and destination recovery dumps in a new private directory:
+
+```sh
+npm run db:transfer:stage -- --archive-dir=./backups/myota-transfer-20261020
+```
+
+The command runs preflight again, writes six PostgreSQL custom-format dumps and
+a SHA-256 manifest containing the preflight report, and verifies each archive
+is readable. It refuses an existing output directory. The files contain
+database data; protect and retain them as sensitive backups. Staging does not
+restore or modify a database.
 
 ## Database owners
 
@@ -102,12 +117,12 @@ remains archived.
 
 ## Implementation gates
 
-The transfer tooling still needs a checksummed three-owner copy command, a
+The transfer tooling still needs the target restore/apply command, a
 target-specific destructive confirmation, and per-owner validation reports.
-The ledger adoption command is implemented but has not been rehearsed against
-disposable PostgreSQL databases. A copy command must stage all three source
-dumps before modifying any target and must never begin copying until all six
-database targets and source migration ledgers pass preflight.
+The ledger adoption command and dump staging are implemented but have not been
+rehearsed against disposable PostgreSQL databases. The restore command must
+verify all six dump checksums before modifying any target and must apply all
+NestJS migrations only after all three source schemas have been restored.
 
 Do not run a production transfer until the tool has been rehearsed on
 disposable copies of all three databases, destination role and grant handling

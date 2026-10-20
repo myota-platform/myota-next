@@ -76,6 +76,17 @@ async function main() {
       const targetLedger = await inspectLedger(targetClient, owner);
       const expectedMigrations = await expectedSourceMigrations(owner);
       assertExpectedSourceLedger(owner, sourceLedger, expectedMigrations);
+      const sourceAclRoles = await aclRoles(sourceClient);
+      const targetAclRoles = await aclRoles(targetClient);
+      const missingTargetRoles = sourceAclRoles.filter(
+        (role) => !targetAclRoles.includes(role),
+      );
+      if (missingTargetRoles.length)
+        throw new Error(
+          `${owner} destination is missing source ACL roles: ${missingTargetRoles.join(', ')}`,
+        );
+      if (owner === 'geo')
+        await assertPostgisAvailable(sourceClient, targetClient);
       const relationCount = await targetClient.query<{ count: string }>(`
         SELECT count(*)::text AS count
           FROM pg_class AS c
@@ -98,6 +109,7 @@ async function main() {
               mode: application_mode,
             }),
           ),
+          aclRoles: sourceAclRoles,
           sourceHistory: 'matches-verified-python-migrations',
         },
         target: {
@@ -106,6 +118,7 @@ async function main() {
           port: Number(target.port),
           publicApplicationRelations: Number(relationCount.rows[0]?.count ?? 0),
           migrationLedger: targetLedger.kind,
+          aclRoles: targetAclRoles,
         },
       });
     } finally {
@@ -117,7 +130,8 @@ async function main() {
     `${JSON.stringify(
       {
         mode: 'read-only',
-        transferImplemented: false,
+        dataCopyImplemented: false,
+        dumpStagingImplemented: true,
         sourceRepositoryBaseline:
           'myota-platform/myota@7f904a5130e59006765cf882956a4adbfecb17ec',
         ownerCount: reports.length,
@@ -129,6 +143,58 @@ async function main() {
       2,
     )}\n`,
   );
+}
+
+async function aclRoles(client: Client): Promise<string[]> {
+  const result = await client.query<{ rolname: string }>(`
+    WITH acl_items AS (
+      SELECT unnest(n.nspacl) AS acl
+        FROM pg_namespace AS n
+       WHERE n.nspname='public' AND n.nspacl IS NOT NULL
+      UNION ALL
+      SELECT unnest(c.relacl) AS acl
+        FROM pg_class AS c
+        JOIN pg_namespace AS n ON n.oid=c.relnamespace
+       WHERE n.nspname='public' AND c.relacl IS NOT NULL
+      UNION ALL
+      SELECT unnest(p.proacl) AS acl
+        FROM pg_proc AS p
+        JOIN pg_namespace AS n ON n.oid=p.pronamespace
+       WHERE n.nspname='public' AND p.proacl IS NOT NULL
+      UNION ALL
+      SELECT unnest(d.defaclacl) AS acl
+        FROM pg_default_acl AS d
+       WHERE d.defaclnamespace='public'::regnamespace
+         AND d.defaclacl IS NOT NULL
+    ), acl_principals AS (
+      SELECT privilege.grantee AS role_oid
+        FROM acl_items
+        CROSS JOIN LATERAL aclexplode(acl_items.acl) AS privilege
+      UNION
+      SELECT privilege.grantor AS role_oid
+        FROM acl_items
+        CROSS JOIN LATERAL aclexplode(acl_items.acl) AS privilege
+    )
+    SELECT DISTINCT role.rolname
+      FROM acl_principals AS principal
+      JOIN pg_roles AS role ON role.oid=principal.role_oid
+     WHERE principal.role_oid<>0
+     ORDER BY role.rolname
+  `);
+  return result.rows.map((row) => row.rolname);
+}
+
+async function assertPostgisAvailable(source: Client, target: Client) {
+  const sourceInstalled = await source.query<{ installed: boolean }>(`
+    SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname='postgis') AS installed
+  `);
+  const targetAvailable = await target.query<{ available: boolean }>(`
+    SELECT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name='postgis') AS available
+  `);
+  if (!sourceInstalled.rows[0]?.installed)
+    throw new Error('Geodata source database does not have PostGIS installed');
+  if (!targetAvailable.rows[0]?.available)
+    throw new Error('Geodata destination server does not provide PostGIS');
 }
 
 function endpoint(variable: string): Endpoint {
