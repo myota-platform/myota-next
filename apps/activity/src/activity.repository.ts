@@ -938,8 +938,9 @@ export class ActivityRepository {
     });
   }
 
+  // The reference resolves the QSO through correctionId, not the nested path.
   async reviewCorrection(
-    qsoId: string,
+    _qsoId: string,
     correctionId: string,
     body: JsonRecord,
     key?: string,
@@ -951,13 +952,13 @@ export class ActivityRepository {
         [correctionId],
       );
       const correction = correctionResult.rows[0];
-      if (!correction || String(correction.qso_id) !== qsoId)
-        throw new NotFoundException('QSO correction not found');
+      if (!correction) throw new NotFoundException('QSO correction not found');
       if (correction.status !== 'PENDING')
         throw new BadRequestException('correction is no longer pending');
+      const correctionQsoId = String(correction.qso_id);
       const qsoResult = await client.query(
         'SELECT * FROM activity_qso WHERE id=$1 FOR UPDATE',
-        [qsoId],
+        [correctionQsoId],
       );
       const qso = qsoResult.rows[0];
       if (!qso) throw new NotFoundException('QSO not found');
@@ -989,7 +990,7 @@ export class ActivityRepository {
               : values[field],
           );
         }
-        parameters.push(qsoId);
+        parameters.push(correctionQsoId);
         await client.query(
           `UPDATE activity_qso SET ${assignments.join(',')} WHERE id=$${parameters.length}`,
           parameters,

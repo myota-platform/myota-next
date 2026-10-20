@@ -185,7 +185,8 @@
   aggregates, and result exports support
   JSON and CSV. QSO correction requests and administrator review now use
   transactional Activity persistence; requests store any truthy `proposedValues`
-  JSON shape accepted by the reference. Applying an object correction queues
+  JSON shape accepted by the reference. Review resolves the QSO through the
+  correction record, as the reference does. Applying an object correction queues
   award recalculation, and correction timestamps retain Python-compatible
   falsey-value handling and microsecond precision. Activity statistics can be
   listed and rebuild jobs queued,
