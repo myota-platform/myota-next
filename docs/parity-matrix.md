@@ -361,7 +361,7 @@ review, and editing scoped to the selected programme. The Admin Awards screen us
 independent bounded paging for award
 definitions, requests, and issuances; the asset catalogue follows its API pages
 for design selection. The Participant client includes localized published programme content,
-paged approved/candidate entity catalogue and map, map-picked point proposals and existing-candidate proposals, published award and level catalogue with eligible-level requests, activation creation and complete paged own-activation history for QSO selection,
+paged approved/candidate entity catalogue and map, map-picked point proposals and existing-candidate proposals, published award and level catalogue with eligible-level requests using the current Identity account and callsign data, activation creation and complete paged own-activation history for QSO selection,
 single-QSO entry, profile editing and image management, but those workflows lack
 browser-level compatibility coverage. The award catalogue follows all API pages.
 Remaining work

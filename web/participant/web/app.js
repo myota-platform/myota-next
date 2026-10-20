@@ -790,8 +790,8 @@ async function signInForAward() {
     }),
   });
   awardAccessToken = data.accessToken;
-  awardAccount = data.account;
   localStorage.setItem('myota_public_access', awardAccessToken);
+  awardAccount = await awardApi('/v1/identity/me');
   renderOperatorCallsigns();
   await loadActivations();
   return awardAccount;
