@@ -352,7 +352,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
         Math.max(state.leaseRemainingSeconds, 1),
         MAX_WORK_WAIT_SECONDS,
       );
-      message.working();
+      this.extendMessageAck(message, 'waiting for Geodata work ownership');
       await this.wait(waitSeconds * 1000);
     }
     message.nak(1000);
@@ -444,7 +444,17 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
       if (result === 'done') return;
       if (definition.heartbeat && !(await definition.heartbeat(job)))
         throw new Error('Geodata work lease was lost');
+      this.extendMessageAck(message, 'processing Geodata work');
+    }
+  }
+
+  private extendMessageAck(message: JsMsg, context: string): void {
+    try {
       message.working();
+    } catch (error) {
+      this.logger.warn(
+        `Could not extend Geodata work ACK while ${context}: ${safeError(error)}`,
+      );
     }
   }
 
