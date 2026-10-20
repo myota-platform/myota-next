@@ -97,6 +97,8 @@ assignments receive a Core-owned monotonic ordering value. `core/015` does the
 same for callsigns, callsign evidence, and security events in account exports.
 `core/016` preserves Programme insertion order in catalogue pages and
 `assignedProgrammes` arrays, backfilling by creation timestamp and slug.
+`core/017` preserves Identity account insertion order in administrator account
+pages, backfilling by creation timestamp and ID.
 
 `geo/002` adds attempt-scoped import feature staging so workers can process
 large inputs without retaining all prepared candidates and validation errors

@@ -580,7 +580,7 @@ export class IdentityAuthService {
         `SELECT a.id, a.display_name, a.email::text AS email, a.status
            FROM public.account a
           WHERE ${filter}
-          ORDER BY a.created_at, a.id`,
+          ORDER BY a.insertion_order`,
         [status],
       );
       const matchingAccounts = searchResult.rows.filter(

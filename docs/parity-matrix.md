@@ -72,7 +72,7 @@ sets its password only when no credential exists, ensures its global operator
 role, and writes the corresponding Core outbox and security events.
 Administrator account search now uses full default Unicode 15.0 case folding,
 matching the Python 3.12 reference. It scans only IDs, names, email addresses,
-and status for eligible accounts, folds names and email addresses before
+and status for eligible accounts in reference insertion order, folds names and email addresses before
 slicing the result page, then loads profile, role, and callsign details only
 for that page. The Admin Identity view follows the returned page metadata and
 lets administrators move between matching account pages without loading the
