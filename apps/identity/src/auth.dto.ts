@@ -159,7 +159,8 @@ export class CreateAccountDto {
   @MinLength(1)
   displayName!: string;
 
-  @IsEmail()
+  @IsString()
+  @MinLength(1)
   email!: string;
 
   @IsString()
