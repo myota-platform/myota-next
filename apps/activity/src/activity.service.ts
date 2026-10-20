@@ -273,15 +273,20 @@ export class ActivityService {
     key: string | undefined,
     body: JsonRecord,
   ) {
-    const claims = verifyAccessToken(authorization);
+    const missing = ['activationId', 'filename', 'contentBase64'].filter(
+      (field) => !pythonTruthy(body[field]),
+    );
+    if (missing.length)
+      throw new BadRequestException(
+        `missing required fields: ${missing.join(', ')}`,
+      );
     const activationId =
       typeof body.activationId === 'string' ? body.activationId : '';
     const filename = typeof body.filename === 'string' ? body.filename : '';
-    if (!activationId || !filename || typeof body.contentBase64 !== 'string')
-      throw new BadRequestException(
-        'activationId, filename, and contentBase64 are required',
-      );
+    if (typeof body.contentBase64 !== 'string')
+      throw new BadRequestException('contentBase64 must be valid base64');
     const activation = await this.repository.get(activationId);
+    const claims = verifyAccessToken(authorization);
     this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
     const content = decodeBase64(body.contentBase64);
     const maxBytes = integerSetting(

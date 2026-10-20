@@ -228,7 +228,8 @@
   and inspected; recipient notifications can be read with owner/admin checks.
   Activation history, public activation history, and statistics pages now use
   database limits and offsets; public result exports remain complete exports.
-  ADIF uploads are ownership-checked, size-limited, scanned, stored in S3, and
+  ADIF required fields use Python truthiness before activation lookup and
+  authorization. Uploads are ownership-checked, size-limited, scanned, stored in S3, and
   queued transactionally; the submitted filename is preserved in metadata and
   `/` is replaced with `_` only in its object key, matching Python. The Activity
   worker decodes and normalizes the ADIF
