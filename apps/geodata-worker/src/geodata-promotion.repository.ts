@@ -986,26 +986,42 @@ function sequenceMatcherRatio(left: string, right: string) {
   const leftSymbols = Array.from(left);
   const rightSymbols = Array.from(right);
   if (!leftSymbols.length && !rightSymbols.length) return 1;
+
+  const popular = new Set<string>();
+  if (rightSymbols.length >= 200) {
+    const counts = new Map<string, number>();
+    for (const symbol of rightSymbols)
+      counts.set(symbol, (counts.get(symbol) ?? 0) + 1);
+    const popularityThreshold = Math.floor(rightSymbols.length / 100) + 1;
+    for (const [symbol, count] of counts)
+      if (count > popularityThreshold) popular.add(symbol);
+  }
+  const rightIndices = new Map<string, number[]>();
+  for (let index = 0; index < rightSymbols.length; index += 1) {
+    const symbol = rightSymbols[index];
+    if (popular.has(symbol)) continue;
+    const indices = rightIndices.get(symbol);
+    if (indices) indices.push(index);
+    else rightIndices.set(symbol, [index]);
+  }
+
   const pending: [number, number, number, number][] = [
     [0, leftSymbols.length, 0, rightSymbols.length],
   ];
   let matchingCharacters = 0;
   while (pending.length) {
     const [leftStart, leftEnd, rightStart, rightEnd] = pending.pop()!;
-    let previous = new Uint32Array(rightEnd - rightStart + 1);
     let bestLeft = leftStart;
     let bestRight = rightStart;
     let bestSize = 0;
+    let previous = new Map<number, number>();
     for (let leftIndex = leftStart; leftIndex < leftEnd; leftIndex += 1) {
-      const current = new Uint32Array(rightEnd - rightStart + 1);
-      for (
-        let rightIndex = rightStart;
-        rightIndex < rightEnd;
-        rightIndex += 1
-      ) {
-        if (leftSymbols[leftIndex] !== rightSymbols[rightIndex]) continue;
-        const size = previous[rightIndex - rightStart] + 1;
-        current[rightIndex - rightStart + 1] = size;
+      const current = new Map<number, number>();
+      for (const rightIndex of rightIndices.get(leftSymbols[leftIndex]) ?? []) {
+        if (rightIndex < rightStart) continue;
+        if (rightIndex >= rightEnd) break;
+        const size = (previous.get(rightIndex - 1) ?? 0) + 1;
+        current.set(rightIndex, size);
         if (size > bestSize) {
           bestLeft = leftIndex - size + 1;
           bestRight = rightIndex - size + 1;
@@ -1014,6 +1030,23 @@ function sequenceMatcherRatio(left: string, right: string) {
       }
       previous = current;
     }
+
+    while (
+      bestLeft > leftStart &&
+      bestRight > rightStart &&
+      leftSymbols[bestLeft - 1] === rightSymbols[bestRight - 1]
+    ) {
+      bestLeft -= 1;
+      bestRight -= 1;
+      bestSize += 1;
+    }
+    while (
+      bestLeft + bestSize < leftEnd &&
+      bestRight + bestSize < rightEnd &&
+      leftSymbols[bestLeft + bestSize] === rightSymbols[bestRight + bestSize]
+    )
+      bestSize += 1;
+
     if (!bestSize) continue;
     matchingCharacters += bestSize;
     if (leftStart < bestLeft && rightStart < bestRight)

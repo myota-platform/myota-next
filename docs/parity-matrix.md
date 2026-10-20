@@ -174,7 +174,9 @@ validation, using Python-compatible Unicode casefolding, whitespace collapse,
 and 300-code-point truncation. The worker validates WGS84
 geometries, stages candidates with provenance and 50 m duplicate
 warnings, records errors, and emits the preprocessing fact. Conflation name
-similarity uses Python Unicode casefolding and whitespace stripping. Community proposals
+similarity uses Python Unicode casefolding and whitespace stripping, plus the
+`SequenceMatcher` popularity heuristic for reference names of 200 or more code
+points. Community proposals
 join this pipeline, and community proposals and imported features preserve
 validated attachment metadata before promotion. Multipart/resumable
 uploads are implemented with owner-scoped durable sessions, bounded binary

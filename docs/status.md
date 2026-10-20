@@ -447,7 +447,8 @@
   match signals and prior decisions, and recording resolutions. Entity import
   promotion now searches overlapping PostGIS bounding boxes, computes the
   baseline name/containment/overlap/distance/jurisdiction score, using Python
-  Unicode casefolding and whitespace stripping for the name signal, and stores
+  Unicode casefolding and whitespace stripping for the name signal, and applies
+  `SequenceMatcher`'s 200-code-point popularity heuristic. It stores
   deduplicated candidates at the existing 0.55 threshold.
   The supported import
   adapter catalogue, provider-derived location hierarchy, and authorized
