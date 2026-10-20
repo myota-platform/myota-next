@@ -43,9 +43,14 @@ export class ActivityOperationsController {
   @Get('notifications')
   notifications(
     @Headers('authorization') authorization: string | undefined,
-    @Query('recipientId') recipientId?: string,
+    @Query()
+    query: {
+      recipientId?: string;
+      page?: string;
+      pageSize?: string;
+    },
   ) {
-    return this.activity.listNotifications(authorization, recipientId);
+    return this.activity.listNotifications(authorization, query);
   }
 
   @Post('activity/work-jobs/:jobId/redrive')

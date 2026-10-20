@@ -57,6 +57,9 @@ an audited reason; long-running Activity jobs now extend their 120-second leases
 from a separate database connection while processing. Statistics listing and rebuild-job APIs,
 transactional snapshot rebuilds, and owner-scoped notification reads are
 implemented. ADIF import creation, processing, and status reads are implemented.
+The notifications endpoint now supports the contract's optional `page` and
+`pageSize` parameters with database-bounded reads; requests without paging
+parameters retain the prior unpaged response shape.
 The Admin Activity page opens activation details and normalized QSOs, lists
 statistics snapshots in programme scope, and allows Activity administrators to
 queue and inspect rebuild jobs. It also lists notifications for the signed-in
