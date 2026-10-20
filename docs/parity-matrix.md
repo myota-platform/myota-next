@@ -72,7 +72,9 @@ normalized QSO writes, validity checks, ownership checks, subject aggregates,
 transactional event outbox records, idempotency responses, and award recalculation
 jobs. Activation resource updates require `status=CLOSED`, and close ignores
 `Idempotency-Key`, so repeated closes fail after the first transition as in the
-reference. Explicit falsey `endedAt` values are treated as null. Activation
+reference. Participant tokens with `identity.me` can list activations only
+when filtering by their own operator ID; Activity readers and administrators
+retain their broader listing access. Explicit falsey `endedAt` values are treated as null. Activation
 validity defaults come from `programmeRules` only, even
 when validation uses the `rules` alias. Timestamp normalization accepts lowercase `t`, ISO week dates,
 one-character date/time separators, and fractional-second time-zone offsets
@@ -346,7 +348,7 @@ outstanding.
 | Application     | Required parity                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Admin web       | Login and role-aware navigation; account and role management; programme/category/content/policy administration; Geodata catalogue, import, preprocessing, review, entity editing, maps and deletion; Activity/QSO and award administration; observability access. Preserve accessible keyboard workflows, confirmation of destructive actions, conflict handling, bounded paging, resumable upload behavior, and accurate loading/error states. |
-| Participant web | Programme selection, public programme content and rules, approved/candidate entity table and map, candidate proposal, authenticated profile editing and cropped profile-image upload, published award/level display and request, activation creation, QSO entry, and activation close. Keep programme policy, callsign authorization, and eligibility decisions on owning services.                                                             |
+| Participant web | Programme selection, public programme content and rules, approved/candidate entity table and map, candidate proposal, authenticated profile editing and cropped profile-image upload, published award/level display and request, activation creation and own activation history, QSO entry, and activation close. Keep programme policy, callsign authorization, and eligibility decisions on owning services.                                  |
 
 The baseline Admin and Participant applications are carried forward under
 `web/` with separate deployment artifacts. The Admin build is checked in CI;

@@ -657,6 +657,10 @@ paths:
         - in: query
           name: programme
           schema: { type: string }
+        - in: query
+          name: operatorId
+          description: Required for participants, who may list only their own activations.
+          schema: { type: string, format: uuid }
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses: { '200': { description: Activation page } }

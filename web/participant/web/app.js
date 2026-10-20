@@ -629,7 +629,7 @@ async function loadActivations() {
   }
   try {
     const result = await awardApi(
-      `/v1/activations?programme=${encodeURIComponent($('programme-select').value)}&page=1&pageSize=100`,
+      `/v1/activations?programme=${encodeURIComponent($('programme-select').value)}&operatorId=${encodeURIComponent(awardAccount.id)}&page=1&pageSize=100`,
     );
     activations = result.items || [];
     const open = activations.filter(

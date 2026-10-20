@@ -43,7 +43,18 @@ export class ActivityService {
       pageSize?: string;
     },
   ) {
-    this.authorize(authorization, ['activity.read', 'activity.admin']);
+    const claims = this.authorize(authorization, [
+      'activity.read',
+      'activity.admin',
+      'identity.me',
+    ]);
+    const canReadAll = claims.scp.some((scope) =>
+      ['*', 'activity.read', 'activity.admin'].includes(scope),
+    );
+    if (!canReadAll && query.operatorId !== claims.sub)
+      throw new ForbiddenException(
+        'participants may only list their own activations',
+      );
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
     return this.repository.listPage(
