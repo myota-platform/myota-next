@@ -9,6 +9,7 @@ import proj4, { type Converter } from 'proj4';
 import yauzl from 'yauzl';
 import { open as openShapefile } from 'shapefile';
 import {
+  MAX_SHAPEFILE_UPLOAD_BYTES,
   MAX_IMPORT_FEATURE_BYTES,
   MAX_IMPORT_FEATURE_VERTICES,
   MAX_SHAPEFILE_EXPANDED_BYTES,
@@ -16,7 +17,6 @@ import {
 import { canonicalPythonGeneratedJson } from '../../geodata/src/geodata-request-fingerprint.js';
 import { setSourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 
-const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_ARCHIVE_MEMBERS = 100;
 const MAX_RECORD_BYTES = MAX_IMPORT_FEATURE_BYTES;
 const MAX_METADATA_BYTES = 1024 * 1024;
@@ -41,13 +41,7 @@ export async function* streamShapefileFeatures(
     const hash = createHash('sha256');
     let archiveBytes = 0;
     let lastHeartbeatBytes = 0;
-    const archiveLimit = Math.min(
-      positiveEnv(
-        process.env.MYOTA_SHAPEFILE_MAX_UPLOAD_BYTES,
-        256 * 1024 * 1024,
-      ),
-      MAX_ARCHIVE_BYTES,
-    );
+    const archiveLimit = MAX_SHAPEFILE_UPLOAD_BYTES;
     await pipeline(
       source,
       async function* (input) {
@@ -501,11 +495,6 @@ function countVertices(value: unknown): number {
     }
   }
   return vertices;
-}
-
-function positiveEnv(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

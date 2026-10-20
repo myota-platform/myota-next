@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { JSONParser } from '@streamparser/json';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
+  MAX_GEOJSON_UPLOAD_BYTES,
   MAX_IMPORT_FEATURE_BYTES,
   MAX_IMPORT_FEATURE_VERTICES,
 } from '@app/platform/import-limits.js';
@@ -10,7 +11,6 @@ import {
   sourceFeatureHashOverride,
 } from './geodata-source-feature-hash.js';
 
-const MAX_SOURCE_BYTES = 512 * 1024 * 1024;
 const MAX_NESTING_DEPTH = 128;
 const PARSER_CHUNK_BYTES = 64 * 1024;
 const MAX_ROOT_KEY_BYTES = 1024;
@@ -76,10 +76,7 @@ export async function readGeoJsonDocumentMetadata(
   let hasRootType = false;
   let sourceBytes = 0;
   let lastHeartbeatBytes = 0;
-  const sourceLimit = Math.min(
-    positiveEnv(process.env.MYOTA_GEOJSON_MAX_UPLOAD_BYTES, 256 * 1024 * 1024),
-    MAX_SOURCE_BYTES,
-  );
+  const sourceLimit = MAX_GEOJSON_UPLOAD_BYTES;
 
   parser.onValue = ({ value, key, stack }) => {
     if (stack.length !== 1 || stack[0]?.mode !== TOKEN_PARSER_OBJECT_MODE)
@@ -154,10 +151,7 @@ export async function* streamGeoJsonFeatures(
   let sourceBytes = 0;
   let lastHeartbeatBytes = 0;
   const digest = createHash('sha256');
-  const sourceLimit = Math.min(
-    positiveEnv(process.env.MYOTA_GEOJSON_MAX_UPLOAD_BYTES, 256 * 1024 * 1024),
-    MAX_SOURCE_BYTES,
-  );
+  const sourceLimit = MAX_GEOJSON_UPLOAD_BYTES;
 
   const iterator = source[Symbol.asyncIterator]();
   let parser: JSONParser | undefined;
@@ -707,11 +701,6 @@ function countFeatureVertices(value: unknown): number {
 
 function isJsonWhitespace(byte: number) {
   return byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0d;
-}
-
-function positiveEnv(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function toGeoJsonFeature(value: unknown) {

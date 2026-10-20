@@ -103,8 +103,8 @@ requirePattern(
 );
 requirePattern(
   'libs/platform/src/import-limits.ts',
-  /MAX_IMPORT_FEATURE_VERTICES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_FEATURE_VERTICES[\s\S]*?MAX_SHAPEFILE_EXPANDED_BYTES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES[\s\S]*?MAX_IMPORT_BATCH_BYTES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_BYTES[\s\S]*?MAX_IMPORT_BATCH_FEATURES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_SIZE/,
-  'Geodata decoder and batch limits must use Python-compatible integer settings',
+  /MAX_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_GEOJSON_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_OSM_PBF_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_SHAPEFILE_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_IMPORT_FEATURE_VERTICES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_FEATURE_VERTICES[\s\S]*?MAX_SHAPEFILE_EXPANDED_BYTES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES[\s\S]*?MAX_IMPORT_BATCH_BYTES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_BYTES[\s\S]*?MAX_IMPORT_BATCH_FEATURES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_SIZE/,
+  'Geodata upload, decoder, and batch limits must use Python-compatible integer settings',
 );
 for (const relativePath of [
   'apps/geodata/src/geodata-xml-import.ts',
@@ -122,11 +122,46 @@ requirePattern(
   /MAX_SHAPEFILE_EXPANDED_BYTES/,
   'Shapefile streaming must honor its configured expanded-size limit',
 );
+for (const [relativePath, limitName] of [
+  [
+    'apps/geodata-worker/src/geodata-geojson-stream.ts',
+    'MAX_GEOJSON_UPLOAD_BYTES',
+  ],
+  ['apps/geodata-worker/src/geodata-osm-pbf.ts', 'MAX_OSM_PBF_UPLOAD_BYTES'],
+  [
+    'apps/geodata-worker/src/geodata-shapefile-stream.ts',
+    'MAX_SHAPEFILE_UPLOAD_BYTES',
+  ],
+])
+  requirePattern(
+    relativePath,
+    new RegExp(`sourceLimit = ${limitName}|archiveLimit = ${limitName}`),
+    `${relativePath} must use the same source cap as upload admission`,
+  );
+requirePattern(
+  'apps/geodata/src/geodata-upload.service.ts',
+  /MAX_GEOJSON_UPLOAD_BYTES[\s\S]*?MAX_OSM_PBF_UPLOAD_BYTES[\s\S]*?MAX_SHAPEFILE_UPLOAD_BYTES[\s\S]*?MAX_UPLOAD_BYTES/,
+  'Geodata upload admission must use the shared format-specific source caps',
+);
 requirePattern(
   'apps/geodata-worker/src/geodata-work.repository.ts',
   /stagedBytes \+ featureBytes > MAX_IMPORT_BATCH_BYTES[\s\S]*?staged\.length >= MAX_IMPORT_BATCH_FEATURES[\s\S]*?stagedBytes >= MAX_IMPORT_BATCH_BYTES/,
   'Geodata staging batches must honor configured feature-count and serialized-byte bounds',
 );
+requirePattern(
+  'apps/geodata-worker/src/geodata-osm-pbf.ts',
+  /MAX_OSM_PBF_UPLOAD_BYTES[\s\S]*?Buffer\.byteLength\(trimmed, 'utf8'\) > MAX_IMPORT_FEATURE_BYTES/,
+  'OSM PBF output must stream without a stricter aggregate cap while retaining per-feature and source-upload limits',
+);
+if (
+  /MAX_OUTPUT_BYTES/.test(
+    fs.readFileSync(
+      path.join(repositoryRoot, 'apps/geodata-worker/src/geodata-osm-pbf.ts'),
+      'utf8',
+    ),
+  )
+)
+  errors.push('OSM PBF decoding must not impose an aggregate output-size cap');
 requirePattern(
   'libs/platform/src/bootstrap.ts',
   /containsBigInt\(body\)[\s\S]*?stringifyJsonWithBigInts\(body\)/,

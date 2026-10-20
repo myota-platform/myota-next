@@ -16,6 +16,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import proj4 from 'proj4';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { MAX_UPLOAD_BYTES } from '@app/platform/import-limits.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import {
   firstPythonTruthy,
@@ -224,10 +225,7 @@ export class GeodataImportService {
   private async resolveObjectReference(body: Record<string, unknown>) {
     if (!isRecord(body.source) || typeof body.source.objectKey !== 'string')
       return body;
-    const maximumBytes = integerSetting(
-      process.env.MYOTA_UPLOAD_MAX_BYTES,
-      1024 * 1024 * 1024,
-    );
+    const maximumBytes = MAX_UPLOAD_BYTES;
     const bucket =
       process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports';
     const requestedBucket =

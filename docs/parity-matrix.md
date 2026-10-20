@@ -181,15 +181,16 @@ PyShp's GeoJSON conversion. OSM PBF uploads are decoded by
 `osmium-tool` in the Geodata worker image, preserve OSM tags and type/id source
 references, and emit the configured hiking, protected-area, point, path, and
 multipolygon features using a temporary disk-backed node-location index.
-PBF source bytes stream to disk with checksum verification; source upload size
-uses the shared 1 GiB default or the optional format-specific override. Decoded PBF output is capped at
-128 MiB and streamed one feature at a time into staged batches bounded by
+PBF source bytes stream to disk with checksum verification. API admission and
+worker decoding share the same configured upload cap, defaulting to 1 GiB or
+the optional format-specific override. PBF output is streamed one feature at a
+time, bounded by the per-feature and total-feature limits, into staged batches bounded by
 `MYOTA_IMPORT_BATCH_SIZE` and `MYOTA_IMPORT_BATCH_BYTES` (100 features and
 32 MiB by default),
 with the configured per-feature byte limit (16 MiB by default), 250,000 vertex
 limit, and configured feature cap. GeoJSON multipart uploads stream their
 source and yield one parsed
-feature at a time, with the shared 1 GiB upload default or the optional
+feature at a time, with the same shared API/worker 1 GiB upload cap or optional
 format-specific override, 16 MiB
 per-feature size by default, 250,000 vertices, and the configured feature
 count. `GEODATA_MAX_IMPORT_FEATURES` uses Python-compatible integer parsing in
@@ -222,8 +223,8 @@ parity still requires fixtures for binary formats and uncommon geometries or
 CRS definitions. The direct JSON import path materializes
 the normalized collection, while multipart GeoJSON streams source features.
 Shapefile multipart uploads stream to
-temporary disk and decode records one at a time, with the shared 1 GiB upload
-default or the optional format-specific override, a 1 GiB expanded-size cap, 16 MiB
+temporary disk and decode records one at a time, with the same shared API/worker
+1 GiB upload cap or optional format-specific override, a 1 GiB expanded-size cap, 16 MiB
 per-feature size by default, 250,000 vertices, and the configured feature
 count. Less
 common geometry types and uncommon CRS definitions still need compatibility

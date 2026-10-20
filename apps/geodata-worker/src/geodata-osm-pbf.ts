@@ -9,14 +9,13 @@ import { StringDecoder } from 'node:string_decoder';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import {
+  MAX_OSM_PBF_UPLOAD_BYTES,
   MAX_IMPORT_FEATURE_BYTES,
   MAX_IMPORT_FEATURE_VERTICES,
 } from '@app/platform/import-limits.js';
 import { canonicalPythonGeneratedJson } from '../../geodata/src/geodata-request-fingerprint.js';
 import { setSourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 
-const MAX_SOURCE_BYTES = 512 * 1024 * 1024;
-const MAX_OUTPUT_BYTES = 128 * 1024 * 1024;
 const REQUIRED_TAGS = [
   'leisure=park',
   'leisure=nature_reserve',
@@ -67,13 +66,7 @@ export async function* decodeOsmPbfStream(
   try {
     const digest = createHash('sha256');
     let sourceBytes = 0;
-    const sourceLimit = Math.min(
-      positiveEnv(
-        process.env.MYOTA_OSM_PBF_MAX_UPLOAD_BYTES,
-        256 * 1024 * 1024,
-      ),
-      MAX_SOURCE_BYTES,
-    );
+    const sourceLimit = MAX_OSM_PBF_UPLOAD_BYTES;
     const sourceGuard = new Transform({
       transform(chunk: Buffer, _encoding, callback) {
         sourceBytes += chunk.length;
@@ -203,11 +196,6 @@ async function* parseOsmiumFeatures(
     );
 }
 
-function positiveEnv(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 async function* runOsmium(
   sourcePath: string,
   configPath: string,
@@ -227,9 +215,7 @@ async function* runOsmium(
     { stdio: ['ignore', 'pipe', 'pipe'] },
   );
   const stderr: Buffer[] = [];
-  let outputBytes = 0;
   let stderrBytes = 0;
-  let overflow = false;
   let heartbeatError: unknown;
   let spawnError: Error | undefined;
   let heartbeatInFlight = false;
@@ -272,21 +258,34 @@ async function* runOsmium(
   let streamError: unknown;
   try {
     for await (const chunk of child.stdout) {
-      outputBytes += chunk.length;
-      if (outputBytes > MAX_OUTPUT_BYTES) {
-        overflow = true;
-        child.kill('SIGKILL');
-        continue;
-      }
       pending += decoder.write(chunk);
       const records = pending
         .replaceAll(String.fromCharCode(0x1e), '\n')
         .split(/[\r\n]+/);
       pending = records.pop() ?? '';
-      for (const record of records) if (record.trim()) yield record.trim();
+      for (const record of records) {
+        const trimmed = record.trim();
+        if (!trimmed) continue;
+        if (Buffer.byteLength(trimmed, 'utf8') > MAX_IMPORT_FEATURE_BYTES)
+          throw new Error(
+            `an OSM feature exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
+          );
+        yield trimmed;
+      }
+      if (Buffer.byteLength(pending, 'utf8') > MAX_IMPORT_FEATURE_BYTES + 2)
+        throw new Error(
+          `an OSM feature exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
+        );
     }
     pending += decoder.end();
-    if (pending.trim()) yield pending.trim();
+    const trimmed = pending.trim();
+    if (trimmed) {
+      if (Buffer.byteLength(trimmed, 'utf8') > MAX_IMPORT_FEATURE_BYTES)
+        throw new Error(
+          `an OSM feature exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
+        );
+      yield trimmed;
+    }
   } catch (error) {
     streamError = error;
     child.kill('SIGTERM');
@@ -301,7 +300,6 @@ async function* runOsmium(
   if (spawnError)
     throw new Error(`OSM PBF decoder could not start: ${spawnError.message}`);
   if (heartbeatError) throw heartbeatError;
-  if (overflow) throw new Error('OSM PBF decoded output exceeds 128 MiB');
   if (streamError) throw streamError;
   if (exitCode !== 0) {
     const details = Buffer.concat(stderr).toString('utf8').trim();

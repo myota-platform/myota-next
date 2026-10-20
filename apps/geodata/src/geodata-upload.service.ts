@@ -21,23 +21,16 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import {
+  MAX_GEOJSON_UPLOAD_BYTES,
+  MAX_OSM_PBF_UPLOAD_BYTES,
+  MAX_SHAPEFILE_UPLOAD_BYTES,
+  MAX_UPLOAD_BYTES,
+} from '@app/platform/import-limits.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import { normalizeEntityTypeCodes } from './geodata-entity-types.js';
 
-const maxUploadBytes = integerEnv('MYOTA_UPLOAD_MAX_BYTES', 1024 ** 3);
-const maxGeoJsonUploadBytes = integerEnv(
-  'MYOTA_GEOJSON_MAX_UPLOAD_BYTES',
-  maxUploadBytes,
-);
-const maxOsmPbfUploadBytes = integerEnv(
-  'MYOTA_OSM_PBF_MAX_UPLOAD_BYTES',
-  maxUploadBytes,
-);
-const maxShapefileUploadBytes = integerEnv(
-  'MYOTA_SHAPEFILE_MAX_UPLOAD_BYTES',
-  maxUploadBytes,
-);
 const maxPartBytes = Math.max(
   5 * 1024 * 1024,
   integerEnv('MYOTA_UPLOAD_PART_MAX_BYTES', 16 * 1024 * 1024),
@@ -708,10 +701,10 @@ function pythonInteger(value: unknown): bigint | null {
 
 function sourceUploadLimit(format: string) {
   return format === 'OSM_PBF'
-    ? maxOsmPbfUploadBytes
+    ? MAX_OSM_PBF_UPLOAD_BYTES
     : format === 'GEOJSON'
-      ? maxGeoJsonUploadBytes
+      ? MAX_GEOJSON_UPLOAD_BYTES
       : format === 'SHAPEFILE' || format === 'SHP' || format === 'PARKSERVE_US'
-        ? maxShapefileUploadBytes
-        : maxUploadBytes;
+        ? MAX_SHAPEFILE_UPLOAD_BYTES
+        : MAX_UPLOAD_BYTES;
 }

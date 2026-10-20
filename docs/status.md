@@ -449,6 +449,9 @@
   Owner-scoped resumable S3 multipart uploads now support idempotent session
   creation, bounded binary parts, progress reads, completion, checksum and
   malware scanning, abort, and transactional import-run/outbox creation.
+  API admission and worker decoding now share the same 1 GiB default and
+  format-specific upload caps, so accepted upload sizes are processable by the
+  corresponding worker.
   Upload adapter values are matched exactly, format values are uppercased
   without trimming, filenames preserve submitted whitespace, and idempotency
   keys remain unmodified. Upload size defaults to 1 GiB through
@@ -475,8 +478,9 @@
   hiking-path and protected-area tag catalogue, and assembles closed-way and
   multipolygon areas using a temporary disk-backed node-location index. PBF
   source bytes stream to disk with checksum verification; upload size follows
-  `MYOTA_OSM_PBF_MAX_UPLOAD_BYTES` or the shared upload limit. Decoded output is capped at 128 MiB, with
-  features stream one at a time into staged batches bounded by
+  `MYOTA_OSM_PBF_MAX_UPLOAD_BYTES` or the shared upload limit. Output streams
+  one feature at a time under the per-feature and total-feature limits, into
+  staged batches bounded by
   `MYOTA_IMPORT_BATCH_SIZE` and `MYOTA_IMPORT_BATCH_BYTES` (100 features and
   32 MiB by default), with 16 MiB and the configured vertex ceiling per
   feature, plus the configured feature cap.
