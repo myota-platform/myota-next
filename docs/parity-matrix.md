@@ -383,6 +383,13 @@ map renders point, line, polygon, and multipart entity geometries.
   the registered durable ACK wait. Optional `GEODATA_WORKER_ACK_WAIT_SECONDS`,
   `GEODATA_WORKER_MAX_ACK_PENDING`, and `GEODATA_WORKER_MAX_DELIVERIES` settings
   are shared by JetStream provisioning and worker policy validation.
+  The reference Python API also exposes separate `MYOTA_UPLOAD_WORKERS`,
+  `MYOTA_IMPORT_WORKERS`, `MYOTA_LOCATION_WORKERS`, and
+  `MYOTA_DELETION_WORKERS` thread-pool limits. They do not map one-to-one to
+  Nest's four durable consumers, and the Nest runtime does not accept those
+  legacy settings. Before operational parity is qualified, compare per-work
+  throughput and resource limits under representative loads, then tune the
+  registered durable policies and worker replica counts together.
   Stale queued and expired work is re-enqueued through the owner outbox.
   Scheduled import and upload-session retention is implemented; outage/recovery
   evidence remains open.
