@@ -110,7 +110,7 @@ export function parseXmlImport(
       }
     } else if (name === 'trkseg') {
       trackPoints = [];
-    } else if (name === 'trkpt' && trackPoints) {
+    } else if (name === 'trkpt' && trackPoints && stack.at(-2) === 'trkseg') {
       const attributes = tag.attributes as Record<string, string>;
       const longitude = Number(attributes.lon);
       const latitude = Number(attributes.lat);
