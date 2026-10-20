@@ -14,12 +14,20 @@ const TOKEN_PARSER_OBJECT_MODE = 0;
 const TOKEN_PARSER_ARRAY_MODE = 1;
 const sourceJsonByFeature = new WeakMap<
   object,
-  { rawJson: string; inheritedCrsJson?: string }
+  {
+    rawJson: string;
+    inheritedCrsJson?: string;
+    rootGeometryDocument?: boolean;
+  }
 >();
 
-export function sourceJsonForGeoJsonFeature(
-  feature: unknown,
-): { rawJson: string; inheritedCrsJson?: string } | undefined {
+export function sourceJsonForGeoJsonFeature(feature: unknown):
+  | {
+      rawJson: string;
+      inheritedCrsJson?: string;
+      rootGeometryDocument?: boolean;
+    }
+  | undefined {
   return isObject(feature) ? sourceJsonByFeature.get(feature) : undefined;
 }
 
@@ -219,6 +227,9 @@ export async function* streamGeoJsonFeatures(
                   rawJson: sourceJson,
                   ...(inheritedCrsJson !== undefined
                     ? { inheritedCrsJson }
+                    : {}),
+                  ...(isSingleObject && documentMetadata.rootType !== 'Feature'
+                    ? { rootGeometryDocument: true }
                     : {}),
                 });
             }
@@ -453,7 +464,7 @@ class GeoJsonResourceGuard {
       parent?.features === true ||
       (this.frames.length === 0 &&
         kind === 'object' &&
-        this.documentType === 'Feature');
+        this.documentType !== 'FeatureCollection');
     if (isRoot) this.sawRootObject = true;
     if (isRootArray) this.sawRootArray = true;
     if (isFeaturesArray) this.sawFeaturesArray = true;

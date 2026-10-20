@@ -14,6 +14,7 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { pythonFloatString } from '@app/platform/python-number.js';
 import {
+  canonicalPythonGeoJsonFeature,
   canonicalPythonJson,
   canonicalPythonJsonWithProperty,
 } from '../../geodata/src/geodata-request-fingerprint.js';
@@ -1388,11 +1389,19 @@ function resolveLegacyManualSourceRef(
 
 function hashCanonicalJson(
   value: unknown,
-  sourceJson?: { rawJson: string; inheritedCrsJson?: string },
+  sourceJson?: {
+    rawJson: string;
+    inheritedCrsJson?: string;
+    rootGeometryDocument?: boolean;
+  },
 ): string {
   if (sourceJson !== undefined) {
-    const canonical =
-      sourceJson.inheritedCrsJson === undefined
+    const canonical = sourceJson.rootGeometryDocument
+      ? canonicalPythonGeoJsonFeature(
+          sourceJson.rawJson,
+          sourceJson.inheritedCrsJson,
+        )
+      : sourceJson.inheritedCrsJson === undefined
         ? canonicalPythonJson(sourceJson.rawJson)
         : canonicalPythonJsonWithProperty(
             sourceJson.rawJson,

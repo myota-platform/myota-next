@@ -408,9 +408,9 @@
   formatting and Unicode code-point key ordering. Streamed GeoJSON features
   and direct GEOJSON/WFS JSON imports retain raw numeric tokens so `1` and
   `1.0` hash as distinct Python integer and float values, including inherited
-  root CRS values up to 16 MiB. GeoJSON geometry documents converted into
-  Features, oversized root CRS values, normalized ArcGIS imports, and generated
-  Shapefile/PBF features can still lose that distinction.
+  root CRS values up to 16 MiB and streamed root geometry documents converted
+  into Features. Oversized root CRS values, normalized ArcGIS imports, and
+  generated Shapefile/PBF features can still lose that distinction.
   Candidate creation, queue creation, status, hashes, and outbox events
   finalize in one transaction. The final event is assembled in PostgreSQL to avoid
   retaining every feature summary in the worker heap.

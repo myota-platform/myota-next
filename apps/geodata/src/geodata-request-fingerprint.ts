@@ -34,6 +34,43 @@ export function canonicalPythonJsonWithProperty(
   return canonicalJsonValue(value);
 }
 
+export function canonicalPythonGeoJsonFeature(
+  rawDocument: string,
+  inheritedCrsJson?: string,
+): string {
+  const document = new JsonParser(rawDocument).parse();
+  if (!isRecord(document)) return canonicalJsonValue(document);
+
+  let feature: Record<string, unknown>;
+  if (isRecord(document.geometry)) {
+    feature = {
+      type: 'Feature',
+      geometry: document.geometry,
+      properties: isPythonTruthyJson(document.properties)
+        ? document.properties
+        : {},
+    };
+    if (document.id !== null && document.id !== undefined)
+      feature.id = document.id;
+  } else if (
+    [
+      'Point',
+      'LineString',
+      'MultiLineString',
+      'Polygon',
+      'MultiPolygon',
+    ].includes(String(document.type))
+  ) {
+    feature = { type: 'Feature', geometry: document, properties: {} };
+  } else {
+    feature = document;
+  }
+
+  if (inheritedCrsJson !== undefined && !Object.hasOwn(feature, 'crs'))
+    feature.crs = new JsonParser(inheritedCrsJson).parse();
+  return canonicalJsonValue(feature);
+}
+
 /** Preserve source number tokens for direct GeoJSON and WFS import payloads. */
 export function rawGeoJsonImportDocument(
   rawRequest: string,

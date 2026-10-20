@@ -166,10 +166,11 @@ compatible outbox event are finalized atomically, with event arrays assembled
 in the database. Record hashes use Python float formatting and Unicode
 code-point key ordering. Streamed GeoJSON and direct GEOJSON/WFS JSON imports
 retain raw numeric tokens in features and injected root CRS values up to 16 MiB.
-GeoJSON geometry documents converted into Features, oversized root CRS values,
-normalized ArcGIS imports, and generated Shapefile/PBF features can still lose
-integer-versus-float distinctions. The direct JSON import path materializes
-the normalized collection, while multipart GeoJSON streams source features.
+Streamed root geometry documents converted into Features retain those tokens as
+well. Oversized root CRS values, normalized ArcGIS imports, and generated
+Shapefile/PBF features can still lose integer-versus-float distinctions. The
+direct JSON import path materializes the normalized collection, while multipart
+GeoJSON streams source features.
 Shapefile multipart uploads stream to
 temporary disk and decode records one at a time, with a 256 MiB default upload
 cap (512 MiB maximum), 1 GiB expanded-size cap, 16 MiB
