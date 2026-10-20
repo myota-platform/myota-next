@@ -19,6 +19,7 @@ import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   compareTimestamps,
+  adifAwardRecalculationKey,
   calculateAdifRejectedRecords,
   normalizeTimestamp,
   parseAdif,
@@ -580,6 +581,10 @@ export class ActivityWorkRepository {
       }
     }
     if (accepted) {
+      const awardRecalculationKey = adifAwardRecalculationKey(
+        String(record.activation_id),
+        String(normalized[0]?.qso.deduplicationKey),
+      );
       await client.query(
         `UPDATE activity_activation SET qso_count=qso_count+$2,
          unique_callsign_count=(SELECT count(DISTINCT worked_callsign) FROM activity_qso WHERE activation_id=$1 AND status<>'VOID'),
@@ -597,14 +602,14 @@ export class ActivityWorkRepository {
             programmeSlug: record.programme_slug,
             subjectIds: [...awardSubjects],
           }),
-          `adif:${importId}:award-recalculate`,
+          awardRecalculationKey,
         ],
       );
       await client.query(
         `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at,correlation_id)
          SELECT id,'activity.award-recalculate.v1','activity-service','activity_job',id,jsonb_build_object('jobId',id),now(),now(),$2
          FROM activity_job WHERE idempotency_key=$1 ON CONFLICT DO NOTHING`,
-        [`adif:${importId}:award-recalculate`, randomUUID()],
+        [awardRecalculationKey, randomUUID()],
       );
     }
     const rejected = calculateAdifRejectedRecords(

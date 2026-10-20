@@ -269,7 +269,9 @@ normalized records fail the insert and retry the job, while an import with no
 normalized records can complete with its rejected-row errors. The persisted
 `recordsRejected` value uses the Python worker's formula
 `recordsSeen - recordsAccepted + normalizationErrorCount`, including its
-additional count for normalization errors. Automated
+additional count for normalization errors. ADIF-triggered award recalculation
+uses the Python batch key `batch:<activationId>:<firstQsoDeduplicationKey>`.
+Automated
 compatibility and outage/recovery qualification remain outstanding.
 Failed or queued Activity jobs can be redriven by administrators with
 an audited reason; long-running Activity jobs now extend their 120-second leases

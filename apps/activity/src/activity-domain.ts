@@ -607,6 +607,13 @@ export function calculateAdifRejectedRecords(
   return recordsSeen - recordsAccepted + normalizationErrorCount;
 }
 
+export function adifAwardRecalculationKey(
+  activationId: string,
+  firstQsoDeduplicationKey: string,
+): string {
+  return `batch:${activationId}:${firstQsoDeduplicationKey}`;
+}
+
 export function evaluateActivation(
   activation: JsonRecord,
   qsos: JsonRecord[],
