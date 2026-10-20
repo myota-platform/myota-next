@@ -194,7 +194,8 @@
   normalization and required-field checks precede operator authorization, as in
   the reference. Falsey `location` and `rules` alias values normalize to empty
   objects as in Python; rule evaluation also defaults falsey persisted rules to
-  an empty object. It persists
+  an empty object. `authorizedCallsigns` defaults only when omitted and uses
+  Python-compatible iteration. It persists
   normalized activations and QSOs in Activity PostgreSQL with UTC microsecond
   timestamp precision preserved through normalization, validity checks,
   persistence, deduplication, and reads. QSO `source` defaults to `manual` only

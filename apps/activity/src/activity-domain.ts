@@ -301,7 +301,10 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
   const callsign = data.operatorCallsign
     ? normalizeCallsign(data.operatorCallsign)
     : null;
-  const authorized = (data.authorizedCallsigns ?? []).map(normalizeCallsign);
+  const authorizedCallsigns = Object.hasOwn(data, 'authorizedCallsigns')
+    ? pythonIterable(data.authorizedCallsigns)
+    : [];
+  const authorized = authorizedCallsigns.map(normalizeCallsign);
   if (callsign && authorized.length && !authorized.includes(callsign)) {
     throw new BadRequestException(
       'operator callsign is not authorized for this account',
@@ -351,6 +354,13 @@ function pointInBounds(
     pythonFloat(bounds.minLongitude, 'minLongitude') <= longitude &&
     longitude <= pythonFloat(bounds.maxLongitude, 'maxLongitude')
   );
+}
+
+function pythonIterable(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') return Array.from(value);
+  if (value !== null && typeof value === 'object') return Object.keys(value);
+  throw new TypeError('authorizedCallsigns is not iterable');
 }
 
 export function pythonFloat(value: unknown, field: string): number {
