@@ -291,7 +291,7 @@ export class ActivityService {
     );
     if (content.length > maxBytes)
       throw new BadRequestException(
-        'ADIF upload exceeds the configured size limit',
+        `${filename} exceeds the configured upload limit`,
       );
     const eicar = Buffer.from(
       'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*',
