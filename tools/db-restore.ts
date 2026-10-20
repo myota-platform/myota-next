@@ -4,6 +4,10 @@ import { createReadStream } from 'node:fs';
 import { lstat, readFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import {
+  assertDistinctDatabaseTargets,
+  type OwnerDatabaseConfig,
+} from './db-owner-config.js';
 
 const execFileAsync = promisify(execFile);
 const owners = {
@@ -13,10 +17,7 @@ const owners = {
 } as const;
 type Owner = keyof typeof owners;
 
-type DatabaseConfig = {
-  database: string;
-  environment: NodeJS.ProcessEnv;
-};
+type DatabaseConfig = OwnerDatabaseConfig;
 
 type BackupEntry = { database: string; file: string; sha256: string };
 type BackupManifest = {
@@ -156,6 +157,7 @@ async function main() {
       'ignore',
     );
   }
+  assertDistinctDatabaseTargets(Object.keys(owners), configs);
 
   process.stderr.write(
     `Restoring all three databases from ${basename(backup)}. Each database is transactional; a later owner failure does not roll back earlier databases.\n`,

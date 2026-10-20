@@ -4,6 +4,10 @@ import { createReadStream } from 'node:fs';
 import { mkdir, open, rename, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import {
+  assertDistinctDatabaseTargets,
+  type OwnerDatabaseConfig,
+} from './db-owner-config.js';
 
 const execFileAsync = promisify(execFile);
 const owners = {
@@ -13,10 +17,7 @@ const owners = {
 } as const;
 type Owner = keyof typeof owners;
 
-type DatabaseConfig = {
-  database: string;
-  environment: NodeJS.ProcessEnv;
-};
+type DatabaseConfig = OwnerDatabaseConfig;
 
 type BackupManifest = {
   manifestVersion: 1;
@@ -101,12 +102,16 @@ async function main() {
   const staging = join(root, `.myota-${stamp}-${process.pid}.partial`);
   const pgDump = process.env.PG_DUMP_PATH ?? 'pg_dump';
   await assertPgDump16(pgDump);
+  const configs = {} as Record<Owner, DatabaseConfig>;
+  for (const owner of Object.keys(owners) as Owner[])
+    configs[owner] = databaseConfig(owner);
+  assertDistinctDatabaseTargets(Object.keys(owners), configs);
   await mkdir(root, { recursive: true, mode: 0o700 });
   await mkdir(staging, { mode: 0o700 });
   const databases = {} as BackupManifest['databases'];
   try {
     for (const owner of Object.keys(owners) as Owner[]) {
-      const config = databaseConfig(owner);
+      const config = configs[owner];
       const file = `${owner}.dump`;
       await run(
         pgDump,

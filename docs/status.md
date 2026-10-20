@@ -51,8 +51,10 @@
   and topology setup. This is a development stack; production release and
   rollout qualification remain open.
 - Three-owner database backup and restore commands write custom-format dumps
-  with a SHA-256 manifest and verify all files before restore. Cross-version
-  data transfer and restore rehearsal remain open.
+  with a SHA-256 manifest, require distinct PostgreSQL targets for Core,
+  Activity, and Geodata, and verify all files before restore. Cross-version
+  data transfer and restore rehearsal remain open. See
+  [database backup and restore](operations/database-backup-restore.md).
 - Current OpenAPI, event schemas, and three database migration baselines copied
   as compatibility references.
 - First Identity slice: disabled public registration, password login, refresh
