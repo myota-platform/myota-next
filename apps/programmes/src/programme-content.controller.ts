@@ -5,7 +5,6 @@ import {
   Headers,
   HttpCode,
   Param,
-  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -77,7 +76,7 @@ export class ProgrammeContentController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
-    @Param('contentId', new ParseUUIDPipe()) contentId: string,
+    @Param('contentId') contentId: string,
   ) {
     return this.content.submit(authorization, slug, contentId, idempotencyKey);
   }
@@ -88,7 +87,7 @@ export class ProgrammeContentController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
-    @Param('contentId', new ParseUUIDPipe()) contentId: string,
+    @Param('contentId') contentId: string,
     @Body() body: ReviewProgrammeContentDto,
   ) {
     return this.content.review(
@@ -106,7 +105,7 @@ export class ProgrammeContentController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
-    @Param('contentId', new ParseUUIDPipe()) contentId: string,
+    @Param('contentId') contentId: string,
     @Body() body: PublishProgrammeContentDto,
   ) {
     return this.content.publish(
@@ -124,7 +123,7 @@ export class ProgrammeContentController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
-    @Param('contentId', new ParseUUIDPipe()) contentId: string,
+    @Param('contentId') contentId: string,
     @Body() body: PatchProgrammeContentDto,
   ) {
     return this.content.patch(

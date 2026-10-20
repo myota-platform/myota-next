@@ -132,8 +132,9 @@
   Programme content supports draft editing,
   review submission and decisions, publication, paginated filtering, and locale
   coverage reporting with Python-compatible half-to-even percentage rounding;
-  content creation reuses a truthy supplied string ID and generates a UUID for
-  an omitted or empty ID, matching the reference handler;
+  content creation reuses a truthy supplied string ID, generates a UUID for an
+  omitted or empty ID, and accepts those IDs on lifecycle routes, matching the
+  reference handler;
   content values and policy schemas follow the reference's
   non-empty JSON checks. Programme content now uses an indexed Core relational
   table with a migration backfill; content transitions, idempotency records,
