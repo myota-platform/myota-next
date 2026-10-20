@@ -944,11 +944,12 @@ export function validateWebsiteUrl(
   }
   try {
     const parsed = new URL(website);
+    const authority =
+      website.match(/^[a-z][a-z\d+.-]*:\/\/([^/?#]*)/i)?.[1] ?? '';
     if (
       !['http:', 'https:'].includes(parsed.protocol.toLowerCase()) ||
       !parsed.hostname ||
-      parsed.username ||
-      parsed.password
+      authority.includes('@')
     ) {
       throw new Error('unsupported URL');
     }
