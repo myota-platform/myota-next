@@ -53,7 +53,8 @@ custom roles under the existing authorized scopes; custom role creation and
 partial updates are backed by Core transactions and security/outbox events.
 Owner profile updates authenticate and check revocation and account availability
 before validating submitted fields, matching the Python handler's response
-precedence.
+precedence. Website URL normalization also removes empty trailing query and
+fragment delimiters, matching Python's `urlunsplit` behavior.
 Role arrays preserve assignment order, including multi-role replacements that
 share a creation timestamp.
 Administrative account updates now preserve profile, password, status,

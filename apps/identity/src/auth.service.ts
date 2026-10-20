@@ -1009,7 +1009,20 @@ export function validateWebsiteUrl(
     ) {
       throw new Error('unsupported URL');
     }
-    return website.replace(/^[^:]+:/, parsed.protocol);
+    let normalized = website.replace(/^[^:]+:/, parsed.protocol);
+    const queryIndex = normalized.indexOf('?');
+    const fragmentIndex = normalized.indexOf('#');
+    if (
+      queryIndex >= 0 &&
+      (fragmentIndex < 0
+        ? queryIndex === normalized.length - 1
+        : queryIndex === fragmentIndex - 1)
+    ) {
+      normalized =
+        normalized.slice(0, queryIndex) + normalized.slice(queryIndex + 1);
+    }
+    if (normalized.endsWith('#')) normalized = normalized.slice(0, -1);
+    return normalized;
   } catch {
     throw new BadRequestException(
       'websiteUrl must be an HTTP or HTTPS URL without credentials',
