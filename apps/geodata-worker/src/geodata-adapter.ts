@@ -239,8 +239,8 @@ function normalizeCoordinates(value: unknown, source: string): unknown {
       value[0],
       value[1],
     ]);
-    // The pinned Python transformer receives only XY ordinates.
-    return [longitude, latitude];
+    // The pinned Python transformer reprojects XY and preserves higher ordinates.
+    return [longitude, latitude, ...value.slice(2)];
   }
   if (Array.isArray(value))
     return value.map((child) => normalizeCoordinates(child, source));

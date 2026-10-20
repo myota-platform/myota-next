@@ -178,10 +178,11 @@ JSON GeoJSON, WFS GeoJSON, and ArcGIS FeatureServer JSON import creation stores
 normalized GeoJSON source documents in S3-compatible storage and queues
 idempotent import runs transactionally. ArcGIS geometries with WGS84 and
 Web Mercator spatial references are normalized to WGS84; other EPSG WKIDs are
-reprojected when the installed `proj4` definitions support them. Reprojected
-coordinates retain XY only, while unprojected WGS84 coordinates retain extra
-ordinates, matching the pinned Python transform path. Web Mercator exponential
-overflow rejects the feature as in Python. Pasted KML and GPX are
+reprojected when the installed `proj4` definitions support them. WGS84 input
+retains extra ordinates, the Web Mercator special case emits XY only, and other
+projected CRS transforms preserve ordinates beyond XY, matching the pinned
+Python path. Web Mercator exponential overflow rejects the feature as in Python.
+Pasted KML and GPX are
 also converted to GeoJSON with XML document types rejected and bounded
 feature/coordinate counts. Multipart uploads accept GeoJSON and bounded
 Shapefile ZIP archives with matching sidecars (`SHAPEFILE`, `SHP`, and the
@@ -230,7 +231,9 @@ coordinates. Shapefile hashes use DBF numeric field types to distinguish integer
 and floating-point attributes and include the source `.prj` text. Binary-format
 integer attributes are staged without precision loss, including values beyond
 JavaScript's safe integer range. Geodata PostgreSQL pools preserve those values
-on reads, and the API returns them as numeric JSON tokens. Hash and feature
+on reads, and the API returns them as numeric JSON tokens. Generic projected
+CRS transforms preserve ordinates beyond XY; the reference's Web Mercator
+special case emits XY only. Hash and feature
 parity still requires fixtures for binary formats and uncommon geometries or
 CRS definitions. The direct JSON import path materializes
 the normalized collection, while multipart GeoJSON streams source features.

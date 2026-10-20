@@ -501,10 +501,14 @@ function reprojectCoordinates(value: unknown, sourceWkid: number): unknown {
     const x = Number(value[0]);
     const y = Number(value[1]);
     if (sourceWkid === 3857) {
-      const longitude = (x / 6378137) * (180 / Math.PI);
+      const longitude = (x / 20037508.34) * 180;
+      const latitudeDegrees = (y / 20037508.34) * 180;
+      const exponential = Math.exp((latitudeDegrees * Math.PI) / 180);
+      if (!Number.isFinite(exponential))
+        throw new BadRequestException('math range error');
       const latitude =
-        (2 * Math.atan(Math.exp(y / 6378137)) - Math.PI / 2) * (180 / Math.PI);
-      return [longitude, latitude, ...value.slice(2)];
+        (180 / Math.PI) * (2 * Math.atan(exponential) - Math.PI / 2);
+      return [longitude, latitude];
     }
     try {
       const [longitude, latitude] = proj4(`EPSG:${sourceWkid}`, 'EPSG:4326', [
