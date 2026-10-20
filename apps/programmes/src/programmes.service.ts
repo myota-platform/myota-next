@@ -28,7 +28,7 @@ export class ProgrammesService {
 
   async list(query: { page?: string; pageSize?: string }) {
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const start = (page - 1) * pageSize;
     const { items, total } = await this.programmes.listPage(pageSize, start);
     return {

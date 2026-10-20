@@ -273,7 +273,7 @@ export class IdentityAccountService {
       throw new ForbiddenException('identity.admin scope is required');
     }
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const client = await this.connect();
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');

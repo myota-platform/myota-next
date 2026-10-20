@@ -59,7 +59,7 @@ export class GeodataRepository {
     }
     const where = filters.length ? filters.join(' AND ') : 'true';
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const client = await this.connect();
     try {
       const counted = await client.query(
@@ -120,7 +120,7 @@ export class GeodataRepository {
 
   async listImports(query: Record<string, unknown>) {
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const client = await this.connect();
     try {
       const counted = await client.query(
@@ -160,7 +160,7 @@ export class GeodataRepository {
 
   async listConflation(query: Record<string, unknown>) {
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const resolution = firstQueryValue(query.resolution) || null;
     const client = await this.connect();
     try {
@@ -204,7 +204,7 @@ export class GeodataRepository {
 
   async listImportCandidates(runId: string, query: Record<string, unknown>) {
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const client = await this.connect();
     try {
       const counted = await client.query(

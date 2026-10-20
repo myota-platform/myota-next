@@ -45,7 +45,7 @@ export class AwardsService {
     const claims = authorization ? verifyAccessToken(authorization) : null;
     if (claims) this.authorize(claims.scp, ['awards.read', 'awards.admin']);
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const offset = (BigInt(page) - 1n) * BigInt(pageSize);
     const result = await this.repository.listAwardDefinitionsPage(
       query.programme,
@@ -399,7 +399,7 @@ export class AwardsService {
   ) {
     this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const offset = (BigInt(page) - 1n) * BigInt(pageSize);
     const result = await this.repository.listAwardRequestsPage(
       query.subjectId,
@@ -482,7 +482,7 @@ export class AwardsService {
   ) {
     this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const offset = (BigInt(page) - 1n) * BigInt(pageSize);
     const result = await this.repository.listAwardIssuancesPage(
       offset,
@@ -565,7 +565,7 @@ export class AwardsService {
   ) {
     this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const offset = (BigInt(page) - 1n) * BigInt(pageSize);
     const result = await this.repository.listAwardAssetsPage(offset, pageSize);
     return {

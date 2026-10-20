@@ -47,7 +47,7 @@ export class ActivityService {
         ? query.operatorId
         : claims.sub;
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     return this.repository.listPage(
       query.programme,
       operatorId,
@@ -359,7 +359,7 @@ export class ActivityService {
 
   async publicHistory(programme?: string, page?: string, pageSize?: string) {
     const pageNumber = parsePageInteger(page, 1);
-    const size = Math.min(100, parsePageInteger(pageSize, 50));
+    const size = parsePageInteger(pageSize, 50, 100);
     const result = await this.repository.listPage(
       programme,
       undefined,
@@ -478,7 +478,7 @@ export class ActivityService {
   ) {
     this.authorize(authorization, ['activity.read', 'activity.admin']);
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     return this.repository.listStatisticsPage(query.programme, page, pageSize);
   }
 
@@ -517,7 +517,7 @@ export class ActivityService {
     if (query.page === undefined && query.pageSize === undefined)
       return { items: await this.repository.listNotifications(recipient) };
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     return this.repository.listNotificationPage(recipient, page, pageSize);
   }
 

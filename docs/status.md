@@ -21,7 +21,9 @@
   locale, and Geodata filters. Award progress also accepts the reference's
   `subjectId` alias for `participantId`. Pagination skips blank repeated values
   before parsing `page` and `pageSize`, and accepts Python's numeric whitespace
-  and Unicode decimal digits for those integer values.
+  and Unicode decimal digits for those integer values. The page-size cap is
+  applied before converting to a JavaScript number, so oversized valid page
+  sizes are clamped to 100 as in the reference.
 - The shared HTTP bootstrap honors `MYOTA_MAX_BODY_BYTES` as a strict integer.
   Identity and Programmes default to 1 MiB, Geodata to 1 GiB as in the Python
   reference, and Activity/Gateway to 35 MiB for encoded upload paths. Individual

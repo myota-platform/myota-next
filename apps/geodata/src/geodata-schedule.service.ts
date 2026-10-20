@@ -39,7 +39,7 @@ export class GeodataScheduleService {
 
   async list(query: Record<string, unknown>) {
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const offset = BigInt(page - 1) * BigInt(pageSize);
     const client = await this.connect();
     try {

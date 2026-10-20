@@ -543,7 +543,7 @@ export class IdentityAuthService {
       throw new ForbiddenException('identity.admin scope is required');
     }
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const search = unicodeCaseFold(query.q ?? '');
     const status = query.status || null;
     const client = await this.connect();

@@ -41,7 +41,7 @@ export class ProgrammePolicyService {
   ) {
     this.authorizeAdmin(authorization, slug);
     const page = parsePageInteger(query.page, 1);
-    const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const start = (page - 1) * pageSize;
     const { items, total } = await this.reads.listPolicyDraftPage(
       slug,
