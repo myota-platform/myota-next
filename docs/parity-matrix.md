@@ -103,8 +103,9 @@ references, and emit the configured hiking, protected-area, point, path, and
 multipolygon features using a temporary disk-backed node-location index.
 PBF source bytes stream to disk with checksum verification; the default upload
 limit is 256 MiB and can be raised to 512 MiB. Decoded PBF output is capped at
-128 MiB, with per-feature 16 MiB and 250,000 vertex limits and the configured
-feature cap. GeoJSON multipart uploads stream their source and yield one parsed
+128 MiB and streamed one feature at a time into four-record staging batches,
+with per-feature 16 MiB and 250,000 vertex limits and the configured feature
+cap. GeoJSON multipart uploads stream their source and yield one parsed
 feature at a time, with a 256 MiB default upload cap (512 MiB maximum), 16 MiB
 per-feature size, 250,000 vertices, and the configured feature count. Prepared
 candidates and validation errors are staged by import attempt in Geodata

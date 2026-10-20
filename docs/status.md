@@ -228,7 +228,8 @@
   source bytes stream to disk with checksum verification; the upload default
   is 256 MiB and can be raised to 512 MiB with
   `MYOTA_OSM_PBF_MAX_UPLOAD_BYTES`. Decoded output is capped at 128 MiB, with
-  16 MiB and 250,000 vertices per feature, plus the configured feature cap.
+  features streamed one at a time into four-record staging batches, 16 MiB and
+  250,000 vertices per feature, plus the configured feature cap.
   GeoJSON and Shapefile upload parsing enforce 16 MiB and 250,000 vertices per
   feature. Prepared candidates and validation errors are attempt-scoped in the
   Geodata database; per-record hashes and source manifests are persisted

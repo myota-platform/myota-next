@@ -453,14 +453,13 @@ export class GeodataWorkRepository {
     );
     let features: Iterable<unknown> | AsyncIterable<unknown>;
     if (format === 'OSM_PBF') {
-      const document = await decodeOsmPbfStream(
+      features = decodeOsmPbfStream(
         object.Body as AsyncIterable<Uint8Array>,
         filename,
         featureLimit,
         run.source_hash,
         () => this.heartbeat(run),
       );
-      features = document.features;
     } else if (format === 'GEOJSON') {
       const documentMetadata = await readGeoJsonDocumentMetadata(
         object.Body as AsyncIterable<Uint8Array>,
