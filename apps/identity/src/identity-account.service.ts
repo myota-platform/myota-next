@@ -177,8 +177,10 @@ export class IdentityAccountService {
         updated_at: Date;
       }>(
         `INSERT INTO public.account
-           (id, display_name, email, identity_email_key, participation_type, status)
-         VALUES ($1, $2, $3, $3, $4, 'PENDING_SETUP')
+           (id, display_name, email, identity_email_key, participation_type,
+            status, created_at, updated_at)
+         VALUES ($1, $2, $3, $3, $4, 'PENDING_SETUP',
+                 clock_timestamp(), clock_timestamp())
          RETURNING created_at, updated_at`,
         [
           accountId,
@@ -190,6 +192,7 @@ export class IdentityAccountService {
 
       const callsigns: Record<string, unknown>[] = [];
       let primaryCallsignId: string | null = null;
+      let accountUpdatedAt = accountResult.rows[0].updated_at;
       let callsignValue: string | undefined;
       if (input.callsign) {
         callsignValue = collapsePythonWhitespace(input.callsign.toUpperCase());
@@ -199,14 +202,18 @@ export class IdentityAccountService {
       }
       if (callsignValue) {
         const callsignId = randomUUID();
-        await client.query(
+        const callsignResult = await client.query<{
+          created_at: Date;
+          updated_at: Date;
+        }>(
           `INSERT INTO public.callsign
              (id, account_id, value, lifecycle_status, source,
               verification_source, created_at, updated_at)
-           VALUES ($1, $2, $3, 'UNVERIFIED', 'self-asserted', NULL, now(), now())`,
+           VALUES ($1, $2, $3, 'UNVERIFIED', 'self-asserted', NULL,
+                   clock_timestamp(), clock_timestamp())
+           RETURNING created_at, updated_at`,
           [callsignId, accountId, callsignValue],
         );
-        const createdAt = new Date();
         const callsign = {
           id: callsignId,
           value: callsignValue,
@@ -217,8 +224,8 @@ export class IdentityAccountService {
           validFrom: null,
           validTo: null,
           evidenceIds: [],
-          createdAt,
-          updatedAt: createdAt,
+          createdAt: callsignResult.rows[0].created_at,
+          updatedAt: callsignResult.rows[0].updated_at,
         };
         callsigns.push(callsign);
         if (input.participationType === 'OPERATOR') {
@@ -235,6 +242,12 @@ export class IdentityAccountService {
           aggregateId: callsignId,
           payload: { accountId, ...callsign },
         });
+        const accountUpdate = await client.query<{ updated_at: Date }>(
+          `UPDATE public.account SET updated_at = clock_timestamp()
+            WHERE id = $1 RETURNING updated_at`,
+          [accountId],
+        );
+        accountUpdatedAt = accountUpdate.rows[0].updated_at;
       }
 
       const account = {
@@ -249,7 +262,7 @@ export class IdentityAccountService {
         callsigns,
         primaryCallsignId,
         createdAt: accountResult.rows[0].created_at,
-        updatedAt: accountResult.rows[0].updated_at,
+        updatedAt: accountUpdatedAt,
       };
       await writeOutboxEvent(client, {
         eventType: 'identity.account.created.v1',

@@ -81,6 +81,9 @@ assigned independently, matching the reference's two clock reads.
 The current-account and login/refresh account projections include account
 creation time, primary callsign ID, and callsigns as separate fields, matching
 the Python account projection.
+Account creation assigns `createdAt` and `updatedAt` independently, and an
+initial callsign advances the account's `updatedAt`, matching the reference's
+separate clock reads.
 Login audit events preserve the reference's `actorId` payload and account
 aggregate for known accounts, while unknown-account events remain associated
 with the `system` aggregate.
