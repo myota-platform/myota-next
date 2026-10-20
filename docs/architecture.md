@@ -33,6 +33,13 @@ facts or commands through APIs and the event/work transport. Keep service-local
 outbox, idempotency, checkpoint, lease, and dead-letter records beside the
 owning domain data.
 
+Geodata JSON writes with an `Idempotency-Key` share the request contract in
+[`geodata-request-idempotency.ts`](../apps/geodata/src/geodata-request-idempotency.ts):
+keys are scoped by authenticated owner and request URL, request fingerprints
+reject changed-body reuse, and successful results are stored with the owning
+Geodata transaction. Resumable upload sessions retain their session-specific
+owner and part-checksum rules.
+
 ## Asynchronous work
 
 Persist work intent and domain state in the owning database before publishing.

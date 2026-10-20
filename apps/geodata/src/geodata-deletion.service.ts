@@ -14,6 +14,12 @@ import {
   verifyAccessToken,
   type AccessTokenClaims,
 } from '@app/platform/access-token.js';
+import {
+  lockRequest,
+  readRequestResponse,
+  replayRequest,
+  requestResponse,
+} from './geodata-request-idempotency.js';
 
 @Injectable()
 export class GeodataDeletionService {
@@ -29,7 +35,8 @@ export class GeodataDeletionService {
   ) {
     const claims = verifyAccessToken(authorization);
     if (key && requestHash) {
-      const replay = await this.replayRequest(
+      const replay = await replayRequest(
+        () => this.connect(),
         'geodata-entity-deletion',
         key,
         requestHash,
@@ -85,32 +92,16 @@ export class GeodataDeletionService {
     try {
       await transaction.query('BEGIN');
       if (key) {
-        await transaction.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-          [key],
+        await lockRequest(transaction, key);
+        const existing = await readRequestResponse(
+          transaction,
+          'geodata-entity-deletion',
+          key,
+          requestHash,
         );
-        const existing = await transaction.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-          ['geodata-entity-deletion', key],
-        );
-        if (existing.rows[0]) {
-          const existingResponse = existing.rows[0].response as Record<
-            string,
-            unknown
-          >;
-          if (
-            requestHash &&
-            (!isRecord(existingResponse) ||
-              existingResponse.requestHash !== requestHash ||
-              !Object.hasOwn(existingResponse, 'result'))
-          )
-            throw new ConflictException(
-              'Idempotency-Key was already used for another request',
-            );
+        if (existing.found) {
           await transaction.query('COMMIT');
-          return requestHash && isRecord(existingResponse)
-            ? existingResponse.result
-            : existingResponse;
+          return existing.response;
         }
       }
       await transaction.query(
@@ -133,9 +124,7 @@ export class GeodataDeletionService {
           [
             'geodata-entity-deletion',
             key,
-            JSON.stringify(
-              requestHash ? { requestHash, result: response } : response,
-            ),
+            JSON.stringify(requestResponse(response, requestHash)),
           ],
         );
       await transaction.query('COMMIT');
@@ -181,7 +170,8 @@ export class GeodataDeletionService {
   ) {
     const claims = verifyAccessToken(authorization);
     if (key && requestHash) {
-      const replay = await this.replayRequest(
+      const replay = await replayRequest(
+        () => this.connect(),
         'geodata-entity-deletion-confirm',
         key,
         requestHash,
@@ -201,27 +191,16 @@ export class GeodataDeletionService {
     try {
       await client.query('BEGIN');
       if (key) {
-        await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-          [key],
+        await lockRequest(client, key);
+        const prior = await readRequestResponse(
+          client,
+          'geodata-entity-deletion-confirm',
+          key,
+          requestHash,
         );
-        const prior = await client.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-          ['geodata-entity-deletion-confirm', key],
-        );
-        if (prior.rows[0]) {
-          const saved = prior.rows[0].response;
-          if (
-            requestHash &&
-            (!isRecord(saved) ||
-              saved.requestHash !== requestHash ||
-              !Object.hasOwn(saved, 'result'))
-          )
-            throw new ConflictException(
-              'Idempotency-Key was already used for another request',
-            );
+        if (prior.found) {
           await client.query('COMMIT');
-          return requestHash && isRecord(saved) ? saved.result : saved;
+          return prior.response;
         }
       }
       const selected = await client.query(
@@ -246,9 +225,7 @@ export class GeodataDeletionService {
             [
               'geodata-entity-deletion-confirm',
               key,
-              JSON.stringify(
-                requestHash ? { requestHash, result: response } : response,
-              ),
+              JSON.stringify(requestResponse(response, requestHash)),
             ],
           );
         await client.query('COMMIT');
@@ -295,52 +272,11 @@ export class GeodataDeletionService {
           [
             'geodata-entity-deletion-confirm',
             key,
-            JSON.stringify(
-              requestHash ? { requestHash, result: response } : response,
-            ),
+            JSON.stringify(requestResponse(response, requestHash)),
           ],
         );
       await client.query('COMMIT');
       return response;
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  private async replayRequest(
-    service: string,
-    key: string,
-    requestHash: string,
-  ) {
-    const client = await this.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-        [key],
-      );
-      const result = await client.query(
-        'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-        [service, key],
-      );
-      if (!result.rows[0]) {
-        await client.query('COMMIT');
-        return { found: false as const, response: undefined };
-      }
-      const saved = result.rows[0].response;
-      if (
-        !isRecord(saved) ||
-        saved.requestHash !== requestHash ||
-        !Object.hasOwn(saved, 'result')
-      )
-        throw new ConflictException(
-          'Idempotency-Key was already used for another request',
-        );
-      await client.query('COMMIT');
-      return { found: true as const, response: saved.result };
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
@@ -447,8 +383,4 @@ function publicJob(job: Record<string, unknown>) {
     ...result
   } = job;
   return result;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

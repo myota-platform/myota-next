@@ -352,7 +352,7 @@ export class GeodataController {
     );
     return {
       ...(await this.repository.getImport(runId)),
-      ...finalization,
+      ...(finalization as Record<string, unknown>),
       finalized: true,
     };
   }

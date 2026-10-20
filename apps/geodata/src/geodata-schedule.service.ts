@@ -15,6 +15,12 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { GeodataImportService } from './geodata-import.service.js';
+import {
+  lockRequest,
+  readRequestResponse,
+  replayRequest,
+  requestResponse,
+} from './geodata-request-idempotency.js';
 
 type RefreshSchedule = {
   id: string;
@@ -75,64 +81,29 @@ export class GeodataScheduleService {
     requestHash?: string,
   ) {
     if (key && requestHash) {
-      const replay = await this.connect();
-      try {
-        await replay.query('BEGIN');
-        await replay.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-          [key],
-        );
-        const previous = await replay.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-          ['geodata-schedule-create', key],
-        );
-        if (previous.rows[0]) {
-          const saved = previous.rows[0].response;
-          if (
-            !isRecord(saved) ||
-            saved.requestHash !== requestHash ||
-            !Object.hasOwn(saved, 'result')
-          )
-            throw new ConflictException(
-              'Idempotency-Key was already used for another request',
-            );
-          await replay.query('COMMIT');
-          return saved.result;
-        }
-        await replay.query('COMMIT');
-      } catch (error) {
-        await replay.query('ROLLBACK').catch(() => undefined);
-        throw error;
-      } finally {
-        replay.release();
-      }
+      const replay = await replayRequest(
+        () => this.connect(),
+        'geodata-schedule-create',
+        key,
+        requestHash,
+      );
+      if (replay.found) return replay.response;
     }
     const schedule = prepareSchedule(body);
     const client = await this.connect();
     try {
       await client.query('BEGIN');
       if (key) {
-        await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-          [key],
+        await lockRequest(client, key);
+        const prior = await readRequestResponse(
+          client,
+          'geodata-schedule-create',
+          key,
+          requestHash,
         );
-        const prior = await client.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-          ['geodata-schedule-create', key],
-        );
-        if (prior.rows[0]) {
-          const saved = prior.rows[0].response;
-          if (
-            requestHash &&
-            (!isRecord(saved) ||
-              saved.requestHash !== requestHash ||
-              !Object.hasOwn(saved, 'result'))
-          )
-            throw new ConflictException(
-              'Idempotency-Key was already used for another request',
-            );
+        if (prior.found) {
           await client.query('COMMIT');
-          return requestHash && isRecord(saved) ? saved.result : saved;
+          return prior.response;
         }
       }
       await client.query(
@@ -155,9 +126,7 @@ export class GeodataScheduleService {
           [
             'geodata-schedule-create',
             key,
-            JSON.stringify(
-              requestHash ? { requestHash, result: schedule } : schedule,
-            ),
+            JSON.stringify(requestResponse(schedule, requestHash)),
           ],
         );
       await client.query('COMMIT');
@@ -178,37 +147,13 @@ export class GeodataScheduleService {
     requestHash?: string,
   ) {
     if (key && requestHash) {
-      const replay = await this.connect();
-      try {
-        await replay.query('BEGIN');
-        await replay.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-          [key],
-        );
-        const previous = await replay.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-          ['geodata-schedule-run', key],
-        );
-        if (previous.rows[0]) {
-          const saved = previous.rows[0].response;
-          if (
-            !isRecord(saved) ||
-            saved.requestHash !== requestHash ||
-            !Object.hasOwn(saved, 'result')
-          )
-            throw new ConflictException(
-              'Idempotency-Key was already used for another request',
-            );
-          await replay.query('COMMIT');
-          return saved.result;
-        }
-        await replay.query('COMMIT');
-      } catch (error) {
-        await replay.query('ROLLBACK').catch(() => undefined);
-        throw error;
-      } finally {
-        replay.release();
-      }
+      const replay = await replayRequest(
+        () => this.connect(),
+        'geodata-schedule-run',
+        key,
+        requestHash,
+      );
+      if (replay.found) return replay.response;
     }
     if (!Array.isArray(body.features))
       throw new BadRequestException('features must be an array');
@@ -231,7 +176,7 @@ export class GeodataScheduleService {
     const importKey = key
       ? `schedule:${scheduleId}:${key}`
       : `schedule:${scheduleId}:${randomUUID()}`;
-    const run = await this.imports.create(
+    const run = (await this.imports.create(
       importKey,
       {
         ...body,
@@ -246,34 +191,23 @@ export class GeodataScheduleService {
         autoPromote: { requestedBy, note: 'Scheduled source refresh' },
         requestHash,
       },
-    );
+    )) as Record<string, unknown>;
     const now = new Date();
     const runAt = now.toISOString();
     const update = await this.connect();
     try {
       await update.query('BEGIN');
       if (key) {
-        await update.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-          [key],
+        await lockRequest(update, key);
+        const previous = await readRequestResponse(
+          update,
+          'geodata-schedule-run',
+          key,
+          requestHash,
         );
-        const previous = await update.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-          ['geodata-schedule-run', key],
-        );
-        if (previous.rows[0]) {
-          const saved = previous.rows[0].response;
-          if (
-            requestHash &&
-            (!isRecord(saved) ||
-              saved.requestHash !== requestHash ||
-              !Object.hasOwn(saved, 'result'))
-          )
-            throw new ConflictException(
-              'Idempotency-Key was already used for another request',
-            );
+        if (previous.found) {
           await update.query('COMMIT');
-          return requestHash && isRecord(saved) ? saved.result : saved;
+          return previous.response;
         }
       }
       await update.query(
@@ -299,9 +233,7 @@ export class GeodataScheduleService {
           [
             'geodata-schedule-run',
             key,
-            JSON.stringify(
-              requestHash ? { requestHash, result: response } : response,
-            ),
+            JSON.stringify(requestResponse(response, requestHash)),
           ],
         );
       await update.query('COMMIT');
@@ -413,8 +345,4 @@ function referenceInteger(value: unknown): number {
   const normalized = value.trim();
   if (!/^[+-]?\d(?:_?\d)*$/.test(normalized)) return Number.NaN;
   return Number(normalized.replaceAll('_', ''));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

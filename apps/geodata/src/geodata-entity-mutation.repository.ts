@@ -22,6 +22,12 @@ import {
   missingLocationFields,
   queueLocationEnrichment,
 } from './geodata-location-enrichment.js';
+import {
+  lockRequest,
+  readRequestResponse,
+  replayRequest,
+  requestResponse,
+} from './geodata-request-idempotency.js';
 
 const MAX_COORDINATES = integerSetting(
   process.env.GEODATA_MAX_COORDINATES,
@@ -73,7 +79,8 @@ export class GeodataEntityMutationRepository {
     requestHash?: string,
   ) {
     if (key && requestHash) {
-      const replay = await this.replayRequest(
+      const replay = await replayRequest(
+        () => this.connect(),
         'geodata-entity-review',
         key,
         requestHash,
@@ -95,12 +102,7 @@ export class GeodataEntityMutationRepository {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
-      if (key) {
-        await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-          [key],
-        );
-      }
+      if (key) await lockRequest(client, key);
       const result = await client.query(
         `SELECT id,revision,lifecycle_status,programme_slug,jurisdiction,
           entity_type_code,public_properties,
@@ -115,7 +117,7 @@ export class GeodataEntityMutationRepository {
       if (!row) throw new NotFoundException('geodata entity not found');
       assertReviewCoverage(claims, row);
       if (key) {
-        const previous = await this.idempotentResponse(
+        const previous = await readRequestResponse(
           client,
           'geodata-entity-review',
           key,
@@ -233,12 +235,13 @@ export class GeodataEntityMutationRepository {
       );
       const response = current.rows[0]?.entity;
       if (key)
-        await this.saveIdempotentResponse(
-          client,
-          'geodata-entity-review',
-          key,
-          response,
-          requestHash,
+        await client.query(
+          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+          [
+            'geodata-entity-review',
+            key,
+            JSON.stringify(requestResponse(response, requestHash)),
+          ],
         );
       await client.query('COMMIT');
       return response;
@@ -259,7 +262,8 @@ export class GeodataEntityMutationRepository {
     requestHash?: string,
   ) {
     if (key && requestHash) {
-      const replay = await this.replayRequest(
+      const replay = await replayRequest(
+        () => this.connect(),
         'geodata-entity-metadata',
         key,
         requestHash,
@@ -337,12 +341,7 @@ export class GeodataEntityMutationRepository {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
-      if (key) {
-        await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-          [key],
-        );
-      }
+      if (key) await lockRequest(client, key);
       const result = await client.query(
         `SELECT id,revision,name,website,description,lifecycle_status,
           programme_slug,jurisdiction,entity_type_code,public_properties,
@@ -359,7 +358,7 @@ export class GeodataEntityMutationRepository {
       if ('location' in body)
         assertGisAdminCoverage(claims, row, 'geodata.location.manage');
       if (key) {
-        const previous = await this.idempotentResponse(
+        const previous = await readRequestResponse(
           client,
           'geodata-entity-metadata',
           key,
@@ -572,12 +571,13 @@ export class GeodataEntityMutationRepository {
       );
       const response = current.rows[0]?.entity;
       if (key)
-        await this.saveIdempotentResponse(
-          client,
-          'geodata-entity-metadata',
-          key,
-          response,
-          requestHash,
+        await client.query(
+          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+          [
+            'geodata-entity-metadata',
+            key,
+            JSON.stringify(requestResponse(response, requestHash)),
+          ],
         );
       await client.query('COMMIT');
       return response;
@@ -598,7 +598,8 @@ export class GeodataEntityMutationRepository {
     requestHash?: string,
   ) {
     if (key && requestHash) {
-      const replay = await this.replayRequest(
+      const replay = await replayRequest(
+        () => this.connect(),
         'geodata-location-enrichment',
         key,
         requestHash,
@@ -611,12 +612,7 @@ export class GeodataEntityMutationRepository {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
-      if (key) {
-        await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-          [key],
-        );
-      }
+      if (key) await lockRequest(client, key);
       const selected = await client.query(
         `SELECT id,revision,geom,programme_slug,jurisdiction,entity_type_code,
           ST_AsGeoJSON(geom)::jsonb AS geometry,
@@ -629,7 +625,7 @@ export class GeodataEntityMutationRepository {
       if (!row) throw new NotFoundException('geodata entity not found');
       assertGisAdminCoverage(claims, row, 'geodata.location.manage');
       if (key) {
-        const previous = await this.idempotentResponse(
+        const previous = await readRequestResponse(
           client,
           'geodata-location-enrichment',
           key,
@@ -684,11 +680,13 @@ export class GeodataEntityMutationRepository {
           queued: true,
         };
         if (key)
-          await this.saveIdempotentResponse(
-            client,
-            'geodata-location-enrichment',
-            key,
-            receipt,
+          await client.query(
+            'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+            [
+              'geodata-location-enrichment',
+              key,
+              JSON.stringify(requestResponse(receipt, requestHash)),
+            ],
           );
         await client.query('COMMIT');
         return receipt;
@@ -735,12 +733,13 @@ export class GeodataEntityMutationRepository {
         queued: true,
       };
       if (key)
-        await this.saveIdempotentResponse(
-          client,
-          'geodata-location-enrichment',
-          key,
-          receipt,
-          requestHash,
+        await client.query(
+          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+          [
+            'geodata-location-enrichment',
+            key,
+            JSON.stringify(requestResponse(receipt, requestHash)),
+          ],
         );
       await client.query('COMMIT');
       return receipt;
@@ -761,7 +760,8 @@ export class GeodataEntityMutationRepository {
     requestHash?: string,
   ) {
     if (key && requestHash) {
-      const replay = await this.replayRequest(
+      const replay = await replayRequest(
+        () => this.connect(),
         'geodata-entity-categories',
         key,
         requestHash,
@@ -788,12 +788,7 @@ export class GeodataEntityMutationRepository {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
-      if (key) {
-        await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-          [key],
-        );
-      }
+      if (key) await lockRequest(client, key);
       const selected = await client.query(
         `SELECT id,revision,lifecycle_status,programme_slug,jurisdiction,
           entity_type_code,public_properties
@@ -804,7 +799,7 @@ export class GeodataEntityMutationRepository {
       if (!row) throw new NotFoundException('geodata entity not found');
       assertReviewCoverage(claims, row);
       if (key) {
-        const previous = await this.idempotentResponse(
+        const previous = await readRequestResponse(
           client,
           'geodata-entity-categories',
           key,
@@ -911,12 +906,13 @@ export class GeodataEntityMutationRepository {
       }
       const response = await this.readEntityWithClient(client, id);
       if (key)
-        await this.saveIdempotentResponse(
-          client,
-          'geodata-entity-categories',
-          key,
-          response,
-          requestHash,
+        await client.query(
+          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+          [
+            'geodata-entity-categories',
+            key,
+            JSON.stringify(requestResponse(response, requestHash)),
+          ],
         );
       await client.query('COMMIT');
       return response;
@@ -937,7 +933,8 @@ export class GeodataEntityMutationRepository {
     requestHash?: string,
   ) {
     if (key && requestHash) {
-      const replay = await this.replayRequest(
+      const replay = await replayRequest(
+        () => this.connect(),
         'geodata-entity-geometry',
         key,
         requestHash,
@@ -992,12 +989,7 @@ export class GeodataEntityMutationRepository {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
-      if (key) {
-        await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-          [key],
-        );
-      }
+      if (key) await lockRequest(client, key);
       const selected = await client.query(
         `SELECT id,revision,programme_slug,jurisdiction,entity_type_code,
           ST_AsGeoJSON(geom)::jsonb AS geometry,public_properties,
@@ -1011,7 +1003,7 @@ export class GeodataEntityMutationRepository {
       if (!row) throw new NotFoundException('geodata entity not found');
       assertReviewCoverage(claims, row);
       if (key) {
-        const previous = await this.idempotentResponse(
+        const previous = await readRequestResponse(
           client,
           'geodata-entity-geometry',
           key,
@@ -1104,12 +1096,13 @@ export class GeodataEntityMutationRepository {
       }
       const response = await this.readEntityWithClient(client, id);
       if (key)
-        await this.saveIdempotentResponse(
-          client,
-          'geodata-entity-geometry',
-          key,
-          response,
-          requestHash,
+        await client.query(
+          'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
+          [
+            'geodata-entity-geometry',
+            key,
+            JSON.stringify(requestResponse(response, requestHash)),
+          ],
         );
       await client.query('COMMIT');
       return response;
@@ -1159,79 +1152,6 @@ export class GeodataEntityMutationRepository {
       [id],
     );
     return result.rows[0]?.entity;
-  }
-
-  private async idempotentResponse(
-    client: PoolClient,
-    service: string,
-    key: string,
-    requestHash?: string,
-  ) {
-    const result = await client.query(
-      'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-      [service, key],
-    );
-    if (!result.rows[0]) return { found: false as const, response: undefined };
-    const saved = result.rows[0].response;
-    if (requestHash) {
-      if (
-        !isRecord(saved) ||
-        saved.requestHash !== requestHash ||
-        !Object.hasOwn(saved, 'result')
-      )
-        throw new ConflictException(
-          'Idempotency-Key was already used for another request',
-        );
-      return { found: true as const, response: saved.result };
-    }
-    return { found: true as const, response: saved };
-  }
-
-  private async replayRequest(
-    service: string,
-    key: string,
-    requestHash: string,
-  ) {
-    const client = await this.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))",
-        [key],
-      );
-      const previous = await this.idempotentResponse(
-        client,
-        service,
-        key,
-        requestHash,
-      );
-      await client.query('COMMIT');
-      return previous;
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  private async saveIdempotentResponse(
-    client: PoolClient,
-    service: string,
-    key: string,
-    response: unknown,
-    requestHash?: string,
-  ) {
-    await client.query(
-      'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
-      [
-        service,
-        key,
-        JSON.stringify(
-          requestHash ? { requestHash, result: response } : response,
-        ),
-      ],
-    );
   }
 
   private async connect(): Promise<PoolClient> {

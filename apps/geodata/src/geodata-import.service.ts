@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Inject,
   Injectable,
   ServiceUnavailableException,
@@ -22,6 +21,11 @@ import {
   normalizeEntityTypeCodes,
 } from './geodata-entity-types.js';
 import { parseXmlImport } from './geodata-xml-import.js';
+import {
+  lockRequest,
+  readRequestResponse,
+  requestResponse,
+} from './geodata-request-idempotency.js';
 
 const adapters = new Set(['PARKSERVE_US', 'OSM', 'GOVERNMENT_GIS', 'MANUAL']);
 
@@ -60,32 +64,21 @@ export class GeodataImportService {
     try {
       await client.query('BEGIN');
       if (key) {
-        await client.query(
-          options.requestHash
-            ? "SELECT pg_advisory_xact_lock(hashtextextended('geodata:request:' || $1,0))"
-            : "SELECT pg_advisory_xact_lock(hashtextextended('geodata-service:' || $1,0))",
-          [key],
+        if (options.requestHash) await lockRequest(client, key);
+        else
+          await client.query(
+            "SELECT pg_advisory_xact_lock(hashtextextended('geodata-service:' || $1,0))",
+            [key],
+          );
+        const previous = await readRequestResponse(
+          client,
+          'geodata-service',
+          key,
+          options.requestHash,
         );
-        const previous = await client.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
-          ['geodata-service', key],
-        );
-        if (previous.rows[0]) {
-          const saved = previous.rows[0].response;
-          if (options.requestHash) {
-            if (
-              !isRecord(saved) ||
-              saved.requestHash !== options.requestHash ||
-              !Object.hasOwn(saved, 'result')
-            )
-              throw new ConflictException(
-                'Idempotency-Key was already used for another request',
-              );
-            await client.query('COMMIT');
-            return saved.result;
-          }
+        if (previous.found) {
           await client.query('COMMIT');
-          return saved;
+          return previous.response;
         }
       }
 
@@ -186,11 +179,7 @@ export class GeodataImportService {
           [
             'geodata-service',
             key,
-            JSON.stringify(
-              options.requestHash
-                ? { requestHash: options.requestHash, result: response }
-                : response,
-            ),
+            JSON.stringify(requestResponse(response, options.requestHash)),
           ],
         );
       await client.query('COMMIT');
