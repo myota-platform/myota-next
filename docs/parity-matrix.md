@@ -97,7 +97,10 @@ behavior for nested conditions. ADIF uploads now pass
 authorization, malware checks, and object storage before durable queueing; the
 Activity worker parses records, records successes and rejects, updates
 aggregates, and reports import status. CSV file uploads now validate bounded
-UTF-8 input and queue normalized rows through the same ingestion job. Remaining
+UTF-8 input and queue normalized rows through the same ingestion job. CSV QSO
+ingestion is an addition to the legacy behavior: the Python Activity service
+exports public results as CSV but has no CSV QSO ingestion route. It is tracked
+as an extension, not as evidence of legacy parity. Remaining
 Activity notification producers cover ADIF completion and award qualification;
 the durable consumer handles cross-service Identity and Geodata decisions.
 ADIF validity-window handling aborts the full import before writing QSOs when
