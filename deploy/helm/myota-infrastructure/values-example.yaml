@@ -1,0 +1,18 @@
+# Non-secret single-node example; size volumes for real data before deployment.
+imagePullPolicy: IfNotPresent
+postgresSecret: myota-postgres-auth
+storageClassName: ''
+resources: {}
+databases:
+  core:
+    name: myota_core
+    image: postgres:16-alpine
+    storage: 10Gi
+  activity:
+    name: myota_activity
+    image: postgres:16-alpine
+    storage: 20Gi
+  geo:
+    name: myota_geo
+    image: postgis/postgis:16-3.4
+    storage: 50Gi

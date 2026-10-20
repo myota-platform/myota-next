@@ -48,6 +48,12 @@ Identity and Programmes; Activity and Geodata have their own URLs. Use runtime
 database credentials for services and migration credentials for the migration
 Job where permissions differ. Keep all credentials in Secrets, not Helm values.
 
+For the optional single-instance PostgreSQL StatefulSets, install
+[`myota-infrastructure`](../myota-infrastructure/README.md) first and wait for
+Core, Activity, and Geodata to become Ready. Configure the database URL Secrets
+to use that release's three service names, then install this chart. NATS and
+S3-compatible storage remain external prerequisites.
+
 Configure repository and tag or digest for each enabled component image and
 `migrations.image`, then install with environment-specific non-secret values:
 

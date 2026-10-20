@@ -47,5 +47,6 @@ The initial NestJS [Helm chart](helm/myota-next/README.md) deploys the APIs,
 background processes, and separate Admin and Participant apps against external
 PostgreSQL, NATS, and S3-compatible services. Its opt-in JetStream Job
 provisions reviewed stream topology but does not install a NATS server. The
-chart does not provision the other stateful infrastructure or replace the
-prior Fleet release process, and is not qualified for production rollout.
+optional [infrastructure chart](helm/myota-infrastructure/README.md) can create
+the three PostgreSQL owners. NATS and S3-compatible storage, Fleet release
+automation, and production qualification remain outstanding.

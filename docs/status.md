@@ -705,7 +705,9 @@
 - An initial NestJS Helm chart now describes API, worker, Admin, and Participant
   Deployments, per-owner Core/Activity/Geodata database URLs, migration
   credentials, readiness probes, internal Services, and configurable API and
-  browser ingress hosts. PostgreSQL, NATS, S3-compatible storage, and Fleet
+  browser ingress hosts. An optional companion chart provisions the three
+  PostgreSQL owners as single-instance StatefulSets with retained PVCs; it does
+  not create a fourth Email database. NATS, S3-compatible storage, and Fleet
   release automation remain external or incomplete. CI-gated GHCR publication
   now builds each Nest application image, both browser apps, and the
   migration/topology tools image. An opt-in, capacity-gated Job provisions the
