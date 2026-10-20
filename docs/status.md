@@ -144,8 +144,10 @@
   events. Geodata deletion now runs through its registered durable and extends
   the owner lease; explicit redrive and outage/recovery evidence remain open.
 - Geodata now accepts bounded JSON GeoJSON, WFS GeoJSON, and ArcGIS
-  FeatureServer JSON imports; ArcGIS features are normalized to WGS84 GeoJSON
-  before storage, and the source format is retained in import metadata. Import
+  FeatureServer JSON imports; ArcGIS WKIDs are normalized to WGS84 GeoJSON
+  before storage using the built-in Web Mercator aliases or an installed
+  `proj4` definition, and the source format is retained in import metadata.
+  Import
   creation stores the normalized source document in S3-compatible object
   storage and creates an idempotent queued import run (configurable
   `MYOTA_MAX_BODY_BYTES` request limit, 1 GiB default, and 5,000 feature
