@@ -14,6 +14,8 @@ import { GeodataDeletionService } from './geodata-deletion.service.js';
 import { GeodataScheduleService } from './geodata-schedule.service.js';
 import { GeodataProposalService } from './geodata-proposal.service.js';
 import { GeodataLoadTestCleanupService } from './geodata-load-test-cleanup.service.js';
+import { GeodataMetricsController } from './geodata-metrics.controller.js';
+import { GeodataQueryMetrics } from './geodata-query-metrics.service.js';
 import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 
 @Module({
@@ -24,7 +26,7 @@ import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
       parseJsonWithExactIntegers,
     ),
   ],
-  controllers: [HealthController, GeodataController],
+  controllers: [HealthController, GeodataController, GeodataMetricsController],
   providers: [
     GeodataRepository,
     GeodataImportService,
@@ -35,6 +37,7 @@ import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
     GeodataScheduleService,
     GeodataProposalService,
     GeodataLoadTestCleanupService,
+    GeodataQueryMetrics,
   ],
 })
 export class GeodataModule {}

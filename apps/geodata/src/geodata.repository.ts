@@ -14,11 +14,13 @@ import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { parsePythonFloatText } from '@app/platform/python-numeric.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { canonicalPythonGeneratedJson } from './geodata-request-fingerprint.js';
+import { GeodataQueryMetrics } from './geodata-query-metrics.service.js';
 
 @Injectable()
 export class GeodataRepository {
   constructor(
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
+    private readonly queryMetrics: GeodataQueryMetrics,
   ) {}
 
   async listEntities(query: Record<string, unknown>) {
@@ -321,16 +323,24 @@ export class GeodataRepository {
     const bounds = [minLon, latitude(y + 1), maxLon, latitude(y)];
     const client = await this.connect();
     try {
-      const result = await client.query(
-        `SELECT id::text,programme_slug,entity_type_code,name,
-          lifecycle_status AS status,ST_AsGeoJSON(geom)::jsonb AS geometry,
-          public_properties,website,description
-         FROM geodata_entity
-         WHERE geom && ST_MakeEnvelope($1,$2,$3,$4,4326)
-           AND ST_Intersects(geom,ST_MakeEnvelope($1,$2,$3,$4,4326))
-         ORDER BY name,id LIMIT 501`,
-        bounds,
-      );
+      const queryStarted = performance.now();
+      let result;
+      try {
+        result = await client.query(
+          `SELECT id::text,programme_slug,entity_type_code,name,
+            lifecycle_status AS status,ST_AsGeoJSON(geom)::jsonb AS geometry,
+            public_properties,website,description
+           FROM geodata_entity
+           WHERE geom && ST_MakeEnvelope($1,$2,$3,$4,4326)
+             AND ST_Intersects(geom,ST_MakeEnvelope($1,$2,$3,$4,4326))
+           ORDER BY name,id LIMIT 501`,
+          bounds,
+        );
+      } finally {
+        this.queryMetrics.observePostgisQuery(
+          (performance.now() - queryStarted) / 1000,
+        );
+      }
       const truncated = result.rows.length > 500;
       const features = result.rows.slice(0, 500).map((row) => {
         const properties = isRecord(row.public_properties)

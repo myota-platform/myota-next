@@ -43,6 +43,9 @@
   `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` to report telemetry; without them,
   the SDK emits no telemetry. `MYOTA_BUILD_VERSION` or `GIT_SHA` labels the
   deployed version when provided.
+- Geodata exposes a Prometheus `/metrics` endpoint with PostGIS tile-query
+  duration and slow-query metrics. The `MYOTA_SLOW_QUERY_THRESHOLD_MS` setting
+  defaults to 250 ms, matching the Python reference.
 - ADIF QSO imports normalize and validate records before inserting valid rows in
   one PostgreSQL batch. If a database value rejects that batch, the worker falls
   back to per-record inserts so valid records still import and errors retain
