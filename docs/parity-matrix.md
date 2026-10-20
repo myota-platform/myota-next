@@ -106,6 +106,9 @@ Programme list pages and shared-category `assignedProgrammes` arrays preserve
 the reference's insertion order through a Core-owned record sequence; existing
 rows are backfilled by creation timestamp and slug. Shared entity-type catalogue
 items use Python code-point ordering by code.
+Programme content lists sort by key and locale, preserving insertion order for
+versions with the same pair; the Core migration backfills that order from
+creation timestamps and assigns sequence values to new content.
 Entity-type `active` inputs and stored values are coerced using Python
 truthiness rather than requiring a JSON boolean, including falsey legacy JSON
 values, before the normalized catalogue record is persisted.

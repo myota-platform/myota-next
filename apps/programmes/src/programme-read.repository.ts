@@ -48,21 +48,23 @@ export class ProgrammeReadRepository {
            SELECT content.payload AS value,
                   content.content_key,
                   content.locale,
-                  content.id
+                  content.content_order
              FROM public.programme_content AS content
             WHERE content.programme_slug = $1
               AND ($2::text IS NULL OR content.locale = $2)
               AND ($3::text IS NULL OR content.status = $3)
          ), page AS (
-           SELECT value, content_key, locale, id FROM filtered
-            ORDER BY content_key COLLATE "C", locale COLLATE "C", id COLLATE "C"
+           SELECT value, content_key, locale, content_order FROM filtered
+            ORDER BY content_key COLLATE "C",
+                     locale COLLATE "C",
+                     content_order
             LIMIT $4 OFFSET $5
          )
          SELECT COALESCE(
                   (SELECT jsonb_agg(page.value ORDER BY
                     page.content_key COLLATE "C",
                     page.locale COLLATE "C",
-                    page.id COLLATE "C") FROM page),
+                    page.content_order) FROM page),
                   '[]'::jsonb
                 ) AS items,
                 (SELECT count(*)::int FROM filtered) AS total`,
