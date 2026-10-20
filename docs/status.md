@@ -442,6 +442,10 @@
   to remove entities with Activity impact. Direct and scheduled imports preserve
   exact adapter values and programme slugs; import formats are uppercased
   without trimming, matching Python input handling.
+  `GEODATA_MAX_IMPORT_FEATURES` uses the shared Python-compatible integer
+  setting parser in both the API and worker, retaining zero and negative
+  configured limits and rejecting malformed values instead of silently using
+  the default.
   Owner-scoped resumable S3 multipart uploads now support idempotent session
   creation, bounded binary parts, progress reads, completion, checksum and
   malware scanning, abort, and transactional import-run/outbox creation.

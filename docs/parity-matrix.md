@@ -190,7 +190,9 @@ source and yield one parsed
 feature at a time, with the shared 1 GiB upload default or the optional
 format-specific override, 16 MiB
 per-feature size by default, 250,000 vertices, and the configured feature
-count. The shared `MYOTA_IMPORT_MAX_FEATURE_BYTES` setting controls decoded
+count. `GEODATA_MAX_IMPORT_FEATURES` uses Python-compatible integer parsing in
+both API and worker, including zero and negative limits; malformed values fail
+instead of silently falling back. The shared `MYOTA_IMPORT_MAX_FEATURE_BYTES` setting controls decoded
 feature size in GeoJSON, KML/GPX, Shapefile, and PBF imports (16 MiB by
 default). Prepared candidates and validation errors are staged by import attempt in Geodata
 PostgreSQL; candidate creation, import status, processing queue, and the

@@ -14,6 +14,7 @@ import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { MAX_IMPORT_FEATURE_BYTES } from '@app/platform/import-limits.js';
+import { integerSetting } from '@app/platform/integer-setting.js';
 import { pythonFloatString } from '@app/platform/python-number.js';
 import {
   canonicalPythonGeoJsonFeature,
@@ -464,8 +465,9 @@ export class GeodataWorkRepository {
       typeof run.source_metadata.filename === 'string'
         ? run.source_metadata.filename
         : '';
-    const featureLimit = boundedFeatureLimit(
+    const featureLimit = integerSetting(
       process.env.GEODATA_MAX_IMPORT_FEATURES,
+      5000,
     );
     let features: Iterable<unknown> | AsyncIterable<unknown>;
     if (format === 'OSM_PBF') {
@@ -1461,11 +1463,4 @@ function hashCanonicalJson(
     return 'null';
   };
   return createHash('sha256').update(canonical(value), 'utf8').digest('hex');
-}
-
-function boundedFeatureLimit(value: string | undefined): number {
-  const parsed = Number.parseInt(value ?? '', 10);
-  return Number.isInteger(parsed) && parsed > 0 && parsed <= 100_000
-    ? parsed
-    : 5000;
 }

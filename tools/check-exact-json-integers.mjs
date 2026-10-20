@@ -92,6 +92,16 @@ requirePattern(
   'Geodata multipart expected sizes must follow Python integer conversion before size bounds',
 );
 requirePattern(
+  'apps/geodata/src/geodata-import.service.ts',
+  /const maxFeatures = integerSetting\([\s\S]*?process\.env\.GEODATA_MAX_IMPORT_FEATURES[\s\S]*?5000/,
+  'Geodata API feature limits must parse configuration with Python-compatible integer settings',
+);
+requirePattern(
+  'apps/geodata-worker/src/geodata-work.repository.ts',
+  /const featureLimit = integerSetting\([\s\S]*?process\.env\.GEODATA_MAX_IMPORT_FEATURES,[\s\S]*?5000/,
+  'Geodata worker feature limits must parse configuration with Python-compatible integer settings',
+);
+requirePattern(
   'libs/platform/src/bootstrap.ts',
   /containsBigInt\(body\)[\s\S]*?stringifyJsonWithBigInts\(body\)/,
   'shared HTTP bootstrap must serialize BigInt responses as JSON integers',

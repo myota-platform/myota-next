@@ -410,7 +410,7 @@ function prepareImport(body: Record<string, unknown>) {
     throw new BadRequestException(
       'GEOJSON features must be non-empty Feature objects',
     );
-  const maxFeatures = boundedInteger(
+  const maxFeatures = integerSetting(
     process.env.GEODATA_MAX_IMPORT_FEATURES,
     5000,
   );
@@ -524,11 +524,4 @@ function reprojectCoordinates(value: unknown, sourceWkid: number): unknown {
     }
   }
   return value.map((child) => reprojectCoordinates(child, sourceWkid));
-}
-
-function boundedInteger(value: string | undefined, fallback: number) {
-  const parsed = Number.parseInt(value ?? '', 10);
-  return Number.isInteger(parsed) && parsed > 0 && parsed <= 100000
-    ? parsed
-    : fallback;
 }
