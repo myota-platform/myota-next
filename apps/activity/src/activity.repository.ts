@@ -8,6 +8,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import {
   evaluateActivation,
   normalizeTimestamp,
@@ -1270,8 +1271,15 @@ export class ActivityRepository {
     reasonValue: unknown,
     key?: string,
   ): Promise<JsonRecord> {
-    const reason = typeof reasonValue === 'string' ? reasonValue.trim() : '';
-    if (!actor || actor.length > 120 || !reason || reason.length > 500)
+    const normalizedActor = trimPythonWhitespace(actor);
+    const reason =
+      typeof reasonValue === 'string' ? trimPythonWhitespace(reasonValue) : '';
+    if (
+      !normalizedActor ||
+      Array.from(normalizedActor).length > 120 ||
+      !reason ||
+      Array.from(reason).length > 500
+    )
       throw new BadRequestException(
         'actor and reason must be present and within the audit limits',
       );
@@ -1320,7 +1328,7 @@ export class ActivityRepository {
       await client.query(
         `INSERT INTO activity_work_redrive_audit(id,job_id,outbox_event_id,actor,reason)
          VALUES ($1,$2,$3,$4,$5)`,
-        [randomUUID(), id, outboxEventId, actor, reason],
+        [randomUUID(), id, outboxEventId, normalizedActor, reason],
       );
       await client.query(
         'UPDATE activity_work_dead_letter SET resolved_at=now() WHERE work_id=$1 AND resolved_at IS NULL',
@@ -1329,7 +1337,7 @@ export class ActivityRepository {
       return {
         jobId: id,
         status: 'QUEUED',
-        redrivenBy: actor,
+        redrivenBy: normalizedActor,
         reason,
         outboxEventId,
       };
