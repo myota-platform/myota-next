@@ -27,10 +27,10 @@ creation, evidence, verification, primary selection, and retirement also write
 to the relational Core model and outbox.
 These are the first implemented slices; they still need automated
 compatibility coverage before they count as parity complete.
-Administrator account search currently uses JavaScript/PostgreSQL lowercase
-conversion, while the reference uses Python Unicode `casefold()`. ASCII search
-matches; full Unicode case-fold equivalence remains an identified compatibility
-gap.
+Administrator account search now uses full default Unicode 15.0 case folding,
+matching the Python 3.12 reference. To preserve that behavior, the service folds
+the status-matched account names and email addresses before slicing the result
+page; role and callsign details are still loaded only for that page.
 
 Activity has an initial activation and single-QSO slice: activation list/create/read/close,
 normalized QSO writes, validity checks, ownership checks, subject aggregates,

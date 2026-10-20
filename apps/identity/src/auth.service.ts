@@ -20,6 +20,7 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
+import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import { DEFAULT_ROLE_SCOPES } from './role-catalog.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
 
@@ -539,19 +540,12 @@ export class IdentityAuthService {
     }
     const page = parsePageInteger(query.page, 1);
     const pageSize = Math.min(100, parsePageInteger(query.pageSize, 50));
-    const search = (query.q ?? '').toLowerCase();
+    const search = unicodeCaseFold(query.q ?? '');
     const status = query.status || null;
     const client = await this.connect();
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-      const filter = `($1::text IS NULL OR a.status = $1)
-        AND ($2 = '' OR coalesce(position($2 in lower(a.display_name)), 0) > 0
-          OR coalesce(position($2 in lower(a.email::text)), 0) > 0)`;
-      const params = [status, search];
-      const totalResult = await client.query<{ total: string }>(
-        `SELECT count(*)::text AS total FROM public.account a WHERE ${filter}`,
-        params,
-      );
+      const filter = '($1::text IS NULL OR a.status = $1)';
       const accountResult = await client.query<AdminAccountRow>(
         `SELECT a.id, a.display_name, a.email::text AS email,
                 a.participation_type, a.status, a.created_at, a.updated_at,
@@ -565,16 +559,26 @@ export class IdentityAuthService {
            LEFT JOIN public.account_primary_callsign primary_call
              ON primary_call.account_id = a.id
           WHERE ${filter}
-          ORDER BY a.created_at, a.id
-          LIMIT $3 OFFSET $4`,
-        [...params, pageSize, (page - 1) * pageSize],
+          ORDER BY a.created_at, a.id`,
+        [status],
       );
-      const accountIds = accountResult.rows.map((account) => account.id);
+      const matchingAccounts = accountResult.rows.filter(
+        (account) =>
+          !search ||
+          unicodeCaseFold(account.display_name ?? '').includes(search) ||
+          unicodeCaseFold(account.email ?? '').includes(search),
+      );
+      const total = matchingAccounts.length;
+      const pageAccounts = matchingAccounts.slice(
+        (page - 1) * pageSize,
+        page * pageSize,
+      );
+      const accountIds = pageAccounts.map((account) => account.id);
       const [rolesByAccount, callsignsByAccount] = await Promise.all([
         this.loadRolesForAccounts(client, accountIds),
         this.loadCallsignsForAccounts(client, accountIds),
       ]);
-      const items = accountResult.rows.map((account) => {
+      const items = pageAccounts.map((account) => {
         const roles = rolesByAccount.get(account.id) ?? [];
         return {
           id: account.id,
@@ -594,7 +598,6 @@ export class IdentityAuthService {
         };
       });
       await client.query('COMMIT');
-      const total = Number(totalResult.rows[0]?.total ?? 0);
       return {
         items,
         page,
