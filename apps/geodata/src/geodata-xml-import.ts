@@ -8,6 +8,7 @@ type Feature = {
 };
 
 const maximumXmlBytes = 20 * 1024 * 1024;
+const maximumFeatureBytes = 16 * 1024 * 1024;
 const maximumFeatures = 100_000;
 const maximumCoordinates = 250_000;
 
@@ -47,6 +48,12 @@ export function parseXmlImport(
   };
   const local = (name: string) => name.split(':').at(-1) ?? name;
   const addFeature = (feature: Feature) => {
+    if (
+      Buffer.byteLength(JSON.stringify(feature), 'utf8') > maximumFeatureBytes
+    )
+      fail(
+        `a source feature exceeds the configured decoded-size limit (${maximumFeatureBytes} bytes)`,
+      );
     features.push(feature);
     if (features.length > maximumFeatures)
       fail('XML import has too many features');

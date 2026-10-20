@@ -216,7 +216,8 @@
   required; DBF text uses PyShp's UTF-8 default and `.cpg` files are ignored,
   matching the reference loader.
   Pasted-import creation also decodes bounded KML and GPX to GeoJSON, applying
-  the 250,000 coordinate ceiling per emitted geometry or GPX track segment.
+  a 16 MiB decoded-feature limit and the 250,000 coordinate ceiling per
+  emitted geometry or GPX track segment.
   OSM PBF
   uploads now decode in the Geodata worker with osmium-tool. The converter
   preserves OSM tags and stable type/id source references, filters the current
