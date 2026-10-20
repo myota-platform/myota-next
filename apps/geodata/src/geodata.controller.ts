@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Body,
   Delete,
@@ -407,9 +408,9 @@ export class GeodataController {
     @Res() response: Response,
   ) {
     const tile = await this.repository.getTile(
-      Number(zoom),
-      Number(x),
-      Number(y),
+      parseTileCoordinate(zoom),
+      parseTileCoordinate(x),
+      parseTileCoordinate(y),
     );
     response.setHeader('content-type', 'application/vnd.mapbox-vector-tile');
     response.setHeader('cache-control', 'public, max-age=60');
@@ -505,6 +506,16 @@ export class GeodataController {
       claims,
     );
   }
+}
+
+function parseTileCoordinate(value: string): number {
+  const normalized = value.trim();
+  if (!/^[+-]?\d(?:_?\d)*$/.test(normalized))
+    throw new BadRequestException('tile coordinates must be integers');
+  const parsed = Number(normalized.replaceAll('_', ''));
+  if (!Number.isSafeInteger(parsed))
+    throw new BadRequestException('tile coordinates must be integers');
+  return parsed;
 }
 
 function authorizeBearer(authorization: string | undefined) {

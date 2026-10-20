@@ -283,7 +283,8 @@
   discards staged candidates and queues, marks terminal runs processed, and
   records a transactional outbox fact. Authenticated entity audit
   reads combine the entity's review histories with durable audit events. Vector
-  tile reads serve approved entity geometry as Mapbox vector tiles.
+  tile reads serve approved entity geometry as Mapbox vector tiles and parse
+  z/x/y path values as integers before applying Web Mercator range checks.
   A separate scheduled importer can poll due refresh schedules and fetch
   GeoJSON or ArcGIS FeatureServer data from explicitly allowlisted HTTPS hosts.
   It remains disabled unless `GEODATA_IMPORTER_ENABLED=true`; deployment and
