@@ -14,6 +14,7 @@ import {
 } from '@aws-sdk/client-s3';
 import {
   integerSetting,
+  pythonTruthy,
   trimPythonWhitespace,
   verifyAccessToken,
 } from '@app/platform';
@@ -117,7 +118,7 @@ export class ActivityService {
     body: JsonRecord,
   ) {
     const claims = verifyAccessToken(authorization);
-    if (!body.workedCallsign || !body.timestamp)
+    if (!pythonTruthy(body.workedCallsign) || !pythonTruthy(body.timestamp))
       throw new BadRequestException(
         'workedCallsign and timestamp are required',
       );
@@ -152,7 +153,7 @@ export class ActivityService {
   ) {
     const claims = verifyAccessToken(authorization);
     if (
-      !body.activationId ||
+      !pythonTruthy(body.activationId) ||
       !Array.isArray(body.qsos) ||
       body.qsos.length === 0
     )
@@ -435,7 +436,11 @@ export class ActivityService {
     body: JsonRecord,
   ) {
     const claims = verifyAccessToken(authorization);
-    if (!body.requestedBy || !body.reason || !body.proposedValues)
+    if (
+      !pythonTruthy(body.requestedBy) ||
+      !pythonTruthy(body.reason) ||
+      !pythonTruthy(body.proposedValues)
+    )
       throw new BadRequestException(
         'requestedBy, reason, and proposedValues are required',
       );
@@ -458,7 +463,10 @@ export class ActivityService {
     body: JsonRecord,
   ) {
     this.authorize(authorization, ['activity.admin']);
-    if (!['APPLIED', 'REJECTED'].includes(body.decision) || !body.reviewedBy)
+    if (
+      !['APPLIED', 'REJECTED'].includes(body.decision) ||
+      !pythonTruthy(body.reviewedBy)
+    )
       throw new BadRequestException(
         'decision must be APPLIED or REJECTED and reviewedBy is required',
       );
