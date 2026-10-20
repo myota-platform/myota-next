@@ -204,7 +204,9 @@
   normalized into those ingestion jobs. The Activity worker consumes the
   registered JetStream work durables and processes jobs transactionally with
   database leases, message progress acknowledgements, bounded retries, and
-  dead-letter records. QSO ingestion batches use one JSONB recordset insert,
+  dead-letter records. Work IDs accept canonical UUIDs with any version and
+  variant bits, and `causationId` remains optional as in the reference and
+  shared contract. QSO ingestion batches use one JSONB recordset insert,
   database deduplication, per-record outbox events, and first-record keyed award
   recalculation, matching the reference batch path. Its `/healthz` and `/readyz` endpoints expose liveness
   and database/NATS readiness on `ACTIVITY_WORKER_HEALTH_PORT`. Public

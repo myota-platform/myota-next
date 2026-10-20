@@ -34,8 +34,7 @@ const WORK_RECONCILE_SECONDS = Math.max(
   5,
   Number(process.env.ACTIVITY_WORK_RECONCILE_SECONDS ?? 60),
 );
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 type WorkDefinition = {
   kind: string;
@@ -403,8 +402,9 @@ function validateEnvelope(
     !envelope.createdAt.endsWith('Z') ||
     typeof workId !== 'string' ||
     !UUID.test(workId) ||
-    typeof envelope.causationId !== 'string' ||
-    !UUID.test(envelope.causationId) ||
+    (envelope.causationId !== undefined &&
+      (typeof envelope.causationId !== 'string' ||
+        envelope.causationId.length > 200)) ||
     !isRecord(aggregate) ||
     aggregate.type !== 'activity_job' ||
     aggregate.id !== workId ||
