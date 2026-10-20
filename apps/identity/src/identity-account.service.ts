@@ -149,7 +149,7 @@ export class IdentityAccountService {
       let primaryCallsignId: string | null = null;
       let callsignValue: string | undefined;
       if (body.callsign) {
-        callsignValue = body.callsign.trim().toUpperCase();
+        callsignValue = trimPythonWhitespace(body.callsign).toUpperCase();
         if (!callsignValue) {
           throw new BadRequestException('callsign cannot be empty');
         }
@@ -408,7 +408,7 @@ export class IdentityAccountService {
       );
       const account = accountResult.rows[0];
       if (!account) throw new NotFoundException('account not found');
-      const value = body.callsign.trim().toUpperCase();
+      const value = trimPythonWhitespace(body.callsign).toUpperCase();
       if (!value) throw new BadRequestException('callsign cannot be empty');
       const duplicate = await client.query(
         `SELECT 1 FROM public.callsign

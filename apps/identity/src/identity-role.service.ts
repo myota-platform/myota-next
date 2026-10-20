@@ -10,6 +10,7 @@ import {
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
+import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { IdentityAuthService } from './auth.service.js';
 import type { AdminRoleDefinitionDto } from './auth.dto.js';
 import {
@@ -91,12 +92,11 @@ export class IdentityRoleService {
     if (!body.code || !body.name) {
       throw new BadRequestException('code and name are required');
     }
-    const code = body.code
-      .trim()
+    const code = trimPythonWhitespace(body.code)
       .toUpperCase()
       .replace(/[^A-Z0-9_]+/g, '_')
       .replace(/^_+|_+$/g, '');
-    const name = body.name.trim();
+    const name = trimPythonWhitespace(body.name);
     if (!code || !name) {
       throw new BadRequestException('role code and name must not be empty');
     }
@@ -192,7 +192,10 @@ export class IdentityRoleService {
           'built-in role definitions cannot be edited',
         );
       }
-      const name = body.name === undefined ? current.name : body.name.trim();
+      const name =
+        body.name === undefined
+          ? current.name
+          : trimPythonWhitespace(body.name);
       if (!name) throw new BadRequestException('role name must not be empty');
       const description = body.description ?? current.description;
       const scopes =
