@@ -258,8 +258,9 @@
   and description edits are transactional and audited. If-Match protected
   geometry, category, and manual location edits are also audited. Geometry
   updates accept Python's `way`, `linestring`, and `multilinestring` aliases
-  and persist their canonical type with only type and coordinates; API edits
-  and import workers share Python's configured coordinate limit. Category
+  and persist their canonical type with only type and coordinates. API edits
+  and import workers share Python's structural validation and configured
+  coordinate limit. Category
   codes use Python's Unicode whitespace stripping rules. Location
   names, entity names, location values, websites, and descriptions now use
   Python whitespace stripping and code-point length rules. Entity, import, and

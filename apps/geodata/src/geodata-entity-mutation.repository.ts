@@ -13,7 +13,7 @@ import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import type { AccessTokenClaims } from '@app/platform/access-token.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
-import { collectCoordinatePairs } from '@app/geodata-domain';
+import { validateGeometryCoordinates } from '@app/geodata-domain';
 import { entityProjection } from './geodata.repository.js';
 import {
   locationSnapshot,
@@ -902,13 +902,17 @@ export class GeodataEntityMutationRepository {
       throw new BadRequestException(
         'geometry must be a supported GeoJSON geometry',
       );
-    const coordinateCount = collectCoordinatePairs(
-      geometryInput.coordinates,
-    ).length;
-    if (coordinateCount === 0 || coordinateCount > MAX_COORDINATES)
-      throw new BadRequestException(
-        `geometry must contain between 1 and ${MAX_COORDINATES} coordinates`,
+    try {
+      validateGeometryCoordinates(
+        geometryType,
+        geometryInput.coordinates,
+        MAX_COORDINATES,
       );
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'invalid geometry coordinates',
+      );
+    }
     const geometry = JSON.stringify({
       type: geometryType,
       coordinates: geometryInput.coordinates,
