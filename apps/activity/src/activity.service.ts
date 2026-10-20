@@ -438,7 +438,6 @@ export class ActivityService {
 
   async requestCorrection(
     authorization: string | undefined,
-    key: string | undefined,
     qsoId: string,
     body: JsonRecord,
   ) {
@@ -458,13 +457,11 @@ export class ActivityService {
       throw new ForbiddenException(
         'the correction requester or activity.admin scope is required',
       );
-    await this.repository.getQso(qsoId);
-    return this.repository.createCorrection(qsoId, body, key);
+    return this.repository.createCorrection(qsoId, body);
   }
 
   async reviewCorrection(
     authorization: string | undefined,
-    key: string | undefined,
     qsoId: string,
     correctionId: string,
     body: JsonRecord,
@@ -477,7 +474,7 @@ export class ActivityService {
         'decision must be APPLIED or REJECTED and reviewedBy is required',
       );
     this.authorize(authorization, ['activity.admin']);
-    return this.repository.reviewCorrection(qsoId, correctionId, body, key);
+    return this.repository.reviewCorrection(qsoId, correctionId, body);
   }
 
   async listStatistics(

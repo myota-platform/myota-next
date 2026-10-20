@@ -76,8 +76,9 @@ handler. The separate Activity worker consumes its six registered JetStream
 durables with database leases, progress acknowledgements, retries, and
 dead-letter state. Activity notification events use a separate durable
 consumer. Recovery evidence remains open. QSO correction requests and
-administrator review are also
-implemented, with applied changes queuing recalculation. Award definition draft,
+administrator review are also implemented, ignore `Idempotency-Key` as the
+reference does, and rely on the database relation for request QSO existence.
+Applied changes queue recalculation. Award definition draft,
 review, publish, and retire APIs are implemented. Award progress reads and
 evaluation/recalculation job APIs persist versioned progress and qualification
 notifications through the Activity worker. Award requests validate eligibility,

@@ -15,25 +15,22 @@ export class QsoCorrectionController {
   @Post()
   request(
     @Headers('authorization') authorization: string | undefined,
-    @Headers('idempotency-key') key: string | undefined,
     @Param('qsoId') qsoId: string,
     @Body() body: Record<string, any>,
   ) {
-    return this.activity.requestCorrection(authorization, key, qsoId, body);
+    return this.activity.requestCorrection(authorization, qsoId, body);
   }
 
   @Post(':correctionId/review')
   @HttpCode(200)
   review(
     @Headers('authorization') authorization: string | undefined,
-    @Headers('idempotency-key') key: string | undefined,
     @Param('qsoId') qsoId: string,
     @Param('correctionId') correctionId: string,
     @Body() body: Record<string, any>,
   ) {
     return this.activity.reviewCorrection(
       authorization,
-      key,
       qsoId,
       correctionId,
       body,

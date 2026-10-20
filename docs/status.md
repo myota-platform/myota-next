@@ -204,8 +204,10 @@
   Statistics rebuild requests always use the reference's programme-and-UTC-day
   idempotency key; a caller-supplied header does not override it.
   Requests store any
-  truthy `proposedValues` JSON shape accepted by the reference. Review resolves the QSO through the
-  correction record, as the reference does. Applying an object correction queues
+  truthy `proposedValues` JSON shape accepted by the reference, rely on the
+  database relation to validate the QSO, and ignore `Idempotency-Key` on both
+  request and review. Review resolves the QSO through the correction record,
+  as the reference does. Applying an object correction queues
   award recalculation, and correction timestamps retain Python-compatible
   falsey-value handling and microsecond precision. Activity statistics can be
   listed and rebuild jobs queued,

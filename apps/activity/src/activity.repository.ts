@@ -912,17 +912,8 @@ export class ActivityRepository {
     }
   }
 
-  async createCorrection(
-    qsoId: string,
-    body: JsonRecord,
-    key?: string,
-  ): Promise<JsonRecord> {
-    return this.mutate(key, async (client) => {
-      const qso = await client.query(
-        'SELECT id FROM activity_qso WHERE id=$1',
-        [qsoId],
-      );
-      if (!qso.rows[0]) throw new NotFoundException('QSO not found');
+  async createCorrection(qsoId: string, body: JsonRecord): Promise<JsonRecord> {
+    return this.mutate(undefined, async (client) => {
       const result = await client.query(
         `INSERT INTO activity_qso_correction(id,qso_id,requested_by,reason,proposed_values)
          VALUES ($1,$2,$3,$4,$5::jsonb) RETURNING *, ${correctionTimestampProjection}`,
@@ -943,9 +934,8 @@ export class ActivityRepository {
     _qsoId: string,
     correctionId: string,
     body: JsonRecord,
-    key?: string,
   ): Promise<JsonRecord> {
-    return this.mutate(key, async (client) => {
+    return this.mutate(undefined, async (client) => {
       const correctionResult = await client.query(
         `SELECT *, ${correctionTimestampProjection}
          FROM activity_qso_correction WHERE id=$1 FOR UPDATE`,
