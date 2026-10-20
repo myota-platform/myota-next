@@ -80,6 +80,6 @@ if (errors.length) {
   process.exitCode = 1;
 } else {
   process.stdout.write(
-    'Geodata exact-integer parsing and serialization are wired across API, worker, and importer components.\n',
+    'Geodata exact-integer database parsing is enabled for API and worker; BigInt-safe serialization is enforced across API, worker, and importer components.\n',
   );
 }
