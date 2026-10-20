@@ -301,10 +301,11 @@ including a confirmation retry against an already completed job. Import
 finalization and failed promotion queue redrive use the same request fingerprint
 and successful-result replay.
 Candidate validation notes are stored as JSONB with existing text values
-preserved as JSON strings. If-Match protected name, website,
-description, geometry, and
-category and location edits are also implemented; other review
-workflows remain outstanding.
+preserved as JSON strings. If-Match protected name, website, description,
+geometry, category, and location edits are also implemented. Entity status,
+import candidate, and conflation review actions have corresponding Admin
+workflows; broader payload and workflow compatibility qualification remains
+outstanding.
 
 ## User applications
 
