@@ -256,7 +256,8 @@
   Entity-deletion impact reads and idempotent cascades are implemented: the
   Activity service removes linked valid QSOs and corrections, invalidates
   affected activations, rebuilds subject aggregates, and queues award
-  recalculation jobs. Geodata now provides scoped impact and confirmation jobs
+  recalculation jobs. The cascade validates a missing/falsey `entityId` before
+  admin authorization, matching the reference route. Geodata now provides scoped impact and confirmation jobs
   and a retryable worker that applies the Activity cascade before transactionally
   deleting Geodata references and the entity. Both services persist outbox
   events. Geodata deletion now runs through its registered durable and extends

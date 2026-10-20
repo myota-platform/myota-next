@@ -28,9 +28,9 @@ export class ActivityController {
   cascadeDeleteEntity(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') key: string | undefined,
-    @Body() body: Record<string, unknown>,
+    @Body() body: Record<string, unknown> | null,
   ) {
-    return this.activity.cascadeDeleteEntity(authorization, key, body);
+    return this.activity.cascadeDeleteEntity(authorization, key, body ?? {});
   }
 
   @Get()
