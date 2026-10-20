@@ -78,6 +78,9 @@ as deterministic tie-breakers.
 Callsign retirement authenticates and resolves the account and callsign before
 validating its optional fields, then validates a primary replacement before
 reading evidence, matching the reference's operation order.
+Callsign verification authenticates and resolves its target, then requires
+evidence before validating the optional verification source, matching the
+reference's error precedence.
 Administrator account PATCH and role-assignment PUT authenticate and resolve
 the target account before validating the request body, matching the reference's
 response precedence. When role replacement is requested, Nest checks

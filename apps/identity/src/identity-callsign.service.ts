@@ -17,9 +17,8 @@ import type {
   AddCallsignDto,
   CallsignEvidenceDto,
   SetPrimaryCallsignDto,
-  VerifyCallsignDto,
 } from './auth.dto.js';
-import { RetireCallsignDto } from './auth.dto.js';
+import { RetireCallsignDto, VerifyCallsignDto } from './auth.dto.js';
 
 interface AccountRecord {
   id: string;
@@ -289,7 +288,7 @@ export class IdentityCallsignService {
     authorization: string,
     accountId: string,
     callsignId: string,
-    body: VerifyCallsignDto,
+    rawBody: unknown,
   ) {
     const actor = await this.auth.currentAccount(authorization);
     const scopes = new Set(actor.scopes as string[]);
@@ -322,6 +321,7 @@ export class IdentityCallsignService {
           'at least one evidence record is required',
         );
       }
+      const body = await validateVerifyCallsignBody(rawBody);
       const verifiedAt = (
         await client.query<{ timestamp: Date }>(
           'SELECT clock_timestamp() AS timestamp',
@@ -624,4 +624,18 @@ async function validateRetireCallsignBody(
     type: 'body',
     metatype: RetireCallsignDto,
   })) as RetireCallsignDto;
+}
+
+const verifyCallsignValidationPipe = new ValidationPipe({
+  transform: true,
+  whitelist: true,
+});
+
+async function validateVerifyCallsignBody(
+  body: unknown,
+): Promise<VerifyCallsignDto> {
+  return (await verifyCallsignValidationPipe.transform(body, {
+    type: 'body',
+    metatype: VerifyCallsignDto,
+  })) as VerifyCallsignDto;
 }
