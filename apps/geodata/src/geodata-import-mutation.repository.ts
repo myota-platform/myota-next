@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import type { AccessTokenClaims } from '@app/platform/access-token.js';
+import { parsePageTotal, type PageInteger } from '@app/platform/pagination.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { assertReviewCoverage } from './geodata-entity-mutation.repository.js';
 import {
@@ -205,18 +206,21 @@ export class GeodataImportMutationRepository {
         throw new BadRequestException(
           'an import cannot be finalized while it is still processing',
         );
-      let stagedRecordsDiscarded = 0;
-      let processingQueuesDiscarded = 0;
+      let stagedRecordsDiscarded: PageInteger = 0;
+      let processingQueuesDiscarded: PageInteger = 0;
       if (run.status !== 'PROCESSED') {
         const counts = await client.query(
-          `SELECT (SELECT count(*)::integer FROM geodata_import_candidate WHERE import_run_id=$1) AS candidates,
-                  (SELECT count(*)::integer FROM geodata_import_candidate_stage WHERE import_run_id=$1) AS staged,
-                  (SELECT count(*)::integer FROM geodata_import_processing_queue WHERE import_run_id=$1) AS queues`,
+          `SELECT (SELECT count(*) FROM geodata_import_candidate WHERE import_run_id=$1) AS candidates,
+                  (SELECT count(*) FROM geodata_import_candidate_stage WHERE import_run_id=$1) AS staged,
+                  (SELECT count(*) FROM geodata_import_processing_queue WHERE import_run_id=$1) AS queues`,
           [runId],
         );
-        stagedRecordsDiscarded =
-          Number(counts.rows[0].candidates) + Number(counts.rows[0].staged);
-        processingQueuesDiscarded = Number(counts.rows[0].queues);
+        const candidatesDiscarded = parsePageTotal(counts.rows[0].candidates);
+        const stagedCount = parsePageTotal(counts.rows[0].staged);
+        stagedRecordsDiscarded = parsePageTotal(
+          BigInt(candidatesDiscarded) + BigInt(stagedCount),
+        );
+        processingQueuesDiscarded = parsePageTotal(counts.rows[0].queues);
         await client.query(
           "SELECT set_config('myota.geodata_writer','row-v1',true)",
         );

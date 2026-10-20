@@ -396,7 +396,9 @@ feature size in GeoJSON, KML/GPX, Shapefile, and PBF imports (16 MiB by
 default). Prepared candidates and validation errors are staged by import attempt in Geodata
 PostgreSQL; candidate creation, import status, processing queue, and the
 compatible outbox event are finalized atomically, with event arrays assembled
-in the database. Record hashes use Python float formatting and Unicode
+in the database. Finalization's discarded-record and processing-queue totals
+preserve exact PostgreSQL integers through the response and outbox payload.
+Record hashes use Python float formatting and Unicode
 code-point key ordering. Streamed GeoJSON and direct GEOJSON/WFS JSON imports
 retain raw numeric tokens in features and injected root CRS values within the
 configured decoded-size limit (`MYOTA_IMPORT_MAX_FEATURE_BYTES`, 16 MiB by
