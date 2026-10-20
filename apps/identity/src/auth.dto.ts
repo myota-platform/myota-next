@@ -11,7 +11,8 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+import { firstQueryValue } from '@app/platform/query.js';
 
 export class LoginDto {
   @IsEmail()
@@ -43,28 +44,34 @@ export class RecoveryResetDto {
 
 export class AdminAccountsQueryDto {
   @IsOptional()
+  @Transform(({ value }) => firstQueryValue(value))
   @IsString()
   q?: string;
 
   @IsOptional()
+  @Transform(({ value }) => firstQueryValue(value))
   @IsString()
   status?: string;
 
   @IsOptional()
+  @Transform(({ value }) => firstQueryValue(value))
   @IsString()
   page?: string;
 
   @IsOptional()
+  @Transform(({ value }) => firstQueryValue(value))
   @IsString()
   pageSize?: string;
 }
 
 export class SecurityEventsQueryDto {
   @IsOptional()
+  @Transform(({ value }) => firstQueryValue(value))
   @IsString()
   page?: string;
 
   @IsOptional()
+  @Transform(({ value }) => firstQueryValue(value))
   @IsString()
   pageSize?: string;
 }

@@ -17,10 +17,10 @@
   Geodata probes PostGIS. Gateway readiness does not depend on a database.
 - Shared query parsing selects the first nonblank repeated string value for
   Activity activation/public/statistics/notification filters, award filters,
-  Programme content and policy filters, public content locale, and Geodata
-  filters. Award progress also accepts the reference's `subjectId` alias for
-  `participantId`. Pagination skips blank repeated values before parsing
-  `page` and `pageSize`, matching the reference query parser.
+  Identity admin filters, Programme content and policy filters, public content
+  locale, and Geodata filters. Award progress also accepts the reference's
+  `subjectId` alias for `participantId`. Pagination skips blank repeated values
+  before parsing `page` and `pageSize`, matching the reference query parser.
 - The shared HTTP bootstrap honors `MYOTA_MAX_BODY_BYTES` as a strict integer.
   Identity and Programmes default to 1 MiB, Geodata to 1 GiB as in the Python
   reference, and Activity/Gateway to 35 MiB for encoded upload paths. Individual
