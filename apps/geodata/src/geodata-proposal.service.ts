@@ -17,10 +17,11 @@ export class GeodataProposalService {
     key: string | undefined,
     proposerId: string,
     body: Record<string, unknown>,
+    requestPath: string,
     rawBody?: string,
   ) {
     const idempotencyKey = key
-      ? `http:${proposerId}:/v1/geodata/proposals:${key}`
+      ? `http:${proposerId}:${requestPath}:${key}`
       : undefined;
     const requestHash = key ? fingerprintJsonRequest(body, rawBody) : undefined;
     const proposalId = randomUUID();

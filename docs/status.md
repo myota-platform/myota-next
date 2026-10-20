@@ -273,10 +273,10 @@
   selects `sourceKey`, `url`, then `name` with Python truthiness and preserves
   submitted whitespace; source metadata keeps the caller's values plus the
   reference name/license defaults. Proposal feature objects pass through the
-  same adapter normalization without an extra `type` requirement. Proposal
-  idempotency is scoped to proposer and route and rejects reuse with a changed
-  request body before proposal validation; its fingerprint preserves JSON
-  integer versus float values, and its transaction lock spans validation,
+  same adapter normalization without an extra `type` requirement. Proposal and
+  direct-import idempotency is scoped to owner and actual request path and
+  rejects reuse with a changed body before validation. Fingerprints preserve
+  JSON integer versus float values, and the request lock spans validation,
   source storage, and import/outbox creation.
   `/healthz` and `/readyz` expose worker liveness and
   GeoData PostgreSQL/NATS readiness on `GEODATA_WORKER_HEALTH_PORT`. The service

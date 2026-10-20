@@ -30,7 +30,11 @@ export async function bootstrapHttpService(
     express.json({
       limit: jsonLimit,
       verify: (request, _response, buffer) => {
-        if (request.url?.split('?', 1)[0] === '/v1/geodata/proposals')
+        if (
+          ['/v1/geodata/proposals', '/v1/geodata/imports'].includes(
+            request.url?.split('?', 1)[0] ?? '',
+          )
+        )
           Object.assign(request, { rawBody: buffer });
       },
     }),

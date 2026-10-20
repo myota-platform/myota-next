@@ -29,6 +29,7 @@ import { GeodataScheduleService } from './geodata-schedule.service.js';
 import { GeodataProposalService } from './geodata-proposal.service.js';
 import { GeodataLoadTestCleanupService } from './geodata-load-test-cleanup.service.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
+import { fingerprintJsonRequest } from './geodata-request-fingerprint.js';
 
 @Controller('geodata')
 export class GeodataController {
@@ -117,7 +118,13 @@ export class GeodataController {
     const rawBody = (
       request as Request & { rawBody?: Buffer }
     ).rawBody?.toString('utf8');
-    return this.proposals.create(key, claims.sub, body, rawBody);
+    return this.proposals.create(
+      key,
+      claims.sub,
+      body,
+      request.originalUrl,
+      rawBody,
+    );
   }
 
   @Delete('load-test-runs/:testRunId')
@@ -194,7 +201,7 @@ export class GeodataController {
     @Req() request: Request,
     @Body() body: Record<string, unknown>,
   ) {
-    authorizeImport(authorization);
+    const claims = authorizeImport(authorization);
     if (request.is('multipart/form-data')) {
       request.resume();
       const contentLength = request.header('content-length') ?? '0';
@@ -217,7 +224,15 @@ export class GeodataController {
         'single-request uploads are disabled; create a resumable upload session',
       );
     }
-    return this.imports.create(key, body);
+    const rawBody = (
+      request as Request & { rawBody?: Buffer }
+    ).rawBody?.toString('utf8');
+    const idempotencyKey = key
+      ? `http:${claims.sub}:${request.originalUrl}:${key}`
+      : undefined;
+    return this.imports.create(idempotencyKey, () => body, {
+      requestHash: key ? fingerprintJsonRequest(body, rawBody) : undefined,
+    });
   }
 
   @Get('imports')
