@@ -27,6 +27,10 @@
   explicit apply opt-in and measured finite stream limits, creates missing
   streams/durables, and rejects configuration drift. See
   `deploy/jetstream/README.md` for supported scopes and settings.
+- Local Compose now runs the NestJS services against the three owner databases,
+  with local JetStream, object storage, SMTP capture, and one-shot migration
+  and topology setup. This is a development stack; production release and
+  rollout qualification remain open.
 - Current OpenAPI, event schemas, and three database migration baselines copied
   as compatibility references.
 - First Identity slice: disabled public registration, password login, refresh

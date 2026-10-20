@@ -38,7 +38,7 @@
     "lint": "oxlint --type-aware apps libs tools",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.ts\" \"web/admin/*.{ts,html,json}\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
     "format:check": "prettier --check \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.ts\" \"web/admin/*.{ts,html,json}\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
-    "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-migrate.ts tools/provision-jetstream.ts"
+    "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-migrate.ts tools/provision-jetstream.ts tools/render-seaweedfs-s3-config.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",

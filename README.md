@@ -34,9 +34,12 @@ producer, deployment, and full telemetry qualification remain gated. See
 - `apps/email-worker` — Core-owned JetStream email delivery consumer.
 - `web/admin` and `web/participant` — separate browser applications.
 - `contracts` — HTTP and event compatibility contracts.
-- `deploy` — owner-scoped database migrations and image build guidance.
+- `deploy` — local Compose, owner-scoped database migrations, JetStream
+  provisioning, and image build guidance.
 - `docs` — architecture, behavior parity, and implementation gates.
 
 See [`docs/architecture.md`](docs/architecture.md) for target boundaries and
 [`docs/implementation-plan.md`](docs/implementation-plan.md) for the staged
 parity sequence.
+
+For the local Compose environment, see [`deploy/README.md`](deploy/README.md).
