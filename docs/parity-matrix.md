@@ -93,7 +93,11 @@ condition operators default to `GTE` only when omitted; an explicit `null` is
 an unknown operator and evaluates false. Entity-type comparisons also preserve
 Python's absent-versus-null string conversion and iterable handling. `AND`,
 `OR`, and `NOT` preserve Python truthiness, iteration, and omitted-versus-null
-behavior for nested conditions. ADIF uploads now pass
+behavior for nested conditions. Award asset IDs and recalculation subject lists
+use Python truthiness defaults, issuance defaults `dateObtained` only when the
+field is omitted, and award-definition optional fields retain explicit null
+values where the reference uses dictionary defaults only for omitted fields.
+ADIF uploads now pass
 authorization, malware checks, and object storage before durable queueing; the
 Activity worker parses records, records successes and rejects, updates
 aggregates, and reports import status. CSV file uploads now validate bounded

@@ -64,14 +64,18 @@ export function validateAwardDraft(body: JsonRecord, existing?: JsonRecord) {
     : (existing?.version ?? 1);
   const record: JsonRecord = {
     ...existing,
-    id: body.awardId ?? existing?.id ?? randomUUID(),
+    id: pythonTruthy(body.awardId)
+      ? body.awardId
+      : (existing?.id ?? randomUUID()),
     programmeSlug: body.programmeSlug,
     code: body.code,
     name: body.name,
-    description: body.description ?? '',
+    description: Object.hasOwn(body, 'description') ? body.description : '',
     category,
     version: integerValue(versionValue, 'version'),
-    achievementMetric: body.achievementMetric ?? 'QSO_COUNT',
+    achievementMetric: Object.hasOwn(body, 'achievementMetric')
+      ? body.achievementMetric
+      : 'QSO_COUNT',
     condition: body.condition,
     levels: body.levels,
     backgroundAsset,

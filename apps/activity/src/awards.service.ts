@@ -18,6 +18,7 @@ import { verifyAccessToken } from '@app/platform/access-token.js';
 import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
 import { parsePageInteger } from '@app/platform/pagination.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { ActivityRepository } from './activity.repository.js';
 import { ActivityAwardsRepository } from './activity-awards.repository.js';
 import {
@@ -321,7 +322,7 @@ export class AwardsService {
   ) {
     this.authorizeHeader(authorization, ['awards.admin']);
     const award = await this.getAwardDefinitionOrThrow(awardId);
-    const subjects = body.subjectIds ?? [];
+    const subjects = pythonTruthy(body.subjectIds) ? body.subjectIds : [];
     if (!Array.isArray(subjects))
       throw new BadRequestException('subjectIds must be an array');
     const sorted = subjects.map(String).sort();
@@ -445,7 +446,9 @@ export class AwardsService {
     if (signature.kind !== 'SIGNATURE')
       throw new BadRequestException('a registered signature asset is required');
     const issuedAt = new Date().toISOString();
-    const dateObtained = body.dateObtained ?? issuedAt;
+    const dateObtained = Object.hasOwn(body, 'dateObtained')
+      ? body.dateObtained
+      : issuedAt;
     if (!Number.isFinite(new Date(String(dateObtained)).getTime()))
       throw new BadRequestException('dateObtained must be a valid timestamp');
     const issuance: JsonRecord = {
@@ -708,7 +711,7 @@ export class AwardsService {
       );
     const isBackground = body.kind === 'BACKGROUND';
     const asset = {
-      id: body.assetId ?? randomUUID(),
+      id: pythonTruthy(body.assetId) ? body.assetId : randomUUID(),
       kind: body.kind,
       name: body.name,
       objectKey: body.objectKey,
