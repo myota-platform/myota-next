@@ -284,7 +284,7 @@ export class ActivityNotificationsService
       envelope = decoded as Envelope;
       eventType =
         typeof envelope.eventType === 'string' ? envelope.eventType : 'unknown';
-      if (typeof envelope.eventId !== 'string' || !isUuid(envelope.eventId)) {
+      if (!normalizeUuid(envelope.eventId)) {
         permanent = true;
         throw new Error('invalid_event_id');
       }
@@ -342,7 +342,8 @@ export class ActivityNotificationsService
     const client = await this.pool!.connect();
     try {
       await client.query('BEGIN');
-      const eventId = String(event.eventId).toLowerCase();
+      const eventId = normalizeUuid(event.eventId);
+      if (!eventId) throw new Error('invalid_event_id');
       const seen = await client.query(
         'SELECT 1 FROM public.consumer_processed_event WHERE consumer=$1 AND event_id=$2',
         [CONSUMER, eventId],
@@ -400,9 +401,9 @@ export class ActivityNotificationsService
     permanent: boolean,
   ): Promise<void> {
     const client: PoolClient = await this.pool!.connect();
-    const eventId = isUuid(event.eventId)
-      ? event.eventId.toLowerCase()
-      : fallbackEventId(message.subject, message.info.streamSequence);
+    const eventId =
+      normalizeUuid(event.eventId) ??
+      fallbackEventId(message.subject, message.info.streamSequence);
     const diagnostic = redact(event);
     try {
       await client.query('BEGIN');
@@ -483,13 +484,15 @@ function nonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-function isUuid(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      value,
-    )
-  );
+function normalizeUuid(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const hex = value
+    .replaceAll('urn:', '')
+    .replaceAll('uuid:', '')
+    .replace(/^\{+|\}+$/g, '')
+    .replaceAll('-', '');
+  if (!/^[0-9a-f]{32}$/i.test(hex)) return undefined;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`.toLowerCase();
 }
 
 function fallbackEventId(subject: string, sequence: number): string {

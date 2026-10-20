@@ -404,6 +404,8 @@
   failures, and stores redacted poison envelopes with stream coordinates before
   terminating them. Notice payloads and deduplication keys retain the producer's
   event ID spelling, while consumer checkpoints use normalized UUIDs. Its
+  UUID parsing accepts nil IDs and all version/variant bit patterns supported
+  by Python's UUID parser.
   metrics listener exposes `/healthz`, `/readyz`, and
   Prometheus metrics for bounded delivery outcomes and unresolved dead letters;
   readiness checks Activity PostgreSQL and the NATS connection. An audited CLI
