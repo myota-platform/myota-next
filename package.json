@@ -29,6 +29,7 @@
     "start:email-worker": "nest start email-worker",
     "start:outbox-worker:dev": "nest start outbox-worker --watch",
     "migrate:db": "node --experimental-strip-types tools/db-migrate.ts",
+    "provision:jetstream": "node --experimental-strip-types tools/provision-jetstream.ts",
     "redrive:email": "node --experimental-strip-types apps/email-worker/src/redrive-email.ts",
     "redrive:activity-notification": "node --experimental-strip-types apps/activity-notifications/src/redrive-notification.ts",
     "test": "vitest run",
@@ -37,7 +38,7 @@
     "lint": "oxlint --type-aware apps libs tools",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.ts\" \"web/admin/*.{ts,html,json}\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
     "format:check": "prettier --check \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.ts\" \"web/admin/*.{ts,html,json}\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
-    "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-migrate.ts"
+    "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-migrate.ts tools/provision-jetstream.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",

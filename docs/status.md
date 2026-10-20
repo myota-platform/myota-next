@@ -23,6 +23,10 @@
   `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` to report telemetry; without them,
   the SDK emits no telemetry. `MYOTA_BUILD_VERSION` or `GIT_SHA` labels the
   deployed version when provided.
+- A create-only JetStream provisioner consumes the event registry, requires
+  explicit apply opt-in and measured finite stream limits, creates missing
+  streams/durables, and rejects configuration drift. See
+  `deploy/jetstream/README.md` for supported scopes and settings.
 - Current OpenAPI, event schemas, and three database migration baselines copied
   as compatibility references.
 - First Identity slice: disabled public registration, password login, refresh
