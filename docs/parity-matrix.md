@@ -229,7 +229,9 @@ and request fingerprint, replays successful results before body validation,
 and rejects changed-body key reuse. Import promotion applies the same request
 contract while retaining scope checks and atomic queue/outbox writes. Entity
 review, metadata, category, geometry, and location-enrichment writes also use
-the owner/path/body contract and replay before mutation validation.
+the owner/path/body contract and replay before mutation validation. Conflation
+resolution uses the same contract while preserving its transactional history
+and outbox write.
 Candidate validation notes are stored as JSONB with existing text values
 preserved as JSON strings. If-Match protected name, website,
 description, geometry, and

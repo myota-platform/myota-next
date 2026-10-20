@@ -457,9 +457,21 @@ export class GeodataController {
     @Headers('idempotency-key') key: string | undefined,
     @Param('candidateId') candidateId: string,
     @Body() body: Record<string, unknown>,
+    @Req() request: Request,
   ) {
-    authorizeBearer(authorization);
-    return this.importMutations.resolveConflation(candidateId, key, body);
+    const claims = verifyAccessToken(authorization);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
+    return this.importMutations.resolveConflation(
+      candidateId,
+      idempotency.key,
+      body,
+      idempotency.requestHash,
+    );
   }
 
   @Get('location-options')
