@@ -147,7 +147,8 @@ also converted to GeoJSON with XML document types rejected and bounded
 feature/coordinate counts. Multipart uploads accept GeoJSON and bounded
 Shapefile ZIP archives with matching sidecars (`SHAPEFILE`, `SHP`, and the
 legacy `PARKSERVE_US` format alias); Shapefile coordinates are reprojected from
-the supplied `.prj` to WGS84. OSM PBF uploads are decoded by
+the supplied `.prj` to WGS84, and NULL shape records fail preprocessing as in
+PyShp's GeoJSON conversion. OSM PBF uploads are decoded by
 `osmium-tool` in the Geodata worker image, preserve OSM tags and type/id source
 references, and emit the configured hiking, protected-area, point, path, and
 multipolygon features using a temporary disk-backed node-location index.

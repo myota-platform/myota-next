@@ -158,6 +158,10 @@ export async function* streamShapefileFeatures(
           throw new Error(
             `geodata import contains more than ${featureLimit} features`,
           );
+        if (result.value === null)
+          throw new Error(
+            'Shape type "NULL" cannot be represented as GeoJSON.',
+          );
         const feature = projection
           ? reprojectFeature(result.value, projection)
           : result.value;

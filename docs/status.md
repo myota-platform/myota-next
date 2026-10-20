@@ -414,6 +414,8 @@
   source bytes and decoded
   records now stream via bounded temporary files, matching the reference's 1
   GiB expanded-size default and reproject coordinates using `.prj` metadata.
+  NULL shape records fail preprocessing because PyShp cannot represent them as
+  GeoJSON.
   The streaming parser's less common geometry types and uncommon CRS
   definitions still need parity qualification before broad Shapefile parity can
   be claimed.
