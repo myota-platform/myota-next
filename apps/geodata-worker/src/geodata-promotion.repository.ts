@@ -360,7 +360,7 @@ export class GeodataPromotionRepository {
             policy,
             previousStatus: row.lifecycle_status,
           },
-          new Date(occurredAt),
+          occurredAt,
         );
         disappeared += 1;
       }
@@ -613,12 +613,12 @@ export class GeodataPromotionRepository {
       const previousProperties = isRecord(existing.rows[0]?.public_properties)
         ? existing.rows[0].public_properties
         : {};
-      const now = new Date();
+      const now = await utcTimestamp(client);
       const review =
         queue.target_status === 'APPROVED'
           ? {
               reviewerId: queue.requested_by,
-              reviewedAt: now.toISOString(),
+              reviewedAt: now,
               note:
                 textValue(queue.job_metadata.note) ??
                 'Approved from validated import',
@@ -651,7 +651,7 @@ export class GeodataPromotionRepository {
         },
         review,
         reviewHistory,
-        updatedAt: now.toISOString(),
+        updatedAt: now,
       });
       const website =
         existing.rows[0]?.website ?? textValue(properties.website);
@@ -884,8 +884,9 @@ export class GeodataPromotionRepository {
     aggregateType: string,
     aggregateId: string,
     payload: Record<string, unknown>,
-    occurredAt: Date | string = new Date(),
+    occurredAt?: Date | string,
   ) {
+    const eventTimestamp = occurredAt ?? (await utcTimestamp(client));
     await client.query(
       `INSERT INTO outbox_event
        (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
@@ -896,7 +897,7 @@ export class GeodataPromotionRepository {
         aggregateType,
         aggregateId,
         stringifyJsonWithBigInts(payload),
-        occurredAt,
+        eventTimestamp,
         randomUUID(),
       ],
     );
