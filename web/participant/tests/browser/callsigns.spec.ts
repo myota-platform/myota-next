@@ -191,3 +191,104 @@ test('lets an operator manage callsigns, evidence, and primary retirement', asyn
     ),
   ).toBe(true);
 });
+
+test('keeps a successful callsign save distinct from a failed profile refresh', async ({
+  page,
+}) => {
+  const account = {
+    id: 'participant-2',
+    email: 'operator2@example.test',
+    displayName: 'Operator Two',
+    primaryCallsignId: null,
+    callsigns: [] as Array<Record<string, unknown>>,
+    profileImage: null,
+  };
+  const callsignRequests: Array<{
+    body: unknown;
+    idempotencyKey: string;
+  }> = [];
+  let mutationApplied = false;
+  let failProfileRefresh = true;
+
+  await page.route('**/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({ json: { items: [], nextPage: null } });
+      return;
+    }
+
+    if (url.pathname === '/v1/identity/auth/login') {
+      await route.fulfill({
+        json: {
+          accessToken: 'participant-callsign-access-token',
+          refreshToken: 'participant-callsign-refresh-token',
+        },
+      });
+      return;
+    }
+
+    if (url.pathname === '/v1/identity/me' && method === 'GET') {
+      if (mutationApplied && failProfileRefresh) {
+        failProfileRefresh = false;
+        await route.fulfill({
+          status: 503,
+          json: { message: 'Profile refresh temporarily unavailable.' },
+        });
+      } else {
+        await route.fulfill({ json: account });
+      }
+      return;
+    }
+
+    if (
+      url.pathname === '/v1/identity/accounts/participant-2/callsigns' &&
+      method === 'POST'
+    ) {
+      callsignRequests.push({
+        body: request.postDataJSON(),
+        idempotencyKey: request.headers()['idempotency-key'] || '',
+      });
+      account.callsigns.push({
+        id: 'callsign-new',
+        value: 'DL2NEW',
+        status: 'UNVERIFIED',
+        evidenceIds: [],
+      });
+      mutationApplied = true;
+      await route.fulfill({ status: 201, json: account });
+      return;
+    }
+
+    await route.fulfill({
+      json: { items: [], page: 1, total: 0, nextPage: null },
+    });
+  });
+
+  await page.goto('http://127.0.0.1:8091');
+  await page.locator('#award-email').fill('operator2@example.test');
+  await page.locator('#award-password').fill('test-password');
+  await page.locator('#award-login button[type="submit"]').click();
+  await expect(page.locator('#profile-callsigns')).toBeVisible();
+
+  await page.locator('#profile-callsign-value').fill('DL2NEW');
+  await page.locator('#profile-callsign-add button[type="submit"]').click();
+  await expect(page.locator('#profile-status')).toHaveText(
+    'Callsign added. Profile refresh failed: Profile refresh temporarily unavailable. Reload the profile to confirm the latest state.',
+  );
+  expect(callsignRequests).toEqual([
+    {
+      body: { callsign: 'DL2NEW' },
+      idempotencyKey: expect.any(String),
+    },
+  ]);
+  expect(callsignRequests[0].idempotencyKey).not.toBe('');
+
+  await page.reload();
+  await expect(
+    page.locator('.profile-callsign-row').filter({ hasText: 'DL2NEW' }),
+  ).toBeVisible();
+  await expect(page.locator('#profile-status')).toHaveText('Profile loaded.');
+});

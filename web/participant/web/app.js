@@ -1174,8 +1174,12 @@ async function runProfileCallsignMutation(progress, success, action) {
     }
     await refreshProfileCallsigns(success);
   } catch (error) {
+    const detail =
+      error instanceof Error
+        ? error.message.replace(/[.!?]+$/, '')
+        : String(error);
     $('profile-status').textContent =
-      `${success} Profile refresh failed: ${error.message}. Reload the profile to confirm the latest state.`;
+      `${success} Profile refresh failed: ${detail}. Reload the profile to confirm the latest state.`;
   } finally {
     profileCallsignBusy = false;
     setProfileCallsignControlsDisabled(false);
