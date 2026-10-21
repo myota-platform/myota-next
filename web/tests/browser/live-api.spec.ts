@@ -98,6 +98,82 @@ test('signs into Admin through Gateway and loads its live dashboard', async ({
   expect(failedResponses).toEqual([]);
 });
 
+test('creates, reviews, and publishes a policy in Admin through Gateway', async ({
+  page,
+  request,
+}) => {
+  test.skip(!hasApiDatabases, 'requires the CI PostgreSQL databases');
+
+  const email =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL ?? 'browser-e2e-admin@example.test';
+  const password =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD ?? 'browser-e2e-password-7!Q';
+  const access = await request.post(
+    'http://127.0.0.1:8080/v1/identity/auth/login',
+    { data: { email, password } },
+  );
+  expect(access.ok()).toBeTruthy();
+  const { accessToken } = await access.json();
+  const slug = `browser-policy-${randomUUID()}`;
+  const programme = await request.post('http://127.0.0.1:8080/v1/programmes', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Idempotency-Key': randomUUID(),
+    },
+    data: {
+      slug,
+      name: 'Browser policy lifecycle programme',
+      description: 'Created for the live Admin policy workflow.',
+      entityTypes: [
+        {
+          code: `E2E_${randomUUID().replaceAll('-', '').slice(0, 12)}`,
+          label: 'Policy test point',
+          geometryTypes: ['POINT'],
+        },
+      ],
+      rules: {
+        activationValidityDays: 7,
+        minimumQsos: { activation: 1, hunter: 1 },
+        publicAccessRequired: false,
+      },
+    },
+  });
+  expect(programme.status()).toBe(201);
+
+  const failedResponses: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('/v1/') && response.status() >= 400)
+      failedResponses.push(`${response.status()} ${response.url()}`);
+  });
+  await page.goto('http://127.0.0.1:8090/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto('http://127.0.0.1:8090/policies');
+  await page.getByLabel('Programme').selectOption(slug);
+  await page.getByRole('button', { name: 'New draft' }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Live browser policy');
+  await page
+    .locator('textarea.code-editor')
+    .fill('{"rules":{"minimumQsos":{"activation":3,"hunter":1}}}');
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByText('Policy draft saved.')).toBeVisible();
+  await page.getByRole('button', { name: 'Submit for review' }).click();
+  await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();
+  await page.getByRole('button', { name: 'Approve' }).click();
+  await expect(page.getByRole('button', { name: 'Publish' })).toBeVisible();
+  await page
+    .getByLabel('Effective from (UTC)')
+    .fill(new Date(Date.now() + 60_000).toISOString().slice(0, 16));
+  await page.getByRole('button', { name: 'Publish' }).click();
+  await expect(page.getByText('Policy published.')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /Live browser policy.*PUBLISHED/ }),
+  ).toBeVisible();
+  expect(failedResponses).toEqual([]);
+});
+
 test('creates a participant account in Admin through the live Identity API', async ({
   page,
 }) => {

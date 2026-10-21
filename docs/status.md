@@ -35,9 +35,11 @@ production readiness.
   [worker and operations coverage](parity/workers-operations.md), the
   [database backup and restore notes](operations/database-backup-restore.md),
   and the [object-store recovery notes](operations/object-store-recovery.md).
-- **Web applications:** CI now checks Admin sign-in/dashboard and one public
-  Participant catalogue workflow against running NestJS services through the
-  Gateway. Most other browser workflows still use intercepted API responses;
+- **Web applications:** CI exercises Admin sign-in/dashboard, Identity account
+  creation and callsign management through export and anonymization, Activity
+  correction review, and policy publication against running NestJS services
+  through the Gateway. Participant public catalogue loading also uses the live
+  services. Most other browser workflows still use intercepted API responses;
   broader payload coverage, accessibility, responsive behavior, and failure
   states remain to be qualified.
 - **Production operations:** qualify persistent database operations, NATS,
