@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { ActivityModule } from '../../activity/src/activity.module.js';
 import { IdentityModule } from './identity.module.js';
 
 const describeWithCoreDatabase = describe.skipIf(
-  !process.env.CORE_DATABASE_URL,
+  !process.env.CORE_DATABASE_URL || !process.env.ACTIVITY_DATABASE_URL,
 );
 
-describeWithCoreDatabase('Identity API with PostgreSQL', () => {
-  it('bootstraps an operator and completes login, current-account, and refresh over HTTP', async () => {
+describeWithCoreDatabase('MyOTA APIs with PostgreSQL', () => {
+  it('completes bootstrap, Identity session, and Activity activation/QSO workflows over HTTP', async () => {
     const email = `identity-e2e-${randomUUID()}@example.test`;
     const password = `MyOTA-e2e-${randomUUID()}!`;
     const previousEmail = process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL;
@@ -17,7 +18,7 @@ describeWithCoreDatabase('Identity API with PostgreSQL', () => {
     process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD = password;
 
     const module = await Test.createTestingModule({
-      imports: [IdentityModule],
+      imports: [IdentityModule, ActivityModule],
     }).compile();
     const app = module.createNestApplication();
     try {
@@ -52,6 +53,42 @@ describeWithCoreDatabase('Identity API with PostgreSQL', () => {
         .post('/identity/auth/refresh')
         .send({ refreshToken: login.body.refreshToken })
         .expect(401);
+
+      const startedAt = new Date().toISOString();
+      const activation = await request(server)
+        .post('/activations')
+        .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          programmeSlug: 'identity-e2e',
+          entityId: `entity-${randomUUID()}`,
+          operatorId: login.body.account.id,
+          operatorCallsign: 'EA0E2E',
+          startedAt,
+        })
+        .expect(201);
+      expect(activation.body.status).toBe('OPEN');
+      expect(activation.body.operatorId).toBe(login.body.account.id);
+
+      const qso = await request(server)
+        .post(`/activations/${activation.body.id}/qsos`)
+        .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          workedCallsign: 'F4E2E',
+          timestamp: startedAt,
+          band: '20M',
+          mode: 'SSB',
+        })
+        .expect(201);
+      expect(qso.body.workedCallsign).toBe('F4E2E');
+
+      const closed = await request(server)
+        .patch(`/activations/${activation.body.id}`)
+        .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+        .send({ status: 'CLOSED', endedAt: new Date().toISOString() })
+        .expect(200);
+      expect(closed.body.status).toBe('CLOSED');
     } finally {
       await app.close();
       if (previousEmail === undefined) {
