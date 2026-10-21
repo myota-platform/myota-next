@@ -98,12 +98,8 @@ export class GeodataEntityMutationRepository {
     const targetStatus =
       typeof requestedStatus === 'string' ? requestedStatus : '';
     const note = body.note === undefined ? null : body.note;
-    if (!pythonTruthy(reviewerId))
-      throw new BadRequestException('reviewerId is required');
-    if (
-      !['APPROVED', 'CANDIDATE', 'RETIRED', 'REJECTED'].includes(targetStatus)
-    )
-      throw new BadRequestException('unsupported entity review status');
+    if (!pythonTruthy(requestedStatus))
+      throw new BadRequestException('review status or decision is required');
     const expectedVersion = parseIfMatch(ifMatch);
     const client = await this.connect();
     try {
@@ -122,6 +118,14 @@ export class GeodataEntityMutationRepository {
       const row = result.rows[0];
       if (!row) throw new NotFoundException(pythonKeyErrorDetail(id));
       assertReviewCoverage(claims, row);
+      if (!pythonTruthy(reviewerId))
+        throw new BadRequestException('reviewerId is required');
+      if (
+        !['APPROVED', 'CANDIDATE', 'RETIRED', 'REJECTED'].includes(
+          targetStatus,
+        )
+      )
+        throw new BadRequestException('unsupported entity review status');
       if (key) {
         const previous = await readRequestResponse(
           client,
