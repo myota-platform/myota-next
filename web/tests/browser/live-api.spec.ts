@@ -405,6 +405,14 @@ test('manages participant-owned callsigns through the live Identity API', async 
   await page.locator('#award-login button[type="submit"]').click();
   await expect(page.locator('#profile-callsigns')).toBeVisible();
 
+  const websiteUrl = `https://radio-${randomUUID()}.example.test`;
+  const biographyMarkdown =
+    'Live participant profile details from the browser integration.';
+  await page.locator('#profile-website').fill(websiteUrl);
+  await page.locator('#profile-biography').fill(biographyMarkdown);
+  await page.getByRole('button', { name: 'Save profile details' }).click();
+  await expect(page.locator('#profile-status')).toHaveText('Profile saved.');
+
   await page.locator('#profile-callsign-value').fill(newValue);
   await page.locator('#profile-callsign-add button[type="submit"]').click();
   await expect(page.locator('#profile-status')).toHaveText('Callsign added.');
@@ -463,6 +471,8 @@ test('manages participant-owned callsigns through the live Identity API', async 
   expect(finalAccountView).toMatchObject({
     id: accountId,
     primaryCallsignId: newCallsignId,
+    websiteUrl,
+    biographyMarkdown,
   });
   expect(finalAccountView.callsigns).toEqual(
     expect.arrayContaining([

@@ -29,7 +29,8 @@ create a participant account with an authorized Activity role through Gateway,
 add and verify its callsign, activate the account, export its data, and
 deactivate and anonymize it through Gateway. Another workflow signs in as a
 participant and exercises owner callsign creation, evidence submission,
-primary selection, and retirement against the live Identity API. A separate workflow creates a
+primary selection, and retirement plus profile detail editing against the live
+Identity API. A separate workflow creates a
 programme through Gateway before Participant loads its catalogue,
 published-content response, and empty Geodata entity page through the Vite
 proxy and running NestJS services. Other browser workflows continue to use
