@@ -1,7 +1,37 @@
-import { readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { promisify } from 'node:util';
 import { vi } from 'vitest';
 import { sourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 import { decodeOsmPbfStream } from './geodata-osm-pbf.js';
+
+const execFileAsync = promisify(execFile);
+
+async function readProcessTreeRssBytes(rootPid: number): Promise<number> {
+  const pending = [rootPid];
+  let total = 0;
+  while (pending.length) {
+    const pid = pending.pop();
+    if (pid === undefined) continue;
+    try {
+      const [status, children] = await Promise.all([
+        readFile(`/proc/${pid}/status`, 'utf8'),
+        readFile(`/proc/${pid}/task/${pid}/children`, 'utf8'),
+      ]);
+      const residentKb = /^VmRSS:\s+(\d+)\s+kB$/m.exec(status)?.[1];
+      if (residentKb) total += Number(residentKb) * 1024;
+      pending.push(...children.trim().split(/\s+/).filter(Boolean).map(Number));
+    } catch {
+      // A short-lived subprocess may exit between reading its parent and it.
+    }
+  }
+  return total;
+}
 
 describe('OSM PBF reference parity', () => {
   it('matches Python node, way, and multipolygon features and hashes', async () => {
@@ -133,4 +163,84 @@ describe('OSM PBF reference parity', () => {
       vi.resetModules();
     }
   });
+
+  it.skipIf(process.platform !== 'linux')(
+    'streams a large PBF while keeping decoder process-tree RSS growth below 96 MiB',
+    async () => {
+      const directory = await mkdtemp(join(tmpdir(), 'myota-osm-rss-'));
+      const xmlPath = join(directory, 'many-parks.osm');
+      const pbfPath = join(directory, 'many-parks.osm.pbf');
+      const featureCount = 250_000;
+      async function* osmXml() {
+        yield '<?xml version="1.0" encoding="UTF-8"?><osm version="0.6" generator="myota-parity">';
+        for (let start = 1; start <= featureCount; start += 1000) {
+          let chunk = '';
+          for (
+            let id = start;
+            id < Math.min(start + 1000, featureCount + 1);
+            id++
+          ) {
+            const longitude = -5.99 + (id % 100) / 100_000;
+            chunk += `<node id="${id}" lat="37.39" lon="${longitude}"><tag k="leisure" v="park"/></node>`;
+          }
+          yield chunk;
+        }
+        yield '</osm>';
+      }
+
+      try {
+        await pipeline(
+          Readable.from(osmXml()),
+          createWriteStream(xmlPath, { flags: 'wx', mode: 0o600 }),
+        );
+        await execFileAsync('osmium', [
+          'cat',
+          xmlPath,
+          '--output',
+          pbfPath,
+          '--output-format',
+          'pbf',
+        ]);
+
+        const beforeRssBytes = await readProcessTreeRssBytes(process.pid);
+        let peakRssBytes = beforeRssBytes;
+        let sampling = true;
+        const sample = (async () => {
+          while (sampling) {
+            peakRssBytes = Math.max(
+              peakRssBytes,
+              await readProcessTreeRssBytes(process.pid),
+            );
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+        })();
+        let decoded = 0;
+        try {
+          for await (const _feature of decodeOsmPbfStream(
+            createReadStream(pbfPath),
+            'many-parks.osm.pbf',
+            featureCount,
+            '',
+          )) {
+            decoded++;
+          }
+        } finally {
+          sampling = false;
+          await sample;
+          peakRssBytes = Math.max(
+            peakRssBytes,
+            await readProcessTreeRssBytes(process.pid),
+          );
+        }
+
+        expect(decoded).toBe(featureCount);
+        expect(peakRssBytes - beforeRssBytes).toBeLessThanOrEqual(
+          96 * 1024 * 1024,
+        );
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+    120_000,
+  );
 });
