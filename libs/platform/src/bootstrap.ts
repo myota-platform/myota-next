@@ -194,6 +194,7 @@ export async function bootstrapHttpService(
             '/v1/entity-types',
             '/v1/identity/admin/roles',
             '/v1/identity/roles',
+            '/v1/qso-ingestions',
           ].includes(path) ||
             /^\/v1\/programmes\/[^/]+\/entity-types$/.test(path) ||
             /^\/v1\/activations\/[^/]+\/qsos$/.test(path))) ||

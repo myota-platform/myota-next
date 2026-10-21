@@ -13,10 +13,11 @@ of the authenticated subject and submitted operator ID, retaining JSON float
 tokens such as `1.0` as distinct from integer `1`.
 Single-QSO writes check `workedCallsign` and `timestamp` with Python truthiness
 before activation lookup and return the same ordered `missing required fields`
-detail as the reference. Direct QSO writes preserve Python string coercion
-for JSON float tokens in `workedCallsign`, `workedLocator`, `hunterId`, and
-`workedEntityId`, including exact float-token metadata before normalization and
-deduplication. Activation validity defaults come from
+detail as the reference. Direct QSO writes and queued QSO ingestion preserve
+Python string coercion for JSON float tokens in `workedCallsign`,
+`workedLocator`, `hunterId`, and `workedEntityId`; ingestion retains float-token
+metadata through the Activity JSONB job payload and worker read. Activation
+validity defaults come from
 `programmeRules` only, even
 when validation uses the `rules` alias. Timestamp normalization accepts lowercase `t`, ISO week dates,
 one-character date/time separators, and fractional-second time-zone offsets

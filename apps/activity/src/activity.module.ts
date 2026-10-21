@@ -5,6 +5,7 @@ import {
   HttpMetricsController,
   observeRoot,
 } from '@app/platform';
+import { parseJsonWithFloatMetadata } from '@app/platform/json-exact.js';
 import { ActivityController } from './activity.controller.js';
 import { ActivityRepository } from './activity.repository.js';
 import { ActivityAwardsRepository } from './activity-awards.repository.js';
@@ -20,7 +21,10 @@ import { AdifImportController } from './adif-import.controller.js';
 @Module({
   imports: [
     observeRoot('activity-api'),
-    DatabaseHealthModule.forEnvironment('ACTIVITY_DATABASE_URL'),
+    DatabaseHealthModule.forEnvironment(
+      'ACTIVITY_DATABASE_URL',
+      parseJsonWithFloatMetadata,
+    ),
   ],
   controllers: [
     HealthController,

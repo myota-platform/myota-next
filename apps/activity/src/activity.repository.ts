@@ -8,7 +8,10 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
+import {
+  stringifyJsonWithBigInts,
+  stringifyJsonWithMetadata,
+} from '@app/platform/json-bigint.js';
 import {
   nextPageIfMore,
   pageOffset,
@@ -818,7 +821,7 @@ export class ActivityRepository {
          VALUES ($1,$2,$3::jsonb,$4)
          RETURNING id,kind,payload,status,attempts,available_at,started_at,completed_at,last_error,created_at,
                    ${jobTimestampProjection}`,
-        [id, kind, JSON.stringify(payload), key ?? null],
+        [id, kind, stringifyJsonWithMetadata(payload), key ?? null],
       );
       await client.query(
         `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at,correlation_id)
