@@ -182,3 +182,143 @@ test('creates a participant account in Admin through the live Identity API', asy
   ).toContainText(callsignValue);
   expect(failedResponses).toEqual([]);
 });
+
+test('reviews a live QSO correction in Admin and verifies the updated QSO', async ({
+  page,
+  request,
+}) => {
+  test.skip(!hasApiDatabases, 'requires the CI PostgreSQL databases');
+
+  const email =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL ?? 'browser-e2e-admin@example.test';
+  const password =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD ?? 'browser-e2e-password-7!Q';
+  const login = await request.post(
+    'http://127.0.0.1:8080/v1/identity/auth/login',
+    { data: { email, password } },
+  );
+  expect(login.ok()).toBeTruthy();
+  const { accessToken, account } = await login.json();
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const suffix = randomUUID();
+  const programmeSlug = `browser-correction-${suffix}`;
+  const startedAt = new Date().toISOString();
+  const programme = await request.post('http://127.0.0.1:8080/v1/programmes', {
+    headers: { ...headers, 'Idempotency-Key': randomUUID() },
+    data: {
+      slug: programmeSlug,
+      name: 'Browser correction review programme',
+      description: 'Created for the live Admin correction review workflow.',
+      entityTypes: [
+        {
+          code: `E2E_${suffix.replaceAll('-', '').slice(0, 12)}`,
+          label: 'Correction test point',
+          geometryTypes: ['POINT'],
+        },
+      ],
+      rules: {
+        activationValidityDays: 7,
+        minimumQsos: { activation: 1, hunter: 1 },
+        publicAccessRequired: false,
+      },
+    },
+  });
+  expect(programme.status()).toBe(201);
+
+  const activationResponse = await request.post(
+    'http://127.0.0.1:8080/v1/activations',
+    {
+      headers: { ...headers, 'Idempotency-Key': randomUUID() },
+      data: {
+        programmeSlug,
+        entityId: `entity-${suffix}`,
+        operatorId: account.id,
+        operatorCallsign: 'EA0BROWSER',
+        startedAt,
+        programmeRules: {
+          minimumQsos: { activation: 1, hunter: 1 },
+        },
+      },
+    },
+  );
+  expect(activationResponse.status()).toBe(201);
+  const activation = await activationResponse.json();
+  const qsoResponse = await request.post(
+    `http://127.0.0.1:8080/v1/activations/${activation.id}/qsos`,
+    {
+      headers: { ...headers, 'Idempotency-Key': randomUUID() },
+      data: {
+        workedCallsign: `F4${suffix.replaceAll('-', '').slice(0, 5).toUpperCase()}`,
+        timestamp: startedAt,
+        band: '20M',
+        mode: 'SSB',
+      },
+    },
+  );
+  expect(qsoResponse.status()).toBe(201);
+  const qso = (await qsoResponse.json()).qso;
+  const originalCallsign = qso.workedCallsign as string;
+  const correctedCallsign = `G4${suffix.replaceAll('-', '').slice(0, 5).toUpperCase()}`;
+  const correctionResponse = await request.post(
+    `http://127.0.0.1:8080/v1/qsos/${qso.id}/corrections`,
+    {
+      headers,
+      data: {
+        requestedBy: account.id,
+        reason: 'Correct the worked callsign from the live browser test.',
+        proposedValues: { workedCallsign: correctedCallsign },
+      },
+    },
+  );
+  expect(correctionResponse.status()).toBe(201);
+  const correction = await correctionResponse.json();
+
+  const failedResponses: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('/v1/') && response.status() >= 400)
+      failedResponses.push(`${response.status()} ${response.url()}`);
+  });
+  await page.goto('http://127.0.0.1:8090/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto('http://127.0.0.1:8090/activity');
+
+  const correctionCard = page
+    .locator('.correction-card')
+    .filter({ hasText: originalCallsign });
+  await expect(correctionCard).toContainText(
+    'Correct the worked callsign from the live browser test.',
+  );
+  await expect(correctionCard).toContainText(correctedCallsign);
+  await correctionCard
+    .getByLabel('Review note (optional)')
+    .fill('Confirmed in the live Admin browser workflow.');
+  const reviewResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname ===
+        `/v1/qsos/${qso.id}/corrections/${correction.id}/review`,
+  );
+  page.once('dialog', (dialog) => dialog.accept());
+  await correctionCard
+    .getByRole('button', { name: 'Apply correction' })
+    .click();
+  expect((await reviewResponse).status()).toBe(200);
+  await expect(page.getByText('QSO correction applied.')).toBeVisible();
+
+  await page.getByLabel('Status').selectOption('APPLIED');
+  await expect(
+    page.locator('.correction-card').filter({ hasText: correctedCallsign }),
+  ).toContainText('APPLIED');
+  const activationRead = await request.get(
+    `http://127.0.0.1:8080/v1/activations/${activation.id}`,
+    { headers },
+  );
+  expect(activationRead.status()).toBe(200);
+  expect((await activationRead.json()).qsos).toMatchObject([
+    { id: qso.id, workedCallsign: correctedCallsign, status: 'CORRECTED' },
+  ]);
+  expect(failedResponses).toEqual([]);
+});

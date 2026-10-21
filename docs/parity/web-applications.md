@@ -56,8 +56,11 @@ activation/QSO detail viewing and statistics rebuild submission with an
 idempotency key and job status refresh. The Admin Activity screen also lists,
 filters, pages, and reviews QSO correction requests. Review cards identify both
 requester and operator, and confirmations explain the effect of applying versus
-rejecting. Browser coverage verifies the affected QSO context, status filtering,
-review notes, paging, and both apply and reject outcomes.
+rejecting. Intercepted browser coverage verifies the affected QSO context,
+status filtering, review notes, paging, and both apply and reject outcomes. A
+live CI browser workflow creates an isolated programme, activation, QSO, and
+correction, applies the correction in Admin, and verifies the updated QSO
+through Gateway.
 Award browser checks cover programme-
 scoped draft creation, its idempotency key and condition/level payload, and
 the submit, approve, and publish lifecycle. Award creation, definition edits,
