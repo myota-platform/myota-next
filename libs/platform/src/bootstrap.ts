@@ -54,6 +54,16 @@ export async function bootstrapHttpService(
     )
   )
     app.use((request: Request, response: Response, next: NextFunction) => {
+      const originalEnd = response.end.bind(response);
+      response.end = new Proxy(originalEnd, {
+        apply(target, thisArg, argumentsList) {
+          if (response.statusCode === 204) {
+            response.setHeader('Content-Type', 'application/json; charset=utf-8');
+            response.setHeader('Content-Length', '0');
+          }
+          return Reflect.apply(target, thisArg, argumentsList);
+        },
+      });
       response.setHeader('Access-Control-Allow-Origin', '*');
       response.setHeader(
         'Access-Control-Allow-Headers',

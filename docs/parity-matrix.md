@@ -19,6 +19,8 @@ behavior: invalid credentials return 400, while permission and rate-limit
 failures return 403. Other NestJS 401 permission exceptions also map to 403.
 Identity, Programmes, Activity, and Geodata APIs send the reference CORS headers
 on responses and answer preflight requests; Geodata also allows `If-Match`.
+Their 204 responses retain the reference JSON content type and zero content
+length.
 Malformed JSON and oversized JSON bodies use the reference's 400
 `invalid_request` response shape and details.
 The shared parser decodes JSON request bodies regardless of `Content-Type` or
