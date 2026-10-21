@@ -474,20 +474,33 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
     }
 
     const started = performance.now();
-    let brokerAcknowledged = false;
-    let publishObserved = false;
+    let acknowledgedStream: string;
     try {
       const ack = await this.relay!.publish(routed.subject, body, {
         msgID: event.eventId,
         timeout: PUBLISH_TIMEOUT_MS,
       });
-      brokerAcknowledged = true;
+      acknowledgedStream = ack.stream;
       this.natsUp = 1;
+    } catch (error) {
+      this.natsUp = 0;
       this.observePublish((performance.now() - started) / 1000);
-      publishObserved = true;
-      if (ack.stream !== routed.stream)
-        throw new Error('JetStream acknowledged an unexpected stream');
-      this.published += 1;
+      if (error instanceof OutboxContractError)
+        await this.markFailed(event, error, true);
+      else await this.markFailed(event, error, false);
+      return;
+    }
+    this.observePublish((performance.now() - started) / 1000);
+    if (acknowledgedStream !== routed.stream) {
+      await this.markFailed(
+        event,
+        new Error('JetStream acknowledged an unexpected stream'),
+        false,
+      );
+      return;
+    }
+    this.published += 1;
+    try {
       const client = await this.pool!.connect();
       try {
         await client.query('BEGIN');
@@ -501,18 +514,15 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
         );
         await client.query('COMMIT');
       } catch (error) {
-        await client.query('ROLLBACK');
+        await client.query('ROLLBACK').catch(() => undefined);
         throw error;
       } finally {
         client.release();
       }
     } catch (error) {
-      if (!brokerAcknowledged) this.natsUp = 0;
-      if (!publishObserved)
-        this.observePublish((performance.now() - started) / 1000);
-      if (error instanceof OutboxContractError)
-        await this.markFailed(event, error, true);
-      else await this.markFailed(event, error, false);
+      this.logger.error(
+        `JetStream acknowledged event ${event.eventId}, but the outbox mark failed: ${this.safeError(error)}`,
+      );
     }
   }
 

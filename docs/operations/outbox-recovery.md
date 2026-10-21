@@ -35,3 +35,8 @@ restart. If JetStream is unavailable, the relay records a retryable failure;
 after the server returns, the client reconnects and the retained event is
 published. This exercises one broker process and retained local file store. It
 does not qualify clustered failover or production NATS deployment recovery.
+
+When JetStream acknowledges a publish but the owner-database update fails, the
+relay leaves the outbox event unpublished. A later claim retries the event with
+the same event ID as `Nats-Msg-Id`; the relay does not count the database-mark
+failure against the publish retry limit or dead-letter the acknowledged event.
