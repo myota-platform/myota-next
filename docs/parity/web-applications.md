@@ -75,6 +75,12 @@ programme editor and Gateway. It verifies the resulting Core catalogue and
 programme records, idempotency keys, and catalogue, assignment, and removal
 outbox events.
 
+Another live Admin workflow creates a printable background asset, saves an
+award draft, submits and approves it, and publishes it through Gateway. The
+browser API stack uses an ephemeral S3-compatible store for the upload and
+read-back; CI verifies the stored Activity asset, published award definition,
+print-readiness result, and saved and published outbox events.
+
 An additional live browser workflow seeds an isolated Geodata entity and a
 catalogue-backed country value, signs in as the bootstrap administrator, edits
 the entity's country and city through Admin and Gateway, then verifies the
