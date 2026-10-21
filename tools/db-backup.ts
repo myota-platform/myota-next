@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import {
   assertDistinctDatabaseTargets,
   type OwnerDatabaseConfig,
-} from './db-owner-config.js';
+} from './db-owner-config.ts';
 
 const execFileAsync = promisify(execFile);
 const owners = {
