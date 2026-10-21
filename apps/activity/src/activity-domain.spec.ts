@@ -2,6 +2,7 @@ import {
   adifAwardRecalculationKey,
   calculateAdifRejectedRecords,
   evaluateActivation,
+  normalizeActivation,
   normalizeQso,
   normalizeTimestamp,
   parseTimestamp,
@@ -147,5 +148,84 @@ describe('activation rule evaluation compatibility', () => {
 
     expect(result.valid).toBe(true);
     expect(result.violations).toEqual([]);
+  });
+});
+
+describe('activation validation compatibility', () => {
+  it('normalizes the callsign, UTC start time, location, and rules alias', () => {
+    const result = normalizeActivation({
+      operatorCallsign: ' dl1abc ',
+      callsignLifecycleStatus: 'UNVERIFIED',
+      authorizedCallsigns: ['DL1ABC'],
+      programmeRules: {},
+      rules: {
+        allowUnverifiedCallsign: true,
+        requireLocation: true,
+        entityBounds: {
+          minLatitude: 45,
+          maxLatitude: 48,
+          minLongitude: 6,
+          maxLongitude: 10,
+        },
+      },
+      location: { latitude: '46.2', longitude: '7.3' },
+      startedAt: '2026-10-21T10:20:30+02:00',
+    });
+
+    expect(result).toMatchObject({
+      operatorCallsign: 'DL1ABC',
+      programmeRules: {
+        allowUnverifiedCallsign: true,
+        requireLocation: true,
+      },
+      location: { latitude: '46.2', longitude: '7.3' },
+      startedAt: '2026-10-21T08:20:30Z',
+    });
+  });
+
+  it.each([
+    [
+      'requires coordinates when the programme rule says so',
+      { programmeRules: { requireLocation: true }, location: {} },
+      'programme rules require an activation location',
+    ],
+    [
+      'rejects a location outside entity bounds',
+      {
+        rules: {
+          entityBounds: {
+            minLatitude: 45,
+            maxLatitude: 48,
+            minLongitude: 6,
+            maxLongitude: 10,
+          },
+        },
+        location: { latitude: 49, longitude: 7 },
+      },
+      'activation location is outside the entity bounds',
+    ],
+    [
+      'rejects an unauthorized callsign',
+      {
+        operatorCallsign: 'F4XYZ',
+        authorizedCallsigns: ['DL1ABC'],
+      },
+      'operator callsign is not authorized for this account',
+    ],
+    [
+      'rejects retired callsigns',
+      {
+        operatorCallsign: 'DL1ABC',
+        callsignLifecycleStatus: 'RETIRED',
+      },
+      'retired callsigns cannot start activations',
+    ],
+  ])('%s', (_label, additions, message) => {
+    expect(() =>
+      normalizeActivation({
+        startedAt: '2026-10-21T10:00:00Z',
+        ...(additions as Record<string, unknown>),
+      }),
+    ).toThrow(message as string);
   });
 });

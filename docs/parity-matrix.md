@@ -212,7 +212,9 @@ supported by Python's
 `datetime.fromisoformat`; Activity tests cover date-only, ISO week, compact
 offset, fractional offset-second, and invalid lowercase-`z` cases. A Python
 fixture also verifies QSO normalization and the SHA-256 deduplication key;
-activation evaluation tests verify violation ordering and falsey end times.
+activation validation tests cover rule fallback, location bounds, callsign
+authorization and lifecycle; evaluation tests verify violation ordering and
+falsey end times.
 QSO ingestion requests also persist bounded,
 owner-scoped jobs with a status read path. `sourceFormat` defaults only when
 omitted and otherwise reaches the worker unchanged, matching the Python
