@@ -113,6 +113,9 @@ Python `str()` conversion before uppercasing, and definition signature asset
 IDs retain the submitted value for registry lookup. Certificate element
 labels and kinds plus print page and orientation settings also use Python
 `str()` conversion, with defaults applied only when fields are omitted.
+Preview name and manager labels use Python truthiness and `str()` conversion;
+preview DPI accepts the reference's finite fractional values in the 150–300
+range.
 Issuance preserves the submitted `dateObtained` value and defaults it only
 when omitted; certificate rendering converts that value with Python `str()`.
 Award-request fact lookup passes stored programme and category values through,

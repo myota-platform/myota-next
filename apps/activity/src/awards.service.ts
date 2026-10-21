@@ -34,7 +34,7 @@ import {
   validateAwardDraft,
   validateTemplate,
 } from './award-domain.js';
-import { pythonInt, type JsonRecord } from './activity-domain.js';
+import { pythonFloat, pythonInt, type JsonRecord } from './activity-domain.js';
 
 @Injectable()
 export class AwardsService {
@@ -587,8 +587,9 @@ export class AwardsService {
       );
     this.previewBusy = true;
     try {
-      const name = typeof body.name === 'string' ? body.name : '';
-      if (!name) throw new BadRequestException('missing required fields: name');
+      if (!pythonTruthy(body.name))
+        throw new BadRequestException('missing required fields: name');
+      const name = pythonString(body.name);
       const template = asRecord(body.template, 'template');
       if (!Array.isArray(template.elements) || template.elements.length > 30)
         throw new BadRequestException(
@@ -604,11 +605,14 @@ export class AwardsService {
           ? printSpec.orientation
           : 'PORTRAIT',
       ).toUpperCase();
-      const dpi = Number(printSpec.dpi ?? 300);
+      const dpi = pythonFloat(
+        Object.hasOwn(printSpec, 'dpi') ? printSpec.dpi : 300,
+        'print.dpi',
+      );
       if (
         !['A4', 'LETTER'].includes(page) ||
         !['PORTRAIT', 'LANDSCAPE'].includes(orientation) ||
-        !Number.isInteger(dpi) ||
+        !Number.isFinite(dpi) ||
         dpi < 150 ||
         dpi > 300
       )
@@ -648,10 +652,15 @@ export class AwardsService {
         CALLSIGN: 'EA7TEST',
         PERSON_NAME: 'Demo Radio Operator',
         DATE_OBTAINED: new Date().toISOString().slice(0, 10),
-        MANAGER_NAME:
-          typeof body.managerName === 'string' && body.managerName
-            ? Array.from(body.managerName).slice(0, 200).join('')
-            : 'Demo Award Manager',
+        MANAGER_NAME: Array.from(
+          pythonString(
+            pythonTruthy(body.managerName)
+              ? body.managerName
+              : 'Demo Award Manager',
+          ),
+        )
+          .slice(0, 200)
+          .join(''),
       };
       const pdf = await renderCertificatePdf({
         printSpec: { page, orientation, dpi },
