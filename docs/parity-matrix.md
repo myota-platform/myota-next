@@ -478,7 +478,7 @@ need qualification. Area and way vertex limits use the reference errors;
 the CLI decoder checks after osmium emits a record, bounded by the decoded
 feature-size cap, while PyOsmium checks areas before GeoJSON materialization.
 CI also streams a generated 300,000-feature GeoJSON FeatureCollection through
-the metadata scan and feature pass, with Node RSS growth under 96 MiB; a
+the metadata scan and feature pass, with Node RSS growth under 160 MiB; a
 top-level feature array has a separate correctness fixture. The Python stress
 fixture uses the same GeoJSON feature count and a 96 MiB absolute process-RSS
 limit, while the Nest check measures growth from its test-worker baseline, so

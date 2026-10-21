@@ -70,8 +70,8 @@ behavioral parity or production readiness.
   Shapefile stream RSS growth at 50,000 records, and KML/GPX stream RSS growth at
   50,000 features each. Larger datasets and full worker throughput remain
   unqualified. The full suite can contaminate the GeoJSON RSS measurement when
-  other test workers run concurrently, so CI runs that 96 MiB qualification in
-  a separate required `npm run test:geodata-rss` step.
+  other test workers run concurrently, so CI runs that 160 MiB qualification
+  in a separate required `npm run test:geodata-rss` step.
   Per-durable NestJS concurrency is configurable,
   but the reference thread-pool settings do not map directly to its durable
   consumers.

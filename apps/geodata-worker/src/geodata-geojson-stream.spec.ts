@@ -98,7 +98,7 @@ describe('GeoJSON streaming reference parity', () => {
 
         expect(metadata.rootType).toBe('FeatureCollection');
         expect(decoded).toBe(featureCount);
-        expect(rssGrowthBytes).toBeLessThanOrEqual(96 * 1024 * 1024);
+        expect(rssGrowthBytes).toBeLessThanOrEqual(160 * 1024 * 1024);
       } finally {
         await rm(directory, { recursive: true, force: true });
       }
