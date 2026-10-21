@@ -87,7 +87,9 @@ same detail for missing records. Award definition draft, review, publish, and
 retire APIs are implemented.
 Award progress reads and
 evaluation/recalculation job APIs persist versioned progress and qualification
-notifications through the Activity worker. Evaluation-job self-access compares
+notifications through the Activity worker. The worker parses award definition
+and issuance JSONB text exactly when loading evaluations and render jobs.
+Evaluation-job self-access compares
 Python `str()` conversions of account IDs, retaining JSON float tokens such as
 `1.0` as distinct from integer `1`. Award requests validate eligibility;
 issuance is transactional and permanent, and PDF render jobs store artifacts in

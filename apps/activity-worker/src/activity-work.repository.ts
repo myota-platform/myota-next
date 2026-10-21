@@ -763,10 +763,14 @@ export class ActivityWorkRepository {
 
   private async processPdfRender(client: PoolClient, payload: JsonRecord) {
     const selected = await client.query(
-      'SELECT issuance FROM activity_award_issuance WHERE id=$1 FOR UPDATE',
+      'SELECT issuance::text AS issuance_text FROM activity_award_issuance WHERE id=$1 FOR UPDATE',
       [payload.issuanceId],
     );
-    const issuance = selected.rows[0]?.issuance as JsonRecord | undefined;
+    const issuance = selected.rows[0]
+      ? (parseJsonWithExactIntegers(
+          String(selected.rows[0].issuance_text),
+        ) as JsonRecord)
+      : undefined;
     if (!issuance) throw new Error('award issuance not found');
     const spec = issuance.renderSpec as JsonRecord;
     const backgroundAsset = spec.backgroundAsset as JsonRecord;
@@ -910,10 +914,14 @@ export class ActivityWorkRepository {
     payload: JsonRecord,
   ) {
     const result = await client.query(
-      'SELECT definition FROM activity_award_definition WHERE id=$1',
+      'SELECT definition::text AS definition_text FROM activity_award_definition WHERE id=$1',
       [payload.awardId],
     );
-    const award = result.rows[0]?.definition;
+    const award = result.rows[0]
+      ? (parseJsonWithExactIntegers(
+          String(result.rows[0].definition_text),
+        ) as JsonRecord)
+      : undefined;
     if (!award) throw new Error('award definition not found');
     const facts = pythonTruthy(payload.facts)
       ? payload.facts
@@ -949,10 +957,13 @@ export class ActivityWorkRepository {
     payload: JsonRecord,
   ) {
     const result = await client.query(
-      `SELECT definition FROM activity_award_definition WHERE programme_slug=$1 AND status IN ('PUBLISHED','RETIRED') ORDER BY code,version`,
+      `SELECT definition::text AS definition_text FROM activity_award_definition WHERE programme_slug=$1 AND status IN ('PUBLISHED','RETIRED') ORDER BY code,version`,
       [payload.programmeSlug],
     );
-    for (const { definition: award } of result.rows) {
+    for (const row of result.rows) {
+      const award = parseJsonWithExactIntegers(
+        String(row.definition_text),
+      ) as JsonRecord;
       if (
         pythonTruthy(payload.awardId) &&
         pythonString(award.id) !== pythonString(payload.awardId)
