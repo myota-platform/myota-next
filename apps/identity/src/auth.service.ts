@@ -22,6 +22,7 @@ import {
   parsePageInteger,
 } from '@app/platform/pagination.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
+import { missingPythonTruthyFields } from '@app/platform/python-truthiness.js';
 import {
   isPythonWhitespace,
   trimPythonWhitespace,
@@ -155,6 +156,7 @@ export class IdentityAuthService {
     input: { email: string; password: string },
     context: RequestContext,
   ): Promise<Record<string, unknown>> {
+    requireIdentityFields(input, ['email', 'password']);
     const client = await this.connect();
     let failure: Error | undefined;
     try {
@@ -287,6 +289,7 @@ export class IdentityAuthService {
     token: string,
     context: RequestContext,
   ): Promise<Record<string, unknown>> {
+    requireIdentityFields({ refreshToken: token }, ['refreshToken']);
     const claims = verifyToken(token, 'refresh');
     const client = await this.connect();
     try {
@@ -342,6 +345,7 @@ export class IdentityAuthService {
   }
 
   async requestRecovery(email: string): Promise<Record<string, unknown>> {
+    requireIdentityFields({ email }, ['email']);
     const normalizedEmail = unicodeCaseFold(trimPythonWhitespace(email));
     const client = await this.connect();
     try {
@@ -395,6 +399,7 @@ export class IdentityAuthService {
     token: string,
     newPassword: string,
   ): Promise<{ status: string }> {
+    requireIdentityFields({ token, newPassword }, ['token', 'newPassword']);
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -1214,4 +1219,13 @@ function isIpAddress(value: string | null): boolean {
   return (
     value !== null && /^(?:\d{1,3}\.){3}\d{1,3}$|^[0-9a-f:]+$/i.test(value)
   );
+}
+
+function requireIdentityFields(body: unknown, names: readonly string[]) {
+  const missing = missingPythonTruthyFields(body, names);
+  if (missing.length) {
+    throw new BadRequestException(
+      `missing required fields: ${missing.join(', ')}`,
+    );
+  }
 }

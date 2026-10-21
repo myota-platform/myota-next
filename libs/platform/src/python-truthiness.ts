@@ -11,3 +11,14 @@ export function pythonTruthy(value: unknown): boolean {
 export function firstPythonTruthy(...values: unknown[]): unknown {
   return values.find(pythonTruthy);
 }
+
+export function missingPythonTruthyFields(
+  body: unknown,
+  names: readonly string[],
+): string[] {
+  const fields =
+    body !== null && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+  return names.filter((name) => !pythonTruthy(fields[name]));
+}

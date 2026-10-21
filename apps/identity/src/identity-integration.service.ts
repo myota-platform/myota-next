@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -8,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
+import { missingPythonTruthyFields } from '@app/platform/python-truthiness.js';
 import type { IdentityAuthService } from './auth.service.js';
 import type { OidcProviderMappingDto } from './auth.dto.js';
 
@@ -22,6 +24,7 @@ export class IdentityIntegrationService {
     authorization: string,
     body: OidcProviderMappingDto,
   ): Promise<Record<string, unknown>> {
+    requireOidcFields(body, ['programmeSlug', 'issuer', 'clientId']);
     const actor = await this.auth.currentAccount(authorization);
     const scopes = new Set(actor.scopes as string[]);
     if (!scopes.has('*') && !scopes.has('identity.oidc.configure')) {
@@ -99,5 +102,14 @@ export class IdentityIntegrationService {
     } catch {
       throw new ServiceUnavailableException('Identity database is unavailable');
     }
+  }
+}
+
+function requireOidcFields(body: object, names: readonly string[]) {
+  const missing = missingPythonTruthyFields(body, names);
+  if (missing.length) {
+    throw new BadRequestException(
+      `missing required fields: ${missing.join(', ')}`,
+    );
   }
 }

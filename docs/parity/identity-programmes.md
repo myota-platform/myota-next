@@ -101,6 +101,9 @@ enumeration behavior, one-time token use, password length, and session
 revocation. Login tests verify the eight-attempt general limit and the
 global-operator bypass. Account, callsign, recovery, and authorization sequence
 behavior still require broader automated compatibility coverage.
+Login, refresh, recovery request/reset, and OIDC mapping use the reference's
+Python-truthy required-field checks before authentication or persistence, with
+the same `missing required fields` response precedence.
 The Python retired-permission fixtures are also covered in Nest: persisted
 custom-role definitions omit `operations.read`, and current-account scopes are
 recalculated from live role assignments instead of retaining that retired

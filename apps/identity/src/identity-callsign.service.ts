@@ -15,7 +15,7 @@ import {
   pythonKeyErrorDetail,
   trimPythonWhitespace,
 } from '@app/platform/python-strings.js';
-import { pythonTruthy } from '@app/platform/python-truthiness.js';
+import { missingPythonTruthyFields } from '@app/platform/python-truthiness.js';
 import { IdentityAuthService } from './auth.service.js';
 import type {
   AddCallsignDto,
@@ -646,10 +646,9 @@ export class IdentityCallsignService {
 
 function requireCallsignFields(
   body: object,
-  names: string[],
+  names: readonly string[],
 ) {
-  const fields = body as Record<string, unknown>;
-  const missing = names.filter((name) => !pythonTruthy(fields[name]));
+  const missing = missingPythonTruthyFields(body, names);
   if (missing.length) {
     throw new BadRequestException(
       `missing required fields: ${missing.join(', ')}`,
