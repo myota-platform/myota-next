@@ -118,4 +118,30 @@ describe('IdentityProfileImageService Pillow compatibility', () => {
       differences[Math.floor((differences.length - 1) * 0.99)],
     ).toBeLessThanOrEqual(8);
   });
+
+  it('rejects APNG animation when the default image is outside the animation', async () => {
+    const source = await readFile(
+      new URL(
+        './fixtures/profile-image-apng-default-image.png',
+        import.meta.url,
+      ),
+    );
+    const service = new IdentityProfileImageService(
+      null,
+      null as unknown as IdentityAuthService,
+    );
+    const internal = service as unknown as {
+      normalize: (
+        contentType: string,
+        input: AsyncIterable<Uint8Array>,
+      ) => Promise<Buffer>;
+    };
+    const input = (async function* () {
+      yield source;
+    })();
+
+    await expect(internal.normalize('image/png', input)).rejects.toThrow(
+      'animated profile images are not supported',
+    );
+  });
 });

@@ -136,8 +136,10 @@ shared WebP quality, alpha quality, effort, lossless, preset, and
 transparent-pixel options.
 Sharp inspects all WebP frames and reads APNG animation-control chunks before
 applying the reference's animation rejection rule, including APNG files with a
-separate default image. Pixel decoding remains limited to one frame and 4096
-pixels per dimension.
+separate default image. A Pillow-generated APNG fixture with one animation
+frame and a separate default image verifies rejection when Sharp reports no
+page count. Pixel decoding remains limited to one frame and 4096 pixels per
+dimension.
 Profile-image and account update timestamps are assigned independently,
 matching the reference's two clock reads.
 The current-account and login/refresh account projections include account
