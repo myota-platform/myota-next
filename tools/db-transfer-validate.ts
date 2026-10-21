@@ -128,7 +128,7 @@ async function main() {
     throw new Error(
       `Set MYOTA_TRANSFER_VALIDATION_CONFIRM to exactly: ${confirmation}`,
     );
-  await assertApplyReport(archive, confirmation, endpoints, emailSource);
+  await assertApplyReport(archive, endpoints, emailSource);
 
   const report: ValidationReport = {
     validationVersion: 1,
@@ -267,6 +267,12 @@ function validationConfirmation(
   return `VALIDATE core=${endpointId(endpoints.core.target)} activity=${endpointId(endpoints.activity.target)} geo=${endpointId(endpoints.geo.target)}`;
 }
 
+function transferConfirmation(
+  endpoints: Record<Owner, { source: Endpoint; target: Endpoint }>,
+) {
+  return `TRANSFER core=${endpointId(endpoints.core.target)} activity=${endpointId(endpoints.activity.target)} geo=${endpointId(endpoints.geo.target)}`;
+}
+
 function assertSevenDistinctEndpoints(
   endpoints: Record<Owner, { source: Endpoint; target: Endpoint }>,
   emailSource: Endpoint,
@@ -293,7 +299,6 @@ function assertSevenDistinctEndpoints(
 
 async function assertApplyReport(
   archive: string,
-  confirmation: string,
   endpoints: Record<Owner, { source: Endpoint; target: Endpoint }>,
   emailSource: Endpoint,
 ) {
@@ -339,7 +344,7 @@ async function assertApplyReport(
     report.transferVersion !== 2 ||
     report.sourceBaseline !== baseline ||
     report.status !== 'migration-complete-validation-required' ||
-    report.targetConfirmation !== confirmation ||
+    report.targetConfirmation !== transferConfirmation(endpoints) ||
     manifest.sourceBaseline !== baseline ||
     report.emailSourceEndpoint !== endpointId(emailSource) ||
     manifest.legacyEmailSource?.repositoryBaseline !== emailBaseline ||
