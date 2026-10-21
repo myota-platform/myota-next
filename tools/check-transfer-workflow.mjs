@@ -249,7 +249,8 @@ try {
     await admin.query(`CREATE DATABASE "${database}" TEMPLATE template0`);
     created.push(database);
   }
-  await admin.query(
+  await query(
+    endpoints['geo-target'],
     `GRANT USAGE ON SCHEMA public TO ${geodataAclRoles.map((role) => `"${role}"`).join(', ')}`,
   );
 
