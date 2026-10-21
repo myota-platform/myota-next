@@ -21,6 +21,7 @@ import {
   ProgrammeContentRepository,
   type ProgrammeContentRecord,
 } from './programme-content.repository.js';
+import { getUtcTimestamp } from './programme-mutation.repository.js';
 import type {
   PatchProgrammeContentDto,
   PublishProgrammeContentDto,
@@ -109,7 +110,7 @@ export class ProgrammeContentService {
       ) {
         throw new BadRequestException('only draft content can be edited');
       }
-      const createdAt = previous?.createdAt ?? new Date().toISOString();
+      const createdAt = previous?.createdAt ?? (await getUtcTimestamp(client));
       const record: ProgrammeContentRecord = {
         ...(previous ?? {
           id: contentId,
@@ -122,7 +123,7 @@ export class ProgrammeContentService {
         locale: body.locale,
         value: body.value,
         fallbackLocale: body.fallbackLocale ?? null,
-        updatedAt: new Date().toISOString(),
+        updatedAt: await getUtcTimestamp(client),
       };
       await this.contents.save(client, record);
       await this.contents.recordEvent(
@@ -152,8 +153,8 @@ export class ProgrammeContentService {
         throw new BadRequestException('only draft content can be submitted');
       }
       content.status = 'UNDER_REVIEW';
-      content.submittedAt = new Date().toISOString();
-      content.updatedAt = new Date().toISOString();
+      content.submittedAt = await getUtcTimestamp(client);
+      content.updatedAt = await getUtcTimestamp(client);
       content.reviewHistory.push({
         action: 'SUBMITTED',
         occurredAt: content.submittedAt,
@@ -201,8 +202,8 @@ export class ProgrammeContentService {
         );
       }
       content.status = decision;
-      content.reviewedAt = new Date().toISOString();
-      content.updatedAt = new Date().toISOString();
+      content.reviewedAt = await getUtcTimestamp(client);
+      content.updatedAt = await getUtcTimestamp(client);
       content.reviewHistory.push({
         action: decision,
         reviewerId: body.reviewerId,
@@ -251,9 +252,9 @@ export class ProgrammeContentService {
       }
       content.status = 'PUBLISHED';
       content.effectiveFrom = effectiveFrom;
-      content.publishedAt = new Date().toISOString();
+      content.publishedAt = await getUtcTimestamp(client);
       content.publisherId = body.publisherId;
-      content.updatedAt = new Date().toISOString();
+      content.updatedAt = await getUtcTimestamp(client);
       content.reviewHistory.push({
         action: 'PUBLISHED',
         publisherId: body.publisherId,

@@ -261,7 +261,8 @@ is omitted, matching Python's `dict.get` behavior.
 Programme and entity-type creation, plus Programme-content and policy-draft
 creation, submission, review, and publication, retain independent timestamps
 for lifecycle events and `updatedAt`, matching the reference's separate clock
-reads.
+reads. Their UTC timestamp strings retain six fractional digits from the
+Programme database clock, including review history and event payloads.
 Programme creation retains its required-field checks before admin authorization;
 Programme updates, entity-type writes, and content workflows perform their
 request checks after the same authorization and record-resolution steps as the

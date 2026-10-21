@@ -13,7 +13,10 @@ import {
   pageOffset,
   parsePageInteger,
 } from '@app/platform/pagination.js';
-import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
+import {
+  getUtcTimestamp,
+  ProgrammeMutationRepository,
+} from './programme-mutation.repository.js';
 import { ProgrammeReadRepository } from './programme-read.repository.js';
 import { ProgrammeRepository } from './programme.repository.js';
 import {
@@ -94,7 +97,7 @@ export class ProgrammePolicyService {
           'only draft policy versions can be edited',
         );
       }
-      const createdAt = previous?.createdAt ?? new Date().toISOString();
+      const createdAt = previous?.createdAt ?? (await getUtcTimestamp(client));
       const draft: ProgrammePolicyDraft = {
         ...(previous ?? {
           id: draftId,
@@ -109,7 +112,7 @@ export class ProgrammePolicyService {
         effectiveFrom: body.effectiveFrom
           ? normalizeUtcTimestamp(body.effectiveFrom)
           : null,
-        updatedAt: new Date().toISOString(),
+        updatedAt: await getUtcTimestamp(client),
       };
       await this.policies.save(client, draft);
       await this.policies.recordEvent(
@@ -139,8 +142,8 @@ export class ProgrammePolicyService {
         throw new BadRequestException('only draft policies can be submitted');
       }
       draft.status = 'UNDER_REVIEW';
-      draft.submittedAt = new Date().toISOString();
-      draft.updatedAt = new Date().toISOString();
+      draft.submittedAt = await getUtcTimestamp(client);
+      draft.updatedAt = await getUtcTimestamp(client);
       draft.reviewHistory.push({
         action: 'SUBMITTED',
         occurredAt: draft.submittedAt,
@@ -171,8 +174,8 @@ export class ProgrammePolicyService {
         );
       }
       draft.status = body.decision;
-      draft.reviewedAt = new Date().toISOString();
-      draft.updatedAt = new Date().toISOString();
+      draft.reviewedAt = await getUtcTimestamp(client);
+      draft.updatedAt = await getUtcTimestamp(client);
       draft.reviewHistory.push({
         action: body.decision,
         reviewerId: body.reviewerId,
@@ -206,13 +209,12 @@ export class ProgrammePolicyService {
         );
       }
       const programme = await this.programmes.getInTransaction(client, slug);
-      if (!programme)
-        throw new NotFoundException(pythonKeyErrorDetail(slug));
+      if (!programme) throw new NotFoundException(pythonKeyErrorDetail(slug));
       draft.status = 'PUBLISHED';
       draft.effectiveFrom = effectiveFrom;
-      draft.publishedAt = new Date().toISOString();
+      draft.publishedAt = await getUtcTimestamp(client);
       draft.publisherId = body.publisherId;
-      draft.updatedAt = new Date().toISOString();
+      draft.updatedAt = await getUtcTimestamp(client);
       draft.reviewHistory.push({
         action: 'PUBLISHED',
         publisherId: body.publisherId,
@@ -235,7 +237,7 @@ export class ProgrammePolicyService {
         });
         programme.awards = awards;
       }
-      programme.updatedAt = new Date().toISOString();
+      programme.updatedAt = await getUtcTimestamp(client);
       await this.programmes.save(client, programme);
       await this.policies.save(client, draft);
       await this.mutations.recordEvent(

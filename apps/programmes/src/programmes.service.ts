@@ -22,7 +22,10 @@ import {
   trimPythonWhitespace,
 } from '@app/platform/python-strings.js';
 import { nextPolicyVersion, type ProgrammeRecord } from './programme.types.js';
-import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
+import {
+  getUtcTimestamp,
+  ProgrammeMutationRepository,
+} from './programme-mutation.repository.js';
 import { ProgrammeRepository } from './programme.repository.js';
 import { ProgrammeEntityTypeRepository } from './programme-entity-type.repository.js';
 import type {
@@ -55,8 +58,7 @@ export class ProgrammesService {
 
   async get(slug: string): Promise<ProgrammeRecord> {
     const programme = await this.programmes.get(slug);
-    if (!programme)
-      throw new NotFoundException(pythonKeyErrorDetail(slug));
+    if (!programme) throw new NotFoundException(pythonKeyErrorDetail(slug));
     return programme;
   }
 
@@ -94,9 +96,11 @@ export class ProgrammesService {
         throw new BadRequestException('programme slug already exists');
       }
       const catalog = await this.entityTypes.listAll(client);
-      const normalizedTypes = body.entityTypes.map((entityType) =>
-        normalizeEntityType(entityType),
-      );
+      const normalizedTypes: (Record<string, unknown> & { code: string })[] =
+        [];
+      for (const entityType of body.entityTypes) {
+        normalizedTypes.push(await normalizeEntityType(client, entityType));
+      }
       for (const entityType of normalizedTypes) {
         if (!catalog[entityType.code]) {
           catalog[entityType.code] = entityType;
@@ -125,8 +129,8 @@ export class ProgrammesService {
             : { primary: '#0f766e', accent: '#f59e0b' },
         oidc: body.oidc ?? null,
         status: 'ACTIVE',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: await getUtcTimestamp(client),
+        updatedAt: await getUtcTimestamp(client),
       };
       await this.programmes.create(client, slug, programme);
       await this.mutations.recordEvent(
@@ -158,11 +162,10 @@ export class ProgrammesService {
     this.authorizeAdmin(authorization, slug);
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
-      if (!programme)
-        throw new NotFoundException(pythonKeyErrorDetail(slug));
+      if (!programme) throw new NotFoundException(pythonKeyErrorDetail(slug));
       if (status === 'ARCHIVED') {
         programme.status = 'ARCHIVED';
-        programme.updatedAt = new Date().toISOString();
+        programme.updatedAt = await getUtcTimestamp(client);
         await this.programmes.save(client, programme);
         await this.mutations.recordEvent(
           client,
@@ -187,7 +190,11 @@ export class ProgrammesService {
             typeof item.code === 'string'
               ? trimPythonWhitespace(item.code).toUpperCase()
               : '';
-          const normalized = normalizeEntityType(item, catalog[code]);
+          const normalized = await normalizeEntityType(
+            client,
+            item,
+            catalog[code],
+          );
           if (!catalog[code]) {
             catalog[code] = normalized;
             await this.entityTypes.save(client, normalized);
@@ -202,7 +209,7 @@ export class ProgrammesService {
       if (body.rules !== undefined || body.entityTypes !== undefined) {
         programme.policyVersion = nextPolicyVersion(programme.policyVersion);
       }
-      programme.updatedAt = new Date().toISOString();
+      programme.updatedAt = await getUtcTimestamp(client);
       await this.programmes.save(client, programme);
       await this.mutations.recordEvent(
         client,
@@ -230,8 +237,7 @@ export class ProgrammesService {
   ) {
     this.authorizeAdmin(authorization, slug);
     const programme = await this.programmes.get(slug);
-    if (!programme)
-      throw new NotFoundException(pythonKeyErrorDetail(slug));
+    if (!programme) throw new NotFoundException(pythonKeyErrorDetail(slug));
     return { programmeSlug: slug, items: programme.entityTypes ?? [] };
   }
 
@@ -251,10 +257,11 @@ export class ProgrammesService {
         ),
       ).toUpperCase();
       const previous = catalog[code];
-      const entityType = normalizeEntityType(body, previous);
+      const entityType = await normalizeEntityType(client, body, previous);
       catalog[code] = entityType;
       await this.entityTypes.save(client, entityType);
-      for (const programme of this.refreshAssignedEntityTypes(
+      for (const programme of await this.refreshAssignedEntityTypes(
+        client,
         programmes,
         catalog,
         code,
@@ -286,8 +293,7 @@ export class ProgrammesService {
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programmes = await this.programmes.listAll(client);
       const programme = programmes.find((item) => item.slug === slug);
-      if (!programme)
-        throw new NotFoundException(pythonKeyErrorDetail(slug));
+      if (!programme) throw new NotFoundException(pythonKeyErrorDetail(slug));
       const catalog = await this.entityTypes.listAll(client);
       const code = trimPythonWhitespace(
         pythonStringJsonField(
@@ -296,10 +302,11 @@ export class ProgrammesService {
         ),
       ).toUpperCase();
       const previous = catalog[code];
-      const entityType = normalizeEntityType(body, previous);
+      const entityType = await normalizeEntityType(client, body, previous);
       catalog[code] = entityType;
       await this.entityTypes.save(client, entityType);
-      for (const assigned of this.refreshAssignedEntityTypes(
+      for (const assigned of await this.refreshAssignedEntityTypes(
+        client,
         programmes,
         catalog,
         code,
@@ -335,8 +342,7 @@ export class ProgrammesService {
     const code = trimPythonWhitespace(codeValue).toUpperCase();
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
-      if (!programme)
-        throw new NotFoundException(pythonKeyErrorDetail(slug));
+      if (!programme) throw new NotFoundException(pythonKeyErrorDetail(slug));
       const catalog = await this.entityTypes.listAll(client);
       if (!catalog[code])
         throw new BadRequestException('unknown entity category');
@@ -359,8 +365,7 @@ export class ProgrammesService {
     const code = trimPythonWhitespace(codeValue).toUpperCase();
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
-      if (!programme)
-        throw new NotFoundException(pythonKeyErrorDetail(slug));
+      if (!programme) throw new NotFoundException(pythonKeyErrorDetail(slug));
       const catalog = await this.entityTypes.listAll(client);
       await this.applyAssignment(client, programme, code, catalog, false);
       return { programmeSlug: slug, items: programme.entityTypes ?? [] };
@@ -386,18 +391,19 @@ export class ProgrammesService {
     );
   }
 
-  private refreshAssignedEntityTypes(
+  private async refreshAssignedEntityTypes(
+    client: PoolClient,
     programmes: ProgrammeRecord[],
     catalog: Record<string, Record<string, unknown>>,
     code: string,
-  ): ProgrammeRecord[] {
+  ): Promise<ProgrammeRecord[]> {
     const updated: ProgrammeRecord[] = [];
     for (const programme of programmes) {
       if (programme.entityTypeCodes?.includes(code)) {
         programme.entityTypes = programme.entityTypeCodes.map(
           (assignedCode) => catalog[assignedCode],
         );
-        programme.updatedAt = new Date().toISOString();
+        programme.updatedAt = await getUtcTimestamp(client);
         updated.push(programme);
       }
     }
@@ -419,7 +425,7 @@ export class ProgrammesService {
     programme.entityTypeCodes = nextCodes;
     programme.entityTypes = nextCodes.map((current) => catalog[current]);
     programme.policyVersion = nextPolicyVersion(programme.policyVersion);
-    programme.updatedAt = new Date().toISOString();
+    programme.updatedAt = await getUtcTimestamp(client);
     await this.programmes.save(client, programme);
     await this.mutations.recordEvent(
       client,
@@ -476,10 +482,11 @@ const GEOMETRY_TYPES = new Set([
   'MULTIPOLYGON',
 ]);
 
-function normalizeEntityType(
+async function normalizeEntityType(
+  client: PoolClient,
   body: EntityTypeDto | Record<string, unknown>,
   existing?: Record<string, unknown>,
-): Record<string, unknown> & { code: string } {
+): Promise<Record<string, unknown> & { code: string }> {
   const missing = [
     ...(!pythonTruthy(body.code) ? ['code'] : []),
     ...(!pythonTruthy(body.label) ? ['label'] : []),
@@ -509,13 +516,18 @@ function normalizeEntityType(
   }
   const rawGeometryTypes =
     body.geometryTypes !== undefined ? body.geometryTypes : body.geometry;
-  if (!Array.isArray(rawGeometryTypes) && typeof rawGeometryTypes !== 'string') {
+  if (
+    !Array.isArray(rawGeometryTypes) &&
+    typeof rawGeometryTypes !== 'string'
+  ) {
     throw new BadRequestException(
       'geometryTypes must contain at least one supported GeoJSON geometry type',
     );
   }
   const geometryList =
-    typeof rawGeometryTypes === 'string' ? [rawGeometryTypes] : rawGeometryTypes;
+    typeof rawGeometryTypes === 'string'
+      ? [rawGeometryTypes]
+      : rawGeometryTypes;
   if (!geometryList.length) {
     throw new BadRequestException(
       'geometryTypes must contain at least one supported GeoJSON geometry type',
@@ -524,7 +536,9 @@ function normalizeEntityType(
   const geometryTypes = [
     ...new Set(
       geometryList.map((value) => {
-        const geometry = trimPythonWhitespace(pythonString(value)).toUpperCase();
+        const geometry = trimPythonWhitespace(
+          pythonString(value),
+        ).toUpperCase();
         return geometry === 'WAY' ? 'LINESTRING' : geometry;
       }),
     ),
@@ -542,8 +556,10 @@ function normalizeEntityType(
       : existing && existing.active !== undefined
         ? existing.active
         : true;
+  const createdAt = existing?.createdAt ?? (await getUtcTimestamp(client));
+  const updatedAt = await getUtcTimestamp(client);
   return {
-    ...(existing ?? { createdAt: new Date().toISOString() }),
+    ...(existing ?? { createdAt }),
     code,
     label,
     geometry: geometryTypes[0],
@@ -552,6 +568,6 @@ function normalizeEntityType(
       ? trimPythonWhitespace(pythonStringJsonField(source, 'description'))
       : '',
     active: pythonTruthy(activeValue),
-    updatedAt: new Date().toISOString(),
+    updatedAt,
   };
 }
