@@ -144,4 +144,50 @@ describe('IdentityProfileImageService Pillow compatibility', () => {
       'animated profile images are not supported',
     );
   });
+
+  it('matches Pillow rejection rules for media type and input limits', async () => {
+    const source = await readFile(
+      new URL('./fixtures/profile-image-rgba.png', import.meta.url),
+    );
+    const service = new IdentityProfileImageService(
+      null,
+      null as unknown as IdentityAuthService,
+    );
+    const internal = service as unknown as {
+      normalize: (
+        contentType: string,
+        input: AsyncIterable<Uint8Array>,
+      ) => Promise<Buffer>;
+    };
+    const stream = (content: Uint8Array) =>
+      (async function* () {
+        yield content;
+      })();
+
+    await expect(
+      internal.normalize('image/jpeg', stream(source)),
+    ).rejects.toThrow('profile image content does not match its media type');
+
+    const oversizedImage = await sharp({
+      create: {
+        width: 4097,
+        height: 1,
+        channels: 3,
+        background: { r: 20, g: 80, b: 140 },
+      },
+    })
+      .png()
+      .toBuffer();
+    await expect(
+      internal.normalize('image/png', stream(oversizedImage)),
+    ).rejects.toThrow('profile image dimensions exceed 4096 pixels');
+
+    const tooManyBytes = (async function* () {
+      yield Buffer.alloc(5 * 1024 * 1024);
+      yield Buffer.from([0]);
+    })();
+    await expect(internal.normalize('image/png', tooManyBytes)).rejects.toThrow(
+      'profile image must be between 1 byte and 5 MiB',
+    );
+  });
 });
