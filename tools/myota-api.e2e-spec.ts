@@ -5,11 +5,15 @@ import request from 'supertest';
 import { bootstrapHttpService } from '../libs/platform/src/bootstrap.js';
 import { integerSetting } from '../libs/platform/src/integer-setting.js';
 import { ActivityModule } from '../apps/activity/src/activity.module.js';
+import { GeodataModule } from '../apps/geodata/src/geodata.module.js';
 import { GatewayModule } from '../apps/gateway/src/gateway.module.js';
 import { IdentityModule } from '../apps/identity/src/identity.module.js';
+import { ProgrammesModule } from '../apps/programmes/src/programmes.module.js';
 
 const describeWithDatabases = describe.skipIf(
-  !process.env.CORE_DATABASE_URL || !process.env.ACTIVITY_DATABASE_URL,
+  !process.env.CORE_DATABASE_URL ||
+    !process.env.ACTIVITY_DATABASE_URL ||
+    !process.env.GEO_DATABASE_URL,
 );
 
 describeWithDatabases(
@@ -22,7 +26,9 @@ describeWithDatabases(
         'MYOTA_BOOTSTRAP_ADMIN_EMAIL',
         'MYOTA_BOOTSTRAP_ADMIN_PASSWORD',
         'MYOTA_IDENTITY_URL',
+        'MYOTA_PROGRAMMES_URL',
         'MYOTA_ACTIVITY_URL',
+        'MYOTA_GEODATA_URL',
         'PORT',
       ] as const;
       const previous = Object.fromEntries(
@@ -33,13 +39,19 @@ describeWithDatabases(
       process.env.PORT = '0';
 
       let identityApp: INestApplication | undefined;
+      let programmesApp: INestApplication | undefined;
       let activityApp: INestApplication | undefined;
+      let geodataApp: INestApplication | undefined;
       let gatewayApp: INestApplication | undefined;
       try {
         identityApp = await startIdentity();
+        programmesApp = await startProgrammes();
         activityApp = await startActivity();
+        geodataApp = await startGeodata();
         process.env.MYOTA_IDENTITY_URL = await listen(identityApp);
+        process.env.MYOTA_PROGRAMMES_URL = await listen(programmesApp);
         process.env.MYOTA_ACTIVITY_URL = await listen(activityApp);
+        process.env.MYOTA_GEODATA_URL = await listen(geodataApp);
         gatewayApp = await startGateway();
         const gatewayUrl = await listen(gatewayApp);
 
@@ -66,13 +78,48 @@ describeWithDatabases(
           .send({ refreshToken: login.body.refreshToken })
           .expect(401);
 
+        const programmeSlug = `gateway-e2e-${randomUUID()}`;
+        const programme = await request(gatewayUrl)
+          .post('/v1/programmes')
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({
+            slug: programmeSlug,
+            name: 'Gateway integration programme',
+            entityTypes: [
+              {
+                code: 'E2E_PT',
+                label: 'Integration point',
+                geometryTypes: ['POINT'],
+              },
+            ],
+            rules: { activationValidityDays: 7 },
+          })
+          .expect(201);
+        const programmeRead = await request(gatewayUrl)
+          .get(`/v1/programmes/${programmeSlug}`)
+          .expect(200);
+        expect(programmeRead.body.id).toBe(programme.body.id);
+
+        const entities = await request(gatewayUrl)
+          .get('/v1/geodata/entities')
+          .query({ programme: programmeSlug, page: 1, pageSize: 10 })
+          .expect(200);
+        expect(entities.body).toMatchObject({
+          items: [],
+          page: 1,
+          pageSize: 10,
+          total: 0,
+          nextPage: null,
+        });
+
         const startedAt = new Date().toISOString();
         const activation = await request(gatewayUrl)
           .post('/v1/activations')
           .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
           .set('Idempotency-Key', randomUUID())
           .send({
-            programmeSlug: 'gateway-e2e',
+            programmeSlug,
             entityId: `entity-${randomUUID()}`,
             operatorId: login.body.account.id,
             operatorCallsign: 'EA0E2E',
@@ -102,7 +149,7 @@ describeWithDatabases(
         expect(closed.body.status).toBe('CLOSED');
       } finally {
         await Promise.all(
-          [gatewayApp, activityApp, identityApp]
+          [gatewayApp, geodataApp, activityApp, programmesApp, identityApp]
             .filter((app): app is INestApplication => app !== undefined)
             .map((app) => app.close()),
         );
@@ -145,6 +192,30 @@ async function startActivity() {
         detail: 'preview design exceeds 64 KiB',
       },
     ],
+  );
+}
+
+async function startProgrammes() {
+  return bootstrapHttpService(
+    ProgrammesModule,
+    0,
+    undefined,
+    [],
+    [],
+    true,
+    'programmes-api',
+  );
+}
+
+async function startGeodata() {
+  return bootstrapHttpService(
+    GeodataModule,
+    0,
+    integerSetting(process.env.MYOTA_MAX_BODY_BYTES, 1024 ** 3),
+    ['/v1/geodata/import-uploads/:uploadId/parts/:partNumber'],
+    [],
+    true,
+    'geodata-api',
   );
 }
 

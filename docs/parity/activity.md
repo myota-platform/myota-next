@@ -39,9 +39,9 @@ activation validation tests cover rule fallback, location bounds, callsign
 authorization and lifecycle; evaluation tests verify violation ordering and
 falsey end times. ADIF tests cover multiple records, field mapping, date/time
 composition, and omission of incomplete records. The PostgreSQL-backed HTTP
-integration fixture uses a real Identity-issued operator token to create an
-activation, record a QSO, and close the activation through Gateway to the
-Activity API and its separate owner database.
+integration fixture creates a programme through Gateway, then uses a real
+Identity-issued operator token to create an activation, record a QSO, and close
+it through the Activity API and its separate owner database.
 Activation validation also preserves the Python handler's order: earlier rule
 and callsign checks run before the `startedAt` lookup, whose omission maps to
 the reference's 404 missing-key response. Truthy pair iterables for `location`
