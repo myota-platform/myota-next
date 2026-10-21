@@ -22,6 +22,9 @@ the TLS handshake, and sends no AUTH command when that handshake fails. A
 successful SMTP delivery against deployment trust roots remains an operational
 qualification gate. Identity recipient token expiry uses a monotonic clock
 measured from before token acquisition, matching the reference cache timing.
+The cached lifetime subtracts a 30-second margin and clamps the result to
+30–270 seconds, matching the Python worker even when Identity returns a short
+token lifetime.
 
 Programme policy service coverage now exercises a rules draft through save,
 submit, approval, and publication, including offset timestamp normalization,
