@@ -101,7 +101,9 @@ Administrative account updates now preserve profile, password, status,
 anonymization, and role replacement behavior in Core transactions. As in the
 reference handler, changing status alone does not anonymize the account or
 revoke its sessions; existing refresh sessions also remain rotatable, and both
-session revocation and anonymization happen when `anonymize` is true. Callsign
+session revocation and anonymization happen when `anonymize` is true. Password
+changes and anonymization refresh `revokedAt` on already-revoked sessions as
+well, matching the handler's per-session update. Callsign
 creation, evidence, verification, primary selection, and retirement also write
 to the relational Core model and outbox. Account reads and exports preserve the
 reference's callsign, evidence, and security-event insertion order through

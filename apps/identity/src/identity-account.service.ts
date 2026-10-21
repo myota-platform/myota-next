@@ -569,7 +569,7 @@ export class IdentityAccountService {
           [accountId, await hashPassword(body.password)],
         );
         await client.query(
-          `UPDATE public.auth_session SET revoked_at = coalesce(revoked_at, now())
+          `UPDATE public.auth_session SET revoked_at = clock_timestamp()
             WHERE account_id = $1`,
           [accountId],
         );
@@ -577,7 +577,7 @@ export class IdentityAccountService {
 
       if (anonymize) {
         await client.query(
-          `UPDATE public.auth_session SET revoked_at = coalesce(revoked_at, now())
+          `UPDATE public.auth_session SET revoked_at = clock_timestamp()
             WHERE account_id = $1`,
           [accountId],
         );
