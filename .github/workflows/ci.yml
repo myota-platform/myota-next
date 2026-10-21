@@ -75,6 +75,7 @@ jobs:
       - run: npm test
       - run: npm run test:geodata-rss
       - run: npm run test:activity-worker-recovery
+      - run: npm run test:outbox-recovery
       - run: npm run test:geodata-worker-recovery
       - run: npm run build
       - run: npm ci --prefix web/admin
