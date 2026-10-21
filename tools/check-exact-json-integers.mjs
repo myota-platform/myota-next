@@ -38,6 +38,11 @@ requirePattern(
 );
 requirePattern(
   'libs/platform/src/bootstrap.ts',
+  /express\.json\([\s\S]*?['\"]\/v1\/qso-ingestions['\"][\s\S]*?Object\.assign\(request, \{ rawBody: buffer \}\)/,
+  'QSO ingestion requests must retain raw JSON bytes for exact numeric parsing',
+);
+requirePattern(
+  'libs/platform/src/bootstrap.ts',
   /'\/v1\/geodata\/refresh-schedules'[\s\S]*?parseJsonWithExactIntegers/,
   'Geodata schedule creation requests must preserve exact JSON integers',
 );
