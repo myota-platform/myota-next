@@ -19,7 +19,8 @@ Malformed JSON and oversized JSON bodies use the reference's 400
 `invalid_request` response shape and details.
 The shared parser decodes JSON request bodies regardless of `Content-Type` or
 declared charset, as the reference does. It applies the same invalid request
-details to malformed JSON and invalid UTF-8, including a leading UTF-8 BOM.
+details to malformed JSON, invalid UTF-8, a leading UTF-8 BOM, and compressed
+request bodies, which the reference attempts to decode as plain UTF-8 JSON.
 The Geodata import creation route retains its dedicated multipart
 handling for `multipart/form-data`, and Activity award image uploads retain
 their route-specific binary handling.

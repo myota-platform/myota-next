@@ -137,10 +137,12 @@ export function parserProblem(
     request.path,
     request.get('content-type'),
   );
-  if (isJson && errorType === 'entity.parse.failed') {
-    status = 400;
-    detail = 'invalid JSON body';
-  } else if (isJson && errorType === 'entity.verify.failed') {
+  if (
+    isJson &&
+    ['entity.parse.failed', 'entity.verify.failed', 'encoding.unsupported'].includes(
+      errorType,
+    )
+  ) {
     status = 400;
     detail = 'invalid JSON body';
   } else if (

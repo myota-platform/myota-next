@@ -89,6 +89,7 @@ export async function bootstrapHttpService(
     app.use(
       express.json({
         limit: jsonLimit,
+        inflate: false,
         strict: false,
         type: (request) =>
           usesSharedJsonParser(
