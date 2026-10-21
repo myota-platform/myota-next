@@ -151,7 +151,7 @@ test('creates, reviews, and publishes a policy in Admin through Gateway', async 
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await page.goto('http://127.0.0.1:8090/policies');
-  await page.getByLabel('Programme').selectOption(slug);
+  await page.locator('.programme-scope select').selectOption(slug);
   await page.getByRole('button', { name: 'New draft' }).click();
   await page.getByLabel('Name', { exact: true }).fill('Live browser policy');
   await page
