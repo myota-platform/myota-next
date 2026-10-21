@@ -1,14 +1,32 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { createServer } from 'node:net';
 import { Readable } from 'node:stream';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  AckPolicy,
+  DeliverPolicy,
+  jetstream,
+  jetstreamManager,
+  ReplayPolicy,
+  RetentionPolicy,
+  StorageType,
+} from '@nats-io/jetstream';
+import type { ConsumerConfig, StreamConfig } from '@nats-io/jetstream';
+import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint.js';
+import { GeodataWorkerService } from './geodata-worker.service.js';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
 
 const recoveryTestName =
   'replays committed staging after a worker process is killed';
+const brokerRecoveryTestName =
+  'resumes durable work after JetStream restarts with file storage retained';
 
 describe('Geodata worker process recovery', () => {
   it.skipIf(
@@ -25,7 +43,281 @@ describe('Geodata worker process recovery', () => {
     },
     120_000,
   );
+
+  it.skipIf(
+    process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
+      !process.env.GEO_DATABASE_URL,
+  )(brokerRecoveryTestName, async () => verifyBrokerRecovery(), 45_000);
 });
+
+async function verifyBrokerRecovery() {
+  const databaseUrl = process.env.GEO_DATABASE_URL;
+  if (!databaseUrl) throw new Error('GEO_DATABASE_URL is required');
+  if (
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(databaseUrl).hostname)
+  )
+    throw new Error('broker recovery qualification requires local Postgres');
+
+  const directory = await mkdtemp(join(tmpdir(), 'myota-geodata-worker-'));
+  const natsPort = await reserveLocalPort();
+  const healthPort = await reserveLocalPort();
+  const natsUrl = `nats://127.0.0.1:${natsPort}`;
+  const savedEnvironment = new Map<string, string | undefined>();
+  for (const [name, value] of Object.entries({
+    NATS_URL: natsUrl,
+    GEO_DATABASE_URL: databaseUrl,
+    GEODATA_WORKER_HEALTH_PORT: String(healthPort),
+    GEODATA_WORKER_MAX_ACK_PENDING: '1',
+  })) {
+    savedEnvironment.set(name, process.env[name]);
+    process.env[name] = value;
+  }
+
+  const completedJobs = new Set<string>();
+  const executionOrder: string[] = [];
+  const workRepository = {
+    staleCancellationIds: vi.fn(async () => []),
+    recoverExpiredWorkDispatches: vi.fn(async () => ({
+      preprocessing: 0,
+      promotion: 0,
+      deletion: 0,
+      enrichment: 0,
+    })),
+  };
+  const deletions = {
+    claim: vi.fn(async (jobId: string) =>
+      completedJobs.has(jobId) ? null : { jobId },
+    ),
+    getDeletionState: vi.fn(async (jobId: string) => ({
+      status: completedJobs.has(jobId) ? 'DELETED' : 'QUEUED',
+      leaseRemainingSeconds: 0,
+    })),
+    execute: vi.fn(async ({ jobId }: { jobId: string }) => {
+      completedJobs.add(jobId);
+      executionOrder.push(jobId);
+      return true;
+    }),
+  };
+  const retention = {
+    purgeSweep: vi.fn(async () => ({ eligible: 0, uploadsExpired: 0 })),
+  };
+
+  let server: ChildProcess | undefined;
+  let publisher: Awaited<ReturnType<typeof connect>> | undefined;
+  let worker: GeodataWorkerService | undefined;
+  const jobIds = [randomUUID(), randomUUID()];
+  try {
+    server = await startRecoveryJetStream(natsPort, directory);
+    publisher = await connect({
+      servers: natsUrl,
+      name: 'geodata-worker-restart-publisher',
+      maxReconnectAttempts: -1,
+      reconnectTimeWait: 100,
+    });
+    const manager = await jetstreamManager(publisher);
+    await manager.streams.add({
+      name: 'MYOTA_GEODATA_WORK',
+      subjects: ['myota.work.geodata.>'],
+      retention: RetentionPolicy.Workqueue,
+      storage: StorageType.File,
+      num_replicas: 1,
+      max_age: 1_209_600_000_000_000,
+      max_bytes: 16 * 1024 * 1024,
+      max_msgs: 100,
+      max_msg_size: 900_000,
+    } as StreamConfig);
+    const consumers = [
+      [
+        'geodata-preprocessing-v1',
+        'myota.work.geodata.import-preprocess.v1',
+        300,
+        100,
+      ],
+      [
+        'geodata-import-promotion-v1',
+        'myota.work.geodata.import-promotion.v1',
+        300,
+        100,
+      ],
+      [
+        'geodata-entity-deletion-v1',
+        'myota.work.geodata.entity-delete.v1',
+        120,
+        100,
+      ],
+      [
+        'geodata-location-enrichment-v1',
+        'myota.work.geodata.location-enrichment.v1',
+        120,
+        8,
+      ],
+    ] as const;
+    for (const [
+      durable,
+      filterSubject,
+      ackWaitSeconds,
+      maxDeliveries,
+    ] of consumers) {
+      await manager.consumers.add('MYOTA_GEODATA_WORK', {
+        durable_name: durable,
+        filter_subject: filterSubject,
+        deliver_policy: DeliverPolicy.All,
+        ack_policy: AckPolicy.Explicit,
+        replay_policy: ReplayPolicy.Instant,
+        ack_wait: ackWaitSeconds * 1_000_000_000,
+        max_deliver: maxDeliveries,
+        max_ack_pending: 1,
+        max_waiting: 1,
+        num_replicas: 0,
+      } as ConsumerConfig);
+    }
+
+    worker = new GeodataWorkerService(
+      workRepository as never,
+      {} as never,
+      {} as never,
+      deletions as never,
+      retention as never,
+      null,
+    );
+    await worker.onModuleInit();
+    const workerState = worker as unknown as { natsUp: boolean };
+    await waitForRecovery(
+      () => workerState.natsUp,
+      'Geodata worker did not connect to JetStream',
+    );
+    await publishDeletion(publisher, jobIds[0]!);
+    await waitForRecovery(
+      () => completedJobs.has(jobIds[0]!),
+      'Geodata worker did not process work before restart',
+    );
+    await waitForRecovery(async () => {
+      const consumer = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        'geodata-entity-deletion-v1',
+      );
+      return consumer.num_pending === 0 && consumer.num_ack_pending === 0;
+    }, 'Geodata worker did not settle its first delivery before restart');
+
+    await stopRecoveryJetStream(server);
+    server = undefined;
+    await waitForRecovery(
+      () => !workerState.natsUp,
+      'Geodata worker did not detect the JetStream outage',
+    );
+
+    server = await startRecoveryJetStream(natsPort, directory);
+    await waitForRecovery(
+      () => workerState.natsUp,
+      'Geodata worker did not reconnect to JetStream',
+    );
+    const restartedManager = await jetstreamManager(publisher);
+    await restartedManager.streams.info('MYOTA_GEODATA_WORK');
+    await publishDeletion(publisher, jobIds[1]!);
+    await waitForRecovery(
+      () => completedJobs.has(jobIds[1]!),
+      'Geodata durable did not resume delivery after broker restart',
+    );
+
+    expect(executionOrder).toEqual(jobIds);
+    expect(deletions.execute).toHaveBeenCalledTimes(2);
+  } finally {
+    if (worker) await worker.onModuleDestroy().catch(() => undefined);
+    if (publisher) await publisher.drain().catch(() => undefined);
+    if (server) await stopRecoveryJetStream(server).catch(() => undefined);
+    for (const [name, value] of savedEnvironment) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function publishDeletion(
+  publisher: Awaited<ReturnType<typeof connect>>,
+  jobId: string,
+) {
+  await jetstream(publisher).publish(
+    'myota.work.geodata.entity-delete.v1',
+    new TextEncoder().encode(
+      stringifyJsonWithBigInts({
+        envelopeVersion: 1,
+        workId: jobId,
+        workType: 'geodata.entity-delete.v1',
+        producer: 'geodata',
+        createdAt: new Date().toISOString(),
+        aggregate: { type: 'entity_deletion_job', id: jobId },
+        payload: { jobId },
+      }),
+    ),
+  );
+}
+
+async function waitForRecovery(
+  predicate: () => boolean | Promise<boolean>,
+  message: string,
+) {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(message);
+}
+
+async function reserveLocalPort(): Promise<number> {
+  const listener = createServer();
+  await new Promise<void>((resolve, reject) => {
+    listener.once('error', reject);
+    listener.listen(0, '127.0.0.1', resolve);
+  });
+  const address = listener.address();
+  if (!address || typeof address === 'string')
+    throw new Error('could not reserve a local recovery test port');
+  await new Promise<void>((resolve, reject) =>
+    listener.close((error) => (error ? reject(error) : resolve())),
+  );
+  return address.port;
+}
+
+async function startRecoveryJetStream(port: number, storeDirectory: string) {
+  const server = spawn(
+    'nats-server',
+    ['-js', '-p', String(port), '-sd', storeDirectory],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  let output = '';
+  server.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+    output += chunk;
+  });
+  server.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+    output += chunk;
+  });
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    if (server.exitCode !== null || server.signalCode !== null)
+      throw new Error(`JetStream exited during startup: ${output}`);
+    if (output.includes('Server is ready')) return server;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  server.kill('SIGKILL');
+  throw new Error(`JetStream did not start: ${output}`);
+}
+
+async function stopRecoveryJetStream(server: ChildProcess) {
+  if (server.exitCode !== null || server.signalCode !== null) return;
+  server.kill('SIGKILL');
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error('JetStream server did not stop')),
+      5000,
+    );
+    server.once('exit', () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+}
 
 async function runRecoveryWorkerPhase() {
   const databaseUrl = process.env.GEO_DATABASE_URL;
