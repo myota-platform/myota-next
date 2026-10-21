@@ -35,10 +35,12 @@ The Node 24/NestJS workspace, separate service and worker entry points,
 database-aware readiness, copied contracts and migrations, formatting, lint,
 typecheck, build gates, an owner-scoped migration runner, and a per-application
 Docker recipe are in place. GitHub Actions run static and build gates and
-provide a gated workflow for publishing application images. Data transfer and
-deployment qualification remain open. Identity, Programmes, Activity, and
-Geodata have substantial working slices. See the [implementation status](status.md)
-and [parity matrix](parity-matrix.md) for current coverage and known gaps.
+provide a gated workflow for publishing application images. Deployment
+qualification remains open. Identity, Programmes, Activity, and Geodata have
+substantial working slices. The platform starts with empty target databases;
+transferring data from the old platform is out of scope. See the
+[implementation status](status.md) and [parity matrix](parity-matrix.md) for
+current coverage and known gaps.
 
 ## 2. Implement contract-shaped synchronous behavior
 
@@ -65,21 +67,23 @@ and [parity matrix](parity-matrix.md) for current coverage and known gaps.
 - Verify payloads, permission states, destructive and conflict flows, uploads,
   async progress, accessibility, and responsive behavior in browser workflows.
 
-## 5. Prove parity and prepare data transition
+## 5. Prove parity and qualify fresh deployment
 
 - Extend automated compatibility evidence across APIs, databases, workers, and
   browser workflows. Current CI static and build checks do not prove parity.
-- Compare seeded datasets and representative API results with the reference.
-- Rehearse the existing per-owner export/import, row-count, consistency, and
-  rollback tooling on disposable copies of Core, Activity, and Geodata.
+- Compare isolated API fixtures and representative results with the reference;
+  do not transfer its database contents.
+- Initialize Core, Activity, and Geodata from empty databases and qualify
+  owner migrations, backups, and restore procedures.
 - Exercise backups, restore, broker outage, worker restart, and object-store
-  recovery before considering a production transition.
+  recovery before considering production deployment.
 
 ## Exit gate
 
-No cutover until the function parity matrix is fully traced to code and tests,
-the three databases have verified migration/transfer and restore procedures,
-all worker recovery paths are proven, browser workflows pass, and deployment
-qualification succeeds in an isolated environment. This repository is a
-development baseline, not a production cutover candidate. Use the parity matrix
-for missing behavior and the status document for current implementation.
+No production deployment until the function parity matrix is fully traced to
+code and compatibility checks, the three databases initialize cleanly and
+have verified backup and restore procedures, worker recovery paths are
+qualified, browser workflows pass, and deployment qualification succeeds in an
+isolated environment. This repository is a development baseline. Use the
+parity matrix for missing behavior and the status document for current
+implementation.

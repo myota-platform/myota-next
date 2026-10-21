@@ -42,8 +42,9 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml down -v
 
 This Compose file is a development environment. The image workflow publishes
 per-process and browser-app GHCR images from qualified `main` and `v*` revisions.
-Immutable image pinning, data transfer, backups, restore, and rollout
-qualification remain separate work.
+Immutable image pinning, backups, restore, and rollout qualification remain
+separate work. Transfer from the old Python databases is out of scope; this
+implementation starts with empty owner databases.
 
 The initial NestJS [Helm chart](helm/myota-next/README.md) deploys the APIs,
 background processes, and separate Admin and Participant apps against external

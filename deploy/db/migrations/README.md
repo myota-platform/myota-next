@@ -58,15 +58,14 @@ independent databases one atomic restore. If a later owner fails, restore all
 three databases again from the same backup before resuming the application.
 Rehearse restores on disposable databases. These scripts restore a compatible
 schema snapshot; they do not migrate data between the Python and NestJS schema
-versions or replace the separate cutover and rollback plan.
+versions. The new platform starts from empty databases; cross-version data
+transfer and cutover are out of scope.
 
-`001` is the initial schema snapshot for each database. It is suitable only for
-a new target database. The runner does not adopt an existing schema without a
-migration ledger, transfer production data, or provide rollback. Before cutover,
-validate source and target counts and constraints, rehearse repeatable transfer
-on disposable copies, and document rollback for each database independently.
-The verified source migration history and transfer requirements are recorded
-in [cross-version database transfer](../../../docs/operations/cross-version-data-transfer.md).
+`001` is the initial schema snapshot for each database and is suitable for an
+empty target database. The runner does not adopt a pre-existing schema or
+provide rollback. The old cross-version transfer notes are retained in
+[cross-version database transfer](../../../docs/operations/cross-version-data-transfer.md)
+for reference only.
 Do not introduce cross-database foreign keys or combine the three restore
 boundaries.
 

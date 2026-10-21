@@ -11,7 +11,10 @@ import {
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
-import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import {
+  pythonKeyErrorDetail,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
 import { IdentityAuthService } from './auth.service.js';
 import { AdminRoleDefinitionDto } from './auth.dto.js';
 import {
@@ -200,7 +203,7 @@ export class IdentityRoleService {
             'built-in role definitions cannot be edited',
           );
         }
-        throw new NotFoundException('role definition not found');
+        throw new NotFoundException(pythonKeyErrorDetail(code));
       }
       if (current.system) {
         throw new BadRequestException(

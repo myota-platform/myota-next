@@ -1,5 +1,9 @@
 # Cross-version database transfer
 
+**Out of scope for the current MyOTA parity goal.** The target platform starts
+with empty databases; this document is retained as historical planning
+material and is not a required implementation or deployment gate.
+
 This document records verified migration inputs and the work needed to transfer
 the running Python platform into the NestJS monorepo. A read-only preflight
 command checks the three application database owners and the legacy Email

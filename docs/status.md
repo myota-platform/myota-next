@@ -33,10 +33,6 @@ production readiness.
   outage, cluster failover, and other worker and object-store recovery paths
   remain open. See [worker and operations coverage](parity/workers-operations.md)
   and the [object-store recovery notes](operations/object-store-recovery.md).
-- **Data transition:** disposable-database transfer, backup, and restore paths
-  are exercised. Production-sized rehearsal, destination grants, external-state
-  reconciliation, and rollback for writes accepted after cutover remain open.
-  See [cross-version transfer](operations/cross-version-data-transfer.md).
 - **Web applications:** current browser workflows use intercepted API
   responses. Service integration, broader payload coverage, accessibility,
   responsive behavior, and failure states remain to be qualified.
@@ -49,9 +45,10 @@ production readiness.
 ## References
 
 - [Function parity matrix](parity-matrix.md) and its [detailed behavior pages](parity/): requirements, coverage, and known differences.
-- [Implementation plan](implementation-plan.md): migration sequence and exit gate.
+- [Implementation plan](implementation-plan.md): implementation sequence and exit gate.
 - [API baseline](api-baseline.md) and [operation traceability](api-operation-traceability.md): contract operations and controller ownership.
 - [Database backup and restore](operations/database-backup-restore.md) and [deployment guide](../deploy/README.md): operational procedures and deployment state.
 
-This repository is a development baseline. Do not use it for production cutover
-until the parity and operational gates above are closed.
+This repository is a development baseline. Do not use it in production until
+the parity and operational gates above are closed. The current goal starts from
+empty databases and excludes transfer from the old platform.

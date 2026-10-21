@@ -41,6 +41,8 @@ custom codes containing underscores.
 Role-definition POST and PATCH authenticate before DTO validation; PATCH also
 resolves and rejects built-in definitions before validating the submitted
 fields, matching the Python handler's response precedence.
+An authorized PATCH for a missing custom role returns the reference's quoted
+role-code 404 detail.
 Owner profile updates authenticate and check revocation and account availability
 before validating submitted fields, matching the Python handler's response
 precedence. Website URL normalization also removes empty trailing query and
