@@ -1,99 +1,57 @@
 # Implementation status
 
-This repository is a clean Node.js and NestJS implementation of MyOTA. The
-current reference is the pinned [`myota` commit](https://github.com/myota-platform/myota/tree/7f904a5130e59006765cf882956a4adbfecb17ec).
-Track required behavior and known differences in the [parity matrix](parity-matrix.md);
-this page summarizes the current state and remaining release gates.
+This repository is a clean Node.js and NestJS implementation of MyOTA, based
+on the pinned [`myota` reference](https://github.com/myota-platform/myota/tree/7f904a5130e59006765cf882956a4adbfecb17ec).
+The [parity matrix](parity-matrix.md) is the acceptance inventory; this page
+summarizes implementation coverage and remaining gates.
 
-## Implemented
+## In place
 
-- **Runtime:** Node.js 24, NestJS 12, and independently startable API and
-  worker applications. The shared platform package provides health checks,
-  metrics, tracing, request handling, and database access. All NestJS
-  applications use `@nestjs/observe`.
-- **Data ownership:** exactly three application databases: Core for Identity,
-  Programmes, and Email; Activity; and Geodata with PostGIS. Services own their
-  migrations and do not join across databases.
-- **APIs and workers:** initial and extended Identity, Programmes, Activity,
-  Geodata, and Email slices are implemented. Durable jobs, transactional
-  outboxes, leases, retries, dead letters, and audited redrive are present for
-  the documented workflows.
-- **Web applications:** Admin and Participant applications are separate
-  deployable artifacts and use the NestJS APIs. CI builds Admin and runs
-  Chromium workflows across account and role administration, programme and
-  award management, Geodata review/import, and Participant activation, QSO,
-  profile, and award flows. The parity matrix lists covered scenarios and
-  remaining browser gaps.
-- **Build and deployment:** CI runs unit and browser suites, checks and builds
-  the NestJS applications, and builds container images. Helm charts describe the applications and optional single-instance
-  PostgreSQL for the three owners. Local Compose provisions the development
-  stack.
+- Node.js 24, NestJS 12, and `@nestjs/observe` across the independently
+  startable API and worker applications.
+- Exactly three application databases: Core for Identity, Programmes, and
+  Email; Activity; and Geodata with PostGIS. Services own their schemas and do
+  not join across databases.
+- API and worker implementations for Identity, Programmes, Activity, Geodata,
+  and Email, including the documented durable work, outbox, retry, lease, and
+  redrive flows.
+- Separate Admin and Participant applications, with browser coverage for key
+  account, programme, Geodata, Activity, and award workflows.
+- Workspace build, static checks, container images, local Compose, and Helm
+  deployment definitions.
 
-These items describe implementation coverage; they do not establish full
-behavioral parity or production readiness.
+These items describe implementation coverage, not complete function parity or
+production readiness.
 
-## Remaining work
+## Remaining gates
 
-- Add compatibility evidence for the implemented API and worker behavior.
-- Exercise broker and object-store outages, retries, recovery, and redrive
-  against disposable infrastructure. CI now covers Activity notification
-  replica sharing, durable resume after a worker restart, a single-server
-  JetStream restart with its file store retained, confirmed notification ACKs,
-  duplicate-event idempotency, and audited dead-letter redrive. It also verifies
-  Activity statistics-job lease takeover after a worker process kill and
-  Geodata import preprocessing replay after committed staging, plus live
-  delivery across all four Geodata worker durables after a single-server
-  JetStream restart with retained file storage. It also simulates preprocessing
-  repository failure and verifies JetStream redelivery after repository access
-  returns; an actual PostgreSQL outage remains unqualified. A fault-injection
-  check verifies outbox retry and successful
-  publication, attempt exhaustion, and audited redrive for Core, Activity, and
-  Geodata events against their separate databases. It also kills and restarts
-  an isolated JetStream server with its file store retained, then verifies
-  outbox retry and publication for each owner. A SeaweedFS restart check
-  verifies Geodata multipart-part retry, database rollback after a failed
-  upload, and completion from the retained data volume. Other worker and
-  object-store recovery paths remain to be qualified; see the
-  [object-store recovery notes](operations/object-store-recovery.md).
-- Complete the semantic review and rehearsal for cross-version database
-  transfer, backup, restore, and rollback. CI exercises the transfer commands
-  end to end on disposable databases with Identity, Programme, Activity,
-  Geodata, and Email fixture data, then restores all three captured pre-apply
-  recovery dumps after simulated partial target changes. Production-sized
-  rehearsal, destination role/grant review, object-store and NATS reconciliation,
-  and rollback for writes accepted after cutover remain open.
-- Expand browser workflow checks across Admin and Participant payload parity,
-  accessibility, responsive behavior, and failure states.
-  Current browser checks use intercepted API responses and do not test
-  deployment or service integration.
-- Qualify production deployment, persistent database operations, NATS topology,
-  object storage, secrets, observability, and release automation.
-- Compare Geodata worker throughput and resource limits with the reference under
-  representative loads. CI bounds OSM PBF process-tree RSS growth at 50,000 and
-  250,000 features, GeoJSON stream RSS growth at 300,000 features, and
-  Shapefile stream RSS growth at 50,000 records, and KML/GPX stream RSS growth at
-  50,000 features each. Larger datasets and full worker throughput remain
-  unqualified. The full suite can contaminate the GeoJSON RSS measurement when
-  other test workers run concurrently, so CI runs that 160 MiB qualification
-  in a separate required `npm run test:geodata-rss` step.
-  Per-durable NestJS concurrency is configurable,
-  but the reference thread-pool settings do not map directly to its durable
-  consumers.
+- **Behavioral parity:** qualify request, authorization, persistence, failure,
+  and workflow behavior for the required operations and events. The parity
+  pages record current coverage and gaps; route presence alone is not proof.
+- **Recovery:** single-server JetStream restart, selected worker lease recovery,
+  redrive, and Geodata multipart object-store recovery have evidence. PostgreSQL
+  outage, cluster failover, and other worker and object-store recovery paths
+  remain open. See [worker and operations coverage](parity/workers-operations.md)
+  and the [object-store recovery notes](operations/object-store-recovery.md).
+- **Data transition:** disposable-database transfer, backup, and restore paths
+  are exercised. Production-sized rehearsal, destination grants, external-state
+  reconciliation, and rollback for writes accepted after cutover remain open.
+  See [cross-version transfer](operations/cross-version-data-transfer.md).
+- **Web applications:** current browser workflows use intercepted API
+  responses. Service integration, broader payload coverage, accessibility,
+  responsive behavior, and failure states remain to be qualified.
+- **Production operations:** qualify persistent database operations, NATS,
+  object storage, secrets, observability, deployment, and release automation.
+- **Geodata performance:** larger datasets and full worker throughput remain
+  unqualified. Python thread-pool limits do not map directly to Nest durable
+  consumer concurrency; compare throughput and resource use before tuning.
 
 ## References
 
-- [Function parity matrix](parity-matrix.md): domain behavior, compatibility
-  details, and known differences.
-- [Implementation plan](implementation-plan.md): migration sequence and exit
-  gate.
-- [API baseline](api-baseline.md) and [operation traceability](api-operation-traceability.md):
-  contract operations and NestJS route ownership.
-- [Cross-version database transfer](operations/cross-version-data-transfer.md)
-  and [backup and restore](operations/database-backup-restore.md): data
-  transition procedures and open rehearsals.
-- [Object-store recovery](operations/object-store-recovery.md): qualified
-  Geodata multipart retry behavior and its limits.
-- [Deployment guide](../deploy/README.md): Compose and Helm deployment state.
+- [Function parity matrix](parity-matrix.md) and its [detailed behavior pages](parity/): requirements, coverage, and known differences.
+- [Implementation plan](implementation-plan.md): migration sequence and exit gate.
+- [API baseline](api-baseline.md) and [operation traceability](api-operation-traceability.md): contract operations and controller ownership.
+- [Database backup and restore](operations/database-backup-restore.md) and [deployment guide](../deploy/README.md): operational procedures and deployment state.
 
-The monorepo is a development baseline. Do not use it for production cutover
+This repository is a development baseline. Do not use it for production cutover
 until the parity and operational gates above are closed.

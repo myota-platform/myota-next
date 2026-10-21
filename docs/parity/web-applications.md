@@ -1,0 +1,47 @@
+# Web applications
+
+| Application     | Required parity                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Admin web       | Login and role-aware navigation; account and role management; programme/category/content/policy administration; Geodata catalogue, import, preprocessing, review, entity editing, maps and deletion; Activity/QSO and award administration; observability access. Preserve accessible keyboard workflows, confirmation of destructive actions, conflict handling, bounded paging, resumable upload behavior, and accurate loading/error states. |
+| Participant web | Programme selection, public programme content and rules, approved/candidate entity table and map, candidate proposal, authenticated profile editing and cropped profile-image upload, published award/level display and request, activation creation and own activation history, QSO entry, and activation close. Keep programme policy, callsign authorization, and eligibility decisions on owning services.                                  |
+
+The baseline Admin and Participant applications are carried forward under
+`web/` with separate deployment artifacts. The Admin build is checked in CI;
+a static source scan resolves 62 concrete Admin HTTP method/path pairs, all
+present in the OpenAPI contract. This does not establish payload or workflow
+parity. The Admin programme editor and Participant selector follow the
+programme API's page metadata so both receive the complete catalogue. The Admin
+Content and Policy views page versions independently while keeping coverage,
+review, and editing scoped to the selected programme. The Admin Awards screen uses
+independent bounded paging for award
+definitions, requests, and issuances; the asset catalogue follows its API pages
+for design selection. The Participant client includes localized published programme content,
+paged approved/candidate entity catalogue and map, map-picked point proposals and existing-candidate proposals, published award and level catalogue with eligible-level requests using the current Identity account and callsign data, rotating Identity refresh-session recovery for authenticated requests, activation creation and complete paged own-activation history for QSO selection,
+single-QSO entry, profile editing and image management. Chromium browser checks
+exercise Admin sign-in, identity session bootstrap, scope denial, Participant
+programme selection and public content, and its activation, QSO, and close
+workflow, profile details editing, image crop/upload, an eligible award
+request, safe biography Markdown preview, and existing-candidate and map-picked
+point proposals with intercepted API responses. Admin browser checks also cover
+sign-in, session bootstrap,
+scope denial, Identity account creation with a permitted role grant and custom
+role creation from the permission catalogue, account search and edits that
+preserve unchanged scoped assignments, account export and confirmed
+deactivation/anonymization, programme creation with policy/category settings,
+policy draft save, review, and publication, and
+version-checked candidate review, and conflict recovery for entity metadata
+edits by reloading the latest server version. Activity browser checks cover
+activation/QSO detail viewing and statistics rebuild submission with an
+idempotency key and job status refresh. Award browser checks cover programme-
+scoped draft creation, its idempotency key and condition/level payload, and
+the submit, approve, and publish lifecycle. Master data browser checks cover shared
+category creation, geometry type selection, inactive lifecycle, and the
+idempotency key. Conflation review browser checks cover a keep-separate
+decision, survivor selection, reviewer attribution, and note. Other Admin
+workflows still lack browser-level compatibility coverage. Refresh schedule
+checks cover programme-scoped schedule creation and queuing a complete manual
+GeoJSON snapshot. Import checks cover pasted GeoJSON queueing, source metadata,
+candidate listing and review, plus idempotent durable candidate promotion. The award catalogue follows all API
+pages. Remaining work includes accessibility/visual review and deployment
+integration. Its public map renders point, line, polygon, and multipart entity
+geometries.
