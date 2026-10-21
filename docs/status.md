@@ -21,9 +21,10 @@ this page summarizes the current state and remaining release gates.
 - **Web applications:** Admin and Participant applications are separate
   deployable artifacts and use the NestJS APIs. The Admin build is part of CI.
   Chromium browser checks cover Admin sign-in, session bootstrap, scope denial,
-  programme creation, and policy draft review/publication; Participant catalogue
-  browsing, activation and QSO lifecycle, profile details and image editing,
-  eligible award requests, and candidate and map-picked point proposals.
+  account creation with a permitted role grant, programme creation, and policy
+  draft review/publication; Participant catalogue browsing, activation and QSO
+  lifecycle, profile details and image editing, eligible award requests, and
+  candidate and map-picked point proposals.
 - **Build and deployment:** CI builds the NestJS applications and container
   images. Helm charts describe the applications and optional single-instance
   PostgreSQL for the three owners. Local Compose provisions the development
