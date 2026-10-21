@@ -74,6 +74,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:geodata-rss
+      - run: npm run test:geodata-worker-recovery
       - run: npm run build
       - run: npm ci --prefix web/admin
       - run: npm run lint --prefix web/admin
