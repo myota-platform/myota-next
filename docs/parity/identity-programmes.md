@@ -225,6 +225,10 @@ request checks after the same authorization and record-resolution steps as the
 reference handlers. Their services receive parsed request objects without
 global DTO validation preempting that order. Required programme and content
 fields use Python truthiness, so empty arrays and objects remain falsey.
+Missing programme, policy-draft, and workflow content records preserve the
+reference's quoted-ID 404 details when their handlers use direct dictionary
+lookups; content and policy PATCH requests retain their distinct 400 missing
+record responses.
 Programme list pages and shared-category `assignedProgrammes` arrays preserve
 the reference's insertion order through a Core-owned record sequence; existing
 rows are backfilled by creation timestamp and slug. Shared entity-type catalogue

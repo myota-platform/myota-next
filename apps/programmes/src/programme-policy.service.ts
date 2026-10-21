@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { verifyAccessToken } from '@app/platform/access-token.js';
+import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import {
   nextPageIfMore,
   pageOffset,
@@ -205,7 +206,8 @@ export class ProgrammePolicyService {
         );
       }
       const programme = await this.programmes.getInTransaction(client, slug);
-      if (!programme) throw new NotFoundException('programme not found');
+      if (!programme)
+        throw new NotFoundException(pythonKeyErrorDetail(slug));
       draft.status = 'PUBLISHED';
       draft.effectiveFrom = effectiveFrom;
       draft.publishedAt = new Date().toISOString();
@@ -319,7 +321,7 @@ export class ProgrammePolicyService {
     draftId: string,
   ): Promise<ProgrammePolicyDraft> {
     const draft = await this.policies.find(client, draftId);
-    if (!draft) throw new NotFoundException('policy draft not found');
+    if (!draft) throw new NotFoundException(pythonKeyErrorDetail(draftId));
     draft.reviewHistory ??= [];
     return draft;
   }

@@ -16,6 +16,7 @@ import {
 } from '@app/platform/pagination.js';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import {
+  pythonKeyErrorDetail,
   pythonString,
   trimPythonWhitespace,
 } from '@app/platform/python-strings.js';
@@ -53,7 +54,8 @@ export class ProgrammesService {
 
   async get(slug: string): Promise<ProgrammeRecord> {
     const programme = await this.programmes.get(slug);
-    if (!programme) throw new NotFoundException('programme not found');
+    if (!programme)
+      throw new NotFoundException(pythonKeyErrorDetail(slug));
     return programme;
   }
 
@@ -155,7 +157,8 @@ export class ProgrammesService {
     this.authorizeAdmin(authorization, slug);
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
-      if (!programme) throw new NotFoundException('programme not found');
+      if (!programme)
+        throw new NotFoundException(pythonKeyErrorDetail(slug));
       if (status === 'ARCHIVED') {
         programme.status = 'ARCHIVED';
         programme.updatedAt = new Date().toISOString();
@@ -226,7 +229,8 @@ export class ProgrammesService {
   ) {
     this.authorizeAdmin(authorization, slug);
     const programme = await this.programmes.get(slug);
-    if (!programme) throw new NotFoundException('programme not found');
+    if (!programme)
+      throw new NotFoundException(pythonKeyErrorDetail(slug));
     return { programmeSlug: slug, items: programme.entityTypes ?? [] };
   }
 
@@ -276,7 +280,8 @@ export class ProgrammesService {
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programmes = await this.programmes.listAll(client);
       const programme = programmes.find((item) => item.slug === slug);
-      if (!programme) throw new NotFoundException('programme not found');
+      if (!programme)
+        throw new NotFoundException(pythonKeyErrorDetail(slug));
       const catalog = await this.entityTypes.listAll(client);
       const code = trimPythonWhitespace(body.code).toUpperCase();
       const previous = catalog[code];
@@ -319,7 +324,8 @@ export class ProgrammesService {
     const code = trimPythonWhitespace(codeValue).toUpperCase();
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
-      if (!programme) throw new NotFoundException('programme not found');
+      if (!programme)
+        throw new NotFoundException(pythonKeyErrorDetail(slug));
       const catalog = await this.entityTypes.listAll(client);
       if (!catalog[code])
         throw new BadRequestException('unknown entity category');
@@ -342,7 +348,8 @@ export class ProgrammesService {
     const code = trimPythonWhitespace(codeValue).toUpperCase();
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
-      if (!programme) throw new NotFoundException('programme not found');
+      if (!programme)
+        throw new NotFoundException(pythonKeyErrorDetail(slug));
       const catalog = await this.entityTypes.listAll(client);
       await this.applyAssignment(client, programme, code, catalog, false);
       return { programmeSlug: slug, items: programme.entityTypes ?? [] };

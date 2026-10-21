@@ -7,6 +7,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
+import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import {
   nextPageIfMore,
   pageOffset,
@@ -69,7 +70,7 @@ export class ProgrammeContentService {
     this.authorizeAdmin(authorization, slug);
     const coverage = await this.reads.getContentCoverage(slug);
     if (!coverage.programmeFound)
-      throw new NotFoundException('programme not found');
+      throw new NotFoundException(pythonKeyErrorDetail(slug));
     return {
       programmeSlug: slug,
       locales: coverage.locales,
@@ -332,7 +333,7 @@ export class ProgrammeContentService {
     contentId: string,
   ): Promise<ProgrammeContentRecord> {
     const content = await this.contents.find(client, contentId);
-    if (!content) throw new NotFoundException('content not found');
+    if (!content) throw new NotFoundException(pythonKeyErrorDetail(contentId));
     content.reviewHistory ??= [];
     return content;
   }
