@@ -1,7 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
-import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import {
+  pythonString,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   parseTimestamp,
@@ -32,7 +35,7 @@ export function validateAwardDraft(body: JsonRecord, existing?: JsonRecord) {
     if (body[field] === undefined || body[field] === null)
       throw new BadRequestException(`${field} is required`);
   }
-  const category = String(body.category).toUpperCase();
+  const category = pythonString(body.category).toUpperCase();
   if (!['HUNTER', 'ACTIVATOR'].includes(category))
     throw new BadRequestException('category must be HUNTER or ACTIVATOR');
   if (!Array.isArray(body.levels) || body.levels.length === 0)

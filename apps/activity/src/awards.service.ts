@@ -105,7 +105,7 @@ export class AwardsService {
     const record = validateAwardDraft(body, existing);
     if (record.signatureAssetId) {
       const asset = await this.awardsRepository.getAwardAsset(
-        String(record.signatureAssetId),
+        record.signatureAssetId,
       );
       if (asset.kind !== 'SIGNATURE')
         throw new BadRequestException('choose a registered signature asset');
@@ -247,9 +247,7 @@ export class AwardsService {
     if (!body.awardId || !body.subjectId)
       throw new BadRequestException('awardId and subjectId are required');
     let facts = body.facts;
-    if (
-      pythonString(claims.sub) !== pythonStringJsonField(body, 'subjectId')
-    ) {
+    if (pythonString(claims.sub) !== pythonStringJsonField(body, 'subjectId')) {
       this.authorize(claims.scp, [
         'awards.read',
         'awards.request',
