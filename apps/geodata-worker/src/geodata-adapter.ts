@@ -255,8 +255,12 @@ function normalizeCoordinates(value: unknown, source: string): unknown {
   return value;
 }
 
-function isPythonNumber(value: unknown): value is number | boolean {
-  return typeof value === 'number' || typeof value === 'boolean';
+function isPythonNumber(value: unknown): value is number | boolean | bigint {
+  return (
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  );
 }
 
 function sourceCrs(value: unknown): string {

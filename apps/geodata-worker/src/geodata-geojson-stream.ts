@@ -703,8 +703,12 @@ function countFeatureVertices(value: unknown): number {
   return vertices;
 }
 
-function isPythonNumber(value: unknown): value is number | boolean {
-  return typeof value === 'number' || typeof value === 'boolean';
+function isPythonNumber(value: unknown): value is number | boolean | bigint {
+  return (
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  );
 }
 
 function isJsonWhitespace(byte: number) {

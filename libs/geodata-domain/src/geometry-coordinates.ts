@@ -67,15 +67,27 @@ function isRing(value: unknown): boolean {
   );
 }
 
-function isPythonNumber(value: unknown): value is number | boolean {
-  return typeof value === 'number' || typeof value === 'boolean';
+function isPythonNumber(value: unknown): value is number | boolean | bigint {
+  return (
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  );
 }
 
 function pythonEqual(left: unknown, right: unknown): boolean {
-  if (typeof left === 'boolean' && typeof right === 'number')
-    return Number(left) === right;
-  if (typeof right === 'boolean' && typeof left === 'number')
-    return left === Number(right);
+  if (isPythonNumber(left) && isPythonNumber(right)) {
+    const leftNumber = typeof left === 'boolean' ? Number(left) : left;
+    const rightNumber = typeof right === 'boolean' ? Number(right) : right;
+    if (typeof leftNumber === 'bigint')
+      return typeof rightNumber === 'bigint'
+        ? leftNumber === rightNumber
+        : Number.isInteger(rightNumber) &&
+            BigInt(rightNumber) === leftNumber;
+    if (typeof rightNumber === 'bigint')
+      return Number.isInteger(leftNumber) && BigInt(leftNumber) === rightNumber;
+    return leftNumber === rightNumber;
+  }
   if (Array.isArray(left) && Array.isArray(right))
     return (
       left.length === right.length &&
