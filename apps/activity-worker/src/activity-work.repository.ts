@@ -337,7 +337,9 @@ export class ActivityWorkRepository {
           const subjectIds = [
             ...new Set([
               activation.operator_id,
-              ...records.map((qso: JsonRecord) => qso.hunterId).filter(Boolean),
+              ...records
+                .map((qso: JsonRecord) => qso.hunterId)
+                .filter(pythonTruthy),
             ]),
           ];
           await client.query(

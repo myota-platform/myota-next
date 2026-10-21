@@ -21,8 +21,10 @@ Python string coercion for JSON float tokens in `workedCallsign`,
 `workedLocator`, `hunterId`, and `workedEntityId`; ingestion retains float-token
 metadata through the Activity JSONB job payload and worker read. Single-QSO
 award-recalculation jobs retain a null `hunterId` entry in `subjectIds`, as the
-Python handler does. Band and mode normalization and validation details use
-Python string conversion for non-string JSON values. Activation
+Python handler does. Batch QSO recalculation jobs filter raw Hunter IDs using
+Python truthiness and preserve their submitted values. Band and mode
+normalization and validation details use Python string conversion for
+non-string JSON values. Activation
 validity defaults come from
 `programmeRules` only, even
 when validation uses the `rules` alias. Timestamp normalization accepts lowercase `t`, ISO week dates,
