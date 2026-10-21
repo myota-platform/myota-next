@@ -141,18 +141,36 @@ export async function* streamXmlFeatures(
       }
     } else if (['wpt', 'rtept'].includes(name)) {
       const attributes = tag.attributes as Record<string, unknown>;
-      const longitude = Number(attributeValue(attributes.lon));
-      const latitude = Number(attributeValue(attributes.lat));
-      if (!Number.isFinite(longitude) || !Number.isFinite(latitude))
+      const longitudeText = attributeValue(attributes.lon);
+      const latitudeText = attributeValue(attributes.lat);
+      const longitude = Number(longitudeText);
+      const latitude = Number(latitudeText);
+      if (
+        !longitudeText ||
+        !trimPythonWhitespace(longitudeText) ||
+        !latitudeText ||
+        !trimPythonWhitespace(latitudeText) ||
+        !Number.isFinite(longitude) ||
+        !Number.isFinite(latitude)
+      )
         fail('GPX point has invalid longitude or latitude');
       else gpxPoint = { coordinates: [longitude, latitude], properties: {} };
     } else if (name === 'trkseg') {
       trackPoints = [];
     } else if (name === 'trkpt' && trackPoints && stack.at(-2) === 'trkseg') {
       const attributes = tag.attributes as Record<string, unknown>;
-      const longitude = Number(attributeValue(attributes.lon));
-      const latitude = Number(attributeValue(attributes.lat));
-      if (!Number.isFinite(longitude) || !Number.isFinite(latitude))
+      const longitudeText = attributeValue(attributes.lon);
+      const latitudeText = attributeValue(attributes.lat);
+      const longitude = Number(longitudeText);
+      const latitude = Number(latitudeText);
+      if (
+        !longitudeText ||
+        !trimPythonWhitespace(longitudeText) ||
+        !latitudeText ||
+        !trimPythonWhitespace(latitudeText) ||
+        !Number.isFinite(longitude) ||
+        !Number.isFinite(latitude)
+      )
         fail('GPX track point has invalid longitude or latitude');
       else {
         trackPoints.push([longitude, latitude]);
