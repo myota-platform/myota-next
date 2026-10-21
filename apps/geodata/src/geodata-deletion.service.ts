@@ -157,7 +157,6 @@ export class GeodataDeletionService {
   }
 
   async get(authorization: string | undefined, jobId: string) {
-    const claims = verifyAccessToken(authorization);
     const client = await this.connect();
     try {
       const result = await client.query(
@@ -167,6 +166,7 @@ export class GeodataDeletionService {
       const job = result.rows[0]?.payload as
         Record<string, unknown> | undefined;
       if (!job) throw new NotFoundException(pythonKeyErrorDetail(jobId));
+      const claims = verifyAccessToken(authorization);
       const entity = {
         programme_slug: (job.entityContext as Record<string, unknown>)
           ?.programmeSlug,
