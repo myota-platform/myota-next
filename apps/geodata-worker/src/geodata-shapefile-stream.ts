@@ -4,7 +4,6 @@ import { createWriteStream } from 'node:fs';
 import { open, readFile, rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import proj4, { type Converter } from 'proj4';
 import yauzl from 'yauzl';
 import { open as openShapefile } from 'shapefile';
 import {
@@ -142,9 +141,6 @@ export async function* streamShapefileFeatures(
         : Math.max(0, Math.min(filteredDbf.recordLimit, shapeRecordLimit));
     const prj = members.get(`${stem}.prj`);
     const projectionText = prj ? await readFile(prj.path, 'utf8') : '';
-    const projection = projectionText
-      ? createWgs84Projection(projectionText)
-      : undefined;
     const dbfRecords = await openDbfRecordReader(filteredDbf.path);
     let reader: Awaited<ReturnType<typeof openShapefile>>;
     try {
@@ -171,9 +167,7 @@ export async function* streamShapefileFeatures(
           throw new Error(
             'Shape type "NULL" cannot be represented as GeoJSON.',
           );
-        const feature = projection
-          ? reprojectFeature(result.value, projection)
-          : result.value;
+        const feature = result.value;
         if (isRecord(feature) && isRecord(feature.properties))
           Object.assign(
             feature.properties,
@@ -401,55 +395,6 @@ async function writeFileHandle(
     if (!result.bytesWritten) throw new Error('Could not write Shapefile DBF');
     offset += result.bytesWritten;
   }
-}
-
-function createWgs84Projection(wkt: string): Converter {
-  if (!wkt) throw new Error('Shapefile projection metadata is empty');
-  try {
-    return proj4(wkt, 'EPSG:4326');
-  } catch (error) {
-    throw new Error('Shapefile projection metadata is not supported', {
-      cause: error,
-    });
-  }
-}
-
-function reprojectFeature(value: unknown, projection: Converter) {
-  if (!isRecord(value) || !isRecord(value.geometry)) return value;
-  reprojectGeometry(value.geometry, projection);
-  return value;
-}
-
-function reprojectGeometry(
-  geometry: Record<string, unknown>,
-  projection: Converter,
-) {
-  if (geometry.type === 'GeometryCollection') {
-    if (Array.isArray(geometry.geometries))
-      for (const child of geometry.geometries)
-        if (isRecord(child)) reprojectGeometry(child, projection);
-    return;
-  }
-  if (Array.isArray(geometry.coordinates))
-    geometry.coordinates = transformCoordinates(
-      geometry.coordinates,
-      projection,
-    );
-}
-
-function transformCoordinates(
-  value: unknown[],
-  projection: Converter,
-): unknown[] {
-  if (
-    value.length >= 2 &&
-    typeof value[0] === 'number' &&
-    typeof value[1] === 'number'
-  )
-    return projection.forward(value as number[]);
-  return value.map((item) =>
-    Array.isArray(item) ? transformCoordinates(item, projection) : item,
-  );
 }
 
 async function validateShapeRecords(path: string, fileBytes: number) {

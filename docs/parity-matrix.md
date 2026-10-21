@@ -460,17 +460,20 @@ normalization. The scheduled Node importer preserves source numeric tokens in
 the generated Feature hashes it submits. Streamed imports reject features whose
 inherited CRS pushes their decoded size over the reference's configured limit.
 Generated PBF hashes now retain Python float formatting for geometry
-coordinates. Shapefile hashes use DBF numeric field types to distinguish integer
-and floating-point attributes and include the source `.prj` text. Binary-format
-integer attributes are staged without precision loss, including values beyond
+coordinates. Shapefile source hashes use original coordinates, DBF numeric field
+types, and source `.prj` text; the adapter applies the CRS transform once during
+normalization. Binary-format integer attributes are staged without precision
+loss, including values beyond
 JavaScript's safe integer range. Geodata PostgreSQL pools preserve those values
 on reads, and the API returns them as numeric JSON tokens. Generic projected
 CRS transforms preserve ordinates beyond XY, and unsupported CRS identifiers
 use the reference domain error; the reference's Web Mercator special case
-emits XY only. Hash and feature
-parity has a PyShp-generated point fixture covering the source feature,
-large-integer DBF field, `.prj` text, and canonical source hash. PBF and less
-common geometry or CRS definitions still need fixtures. The direct JSON import path materializes
+emits XY only. Hash and feature parity has PyShp-generated point fixtures for
+WGS84, uppercase sidecar extensions, and Web Mercator. The projected fixture
+checks the original-coordinate source hash and one adapter reprojection against
+PyShp 2.3.1 and PyProj 3.8.0. The baseline fixture also covers a large-integer
+DBF field, `.prj` text, and canonical source hash. PBF and less common geometry
+or CRS definitions still need fixtures. The direct JSON import path materializes
 the normalized collection and accepts the reference's feature arrays, single
 geometries, geometry wrappers, and empty collections, while multipart GeoJSON
 streams source features.
