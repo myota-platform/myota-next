@@ -10,6 +10,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   nextPageIfMore,
@@ -135,15 +136,17 @@ export class IdentityAccountService {
           [idempotencyKey],
         );
         const previous = await client.query<{
-          response: Record<string, unknown>;
+          response_text: string;
         }>(
-          `SELECT response FROM public.idempotency_record
+          `SELECT response::text AS response_text FROM public.idempotency_record
             WHERE service = 'identity' AND key = $1`,
           [idempotencyKey],
         );
         if (previous.rows[0]) {
           await client.query('COMMIT');
-          return previous.rows[0].response;
+          return parseJsonWithExactIntegers(
+            previous.rows[0].response_text,
+          ) as Record<string, unknown>;
         }
       }
 
@@ -343,10 +346,10 @@ export class IdentityAccountService {
       const eventsResult = await client.query<{
         id: string;
         event_type: string;
-        payload: Record<string, unknown>;
+        payload_text: string;
         occurred_at: Date;
       }>(
-        `SELECT id, event_type, payload, occurred_at
+        `SELECT id, event_type, payload::text AS payload_text, occurred_at
              FROM public.security_event
             ORDER BY occurred_at DESC, event_order ASC
             LIMIT $1 OFFSET $2`,
@@ -359,7 +362,7 @@ export class IdentityAccountService {
           id: event.id,
           eventType: event.event_type,
           occurredAt: event.occurred_at,
-          payload: event.payload,
+          payload: parseJsonWithExactIntegers(event.payload_text),
         })),
         page,
         pageSize,
@@ -717,7 +720,7 @@ export class IdentityAccountService {
       const evidence = await client.query(
         `SELECT e.id, e.callsign_id AS "callsignId", c.account_id AS "accountId",
                 e.evidence_type AS "evidenceType", e.source, e.checksum,
-                e.metadata, e.status, e.submitted_at AS "submittedAt",
+                e.metadata::text AS "metadataText", e.status, e.submitted_at AS "submittedAt",
                 e.reviewed_at AS "reviewedAt"
            FROM public.callsign_evidence e
            JOIN public.callsign c ON c.id = e.callsign_id
@@ -727,7 +730,7 @@ export class IdentityAccountService {
       );
       const securityEvents = await client.query(
         `SELECT id, event_type AS "eventType", occurred_at AS "occurredAt",
-                payload
+                payload::text AS "payloadText"
            FROM public.security_event
           WHERE payload ->> 'accountId' = $1
           ORDER BY event_order`,
@@ -737,8 +740,16 @@ export class IdentityAccountService {
       return {
         account,
         roles,
-        callsignEvidence: evidence.rows,
-        securityEvents: securityEvents.rows,
+        callsignEvidence: evidence.rows.map((row) => ({
+          ...row,
+          metadata: parseJsonWithExactIntegers(row.metadataText),
+          metadataText: undefined,
+        })),
+        securityEvents: securityEvents.rows.map((row) => ({
+          ...row,
+          payload: parseJsonWithExactIntegers(row.payloadText),
+          payloadText: undefined,
+        })),
       };
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
@@ -1088,13 +1099,18 @@ export class IdentityAccountService {
       [key],
     );
     const result = await client.query<{
-      response: Record<string, unknown>;
+      response_text: string;
     }>(
-      `SELECT response FROM public.idempotency_record
+      `SELECT response::text AS response_text FROM public.idempotency_record
         WHERE service = 'identity' AND key = $1`,
       [key],
     );
-    return result.rows[0]?.response ?? null;
+    return result.rows[0]
+      ? (parseJsonWithExactIntegers(result.rows[0].response_text) as Record<
+          string,
+          unknown
+        >)
+      : null;
   }
 
   private async storeIdempotentResult(

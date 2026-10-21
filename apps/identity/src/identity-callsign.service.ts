@@ -10,6 +10,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { writeOutboxEvent } from '@app/platform/outbox.js';
 import {
@@ -566,12 +567,17 @@ export class IdentityCallsignService {
       "SELECT pg_advisory_xact_lock(hashtextextended('identity:' || $1, 0))",
       [key],
     );
-    const result = await client.query<{ response: Record<string, unknown> }>(
-      `SELECT response FROM public.idempotency_record
+    const result = await client.query<{ response_text: string }>(
+      `SELECT response::text AS response_text FROM public.idempotency_record
         WHERE service = 'identity' AND key = $1`,
       [key],
     );
-    return result.rows[0]?.response ?? null;
+    return result.rows[0]
+      ? (parseJsonWithExactIntegers(result.rows[0].response_text) as Record<
+          string,
+          unknown
+        >)
+      : null;
   }
 
   private async storeIdempotentResult(

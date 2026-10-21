@@ -64,7 +64,10 @@ export async function bootstrapHttpService(
       response.end = new Proxy(originalEnd, {
         apply(target, thisArg, argumentsList) {
           if (response.statusCode === 204) {
-            response.setHeader('Content-Type', 'application/json; charset=utf-8');
+            response.setHeader(
+              'Content-Type',
+              'application/json; charset=utf-8',
+            );
             response.setHeader('Content-Length', '0');
           }
           return Reflect.apply(target, thisArg, argumentsList);
@@ -174,7 +177,10 @@ export async function bootstrapHttpService(
             ) ||
             /^\/v1\/qsos\/[^/]+\/corrections$/.test(path) ||
             /^\/v1\/programmes\/[^/]+\/entity-types$/.test(path) ||
-            /^\/v1\/identity\/roles\/[^/]+$/.test(path)
+            /^\/v1\/identity\/roles\/[^/]+$/.test(path) ||
+            /^\/v1\/identity\/accounts\/[^/]+\/callsigns\/[^/]+\/evidence$/.test(
+              path,
+            )
           )
             Object.assign(request, { rawBody: buffer });
         },
@@ -184,11 +190,14 @@ export async function bootstrapHttpService(
       const path = request.url?.split('?', 1)[0] ?? '';
       const exactIntegerRequest =
         request.method === 'POST' &&
-        [
+        ([
           '/v1/programmes',
           '/v1/geodata/refresh-schedules',
           '/v1/geodata/imports',
-        ].includes(path);
+        ].includes(path) ||
+          /^\/v1\/identity\/accounts\/[^/]+\/callsigns\/[^/]+\/evidence$/.test(
+            path,
+          ));
       const floatMetadataRequest =
         (request.method === 'POST' &&
           ([
