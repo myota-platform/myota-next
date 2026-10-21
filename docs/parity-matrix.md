@@ -344,7 +344,7 @@ normalized records can complete with its rejected-row errors. The persisted
 additional count for normalization errors. ADIF-triggered award recalculation
 uses the Python batch key `batch:<activationId>:<firstQsoDeduplicationKey>`.
 Automated
-compatibility and outage/recovery qualification remain outstanding.
+broader compatibility and outage/recovery qualification remain outstanding.
 Failed or queued Activity jobs can be redriven by administrators with
 an audited reason. Failed-job redrive preserves the delivery-attempt counter,
 matching the pinned Python repository. Long-running Activity jobs now extend their 120-second leases
@@ -358,7 +358,11 @@ Python implementation.
 For early ADIF failures, the worker writes the notification under the
 activation ID, as the pinned Python worker does; the notice therefore does not
 appear in the activation owner's account feed. Missing-object notices also
-retain the Python reason string `object unavailable`.
+retain the Python reason string `object unavailable`. A focused S3 read-failure
+fixture verifies that storage errors follow Python `ObjectStore.get` behavior:
+the import is marked failed, counted as one rejection, and notified under the
+activation ID. Broader Activity compatibility and outage/recovery qualification
+remain outstanding.
 Activity activation history, public activation history, and statistics pages
 apply database limits and offsets while retaining their existing page metadata;
 public result exports remain complete exports.
