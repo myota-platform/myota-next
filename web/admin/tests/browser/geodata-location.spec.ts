@@ -161,7 +161,11 @@ test('saves manual location metadata and queues a provider refresh', async ({
     .locator('input[list="location-options-continent"]')
     .fill('Europe');
   await editor.locator('input[list="location-options-country"]').fill('France');
-  await editor.getByLabel('City').fill('Lyon');
+  await editor
+    .locator('.location-editor-grid label')
+    .filter({ hasText: /^City/ })
+    .locator('input')
+    .fill('Lyon');
   await editor.getByLabel('Keep country manual').check();
   await expect(editor.getByLabel('Continent code')).toHaveValue('EU');
   await expect(editor.getByLabel('Country code')).toHaveValue('FR');
