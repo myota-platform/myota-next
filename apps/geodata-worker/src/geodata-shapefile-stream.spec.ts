@@ -4,6 +4,38 @@ import { sourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 import { streamShapefileFeatures } from './geodata-shapefile-stream.js';
 
 describe('streamShapefileFeatures', () => {
+  it('preserves PyShp MultiPointZ GeoJSON coordinates', async () => {
+    const source = await readFile(
+      new URL('./fixtures/python-multipointz-shapefile.zip', import.meta.url),
+    );
+    async function* chunks() {
+      yield source;
+    }
+    const features: unknown[] = [];
+    for await (const feature of streamShapefileFeatures(
+      chunks(),
+      'python-multipointz-shapefile.zip',
+      '',
+      10,
+      async () => undefined,
+    )) {
+      features.push(feature);
+    }
+
+    expect(features).toHaveLength(1);
+    expect(features[0]).toMatchObject({
+      type: 'Feature',
+      geometry: {
+        type: 'MultiPoint',
+        coordinates: [
+          [1, 2],
+          [5, 6],
+        ],
+      },
+      properties: { name: 'Z values' },
+    });
+  });
+
   it.each([
     'python-point-shapefile.zip',
     'python-point-shapefile-uppercase.zip',

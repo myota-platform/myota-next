@@ -492,6 +492,9 @@ or CRS definitions still need fixtures. The direct JSON import path materializes
 the normalized collection and accepts the reference's feature arrays, single
 geometries, geometry wrappers, and empty collections, while multipart GeoJSON
 streams source features.
+The PyShp 2.3.1 MultiPointZ fixture verifies GeoJSON dimensionality: PyShp's
+`__geo_interface__` emits XY coordinates for this shape type, and the Nest
+streaming reader matches it.
 Shapefile multipart uploads stream to
 temporary disk and decode records one at a time, with the same shared API/worker
 1 GiB upload cap or optional format-specific override, a 1 GiB expanded-size cap, 16 MiB
