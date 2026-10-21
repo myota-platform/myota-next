@@ -697,7 +697,7 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
     @Req() request: Request,
   ) {
-    const claims = authorizeReview(authorization);
+    const claims = verifyAccessToken(authorization);
     const idempotency = scopedRequestIdempotency(
       key,
       claims.sub,
@@ -773,13 +773,6 @@ function authorizeImport(authorization: string | undefined) {
   const claims = verifyAccessToken(authorization);
   if (!claims.scp.some((scope) => scope === '*' || scope === 'geodata.import'))
     throw new ForbiddenException('geodata.import scope is required');
-  return claims;
-}
-
-function authorizeReview(authorization: string | undefined) {
-  const claims = verifyAccessToken(authorization);
-  if (!claims.scp.some((scope) => scope === '*' || scope === 'geodata.review'))
-    throw new ForbiddenException('geodata.review scope is required');
   return claims;
 }
 

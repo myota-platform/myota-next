@@ -973,51 +973,7 @@ export class GeodataEntityMutationRepository {
       if (replay.found) return replay.response;
     }
     const editorId = body.editorId;
-    if (!pythonTruthy(editorId))
-      throw new BadRequestException('editorId is required');
-    const geometryInput = isRecord(body.geometry) ? body.geometry : null;
-    const rawGeometryType =
-      typeof geometryInput?.type === 'string' ? geometryInput.type : '';
-    const geometryTypeAliases: Record<string, string> = {
-      way: 'LineString',
-      linestring: 'LineString',
-      multilinestring: 'MultiLineString',
-    };
-    const geometryType =
-      geometryTypeAliases[rawGeometryType.toLowerCase()] ?? rawGeometryType;
-    if (
-      ![
-        'Point',
-        'LineString',
-        'MultiLineString',
-        'Polygon',
-        'MultiPolygon',
-      ].includes(geometryType) ||
-      !geometryInput ||
-      !('coordinates' in geometryInput)
-    )
-      throw new BadRequestException(
-        'geometry must be a supported GeoJSON geometry',
-      );
-    try {
-      validateGeometryCoordinates(
-        geometryType,
-        geometryInput.coordinates,
-        MAX_COORDINATES,
-      );
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error ? error.message : 'invalid geometry coordinates',
-      );
-    }
-    const geometry = stringifyJsonWithBigInts({
-      type: geometryType,
-      coordinates: geometryInput.coordinates,
-    });
-    if (Buffer.byteLength(geometry) > 5 * 1024 * 1024)
-      throw new BadRequestException('geometry exceeds the 5 MiB limit');
     const note = body.note === undefined ? null : body.note;
-    const expectedVersion = parseIfMatch(ifMatch);
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -1034,6 +990,58 @@ export class GeodataEntityMutationRepository {
       const row = selected.rows[0];
       if (!row) throw new NotFoundException(pythonKeyErrorDetail(id));
       assertReviewCoverage(claims, row);
+      const missing = [
+        ...(!pythonTruthy(body.geometry) ? ['geometry'] : []),
+        ...(!pythonTruthy(editorId) ? ['editorId'] : []),
+      ];
+      if (missing.length)
+        throw new BadRequestException(
+          `missing required fields: ${missing.join(', ')}`,
+        );
+      const geometryInput = isRecord(body.geometry) ? body.geometry : null;
+      const rawGeometryType =
+        typeof geometryInput?.type === 'string' ? geometryInput.type : '';
+      const geometryTypeAliases: Record<string, string> = {
+        way: 'LineString',
+        linestring: 'LineString',
+        multilinestring: 'MultiLineString',
+      };
+      const geometryType =
+        geometryTypeAliases[rawGeometryType.toLowerCase()] ?? rawGeometryType;
+      if (
+        ![
+          'Point',
+          'LineString',
+          'MultiLineString',
+          'Polygon',
+          'MultiPolygon',
+        ].includes(geometryType) ||
+        !geometryInput ||
+        !('coordinates' in geometryInput)
+      )
+        throw new BadRequestException(
+          'geometry must be a supported GeoJSON geometry',
+        );
+      try {
+        validateGeometryCoordinates(
+          geometryType,
+          geometryInput.coordinates,
+          MAX_COORDINATES,
+        );
+      } catch (error) {
+        throw new BadRequestException(
+          error instanceof Error
+            ? error.message
+            : 'invalid geometry coordinates',
+        );
+      }
+      const geometry = stringifyJsonWithBigInts({
+        type: geometryType,
+        coordinates: geometryInput.coordinates,
+      });
+      if (Buffer.byteLength(geometry) > 5 * 1024 * 1024)
+        throw new BadRequestException('geometry exceeds the 5 MiB limit');
+      const expectedVersion = parseIfMatch(ifMatch);
       if (key) {
         const previous = await readRequestResponse(
           client,
