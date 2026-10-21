@@ -141,6 +141,60 @@ describeWithDatabases(
           .expect(201);
         expect(qso.body.workedCallsign).toBe('F4E2E');
 
+        const correction = await request(gatewayUrl)
+          .post(`/v1/qsos/${qso.body.id}/corrections`)
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .send({
+            requestedBy: login.body.account.id,
+            reason: 'Correct the worked callsign',
+            proposedValues: { workedCallsign: 'F4E2X' },
+          })
+          .expect(201);
+        expect(correction.body.status).toBe('PENDING');
+
+        const correctionInbox = await request(gatewayUrl)
+          .get('/v1/qso-corrections')
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .query({
+            programme: programmeSlug,
+            status: 'PENDING',
+            page: 1,
+            pageSize: 10,
+          })
+          .expect(200);
+        expect(correctionInbox.body).toMatchObject({
+          page: 1,
+          pageSize: 10,
+          total: 1,
+          items: [
+            {
+              id: correction.body.id,
+              qso: { id: qso.body.id, workedCallsign: 'F4E2E' },
+            },
+          ],
+        });
+
+        const reviewedCorrection = await request(gatewayUrl)
+          .post(
+            `/v1/qsos/${qso.body.id}/corrections/${correction.body.id}/review`,
+          )
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .send({
+            decision: 'APPLIED',
+            reviewedBy: login.body.account.id,
+            reviewNote: 'Verified against the station log',
+          })
+          .expect(200);
+        expect(reviewedCorrection.body.status).toBe('APPLIED');
+
+        const activationRead = await request(gatewayUrl)
+          .get(`/v1/activations/${activation.body.id}`)
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .expect(200);
+        expect(activationRead.body.qsos).toMatchObject([
+          { id: qso.body.id, workedCallsign: 'F4E2X', status: 'CORRECTED' },
+        ]);
+
         const closed = await request(gatewayUrl)
           .patch(`/v1/activations/${activation.body.id}`)
           .set('Authorization', `Bearer ${refreshed.body.accessToken}`)

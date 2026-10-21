@@ -75,6 +75,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:e2e
       - run: npm run test:geodata-rss
       - run: npm run test:activity-worker-recovery
       - run: npm run test:activity-notification-restart-recovery
