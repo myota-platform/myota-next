@@ -104,9 +104,10 @@ Focused Identity fixtures verify profile-image normalization against Pillow,
 pin service-token signing to a Python-generated HS256 token (including Bearer
 and expiry rejection), exercise callsign normalization, retired-value reuse,
 duplicate rejection, and first-primary selection, and pin account-creation
-permission and validation precedence to the Python handler. Recovery fixtures
-cover account enumeration behavior, one-time token use, password length, and
-session revocation. Login tests verify the eight-attempt general limit and the
+permission and validation precedence plus Identity-administrator role
+escalation denial to the Python handler. Recovery fixtures cover account
+enumeration behavior, one-time token use, password length, and session
+revocation. Login tests verify the eight-attempt general limit and the
 global-operator bypass. Account, callsign, recovery, and authorization sequence
 behavior still require broader automated compatibility coverage.
 Profile-image uploads accept JPEG, PNG, or WebP up to 5 MiB, reject animation
