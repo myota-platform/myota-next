@@ -17,7 +17,6 @@ import {
 import type { ConsumerConfig, StreamConfig } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import { Pool } from 'pg';
-import { DatabaseHealthService } from '@app/platform/database.module.js';
 import { describe, expect, it } from 'vitest';
 import { ActivityWorkRepository } from './activity-work.repository.js';
 import { ActivityRetentionRepository } from './activity-retention.repository.js';
@@ -49,7 +48,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       max: 4,
       connectionTimeoutMillis: 1000,
     });
-    new DatabaseHealthService(workerPool);
+    workerPool.on('error', () => undefined);
     const directory = await mkdtemp(join(tmpdir(), 'myota-activity-worker-'));
     const port = await reserveLocalPort();
     const natsUrl = `nats://127.0.0.1:${port}`;

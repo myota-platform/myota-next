@@ -18,9 +18,10 @@ export class DatabaseHealthService implements OnModuleDestroy {
   constructor(
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {
-    this.pool?.on('error', (error: Error) => {
-      this.logger.warn(`PostgreSQL idle connection failed: ${error.message}`);
-    });
+    if (this.pool && typeof this.pool.on === 'function')
+      this.pool.on('error', (error: Error) => {
+        this.logger.warn(`PostgreSQL idle connection failed: ${error.message}`);
+      });
   }
 
   async isReady(): Promise<boolean> {
