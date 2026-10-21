@@ -109,6 +109,25 @@ describe('QSO normalization compatibility', () => {
 });
 
 describe('activation rule evaluation compatibility', () => {
+  it('uses the activation value from the programme minimum QSO rule object', () => {
+    const result = evaluateActivation(
+      {
+        startedAt: '2026-10-21T10:00:00Z',
+        programmeRules: {
+          minimumQsos: { activation: 2, hunter: 1 },
+        },
+      },
+      [{ band: '20M', mode: 'SSB' }],
+      '2026-10-21T11:00:00Z',
+    );
+
+    expect(result).toMatchObject({
+      valid: false,
+      violations: ['minimum QSO requirement was not met'],
+      qsoCount: 1,
+    });
+  });
+
   it('preserves the reference violation order and evaluation metadata', () => {
     const result = evaluateActivation(
       {

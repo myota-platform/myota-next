@@ -666,9 +666,16 @@ export function evaluateActivation(
     compareTimestamps(normalizedEndedAt, activation.validityExpiresAt) > 0
   )
     violations.push('activation exceeded its validity window');
+  const minimumQsoRule = rules.minimumQsos;
+  const minimumActivationQsos =
+    minimumQsoRule !== null &&
+    typeof minimumQsoRule === 'object' &&
+    !Array.isArray(minimumQsoRule)
+      ? (minimumQsoRule as Record<string, unknown>).activation
+      : minimumQsoRule;
   if (
-    rules.minimumQsos != null &&
-    qsos.length < pythonInt(rules.minimumQsos, 'minimumQsos')
+    minimumActivationQsos != null &&
+    qsos.length < pythonInt(minimumActivationQsos, 'minimumQsos')
   )
     violations.push('minimum QSO requirement was not met');
   const allowedBands = Object.hasOwn(rules, 'allowedBands')

@@ -42,6 +42,11 @@ composition, and omission of incomplete records. The PostgreSQL-backed HTTP
 integration fixture creates a programme through Gateway, then uses a real
 Identity-issued operator token to create an activation, record a QSO, and close
 it through the Activity API and its separate owner database.
+Activation evaluation reads `minimumQsos.activation` from the programme's
+nested rule shape and continues to accept the older scalar form. The Python
+reference attempts to convert the whole object to an integer and fails; using
+the activation threshold lets the participant workflow complete as the
+programme contract intends.
 Activation validation also preserves the Python handler's order: earlier rule
 and callsign checks run before the `startedAt` lookup, whose omission maps to
 the reference's 404 missing-key response. Truthy pair iterables for `location`
