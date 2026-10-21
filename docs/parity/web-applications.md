@@ -60,8 +60,8 @@ global-scope checks follow the API authorization rules. The Participant
 profile exposes the owner-authorized callsign actions. These
 callsign controls do not yet have browser-level compatibility coverage. Callsign
 creation and primary-selection retries reuse their idempotency key for the same
-request, and a profile-refresh failure after a successful mutation is reported
-separately from the mutation result.
+request across page reloads in the same tab, and a profile-refresh failure
+after a successful mutation is reported separately from the mutation result.
 The Admin import form also supports resumable KML and GPX file uploads up to
 1 GiB, alongside GeoJSON, OSM PBF, and Shapefile ZIP uploads. The API can
 enforce lower format-specific limits. The award catalogue follows all API

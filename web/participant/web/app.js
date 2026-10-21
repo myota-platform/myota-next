@@ -15,8 +15,13 @@ let awardRefreshToken = localStorage.getItem('myota_public_refresh') || '';
 let awardRefreshInFlight = null;
 const pendingParticipantMutationsKey = 'myota_pending_activity_mutations';
 const pendingParticipantMutations = restorePendingParticipantMutations();
-let profileCallsignAddRequest = null;
-const profilePrimaryCallsignRequestKeys = new Map();
+const pendingProfileCallsignMutationsKey =
+  'myota_pending_profile_callsign_mutations';
+const pendingProfileCallsignMutations =
+  restorePendingProfileCallsignMutations();
+let profileCallsignAddRequest = pendingProfileCallsignMutations.add;
+const profilePrimaryCallsignRequestKeys =
+  pendingProfileCallsignMutations.primary;
 const escapeHtml = (value) =>
   String(value ?? '').replace(
     /[&<>"']/g,
@@ -85,6 +90,45 @@ function persistPendingParticipantMutations() {
     // In-memory retries remain available when browser storage is unavailable.
   }
 }
+function restorePendingProfileCallsignMutations() {
+  try {
+    const saved = JSON.parse(
+      sessionStorage.getItem(pendingProfileCallsignMutationsKey) || '{}',
+    );
+    const add =
+      saved.add &&
+      typeof saved.add.fingerprint === 'string' &&
+      typeof saved.add.key === 'string'
+        ? saved.add
+        : null;
+    const primary = new Map(
+      Array.isArray(saved.primary)
+        ? saved.primary.filter(
+            (entry) =>
+              Array.isArray(entry) &&
+              typeof entry[0] === 'string' &&
+              typeof entry[1] === 'string',
+          )
+        : [],
+    );
+    return { add, primary };
+  } catch {
+    return { add: null, primary: new Map() };
+  }
+}
+function persistPendingProfileCallsignMutations() {
+  try {
+    sessionStorage.setItem(
+      pendingProfileCallsignMutationsKey,
+      JSON.stringify({
+        add: profileCallsignAddRequest,
+        primary: [...profilePrimaryCallsignRequestKeys.entries()],
+      }),
+    );
+  } catch {
+    // In-memory retries remain available when browser storage is unavailable.
+  }
+}
 function completePendingParticipantMutation(id) {
   if (pendingParticipantMutations.delete(id))
     persistPendingParticipantMutations();
@@ -94,13 +138,14 @@ function clearParticipantSession() {
   awardRefreshToken = '';
   awardAccount = null;
   pendingParticipantMutations.clear();
+  profileCallsignAddRequest = null;
+  profilePrimaryCallsignRequestKeys.clear();
   try {
     sessionStorage.removeItem(pendingParticipantMutationsKey);
+    sessionStorage.removeItem(pendingProfileCallsignMutationsKey);
   } catch {
     // Session cleanup continues when browser storage is unavailable.
   }
-  profileCallsignAddRequest = null;
-  profilePrimaryCallsignRequestKeys.clear();
   localStorage.removeItem('myota_public_access');
   localStorage.removeItem('myota_public_refresh');
   if ($('activation-start-form')) $('activation-start-form').hidden = true;
@@ -1246,10 +1291,12 @@ async function refreshProfileCallsigns(status) {
 }
 
 async function setProfilePrimaryCallsign(callsign) {
-  let idempotencyKey = profilePrimaryCallsignRequestKeys.get(callsign.id);
+  const requestId = JSON.stringify([awardAccount.id, callsign.id]);
+  let idempotencyKey = profilePrimaryCallsignRequestKeys.get(requestId);
   if (!idempotencyKey) {
     idempotencyKey = crypto.randomUUID();
-    profilePrimaryCallsignRequestKeys.set(callsign.id, idempotencyKey);
+    profilePrimaryCallsignRequestKeys.set(requestId, idempotencyKey);
+    persistPendingProfileCallsignMutations();
   }
   await runProfileCallsignMutation(
     'Updating primary callsign…',
@@ -1266,7 +1313,8 @@ async function setProfilePrimaryCallsign(callsign) {
           body: JSON.stringify({ callsignId: callsign.id }),
         },
       );
-      profilePrimaryCallsignRequestKeys.delete(callsign.id);
+      profilePrimaryCallsignRequestKeys.delete(requestId);
+      persistPendingProfileCallsignMutations();
     },
   );
 }
@@ -1284,6 +1332,7 @@ $('profile-callsign-add').onsubmit = async (event) => {
       fingerprint,
       key: crypto.randomUUID(),
     };
+    persistPendingProfileCallsignMutations();
   }
   await runProfileCallsignMutation(
     'Adding callsign…',
@@ -1301,6 +1350,7 @@ $('profile-callsign-add').onsubmit = async (event) => {
         },
       );
       profileCallsignAddRequest = null;
+      persistPendingProfileCallsignMutations();
       $('profile-callsign-add').reset();
     },
   );
