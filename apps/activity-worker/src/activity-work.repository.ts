@@ -12,9 +12,9 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { integerSetting } from '@app/platform/integer-setting.js';
 import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
-import { MAX_UPLOAD_BYTES } from '@app/platform/import-limits.js';
 import { parsePageTotal } from '@app/platform/pagination.js';
 import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
 import { pythonString } from '@app/platform/python-strings.js';
@@ -1272,7 +1272,11 @@ async function readObject(client: S3Client, bucket: string, key: string) {
 }
 
 async function scanAdifContent(content: Buffer, filename: string) {
-  if (content.length > MAX_UPLOAD_BYTES)
+  const maxBytes = integerSetting(
+    process.env.MYOTA_UPLOAD_MAX_BYTES,
+    25 * 1024 * 1024,
+  );
+  if (content.length > maxBytes)
     throw new Error(`${filename} exceeds the configured upload limit`);
   const eicar = Buffer.from(
     'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*',
