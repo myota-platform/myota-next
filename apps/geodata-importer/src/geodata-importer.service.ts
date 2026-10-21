@@ -206,7 +206,7 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     if (typeof rawApiUrl !== 'string')
       throw new Error('GEODATA_IMPORT_SPEC geodataUrl must be a string');
     this.assertApiUrl(rawApiUrl);
-    const apiUrl = `${rawApiUrl.replace(/\/$/, '')}/v1/geodata/imports`;
+    const apiUrl = `${rawApiUrl.replace(/\/+$/, '')}/v1/geodata/imports`;
     const requestedKey =
       spec.idempotencyKey !== undefined
         ? spec.idempotencyKey
@@ -297,7 +297,7 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
 
   private apiBase() {
     return (process.env.MYOTA_GEODATA_URL ?? 'http://geodata:8003').replace(
-      /\/$/,
+      /\/+$/,
       '',
     );
   }
