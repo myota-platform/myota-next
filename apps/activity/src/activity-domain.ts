@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
@@ -326,6 +326,8 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
       'a verified callsign is required by this programme',
     );
   }
+  if (!Object.hasOwn(data, 'startedAt'))
+    throw new NotFoundException("'startedAt'");
   const startedAt = normalizeTimestamp(data.startedAt);
   if (
     rules.maxActivationHours != null &&

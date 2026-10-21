@@ -234,6 +234,9 @@ activation validation tests cover rule fallback, location bounds, callsign
 authorization and lifecycle; evaluation tests verify violation ordering and
 falsey end times. ADIF tests cover multiple records, field mapping, date/time
 composition, and omission of incomplete records.
+Activation validation also preserves the Python handler's order: earlier rule
+and callsign checks run before the `startedAt` lookup, whose omission maps to
+the reference's 404 missing-key response.
 QSO ingestion requests also persist bounded,
 owner-scoped jobs with a status read path. `sourceFormat` defaults only when
 omitted and otherwise reaches the worker unchanged, matching the Python

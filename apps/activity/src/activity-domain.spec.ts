@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import {
   adifAwardRecalculationKey,
   calculateAdifRejectedRecords,
@@ -153,6 +154,16 @@ describe('activation rule evaluation compatibility', () => {
 });
 
 describe('activation validation compatibility', () => {
+  it('preserves Python missing-startedAt lookup status after earlier checks', () => {
+    expect(() => normalizeActivation({})).toThrow(NotFoundException);
+    expect(() =>
+      normalizeActivation({
+        programmeRules: { requireLocation: true },
+        location: {},
+      }),
+    ).toThrow('programme rules require an activation location');
+  });
+
   it('normalizes the callsign, UTC start time, location, and rules alias', () => {
     const result = normalizeActivation({
       operatorCallsign: ' dl1abc ',
