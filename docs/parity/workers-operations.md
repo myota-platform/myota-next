@@ -13,7 +13,8 @@
   Notifications are handled by the separate consumer described below. ADIF
   source-object retention retries transient PostgreSQL failures with capped
   jittered backoff; S3 delete failures remain isolated for later retry. Queued
-  jobs missing an outbox command are repaired periodically. A process-kill
+  jobs missing an outbox command are repaired periodically, retrying transient
+  PostgreSQL failures with capped jittered backoff. A process-kill
   qualification covers
   statistics-rebuild lease takeover; other job kinds, broker outages, and
   retention recovery evidence remain open. Transient PostgreSQL failures while

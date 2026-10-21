@@ -416,12 +416,26 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   private async reconcileQueuedOutbox(): Promise<void> {
     while (!this.stopping) {
       try {
-        const repaired = await this.repository.reconcileQueuedWorkOutbox();
+        const repaired = await retryTransientDatabaseOperation(
+          () => this.repository.reconcileQueuedWorkOutbox(),
+          {
+            stopping: () => this.stopping,
+            onRetry: (error, attempt) => {
+              if (attempt === 1 || attempt % 12 === 0)
+                this.logger.warn(
+                  `Activity work recovery is waiting for PostgreSQL: ${safeError(error)}`,
+                );
+            },
+            wait: (milliseconds) =>
+              abortableDelay(milliseconds, this.stopController.signal),
+          },
+        );
         if (repaired)
           this.logger.warn(
             `Repaired ${repaired} queued Activity work outbox rows`,
           );
       } catch (error) {
+        if (this.stopping) return;
         this.logger.error(`Activity work recovery failed: ${safeError(error)}`);
       }
       await this.wait(WORK_RECONCILE_SECONDS * 1000);
