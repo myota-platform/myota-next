@@ -127,7 +127,6 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
         () => serviceState.completedMessages === 3,
         `notification consumer completed ${serviceState.completedMessages} of 3 deliveries`,
       );
-      await waitForDurableIdle(restartedManager);
 
       const processed = await pool.query(
         `SELECT count(*)::int AS count FROM public.consumer_processed_event
