@@ -12,7 +12,8 @@ recipients, and SMTP configuration validation. SMTP/TLS handshake behavior
 is exercised against a local SMTP server: the client requests STARTTLS, begins
 the TLS handshake, and sends no AUTH command when that handshake fails. A
 successful SMTP delivery against deployment trust roots remains an operational
-qualification gate.
+qualification gate. Identity recipient token expiry uses a monotonic clock
+measured from before token acquisition, matching the reference cache timing.
 
 Programme policy service coverage now exercises a rules draft through save,
 submit, approval, and publication, including offset timestamp normalization,

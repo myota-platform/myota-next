@@ -8,6 +8,7 @@ import {
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import type { Consumer, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
+import { performance } from 'node:perf_hooks';
 import type { createTransport } from 'nodemailer';
 import type { Pool, PoolClient } from 'pg';
 import { SpanStatusCode } from '@opentelemetry/api';
@@ -315,7 +316,8 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async resolveRecipient(accountId: string): Promise<string> {
-    if (!this.identityToken || Date.now() >= this.identityTokenExpiresAt) {
+    const tokenCheckTime = performance.now();
+    if (!this.identityToken || tokenCheckTime >= this.identityTokenExpiresAt) {
       const tokenResponse = await fetch(
         `${this.identityUrl}/v1/identity/auth/service-token`,
         {
@@ -335,7 +337,8 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
         throw new Error('Identity service returned an invalid token response');
       this.identityToken = tokenBody.accessToken;
       const expiresIn = boundedInteger(tokenBody.expiresIn, 300, 30, 300);
-      this.identityTokenExpiresAt = Date.now() + (expiresIn - 30) * 1000;
+      this.identityTokenExpiresAt =
+        tokenCheckTime + (expiresIn - 30) * 1000;
     }
     const response = await fetch(
       `${this.identityUrl}/v1/identity/internal/email-recipients/${accountId}`,
