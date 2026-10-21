@@ -40,8 +40,8 @@ role creation from the permission catalogue, account search and edits that
 preserve unchanged scoped assignments, account export and confirmed
 deactivation/anonymization, programme creation with policy/category settings,
 policy draft save, review, and publication, and
-version-checked candidate review, and conflict recovery for entity metadata
-edits by reloading the latest server version. Activity browser checks cover
+version-checked candidate review, and entity metadata conflict recovery
+followed by a successful edit against the reloaded server version. Activity browser checks cover
 activation/QSO detail viewing and statistics rebuild submission with an
 idempotency key and job status refresh. The Admin Activity screen also lists,
 filters, pages, and reviews QSO correction requests. Review cards identify both

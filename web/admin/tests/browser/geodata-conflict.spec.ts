@@ -3,7 +3,11 @@ import { expect, test } from '@playwright/test';
 test('reloads the server version after an optimistic edit conflict', async ({
   page,
 }) => {
-  const metadataRequests: Array<{ body: unknown; ifMatch: string }> = [];
+  const metadataRequests: Array<{
+    body: unknown;
+    ifMatch: string;
+    idempotencyKey: string;
+  }> = [];
   const candidate = {
     id: 'entity-1',
     version: 7,
@@ -21,6 +25,8 @@ test('reloads the server version after an optimistic edit conflict', async ({
     version: 8,
     name: 'Updated summit name',
   };
+  let currentEntity = serverVersion;
+  let conflictOnce = true;
 
   await page.route('**/v1/**', async (route) => {
     const request = route.request();
@@ -78,7 +84,7 @@ test('reloads the server version after an optimistic edit conflict', async ({
     }
 
     if (url.pathname === '/v1/geodata/entities/entity-1' && method === 'GET') {
-      await route.fulfill({ json: serverVersion });
+      await route.fulfill({ json: currentEntity });
       return;
     }
 
@@ -89,11 +95,18 @@ test('reloads the server version after an optimistic edit conflict', async ({
       metadataRequests.push({
         body,
         ifMatch: request.headers()['if-match'] || '',
+        idempotencyKey: request.headers()['idempotency-key'] || '',
       });
-      await route.fulfill({
-        status: 409,
-        json: { message: 'Entity changed; reload it and retry.' },
-      });
+      if (conflictOnce) {
+        conflictOnce = false;
+        await route.fulfill({
+          status: 409,
+          json: { message: 'Entity changed; reload it and retry.' },
+        });
+      } else {
+        currentEntity = { ...currentEntity, ...body, version: 9 };
+        await route.fulfill({ json: currentEntity });
+      }
       return;
     }
 
@@ -128,6 +141,15 @@ test('reloads the server version after an optimistic edit conflict', async ({
     'Updated summit name',
   );
   await expect(page.locator('.error-card')).toHaveCount(0);
+  await page.getByLabel('Display name').fill('Verified summit name');
+  await page
+    .getByPlaceholder('Explain this name change')
+    .fill('Checked the source map.');
+  await page.getByRole('button', { name: 'Save details' }).click();
+  await expect(page.getByText('Entity details saved.')).toBeVisible();
+  await expect(page.getByLabel('Display name')).toHaveValue(
+    'Verified summit name',
+  );
   expect(metadataRequests).toEqual([
     {
       body: {
@@ -138,6 +160,20 @@ test('reloads the server version after an optimistic edit conflict', async ({
         editorId: 'reviewer-1',
       },
       ifMatch: '"7"',
+      idempotencyKey: expect.any(String),
+    },
+    {
+      body: {
+        name: 'Verified summit name',
+        website: null,
+        description: null,
+        note: 'Checked the source map.',
+        editorId: 'reviewer-1',
+      },
+      ifMatch: '"8"',
+      idempotencyKey: expect.any(String),
     },
   ]);
+  expect(metadataRequests[0].idempotencyKey).not.toBe('');
+  expect(metadataRequests[1].idempotencyKey).not.toBe('');
 });

@@ -179,9 +179,9 @@ test('confirms a prepared entity deletion and waits for cascade completion', asy
     .click();
   await page.getByRole('button', { name: 'Audit & deletion' }).click();
   await page.getByRole('button', { name: 'Permanently delete entity' }).click();
-  await expect(page.getByRole('dialog').getByRole('alert')).toContainText(
-    'Temporary preparation failure.',
-  );
+  await expect(
+    page.locator('#workspace-content').getByRole('alert'),
+  ).toContainText('Temporary preparation failure.');
 
   await page.reload();
   await page
@@ -191,13 +191,17 @@ test('confirms a prepared entity deletion and waits for cascade completion', asy
   await page.getByRole('button', { name: 'Audit & deletion' }).click();
   await page.getByRole('button', { name: 'Permanently delete entity' }).click();
 
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toContainText('3');
-  await expect(dialog).toContainText('1 activation(s) may become invalid.');
-  await dialog
+  const deletionDialog = page.getByRole('dialog', {
+    name: 'Delete Delete test summit?',
+  });
+  await expect(deletionDialog).toContainText('3');
+  await expect(deletionDialog).toContainText(
+    '1 activation(s) may become invalid.',
+  );
+  await deletionDialog
     .getByRole('button', { name: 'Permanently delete entity' })
     .click();
-  await expect(page.getByRole('dialog').getByRole('alert')).toContainText(
+  await expect(deletionDialog.getByRole('alert')).toContainText(
     'Temporary confirmation failure.',
   );
 
@@ -209,7 +213,7 @@ test('confirms a prepared entity deletion and waits for cascade completion', asy
   await page.getByRole('button', { name: 'Audit & deletion' }).click();
   await page.getByRole('button', { name: 'Permanently delete entity' }).click();
   await page
-    .getByRole('dialog')
+    .getByRole('dialog', { name: 'Delete Delete test summit?' })
     .getByRole('button', { name: 'Permanently delete entity' })
     .click();
 
