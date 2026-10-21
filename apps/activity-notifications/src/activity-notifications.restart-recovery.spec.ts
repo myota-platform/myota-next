@@ -100,7 +100,10 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
 
       service = new ActivityNotificationsService(pool as Pool);
       await service.onModuleInit();
-      const serviceState = service as unknown as { natsUp: boolean };
+      const serviceState = service as unknown as {
+        natsUp: boolean;
+        completedMessages: number;
+      };
       await waitFor(() => serviceState.natsUp, 'consumer did not connect');
       await publish(publisher, ids[0]!, recipient);
       await waitForNotifications(pool, dedupeKeys, 1);
@@ -120,6 +123,10 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
       await publish(publisher, ids[1]!, recipient);
       await publish(publisher, ids[1]!, recipient);
       await waitForNotifications(pool, dedupeKeys, 2);
+      await waitFor(
+        () => serviceState.completedMessages === 3,
+        `notification consumer completed ${serviceState.completedMessages} of 3 deliveries`,
+      );
       await waitForDurableIdle(restartedManager);
 
       const processed = await pool.query(
