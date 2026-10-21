@@ -577,11 +577,12 @@ programme selection and public content, and its activation, QSO, and close
 workflow, profile details editing, image crop/upload, an eligible award
 request, and existing-candidate and map-picked point proposals with intercepted
 API responses. Admin browser checks also cover sign-in, session bootstrap,
-scope denial, and programme creation with policy and category settings. The
-remaining Admin workflows still lack browser-level compatibility coverage. The
-award catalogue follows all API pages. Remaining work includes
-accessibility/visual review and deployment integration. Its public map renders
-point, line, polygon, and multipart entity geometries.
+scope denial, programme creation with policy/category settings, and policy draft
+save, review, and publication. The remaining Admin workflows still lack
+browser-level compatibility coverage. The award catalogue follows all API
+pages. Remaining work includes accessibility/visual review and deployment
+integration. Its public map renders point, line, polygon, and multipart entity
+geometries.
 
 ## Workers and operations
 

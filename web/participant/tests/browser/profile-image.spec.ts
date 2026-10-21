@@ -3,11 +3,11 @@ import { expect, test } from '@playwright/test';
 test('crops and uploads a profile picture as bounded WebP', async ({
   page,
 }) => {
-  let upload: {
+  const uploads: Array<{
     contentType: string;
     bytes: number;
     authorization: string;
-  } | null = null;
+  }> = [];
 
   await page.route('**/v1/**', async (route) => {
     const request = route.request();
@@ -72,11 +72,11 @@ test('crops and uploads a profile picture as bounded WebP', async ({
     }
 
     if (url.pathname === '/v1/identity/me/profile-image' && method === 'PUT') {
-      upload = {
+      uploads.push({
         contentType: request.headers()['content-type'] || '',
         bytes: request.postDataBuffer()?.byteLength || 0,
         authorization: request.headers().authorization || '',
-      };
+      });
       await route.fulfill({ json: {} });
       return;
     }
@@ -114,10 +114,11 @@ test('crops and uploads a profile picture as bounded WebP', async ({
     'Profile picture saved.',
   );
   await expect(page.locator('#profile-image-current')).toBeVisible();
-  expect(upload).toMatchObject({
+  expect(uploads).toHaveLength(1);
+  expect(uploads[0]).toMatchObject({
     contentType: 'image/webp',
     authorization: 'Bearer participant-profile-access-token',
   });
-  expect(upload?.bytes).toBeGreaterThan(0);
-  expect(upload?.bytes).toBeLessThanOrEqual(256 * 1024);
+  expect(uploads[0]!.bytes).toBeGreaterThan(0);
+  expect(uploads[0]!.bytes).toBeLessThanOrEqual(256 * 1024);
 });
