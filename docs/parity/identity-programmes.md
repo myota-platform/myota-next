@@ -80,6 +80,9 @@ reference's error precedence.
 Callsign creation, primary selection, and evidence submission check required
 fields with Python truthiness before authorization, preserving the reference's
 `missing required fields` response and precedence.
+Primary callsign selection rejects malformed IDs with the same
+`callsignId is not an active callsign on this account` response as a
+non-matching ID instead of exposing a PostgreSQL UUID-cast failure.
 Administrator account PATCH and role-assignment PUT authenticate and resolve
 the target account before validating the request body, matching the reference's
 response precedence. Account-update fixtures pin admin permission denial

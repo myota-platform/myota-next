@@ -192,6 +192,11 @@ export class IdentityCallsignService {
         await client.query('COMMIT');
         return previous;
       }
+      if (!isCanonicalUuid(body.callsignId)) {
+        throw new BadRequestException(
+          'callsignId is not an active callsign on this account',
+        );
+      }
       const callsign = await client.query(
         `SELECT 1 FROM public.callsign
           WHERE id = $1 AND account_id = $2 AND lifecycle_status <> 'RETIRED'`,
@@ -654,6 +659,13 @@ function requireCallsignFields(
       `missing required fields: ${missing.join(', ')}`,
     );
   }
+}
+
+function isCanonicalUuid(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value)
+  );
 }
 
 const retireCallsignValidationPipe = new ValidationPipe({
