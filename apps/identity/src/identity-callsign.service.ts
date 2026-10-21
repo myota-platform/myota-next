@@ -11,7 +11,10 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { writeOutboxEvent } from '@app/platform/outbox.js';
-import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import {
+  pythonKeyErrorDetail,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
 import { IdentityAuthService } from './auth.service.js';
 import type {
   AddCallsignDto,
@@ -50,14 +53,10 @@ export class IdentityCallsignService {
     idempotencyKey?: string,
   ) {
     await this.authorizeAccountTarget(authorization, accountId);
+    this.validateAccountPathId(accountId);
     const client = await this.connect();
     try {
       await client.query('BEGIN');
-      const previous = await this.readIdempotentResult(client, idempotencyKey);
-      if (previous) {
-        await client.query('COMMIT');
-        return previous;
-      }
       const accountResult = await client.query<{
         participation_type: string;
         primary_callsign_id: string | null;
@@ -70,7 +69,13 @@ export class IdentityCallsignService {
         [accountId],
       );
       const account = accountResult.rows[0];
-      if (!account) throw new NotFoundException('account not found');
+      if (!account)
+        throw new NotFoundException(pythonKeyErrorDetail(accountId));
+      const previous = await this.readIdempotentResult(client, idempotencyKey);
+      if (previous) {
+        await client.query('COMMIT');
+        return previous;
+      }
       const value = trimPythonWhitespace(body.callsign).toUpperCase();
       if (!value) throw new BadRequestException('callsign cannot be empty');
       const duplicate = await client.query(
@@ -169,19 +174,21 @@ export class IdentityCallsignService {
     idempotencyKey?: string,
   ) {
     await this.authorizeAccountTarget(authorization, accountId);
+    this.validateAccountPathId(accountId);
     const client = await this.connect();
     try {
       await client.query('BEGIN');
+      const account = await client.query(
+        'SELECT id FROM public.account WHERE id = $1 FOR UPDATE',
+        [accountId],
+      );
+      if (!account.rowCount)
+        throw new NotFoundException(pythonKeyErrorDetail(accountId));
       const previous = await this.readIdempotentResult(client, idempotencyKey);
       if (previous) {
         await client.query('COMMIT');
         return previous;
       }
-      const account = await client.query(
-        'SELECT id FROM public.account WHERE id = $1 FOR UPDATE',
-        [accountId],
-      );
-      if (!account.rowCount) throw new NotFoundException('account not found');
       const callsign = await client.query(
         `SELECT 1 FROM public.callsign
           WHERE id = $1 AND account_id = $2 AND lifecycle_status <> 'RETIRED'`,
@@ -231,9 +238,16 @@ export class IdentityCallsignService {
     if (actor.id !== accountId && !actorScopes.has('*')) {
       throw new ForbiddenException('account scope is missing');
     }
+    this.validateAccountPathId(accountId);
     const client = await this.connect();
     try {
       await client.query('BEGIN');
+      const account = await client.query(
+        'SELECT 1 FROM public.account WHERE id = $1',
+        [accountId],
+      );
+      if (!account.rowCount)
+        throw new NotFoundException(pythonKeyErrorDetail(accountId));
       const callsign = await client.query(
         `SELECT id FROM public.callsign WHERE id = $1 AND account_id = $2 FOR UPDATE`,
         [callsignId, accountId],
@@ -295,9 +309,16 @@ export class IdentityCallsignService {
     if (!scopes.has('*') && !scopes.has('callsign.verify')) {
       throw new ForbiddenException('callsign.verify scope is required');
     }
+    this.validateAccountPathId(accountId);
     const client = await this.connect();
     try {
       await client.query('BEGIN');
+      const account = await client.query(
+        'SELECT 1 FROM public.account WHERE id = $1',
+        [accountId],
+      );
+      if (!account.rowCount)
+        throw new NotFoundException(pythonKeyErrorDetail(accountId));
       const callsignResult = await client.query<{
         id: string;
         value: string;
@@ -382,6 +403,7 @@ export class IdentityCallsignService {
     rawBody: unknown,
   ) {
     await this.authorizeAccountTarget(authorization, accountId);
+    this.validateAccountPathId(accountId);
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -393,7 +415,8 @@ export class IdentityCallsignService {
           WHERE a.id = $1 FOR UPDATE OF a`,
         [accountId],
       );
-      if (!account.rowCount) throw new NotFoundException('account not found');
+      if (!account.rowCount)
+        throw new NotFoundException(pythonKeyErrorDetail(accountId));
       const currentResult = await client.query<{
         id: string;
         value: string;
@@ -504,6 +527,11 @@ export class IdentityCallsignService {
     if (caller.id !== accountId && !scopes.has('*')) {
       throw new ForbiddenException('account scope is missing');
     }
+  }
+
+  private validateAccountPathId(accountId: string) {
+    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(accountId))
+      throw new NotFoundException(pythonKeyErrorDetail(accountId));
   }
 
   private async connect(): Promise<PoolClient> {

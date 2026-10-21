@@ -322,7 +322,7 @@ export class AuthController {
   addCallsign(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('accountId') accountId: string,
     @Body() body: AddCallsignDto,
   ) {
     if (!authorization)
@@ -339,7 +339,7 @@ export class AuthController {
   @HttpCode(201)
   submitCallsignEvidence(
     @Headers('authorization') authorization: string | undefined,
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('accountId') accountId: string,
     @Param('callsignId', new ParseUUIDPipe()) callsignId: string,
     @Body() body: CallsignEvidenceDto,
   ) {
@@ -357,7 +357,7 @@ export class AuthController {
   @HttpCode(200)
   verifyCallsign(
     @Headers('authorization') authorization: string | undefined,
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('accountId') accountId: string,
     @Param('callsignId', new ParseUUIDPipe()) callsignId: string,
     @Body() body: unknown,
   ) {
@@ -375,7 +375,7 @@ export class AuthController {
   setPrimaryCallsign(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('accountId') accountId: string,
     @Body() body: SetPrimaryCallsignDto,
   ) {
     if (!authorization)
@@ -392,7 +392,7 @@ export class AuthController {
   @HttpCode(200)
   retireCallsign(
     @Headers('authorization') authorization: string | undefined,
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('accountId') accountId: string,
     @Param('callsignId', new ParseUUIDPipe()) callsignId: string,
     @Body() body: unknown,
   ) {

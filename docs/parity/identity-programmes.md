@@ -70,6 +70,10 @@ as deterministic tie-breakers.
 Callsign retirement authenticates and resolves the account and callsign before
 validating its optional fields, then validates a primary replacement before
 reading evidence, matching the reference's operation order.
+Callsign create, primary-selection, evidence, verification, and retirement defer
+account-ID resolution until after their respective authorization checks; a
+missing account returns the quoted-ID 404 before replaying an idempotent result
+or resolving a callsign.
 Callsign verification authenticates and resolves its target, then requires
 evidence before validating the optional verification source, matching the
 reference's error precedence.
