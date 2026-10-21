@@ -365,9 +365,9 @@ export class AwardsService {
     if (award.status !== 'PUBLISHED')
       throw new BadRequestException('only published awards can be requested');
     const facts = await this.repository.subjectFacts(
-      String(award.programmeSlug),
+      award.programmeSlug,
       body.subjectId,
-      String(award.category ?? 'HUNTER'),
+      Object.hasOwn(award, 'category') ? award.category : 'HUNTER',
     );
     const evaluation = evaluateAward(award, body.subjectId, facts);
     const level = evaluation.levels.find(
@@ -436,7 +436,7 @@ export class AwardsService {
     const request = await this.awardsRepository.getAwardRequest(requestId);
     if (request.status !== 'REQUESTED')
       throw new BadRequestException('only requested awards can be issued');
-    const award = await this.getAwardDefinitionOrThrow(String(request.awardId));
+    const award = await this.getAwardDefinitionOrThrow(request.awardId);
     const signature = await this.awardsRepository.getAwardAsset(
       body.signatureAssetId,
     );
