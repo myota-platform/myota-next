@@ -13,7 +13,8 @@ let awardAccount = null;
 let awardAccessToken = localStorage.getItem('myota_public_access') || '';
 let awardRefreshToken = localStorage.getItem('myota_public_refresh') || '';
 let awardRefreshInFlight = null;
-const pendingParticipantMutations = new Map();
+const pendingParticipantMutationsKey = 'myota_pending_activity_mutations';
+const pendingParticipantMutations = restorePendingParticipantMutations();
 let profileCallsignAddRequest = null;
 const profilePrimaryCallsignRequestKeys = new Map();
 const escapeHtml = (value) =>
@@ -49,14 +50,55 @@ function pendingParticipantMutation(operation, identity, body) {
   if (!request) {
     request = { id, key: crypto.randomUUID(), body };
     pendingParticipantMutations.set(id, request);
+    persistPendingParticipantMutations();
   }
   return request;
+}
+function restorePendingParticipantMutations() {
+  try {
+    const entries = JSON.parse(
+      sessionStorage.getItem(pendingParticipantMutationsKey) || '[]',
+    );
+    if (!Array.isArray(entries)) return new Map();
+    return new Map(
+      entries.filter(
+        (entry) =>
+          Array.isArray(entry) &&
+          typeof entry[0] === 'string' &&
+          entry[1] &&
+          typeof entry[1].key === 'string' &&
+          entry[1].body &&
+          typeof entry[1].body === 'object',
+      ),
+    );
+  } catch {
+    return new Map();
+  }
+}
+function persistPendingParticipantMutations() {
+  try {
+    sessionStorage.setItem(
+      pendingParticipantMutationsKey,
+      JSON.stringify([...pendingParticipantMutations.entries()]),
+    );
+  } catch {
+    // In-memory retries remain available when browser storage is unavailable.
+  }
+}
+function completePendingParticipantMutation(id) {
+  if (pendingParticipantMutations.delete(id))
+    persistPendingParticipantMutations();
 }
 function clearParticipantSession() {
   awardAccessToken = '';
   awardRefreshToken = '';
   awardAccount = null;
   pendingParticipantMutations.clear();
+  try {
+    sessionStorage.removeItem(pendingParticipantMutationsKey);
+  } catch {
+    // Session cleanup continues when browser storage is unavailable.
+  }
   profileCallsignAddRequest = null;
   profilePrimaryCallsignRequestKeys.clear();
   localStorage.removeItem('myota_public_access');
@@ -822,7 +864,7 @@ async function startActivation(event) {
       headers: { 'Idempotency-Key': request.key },
       body: JSON.stringify(request.body),
     });
-    pendingParticipantMutations.delete(request.id);
+    completePendingParticipantMutation(request.id);
     $('activation-status').textContent = 'Activation started.';
     await loadActivations();
   } catch (error) {
@@ -851,7 +893,7 @@ async function recordQso(event) {
       headers: { 'Idempotency-Key': request.key },
       body: JSON.stringify(request.body),
     });
-    pendingParticipantMutations.delete(request.id);
+    completePendingParticipantMutation(request.id);
     $('qso-callsign').value = '';
     $('activation-status').textContent = 'Contact recorded.';
     await loadActivations();
@@ -873,7 +915,7 @@ async function closeActivation() {
       headers: { 'Idempotency-Key': request.key },
       body: JSON.stringify(request.body),
     });
-    pendingParticipantMutations.delete(request.id);
+    completePendingParticipantMutation(request.id);
     $('activation-status').textContent = 'Activation closed.';
     await loadActivations();
   } catch (error) {
