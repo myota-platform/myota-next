@@ -7,6 +7,8 @@ idempotency JSONB writes preserve arbitrary-precision integer tokens from the
 request parser through serialization, matching Python JSON handling.
 Security-event feeds, account exports, and idempotency replays parse stored
 JSONB text directly, preserving those integers on read as well.
+Programme's Core database pool installs an exact integer JSONB parser for
+programme records, entity types, policy drafts, content, and idempotency reads.
 
 Focused Nest email-worker tests now cover the Python worker's allowlisted
 participant and administrator commands, rejection of sensitive extra fields
