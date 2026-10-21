@@ -263,8 +263,8 @@ test('downloads an issued certificate only after the PDF is ready', async ({
   await page.context().route(downloadUrl, (route) =>
     route.fulfill({
       status: 200,
-      contentType: 'application/pdf',
-      body: '%PDF-1.4 browser certificate fixture',
+      contentType: 'text/html',
+      body: '<!doctype html><title>Certificate download fixture</title>',
     }),
   );
 
