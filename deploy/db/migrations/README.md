@@ -63,16 +63,14 @@ transfer and cutover are out of scope.
 
 `001` is the initial schema snapshot for each database and is suitable for an
 empty target database. The runner does not adopt a pre-existing schema or
-provide rollback. The old cross-version transfer notes are retained in
-[cross-version database transfer](../../../docs/operations/cross-version-data-transfer.md)
-for reference only.
+provide rollback.
 Do not introduce cross-database foreign keys or combine the three restore
 boundaries.
 
 The baseline snapshots retain the Python-owned
 `public.myota_schema_migration` table for source-history comparison. The Node
-runner uses a separate `public.myota_nest_schema_migration` table so applying a
-baseline to a clean database does not collide with that legacy ledger.
+runner uses a separate `public.myota_nest_schema_migration` table for the new
+platform's migration history.
 
 The original application and deployment SQL inputs are preserved as a
 non-executable comparison snapshot in
