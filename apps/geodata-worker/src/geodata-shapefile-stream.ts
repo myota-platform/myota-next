@@ -150,6 +150,13 @@ export async function* streamShapefileFeatures(
       });
     } catch (error) {
       await dbfRecords.close();
+      if (
+        error instanceof Error &&
+        error.message === 'unsupported shape type: 31'
+      )
+        throw new Error(
+          'Shape type "MULTIPATCH" cannot be represented as GeoJSON.',
+        );
       throw error;
     }
     let featureCount = 0;

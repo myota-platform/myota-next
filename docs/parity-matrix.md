@@ -572,6 +572,11 @@ The PyShp 2.3.1 MultiPointZ fixture verifies GeoJSON dimensionality: PyShp's
 streaming reader matches it. A nested Polygon fixture verifies that the reader
 preserves PyShp's MultiPolygon grouping, including an interior ring and an
 island inside that ring.
+The PyShp 2.3.1 reference rejects MultiPatch with
+`Shape type "MULTIPATCH" cannot be represented as GeoJSON.` The NestJS
+Shapefile parser rejects shape type 31 at file open, and the worker maps that
+error to the same message. See the [PyShp 2.3.1 conversion code](https://github.com/GeospatialPython/pyshp/blob/2.3.1/shapefile.py#L3174-L3176)
+and the [NestJS parser's supported shape types](https://github.com/mbostock/shapefile/blob/master/shp/index.js#L11-L24).
 Shapefile multipart uploads stream to
 temporary disk and decode records one at a time, with the same shared API/worker
 1 GiB upload cap or optional format-specific override, a 1 GiB expanded-size cap, 16 MiB
