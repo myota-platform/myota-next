@@ -31,9 +31,9 @@ production readiness.
 - **Recovery:** single-server JetStream restart, selected worker lease recovery,
   redrive, Geodata multipart object-store recovery, and a three-owner backup and
   restore rehearsal have evidence. A PostgreSQL TCP fault proxy now qualifies
-  Geodata import claim and state-lookup recovery; other database outage paths,
-  cluster failover, and additional worker and object-store recovery paths remain
-  open. See
+  Geodata import claim, state lookup, and retry-state persistence recovery;
+  other database outage paths, cluster failover, and additional worker and
+  object-store recovery paths remain open. See
   [worker and operations coverage](parity/workers-operations.md), the
   [database backup and restore notes](operations/database-backup-restore.md),
   and the [object-store recovery notes](operations/object-store-recovery.md).

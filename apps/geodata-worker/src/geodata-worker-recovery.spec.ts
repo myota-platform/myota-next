@@ -88,26 +88,40 @@ async function verifyBrokerRecovery() {
   const processedPromotions: string[] = [];
   const processedEnrichments: string[] = [];
   const outageImportRunId = randomUUID();
+  const settlementImportRunId = randomUUID();
   let outageClaimAttempts = 0;
   let outageStateAttempts = 0;
+  let failSettlementOnce = true;
   const liveWorkRepository = new GeodataWorkRepository(databaseProbe as Pool);
+  const liveImportRunIds = new Set([outageImportRunId, settlementImportRunId]);
   const workRepository = {
     claim: vi.fn(async (importRunId: string) => {
-      if (importRunId === outageImportRunId) {
-        outageClaimAttempts++;
+      if (liveImportRunIds.has(importRunId)) {
+        if (importRunId === outageImportRunId) outageClaimAttempts++;
         return liveWorkRepository.claim(importRunId);
       }
       return { importRunId };
     }),
     getRunState: vi.fn(async (importRunId: string) => {
-      if (importRunId === outageImportRunId) {
-        outageStateAttempts++;
+      if (liveImportRunIds.has(importRunId)) {
+        if (importRunId === outageImportRunId) outageStateAttempts++;
         return liveWorkRepository.getRunState(importRunId);
       }
       return { status: 'QUEUED', leaseRemainingSeconds: 0 };
     }),
     preprocess: vi.fn(async (run: { importRunId?: string; id?: string }) => {
-      processedPreprocessing.push(run.importRunId ?? run.id ?? '');
+      const runId = run.importRunId ?? run.id ?? '';
+      if (runId === settlementImportRunId && failSettlementOnce) {
+        failSettlementOnce = false;
+        databaseProxy.setAvailable(false);
+        throw new Error('injected failure before retry-state persistence');
+      }
+      processedPreprocessing.push(runId);
+    }),
+    fail: vi.fn(async (run: { id: string }, error: unknown) => {
+      if (run.id === settlementImportRunId)
+        return liveWorkRepository.fail(run as never, error);
+      throw new Error('unexpected import failure in recovery fixture');
     }),
     renewHeartbeat: vi.fn(async () => true),
     staleCancellationIds: vi.fn(async () => []),
@@ -166,26 +180,31 @@ async function verifyBrokerRecovery() {
       await fixture.query(
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
       );
-      await fixture.query(
-        `INSERT INTO import_run
-          (id,adapter_code,source_metadata,status,source_key,source_hash)
-         VALUES ($1,'MANUAL',$2::jsonb,'QUEUED',$3,$4)`,
-        [
-          outageImportRunId,
-          stringifyJsonWithBigInts({
-            source: { name: 'database-outage-recovery' },
-            sourceObject: {
-              bucket: 'test-bucket',
-              key: `test/${outageImportRunId}.json`,
-            },
-            filename: `${outageImportRunId}.geojson`,
-            format: 'GEOJSON',
-            entityTypes: ['TEST_PARK'],
-          }),
-          `test/${outageImportRunId}.json`,
-          'a'.repeat(64),
-        ],
-      );
+      for (const [runId, name] of [
+        [outageImportRunId, 'database-claim-outage'],
+        [settlementImportRunId, 'database-settlement-outage'],
+      ]) {
+        await fixture.query(
+          `INSERT INTO import_run
+            (id,adapter_code,source_metadata,status,source_key,source_hash)
+           VALUES ($1,'MANUAL',$2::jsonb,'QUEUED',$3,$4)`,
+          [
+            runId,
+            stringifyJsonWithBigInts({
+              source: { name },
+              sourceObject: {
+                bucket: 'test-bucket',
+                key: `test/${runId}.json`,
+              },
+              filename: `${runId}.geojson`,
+              format: 'GEOJSON',
+              entityTypes: ['TEST_PARK'],
+            }),
+            `test/${runId}.json`,
+            'a'.repeat(64),
+          ],
+        );
+      }
       await fixture.query('COMMIT');
     } catch (error) {
       await fixture.query('ROLLBACK').catch(() => undefined);
@@ -346,13 +365,18 @@ async function verifyBrokerRecovery() {
       { type: 'import_run', id: outageImportRunId },
       { importRunId: outageImportRunId },
     );
-    await waitForRecovery(
-      () =>
+    await waitForRecovery(async () => {
+      const consumer = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        'geodata-preprocessing-v1',
+      );
+      return (
         databaseProxy.rejectedConnections() >= rejectedBeforeOutage + 2 &&
         outageClaimAttempts > 0 &&
-        outageStateAttempts > 0,
-      'Geodata worker did not encounter the PostgreSQL connection outage',
-    );
+        outageStateAttempts > 0 &&
+        consumer.num_ack_pending > 0
+      );
+    }, 'Geodata worker did not encounter the PostgreSQL connection outage');
     databaseProxy.setAvailable(true);
     await waitForRecovery(
       () => processedPreprocessing.includes(outageImportRunId),
@@ -376,8 +400,69 @@ async function verifyBrokerRecovery() {
       attempt_count: 1,
     });
 
+    const rejectedBeforeSettlement = databaseProxy.rejectedConnections();
+    await publishGeodataWork(
+      publisher,
+      'geodata.import-preprocess.v1',
+      settlementImportRunId,
+      { type: 'import_run', id: settlementImportRunId },
+      { importRunId: settlementImportRunId },
+    );
+    await waitForRecovery(async () => {
+      const consumer = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        'geodata-preprocessing-v1',
+      );
+      return (
+        !failSettlementOnce &&
+        databaseProxy.rejectedConnections() > rejectedBeforeSettlement &&
+        consumer.num_ack_pending > 0
+      );
+    }, 'Geodata worker did not retain the delivery while retry state was unavailable');
+    databaseProxy.setAvailable(true);
+    await waitForRecovery(async () => {
+      const result = await directDatabase.query<{
+        status: string;
+        attempt_count: number;
+        last_error: string | null;
+      }>('SELECT status,attempt_count,last_error FROM import_run WHERE id=$1', [
+        settlementImportRunId,
+      ]);
+      return (
+        result.rows[0]?.status === 'QUEUED' &&
+        result.rows[0]?.attempt_count === 1 &&
+        result.rows[0]?.last_error ===
+          'injected failure before retry-state persistence'
+      );
+    }, 'Geodata worker did not persist the failed import retry after recovery');
+    await waitForRecovery(
+      () => processedPreprocessing.includes(settlementImportRunId),
+      'Geodata worker did not complete the retried import after PostgreSQL recovered',
+    );
+    await waitForRecovery(async () => {
+      const consumer = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        'geodata-preprocessing-v1',
+      );
+      return consumer.num_pending === 0 && consumer.num_ack_pending === 0;
+    }, 'Geodata worker did not acknowledge the retried import delivery');
+    const retriedRun = await directDatabase.query<{
+      status: string;
+      attempt_count: number;
+    }>('SELECT status,attempt_count FROM import_run WHERE id=$1', [
+      settlementImportRunId,
+    ]);
+    expect(retriedRun.rows[0]).toMatchObject({
+      status: 'PROCESSING',
+      attempt_count: 2,
+    });
+
     expect(executionOrder).toEqual(jobIds);
-    expect(processedPreprocessing).toEqual([importRunId, outageImportRunId]);
+    expect(processedPreprocessing).toEqual([
+      importRunId,
+      outageImportRunId,
+      settlementImportRunId,
+    ]);
     expect(processedPromotions).toEqual([queueId]);
     expect(processedEnrichments).toEqual([requestId]);
     expect(outageClaimAttempts).toBeGreaterThanOrEqual(2);
@@ -398,15 +483,15 @@ async function verifyBrokerRecovery() {
         );
         await cleanup.query(
           `DELETE FROM outbox_event
-            WHERE aggregate_type='import_run' AND aggregate_id=$1`,
-          [outageImportRunId],
+            WHERE aggregate_type='import_run' AND aggregate_id=ANY($1::text[])`,
+          [[outageImportRunId, settlementImportRunId]],
         );
         await cleanup.query(
-          'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1',
-          [outageImportRunId],
+          'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=ANY($1::uuid[])',
+          [[outageImportRunId, settlementImportRunId]],
         );
-        await cleanup.query('DELETE FROM import_run WHERE id=$1', [
-          outageImportRunId,
+        await cleanup.query('DELETE FROM import_run WHERE id=ANY($1::uuid[])', [
+          [outageImportRunId, settlementImportRunId],
         ]);
         await cleanup.query('COMMIT');
       } catch {

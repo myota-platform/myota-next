@@ -115,14 +115,17 @@
   through a local TCP fault proxy while the Geodata worker claims a persisted
   import and checks its state. It verifies the delivery remains pending while
   those repository calls cannot connect, then restores PostgreSQL connectivity
-  and verifies the worker claims the run and resumes its handler. This qualifies
-  claim and state-lookup recovery for one import durable; database outages
-  during processing or settlement, the other worker repositories, and clustered
-  failover remain open.
+  and verifies the worker claims the run and resumes its handler. A second
+  import fails after claim while the proxy is down; after reconnecting, the
+  worker persists the retry state, redelivers the command, and claims the retry.
+  This qualifies import claim, state lookup, and retry-state persistence across
+  a PostgreSQL connection outage. Other worker repositories, full PostgreSQL
+  process outages, and clustered failover remain open.
   If PostgreSQL fails while the worker is recording a failed delivery, it
   extends the current message ACK and retries settlement for transient
   connection, shutdown, serialization, and deadlock errors with capped jittered
-  backoff. Live database-outage recovery still needs qualification.
+  backoff. Retry-state recovery is qualified above for import preprocessing;
+  settlement recovery for the other Geodata durables remains open.
   Periodic cancellation, expired-work, and retention passes also retry
   transient database failures with capped jittered backoff. Retention repeats
   object deletion safely before retrying its database state change.
