@@ -51,7 +51,9 @@ durables with database leases, progress acknowledgements, retries, and
 dead-letter state. Optional work correlation IDs follow the work-command
 schema's 200-character limit. Invalid work envelopes are dead-lettered without
 a work ID or work type, matching the Python consumer. Activity notification events use a
-separate durable consumer. CI verifies replica sharing, durable resume across a
+separate durable consumer. It parses broker envelopes with exact JSON integers
+so Python-style string conversion and dead-letter persistence retain their
+submitted values. CI verifies replica sharing, durable resume across a
 single-server JetStream restart with retained file storage, confirmed ACKs, and
 duplicate-event idempotency. Cluster failover and database-outage recovery
 remain open. QSO correction requests and administrator review are also

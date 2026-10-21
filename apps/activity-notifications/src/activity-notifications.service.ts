@@ -18,6 +18,7 @@ import type { Consumer, ConsumerConfig, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
@@ -325,7 +326,9 @@ export class ActivityNotificationsService
     try {
       let decoded: unknown;
       try {
-        decoded = JSON.parse(new TextDecoder().decode(message.data));
+        decoded = parseJsonWithExactIntegers(
+          new TextDecoder().decode(message.data),
+        );
       } catch {
         permanent = true;
         throw new Error('invalid_envelope');
