@@ -66,6 +66,11 @@ async function main(): Promise<void> {
         continue;
       }
 
+      // Baseline dumps set an empty session search_path. Restore the normal
+      // application schema before applying each forward migration.
+      await client.query(
+        "SELECT pg_catalog.set_config('search_path', 'public', false)",
+      );
       process.stdout.write(`Applying ${owner}/${file}\n`);
       await client.query('BEGIN');
       try {
