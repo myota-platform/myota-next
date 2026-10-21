@@ -8,7 +8,10 @@ import {
 } from '@nestjs/common';
 import { signAccessToken } from '@app/platform/access-token.js';
 import { abortableDelay } from '@app/platform/async-timers.js';
-import { MAX_IMPORT_FEATURES } from '@app/platform/import-limits.js';
+import {
+  MAX_GEOJSON_UPLOAD_BYTES,
+  MAX_IMPORT_FEATURES,
+} from '@app/platform/import-limits.js';
 import { scheduledFeatureHashOverrides } from '../../geodata/src/geodata-request-fingerprint.js';
 import { featuresFromDocument } from './geodata-importer-document.js';
 
@@ -282,13 +285,24 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     if (!response.body) throw new Error('source returned an empty response');
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
+    let sourceBytes = 0;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      sourceBytes += value.byteLength;
+      if (sourceBytes > MAX_GEOJSON_UPLOAD_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error(
+          `source exceeds the configured upload limit of ${MAX_GEOJSON_UPLOAD_BYTES} bytes`,
+        );
+      }
       chunks.push(value);
     }
-    const text = Buffer.concat(chunks).toString('utf8');
     try {
+      const text = new TextDecoder('utf-8', {
+        fatal: true,
+        ignoreBOM: true,
+      }).decode(Buffer.concat(chunks, sourceBytes));
       return { document: parseJsonWithExactIntegers(text) };
     } catch {
       throw new Error('source did not return valid JSON');

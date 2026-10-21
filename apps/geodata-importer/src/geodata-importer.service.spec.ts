@@ -25,3 +25,48 @@ describe('GeodataImporterService timer cleanup', () => {
     }
   });
 });
+
+describe('GeodataImporterService source decoding', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  const invalidDocuments = [
+    {
+      description: 'invalid UTF-8',
+      bytes: Buffer.concat([
+        Buffer.from('{"type":"FeatureCollection","features":[],"name":"'),
+        Buffer.from([0xff]),
+        Buffer.from('"}'),
+      ]),
+    },
+    {
+      description: 'a UTF-8 BOM',
+      bytes: Buffer.from(
+        '\uFEFF{"type":"FeatureCollection","features":[]}',
+        'utf8',
+      ),
+    },
+  ];
+
+  it.each(invalidDocuments)(
+    'rejects $description like Python does',
+    async ({ bytes }) => {
+      vi.stubEnv('GEODATA_SOURCE_ALLOWLIST', 'example.test');
+      const importer = new GeodataImporterService();
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(bytes, { status: 200 }),
+      );
+      const fetchSource = (
+        importer as unknown as {
+          fetchSource: (url: string) => Promise<{ document: unknown }>;
+        }
+      ).fetchSource;
+
+      await expect(
+        fetchSource.call(importer, 'https://source.example.test/data.geojson'),
+      ).rejects.toThrow('source did not return valid JSON');
+    },
+  );
+});

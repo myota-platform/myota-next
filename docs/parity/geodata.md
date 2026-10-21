@@ -312,7 +312,9 @@ Schedule pages follow the reference mapping's lexicographic ID order. A
 separate Node importer polls due schedules and also accepts the reference
 `GEODATA_IMPORT_SPEC` one-shot complete-snapshot input. It
 fetches GeoJSON or ArcGIS FeatureServer data only from allowlisted HTTPS hosts;
-it rejects redirects and reads the complete response. Scheduled fetches use the
+it rejects redirects, enforces the shared GeoJSON source-byte limit while
+reading, and decodes response bytes as strict UTF-8 before JSON parsing, as the
+Python reference does. Scheduled fetches use the
 schedule run API; one-shot imports post to the ordinary complete-snapshot import
 API. FeatureCollection members are passed through for per-record handling, and
 ArcGIS attributes use Python-compatible `dict()` conversion. The
