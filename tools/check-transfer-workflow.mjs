@@ -52,11 +52,44 @@ function endpointLabel(url) {
 }
 
 async function run(args, env) {
-  const result = await execFile(process.execPath, args, {
-    cwd: process.cwd(),
-    env: { ...process.env, ...env },
-    maxBuffer: 32 * 1024 * 1024,
-  });
+  let result;
+  try {
+    result = await execFile(process.execPath, args, {
+      cwd: process.cwd(),
+      env: { ...process.env, ...env },
+      maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch (error) {
+    if (args.includes('tools/db-transfer-validate.ts')) {
+      const output = error && typeof error === 'object' ? error.stdout : null;
+      if (typeof output === 'string') {
+        try {
+          const report = JSON.parse(output);
+          const failures = Object.entries(report.owners ?? {}).flatMap(
+            ([owner, data]) =>
+              (data.checks ?? [])
+                .filter((check) => check.status === 'failed')
+                .map(
+                  (check) =>
+                    `${owner}/${check.name}: ${check.detail ?? 'check failed'}`,
+                ),
+          );
+          if (failures.length)
+            throw new Error(
+              `Transfer validation checks failed: ${failures.join('; ')}`,
+              { cause: error },
+            );
+        } catch (parseError) {
+          if (
+            parseError instanceof Error &&
+            parseError.message.startsWith('Transfer validation checks failed:')
+          )
+            throw parseError;
+        }
+      }
+    }
+    throw error;
+  }
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
   return result.stdout;
