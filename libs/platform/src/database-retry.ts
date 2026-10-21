@@ -23,6 +23,10 @@ const transientCodes = new Set([
   '40001',
   '40P01',
 ]);
+const transientMessages = new Set([
+  'connection terminated unexpectedly',
+  'socket hang up',
+]);
 
 export async function retryTransientDatabaseOperation<T>(
   operation: () => Promise<T>,
@@ -63,6 +67,11 @@ export function isTransientDatabaseError(error: unknown): boolean {
     if (
       typeof code === 'string' &&
       (code.startsWith('08') || transientCodes.has(code))
+    )
+      return true;
+    if (
+      typeof record.message === 'string' &&
+      transientMessages.has(record.message.toLowerCase())
     )
       return true;
     if (record.cause !== undefined) pending.push(record.cause);

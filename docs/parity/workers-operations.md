@@ -18,9 +18,9 @@
   qualifications cover lease takeover for all six Activity job kinds. The
   checks inspect rebuilt snapshots, award progress, ingested and imported QSOs,
   import notification state, and rendered PDF artifacts. A live connection
-  recovery check injects a temporary PostgreSQL TCP connection loss through a
-  local fault proxy, then verifies the queued job completes after connectivity
-  returns. The Activity worker also reconnects and resumes durable work
+  recovery check makes PostgreSQL TCP connections temporarily unavailable
+  through a local fault proxy, then verifies the queued job completes after
+  connectivity returns. The Activity worker also reconnects and resumes durable work
   delivery after a single-server JetStream restart with its file store
   retained. PostgreSQL process outages, cluster failover, and retention
   recovery evidence remain open. Transient

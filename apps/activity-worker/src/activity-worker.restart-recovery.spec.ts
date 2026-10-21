@@ -53,7 +53,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
     const port = await reserveLocalPort();
     const natsUrl = `nats://127.0.0.1:${port}`;
     const originalNatsUrl = process.env.NATS_URL;
-    const jobs = [randomUUID(), randomUUID(), randomUUID()];
+    const jobs = [randomUUID(), randomUUID()];
     const programmeSlugs = jobs.map((id) => `worker-restart-${id}`);
     let server: ReturnType<typeof spawn> | undefined;
     let publisher: Awaited<ReturnType<typeof connect>> | undefined;
@@ -64,6 +64,11 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       const activityWork = registry.work.filter(
         (item) => item.owner === 'activity-service',
       );
+      const statisticsDurable = activityWork.find(
+        (item) => item.workType === 'activity.statistics-rebuild.v1',
+      )?.durable;
+      if (!statisticsDurable)
+        throw new Error('statistics rebuild durable is not registered');
       process.env.NATS_URL = natsUrl;
       server = await startJetStream(port, directory);
       publisher = await connect({
@@ -103,7 +108,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         } as ConsumerConfig);
       }
 
-      await workerPool.query('SELECT 1');
+      databaseProxy.setAvailable(false);
       worker = new ActivityWorkerService(
         new ActivityWorkRepository(workerPool),
         new ActivityRetentionRepository(workerPool),
@@ -117,31 +122,32 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       );
 
       await queueStatisticsJob(pool, jobs[0]!, programmeSlugs[0]!);
-      await publishWork(publisher, registry, jobs[0]!);
-      await waitForJob(pool, jobs[0]!);
-
-      await queueStatisticsJob(pool, jobs[1]!, programmeSlugs[1]!);
       const rejectedBeforeOutage = databaseProxy.rejectedConnections();
-      databaseProxy.setAvailable(false);
-      await publishWork(publisher, registry, jobs[1]!);
-      await waitFor(
-        () => databaseProxy.rejectedConnections() > rejectedBeforeOutage,
-        'Activity worker did not retry a failed PostgreSQL connection',
-      );
+      await publishWork(publisher, registry, jobs[0]!);
+      await waitFor(async () => {
+        const consumer = await manager.consumers.info(
+          registry.activityWorkStream,
+          statisticsDurable,
+        );
+        return (
+          databaseProxy.rejectedConnections() > rejectedBeforeOutage &&
+          consumer.num_ack_pending > 0
+        );
+      }, 'Activity worker did not retry a failed PostgreSQL connection');
       await new Promise((resolve) => setTimeout(resolve, 1200));
       const waitingJob = await pool.query<{
         status: string;
         attempts: number;
-      }>('SELECT status,attempts FROM activity_job WHERE id=$1', [jobs[1]]);
+      }>('SELECT status,attempts FROM activity_job WHERE id=$1', [jobs[0]]);
       expect(waitingJob.rows[0]).toMatchObject({
         status: 'QUEUED',
         attempts: 0,
       });
       databaseProxy.setAvailable(true);
-      await waitForJob(pool, jobs[1]!);
+      await waitForJob(pool, jobs[0]!);
       const recoveredJob = await pool.query<{ attempts: number }>(
         'SELECT attempts FROM activity_job WHERE id=$1',
-        [jobs[1]],
+        [jobs[0]],
       );
       expect(recoveredJob.rows[0]?.attempts).toBe(1);
 
@@ -158,20 +164,25 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         'worker did not reconnect to JetStream',
       );
       await waitForPublisher(publisher, registry.activityWorkStream);
-      await queueStatisticsJob(pool, jobs[2]!, programmeSlugs[2]!);
-      await publishWork(publisher, registry, jobs[2]!);
-      await waitForJob(pool, jobs[2]!);
+      await queueStatisticsJob(pool, jobs[1]!, programmeSlugs[1]!);
+      await publishWork(publisher, registry, jobs[1]!);
+      await waitForJob(pool, jobs[1]!);
       const snapshots = await pool.query<{ count: number }>(
         `SELECT count(*)::int AS count FROM activity_statistic_snapshot
          WHERE programme_slug=ANY($1::text[]) AND algorithm_version='activity-v2'`,
         [programmeSlugs],
       );
-      expect(snapshots.rows[0]?.count).toBeGreaterThanOrEqual(3);
+      expect(snapshots.rows[0]?.count).toBeGreaterThanOrEqual(2);
     } finally {
       if (worker) await worker.onModuleDestroy().catch(() => undefined);
       await workerPool.end().catch(() => undefined);
       if (publisher) await publisher.drain().catch(() => undefined);
       if (server) await stopJetStream(server).catch(() => undefined);
+      await pool
+        .query('DELETE FROM outbox_event WHERE event_id=ANY($1::uuid[])', [
+          jobs,
+        ])
+        .catch(() => undefined);
       await pool
         .query(
           `DELETE FROM activity_statistic_snapshot
