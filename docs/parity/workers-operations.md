@@ -135,7 +135,13 @@
   isolated JetStream server for each owner, kills it after an outbox claim,
   verifies the event stays retryable, restarts the server with its file store,
   and confirms publication after client reconnection. Cluster failover and
-  deployment-level NATS recovery remain unqualified.
+  deployment-level NATS recovery remain unqualified. Transient PostgreSQL
+  errors while refreshing relay metrics, claiming events, and persisting
+  publish, retry, or dead-letter state use capped jittered backoff. After
+  JetStream confirms publication, the relay retries the owner-database state
+  transaction before claiming another event, preventing a database outage
+  from causing a tight loop of duplicate publishes. Shutdown cancels retry
+  waits. Live database-outage recovery remains unqualified.
 - Runtime: preserve migrations, health/readiness, metrics, logs, traces,
   backups, restore paths, NATS topology, object storage buckets, and separate
   service/worker deployment units. Activity database pools honor the

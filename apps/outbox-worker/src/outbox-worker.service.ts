@@ -10,6 +10,8 @@ import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { abortableDelay } from '@app/platform/async-timers.js';
+import { retryTransientDatabaseOperation } from '@app/platform/database-retry.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   loadOutboxRegistry,
@@ -37,6 +39,7 @@ const METRICS_PORT = Math.max(
 export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OutboxWorkerService.name);
   private stopping = false;
+  private readonly stopController = new AbortController();
   private relay?: ReturnType<typeof jetstream>;
   private connection?: Awaited<ReturnType<typeof connect>>;
   private metricsServer?: Server;
@@ -78,6 +81,7 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     this.stopping = true;
+    this.stopController.abort();
     if (this.metricsServer) {
       await new Promise<void>((resolve, reject) => {
         this.metricsServer!.close((error) =>
@@ -96,10 +100,14 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
     while (!this.stopping) {
       try {
         if (Date.now() >= metricsAt) {
-          await this.refreshMetrics();
+          await this.retryDatabase('refreshing metrics', () =>
+            this.refreshMetrics(),
+          );
           metricsAt = Date.now() + 15_000;
         }
-        const event = await this.claim();
+        const event = await this.retryDatabase('claiming an event', () =>
+          this.claim(),
+        );
         this.databaseUp = 1;
         dbRetryMs = 1000;
         if (!event) {
@@ -244,6 +252,24 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
     this.oldestPendingAge = Math.max(0, Number(row?.oldest_age ?? 0));
     this.unresolvedDeadLetters = Number(row?.dead_letters ?? 0);
     this.databaseUp = 1;
+  }
+
+  private retryDatabase<T>(
+    context: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return retryTransientDatabaseOperation(operation, {
+      stopping: () => this.stopping,
+      onRetry: (error, attempt) => {
+        this.databaseUp = 0;
+        if (attempt === 1 || attempt % 12 === 0)
+          this.logger.warn(
+            `Outbox relay is waiting for PostgreSQL while ${context}: ${this.safeError(error)}`,
+          );
+      },
+      wait: (milliseconds) =>
+        abortableDelay(milliseconds, this.stopController.signal),
+    });
   }
 
   private observePublish(seconds: number): void {
@@ -469,7 +495,9 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
           `serialized event exceeds ${MAX_MESSAGE_BYTES} bytes`,
         );
     } catch (error) {
-      await this.markFailed(event, error, true);
+      await this.retryDatabase('saving a permanent failure', () =>
+        this.markFailed(event, error, true),
+      );
       return;
     }
 
@@ -486,39 +514,28 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
       this.natsUp = 0;
       this.observePublish((performance.now() - started) / 1000);
       if (error instanceof OutboxContractError)
-        await this.markFailed(event, error, true);
-      else await this.markFailed(event, error, false);
+        await this.retryDatabase('saving a permanent failure', () =>
+          this.markFailed(event, error, true),
+        );
+      else
+        await this.retryDatabase('scheduling a publish retry', () =>
+          this.markFailed(event, error, false),
+        );
       return;
     }
     this.observePublish((performance.now() - started) / 1000);
     if (acknowledgedStream !== routed.stream) {
-      await this.markFailed(
-        event,
-        new Error('JetStream acknowledged an unexpected stream'),
-        false,
+      const error = new Error('JetStream acknowledged an unexpected stream');
+      await this.retryDatabase('scheduling a publish retry', () =>
+        this.markFailed(event, error, false),
       );
       return;
     }
-    this.published += 1;
     try {
-      const client = await this.pool!.connect();
-      try {
-        await client.query('BEGIN');
-        await client.query(
-          'UPDATE public.outbox_event SET published_at = now(), last_error = NULL WHERE event_id = $1',
-          [event.eventId],
-        );
-        await client.query(
-          'UPDATE public.dead_letter_event SET resolved_at = now() WHERE event_id = $1 AND resolved_at IS NULL',
-          [event.eventId],
-        );
-        await client.query('COMMIT');
-      } catch (error) {
-        await client.query('ROLLBACK').catch(() => undefined);
-        throw error;
-      } finally {
-        client.release();
-      }
+      await this.retryDatabase('recording a published event', () =>
+        this.markPublished(event),
+      );
+      this.published += 1;
     } catch (error) {
       this.logger.error(
         `JetStream acknowledged event ${event.eventId}, but the outbox mark failed: ${this.safeError(error)}`,
@@ -582,8 +599,29 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
         `Scheduled retry for event ${event.eventId}: ${message}`,
       );
     } catch (failure) {
-      await client.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => undefined);
       throw failure;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async markPublished(event: ClaimedOutboxEvent): Promise<void> {
+    const client = await this.pool!.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'UPDATE public.outbox_event SET published_at = now(), last_error = NULL WHERE event_id = $1',
+        [event.eventId],
+      );
+      await client.query(
+        'UPDATE public.dead_letter_event SET resolved_at = now() WHERE event_id = $1 AND resolved_at IS NULL',
+        [event.eventId],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
     } finally {
       client.release();
     }
@@ -595,6 +633,6 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private pause(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return abortableDelay(ms, this.stopController.signal);
   }
 }

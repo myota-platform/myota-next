@@ -58,8 +58,8 @@ requirePattern(
 );
 requirePattern(
   'apps/outbox-worker/src/outbox-worker.service.ts',
-  /const ack = await this\.relay!\.publish[\s\S]*?msgID: event\.eventId[\s\S]*?if \(acknowledgedStream !== routed\.stream\)[\s\S]*?this\.published \+= 1;[\s\S]*?const client = await this\.pool!\.connect\(\)[\s\S]*?JetStream acknowledged event \$\{event\.eventId\}, but the outbox mark failed:/,
-  'An outbox database-mark failure after JetStream ACK must leave the event pending for stable-ID retry',
+  /const ack = await this\.relay!\.publish[\s\S]*?msgID: event\.eventId[\s\S]*?if \(acknowledgedStream !== routed\.stream\)[\s\S]*?this\.retryDatabase\('recording a published event', \(\) =>\s*this\.markPublished\(event\),\s*\)[\s\S]*?JetStream acknowledged event \$\{event\.eventId\}, but the outbox mark failed:[\s\S]*?private async markPublished\(event: ClaimedOutboxEvent\)[\s\S]*?UPDATE public\.outbox_event SET published_at = now\(\)/,
+  'Outbox must persist a confirmed JetStream publish with transient DB retry and stable-ID replay safety',
 );
 requirePattern(
   'libs/platform/src/database.module.ts',
