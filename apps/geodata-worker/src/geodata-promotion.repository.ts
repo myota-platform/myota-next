@@ -784,6 +784,7 @@ export class GeodataPromotionRepository {
             'LIFECYCLE_PROMOTED',
             queue.requested_by,
             true,
+            await utcTimestamp(client),
           );
           if (enrichment) {
             await client.query(
@@ -797,7 +798,7 @@ export class GeodataPromotionRepository {
               'entity',
               entityId,
               enrichment.event,
-              new Date(enrichment.requestedAt),
+              enrichment.requestedAt,
             );
           }
         }
@@ -883,7 +884,7 @@ export class GeodataPromotionRepository {
     aggregateType: string,
     aggregateId: string,
     payload: Record<string, unknown>,
-    occurredAt = new Date(),
+    occurredAt: Date | string = new Date(),
   ) {
     await client.query(
       `INSERT INTO outbox_event

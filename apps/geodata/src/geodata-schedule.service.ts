@@ -1,6 +1,7 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import {
   BadRequestException,
   ConflictException,
@@ -116,6 +117,8 @@ export class GeodataScheduleService {
           return prior.response;
         }
       }
+      schedule.nextRunAt = await utcTimestamp(client);
+      schedule.createdAt = await utcTimestamp(client);
       await client.query(
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
       );
@@ -214,8 +217,6 @@ export class GeodataScheduleService {
         sourceFeatureHashOverrides,
       },
     )) as Record<string, unknown>;
-    const now = new Date();
-    const runAt = now.toISOString();
     const update = await this.connect();
     try {
       await update.query('BEGIN');
@@ -232,6 +233,7 @@ export class GeodataScheduleService {
           return previous.response;
         }
       }
+      const runAt = await utcTimestamp(update);
       await update.query(
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
       );

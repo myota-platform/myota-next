@@ -27,6 +27,7 @@ import {
   requestResponse,
 } from './geodata-request-idempotency.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
+import { utcTimestamp as databaseUtcTimestamp } from '@app/platform/utc-timestamp.js';
 
 @Injectable()
 export class GeodataDeletionService {
@@ -87,6 +88,8 @@ export class GeodataDeletionService {
     }
     const impact = await this.activityImpact(authorization as string, entityId);
     const id = randomUUID();
+    const createdAt = await this.getUtcTimestamp();
+    const updatedAt = await this.getUtcTimestamp();
     const job = {
       id,
       entityId,
@@ -94,8 +97,8 @@ export class GeodataDeletionService {
       requestedBy,
       impact,
       confirmationRequired: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt,
+      updatedAt,
       entityContext: {
         programmeSlug: entity.programme_slug,
         jurisdiction: entity.jurisdiction,
@@ -188,8 +191,8 @@ export class GeodataDeletionService {
     requestHash?: string,
     requestPath = `/v1/geodata/entity-deletion-jobs/${jobId}/confirm`,
   ) {
-    const missing = ['confirmation', 'deletedBy'].filter((field) =>
-      !pythonTruthy(body[field]),
+    const missing = ['confirmation', 'deletedBy'].filter(
+      (field) => !pythonTruthy(body[field]),
     );
     if (missing.length)
       throw new BadRequestException(
@@ -254,8 +257,8 @@ export class GeodataDeletionService {
         ...job,
         status: 'QUEUED',
         confirmedBy: deletedBy,
-        confirmedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        confirmedAt: await databaseUtcTimestamp(client),
+        updatedAt: await databaseUtcTimestamp(client),
         executionClaims: {
           sub: claims.sub,
           scp: claims.scp,
@@ -353,6 +356,15 @@ export class GeodataDeletionService {
       return await this.pool.connect();
     } catch {
       throw new ServiceUnavailableException('Geodata database is unavailable');
+    }
+  }
+
+  private async getUtcTimestamp(): Promise<string> {
+    const client = await this.connect();
+    try {
+      return await databaseUtcTimestamp(client);
+    } finally {
+      client.release();
     }
   }
 }

@@ -10,6 +10,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
@@ -939,12 +940,7 @@ export class IdentityAccountService {
       }
     }
 
-    const changedAt = (
-      await client.query<{ timestamp: string }>(
-        `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
-      )
-    ).rows[0].timestamp;
+    const changedAt = await utcTimestamp(client);
     await client.query(
       `UPDATE public.account_role SET valid_to = $2
         WHERE account_id = $1 AND valid_to IS NULL`,
@@ -1085,14 +1081,7 @@ export class IdentityAccountService {
     createdAt?: string,
   ) {
     const result: Record<string, unknown>[] = [];
-    const assignmentTime =
-      createdAt ??
-      (
-        await client.query<{ timestamp: string }>(
-          `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
-            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
-        )
-      ).rows[0].timestamp;
+    const assignmentTime = createdAt ?? (await utcTimestamp(client));
     for (const assignment of assignments) {
       const id = randomUUID();
       await client.query(

@@ -8,6 +8,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import { parsePythonFloatText } from '@app/platform/python-numeric.js';
 
 type EnrichmentJob = {
@@ -172,11 +173,11 @@ export class GeodataEnrichmentRepository {
         return;
       }
       if (geometryHash(row.geometry) !== job.geometryHash) {
-        const completedAt = new Date();
+        const completedAt = await utcTimestamp(preflight);
         const stale = {
           ...props,
           locationEnrichmentStatus: 'SUPERSEDED',
-          locationEnrichmentCompletedAt: completedAt.toISOString(),
+          locationEnrichmentCompletedAt: completedAt,
         };
         await preflight.query(
           'UPDATE geodata_entity SET public_properties=$2::jsonb,updated_at=$3 WHERE id=$1',
@@ -237,11 +238,11 @@ export class GeodataEnrichmentRepository {
         return;
       }
       if (geometryHash(row.geometry) !== job.geometryHash) {
-        const completedAt = new Date();
+        const completedAt = await utcTimestamp(client);
         const stale = {
           ...props,
           locationEnrichmentStatus: 'SUPERSEDED',
-          locationEnrichmentCompletedAt: completedAt.toISOString(),
+          locationEnrichmentCompletedAt: completedAt,
         };
         await client.query(
           'UPDATE geodata_entity SET public_properties=$2::jsonb,updated_at=$3 WHERE id=$1',
@@ -284,13 +285,14 @@ export class GeodataEnrichmentRepository {
           continue;
         current[field] = value;
       }
-      const completedAt = new Date();
+      result.geocodedAt = await utcTimestamp(client);
+      const completedAt = await utcTimestamp(client);
       const enrichmentStatus =
         result.status === 'ENRICHED' ? 'COMPLETED' : 'FAILED';
       const nextProps: Record<string, unknown> = {
         ...props,
         locationEnrichmentStatus: enrichmentStatus,
-        locationEnrichmentCompletedAt: completedAt.toISOString(),
+        locationEnrichmentCompletedAt: completedAt,
         locationEnrichmentGeometryHash: job.geometryHash,
         locationEnrichmentReason: job.reason,
         geocodeProvider: result.provider,
@@ -367,7 +369,7 @@ export class GeodataEnrichmentRepository {
     id: string,
     type: string,
     payload: unknown,
-    occurredAt: Date,
+    occurredAt: Date | string,
   ) {
     await client.query(
       `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)

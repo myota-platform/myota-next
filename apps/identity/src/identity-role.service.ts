@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
 import {
   pythonKeyErrorDetail,
@@ -75,12 +76,7 @@ export class IdentityRoleService {
                 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at
          FROM public.identity_role_definition`,
     );
-    const initialTimestamp = (
-      await client.query<{ timestamp: string }>(
-        `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
-      )
-    ).rows[0].timestamp;
+    const initialTimestamp = await utcTimestamp(client);
     const definitions = new Map<string, RoleDefinition>(
       DEFAULT_ROLE_DEFINITIONS.map((definition) => [
         definition.code,

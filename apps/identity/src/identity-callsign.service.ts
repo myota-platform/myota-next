@@ -10,6 +10,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { writeOutboxEvent } from '@app/platform/outbox.js';
@@ -94,14 +95,7 @@ export class IdentityCallsignService {
       const status = body.status ?? 'UNVERIFIED';
       const source = body.source === undefined ? 'self-asserted' : body.source;
       const verifiedAt =
-        status === 'VERIFIED'
-          ? (
-              await client.query<{ verified_at: string }>(
-                `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
-                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS verified_at`,
-              )
-            ).rows[0].verified_at
-          : null;
+        status === 'VERIFIED' ? await utcTimestamp(client) : null;
       const callsignResult = await client.query<{
         created_at: string;
         updated_at: string;
@@ -361,18 +355,8 @@ export class IdentityCallsignService {
         );
       }
       const body = await validateVerifyCallsignBody(rawBody);
-      const verifiedAt = (
-        await client.query<{ timestamp: string }>(
-          `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
-            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
-        )
-      ).rows[0].timestamp;
-      const updatedAt = (
-        await client.query<{ timestamp: string }>(
-          `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
-            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
-        )
-      ).rows[0].timestamp;
+      const verifiedAt = await utcTimestamp(client);
+      const updatedAt = await utcTimestamp(client);
       const verificationSource =
         body.source === undefined ? 'manual-review' : body.source;
       await client.query(
@@ -487,12 +471,7 @@ export class IdentityCallsignService {
       let validTo: string | null;
       let responseValidTo: string | null;
       if (body.validTo === undefined) {
-        validTo = (
-          await client.query<{ timestamp: string }>(
-            `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
-              'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
-          )
-        ).rows[0].timestamp;
+        validTo = await utcTimestamp(client);
         responseValidTo = validTo;
       } else if (body.validTo === null) {
         validTo = null;

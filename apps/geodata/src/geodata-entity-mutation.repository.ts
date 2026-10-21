@@ -19,6 +19,7 @@ import {
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { pythonFloatString } from '@app/platform/python-number.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import type { AccessTokenClaims } from '@app/platform/access-token.js';
 import {
   firstPythonTruthy,
@@ -124,9 +125,7 @@ export class GeodataEntityMutationRepository {
       if (!pythonTruthy(reviewerId))
         throw new BadRequestException('reviewerId is required');
       if (
-        !['APPROVED', 'CANDIDATE', 'RETIRED', 'REJECTED'].includes(
-          targetStatus,
-        )
+        !['APPROVED', 'CANDIDATE', 'RETIRED', 'REJECTED'].includes(targetStatus)
       )
         throw new BadRequestException('unsupported entity review status');
       if (key) {
@@ -161,12 +160,12 @@ export class GeodataEntityMutationRepository {
         const properties = isRecord(row.public_properties)
           ? row.public_properties
           : {};
-        const changedAt = new Date();
+        const changedAt = await utcTimestamp(client);
         const review = {
           ...(isRecord(properties.review) ? properties.review : {}),
           reviewerId,
           note,
-          changedAt: changedAt.toISOString(),
+          changedAt: changedAt,
         };
         const reviewHistory = Array.isArray(properties.reviewHistory)
           ? [...properties.reviewHistory]
@@ -177,13 +176,13 @@ export class GeodataEntityMutationRepository {
           previousStatus,
           reviewerId,
           note,
-          occurredAt: changedAt.toISOString(),
+          occurredAt: changedAt,
         });
         let nextProperties = {
           ...properties,
           review,
           reviewHistory,
-          updatedAt: changedAt.toISOString(),
+          updatedAt: changedAt,
         };
         let enrichmentEvent: Record<string, unknown> | undefined;
         if (['APPROVED', 'CANDIDATE'].includes(targetStatus)) {
@@ -196,6 +195,7 @@ export class GeodataEntityMutationRepository {
             'LIFECYCLE_PROMOTED',
             reviewerId,
             true,
+            await utcTimestamp(client),
           );
           if (enrichment) {
             nextProperties = enrichment.properties;
@@ -458,7 +458,7 @@ export class GeodataEntityMutationRepository {
         const properties = isRecord(row.public_properties)
           ? row.public_properties
           : {};
-        const changedAt = new Date();
+        const changedAt = await utcTimestamp(client);
         const reviewHistory = Array.isArray(properties.reviewHistory)
           ? [...properties.reviewHistory]
           : [];
@@ -472,7 +472,7 @@ export class GeodataEntityMutationRepository {
             previousName: changed.name.previous,
             name: changed.name.value,
             note,
-            occurredAt: changedAt.toISOString(),
+            occurredAt: changedAt,
           });
         const metadataFields = Object.keys(changed)
           .filter((field) => field !== 'name')
@@ -483,7 +483,7 @@ export class GeodataEntityMutationRepository {
             editorId,
             fields: metadataFields,
             note,
-            occurredAt: changedAt.toISOString(),
+            occurredAt: changedAt,
           });
         if (locationInput !== undefined)
           reviewHistory.push({
@@ -493,19 +493,19 @@ export class GeodataEntityMutationRepository {
             previous: previousLocation,
             location: nextLocation,
             note,
-            occurredAt: changedAt.toISOString(),
+            occurredAt: changedAt,
           });
         if (locationInput !== undefined)
           provenance.manualLocation = {
             fields: nextManual,
             editorId,
             note,
-            updatedAt: changedAt.toISOString(),
+            updatedAt: changedAt,
           };
         const propertyDelta: Record<string, unknown> = {
           reviewHistory,
           ...(locationInput !== undefined ? { provenance } : {}),
-          updatedAt: changedAt.toISOString(),
+          updatedAt: changedAt,
         };
         const enrichment =
           locationChanged && releasedManualFields.length
@@ -518,6 +518,7 @@ export class GeodataEntityMutationRepository {
                 'MANUAL_FIELDS_RELEASED',
                 editorId,
                 true,
+                await utcTimestamp(client),
               )
             : undefined;
         const updateParams: unknown[] = [
@@ -560,7 +561,7 @@ export class GeodataEntityMutationRepository {
             id,
             'geodata.entity.location-enrichment-requested.v1',
             enrichment.event,
-            new Date(enrichment.requestedAt),
+            enrichment.requestedAt,
           );
         if (changed.name)
           await this.writeEntityEvent(
@@ -721,7 +722,7 @@ export class GeodataEntityMutationRepository {
         return receipt;
       }
       const requestId = randomUUID();
-      const requestedAt = new Date();
+      const requestedAt = await utcTimestamp(client);
       const nextProperties = {
         ...properties,
         locationEnrichmentRequestId: requestId,
@@ -729,7 +730,7 @@ export class GeodataEntityMutationRepository {
         locationEnrichmentStatus: 'QUEUED',
         locationEnrichmentOnlyMissing: true,
         locationEnrichmentReason: 'ADMIN_REQUESTED_MISSING_METADATA',
-        locationEnrichmentRequestedAt: requestedAt.toISOString(),
+        locationEnrichmentRequestedAt: requestedAt,
         locationEnrichmentRequestedBy: editorId,
       };
       delete nextProperties.locationEnrichmentError;
@@ -882,7 +883,7 @@ export class GeodataEntityMutationRepository {
         const properties = isRecord(row.public_properties)
           ? row.public_properties
           : {};
-        const changedAt = new Date();
+        const changedAt = await utcTimestamp(client);
         const reviewHistory = Array.isArray(properties.reviewHistory)
           ? [...properties.reviewHistory]
           : [];
@@ -894,7 +895,7 @@ export class GeodataEntityMutationRepository {
           previousEntityType: previousTypes[0] ?? null,
           entityType: entityTypes[0],
           note,
-          occurredAt: changedAt.toISOString(),
+          occurredAt: changedAt,
         });
         await client.query(
           `UPDATE geodata_entity SET entity_type_id=$2,entity_type_code=$3,
@@ -908,7 +909,7 @@ export class GeodataEntityMutationRepository {
               entityTypes,
               entityTypeCodes: entityTypes,
               reviewHistory,
-              updatedAt: changedAt.toISOString(),
+              updatedAt: changedAt,
             }),
             changedAt,
           ],
@@ -1089,7 +1090,7 @@ export class GeodataEntityMutationRepository {
       const properties = isRecord(row.public_properties)
         ? row.public_properties
         : {};
-      const changedAt = new Date();
+      const changedAt = await utcTimestamp(client);
       const geometryHistory = Array.isArray(properties.geometryHistory)
         ? [...properties.geometryHistory]
         : [];
@@ -1097,12 +1098,12 @@ export class GeodataEntityMutationRepository {
         editorId,
         note,
         geometry: row.geometry,
-        editedAt: changedAt.toISOString(),
+        editedAt: changedAt,
       });
       let nextProperties: Record<string, unknown> = {
         ...properties,
         geometryHistory,
-        updatedAt: changedAt.toISOString(),
+        updatedAt: changedAt,
       };
       const enrichment = geometryChanged
         ? queueLocationEnrichment(
@@ -1114,6 +1115,7 @@ export class GeodataEntityMutationRepository {
             'GEOMETRY_CHANGED',
             editorId,
             false,
+            await utcTimestamp(client),
           )
         : undefined;
       if (enrichment) nextProperties = enrichment.properties;
@@ -1144,7 +1146,7 @@ export class GeodataEntityMutationRepository {
           id,
           'geodata.entity.location-enrichment-requested.v1',
           enrichment.event,
-          new Date(enrichment.requestedAt),
+          enrichment.requestedAt,
         );
       const response = await this.readEntityWithClient(client, id);
       if (key)
@@ -1171,7 +1173,7 @@ export class GeodataEntityMutationRepository {
     entityId: string,
     eventType: string,
     payload: Record<string, unknown>,
-    occurredAt: Date,
+    occurredAt: Date | string,
   ) {
     await client.query(
       `INSERT INTO geodata_audit_event(event_id,aggregate_type,aggregate_id,event,occurred_at)

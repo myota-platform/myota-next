@@ -37,6 +37,7 @@ export function queueLocationEnrichment(
   reason: string,
   requestedBy: unknown,
   onlyMissing: boolean,
+  requestedAt = new Date().toISOString(),
 ) {
   if (!isRecord(geometry)) return undefined;
   if (onlyMissing && !missingLocationFields(location, manualFields).length)
@@ -50,7 +51,6 @@ export function queueLocationEnrichment(
   )
     return undefined;
   const requestId = randomUUID();
-  const requestedAt = new Date().toISOString();
   const nextProperties: Record<string, unknown> = {
     ...properties,
     locationEnrichmentRequestId: requestId,
