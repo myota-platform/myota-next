@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   readGeoJsonDocumentMetadata,
   streamGeoJsonFeatures,
@@ -27,14 +26,7 @@ describe('GeoJSON streaming reference parity', () => {
             index++
           ) {
             if (index > 0) chunk += ',';
-            chunk += stringifyJsonWithBigInts({
-              type: 'Feature',
-              properties: { name: `fixture-${index}` },
-              geometry: {
-                type: 'Point',
-                coordinates: [-5.99, 37.39],
-              },
-            });
+            chunk += `{"type":"Feature","properties":{"name":"fixture-${index}"},"geometry":{"type":"Point","coordinates":[-5.99,37.39]}}`;
           }
           yield chunk;
         }
