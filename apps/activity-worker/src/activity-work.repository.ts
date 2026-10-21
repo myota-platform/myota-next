@@ -231,13 +231,11 @@ export class ActivityWorkRepository {
           `SELECT *,
             to_char(started_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS started_at_iso,
             to_char(validity_expires_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS validity_expires_at_iso
-           FROM activity_activation WHERE id=$1 FOR UPDATE`,
+           FROM activity_activation WHERE id=$1`,
           [job.payload.activationId],
         );
-        const activation = activationResult.rows[0];
+        let activation = activationResult.rows[0];
         if (!activation) throw new Error('activation not found');
-        if (activation.status !== 'OPEN')
-          throw new Error('activation is not open');
         const records = job.payload.records;
         if (!Array.isArray(records) || records.length === 0)
           throw new Error('ingestion records are empty');
@@ -252,6 +250,20 @@ export class ActivityWorkRepository {
             },
             job.payload.activationId,
           );
+          normalized.push(qso);
+        }
+        const lockedActivationResult = await client.query(
+          `SELECT *,
+            to_char(started_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS started_at_iso,
+            to_char(validity_expires_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS validity_expires_at_iso
+           FROM activity_activation WHERE id=$1 FOR UPDATE`,
+          [job.payload.activationId],
+        );
+        activation = lockedActivationResult.rows[0];
+        if (!activation) throw new Error('activation not found');
+        if (activation.status !== 'OPEN')
+          throw new Error('activation is not open');
+        for (const qso of normalized)
           if (
             compareTimestamps(qso.timestamp, activation.started_at_iso) < 0 ||
             (activation.validity_expires_at_iso &&
@@ -260,9 +272,7 @@ export class ActivityWorkRepository {
                 activation.validity_expires_at_iso,
               ) > 0)
           )
-            throw new Error('QSO is outside the activation validity window');
-          normalized.push(qso);
-        }
+            throw new Error('a QSO is outside the activation validity window');
         const inserted = await client.query(
           `INSERT INTO activity_qso
            (id,activation_id,programme_slug,operator_id,operator_callsign,hunter_id,hunter_callsign,

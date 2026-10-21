@@ -46,7 +46,10 @@ and `programmeRules` are converted with Python-compatible `dict()` semantics.
 QSO ingestion requests also persist bounded,
 owner-scoped jobs with a status read path. `sourceFormat` defaults only when
 omitted and otherwise reaches the worker unchanged, matching the Python
-handler. The separate Activity worker consumes its six registered JetStream
+handler. The worker normalizes every submitted record before it locks and
+checks the activation status and validity window, preserving the Python worker's
+error precedence for mixed-invalid batches. The separate Activity worker
+consumes its six registered JetStream
 durables with database leases, progress acknowledgements, retries, and
 dead-letter state. Optional work correlation IDs follow the work-command
 schema's 200-character limit. Invalid work envelopes are dead-lettered without
