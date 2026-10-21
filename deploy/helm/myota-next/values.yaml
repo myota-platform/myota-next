@@ -121,6 +121,7 @@ components:
       MYOTA_PROFILE_IMAGE_SECRET_KEY:
         { secret: objectStorage, key: profile-image-secret-key }
       MYOTA_PROFILE_IMAGE_BUCKET: '{{ .Values.dependencies.profileImageBucket }}'
+      MYOTA_MAX_BODY_BYTES: '33554432'
       MYOTA_BOOTSTRAP_ADMIN_EMAIL:
         { secret: auth, key: bootstrap-email, optional: true }
       MYOTA_BOOTSTRAP_ADMIN_PASSWORD:

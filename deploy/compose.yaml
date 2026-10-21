@@ -131,6 +131,7 @@ services:
       MYOTA_PROFILE_IMAGE_ACCESS_KEY: ${MYOTA_PROFILE_IMAGE_ACCESS_KEY:-myota-profile-image}
       MYOTA_PROFILE_IMAGE_SECRET_KEY: ${MYOTA_PROFILE_IMAGE_SECRET_KEY:-myota-profile-image-dev-only}
       MYOTA_PROFILE_IMAGE_BUCKET: myota-user-profile-images
+      MYOTA_MAX_BODY_BYTES: '33554432'
     volumes:
       - seaweedfs-s3-config:/config
 
