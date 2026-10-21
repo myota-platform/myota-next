@@ -1148,22 +1148,22 @@ export class GeodataWorkRepository {
 
       const preprocessedCandidates = `COALESCE((SELECT jsonb_agg(candidate_id::text ORDER BY ordinal)
         FROM geodata_import_candidate_stage
-        WHERE import_run_id=$2 AND attempt_count=$3 AND candidate_id IS NOT NULL),'[]'::jsonb)`;
+        WHERE import_run_id=$2::uuid AND attempt_count=$3 AND candidate_id IS NOT NULL),'[]'::jsonb)`;
       const errorSummaries = `COALESCE((SELECT jsonb_agg(error_payload ORDER BY ordinal)
         FROM geodata_import_candidate_stage
-        WHERE import_run_id=$2 AND attempt_count=$3 AND error_payload IS NOT NULL),'[]'::jsonb)`;
+        WHERE import_run_id=$2::uuid AND attempt_count=$3 AND error_payload IS NOT NULL),'[]'::jsonb)`;
       const skippedSummaries = `COALESCE((SELECT jsonb_agg(skipped_payload ORDER BY ordinal)
         FROM geodata_import_candidate_stage
-        WHERE import_run_id=$2 AND attempt_count=$3 AND skipped_payload IS NOT NULL),'[]'::jsonb)`;
+        WHERE import_run_id=$2::uuid AND attempt_count=$3 AND skipped_payload IS NOT NULL),'[]'::jsonb)`;
       const conflationSummaries = `COALESCE((SELECT jsonb_agg(
         jsonb_build_object('ordinal',ordinal,'name',candidate_payload->>'name',
           'matches',candidate_payload->'possibleDuplicates') ORDER BY ordinal)
         FROM geodata_import_candidate_stage
-        WHERE import_run_id=$2 AND attempt_count=$3 AND candidate_id IS NOT NULL
+        WHERE import_run_id=$2::uuid AND attempt_count=$3 AND candidate_id IS NOT NULL
           AND candidate_payload->'possibleDuplicates' <> '[]'::jsonb),'[]'::jsonb)`;
       const sourceRecordMap = `COALESCE((SELECT jsonb_object_agg(source_ref,source_hash)
         FROM (SELECT DISTINCT ON (source_ref COLLATE "C") source_ref,source_hash
-          FROM geodata_import_candidate WHERE import_run_id=$2 AND source_ref IS NOT NULL
+          FROM geodata_import_candidate WHERE import_run_id=$2::uuid AND source_ref IS NOT NULL
           ORDER BY source_ref COLLATE "C",ordinal DESC) records),'{}'::jsonb)`;
       await client.query(
         `INSERT INTO outbox_event
