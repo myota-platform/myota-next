@@ -381,6 +381,9 @@ after their source-ordered validation and authorization checks, including a
 confirmation retry against an already completed job. Import finalization and
 failed promotion queue redrive use the same request fingerprint and
 successful-result replay.
+Deletion worker leases use the database-generated JSONB timestamp value for
+both persistence and lease fencing, preserving the reference representation
+instead of reconstructing the deadline from the process clock.
 Candidate validation notes are stored as JSONB with existing text values
 preserved as JSON strings. If-Match protected name, website, description,
 geometry, category, and location edits are also implemented. Entity status,

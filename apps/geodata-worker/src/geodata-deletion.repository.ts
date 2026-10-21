@@ -48,11 +48,15 @@ export class GeodataDeletionRepository {
         return null;
       }
       const job = row.payload as DeletionJob;
+      const leaseResult = await client.query<{ lease_until: string }>(
+        `SELECT jsonb_build_object(
+           'leaseUntil',now()+interval '120 seconds'
+         )->>'leaseUntil' AS lease_until`,
+      );
       const claimed = {
         ...job,
         status: 'PROCESSING',
-        attemptCount: Number(job.attemptCount ?? 0) + 1,
-        leaseUntil: new Date(Date.now() + 120_000).toISOString(),
+        leaseUntil: leaseResult.rows[0].lease_until,
         updatedAt: await utcTimestamp(client),
       };
       await client.query(
@@ -108,12 +112,12 @@ export class GeodataDeletionRepository {
         `UPDATE geodata_control_record SET payload=payload || jsonb_build_object(
            'leaseUntil',now()+interval '120 seconds','updatedAt',now()),updated_at=now()
          WHERE kind='entityDeletionJobs' AND id=$1 AND payload->>'status'='PROCESSING'
-           AND payload->>'leaseUntil'=$2 RETURNING id`,
+           AND payload->>'leaseUntil'=$2
+         RETURNING payload->>'leaseUntil' AS lease_until`,
         [job.id, job.leaseUntil],
       );
       await client.query('COMMIT');
-      if (result.rowCount)
-        job.leaseUntil = new Date(Date.now() + 120_000).toISOString();
+      if (result.rows[0]) job.leaseUntil = result.rows[0].lease_until;
       return Boolean(result.rowCount);
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
