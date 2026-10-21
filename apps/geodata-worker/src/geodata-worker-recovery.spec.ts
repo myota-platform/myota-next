@@ -26,7 +26,7 @@ import { GeodataWorkRepository } from './geodata-work.repository.js';
 const recoveryTestName =
   'replays committed staging after a worker process is killed';
 const brokerRecoveryTestName =
-  'resumes durable work after JetStream restarts with file storage retained';
+  'resumes all durables after restart and retries a database outage';
 
 describe('Geodata worker process recovery', () => {
   it.skipIf(
@@ -68,6 +68,7 @@ async function verifyBrokerRecovery() {
     GEO_DATABASE_URL: databaseUrl,
     GEODATA_WORKER_HEALTH_PORT: String(healthPort),
     GEODATA_WORKER_MAX_ACK_PENDING: '1',
+    GEODATA_WORKER_ACK_WAIT_SECONDS: '2',
   })) {
     savedEnvironment.set(name, process.env[name]);
     process.env[name] = value;
@@ -78,8 +79,26 @@ async function verifyBrokerRecovery() {
   const processedPreprocessing: string[] = [];
   const processedPromotions: string[] = [];
   const processedEnrichments: string[] = [];
+  const outageImportRunId = randomUUID();
+  let databaseAvailable = true;
+  let outageClaimAttempts = 0;
+  let outageStateAttempts = 0;
   const workRepository = {
-    claim: vi.fn(async (importRunId: string) => ({ importRunId })),
+    claim: vi.fn(async (importRunId: string) => {
+      if (importRunId === outageImportRunId) {
+        outageClaimAttempts++;
+        if (!databaseAvailable)
+          throw new Error('simulated Geodata database outage');
+      }
+      return { importRunId };
+    }),
+    getRunState: vi.fn(async () => {
+      if (!databaseAvailable) {
+        outageStateAttempts++;
+        throw new Error('simulated Geodata database outage');
+      }
+      return { status: 'QUEUED', leaseRemainingSeconds: 0 };
+    }),
     preprocess: vi.fn(async ({ importRunId }: { importRunId: string }) => {
       processedPreprocessing.push(importRunId);
     }),
@@ -156,25 +175,25 @@ async function verifyBrokerRecovery() {
       [
         'geodata-preprocessing-v1',
         'myota.work.geodata.import-preprocess.v1',
-        300,
+        2,
         100,
       ],
       [
         'geodata-import-promotion-v1',
         'myota.work.geodata.import-promotion.v1',
-        300,
+        2,
         100,
       ],
       [
         'geodata-entity-deletion-v1',
         'myota.work.geodata.entity-delete.v1',
-        120,
+        2,
         100,
       ],
       [
         'geodata-location-enrichment-v1',
         'myota.work.geodata.location-enrichment.v1',
-        120,
+        2,
         8,
       ],
     ] as const;
@@ -276,10 +295,29 @@ async function verifyBrokerRecovery() {
       'Geodata work durables did not resume delivery after broker restart',
     );
 
+    databaseAvailable = false;
+    await publishGeodataWork(
+      publisher,
+      'geodata.import-preprocess.v1',
+      outageImportRunId,
+      { type: 'import_run', id: outageImportRunId },
+      { importRunId: outageImportRunId },
+    );
+    await waitForRecovery(
+      () => outageClaimAttempts === 1 && outageStateAttempts === 1,
+      'Geodata worker did not encounter the simulated database outage',
+    );
+    databaseAvailable = true;
+    await waitForRecovery(
+      () => processedPreprocessing.includes(outageImportRunId),
+      'Geodata preprocessing work did not recover after the database returned',
+    );
+
     expect(executionOrder).toEqual(jobIds);
-    expect(processedPreprocessing).toEqual([importRunId]);
+    expect(processedPreprocessing).toEqual([importRunId, outageImportRunId]);
     expect(processedPromotions).toEqual([queueId]);
     expect(processedEnrichments).toEqual([requestId]);
+    expect(outageClaimAttempts).toBeGreaterThanOrEqual(2);
     expect(deletions.execute).toHaveBeenCalledTimes(2);
   } finally {
     if (worker) await worker.onModuleDestroy().catch(() => undefined);
