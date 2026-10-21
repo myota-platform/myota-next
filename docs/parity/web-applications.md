@@ -41,7 +41,9 @@ decision, survivor selection, reviewer attribution, and note. Other Admin
 workflows still lack browser-level compatibility coverage. Refresh schedule
 checks cover programme-scoped schedule creation and queuing a complete manual
 GeoJSON snapshot. Import checks cover pasted GeoJSON queueing, source metadata,
-candidate listing and review, plus idempotent durable candidate promotion. The award catalogue follows all API
+candidate listing and review, plus idempotent durable candidate promotion.
+The Admin import form also supports resumable KML and GPX file uploads up to
+20 MiB, alongside GeoJSON, OSM PBF, and Shapefile ZIP uploads. The award catalogue follows all API
 pages. Remaining work includes accessibility/visual review and deployment
 integration. Its public map renders point, line, polygon, and multipart entity
 geometries.

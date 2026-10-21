@@ -105,17 +105,17 @@ const selectedCounts = computed(() =>
 const showReview = computed(() =>
   Boolean(
     selectedRun.value &&
-      selectedRun.value.status !== 'PROCESSED' &&
-      !isPreprocessing(selectedRun.value) &&
-      (isReviewable(selectedRun.value) || totalCandidates.value),
+    selectedRun.value.status !== 'PROCESSED' &&
+    !isPreprocessing(selectedRun.value) &&
+    (isReviewable(selectedRun.value) || totalCandidates.value),
   ),
 );
 const canFinalize = computed(() =>
   Boolean(
     selectedRun.value &&
-      selectedRun.value.status !== 'PROCESSED' &&
-      !isPreprocessing(selectedRun.value) &&
-      !actionBusy.value,
+    selectedRun.value.status !== 'PROCESSED' &&
+    !isPreprocessing(selectedRun.value) &&
+    !actionBusy.value,
   ),
 );
 const uploadPercent = computed(() =>
@@ -542,9 +542,11 @@ async function queueImport(): Promise<void> {
   }
   if (
     file.value &&
-    !['GEOJSON', 'OSM_GEOJSON', 'OSM_PBF', 'SHAPEFILE'].includes(format.value)
+    !['GEOJSON', 'OSM_GEOJSON', 'OSM_PBF', 'KML', 'GPX', 'SHAPEFILE'].includes(
+      format.value,
+    )
   ) {
-    error.value = `${format.value} file uploads are not available yet. Paste its supported source data or choose GeoJSON, OSM PBF, or Shapefile ZIP.`;
+    error.value = `${format.value} file uploads are not available yet. Paste its supported source data or choose a supported upload format.`;
     return;
   }
   busy.value = true;
@@ -969,8 +971,8 @@ onBeforeUnmount(() => {
             "
           ></textarea>
           <small class="field-help"
-            >KML, GPX, WFS GeoJSON, and ArcGIS JSON can be pasted. Shapefiles
-            must be uploaded as ZIP archives.</small
+            >KML, GPX, WFS GeoJSON, and ArcGIS JSON can be pasted. KML and GPX
+            files can also be uploaded.</small
           >
         </label>
         <label class="wide"
@@ -978,18 +980,19 @@ onBeforeUnmount(() => {
           <input
             ref="fileInput"
             type="file"
-            accept=".json,.geojson,.zip,.pbf"
+            accept=".json,.geojson,.kml,.gpx,.zip,.pbf"
             @change="chooseFile"
           />
           <small class="field-help"
-            >GeoJSON, OSM PBF, and Shapefile ZIP files support uploads up to 512
-            MiB; the server default is 256 MiB. Shapefile archives may expand to
-            1 GiB. GeoJSON and Shapefile features are limited to 16 MiB and
-            250,000 vertices; OSM PBF features have the same limits plus a 128
-            MiB decoded-output cap. Both formats use the configured feature cap.
-            Shapefile ZIP archives must include matching .shp, .shx, and .dbf
-            files. To resume an interrupted upload, choose the original file and
-            the same import settings.</small
+            >KML and GPX files support uploads up to 20 MiB. GeoJSON, OSM PBF,
+            and Shapefile ZIP files support uploads up to 512 MiB; the server
+            default is 256 MiB. Shapefile archives may expand to 1 GiB. GeoJSON
+            and Shapefile features are limited to 16 MiB and 250,000 vertices;
+            OSM PBF features have the same limits plus a 128 MiB decoded-output
+            cap. These formats use the configured feature cap. Shapefile ZIP
+            archives must include matching .shp, .shx, and .dbf files. To resume
+            an interrupted upload, choose the original file and the same import
+            settings.</small
           >
           <small v-if="file" class="field-help"
             >Selected: {{ file.name }} ({{
