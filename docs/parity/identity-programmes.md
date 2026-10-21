@@ -156,7 +156,8 @@ account, requests and consumes a recovery token once, then signs in with the
 new password. A live Admin browser flow also creates a
 participant through Gateway, verifies the returned account and pending setup
 message, grants an additional permitted Activity role, and confirms the account
-appears in the refreshed list.
+appears in the refreshed list. It then adds a callsign, submits verification
+evidence, and verifies the callsign through the live Identity API.
 Login, refresh, recovery request/reset, and OIDC mapping use the reference's
 Python-truthy required-field checks before authentication or persistence, with
 the same `missing required fields` response precedence.

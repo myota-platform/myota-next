@@ -26,7 +26,7 @@ exercise Admin sign-in, identity session bootstrap, scope denial, Participant
 programme selection and public content, and its activation, QSO, and close
 workflow. In CI, live browser checks sign into Admin and load its dashboard,
 create a participant account with an authorized Activity role through Gateway,
-and create a programme through
+add and verify its callsign through Gateway, and create a programme through
 Gateway before Participant loads its catalogue, published-content response,
 and empty Geodata entity page through the Vite proxy and running NestJS
 services. Other browser workflows continue to use intercepted API responses.

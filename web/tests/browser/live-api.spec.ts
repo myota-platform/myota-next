@@ -147,5 +147,38 @@ test('creates a participant account in Admin through the live Identity API', asy
     status: 'PENDING_SETUP',
     roles: [{ role: 'PARTICIPANT' }, { role: 'ACTIVITY_ADMIN' }],
   });
+
+  await page.getByRole('button', { name: new RegExp(accountName) }).click();
+  const callsignRows = page.locator('.callsign-management .callsign-row');
+  const callsignValue = `DL${randomUUID().replaceAll('-', '').slice(0, 5).toUpperCase()}`;
+  const addCallsignForm = page.locator('.callsign-management form').first();
+  await addCallsignForm.getByLabel('Callsign').fill(callsignValue);
+  await addCallsignForm.getByLabel('Initial status').selectOption('UNVERIFIED');
+  await addCallsignForm.getByLabel('Source').fill('operator-asserted');
+  await addCallsignForm.getByRole('button', { name: 'Add callsign' }).click();
+  await expect(callsignRows.filter({ hasText: callsignValue })).toBeVisible();
+
+  const evidenceForm = page.locator('.callsign-management form').nth(1);
+  await evidenceForm
+    .getByLabel('Callsign')
+    .selectOption({ label: callsignValue });
+  await evidenceForm.getByLabel('Evidence type').fill('LICENSE');
+  await evidenceForm.getByLabel('Source').fill('regulator record');
+  await evidenceForm
+    .getByLabel('Metadata JSON (optional)')
+    .fill('{"reference":"browser-live"}');
+  await evidenceForm.getByRole('button', { name: 'Submit evidence' }).click();
+  await expect(
+    callsignRows.filter({ hasText: '1 evidence record' }),
+  ).toBeVisible();
+
+  await page.getByLabel('Verification source').fill('manual-review');
+  await callsignRows
+    .filter({ hasText: callsignValue })
+    .getByRole('button', { name: 'Verify' })
+    .click();
+  await expect(
+    callsignRows.filter({ hasText: 'Verified by manual-review' }),
+  ).toContainText(callsignValue);
   expect(failedResponses).toEqual([]);
 });
