@@ -16,7 +16,7 @@ current reference.
 - Inventory API operations, event producers/consumers, worker kinds, UI routes,
   database tables, object storage buckets, environment settings, and runbooks.
 - Map the 135 upstream OpenAPI operations across 113 paths to service handlers
-  and compatibility evidence. Track the five target-only API extensions listed
+  and compatibility evidence. Track the six target-only API extensions listed
   in [`api-baseline.md`](api-baseline.md) separately from upstream parity.
 - Keep the [API operation traceability index](api-operation-traceability.md)
   mapped to target controller sources, then link each operation to behavioral
