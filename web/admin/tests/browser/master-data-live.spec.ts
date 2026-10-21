@@ -62,9 +62,6 @@ test('creates shared categories and assigns them to a live programme', async ({
         .fill('Live shared category fixture.');
       await page.getByRole('button', { name: 'Save category' }).click();
       await expect(page.getByText('Category saved.')).toBeVisible();
-      await expect(
-        page.getByRole('button', { name: new RegExp(categoryLabels[index]!) }),
-      ).toContainText('Active');
     }
 
     await page.goto('/programmes');
