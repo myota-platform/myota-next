@@ -11,7 +11,11 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
+import {
+  pythonKeyErrorDetail,
+  pythonStringJsonField,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { pythonFloatString } from '@app/platform/python-number.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
@@ -20,7 +24,6 @@ import {
   firstPythonTruthy,
   pythonTruthy,
 } from '@app/platform/python-truthiness.js';
-import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { validateGeometryCoordinates } from '@app/geodata-domain';
 import { entityProjection } from './geodata.repository.js';
 import {
@@ -319,13 +322,12 @@ export class GeodataEntityMutationRepository {
     const note = body.note === undefined ? null : body.note;
     let name: string | undefined;
     if ('name' in body) {
-      if (
-        typeof body.name !== 'string' ||
-        !trimPythonWhitespace(body.name) ||
-        Array.from(trimPythonWhitespace(body.name)).length > 240
-      )
-        throw new BadRequestException('name must contain 1 to 240 characters');
-      name = trimPythonWhitespace(body.name);
+      if (!pythonTruthy(body.name))
+        throw new BadRequestException('missing required fields: name');
+      name = trimPythonWhitespace(pythonStringJsonField(body, 'name'));
+      if (!name) throw new BadRequestException('name must not be empty');
+      if (Array.from(name).length > 240)
+        throw new BadRequestException('name must be 240 characters or fewer');
     }
     const website =
       'website' in body ? normalizeWebsite(body.website) : undefined;

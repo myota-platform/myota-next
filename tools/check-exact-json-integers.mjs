@@ -33,7 +33,7 @@ requirePattern(
 );
 requirePattern(
   'libs/platform/src/bootstrap.ts',
-  /request\.url\?\.split\('\?', 1\)\[0\] === '\/v1\/programmes'[\s\S]*?parseJsonWithExactIntegers/,
+  /const exactIntegerRequest =[\s\S]*?request\.method === 'POST'[\s\S]*?'\/v1\/programmes'[\s\S]*?request\.body = exactIntegerRequest[\s\S]*?parseJsonWithExactIntegers/,
   'Programme creation requests must preserve exact JSON integers',
 );
 requirePattern(

@@ -308,7 +308,9 @@ import candidate validation and promotion preserve submitted notes without
 coercion or truncation, matching the Python handlers. Entity review status
 falls back from `status` to legacy `decision` using Python truthiness; candidate
 proposal identity remains in `candidateSource`, and `sourceRef` uses the normal
-import fallback. Import source identity selects `sourceKey`, `url`, then `name`
+import fallback. Entity-name edits stringify truthy JSON values with Python
+semantics and distinguish missing, whitespace-only, and overlong names. Import
+source identity selects `sourceKey`, `url`, then `name`
 using Python truthiness and preserves submitted whitespace. Proposal feature
 objects follow adapter normalization without an extra `type` requirement.
 Falsey feature properties default to an empty object, while truthy non-object

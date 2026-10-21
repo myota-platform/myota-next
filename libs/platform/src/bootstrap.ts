@@ -13,7 +13,10 @@ import {
 } from './http-problem.js';
 import { ObserveInstrument } from './observe.js';
 import { containsBigInt, stringifyJsonWithBigInts } from './json-bigint.js';
-import { parseJsonWithExactIntegers } from './json-exact.js';
+import {
+  parseJsonWithExactIntegers,
+  parseJsonWithFloatMetadata,
+} from './json-exact.js';
 import { recordHttpRequest } from './http-metrics.js';
 
 type DeclaredBodyLimit = {
@@ -139,41 +142,31 @@ export async function bootstrapHttpService(
           );
           if (decoded.charCodeAt(0) === 0xfeff)
             throw new Error('invalid JSON body');
+          const path = request.url?.split('?', 1)[0] ?? '';
           if (
-            ['/v1/geodata/proposals', '/v1/geodata/imports'].includes(
-              request.url?.split('?', 1)[0] ?? '',
-            ) ||
-            /^\/v1\/geodata\/imports\/[^/]+\/candidates\/validate$/.test(
-              request.url?.split('?', 1)[0] ?? '',
-            ) ||
-            /^\/v1\/geodata\/imports\/[^/]+\/process$/.test(
-              request.url?.split('?', 1)[0] ?? '',
-            ) ||
-            /^\/v1\/geodata\/imports\/[^/]+\/processed$/.test(
-              request.url?.split('?', 1)[0] ?? '',
+            [
+              '/v1/geodata/proposals',
+              '/v1/geodata/imports',
+              '/v1/geodata/refresh-schedules',
+              '/v1/programmes',
+              '/v1/activations',
+              '/v1/awards/evaluation-jobs',
+            ].includes(path) ||
+            /^\/v1\/geodata\/imports\/[^/]+\/(?:candidates\/validate|process|processed)$/.test(
+              path,
             ) ||
             /^\/v1\/geodata\/imports\/[^/]+\/processing-queues\/[^/]+\/redrive$/.test(
-              request.url?.split('?', 1)[0] ?? '',
+              path,
             ) ||
             /^\/v1\/geodata\/entities\/[^/]+(?:\/(?:location-enrichment-requests|reviews|categories|geometry))?$/.test(
-              request.url?.split('?', 1)[0] ?? '',
+              path,
             ) ||
-            /^\/v1\/geodata\/conflation\/[^/]+\/resolve$/.test(
-              request.url?.split('?', 1)[0] ?? '',
-            ) ||
-            /^\/v1\/geodata\/refresh-schedules\/[^/]+\/run$/.test(
-              request.url?.split('?', 1)[0] ?? '',
-            ) ||
+            /^\/v1\/geodata\/conflation\/[^/]+\/resolve$/.test(path) ||
+            /^\/v1\/geodata\/refresh-schedules\/[^/]+\/run$/.test(path) ||
             /^\/v1\/geodata\/entity-deletion-jobs(?:\/[^/]+\/confirm)?$/.test(
-              request.url?.split('?', 1)[0] ?? '',
+              path,
             ) ||
-            request.url?.split('?', 1)[0] === '/v1/geodata/refresh-schedules' ||
-            request.url?.split('?', 1)[0] === '/v1/programmes' ||
-            request.url?.split('?', 1)[0] === '/v1/activations' ||
-            /^\/v1\/qsos\/[^/]+\/corrections$/.test(
-              request.url?.split('?', 1)[0] ?? '',
-            ) ||
-            request.url?.split('?', 1)[0] === '/v1/awards/evaluation-jobs'
+            /^\/v1\/qsos\/[^/]+\/corrections$/.test(path)
           )
             Object.assign(request, { rawBody: buffer });
         },
@@ -181,24 +174,38 @@ export async function bootstrapHttpService(
     );
     app.use((request: Request, _response: Response, next: NextFunction) => {
       const path = request.url?.split('?', 1)[0] ?? '';
-      if (
+      const exactIntegerRequest =
         request.method === 'POST' &&
-        ([
+        [
           '/v1/programmes',
           '/v1/geodata/refresh-schedules',
           '/v1/geodata/imports',
-          '/v1/activations',
-          '/v1/awards/evaluation-jobs',
-        ].includes(path) ||
-          /^\/v1\/qsos\/[^/]+\/corrections$/.test(path) ||
-          /^\/v1\/geodata\/entity-deletion-jobs\/[^/]+\/confirm$/.test(
-            path,
-          )) &&
+        ].includes(path);
+      const floatMetadataRequest =
+        (request.method === 'POST' &&
+          ['/v1/activations', '/v1/awards/evaluation-jobs'].includes(path)) ||
+        (request.method === 'PATCH' &&
+          /^\/v1\/geodata\/entities\/[^/]+$/.test(path)) ||
+        (request.method === 'POST' &&
+          (/^\/v1\/qsos\/[^/]+\/corrections$/.test(path) ||
+            /^\/v1\/geodata\/entity-deletion-jobs\/[^/]+\/confirm$/.test(
+              path,
+            )));
+      if (
+        (exactIntegerRequest || floatMetadataRequest) &&
         Buffer.isBuffer((request as Request & { rawBody?: Buffer }).rawBody)
       )
-        request.body = parseJsonWithExactIntegers(
-          (request as Request & { rawBody: Buffer }).rawBody.toString('utf8'),
-        );
+        request.body = exactIntegerRequest
+          ? parseJsonWithExactIntegers(
+              (request as Request & { rawBody: Buffer }).rawBody.toString(
+                'utf8',
+              ),
+            )
+          : parseJsonWithFloatMetadata(
+              (request as Request & { rawBody: Buffer }).rawBody.toString(
+                'utf8',
+              ),
+            );
       next();
     });
     app.use((request: Request, _response: Response, next: NextFunction) => {

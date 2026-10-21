@@ -11,16 +11,28 @@ export function isJsonFloatingField(value: object, field: string): boolean {
   return floatingFields.get(value)?.has(field) ?? false;
 }
 
-/** Preserve large integers and direct float-token metadata while parsing JSON. */
+/** Parse JSON while keeping integer tokens exact outside JavaScript's safe range. */
 export function parseJsonWithExactIntegers(rawBody: string): unknown {
+  return parseJson(rawBody, true);
+}
+
+/** Preserve direct float-token metadata without changing JSON number values. */
+export function parseJsonWithFloatMetadata(rawBody: string): unknown {
+  return parseJson(rawBody, false);
+}
+
+function parseJson(rawBody: string, preserveLargeIntegers: boolean): unknown {
   const materialize = (value: unknown): unknown => {
     if (value instanceof JsonNumber) {
       if (value.floating) return value.value;
       const integer = value.value as bigint;
-      return integer >= BigInt(Number.MIN_SAFE_INTEGER) &&
-        integer <= BigInt(Number.MAX_SAFE_INTEGER)
-        ? Number(integer)
-        : integer;
+      if (
+        !preserveLargeIntegers ||
+        (integer >= BigInt(Number.MIN_SAFE_INTEGER) &&
+          integer <= BigInt(Number.MAX_SAFE_INTEGER))
+      )
+        return Number(integer);
+      return integer;
     }
     if (Array.isArray(value)) return value.map(materialize);
     if (isRecord(value)) {
