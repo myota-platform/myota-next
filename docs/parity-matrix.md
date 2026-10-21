@@ -465,10 +465,10 @@ and bounded feature/coordinate counts. Queued KML and GPX uploads that contain
 no supported feature complete with zero features, matching the reference
 streaming importer. GPX text properties retain XML text-presence semantics:
 whitespace-only values become empty strings and can replace earlier values.
-Blank or whitespace-only GPX coordinate attributes are rejected, matching
-Python's float conversion rather than JavaScript's empty-string-to-zero
-coercion. KML continues to use the first direct `name` element. Resumable KML
-and GPX uploads are
+KML coordinates and GPX coordinate attributes use Python-compatible float
+parsing, including its rejection of blank values and non-decimal forms that
+JavaScript would coerce. KML continues to use the first direct `name` element.
+Resumable KML and GPX uploads are
 streamed from object storage through a SAX parser, verify the completed source
 hash, and apply the configured upload, per-feature, feature-count, and vertex
 limits while sending worker heartbeats. GPX uploads emit waypoint and route

@@ -10,6 +10,7 @@ import {
   MAX_IMPORT_FEATURE_VERTICES,
   MAX_UPLOAD_BYTES,
 } from '@app/platform/import-limits.js';
+import { parsePythonFloatText } from '@app/platform/python-numeric.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { createUploadSpoolDirectory } from '@app/platform/upload-spool.js';
 
@@ -89,14 +90,9 @@ export async function* streamXmlFeatures(
   const readCoordinate = (raw: string) => {
     const values = raw.split(',');
     if (values.length < 2) return undefined;
-    const longitude = Number(values[0]);
-    const latitude = Number(values[1]);
-    if (
-      !trimPythonWhitespace(values[0] ?? '') ||
-      !trimPythonWhitespace(values[1] ?? '') ||
-      !Number.isFinite(longitude) ||
-      !Number.isFinite(latitude)
-    ) {
+    const longitude = parseCoordinateNumber(values[0] ?? '');
+    const latitude = parseCoordinateNumber(values[1] ?? '');
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
       fail('XML import contains an invalid coordinate');
       return undefined;
     }
@@ -143,16 +139,9 @@ export async function* streamXmlFeatures(
       const attributes = tag.attributes as Record<string, unknown>;
       const longitudeText = attributeValue(attributes.lon);
       const latitudeText = attributeValue(attributes.lat);
-      const longitude = Number(longitudeText);
-      const latitude = Number(latitudeText);
-      if (
-        !longitudeText ||
-        !trimPythonWhitespace(longitudeText) ||
-        !latitudeText ||
-        !trimPythonWhitespace(latitudeText) ||
-        !Number.isFinite(longitude) ||
-        !Number.isFinite(latitude)
-      )
+      const longitude = parseCoordinateNumber(longitudeText ?? '');
+      const latitude = parseCoordinateNumber(latitudeText ?? '');
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude))
         fail('GPX point has invalid longitude or latitude');
       else gpxPoint = { coordinates: [longitude, latitude], properties: {} };
     } else if (name === 'trkseg') {
@@ -161,16 +150,9 @@ export async function* streamXmlFeatures(
       const attributes = tag.attributes as Record<string, unknown>;
       const longitudeText = attributeValue(attributes.lon);
       const latitudeText = attributeValue(attributes.lat);
-      const longitude = Number(longitudeText);
-      const latitude = Number(latitudeText);
-      if (
-        !longitudeText ||
-        !trimPythonWhitespace(longitudeText) ||
-        !latitudeText ||
-        !trimPythonWhitespace(latitudeText) ||
-        !Number.isFinite(longitude) ||
-        !Number.isFinite(latitude)
-      )
+      const longitude = parseCoordinateNumber(longitudeText ?? '');
+      const latitude = parseCoordinateNumber(latitudeText ?? '');
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude))
         fail('GPX track point has invalid longitude or latitude');
       else {
         trackPoints.push([longitude, latitude]);
@@ -370,4 +352,12 @@ function attributeValue(value: unknown): string | undefined {
     return typeof raw === 'string' ? raw : undefined;
   }
   return undefined;
+}
+
+function parseCoordinateNumber(value: string): number {
+  try {
+    return parsePythonFloatText(value);
+  } catch {
+    return Number.NaN;
+  }
 }
