@@ -309,12 +309,21 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
     ? data.operatorCallsign
     : null;
   const callsign = pythonTruthy(rawCallsign)
-    ? normalizeCallsign(rawCallsign)
+    ? normalizeCallsign(pythonStringJsonField(data, 'operatorCallsign'))
     : rawCallsign;
   const authorizedCallsigns = Object.hasOwn(data, 'authorizedCallsigns')
     ? pythonIterable(data.authorizedCallsigns, 'authorizedCallsigns')
     : [];
-  const authorized = authorizedCallsigns.map(normalizeCallsign);
+  const authorized = authorizedCallsigns.map((value, index) =>
+    normalizeCallsign(
+      Array.isArray(data.authorizedCallsigns)
+        ? pythonStringJsonField(
+            data.authorizedCallsigns as unknown as Record<string, unknown>,
+            String(index),
+          )
+        : value,
+    ),
+  );
   if (callsign && authorized.length && !authorized.includes(callsign)) {
     throw new BadRequestException(
       'operator callsign is not authorized for this account',

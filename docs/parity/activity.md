@@ -11,6 +11,9 @@ retain their broader listing access. Explicit falsey `endedAt` values are
 treated as null. Activation owner authorization compares Python `str()` forms
 of the authenticated subject and submitted operator ID, retaining JSON float
 tokens such as `1.0` as distinct from integer `1`.
+Activation operator and authorized callsign normalization also preserves
+Python float-token spelling, so JSON `1.0` is rejected as a callsign instead
+of becoming `1` through JavaScript string conversion.
 Single-QSO writes check `workedCallsign` and `timestamp` with Python truthiness
 before activation lookup and return the same ordered `missing required fields`
 detail as the reference. Direct QSO writes and queued QSO ingestion preserve
