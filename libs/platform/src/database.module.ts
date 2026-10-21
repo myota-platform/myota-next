@@ -24,7 +24,8 @@ export class DatabaseHealthService implements OnModuleDestroy {
       // cannot become an unhandled EventEmitter error; query errors still reach
       // the operation that owns the checked-out client.
       this.pool.on('connect', (client) => {
-        client.on('error', () => undefined);
+        if (typeof client.on === 'function')
+          client.on('error', () => undefined);
       });
       this.pool.on('error', (error: Error) => {
         this.logger.warn(`PostgreSQL idle connection failed: ${error.message}`);

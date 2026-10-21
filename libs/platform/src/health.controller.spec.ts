@@ -50,8 +50,9 @@ describe('health and readiness', () => {
     const on = vi.fn();
     new DatabaseHealthService({ on } as unknown as Pool);
 
-    expect(on).toHaveBeenCalledWith('error', expect.any(Function));
-    const [, handlePoolError] = on.mock.calls[0]!;
+    const errorListener = on.mock.calls.find(([event]) => event === 'error');
+    expect(errorListener).toBeDefined();
+    const [, handlePoolError] = errorListener!;
     expect(() => handlePoolError(new Error('connection reset'))).not.toThrow();
   });
 });
