@@ -113,6 +113,8 @@ Python `str()` conversion before uppercasing, and definition signature asset
 IDs retain the submitted value for registry lookup. Certificate element
 labels and kinds plus print page and orientation settings also use Python
 `str()` conversion, with defaults applied only when fields are omitted.
+Issuance preserves the submitted `dateObtained` value and defaults it only
+when omitted; certificate rendering converts that value with Python `str()`.
 ADIF uploads use the reference's shared `MYOTA_UPLOAD_MAX_BYTES` cap (1 GiB by
 default), then pass authorization, malware checks, and object storage before
 durable queueing; the Activity worker enforces the same cap, parses records,

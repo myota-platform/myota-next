@@ -16,6 +16,7 @@ import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { MAX_UPLOAD_BYTES } from '@app/platform/import-limits.js';
 import { parsePageTotal } from '@app/platform/pagination.js';
 import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
+import { pythonString } from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   compareTimestamps,
@@ -757,7 +758,7 @@ export class ActivityWorkRepository {
       AWARD_NAME: String(issuance.awardName ?? ''),
       CALLSIGN: String(issuance.callsign ?? ''),
       PERSON_NAME: String(issuance.personName ?? ''),
-      DATE_OBTAINED: String(issuance.dateObtained ?? ''),
+      DATE_OBTAINED: pythonString(issuance.dateObtained),
       MANAGER_NAME: String(issuance.managerName ?? ''),
     };
     const pdfBytes = await renderCertificatePdf({

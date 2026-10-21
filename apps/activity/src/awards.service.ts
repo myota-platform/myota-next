@@ -446,8 +446,6 @@ export class AwardsService {
     const dateObtained = Object.hasOwn(body, 'dateObtained')
       ? body.dateObtained
       : issuedAt;
-    if (!Number.isFinite(new Date(String(dateObtained)).getTime()))
-      throw new BadRequestException('dateObtained must be a valid timestamp');
     const issuance: JsonRecord = {
       id: randomUUID(),
       requestId: request.id,
@@ -459,7 +457,7 @@ export class AwardsService {
       callsign: request.callsign,
       personName: request.personName,
       awardName: award.name,
-      dateObtained: new Date(String(dateObtained)).toISOString(),
+      dateObtained,
       managerName: body.managerName,
       signatureAssetId: signature.id,
       issuedAt,
