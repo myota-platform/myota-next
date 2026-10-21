@@ -146,3 +146,143 @@ test('submits an eligible award level with the signed-in account callsign', asyn
     ),
   ).toBe(true);
 });
+
+test('downloads an issued certificate only after the PDF is ready', async ({
+  page,
+}) => {
+  const artifactRequests: string[] = [];
+  const downloadUrl =
+    'http://127.0.0.1:8091/certificates/signed-award.pdf?signature=browser-test';
+  let artifactReady = false;
+
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'myota_public_access',
+      'participant-certificate-token',
+    );
+    localStorage.setItem(
+      'myota_public_refresh',
+      'participant-certificate-refresh',
+    );
+  });
+  await page.route('**/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              slug: 'alpine',
+              name: 'Alpine Summits',
+              description: 'Radio from the high country.',
+              theme: { primary: '#2367a8', accent: '#e38a32' },
+              rules: {
+                minimumQsos: { activation: 4, hunter: 1 },
+                publicAccessRequired: true,
+              },
+              entityTypes: [{ code: 'SOTA', name: 'Summit' }],
+            },
+          ],
+          nextPage: null,
+        },
+      });
+      return;
+    }
+
+    if (url.pathname === '/v1/identity/me') {
+      await route.fulfill({
+        json: {
+          id: 'participant-certificate-owner',
+          email: 'operator@example.test',
+          displayName: 'Operator One',
+          websiteUrl: null,
+          biographyMarkdown: '',
+          primaryCallsignId: null,
+          callsigns: [],
+          profileImage: null,
+        },
+      });
+      return;
+    }
+
+    if (url.pathname.endsWith('/content')) {
+      await route.fulfill({ json: { items: [] } });
+      return;
+    }
+
+    if (url.pathname === '/v1/geodata/entities') {
+      await route.fulfill({
+        json: { items: [], page: 1, total: 0, nextPage: null },
+      });
+      return;
+    }
+
+    if (url.pathname === '/v1/awards') {
+      await route.fulfill({ json: { items: [], nextPage: null } });
+      return;
+    }
+
+    if (url.pathname === '/v1/activations') {
+      await route.fulfill({ json: { items: [], page: 1, total: 0 } });
+      return;
+    }
+
+    if (url.pathname === '/v1/awards/requests') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              callsign: 'DL1ABC',
+              personName: 'Operator One',
+              programmeSlug: 'alpine',
+              levelId: 'bronze',
+              status: 'ISSUED',
+              issuedAwardId: 'issued-certificate-1',
+              artifactReady,
+            },
+          ],
+          page: 1,
+          pageSize: 50,
+          total: 1,
+          nextPage: null,
+        },
+      });
+      return;
+    }
+
+    if (url.pathname === '/v1/awards/issuances/issued-certificate-1/artifact') {
+      artifactRequests.push(request.headers().authorization || 'missing');
+      await route.fulfill({ json: { downloadUrl } });
+      return;
+    }
+
+    await route.fulfill({ json: { items: [], nextPage: null, total: 0 } });
+  });
+  await page.context().route(downloadUrl, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/pdf',
+      body: '%PDF-1.4 browser certificate fixture',
+    }),
+  );
+
+  await page.goto('http://127.0.0.1:8091/#alpine');
+  const requests = page.locator('#participant-award-request-items');
+  await expect(requests).toContainText('ISSUED · CERTIFICATE PROCESSING');
+  await expect(
+    page.getByRole('button', { name: 'Download certificate' }),
+  ).toHaveCount(0);
+
+  artifactReady = true;
+  await page.reload();
+  await expect(requests).toContainText('ISSUED · PDF READY');
+  const popupPromise = page.waitForEvent('popup');
+  await page.getByRole('button', { name: 'Download certificate' }).click();
+  const popup = await popupPromise;
+  await expect(popup).toHaveURL(downloadUrl);
+  await expect
+    .poll(() => artifactRequests)
+    .toEqual(['Bearer participant-certificate-token']);
+});

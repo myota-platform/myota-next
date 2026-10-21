@@ -97,6 +97,11 @@ persisted manual-field markers, revision, and audit event in the Geodata
 database. This complements the intercepted location-form checks with evidence
 across the live browser, API, authorization, transaction, and database
 boundaries.
+
+The Participant certificate control also has an intercepted browser check:
+issued requests show processing without a download action until the API marks
+the PDF ready, after which the signed download URL opens with the participant's
+authorization used for the artifact lookup.
 Award browser checks cover programme-
 scoped draft creation, its idempotency key and condition/level payload, the
 live eligible participant request and Admin issuance flows, and the submit,
