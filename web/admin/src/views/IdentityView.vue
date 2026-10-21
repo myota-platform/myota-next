@@ -154,6 +154,7 @@ const verificationSource = ref('manual-review');
 const pendingCallsignMutationStorageKey =
   'myota_admin_pending_callsign_mutations';
 const restoredCallsignMutations = restorePendingCallsignMutations();
+const pendingAccountCreates = restoredCallsignMutations.accounts;
 const pendingCallsignCreates = restoredCallsignMutations.create;
 const pendingPrimaryCallsignChanges = restoredCallsignMutations.primary;
 const retiringCallsign = computed(() =>
@@ -172,12 +173,23 @@ const canVerifyCallsigns = computed(() =>
 );
 
 function restorePendingCallsignMutations(): {
+  accounts: Map<string, string>;
   create: Map<string, string>;
   primary: Map<string, string>;
 } {
   try {
     const saved = JSON.parse(
       sessionStorage.getItem(pendingCallsignMutationStorageKey) || '{}',
+    );
+    const accounts = new Map<string, string>(
+      Array.isArray(saved.accounts)
+        ? saved.accounts.filter(
+            (entry: unknown) =>
+              Array.isArray(entry) &&
+              typeof entry[0] === 'string' &&
+              typeof entry[1] === 'string',
+          )
+        : [],
     );
     const create = new Map<string, string>(
       Array.isArray(saved.create)
@@ -199,9 +211,9 @@ function restorePendingCallsignMutations(): {
           )
         : [],
     );
-    return { create, primary };
+    return { accounts, create, primary };
   } catch {
-    return { create: new Map(), primary: new Map() };
+    return { accounts: new Map(), create: new Map(), primary: new Map() };
   }
 }
 
@@ -210,6 +222,7 @@ function persistPendingCallsignMutations(): void {
     sessionStorage.setItem(
       pendingCallsignMutationStorageKey,
       JSON.stringify({
+        accounts: [...pendingAccountCreates.entries()],
         create: [...pendingCallsignCreates.entries()],
         primary: [...pendingPrimaryCallsignChanges.entries()],
       }),
@@ -516,27 +529,31 @@ async function changeSecurityEventPage(page: number): Promise<void> {
 }
 async function createAccount(): Promise<void> {
   if (!canCreateAccounts.value) return;
+  const payload: Record<string, unknown> = {
+    displayName: accountCreateForm.displayName.trim(),
+    email: accountCreateForm.email.trim(),
+    participationType: accountCreateForm.participationType,
+  };
+  if (
+    accountCreateForm.participationType === 'OPERATOR' &&
+    accountCreateForm.callsign.trim()
+  )
+    payload.callsign = accountCreateForm.callsign.trim();
+  if (canGrantAdditionalRoles.value && accountCreateForm.roles.length)
+    payload.roles = accountCreateForm.roles
+      .filter((code) => creatableRoles.value.some((role) => role.code === code))
+      .map((role) => ({ role }));
+  const fingerprint = JSON.stringify([store.account?.id, payload]);
+  let idempotencyKey = pendingAccountCreates.get(fingerprint);
+  if (!idempotencyKey) {
+    idempotencyKey = crypto.randomUUID();
+    pendingAccountCreates.set(fingerprint, idempotencyKey);
+    persistPendingCallsignMutations();
+  }
   await feedback.run(
     async () => {
-      const payload: Record<string, unknown> = {
-        displayName: accountCreateForm.displayName.trim(),
-        email: accountCreateForm.email.trim(),
-        participationType: accountCreateForm.participationType,
-      };
-      if (
-        accountCreateForm.participationType === 'OPERATOR' &&
-        accountCreateForm.callsign.trim()
-      )
-        payload.callsign = accountCreateForm.callsign.trim();
-      if (canGrantAdditionalRoles.value && accountCreateForm.roles.length)
-        payload.roles = accountCreateForm.roles
-          .filter((code) =>
-            creatableRoles.value.some((role) => role.code === code),
-          )
-          .map((role) => ({ role }));
-      let created: User;
       try {
-        created = await myotaClient.createIdentityAccount<User>(payload);
+        await myotaClient.createIdentityAccount<User>(payload, idempotencyKey);
       } catch (cause) {
         if (cause instanceof ApiError && cause.status === 403)
           throw new Error(
@@ -554,14 +571,15 @@ async function createAccount(): Promise<void> {
           'Account creation failed. Check the fields and try again.',
         );
       }
+      await fetchData();
+      pendingAccountCreates.delete(fingerprint);
+      persistPendingCallsignMutations();
       accountCreateForm.displayName = '';
       accountCreateForm.email = '';
       accountCreateForm.participationType = 'OPERATOR';
       accountCreateForm.callsign = '';
       accountCreateForm.roles = [];
       creatingAccount.value = false;
-      await fetchData();
-      return created;
     },
     {
       mutation: true,

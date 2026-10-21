@@ -108,8 +108,14 @@ export const myotaClient = {
       body,
     );
   },
-  createIdentityAccount<T = unknown>(body: unknown) {
-    return write<T>('/v1/identity/accounts', 'POST', body);
+  createIdentityAccount<T = unknown>(body: unknown, idempotencyKey?: string) {
+    return write<T>(
+      '/v1/identity/accounts',
+      'POST',
+      body,
+      undefined,
+      idempotencyKey,
+    );
   },
   addIdentityCallsign<T = unknown>(
     accountId: string,
