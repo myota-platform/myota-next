@@ -156,6 +156,10 @@ function clearParticipantSession() {
   if ($('profile-form')) $('profile-form').hidden = true;
   if ($('profile-callsigns')) $('profile-callsigns').hidden = true;
   if ($('profile-image-editor')) $('profile-image-editor').hidden = true;
+  if ($('participant-award-requests')) {
+    $('participant-award-requests').hidden = true;
+    $('participant-award-request-items').replaceChildren();
+  }
   if ($('profile-status'))
     $('profile-status').textContent = 'Sign in below to manage your profile.';
   if (typeof revokeProfileSource === 'function') revokeProfileSource();
@@ -776,6 +780,44 @@ async function loadPublicAwards(slug) {
     $('award-status').textContent = error.message;
   }
 }
+async function loadMyAwardRequests() {
+  const panel = $('participant-award-requests');
+  const list = $('participant-award-request-items');
+  if (!panel || !list || !awardAccessToken || !awardAccount) {
+    if (panel) panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  list.innerHTML = '<p class="small">Loading your award requests…</p>';
+  try {
+    const items = [];
+    let page = 1;
+    while (page !== null) {
+      const data = await awardApi(
+        `/v1/awards/requests?subjectId=${encodeURIComponent(awardAccount.id)}&page=${page}&pageSize=50`,
+      );
+      items.push(...(data.items || []));
+      const nextPage = data.nextPage;
+      if (nextPage == null) {
+        page = null;
+      } else if (Number.isInteger(nextPage) && nextPage > page) {
+        page = nextPage;
+      } else {
+        throw new Error('Your award requests returned invalid paging data.');
+      }
+    }
+    list.innerHTML = items.length
+      ? items
+          .map(
+            (item) =>
+              `<div class="award-request-item"><span><strong>${escapeHtml(item.callsign)} · ${escapeHtml(item.personName)}</strong><small>${escapeHtml(item.programmeSlug)} · ${escapeHtml(item.levelId)}</small></span><span class="award-request-status">${escapeHtml(item.status)}</span></div>`,
+          )
+          .join('')
+      : '<p class="small">You have not requested any awards yet.</p>';
+  } catch (error) {
+    list.innerHTML = `<p class="small">Your award requests are temporarily unavailable. ${escapeHtml(error.message)}</p>`;
+  }
+}
 function renderPublicAwards() {
   if (!publicAwards.length) {
     $('public-awards').innerHTML =
@@ -996,6 +1038,7 @@ async function signInForAward() {
   awardAccount = await awardApi('/v1/identity/me');
   renderOperatorCallsigns();
   await loadActivations();
+  await loadMyAwardRequests();
   return awardAccount;
 }
 async function requestPublicAward(awardId, levelId) {
@@ -1029,6 +1072,7 @@ async function requestPublicAward(awardId, levelId) {
       request.status === 'REQUESTED'
         ? 'Award request submitted for programme review.'
         : 'This award level is already requested or issued.';
+    await loadMyAwardRequests();
     $('award-status').textContent = '';
   } catch (error) {
     $('award-status').textContent = error.message;
@@ -1107,6 +1151,7 @@ async function loadProfile() {
     renderOperatorCallsigns();
     renderEntities();
     await loadActivations();
+    await loadMyAwardRequests();
     $('profile-form').hidden = false;
     $('profile-callsigns').hidden = false;
     renderProfileCallsigns(account);

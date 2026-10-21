@@ -410,7 +410,16 @@ export class AwardsService {
     authorization: string | undefined,
     query: { subjectId?: string; page?: string; pageSize?: string },
   ) {
-    this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
+    const claims = verifyAccessToken(authorization);
+    const isSelfLookup =
+      query.subjectId !== undefined &&
+      pythonString(claims.sub) === query.subjectId;
+    this.authorize(
+      claims.scp,
+      isSelfLookup
+        ? ['awards.read', 'awards.admin', 'awards.request', 'identity.me']
+        : ['awards.read', 'awards.admin'],
+    );
     const page = parsePageInteger(query.page, 1);
     const pageSize = parsePageInteger(query.pageSize, 50, 100);
     const offset = BigInt(pageOffset(page, pageSize));

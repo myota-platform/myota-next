@@ -312,6 +312,32 @@ test('publishes, requests, and issues an award across both web apps', async ({
       `Award issued to ${callsign.value}.`,
     );
     await expect(page.getByText('ISSUED', { exact: true })).toBeVisible();
+
+    const participantRequests = await request.get(
+      `http://127.0.0.1:8080/v1/awards/requests?subjectId=${encodeURIComponent(accountId!)}&page=1&pageSize=50`,
+      { headers: participantHeaders },
+    );
+    expect(participantRequests.status()).toBe(200);
+    expect((await participantRequests.json()).items).toMatchObject([
+      {
+        subjectId: accountId,
+        levelId: 'level-1',
+        status: 'ISSUED',
+        issuedAwardId: expect.any(String),
+      },
+    ]);
+    const otherParticipantRequests = await request.get(
+      'http://127.0.0.1:8080/v1/awards/requests?subjectId=another-participant&page=1&pageSize=50',
+      { headers: participantHeaders },
+    );
+    expect(otherParticipantRequests.status()).toBe(403);
+
+    await page.goto(`http://127.0.0.1:8091/#${programmeSlug}`);
+    const participantAwardRequests = page.locator(
+      '#participant-award-requests',
+    );
+    await expect(participantAwardRequests).toBeVisible();
+    await expect(participantAwardRequests).toContainText('ISSUED');
     expect(failedResponses).toEqual([]);
 
     const award = await activityPool.query<{

@@ -46,7 +46,8 @@ production readiness.
   run through live Activity APIs. Admin award publication and issuance, plus
   Participant eligible-level requests, now cross live Identity and Activity
   APIs and verify persisted request facts and issuance records. Public catalogue
-  loading uses live services as well.
+  loading uses live services as well. Participants can read their own request
+  status, while cross-account reads are denied.
   Most other browser workflows still use intercepted API responses;
   broader payload coverage, accessibility, responsive behavior, and failure
   states remain to be qualified.

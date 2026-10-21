@@ -484,6 +484,29 @@ a {
 .award-login + div {
   padding: 0 20px;
 }
+.award-request-list {
+  padding: 4px 20px 16px;
+}
+.award-request-list h4 {
+  margin: 8px 0;
+}
+.award-request-item {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 9px 0;
+}
+.award-request-item small {
+  color: var(--muted);
+  display: block;
+}
+.award-request-status {
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+}
 .awards-panel .small {
   color: var(--muted);
   font-size: 12px;

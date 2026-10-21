@@ -108,8 +108,11 @@ Evaluation-job self-access compares
 Python `str()` conversions of account IDs, retaining JSON float tokens such as
 `1.0` as distinct from integer `1`. Award requests validate eligibility;
 issuance is transactional and permanent, and PDF render jobs store artifacts in
-S3-compatible storage with authorized presigned download URLs. Qualification
-notice payloads and deduplication also preserve the worker split: recalculation
+S3-compatible storage with authorized presigned download URLs. Request lists
+are available to Activity readers and administrators, and to participants when
+`subjectId` matches their account and their token carries `identity.me` or
+`awards.request`. Qualification notice payloads and deduplication also
+preserve the worker split: recalculation
 notices include `awardCode` and eligible-level IDs in dedupe keys; direct
 evaluation notices omit `awardCode` and key by award, version, and subject.
 Cross-service notices resolve Identity events to account IDs and Geodata

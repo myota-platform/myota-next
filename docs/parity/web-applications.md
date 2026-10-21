@@ -1,9 +1,9 @@
 # Web applications
 
-| Application     | Required parity                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Admin web       | Login and role-aware navigation; account and role management; programme/category/content/policy administration; Geodata catalogue, import, preprocessing, review, entity editing, maps and deletion; Activity/QSO and award administration; observability access. Preserve accessible keyboard workflows, confirmation of destructive actions, conflict handling, bounded paging, resumable upload behavior, and accurate loading/error states. |
-| Participant web | Programme selection, public programme content and rules, approved/candidate entity table and map, candidate proposal, authenticated profile editing, callsign self-service, and cropped profile-image upload, published award/level display and request, activation creation and own activation history, QSO entry, and activation close. Keep programme policy, callsign authorization, and eligibility decisions on owning services.          |
+| Application     | Required parity                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Admin web       | Login and role-aware navigation; account and role management; programme/category/content/policy administration; Geodata catalogue, import, preprocessing, review, entity editing, maps and deletion; Activity/QSO and award administration; observability access. Preserve accessible keyboard workflows, confirmation of destructive actions, conflict handling, bounded paging, resumable upload behavior, and accurate loading/error states.                      |
+| Participant web | Programme selection, public programme content and rules, approved/candidate entity table and map, candidate proposal, authenticated profile editing, callsign self-service, and cropped profile-image upload, published award/level display, eligible request and owner-scoped status, activation creation and own activation history, QSO entry, and activation close. Keep programme policy, callsign authorization, and eligibility decisions on owning services. |
 
 The baseline Admin and Participant applications are carried forward under
 `web/` with separate deployment artifacts. The Admin build is checked in CI;
@@ -19,7 +19,7 @@ and publication. The Admin Awards screen uses
 independent bounded paging for award
 definitions, requests, and issuances; the asset catalogue follows its API pages
 for design selection. The Participant client includes localized published programme content,
-paged approved/candidate entity catalogue and map, map-picked point proposals and existing-candidate proposals, published award and level catalogue with eligible-level requests using the current Identity account and callsign data, rotating Identity refresh-session recovery for authenticated requests, activation creation and complete paged own-activation history for QSO selection,
+paged approved/candidate entity catalogue and map, map-picked point proposals and existing-candidate proposals, published award and level catalogue with eligible-level requests and owner-scoped request status using the current Identity account and callsign data, rotating Identity refresh-session recovery for authenticated requests, activation creation and complete paged own-activation history for QSO selection,
 single-QSO entry, profile editing and image management, and owner callsign
 creation, evidence submission, primary selection, and retirement. Chromium browser checks
 exercise Admin sign-in, identity session bootstrap, scope denial, Participant
@@ -80,10 +80,12 @@ asset, saves an activator award draft, submits and approves it, and publishes
 it through Gateway. It then creates and verifies a participant callsign,
 records a live activation, signs in through Participant, and requests the
 eligible award level. Admin then issues the request with a registered signature
-asset. The browser API stack uses an ephemeral S3-compatible store for the
-artwork upload and read-back; CI verifies the stored Activity assets, published
-award definition, request facts, issuance record, print-readiness result, and
-award lifecycle outbox events.
+asset, and Participant sees the resulting issued status. The owner can read
+their own requests through Activity; attempts to read another participant's
+requests are denied. The browser API stack uses an ephemeral S3-compatible
+store for the artwork upload and read-back; CI verifies the stored Activity
+assets, published award definition, request facts, issuance record,
+print-readiness result, and award lifecycle outbox events.
 
 An additional live browser workflow seeds an isolated Geodata entity and a
 catalogue-backed country value, signs in as the bootstrap administrator, edits
