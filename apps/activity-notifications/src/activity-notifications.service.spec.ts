@@ -1,0 +1,60 @@
+import { ActivityNotificationsService } from './activity-notifications.service.js';
+
+describe('ActivityNotificationsService redelivery', () => {
+  it('does not repeat notification writes when the committed ACK is lost', async () => {
+    let processed = false;
+    const statements: string[] = [];
+    const client = {
+      query: vi.fn(async (sql: string) => {
+        statements.push(sql);
+        if (sql.startsWith('SELECT 1 FROM public.consumer_processed_event'))
+          return { rowCount: processed ? 1 : 0, rows: processed ? [{}] : [] };
+        if (sql.startsWith('INSERT INTO public.consumer_processed_event'))
+          processed = true;
+        return { rowCount: 1, rows: [] };
+      }),
+      release: vi.fn(),
+    };
+    const pool = {
+      connect: vi.fn().mockResolvedValue(client),
+      query: vi.fn().mockResolvedValue({ rows: [{ count: '0' }] }),
+    };
+    const service = new ActivityNotificationsService(pool as never);
+    let ackAttempts = 0;
+    const message = {
+      data: new TextEncoder().encode(
+        JSON.stringify({
+          eventId: '22222222-2222-4222-8222-222222222222',
+          eventType: 'identity.account.created.v1',
+          payload: { accountId: 'account-1' },
+        }),
+      ),
+      subject: 'myota.events.identity.account.created.v1',
+      info: { deliveryCount: 1, streamSequence: 12 },
+      ack: vi.fn(() => {
+        ackAttempts += 1;
+        if (ackAttempts === 1) throw new Error('ack response lost');
+      }),
+      nak: vi.fn(),
+    };
+    const handle = (
+      service as unknown as { handle: (message: unknown) => Promise<void> }
+    ).handle;
+
+    await handle.call(service, message);
+    await handle.call(service, message);
+
+    expect(
+      statements.filter((sql) =>
+        sql.startsWith('INSERT INTO public.activity_notification'),
+      ),
+    ).toHaveLength(1);
+    expect(
+      statements.filter((sql) =>
+        sql.startsWith('INSERT INTO public.consumer_processed_event'),
+      ),
+    ).toHaveLength(1);
+    expect(message.ack).toHaveBeenCalledTimes(2);
+    expect(message.nak).toHaveBeenCalledOnce();
+  });
+});
