@@ -22,7 +22,9 @@ before checking GIS authorization. Confirmation reports missing
 fields in reference order, converts the confirmation value with Python
 `str().upper()`, and checks job-scoped GIS access after resolving the job; the
 confirmation actor does not need `activity.admin` because the queued worker
-uses the authorized context recorded with the job.
+uses the authorized context recorded with the job. Confirmation idempotency
+replay follows required-field and confirmation checks, job lookup, and GIS
+authorization.
 Activity lease extension is supported for long-running jobs.
 Geodata's PostGIS Maidenhead-cell function is checked in CI against the
 reference Python outputs for point, contained polygon, boundary-crossing
@@ -335,10 +337,11 @@ resolution uses the same contract while preserving its transactional history
 and outbox write. Refresh schedule creation and manual runs also scope keys by
 owner and path, check the request fingerprint before validation, and reject
 changed-body reuse; a run replay preserves the prior import and schedule result.
-Deletion-job creation and confirmation also replay by owner, path, and body,
-including a confirmation retry against an already completed job. Import
-finalization and failed promotion queue redrive use the same request fingerprint
-and successful-result replay.
+Deletion-job creation and confirmation also replay by owner, path, and body
+after their source-ordered validation and authorization checks, including a
+confirmation retry against an already completed job. Import finalization and
+failed promotion queue redrive use the same request fingerprint and
+successful-result replay.
 Candidate validation notes are stored as JSONB with existing text values
 preserved as JSON strings. If-Match protected name, website, description,
 geometry, category, and location edits are also implemented. Entity status,

@@ -87,22 +87,20 @@ export class GeodataController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') key: string | undefined,
     @Param('jobId') jobId: string,
-    @Body() body: Record<string, unknown>,
+    @Body() body: Record<string, unknown> | null,
     @Req() request: Request,
   ) {
-    const owner = key ? verifyAccessToken(authorization).sub : '';
-    const idempotency = scopedRequestIdempotency(
-      key,
-      owner,
-      request,
-      body,
-    );
+    const requestBody = body ?? {};
+    const rawBody = (
+      request as Request & { rawBody?: Buffer }
+    ).rawBody?.toString('utf8');
     return this.deletions.confirm(
       authorization,
-      idempotency.key,
+      key,
       jobId,
-      body,
-      idempotency.requestHash,
+      requestBody,
+      key ? fingerprintJsonRequest(requestBody, rawBody) : undefined,
+      request.originalUrl,
     );
   }
 

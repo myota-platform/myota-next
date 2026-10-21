@@ -182,20 +182,12 @@ export class GeodataDeletionService {
 
   async confirm(
     authorization: string | undefined,
-    key: string | undefined,
+    requestKey: string | undefined,
     jobId: string,
     body: Record<string, unknown>,
     requestHash?: string,
+    requestPath = `/v1/geodata/entity-deletion-jobs/${jobId}/confirm`,
   ) {
-    if (key && requestHash) {
-      const replay = await replayRequest(
-        () => this.connect(),
-        'geodata-entity-deletion-confirm',
-        key,
-        requestHash,
-      );
-      if (replay.found) return replay.response;
-    }
     const missing = ['confirmation', 'deletedBy'].filter((field) =>
       !pythonTruthy(body[field]),
     );
@@ -209,19 +201,6 @@ export class GeodataDeletionService {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
-      if (key) {
-        await lockRequest(client, key);
-        const prior = await readRequestResponse(
-          client,
-          'geodata-entity-deletion-confirm',
-          key,
-          requestHash,
-        );
-        if (prior.found) {
-          await client.query('COMMIT');
-          return prior.response;
-        }
-      }
       const selected = await client.query(
         `SELECT payload FROM geodata_control_record
          WHERE kind='entityDeletionJobs' AND id=$1 FOR UPDATE`,
@@ -237,6 +216,22 @@ export class GeodataDeletionService {
         jurisdiction: (job.entityContext as Record<string, unknown>)
           ?.jurisdiction,
       });
+      const key = requestKey
+        ? `http:${claims.sub}:${requestPath}:${requestKey}`
+        : undefined;
+      if (key) {
+        await lockRequest(client, key);
+        const prior = await readRequestResponse(
+          client,
+          'geodata-entity-deletion-confirm',
+          key,
+          requestHash,
+        );
+        if (prior.found) {
+          await client.query('COMMIT');
+          return prior.response;
+        }
+      }
       if (job.status === 'COMPLETED') {
         const response = publicJob(job);
         if (key)
