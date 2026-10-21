@@ -278,9 +278,12 @@ durables with database leases, progress acknowledgements, retries, and
 dead-letter state. Optional work correlation IDs follow the work-command
 schema's 200-character limit. Invalid work envelopes are dead-lettered without
 a work ID or work type, matching the Python consumer. Activity notification events use a
-separate durable consumer. Recovery evidence remains open. QSO correction requests and
-administrator review are also implemented, ignore `Idempotency-Key` as the
-reference does, and rely on the database relation for request QSO existence.
+separate durable consumer. CI verifies replica sharing, durable resume across a
+single-server JetStream restart with retained file storage, confirmed ACKs, and
+duplicate-event idempotency. Cluster failover and database-outage recovery
+remain open. QSO correction requests and administrator review are also
+implemented, ignore `Idempotency-Key` as the reference does, and rely on the
+database relation for request QSO existence.
 Applied corrections update only the reference's writable QSO fields and queue
 award recalculation for the stored QSO, even when the nested route QSO ID differs;
 a focused repository fixture covers that transaction and job payload. Correction
@@ -757,8 +760,10 @@ geometries.
   fallback in poison-event records.
   Named replay
   durables require an explicit start sequence, and optional message limits allow
-  bounded replay runs. Broker/database outage, exhaustion, and redrive recovery
-  qualification remains open.
+  bounded replay runs. A recovery test restarts a single-server JetStream with
+  file storage retained and verifies delivery resumes with confirmed ACKs and
+  duplicate-event idempotency. Cluster failover, database-outage, and retry
+  exhaustion recovery qualification remain open.
 - Geodata workers: registered JetStream consumers for import preprocessing and
   promotion, confirmed entity deletion, and location enrichment are implemented.
   Each durable is polled concurrently up to its registered `max_ack_pending`
