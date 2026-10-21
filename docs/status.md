@@ -55,8 +55,10 @@ behavioral parity or production readiness.
   Activity statistics-job lease takeover after a worker process kill and
   Geodata import preprocessing replay after committed staging, plus live
   delivery across all four Geodata worker durables after a single-server
-  JetStream restart with retained file storage. A fault-injection check verifies
-  outbox retry and successful
+  JetStream restart with retained file storage. It also simulates preprocessing
+  repository failure and verifies JetStream redelivery after repository access
+  returns; an actual PostgreSQL outage remains unqualified. A fault-injection
+  check verifies outbox retry and successful
   publication, attempt exhaustion, and audited redrive for Core, Activity, and
   Geodata events against their separate databases. It also kills and restarts
   an isolated JetStream server with its file store retained, then verifies

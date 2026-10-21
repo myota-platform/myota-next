@@ -815,8 +815,11 @@ geometries.
   Stale queued and expired work is re-enqueued through the owner outbox.
   A live-worker CI check restarts a single-server JetStream with its file store
   retained and verifies all four registered work durables process new work
-  after reconnection. Database-outage and clustered failover recovery remain
-  open.
+  after reconnection. The same check simulates a preprocessing repository
+  failure, makes the status lookup fail, then restores repository access and
+  verifies JetStream redelivery completes the work. This fault injection does
+  not stop PostgreSQL; actual database-outage and clustered failover recovery
+  remain open.
   Scheduled import and upload-session retention is implemented. CI restarts the
   pinned SeaweedFS image during a Geodata multipart upload, verifies a failed
   part leaves no database record, retries it after restart, and checks the

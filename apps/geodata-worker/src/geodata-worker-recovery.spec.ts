@@ -26,7 +26,7 @@ import { GeodataWorkRepository } from './geodata-work.repository.js';
 const recoveryTestName =
   'replays committed staging after a worker process is killed';
 const brokerRecoveryTestName =
-  'resumes all durables after restart and retries a database outage';
+  'resumes all durables after restart and retries after repository failure';
 
 describe('Geodata worker process recovery', () => {
   it.skipIf(
