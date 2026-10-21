@@ -291,7 +291,7 @@ export class ActivityAwardsRepository {
       let where = '';
       if (subjectId) {
         values.push(subjectId);
-        where = `WHERE subject_id=$${values.length}`;
+        where = `WHERE r.subject_id=$${values.length}`;
       }
       const offsetParameter = values.length + 1;
       values.push(offset.toString());
@@ -300,14 +300,15 @@ export class ActivityAwardsRepository {
       const result = await client.query(
         `SELECT total.value,page_rows.*
          FROM (
-           SELECT count(*) AS value FROM activity_award_request
-           ${where}
+           SELECT count(*) AS value FROM activity_award_request r ${where}
          ) total
          LEFT JOIN LATERAL (
-           SELECT *, ${awardRequestProjection}
-           FROM activity_award_request
+           SELECT r.*, ${awardRequestProjection},
+             COALESCE((i.issuance->'artifact'->>'downloadReady')::boolean,FALSE) AS artifact_ready
+           FROM activity_award_request r
+           LEFT JOIN activity_award_issuance i ON i.id=r.issued_award_id
            ${where}
-           ORDER BY requested_at DESC
+           ORDER BY r.requested_at DESC
            LIMIT $${limitParameter} OFFSET $${offsetParameter}::bigint
          ) page_rows ON TRUE`,
         values,
@@ -529,6 +530,7 @@ function awardRequestRecord(row: any): JsonRecord {
         : parseJsonWithExactIntegers(String(row.facts_text)),
     status: row.status,
     issuedAwardId: row.issued_award_id ? String(row.issued_award_id) : null,
+    artifactReady: Boolean(row.artifact_ready),
     requestedAt: timestamp(row.requested_at_iso ?? row.requested_at),
     issuedAt: timestamp(row.issued_at_iso ?? row.issued_at),
   };

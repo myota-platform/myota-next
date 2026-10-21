@@ -543,6 +543,7 @@ export class AwardsService {
       'awards.read',
       'awards.request',
       'awards.admin',
+      'identity.me',
     ]);
     const issuance = await this.awardsRepository.getAwardIssuance(issuanceId);
     if (

@@ -69,6 +69,7 @@ const issuancePage = ref(1);
 const issuanceTotal = ref(0);
 const issueManagerName = ref('');
 const issueSignatureAssetId = ref('');
+const renderQueueStatus = reactive<Record<string, string>>({});
 const message = ref('');
 const templateElements = ref<TemplateElement[]>(defaultElements());
 const error = ref('');
@@ -537,6 +538,50 @@ async function issueAwardRequest(request: {
   } catch (cause) {
     error.value =
       cause instanceof Error ? cause.message : 'Award issuance failed.';
+  } finally {
+    saving.value = false;
+  }
+}
+async function queueCertificateRender(issuance: {
+  id: string;
+  callsign: string;
+  artifact?: { downloadReady?: boolean };
+}): Promise<void> {
+  if (
+    !canManage.value ||
+    saving.value ||
+    issuance.artifact?.downloadReady ||
+    renderQueueStatus[issuance.id] === 'QUEUED'
+  )
+    return;
+  saving.value = true;
+  error.value = '';
+  message.value = '';
+  const requestPath = `/v1/awards/issuances/${encodeURIComponent(issuance.id)}/render-jobs`;
+  const body = {};
+  const fingerprint = JSON.stringify([
+    store.account?.id,
+    requestPath,
+    'POST',
+    body,
+  ]);
+  try {
+    await apiRequest(requestPath, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: {
+        'Idempotency-Key':
+          await pendingAwardMutationKeys.getOrCreate(fingerprint),
+      },
+    });
+    await pendingAwardMutationKeys.complete(fingerprint);
+    renderQueueStatus[issuance.id] = 'QUEUED';
+    message.value = `Certificate PDF queued for ${issuance.callsign}.`;
+  } catch (cause) {
+    error.value =
+      cause instanceof Error
+        ? cause.message
+        : 'Unable to queue certificate PDF.';
   } finally {
     saving.value = false;
   }
@@ -1184,10 +1229,23 @@ onMounted(() => {
         <div v-for="issuance in issuances" :key="issuance.id" class="table-row">
           <span
             ><strong>{{ issuance.awardName }}</strong
-            ><small
-              >{{ issuance.callsign }} · {{ issuance.levelId }}</small
-            ></span
+            ><small>{{ issuance.callsign }} · {{ issuance.levelId }}</small
+            ><small>{{
+              issuance.artifact?.downloadReady
+                ? 'PDF ready'
+                : renderQueueStatus[issuance.id] ||
+                  issuance.artifact?.renderStatus ||
+                  'PDF not queued'
+            }}</small></span
           ><span>{{ issuance.dateObtained }}</span>
+          <button
+            v-if="canManage && !issuance.artifact?.downloadReady"
+            type="button"
+            :disabled="saving || renderQueueStatus[issuance.id] === 'QUEUED'"
+            @click="queueCertificateRender(issuance)"
+          >
+            Queue PDF render for {{ issuance.callsign }}
+          </button>
         </div>
         <p v-if="!issuances.length" class="muted empty">No award issuances.</p>
         <PageNavigation

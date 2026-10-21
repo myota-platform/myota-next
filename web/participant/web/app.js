@@ -810,12 +810,37 @@ async function loadMyAwardRequests() {
       ? items
           .map(
             (item) =>
-              `<div class="award-request-item"><span><strong>${escapeHtml(item.callsign)} · ${escapeHtml(item.personName)}</strong><small>${escapeHtml(item.programmeSlug)} · ${escapeHtml(item.levelId)}</small></span><span class="award-request-status">${escapeHtml(item.status)}</span></div>`,
+              `<div class="award-request-item"><span><strong>${escapeHtml(item.callsign)} · ${escapeHtml(item.personName)}</strong><small>${escapeHtml(item.programmeSlug)} · ${escapeHtml(item.levelId)}</small></span><span class="award-request-status">${escapeHtml(item.status === 'ISSUED' ? (item.artifactReady ? 'ISSUED · PDF READY' : 'ISSUED · CERTIFICATE PROCESSING') : item.status)}</span>${item.status === 'ISSUED' && item.artifactReady ? `<button class="award-level" type="button" data-issued-award-id="${escapeHtml(item.issuedAwardId)}">Download certificate</button>` : ''}</div>`,
           )
           .join('')
       : '<p class="small">You have not requested any awards yet.</p>';
+    list.querySelectorAll('[data-issued-award-id]').forEach((button) => {
+      button.onclick = () => downloadIssuedAward(button.dataset.issuedAwardId);
+    });
   } catch (error) {
     list.innerHTML = `<p class="small">Your award requests are temporarily unavailable. ${escapeHtml(error.message)}</p>`;
+  }
+}
+async function downloadIssuedAward(issuanceId) {
+  const popup = window.open('about:blank', '_blank');
+  if (!popup) {
+    $('award-status').textContent =
+      'Allow pop-ups to open your certificate download.';
+    return;
+  }
+  popup.opener = null;
+  $('award-status').textContent = 'Preparing your certificate download…';
+  try {
+    const artifact = await awardApi(
+      `/v1/awards/issuances/${encodeURIComponent(issuanceId)}/artifact`,
+    );
+    if (!artifact.downloadUrl)
+      throw new Error('The certificate download is unavailable.');
+    popup.location.replace(artifact.downloadUrl);
+    $('award-status').textContent = '';
+  } catch (error) {
+    popup.close();
+    $('award-status').textContent = error.message;
   }
 }
 function renderPublicAwards() {

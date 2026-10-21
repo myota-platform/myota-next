@@ -47,7 +47,9 @@ production readiness.
   Participant eligible-level requests, now cross live Identity and Activity
   APIs and verify persisted request facts and issuance records. Public catalogue
   loading uses live services as well. Participants can read their own request
-  status, while cross-account reads are denied.
+  status, while cross-account reads are denied. Admin can queue certificate PDF
+  rendering, and Participant exposes the download only after the artifact is
+  ready.
   Most other browser workflows still use intercepted API responses;
   broader payload coverage, accessibility, responsive behavior, and failure
   states remain to be qualified.

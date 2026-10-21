@@ -312,6 +312,31 @@ test('publishes, requests, and issues an award across both web apps', async ({
       `Award issued to ${callsign.value}.`,
     );
     await expect(page.getByText('ISSUED', { exact: true })).toBeVisible();
+    const issuanceRecord = await activityPool.query<{ id: string }>(
+      `SELECT id::text FROM activity_award_issuance
+       WHERE programme_slug=$1 AND subject_id=$2`,
+      [programmeSlug, accountId],
+    );
+    expect(issuanceRecord.rows).toHaveLength(1);
+    const issuanceId = issuanceRecord.rows[0]?.id;
+    await page
+      .getByRole('button', { name: `Queue PDF render for ${callsign.value}` })
+      .click();
+    await expect(page.getByRole('status')).toContainText(
+      `Certificate PDF queued for ${callsign.value}.`,
+    );
+    const renderJobs = await activityPool.query<{
+      id: string;
+      status: string;
+      issuance_id: string;
+    }>(
+      `SELECT id::text,status,payload->>'issuanceId' AS issuance_id
+       FROM activity_job WHERE kind='PDF_RENDER' AND payload->>'issuanceId'=$1`,
+      [issuanceId],
+    );
+    expect(renderJobs.rows).toMatchObject([
+      { status: 'QUEUED', issuance_id: issuanceId },
+    ]);
 
     const participantRequests = await request.get(
       `http://127.0.0.1:8080/v1/awards/requests?subjectId=${encodeURIComponent(accountId!)}&page=1&pageSize=50`,
@@ -324,8 +349,17 @@ test('publishes, requests, and issues an award across both web apps', async ({
         levelId: 'level-1',
         status: 'ISSUED',
         issuedAwardId: expect.any(String),
+        artifactReady: false,
       },
     ]);
+    const artifactBeforeRender = await request.get(
+      `http://127.0.0.1:8080/v1/awards/issuances/${issuanceId}/artifact`,
+      { headers: participantHeaders },
+    );
+    expect(artifactBeforeRender.status()).toBe(400);
+    expect((await artifactBeforeRender.json()).message).toContain(
+      'certificate is not ready for download',
+    );
     const otherParticipantRequests = await request.get(
       'http://127.0.0.1:8080/v1/awards/requests?subjectId=another-participant&page=1&pageSize=50',
       { headers: participantHeaders },
@@ -338,6 +372,9 @@ test('publishes, requests, and issues an award across both web apps', async ({
     );
     await expect(participantAwardRequests).toBeVisible();
     await expect(participantAwardRequests).toContainText('ISSUED');
+    await expect(participantAwardRequests).toContainText(
+      'CERTIFICATE PROCESSING',
+    );
     expect(failedResponses).toEqual([]);
 
     const award = await activityPool.query<{
@@ -471,6 +508,29 @@ test('publishes, requests, and issues an award across both web apps', async ({
           [fixtureAwardIds],
         );
         const fixtureIssuanceIds = fixtureIssuances.rows.map((row) => row.id);
+        if (fixtureIssuanceIds.length) {
+          const fixtureRenderJobs = await activityPool.query<{ id: string }>(
+            "SELECT id::text FROM activity_job WHERE kind='PDF_RENDER' AND payload->>'issuanceId'=ANY($1::text[])",
+            [fixtureIssuanceIds],
+          );
+          const fixtureRenderJobIds = fixtureRenderJobs.rows.map(
+            (row) => row.id,
+          );
+          if (fixtureRenderJobIds.length) {
+            await activityPool.query(
+              "DELETE FROM idempotency_record WHERE service='activity-service' AND response->>'renderJobId'=ANY($1::text[])",
+              [fixtureRenderJobIds],
+            );
+            await activityPool.query(
+              "DELETE FROM outbox_event WHERE aggregate_type='activity_job' AND aggregate_id=ANY($1::text[])",
+              [fixtureRenderJobIds],
+            );
+            await activityPool.query(
+              'DELETE FROM activity_job WHERE id=ANY($1::uuid[])',
+              [fixtureRenderJobIds],
+            );
+          }
+        }
         if (fixtureIssuanceIds.length)
           await activityPool.query(
             "DELETE FROM outbox_event WHERE aggregate_type='award_issuance' AND aggregate_id=ANY($1::text[])",

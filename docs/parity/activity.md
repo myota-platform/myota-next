@@ -111,7 +111,9 @@ issuance is transactional and permanent, and PDF render jobs store artifacts in
 S3-compatible storage with authorized presigned download URLs. Request lists
 are available to Activity readers and administrators, and to participants when
 `subjectId` matches their account and their token carries `identity.me` or
-`awards.request`. Qualification notice payloads and deduplication also
+`awards.request`. The owner request response includes certificate readiness;
+artifact reads allow the participant's `identity.me` scope and still enforce
+issuance ownership. Qualification notice payloads and deduplication also
 preserve the worker split: recalculation
 notices include `awardCode` and eligible-level IDs in dedupe keys; direct
 evaluation notices omit `awardCode` and key by award, version, and subject.
