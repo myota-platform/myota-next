@@ -364,12 +364,33 @@ export class GeodataUploadService {
           ? metadata.format.toUpperCase()
           : '';
       const sourceLimit = sourceUploadLimit(format);
-      const scan = await this.scanObject(
-        session.bucket,
-        session.object_key,
-        Number(session.expected_size),
-        sourceLimit,
-      );
+      let scan: { size: number; sha256: string };
+      try {
+        scan = await this.scanObject(
+          session.bucket,
+          session.object_key,
+          Number(session.expected_size),
+          sourceLimit,
+        );
+      } catch (error) {
+        if (error instanceof BadRequestException) {
+          await this.s3().send(
+            new DeleteObjectCommand({
+              Bucket: session.bucket,
+              Key: session.object_key,
+            }),
+          );
+          await client.query(
+            "UPDATE geodata_upload_session SET status='FAILED',updated_at=now() WHERE id=$1",
+            [id],
+          );
+        }
+        throw error;
+      }
+      if (scan.size !== Number(session.expected_size))
+        throw new BadRequestException(
+          'completed object size does not match expectedSize',
+        );
       if (session.expected_sha256 && scan.sha256 !== session.expected_sha256)
         throw new BadRequestException(
           'completed object checksum does not match sha256',
@@ -512,17 +533,10 @@ export class GeodataUploadService {
       hash.update(bytes);
       const scan = Buffer.concat([carry, bytes]);
       if (scan.includes(marker)) {
-        await this.s3()
-          .send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))
-          .catch(() => undefined);
         throw new BadRequestException('malware scan rejected the upload');
       }
       carry = scan.subarray(Math.max(0, scan.length - marker.length + 1));
     }
-    if (size !== expectedSize)
-      throw new BadRequestException(
-        'completed object size does not match expectedSize',
-      );
     const scannerUrl = process.env.MYOTA_CLAMAV_URL?.trim();
     if (scannerUrl) {
       const scannedObject = await this.s3().send(

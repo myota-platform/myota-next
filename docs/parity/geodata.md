@@ -275,6 +275,9 @@ as `entityType`, alongside the complete `entityTypes` list. Reusing a key with
 a different filename or expected size returns HTTP 400.
 Multipart upload creation accepts the Python `JSON` format alias and stores it
 as `GEOJSON`, including when inferred from the filename extension.
+Local object-size and malware scan failures delete the assembled object and
+mark the upload session `FAILED`; scanner service outages leave the completion
+handoff retryable, matching the Python error paths.
 For multipart upload scanning, NestJS maps
 a ClamAV non-2xx response and transport failure to HTTP 500 with the reference
 scanner-unavailable detail. Local malware detection remains HTTP 400. Both
