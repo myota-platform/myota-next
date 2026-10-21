@@ -17,9 +17,10 @@ behavior: invalid credentials return 400, while permission and rate-limit
 failures return 403. Other NestJS 401 permission exceptions also map to 403.
 Malformed JSON and oversized JSON bodies use the reference's 400
 `invalid_request` response shape and details.
-The shared parser decodes JSON request bodies regardless of `Content-Type`, as
-the reference does, and applies the same invalid request details to parse
-failures. The Geodata import creation route retains its dedicated multipart
+The shared parser decodes JSON request bodies regardless of `Content-Type` or
+declared charset, as the reference does. It applies the same invalid request
+details to malformed JSON and invalid UTF-8, including a leading UTF-8 BOM.
+The Geodata import creation route retains its dedicated multipart
 handling for `multipart/form-data`, and Activity award image uploads retain
 their route-specific binary handling.
 Requests with no body reach handlers as an empty object, matching the Python

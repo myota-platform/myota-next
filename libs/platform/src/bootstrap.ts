@@ -75,6 +75,17 @@ export async function bootstrapHttpService(
           ),
         }),
       );
+    app.use((request: Request, _response: Response, next: NextFunction) => {
+      if (
+        usesSharedJsonParser(
+          request.method ?? '',
+          request.url ?? '',
+          request.headers['content-type'],
+        )
+      )
+        request.headers['content-type'] = 'application/json; charset=utf-8';
+      next();
+    });
     app.use(
       express.json({
         limit: jsonLimit,
@@ -86,6 +97,11 @@ export async function bootstrapHttpService(
             request.headers['content-type'],
           ),
         verify: (request, _response, buffer) => {
+          const decoded = new TextDecoder('utf-8', { fatal: true }).decode(
+            buffer,
+          );
+          if (decoded.charCodeAt(0) === 0xfeff)
+            throw new Error('invalid JSON body');
           if (
             ['/v1/geodata/proposals', '/v1/geodata/imports'].includes(
               request.url?.split('?', 1)[0] ?? '',

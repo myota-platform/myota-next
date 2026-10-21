@@ -140,6 +140,9 @@ export function parserProblem(
   if (isJson && errorType === 'entity.parse.failed') {
     status = 400;
     detail = 'invalid JSON body';
+  } else if (isJson && errorType === 'entity.verify.failed') {
+    status = 400;
+    detail = 'invalid JSON body';
   } else if (
     (isJson || request.is('application/x-www-form-urlencoded')) &&
     errorType === 'entity.too.large'
