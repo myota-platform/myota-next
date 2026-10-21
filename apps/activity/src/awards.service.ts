@@ -787,6 +787,10 @@ export class AwardsService {
     return this.awardsRepository.saveAwardAsset(asset);
   }
 
+  authorizeAssetContentUpload(authorization: string | undefined) {
+    this.authorizeHeader(authorization, ['awards.admin']);
+  }
+
   async getAssetContent(authorization: string | undefined, id: string) {
     this.authorizeHeader(authorization, ['awards.read', 'awards.admin']);
     const asset = await this.awardsRepository.getAwardAsset(id);

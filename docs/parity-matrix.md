@@ -325,6 +325,9 @@ and 200 when they return an existing record, matching the reference handlers.
 Optional preview artwork and signature inputs use the reference's truthiness
 defaults, so falsey values behave as absent.
 Registered award assets and bounded content storage are implemented. Award
+image uploads authorize the caller and validate the declared media type and
+20 MiB body limit before reading the body, matching the reference's request
+processing order.
 asset dimensions use Python integer conversion, including float truncation,
 boolean inputs, and strict parsing of numeric strings. Paged asset, request,
 and issuance lists use the same timestamp ordering columns as the reference.

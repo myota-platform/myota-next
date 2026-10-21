@@ -204,11 +204,22 @@ export class AwardsController {
     @Param('assetId') assetId: string,
     @Req() request: Request,
   ) {
+    this.awards.authorizeAssetContentUpload(authorization);
+    const mediaType = contentType?.split(';', 1)[0];
+    if (mediaType !== 'image/png' && mediaType !== 'image/jpeg')
+      throw new BadRequestException('upload must use image/png or image/jpeg');
+    const contentLength = Number(request.headers['content-length'] ?? 0);
+    if (
+      !Number.isInteger(contentLength) ||
+      contentLength <= 0 ||
+      contentLength > 20 * 1024 * 1024
+    )
+      throw new BadRequestException('image upload must be at most 20 MiB');
     const content = await readBoundedBody(request, 20 * 1024 * 1024);
     return this.awards.putAssetContent(
       authorization,
       assetId,
-      contentType?.split(';')[0],
+      mediaType,
       content,
     );
   }
@@ -297,16 +308,14 @@ export class AwardsController {
 async function readBoundedBody(request: Request, maximumBytes: number) {
   const declaredLength = Number(request.headers['content-length'] ?? 0);
   if (declaredLength > maximumBytes)
-    throw new BadRequestException('image exceeds the configured upload limit');
+    throw new BadRequestException('image upload must be at most 20 MiB');
   const chunks: Buffer[] = [];
   let total = 0;
   for await (const chunk of request) {
     const part = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     total += part.length;
     if (total > maximumBytes)
-      throw new BadRequestException(
-        'image exceeds the configured upload limit',
-      );
+      throw new BadRequestException('image upload must be at most 20 MiB');
     chunks.push(part);
   }
   return Buffer.concat(chunks, total);
