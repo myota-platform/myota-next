@@ -278,13 +278,18 @@ export function normalizeCallsign(value: unknown): string {
 
 export function normalizeActivation(data: JsonRecord): JsonRecord {
   const programmeRules = data.programmeRules;
-  const rules =
-    pythonTruthy(programmeRules) && Object.keys(programmeRules).length > 0
+  const rules = pythonDictionary(
+    pythonTruthy(programmeRules)
       ? programmeRules
       : pythonTruthy(data.rules)
         ? data.rules
-        : {};
-  const location = pythonTruthy(data.location) ? data.location : {};
+        : {},
+    'programmeRules',
+  );
+  const location = pythonDictionary(
+    pythonTruthy(data.location) ? data.location : {},
+    'location',
+  );
   if (
     pythonTruthy(rules.requireLocation) &&
     (location.latitude == null || location.longitude == null)
@@ -342,6 +347,42 @@ export function normalizeActivation(data: JsonRecord): JsonRecord {
     location,
     startedAt,
   };
+}
+
+function pythonDictionary(value: unknown, field: string): JsonRecord {
+  if (isJsonRecord(value)) return { ...value };
+  const iterable = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? Array.from(value)
+      : undefined;
+  if (!iterable) throw new TypeError(`${field} is not iterable`);
+  const entries: [string, unknown][] = [];
+  for (const [index, item] of iterable.entries()) {
+    const pair = pythonDictionaryEntry(item, field);
+    if (pair.length !== 2)
+      throw new BadRequestException(
+        `dictionary update sequence element #${index} has length ${pair.length}; 2 is required`,
+      );
+    const key = pair[0];
+    if (key !== null && typeof key === 'object')
+      throw new TypeError('unhashable type: object');
+    entries.push([pythonScalarString(key), pair[1]]);
+  }
+  return Object.fromEntries(entries);
+}
+
+function pythonDictionaryEntry(value: unknown, field: string): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') return Array.from(value);
+  if (isJsonRecord(value)) return Object.keys(value);
+  throw new TypeError(
+    `dictionary update sequence element is not iterable for ${field}`,
+  );
+}
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function pointInBounds(

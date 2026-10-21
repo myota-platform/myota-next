@@ -195,6 +195,34 @@ describe('activation validation compatibility', () => {
     });
   });
 
+  it('converts pair iterables to dictionaries like the Python validator', () => {
+    const result = normalizeActivation({
+      programmeRules: [['requireLocation', true]],
+      location: [
+        ['latitude', '46.2'],
+        ['longitude', '7.3'],
+      ],
+      startedAt: '2026-10-21T10:20:30Z',
+    });
+
+    expect(result.programmeRules).toEqual({ requireLocation: true });
+    expect(result.location).toEqual({ latitude: '46.2', longitude: '7.3' });
+    expect(
+      normalizeActivation({
+        programmeRules: ['xy'],
+        startedAt: '2026-10-21T10:20:30Z',
+      }).programmeRules,
+    ).toEqual({ x: 'y' });
+    expect(() =>
+      normalizeActivation({
+        programmeRules: 'x',
+        startedAt: '2026-10-21T10:20:30Z',
+      }),
+    ).toThrow(
+      'dictionary update sequence element #0 has length 1; 2 is required',
+    );
+  });
+
   it.each([
     [
       'requires coordinates when the programme rule says so',
