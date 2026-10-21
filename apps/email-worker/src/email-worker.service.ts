@@ -338,7 +338,7 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
       this.identityToken = tokenBody.accessToken;
       const expiresIn = boundedInteger(tokenBody.expiresIn, 300, 30, 300);
       this.identityTokenExpiresAt =
-        tokenCheckTime + (expiresIn - 30) * 1000;
+        tokenCheckTime + Math.min(Math.max(30, expiresIn - 30), 270) * 1000;
     }
     const response = await fetch(
       `${this.identityUrl}/v1/identity/internal/email-recipients/${accountId}`,
