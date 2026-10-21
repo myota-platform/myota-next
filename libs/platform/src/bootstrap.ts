@@ -40,7 +40,16 @@ export async function bootstrapHttpService(
     next();
   });
   for (const route of rawBodyRoutes)
-    app.use(route, express.raw({ type: () => true, limit: '16mb' }));
+    app.use(
+      route,
+      express.raw({
+        type: () => true,
+        limit: integerSetting(
+          process.env.MYOTA_UPLOAD_PART_MAX_BYTES,
+          16 * 1024 * 1024,
+        ),
+      }),
+    );
   app.use(
     express.json({
       limit: jsonLimit,

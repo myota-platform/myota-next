@@ -24,8 +24,16 @@ export function usesSharedJsonParser(
     (method === 'POST' &&
       requestPath === '/v1/geodata/imports' &&
       mediaType === 'multipart/form-data') ||
+    isGeodataRawUploadPart(method, requestPath) ||
     (method === 'PUT' &&
       /^\/v1\/awards\/assets\/[^/]+\/content$/.test(requestPath))
+  );
+}
+
+function isGeodataRawUploadPart(method: string, path: string) {
+  return (
+    method === 'POST' &&
+    /^\/v1\/geodata\/import-uploads\/[^/]+\/parts\/[^/]+$/.test(path)
   );
 }
 
@@ -113,6 +121,16 @@ export function parserProblem(
   let detail =
     typeof error.message === 'string' ? error.message : 'invalid request body';
   const errorType = typeof error.type === 'string' ? error.type : '';
+  if (
+    isGeodataRawUploadPart(request.method, request.path) &&
+    errorType === 'entity.too.large'
+  ) {
+    status = 400;
+    detail =
+      typeof error.limit === 'number'
+        ? `upload part must be between 1 and ${error.limit} bytes`
+        : 'upload part exceeds the configured byte limit';
+  }
   const isJson = usesSharedJsonParser(
     request.method,
     request.path,

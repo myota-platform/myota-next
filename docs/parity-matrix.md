@@ -552,7 +552,10 @@ their source and yield one parsed
 feature at a time, with the same shared API/worker 1 GiB upload cap or optional
 format-specific override, 16 MiB
 per-feature size by default, 250,000 vertices, and the configured feature
-count. `GEODATA_MAX_IMPORT_FEATURES` uses Python-compatible integer parsing in
+count. Resumable raw upload parts use `MYOTA_UPLOAD_PART_MAX_BYTES` as the
+request parser and service cap; empty and oversized parts return the same
+`upload part must be between 1 and <limit> bytes` validation detail as Python.
+`GEODATA_MAX_IMPORT_FEATURES` uses Python-compatible integer parsing in
 both API and worker, including zero and negative limits; malformed values fail
 instead of silently falling back. The `MYOTA_IMPORT_MAX_FEATURE_VERTICES` and
 `MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES` settings use the same parser and
