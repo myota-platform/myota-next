@@ -232,6 +232,8 @@ export class GatewayController {
     let body: BodyInit | undefined;
     let duplex: 'half' | undefined;
     if (!['GET', 'HEAD'].includes(request.method)) {
+      const contentLength = request.header('content-length');
+      if (contentLength) headers.set('content-length', contentLength);
       if (request.body !== undefined) {
         body = JSON.stringify(request.body);
         if (!headers.has('content-type'))

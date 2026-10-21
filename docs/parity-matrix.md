@@ -27,6 +27,8 @@ request parser's zero-length body behavior. Non-object JSON values are rejected
 with `JSON body must be an object`, matching the reference parser.
 The Gateway forwards W3C `traceparent` and `tracestate` headers to the owning
 API and passes trace headers back to clients when an upstream provides them.
+It bypasses request-body parsing, streams incoming bodies to the owning API,
+and preserves the declared `Content-Length` for binary and JSON payloads.
 Paged endpoints accept arbitrary-size Python integer page values and preserve
 those exact integers in JSON responses, including values above JavaScript's
 safe integer range. Database page totals also avoid PostgreSQL 32-bit casts and

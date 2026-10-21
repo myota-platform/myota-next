@@ -11,4 +11,6 @@ await bootstrapHttpService(
   [{ path: '_internal/grafana/auth', method: RequestMethod.GET }],
   false,
   'gateway',
+  [],
+  false,
 );

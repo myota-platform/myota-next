@@ -35,6 +35,7 @@ export async function bootstrapHttpService(
   preserveBigIntJson = false,
   serviceId = 'myota-api',
   declaredBodyLimits: DeclaredBodyLimit[] = [],
+  parseRequestBodies = true,
 ): Promise<INestApplication> {
   const app = await NestFactory.create(rootModule, {
     bodyParser: false,
@@ -47,12 +48,103 @@ export async function bootstrapHttpService(
     );
     next();
   });
-  for (const { method, path, maxBytes, detail } of declaredBodyLimits)
-    app.use((request: Request, response: Response, next: NextFunction) => {
+  if (parseRequestBodies) {
+    for (const { method, path, maxBytes, detail } of declaredBodyLimits)
+      app.use((request: Request, response: Response, next: NextFunction) => {
+        if (
+          request.method !== method ||
+          request.url?.split('?', 1)[0] !== path ||
+          Number(request.get('content-length') ?? 0) <= maxBytes
+        ) {
+          next();
+          return;
+        }
+        response
+          .status(400)
+          .type('application/json; charset=utf-8')
+          .json(createApiProblem(request, response, 400, detail));
+      });
+    for (const route of rawBodyRoutes)
+      app.use(
+        route,
+        express.raw({
+          type: () => true,
+          limit: integerSetting(
+            process.env.MYOTA_UPLOAD_PART_MAX_BYTES,
+            16 * 1024 * 1024,
+          ),
+        }),
+      );
+    app.use(
+      express.json({
+        limit: jsonLimit,
+        strict: false,
+        type: (request) =>
+          usesSharedJsonParser(
+            request.method ?? '',
+            request.url ?? '',
+            request.headers['content-type'],
+          ),
+        verify: (request, _response, buffer) => {
+          if (
+            ['/v1/geodata/proposals', '/v1/geodata/imports'].includes(
+              request.url?.split('?', 1)[0] ?? '',
+            ) ||
+            /^\/v1\/geodata\/imports\/[^/]+\/candidates\/validate$/.test(
+              request.url?.split('?', 1)[0] ?? '',
+            ) ||
+            /^\/v1\/geodata\/imports\/[^/]+\/process$/.test(
+              request.url?.split('?', 1)[0] ?? '',
+            ) ||
+            /^\/v1\/geodata\/imports\/[^/]+\/processed$/.test(
+              request.url?.split('?', 1)[0] ?? '',
+            ) ||
+            /^\/v1\/geodata\/imports\/[^/]+\/processing-queues\/[^/]+\/redrive$/.test(
+              request.url?.split('?', 1)[0] ?? '',
+            ) ||
+            /^\/v1\/geodata\/entities\/[^/]+(?:\/(?:location-enrichment-requests|reviews|categories|geometry))?$/.test(
+              request.url?.split('?', 1)[0] ?? '',
+            ) ||
+            /^\/v1\/geodata\/conflation\/[^/]+\/resolve$/.test(
+              request.url?.split('?', 1)[0] ?? '',
+            ) ||
+            /^\/v1\/geodata\/refresh-schedules\/[^/]+\/run$/.test(
+              request.url?.split('?', 1)[0] ?? '',
+            ) ||
+            /^\/v1\/geodata\/entity-deletion-jobs(?:\/[^/]+\/confirm)?$/.test(
+              request.url?.split('?', 1)[0] ?? '',
+            ) ||
+            request.url?.split('?', 1)[0] === '/v1/geodata/refresh-schedules' ||
+            request.url?.split('?', 1)[0] === '/v1/programmes'
+          )
+            Object.assign(request, { rawBody: buffer });
+        },
+      }),
+    );
+    app.use((request: Request, _response: Response, next: NextFunction) => {
       if (
-        request.method !== method ||
-        request.url?.split('?', 1)[0] !== path ||
-        Number(request.get('content-length') ?? 0) <= maxBytes
+        request.method === 'POST' &&
+        [
+          '/v1/programmes',
+          '/v1/geodata/refresh-schedules',
+          '/v1/geodata/imports',
+        ].includes(request.url?.split('?', 1)[0] ?? '') &&
+        Buffer.isBuffer((request as Request & { rawBody?: Buffer }).rawBody)
+      )
+        request.body = parseJsonWithExactIntegers(
+          (request as Request & { rawBody: Buffer }).rawBody.toString('utf8'),
+        );
+      next();
+    });
+    app.use((request: Request, _response: Response, next: NextFunction) => {
+      if (request.body === undefined) request.body = {};
+      next();
+    });
+    app.use((request: Request, response: Response, next: NextFunction) => {
+      const body = request.body as unknown;
+      if (
+        Buffer.isBuffer(body) ||
+        (body !== null && typeof body === 'object' && !Array.isArray(body))
       ) {
         next();
         return;
@@ -60,100 +152,16 @@ export async function bootstrapHttpService(
       response
         .status(400)
         .type('application/json; charset=utf-8')
-        .json(createApiProblem(request, response, 400, detail));
+        .json(
+          createApiProblem(
+            request,
+            response,
+            400,
+            'JSON body must be an object',
+          ),
+        );
     });
-  for (const route of rawBodyRoutes)
-    app.use(
-      route,
-      express.raw({
-        type: () => true,
-        limit: integerSetting(
-          process.env.MYOTA_UPLOAD_PART_MAX_BYTES,
-          16 * 1024 * 1024,
-        ),
-      }),
-    );
-  app.use(
-    express.json({
-      limit: jsonLimit,
-      strict: false,
-      type: (request) =>
-        usesSharedJsonParser(
-          request.method ?? '',
-          request.url ?? '',
-          request.headers['content-type'],
-        ),
-      verify: (request, _response, buffer) => {
-        if (
-          ['/v1/geodata/proposals', '/v1/geodata/imports'].includes(
-            request.url?.split('?', 1)[0] ?? '',
-          ) ||
-          /^\/v1\/geodata\/imports\/[^/]+\/candidates\/validate$/.test(
-            request.url?.split('?', 1)[0] ?? '',
-          ) ||
-          /^\/v1\/geodata\/imports\/[^/]+\/process$/.test(
-            request.url?.split('?', 1)[0] ?? '',
-          ) ||
-          /^\/v1\/geodata\/imports\/[^/]+\/processed$/.test(
-            request.url?.split('?', 1)[0] ?? '',
-          ) ||
-          /^\/v1\/geodata\/imports\/[^/]+\/processing-queues\/[^/]+\/redrive$/.test(
-            request.url?.split('?', 1)[0] ?? '',
-          ) ||
-          /^\/v1\/geodata\/entities\/[^/]+(?:\/(?:location-enrichment-requests|reviews|categories|geometry))?$/.test(
-            request.url?.split('?', 1)[0] ?? '',
-          ) ||
-          /^\/v1\/geodata\/conflation\/[^/]+\/resolve$/.test(
-            request.url?.split('?', 1)[0] ?? '',
-          ) ||
-          /^\/v1\/geodata\/refresh-schedules\/[^/]+\/run$/.test(
-            request.url?.split('?', 1)[0] ?? '',
-          ) ||
-          /^\/v1\/geodata\/entity-deletion-jobs(?:\/[^/]+\/confirm)?$/.test(
-            request.url?.split('?', 1)[0] ?? '',
-          ) ||
-          request.url?.split('?', 1)[0] === '/v1/geodata/refresh-schedules' ||
-          request.url?.split('?', 1)[0] === '/v1/programmes'
-        )
-          Object.assign(request, { rawBody: buffer });
-      },
-    }),
-  );
-  app.use((request: Request, _response: Response, next: NextFunction) => {
-    if (
-      request.method === 'POST' &&
-      [
-        '/v1/programmes',
-        '/v1/geodata/refresh-schedules',
-        '/v1/geodata/imports',
-      ].includes(request.url?.split('?', 1)[0] ?? '') &&
-      Buffer.isBuffer((request as Request & { rawBody?: Buffer }).rawBody)
-    )
-      request.body = parseJsonWithExactIntegers(
-        (request as Request & { rawBody: Buffer }).rawBody.toString('utf8'),
-      );
-    next();
-  });
-  app.use((request: Request, _response: Response, next: NextFunction) => {
-    if (request.body === undefined) request.body = {};
-    next();
-  });
-  app.use((request: Request, response: Response, next: NextFunction) => {
-    const body = request.body as unknown;
-    if (
-      Buffer.isBuffer(body) ||
-      (body !== null && typeof body === 'object' && !Array.isArray(body))
-    ) {
-      next();
-      return;
-    }
-    response
-      .status(400)
-      .type('application/json; charset=utf-8')
-      .json(
-        createApiProblem(request, response, 400, 'JSON body must be an object'),
-      );
-  });
+  }
   if (preserveBigIntJson)
     app.use((_request: Request, response: Response, next: NextFunction) => {
       const originalJson = response.json.bind(response);
