@@ -7,7 +7,7 @@ const hasApiDatabases = Boolean(
   process.env.GEO_DATABASE_URL,
 );
 
-test('loads a real programme catalogue through Gateway and Geodata', async ({
+test('records a Participant activation through live NestJS APIs', async ({
   page,
   request,
 }) => {
@@ -22,8 +22,22 @@ test('loads a real programme catalogue through Gateway and Geodata', async ({
     { data: { email, password } },
   );
   expect(login.ok()).toBeTruthy();
-  const { accessToken } = await login.json();
+  const { accessToken, account } = await login.json();
+  const callsign = `DL1E${randomUUID().replaceAll('-', '').slice(0, 4)}`;
+  const callsignResponse = await request.post(
+    `http://127.0.0.1:8080/v1/identity/accounts/${account.id}/callsigns`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Idempotency-Key': randomUUID(),
+      },
+      data: { callsign },
+    },
+  );
+  expect(callsignResponse.status()).toBe(201);
   const slug = `browser-${randomUUID()}`;
+  const entityId = `browser-entity-${randomUUID()}`;
+  const entityType = `E2E_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   const created = await request.post('http://127.0.0.1:8080/v1/programmes', {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -35,7 +49,7 @@ test('loads a real programme catalogue through Gateway and Geodata', async ({
       description: 'Served by the live NestJS APIs.',
       entityTypes: [
         {
-          code: `E2E_${randomUUID().replaceAll('-', '').slice(0, 12)}`,
+          code: entityType,
           label: 'Integration point',
           geometryTypes: ['POINT'],
         },
@@ -44,12 +58,33 @@ test('loads a real programme catalogue through Gateway and Geodata', async ({
         activationValidityDays: 7,
         minimumQsos: { activation: 1, hunter: 1 },
         publicAccessRequired: false,
+        allowUnverifiedCallsign: true,
       },
     },
   });
   expect(created.status()).toBe(201);
 
   const failedResponses: string[] = [];
+  await page.route('**/v1/geodata/entities**', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            id: entityId,
+            name: 'Browser integration point',
+            entityType,
+            status: 'APPROVED',
+            centroid: { lat: 46.1, lon: 7.2 },
+            geometry: { type: 'Point', coordinates: [7.2, 46.1] },
+          },
+        ],
+        page: 1,
+        total: 1,
+        nextPage: null,
+      },
+    });
+  });
   page.on('response', (response) => {
     if (response.url().includes('/v1/') && response.status() >= 400)
       failedResponses.push(`${response.status()} ${response.url()}`);
@@ -64,7 +99,31 @@ test('loads a real programme catalogue through Gateway and Geodata', async ({
     'Browser integration programme',
   );
   await expect(page.locator('#entity-page-status')).toHaveText(
-    'Page 1 · 0 entities',
+    'Page 1 · 1 entities',
+  );
+  await page.locator('#award-email').fill(email);
+  await page.locator('#award-password').fill(password);
+  await page.locator('#award-login button[type="submit"]').click();
+  await expect(page.locator('#activation-start-form')).toBeVisible();
+  await page.locator('#activation-entity').selectOption(entityId);
+  await page.getByLabel('Operator callsign').selectOption({
+    label: `${callsign} · UNVERIFIED`,
+  });
+  await page.getByRole('button', { name: 'Start activation' }).click();
+  await expect(page.locator('#activation-status')).toHaveText(
+    'Activation started.',
+  );
+  await page.getByLabel('Worked callsign').fill('F4E2E');
+  await page.getByLabel('Band').fill('20M');
+  await page.getByLabel('Mode').fill('SSB');
+  await page.getByRole('button', { name: 'Record contact' }).click();
+  await expect(page.locator('#activation-status')).toHaveText(
+    'Contact recorded.',
+  );
+  page.on('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Close activation' }).click();
+  await expect(page.locator('#activation-status')).toHaveText(
+    'Activation closed.',
   );
   expect(failedResponses).toEqual([]);
 });
