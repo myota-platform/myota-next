@@ -109,7 +109,7 @@ export async function readGeoJsonDocumentMetadata(
     }
   }
 
-  parser.end();
+  if (!parser.isEnded) parser.end();
   const crsSourceKey =
     !hasDocumentCrs || documentCrs === null || documentCrs === undefined
       ? 'spatialReference'
@@ -297,7 +297,7 @@ export async function* streamGeoJsonFeatures(
     }
   }
 
-  parser?.end();
+  if (parser && !parser.isEnded) parser.end();
   while (pending.length) yield pending.shift();
   guard.finish();
   if (!sourceBytes) throw new Error('GeoJSON source object is empty');
