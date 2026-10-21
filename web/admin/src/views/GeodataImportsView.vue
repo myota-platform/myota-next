@@ -3,6 +3,7 @@ import PageHeader from '../components/PageHeader.vue';
 import PageNavigation from '../components/PageNavigation.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { apiRequest } from '../lib/api';
+import { createPendingIdempotencyKeys } from '../lib/pendingIdempotencyKeys';
 import {
   canCancelPreprocessing,
   fetchPreprocessingQueue,
@@ -144,7 +145,9 @@ const candidateActionStatus = ref('');
 const candidateActionError = ref('');
 const candidateReviewComplete = ref(false);
 const candidateAdvancePending = ref(false);
-const candidateActionKey = ref<string | null>(null);
+const pendingCandidateActionKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_geodata_candidate_actions',
+);
 const candidateActionQueueId = ref<string | null>(null);
 const candidatePendingAction = ref<
   'CANDIDATE' | 'APPROVED' | 'REJECTED' | null
@@ -274,6 +277,7 @@ async function waitForPromotionQueue(
   runId: string,
   queueId: string,
   candidateId: string,
+  actionFingerprint: string,
 ): Promise<void> {
   const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
@@ -284,17 +288,21 @@ async function waitForPromotionQueue(
       const error = queue.result?.errors?.find(
         (item) => item.candidateId === candidateId,
       );
-      if (error)
+      if (error) {
+        pendingCandidateActionKeys.complete(actionFingerprint);
+        candidateActionQueueId.value = null;
+        candidatePendingAction.value = null;
         throw new Error(
           error.message || 'Entity promotion failed. Retry this item.',
         );
+      }
       return;
     }
     if (queue.status === 'FAILED') {
       const error = queue.result?.errors?.find(
         (item) => item.candidateId === candidateId,
       );
-      candidateActionKey.value = null;
+      pendingCandidateActionKeys.complete(actionFingerprint);
       candidateActionQueueId.value = null;
       candidatePendingAction.value = null;
       throw new Error(
@@ -365,6 +373,28 @@ async function decideCandidate(
   }
   actionBusy.value = true;
   candidatePendingAction.value = action;
+  const requestBody =
+    action === 'REJECTED'
+      ? {
+          candidateIds: [candidate.id],
+          validationStatus: 'REJECTED',
+          reviewerId: store.account?.id,
+        }
+      : {
+          candidateIds: [candidate.id],
+          targetStatus: action,
+          processorId: store.account?.id,
+        };
+  const requestPath =
+    action === 'REJECTED'
+      ? `/v1/geodata/imports/${encodeURIComponent(runId)}/candidates/validate`
+      : `/v1/geodata/imports/${encodeURIComponent(runId)}/process`;
+  const actionFingerprint = JSON.stringify([
+    store.account?.id,
+    requestPath,
+    requestBody,
+  ]);
+  const actionKey = pendingCandidateActionKeys.getOrCreate(actionFingerprint);
   let actionSucceeded = false;
   candidateActionError.value = '';
   candidateActionStatus.value =
@@ -373,47 +403,32 @@ async function decideCandidate(
       : `Promoting entity to ${action.toLowerCase()}…`;
   try {
     if (action === 'REJECTED') {
-      await apiRequest(
-        `/v1/geodata/imports/${encodeURIComponent(runId)}/candidates/validate`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            candidateIds: [candidate.id],
-            validationStatus: 'REJECTED',
-            reviewerId: store.account?.id,
-          }),
-          headers: {
-            'Idempotency-Key':
-              candidateActionKey.value ||
-              (candidateActionKey.value = crypto.randomUUID()),
-          },
-        },
-      );
+      await apiRequest(requestPath, {
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+        headers: { 'Idempotency-Key': actionKey },
+      });
     } else {
-      if (!candidateActionKey.value)
-        candidateActionKey.value = crypto.randomUUID();
       if (!candidateActionQueueId.value) {
-        const queue = await apiRequest<ImportProcessingQueue>(
-          `/v1/geodata/imports/${encodeURIComponent(runId)}/process`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              candidateIds: [candidate.id],
-              targetStatus: action,
-              processorId: store.account?.id,
-            }),
-            headers: { 'Idempotency-Key': candidateActionKey.value },
-          },
-        );
+        const queue = await apiRequest<ImportProcessingQueue>(requestPath, {
+          method: 'POST',
+          body: JSON.stringify(requestBody),
+          headers: { 'Idempotency-Key': actionKey },
+        });
         candidateActionQueueId.value = queue.id;
       }
       candidateActionStatus.value = 'Promotion queued. Waiting for the result…';
       const queueId = candidateActionQueueId.value;
       if (!queueId)
         throw new Error('Promotion queue was not returned by the service.');
-      await waitForPromotionQueue(runId, queueId, candidate.id);
+      await waitForPromotionQueue(
+        runId,
+        queueId,
+        candidate.id,
+        actionFingerprint,
+      );
     }
-    candidateActionKey.value = null;
+    pendingCandidateActionKeys.complete(actionFingerprint);
     candidateActionQueueId.value = null;
     candidatePendingAction.value = null;
     actionSucceeded = true;
@@ -675,16 +690,26 @@ async function processCandidates(
   if (!id || !ids.length || actionBusy.value) return;
   actionBusy.value = true;
   error.value = '';
+  const requestPath = `/v1/geodata/imports/${encodeURIComponent(id)}/process`;
+  const requestBody = {
+    candidateIds: ids,
+    targetStatus,
+    processorId: store.account?.id,
+  };
+  const fingerprint = JSON.stringify([
+    store.account?.id,
+    requestPath,
+    requestBody,
+  ]);
   try {
-    await apiRequest(`/v1/geodata/imports/${encodeURIComponent(id)}/process`, {
+    await apiRequest(requestPath, {
       method: 'POST',
-      body: JSON.stringify({
-        candidateIds: ids,
-        targetStatus,
-        processorId: store.account?.id,
-      }),
-      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      body: JSON.stringify(requestBody),
+      headers: {
+        'Idempotency-Key': pendingCandidateActionKeys.getOrCreate(fingerprint),
+      },
     });
+    pendingCandidateActionKeys.complete(fingerprint);
     if (selectedRun.value?.id === id) selectedCandidateIds.value = [];
     message.value = `${ids.length} records queued for promotion to ${targetStatus.toLowerCase()}. The counts update as processing finishes.`;
     await refreshImports(true);
@@ -700,19 +725,26 @@ async function rejectCandidates(): Promise<void> {
   if (!id || !ids.length || actionBusy.value) return;
   actionBusy.value = true;
   error.value = '';
+  const requestPath = `/v1/geodata/imports/${encodeURIComponent(id)}/candidates/validate`;
+  const requestBody = {
+    candidateIds: ids,
+    validationStatus: 'REJECTED',
+    reviewerId: store.account?.id,
+  };
+  const fingerprint = JSON.stringify([
+    store.account?.id,
+    requestPath,
+    requestBody,
+  ]);
   try {
-    await apiRequest(
-      `/v1/geodata/imports/${encodeURIComponent(id)}/candidates/validate`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          candidateIds: ids,
-          validationStatus: 'REJECTED',
-          reviewerId: store.account?.id,
-        }),
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
+    await apiRequest(requestPath, {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+      headers: {
+        'Idempotency-Key': pendingCandidateActionKeys.getOrCreate(fingerprint),
       },
-    );
+    });
+    pendingCandidateActionKeys.complete(fingerprint);
     if (selectedRun.value?.id === id) selectedCandidateIds.value = [];
     message.value = 'Rejected records were removed from the import.';
     await refreshImports(true);
@@ -812,7 +844,6 @@ function openCandidate(item: ImportCandidate, event?: MouseEvent): void {
   candidateAdvancePending.value = false;
   candidateActionStatus.value = '';
   candidateActionError.value = '';
-  candidateActionKey.value = null;
   candidateActionQueueId.value = null;
   candidatePendingAction.value = null;
   void nextTick(() =>
@@ -829,7 +860,6 @@ function closeCandidate(): void {
   candidateAdvancePending.value = false;
   candidateActionStatus.value = '';
   candidateActionError.value = '';
-  candidateActionKey.value = null;
   candidateActionQueueId.value = null;
   candidatePendingAction.value = null;
   void nextTick(() => candidateInvoker.value?.focus());
