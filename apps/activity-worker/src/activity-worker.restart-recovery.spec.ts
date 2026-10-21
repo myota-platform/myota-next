@@ -18,6 +18,7 @@ import type { ConsumerConfig, StreamConfig } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
+import { DatabaseHealthService } from '../../../libs/platform/src/database.module.js';
 import { ActivityWorkRepository } from './activity-work.repository.js';
 import { ActivityRetentionRepository } from './activity-retention.repository.js';
 import { ActivityWorkerService } from './activity-worker.service.js';
@@ -48,7 +49,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       max: 4,
       connectionTimeoutMillis: 1000,
     });
-    workerPool.on('error', () => undefined);
+    const workerPoolHealth = new DatabaseHealthService(workerPool);
     const directory = await mkdtemp(join(tmpdir(), 'myota-activity-worker-'));
     const port = await reserveLocalPort();
     const natsUrl = `nats://127.0.0.1:${port}`;
@@ -224,7 +225,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       expect(snapshots.rows[0]?.count).toBeGreaterThanOrEqual(3);
     } finally {
       if (worker) await worker.onModuleDestroy().catch(() => undefined);
-      await workerPool.end().catch(() => undefined);
+      await workerPoolHealth.onModuleDestroy().catch(() => undefined);
       if (publisher) await publisher.drain().catch(() => undefined);
       if (server) await stopJetStream(server).catch(() => undefined);
       await pool

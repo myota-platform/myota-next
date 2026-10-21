@@ -18,10 +18,18 @@ export class DatabaseHealthService implements OnModuleDestroy {
   constructor(
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {
-    if (this.pool && typeof this.pool.on === 'function')
+    if (this.pool && typeof this.pool.on === 'function') {
+      // pg-pool removes its idle-client error listener while a client is checked
+      // out. Keep a client-level listener so a socket failure between queries
+      // cannot become an unhandled EventEmitter error; query errors still reach
+      // the operation that owns the checked-out client.
+      this.pool.on('connect', (client) => {
+        client.on('error', () => undefined);
+      });
       this.pool.on('error', (error: Error) => {
         this.logger.warn(`PostgreSQL idle connection failed: ${error.message}`);
       });
+    }
   }
 
   async isReady(): Promise<boolean> {
