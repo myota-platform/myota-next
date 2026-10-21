@@ -89,7 +89,7 @@ export class ActivityService {
       );
     const claims = verifyAccessToken(authorization);
     if (
-      claims.sub !== activation.operatorId &&
+      pythonString(claims.sub) !== pythonString(activation.operatorId) &&
       !claims.scp.some((scope) => ['*', 'activity.admin'].includes(scope))
     )
       throw new ForbiddenException(
