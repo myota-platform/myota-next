@@ -319,12 +319,27 @@ test('publishes, requests, and issues an award across both web apps', async ({
     );
     expect(issuanceRecord.rows).toHaveLength(1);
     const issuanceId = issuanceRecord.rows[0]?.id;
+    const renderQueueResponse = page.waitForResponse(
+      (response) =>
+        response
+          .url()
+          .includes(`/v1/awards/issuances/${issuanceId}/render-jobs`) &&
+        response.request().method() === 'POST',
+    );
     await page
       .getByRole('button', { name: `Queue PDF render for ${callsign.value}` })
       .click();
-    await expect(page.getByRole('status')).toContainText(
-      `Certificate PDF queued for ${callsign.value}.`,
-    );
+    const queuedResponse = await renderQueueResponse;
+    expect(queuedResponse.status()).toBe(202);
+    await expect
+      .poll(async () => ({
+        notice: await page.locator('.notice[role="status"]').textContent(),
+        error: await page.locator('.error-card[role="alert"]').textContent(),
+      }))
+      .toEqual({
+        notice: `Certificate PDF queued for ${callsign.value}.`,
+        error: null,
+      });
     const renderJobs = await activityPool.query<{
       id: string;
       status: string;
