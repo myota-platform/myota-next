@@ -29,6 +29,8 @@ API, permits them in browser preflight requests, and passes trace headers back
 to clients when an upstream provides them.
 It bypasses request-body parsing, streams incoming bodies to the owning API,
 and preserves the declared `Content-Length` for binary and JSON payloads.
+When it forwards an already parsed JSON body, its serializer preserves exact
+large integer tokens instead of rounding them or failing on `BigInt` values.
 Paged endpoints accept arbitrary-size Python integer page values and preserve
 those exact integers in JSON responses, including values above JavaScript's
 safe integer range. Database page totals also avoid PostgreSQL 32-bit casts and

@@ -10,6 +10,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { writeOutboxEvent } from '@app/platform/outbox.js';
 import {
   pythonKeyErrorDetail,
@@ -287,7 +288,7 @@ export class IdentityCallsignService {
           body.evidenceType,
           body.source,
           body.checksum ?? null,
-          JSON.stringify(metadata),
+          stringifyJsonWithBigInts(metadata),
           evidence.submittedAt,
         ],
       );
@@ -582,7 +583,7 @@ export class IdentityCallsignService {
     await client.query(
       `INSERT INTO public.idempotency_record (service, key, response)
        VALUES ('identity', $1, $2::jsonb)`,
-      [key, JSON.stringify(response)],
+      [key, stringifyJsonWithBigInts(response)],
     );
   }
 
@@ -649,10 +650,7 @@ export class IdentityCallsignService {
   }
 }
 
-function requireCallsignFields(
-  body: object,
-  names: readonly string[],
-) {
+function requireCallsignFields(body: object, names: readonly string[]) {
   const missing = missingPythonTruthyFields(body, names);
   if (missing.length) {
     throw new BadRequestException(

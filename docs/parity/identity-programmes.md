@@ -2,6 +2,10 @@
 
 ## Shared implementation notes
 
+Gateway JSON forwarding and Identity outbox, security-event, evidence, and
+idempotency JSONB writes preserve arbitrary-precision integer tokens from the
+request parser through serialization, matching Python JSON handling.
+
 Focused Nest email-worker tests now cover the Python worker's allowlisted
 participant and administrator commands, rejection of sensitive extra fields
 and BOM-prefixed JSON, HTML escaping, and delivery-state persistence before the

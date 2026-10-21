@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
+import { stringifyJsonWithBigInts } from './json-bigint.js';
 
 interface OutboxEventInput {
   eventType: string;
@@ -26,7 +27,7 @@ export async function writeOutboxEvent(
       event.producer ?? 'identity',
       event.aggregateType,
       event.aggregateId,
-      JSON.stringify(event.payload),
+      stringifyJsonWithBigInts(event.payload),
       event.occurredAt ?? new Date(),
       event.correlationId ?? randomUUID(),
     ],
@@ -51,7 +52,13 @@ export async function writeSecurityEvent(
   await client.query(
     `INSERT INTO public.security_event (id, account_id, event_type, payload, occurred_at)
      VALUES ($1, $2, $3, $4::jsonb, $5)`,
-    [randomUUID(), accountId, eventType, JSON.stringify(payload), occurredAt],
+    [
+      randomUUID(),
+      accountId,
+      eventType,
+      stringifyJsonWithBigInts(payload),
+      occurredAt,
+    ],
   );
   await writeOutboxEvent(client, {
     eventType,

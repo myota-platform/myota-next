@@ -144,7 +144,7 @@ export class ActivityWorkRepository {
           [
             job.id,
             WORK_TYPE_BY_KIND[job.kind],
-            JSON.stringify({ jobId: String(job.id) }),
+            stringifyJsonWithBigInts({ jobId: String(job.id) }),
             job.created_at,
             job.available_at,
           ],
@@ -330,7 +330,12 @@ export class ActivityWorkRepository {
           await client.query(
             `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
            VALUES ($1,'activity.qso.recorded.v1','activity-service','qso',$2,$3::jsonb,now(),$4)`,
-            [randomUUID(), String(row.id), JSON.stringify(qso), randomUUID()],
+            [
+              randomUUID(),
+              String(row.id),
+              stringifyJsonWithBigInts(qso),
+              randomUUID(),
+            ],
           );
         }
         const accepted = acceptedRows.length;
@@ -354,7 +359,7 @@ export class ActivityWorkRepository {
             `INSERT INTO activity_job(id,kind,payload,idempotency_key) VALUES ($1,'AWARD_RECALCULATE',$2::jsonb,$3) ON CONFLICT (idempotency_key) DO NOTHING`,
             [
               awardJobId,
-              JSON.stringify({
+              stringifyJsonWithBigInts({
                 programmeSlug: activation.programme_slug,
                 subjectIds,
               }),
@@ -579,7 +584,12 @@ export class ActivityWorkRepository {
         await client.query(
           `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
            VALUES ($1,'activity.qso.recorded.v1','activity-service','qso',$2,$3::jsonb,now(),$4)`,
-          [randomUUID(), String(row.id), JSON.stringify(qso), randomUUID()],
+          [
+            randomUUID(),
+            String(row.id),
+            stringifyJsonWithBigInts(qso),
+            randomUUID(),
+          ],
         );
         await client.query(`RELEASE SAVEPOINT ${savepoint}`);
         accepted++;
@@ -610,7 +620,7 @@ export class ActivityWorkRepository {
          VALUES ($1,'AWARD_RECALCULATE',$2::jsonb,$3) ON CONFLICT (idempotency_key) DO NOTHING`,
         [
           awardId,
-          JSON.stringify({
+          stringifyJsonWithBigInts({
             programmeSlug: record.programme_slug,
             subjectIds: [...awardSubjects],
           }),
@@ -649,7 +659,7 @@ export class ActivityWorkRepository {
         randomUUID(),
         record.operator_id,
         notificationType,
-        JSON.stringify({ importId, result }),
+        stringifyJsonWithBigInts({ importId, result }),
         `adif:${importId}:completed`,
       ],
     );
@@ -686,7 +696,7 @@ export class ActivityWorkRepository {
         'adif',
         importId,
         qso.deduplicationKey,
-        JSON.stringify(qso),
+        stringifyJsonWithBigInts(qso),
       ],
     );
     return inserted.rows[0] ?? null;
@@ -703,7 +713,14 @@ export class ActivityWorkRepository {
   ): Promise<JsonRecord> {
     const updated = await client.query(
       'UPDATE activity_import SET status=$2,records_seen=$3,records_accepted=$4,records_rejected=$5,errors=$6::jsonb,completed_at=now() WHERE id=$1 RETURNING *',
-      [record.id, status, seen, accepted, rejected, JSON.stringify(errors)],
+      [
+        record.id,
+        status,
+        seen,
+        accepted,
+        rejected,
+        stringifyJsonWithBigInts(errors),
+      ],
     );
     const row = updated.rows[0];
     if (!row) throw new Error(`ADIF import ${String(record.id)} disappeared`);
@@ -714,7 +731,7 @@ export class ActivityWorkRepository {
         [
           randomUUID(),
           record.activation_id,
-          JSON.stringify({
+          stringifyJsonWithBigInts({
             importId: record.id,
             reason:
               errors[0] === 'uploaded object is not available'
@@ -799,13 +816,18 @@ export class ActivityWorkRepository {
     });
     const updated = await client.query(
       'UPDATE activity_award_issuance SET issuance=$2::jsonb WHERE id=$1',
-      [issuance.id, JSON.stringify(issuance)],
+      [issuance.id, stringifyJsonWithBigInts(issuance)],
     );
     if (!updated.rowCount) throw new Error('award issuance disappeared');
     await client.query(
       `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
        VALUES ($1,'awards.rendered.v1','awards-service','award_issuance',$2,$3::jsonb,now(),$4)`,
-      [randomUUID(), issuance.id, JSON.stringify(issuance), randomUUID()],
+      [
+        randomUUID(),
+        issuance.id,
+        stringifyJsonWithBigInts(issuance),
+        randomUUID(),
+      ],
     );
   }
 
@@ -841,7 +863,7 @@ export class ActivityWorkRepository {
             randomUUID(),
             programme,
             category,
-            JSON.stringify({
+            stringifyJsonWithBigInts({
               participants: Number(row.participants),
               qsos: Number(row.qsos),
               activations: Number(row.activations),
@@ -871,7 +893,7 @@ export class ActivityWorkRepository {
               programme,
               statisticType,
               String(group.scope_key),
-              JSON.stringify({
+              stringifyJsonWithBigInts({
                 participants: Number(group.participants),
                 qsos: Number(group.qsos),
                 activations: Number(group.activations),
@@ -1163,7 +1185,12 @@ async function createAwardNotification(
   await client.query(
     `INSERT INTO activity_notification(id,recipient_id,notification_type,payload,status,delivered_at,deduplication_key)
      VALUES ($1,$2,'AWARD_QUALIFIED',$3::jsonb,'DELIVERED',now(),$4) ON CONFLICT DO NOTHING`,
-    [randomUUID(), subjectId, JSON.stringify(payload), deduplicationKey],
+    [
+      randomUUID(),
+      subjectId,
+      stringifyJsonWithBigInts(payload),
+      deduplicationKey,
+    ],
   );
 }
 

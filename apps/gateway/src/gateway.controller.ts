@@ -8,6 +8,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { renderHttpRequestMetrics } from '@app/platform/http-metrics.js';
 import {
   MYOTA_CLIENT_ADDRESS_HEADER,
@@ -235,7 +236,7 @@ export class GatewayController {
       const contentLength = request.header('content-length');
       if (contentLength) headers.set('content-length', contentLength);
       if (request.body !== undefined) {
-        body = JSON.stringify(request.body);
+        body = stringifyJsonWithBigInts(request.body);
         if (!headers.has('content-type'))
           headers.set('content-type', 'application/json');
       } else {

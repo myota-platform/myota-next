@@ -10,6 +10,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   nextPageIfMore,
   pageOffset,
@@ -306,7 +307,7 @@ export class IdentityAccountService {
         await client.query(
           `INSERT INTO public.idempotency_record (service, key, response)
            VALUES ('identity', $1, $2::jsonb)`,
-          [idempotencyKey, JSON.stringify(response)],
+          [idempotencyKey, stringifyJsonWithBigInts(response)],
         );
       }
       await client.query('COMMIT');
@@ -1105,7 +1106,7 @@ export class IdentityAccountService {
     await client.query(
       `INSERT INTO public.idempotency_record (service, key, response)
        VALUES ('identity', $1, $2::jsonb)`,
-      [key, JSON.stringify(response)],
+      [key, stringifyJsonWithBigInts(response)],
     );
   }
 
@@ -1124,8 +1125,7 @@ export class IdentityAccountService {
       [accountId],
     );
     const account = accountResult.rows[0];
-    if (!account)
-      throw new NotFoundException(pythonKeyErrorDetail(accountId));
+    if (!account) throw new NotFoundException(pythonKeyErrorDetail(accountId));
     const callsigns = await client.query(
       `SELECT c.id, c.value, c.lifecycle_status AS status, c.source,
               c.verification_source AS "verificationSource",

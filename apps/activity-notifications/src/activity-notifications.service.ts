@@ -18,6 +18,7 @@ import type { Consumer, ConsumerConfig, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 
@@ -442,7 +443,10 @@ export class ActivityNotificationsService
             randomUUID(),
             String(recipient),
             kind,
-            JSON.stringify({ eventType, eventId: notificationEventId }),
+            stringifyJsonWithBigInts({
+              eventType,
+              eventId: notificationEventId,
+            }),
             `event:${notificationEventId}`,
           ],
         );
@@ -496,7 +500,7 @@ export class ActivityNotificationsService
         [
           eventId,
           eventType,
-          JSON.stringify(diagnostic),
+          stringifyJsonWithBigInts(diagnostic),
           attempts,
           permanent
             ? 'invalid_or_unsupported_envelope'
