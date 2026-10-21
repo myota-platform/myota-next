@@ -1233,8 +1233,8 @@ onMounted(() => {
             ><small>{{
               issuance.artifact?.downloadReady
                 ? 'PDF ready'
-                : renderQueueStatus[issuance.id] ||
-                  issuance.artifact?.renderStatus ||
+                : issuance.renderJobStatus ||
+                  renderQueueStatus[issuance.id] ||
                   'PDF not queued'
             }}</small></span
           ><span>{{ issuance.dateObtained }}</span>

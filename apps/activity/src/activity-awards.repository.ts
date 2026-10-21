@@ -392,11 +392,21 @@ export class ActivityAwardsRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        `SELECT total.value,page_rows.issuance::text AS issuance_text
+        `SELECT total.value,page_rows.issuance::text AS issuance_text,
+                page_rows.render_job_status
          FROM (SELECT count(*) AS value FROM activity_award_issuance) total
          LEFT JOIN LATERAL (
-           SELECT issuance FROM activity_award_issuance
-           ORDER BY created_at DESC
+           SELECT i.issuance,
+                  render_job.status AS render_job_status
+           FROM activity_award_issuance i
+           LEFT JOIN LATERAL (
+             SELECT j.status
+             FROM activity_job j
+             WHERE j.kind='PDF_RENDER' AND j.payload->>'issuanceId'=i.id::text
+             ORDER BY j.created_at DESC,j.id DESC
+             LIMIT 1
+           ) render_job ON TRUE
+           ORDER BY i.created_at DESC
            LIMIT $2 OFFSET $1::bigint
          ) page_rows ON TRUE`,
         [offset.toString(), pageSize],
@@ -404,12 +414,12 @@ export class ActivityAwardsRepository {
       return {
         items: result.rows
           .filter((row) => row.issuance_text !== null)
-          .map(
-            (row) =>
-              parseJsonWithExactIntegers(
-                String(row.issuance_text),
-              ) as JsonRecord,
-          ),
+          .map((row) => ({
+            ...(parseJsonWithExactIntegers(
+              String(row.issuance_text),
+            ) as JsonRecord),
+            renderJobStatus: row.render_job_status ?? null,
+          })),
         total: parsePageTotal(result.rows[0]?.value ?? '0'),
       };
     } finally {

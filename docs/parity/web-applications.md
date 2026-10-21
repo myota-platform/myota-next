@@ -87,7 +87,8 @@ preparation is pending and receives a download action after the worker stores
 the artifact. The browser API stack uses an ephemeral S3-compatible store for
 the artwork upload and read-back; CI verifies the stored Activity assets,
 published award definition, request facts, issuance record, render job,
-print-readiness result, and award lifecycle outbox events.
+print-readiness result, and award lifecycle outbox events. The Admin issuance
+list retains the latest render-job status when the view reloads.
 
 An additional live browser workflow seeds an isolated Geodata entity and a
 catalogue-backed country value, signs in as the bootstrap administrator, edits

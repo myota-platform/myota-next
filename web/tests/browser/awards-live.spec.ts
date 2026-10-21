@@ -347,6 +347,24 @@ test('publishes, requests, and issues an award across both web apps', async ({
     expect(renderJobs.rows).toMatchObject([
       { status: 'QUEUED', issuance_id: issuanceId },
     ]);
+    const adminIssuances = await request.get(
+      'http://127.0.0.1:8080/v1/awards/issuances?page=1&pageSize=50',
+      { headers: { Authorization: `Bearer ${adminAccessToken}` } },
+    );
+    expect(adminIssuances.status()).toBe(200);
+    expect((await adminIssuances.json()).items).toContainEqual(
+      expect.objectContaining({
+        id: issuanceId,
+        renderJobStatus: 'QUEUED',
+      }),
+    );
+    await page.reload();
+    const issuanceRowAfterReload = page
+      .getByRole('button', { name: `Queue PDF render for ${callsign.value}` })
+      .locator('xpath=..');
+    await expect(issuanceRowAfterReload.locator('small').nth(1)).toHaveText(
+      'QUEUED',
+    );
 
     const participantRequests = await request.get(
       `http://127.0.0.1:8080/v1/awards/requests?subjectId=${encodeURIComponent(accountId!)}&page=1&pageSize=50`,

@@ -113,7 +113,9 @@ are available to Activity readers and administrators, and to participants when
 `subjectId` matches their account and their token carries `identity.me` or
 `awards.request`. The owner request response includes certificate readiness;
 artifact reads allow the participant's `identity.me` scope and still enforce
-issuance ownership. Qualification notice payloads and deduplication also
+issuance ownership. Admin issuance pages include the latest PDF render-job
+status so queued and running renders remain visible after reload. Qualification
+notice payloads and deduplication also
 preserve the worker split: recalculation
 notices include `awardCode` and eligible-level IDs in dedupe keys; direct
 evaluation notices omit `awardCode` and key by award, version, and subject.

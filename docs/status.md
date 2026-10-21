@@ -49,7 +49,7 @@ production readiness.
   loading uses live services as well. Participants can read their own request
   status, while cross-account reads are denied. Admin can queue certificate PDF
   rendering, and Participant exposes the download only after the artifact is
-  ready.
+  ready. The latest render-job status persists in Admin across page reloads.
   Most other browser workflows still use intercepted API responses;
   broader payload coverage, accessibility, responsive behavior, and failure
   states remain to be qualified.
