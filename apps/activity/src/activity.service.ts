@@ -15,6 +15,7 @@ import {
 import {
   MAX_UPLOAD_BYTES,
   integerSetting,
+  missingPythonTruthyFields,
   pythonTruthy,
   trimPythonWhitespace,
   verifyAccessToken,
@@ -431,13 +432,14 @@ export class ActivityService {
     qsoId: string,
     body: JsonRecord,
   ) {
-    if (
-      !pythonTruthy(body.requestedBy) ||
-      !pythonTruthy(body.reason) ||
-      !pythonTruthy(body.proposedValues)
-    )
+    const missing = missingPythonTruthyFields(body, [
+      'requestedBy',
+      'reason',
+      'proposedValues',
+    ]);
+    if (missing.length)
       throw new BadRequestException(
-        'requestedBy, reason, and proposedValues are required',
+        `missing required fields: ${missing.join(', ')}`,
       );
     const claims = verifyAccessToken(authorization);
     if (
@@ -456,9 +458,10 @@ export class ActivityService {
     correctionId: string,
     body: JsonRecord,
   ) {
-    if (!pythonTruthy(body.decision) || !pythonTruthy(body.reviewedBy))
+    const missing = missingPythonTruthyFields(body, ['decision', 'reviewedBy']);
+    if (missing.length)
       throw new BadRequestException(
-        'missing required fields: decision, reviewedBy',
+        `missing required fields: ${missing.join(', ')}`,
       );
     this.authorize(authorization, ['activity.admin']);
     if (body.decision !== 'APPLIED' && body.decision !== 'REJECTED')

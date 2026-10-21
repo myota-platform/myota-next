@@ -41,6 +41,8 @@ duplicate-event idempotency. Cluster failover and database-outage recovery
 remain open. QSO correction requests and administrator review are also
 implemented, ignore `Idempotency-Key` as the reference does, and rely on the
 database relation for request QSO existence.
+Correction request and review required fields use the reference's ordered
+`missing required fields` detail before their corresponding authorization step.
 Applied corrections update only the reference's writable QSO fields and queue
 award recalculation for the stored QSO, even when the nested route QSO ID differs;
 a focused repository fixture covers that transaction and job payload. Correction
