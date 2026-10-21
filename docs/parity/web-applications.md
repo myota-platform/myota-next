@@ -60,6 +60,8 @@ candidate listing and review, plus idempotent durable candidate promotion.
 Single-item decisions and bulk candidate promotion or rejection retain their
 idempotency keys across same-tab retries and reloads. Pasted imports retain
 their exact request body and idempotency key for same-tab retries after reload.
+Geodata deletion job creation and confirmation also retain their keys across
+same-tab retries and reloads.
 The Identity account editor exposes callsign creation with status, source, and
 validity fields; evidence submission with checksum and metadata; verification
 for callers with `callsign.verify` and a configurable verification source;

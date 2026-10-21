@@ -295,10 +295,15 @@ export const myotaClient = {
       `/v1/geodata/entity-deletion-jobs/${encodeURIComponent(jobId)}`,
     );
   },
-  confirmGeodataEntityDeletionJob<T = unknown>(jobId: string, body: unknown) {
+  confirmGeodataEntityDeletionJob<T = unknown>(
+    jobId: string,
+    body: unknown,
+    idempotencyKey?: string,
+  ) {
     return deletionWrite<T>(
       `/v1/geodata/entity-deletion-jobs/${encodeURIComponent(jobId)}/confirm`,
       body,
+      idempotencyKey,
     );
   },
   patchAward<T = unknown>(id: string, body: unknown) {

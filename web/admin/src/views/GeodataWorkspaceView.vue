@@ -5,6 +5,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router';
 import { ApiError, apiRequest } from '../lib/api';
 import { myotaClient } from '../lib/myotaClient';
+import { createPendingIdempotencyKeys } from '../lib/pendingIdempotencyKeys';
 import {
   pendingDeletionStatuses,
   pollDeletionJobs,
@@ -18,6 +19,9 @@ import type { EntityCategory, GeoEntity } from '../types';
 
 const props = defineProps<{ mode: 'review' | 'management' }>();
 const store = useAppStore();
+const pendingDeletionKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_geodata_deletions',
+);
 const canEdit = computed(() => hasAnyScope(store.account, 'geodata.review'));
 const canConvertGeometry = computed(
   () =>
@@ -522,7 +526,6 @@ type DeletionItem = {
   entity: GeoEntity;
   job: DeletionJob;
   error?: string;
-  idempotencyKey: string;
 };
 type PendingDeletion =
   | { kind: 'single'; entity: GeoEntity; job: DeletionJob }
@@ -556,14 +559,41 @@ function aggregateDeletionImpact(items: DeletionItem[]): DeletionImpact {
     {},
   );
 }
-async function createDeletionJob(
-  id: string,
-  idempotencyKey?: string,
-): Promise<DeletionJob> {
+function deletionCreationFingerprint(entityId: string): string {
+  const requestPath = '/v1/geodata/entity-deletion-jobs';
+  const requestBody = { entityId, requestedBy: store.account?.id };
+  return JSON.stringify([store.account?.id, requestPath, requestBody]);
+}
+function deletionConfirmationFingerprint(jobId: string): string {
+  const requestPath = `/v1/geodata/entity-deletion-jobs/${encodeURIComponent(jobId)}/confirm`;
+  const requestBody = { confirmation: 'DELETE', deletedBy: store.account?.id };
+  return JSON.stringify([store.account?.id, requestPath, requestBody]);
+}
+async function createDeletionJob(id: string): Promise<DeletionJob> {
+  const requestBody = { entityId: id, requestedBy: store.account?.id };
+  const fingerprint = deletionCreationFingerprint(id);
   return myotaClient.createGeodataEntityDeletionJob<DeletionJob>(
-    { entityId: id, requestedBy: store.account?.id },
-    idempotencyKey,
+    requestBody,
+    await pendingDeletionKeys.getOrCreate(fingerprint),
   );
+}
+async function confirmDeletionJob(jobId: string): Promise<DeletionJob> {
+  const requestBody = { confirmation: 'DELETE', deletedBy: store.account?.id };
+  const fingerprint = deletionConfirmationFingerprint(jobId);
+  return myotaClient.confirmGeodataEntityDeletionJob<DeletionJob>(
+    jobId,
+    requestBody,
+    await pendingDeletionKeys.getOrCreate(fingerprint),
+  );
+}
+async function completeDeletionKeys(
+  entityId: string,
+  jobId: string,
+): Promise<void> {
+  await Promise.all([
+    pendingDeletionKeys.complete(deletionCreationFingerprint(entityId)),
+    pendingDeletionKeys.complete(deletionConfirmationFingerprint(jobId)),
+  ]);
 }
 const deletionPollDelayMs = 1_500;
 function delay(ms: number): Promise<void> {
@@ -615,11 +645,15 @@ async function refreshBulkDeletionStatuses(
     },
     pause: () => delay(deletionPollDelayMs),
   });
-  const completedIds = new Set(
-    pending.items
-      .filter((item) => String(item.job.status).toUpperCase() === 'COMPLETED')
-      .map((item) => item.job.id),
+  const completedItems = pending.items.filter(
+    (item) => String(item.job.status).toUpperCase() === 'COMPLETED',
   );
+  await Promise.all(
+    completedItems.map((item) =>
+      completeDeletionKeys(item.entity.id, item.job.id),
+    ),
+  );
+  const completedIds = new Set(completedItems.map((item) => item.job.id));
   pending.items = pending.items.filter(
     (item) => !completedIds.has(item.job.id),
   );
@@ -662,16 +696,17 @@ async function confirmDelete(): Promise<void> {
   deleting.value = true;
   try {
     if (pending.kind === 'single') {
+      if (String(pending.job.status).toUpperCase() === 'FAILED') {
+        await completeDeletionKeys(pending.entity.id, pending.job.id);
+        pending.job = await createDeletionJob(pending.entity.id);
+      }
       if (
         !pendingDeletionStatuses.has(String(pending.job.status).toUpperCase())
       ) {
         try {
           pending.job = {
             ...pending.job,
-            ...(await myotaClient.confirmGeodataEntityDeletionJob<DeletionJob>(
-              pending.job.id,
-              { confirmation: 'DELETE', deletedBy: store.account?.id },
-            )),
+            ...(await confirmDeletionJob(pending.job.id)),
           };
         } catch (cause) {
           const current =
@@ -690,6 +725,7 @@ async function confirmDelete(): Promise<void> {
       }
       await refreshSingleDeletionStatus(pending);
       if (String(pending.job.status).toUpperCase() === 'COMPLETED') {
+        await completeDeletionKeys(pending.entity.id, pending.job.id);
         message.value =
           'Entity permanently deleted; linked activity and award progress were reconciled.';
         deletionModal.value = null;
@@ -697,6 +733,9 @@ async function confirmDelete(): Promise<void> {
         selectedIds.value = [];
         await load();
       } else if (String(pending.job.status).toUpperCase() === 'FAILED') {
+        await pendingDeletionKeys.complete(
+          deletionCreationFingerprint(pending.entity.id),
+        );
         error.value =
           pending.job.error ||
           'Entity deletion failed. The entity was not reported as deleted.';
@@ -709,8 +748,10 @@ async function confirmDelete(): Promise<void> {
       const submittedItems = [...pending.items];
       const results = await Promise.allSettled(
         submittedItems.map(async (item) => {
-          if (String(item.job.status).toUpperCase() === 'FAILED')
+          if (String(item.job.status).toUpperCase() === 'FAILED') {
+            await completeDeletionKeys(item.entity.id, item.job.id);
             item.job = await createDeletionJob(item.entity.id);
+          }
           if (
             !item.job.status ||
             String(item.job.status).toUpperCase() === 'AWAITING_CONFIRMATION' ||
@@ -719,10 +760,7 @@ async function confirmDelete(): Promise<void> {
             try {
               item.job = {
                 ...item.job,
-                ...(await myotaClient.confirmGeodataEntityDeletionJob<DeletionJob>(
-                  item.job.id,
-                  { confirmation: 'DELETE', deletedBy: store.account?.id },
-                )),
+                ...(await confirmDeletionJob(item.job.id)),
               };
             } catch (cause) {
               // A timeout can happen after the server has durably queued the job.
@@ -815,10 +853,7 @@ async function deleteEntity(
       : entities.value.find((item) => item.id === id);
   if (!entity || !existingJob) return;
   try {
-    await myotaClient.confirmGeodataEntityDeletionJob(existingJob.id, {
-      confirmation: 'DELETE',
-      deletedBy: store.account?.id,
-    });
+    await confirmDeletionJob(existingJob.id);
     message.value =
       'Entity deletion queued; linked QSOs will be removed and award recalculation will run.';
     selected.value = null;
@@ -838,7 +873,6 @@ async function bulkDelete(): Promise<void> {
     items: selectedEntities.map((entity) => ({
       entity,
       job: { id: '', status: 'PREPARING' },
-      idempotencyKey: crypto.randomUUID(),
     })),
     totalCount: selectedEntities.length,
     completedCount: 0,
@@ -864,10 +898,7 @@ async function prepareBulkDeletionJobs(
       await Promise.all(
         batch.map(async (item) => {
           try {
-            item.job = await createDeletionJob(
-              item.entity.id,
-              item.idempotencyKey,
-            );
+            item.job = await createDeletionJob(item.entity.id);
             item.error = undefined;
           } catch (cause) {
             item.job = { id: '', status: 'PREPARATION_FAILED' };
