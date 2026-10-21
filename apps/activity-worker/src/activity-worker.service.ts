@@ -49,8 +49,7 @@ type WorkDefinition = {
 export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ActivityWorkerService.name);
   private stopping = false;
-  private readonly stopSignal: Promise<void>;
-  private resolveStop!: () => void;
+  private readonly waiters = new Set<() => void>();
   private connection?: Awaited<ReturnType<typeof connect>>;
   private loops: Promise<void>[] = [];
   private readonly probes = new WorkerProbeServer();
@@ -60,11 +59,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
     private readonly repository: ActivityWorkRepository,
     private readonly retention: ActivityRetentionRepository,
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
-  ) {
-    this.stopSignal = new Promise((resolve) => {
-      this.resolveStop = resolve;
-    });
-  }
+  ) {}
 
   async onModuleInit(): Promise<void> {
     if (!process.env.ACTIVITY_DATABASE_URL)
@@ -132,7 +127,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     this.stopping = true;
-    this.resolveStop();
+    for (const wake of this.waiters) wake();
     await this.probes.close();
     await Promise.allSettled(this.loops);
     await this.connection?.drain();
@@ -337,10 +332,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     const task = this.repository.process(job);
     while (true) {
-      const state = await Promise.race([
-        task.then(() => 'done' as const),
-        pause(30_000).then(() => 'tick' as const),
-      ]);
+      const state = await waitForTaskOrTick(task, 30_000);
       if (state === 'done') return;
       const extended = await this.repository.heartbeat(job);
       if (!extended) throw new Error('worker lease was lost while processing');
@@ -387,7 +379,17 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async wait(milliseconds: number): Promise<void> {
-    await Promise.race([pause(milliseconds), this.stopSignal]);
+    if (this.stopping) return;
+    await new Promise<void>((resolve) => {
+      let timer: ReturnType<typeof setTimeout>;
+      const finish = () => {
+        clearTimeout(timer);
+        this.waiters.delete(finish);
+        resolve();
+      };
+      timer = setTimeout(finish, milliseconds);
+      this.waiters.add(finish);
+    });
   }
 }
 
@@ -489,4 +491,23 @@ function safeError(error: unknown): string {
 
 function pause(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function waitForTaskOrTick(
+  task: Promise<void>,
+  milliseconds: number,
+): Promise<'done' | 'tick'> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve('tick'), milliseconds);
+    task.then(
+      () => {
+        clearTimeout(timer);
+        resolve('done');
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }

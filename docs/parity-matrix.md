@@ -686,10 +686,12 @@ geometries.
   recalculation, certificate rendering, and statistics rebuild are consumed
   from their registered JetStream durables up to each durable's configured
   `max_ack_pending` concurrency. Database leases and message progress
-  acknowledgements protect long jobs; notifications are handled by
-  the separate consumer described below. ADIF source-object retention is
-  scheduled, and queued jobs missing an outbox command are repaired periodically;
-  other retention and recovery evidence remain open.
+  acknowledgements protect long jobs. Heartbeat timers are cancelled when
+  processing settles, and long scheduled waits are cleared on shutdown.
+  Notifications are handled by the separate consumer described below. ADIF
+  source-object retention is scheduled, and queued jobs missing an outbox
+  command are repaired periodically; other retention and recovery evidence
+  remain open.
 - Identity maintenance: expired recovery tokens, revoked sessions, expired
   revocations, rate-limit windows, old security events, and aged orphan profile
   images are cleaned by a separate Core-owned worker.

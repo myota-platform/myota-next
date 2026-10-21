@@ -98,3 +98,52 @@ describe('ActivityWorkerService work command metadata', () => {
     expect(message.ack).toHaveBeenCalledOnce();
   });
 });
+
+describe('ActivityWorkerService timer cleanup', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('clears the heartbeat interval when a job finishes early', async () => {
+    vi.useFakeTimers();
+    const repository = { process: vi.fn().mockResolvedValue(undefined) };
+    const service = new ActivityWorkerService(
+      repository as never,
+      {} as never,
+      null,
+    );
+    const job = {
+      id: 'job-1',
+      kind: 'QSO_INGESTION',
+      payload: {},
+      attempts: 1,
+      leaseToken: 'lease-1',
+    };
+    const message = { working: vi.fn() };
+
+    await (
+      service as unknown as {
+        processWithHeartbeats: (
+          job: unknown,
+          message: unknown,
+        ) => Promise<void>;
+      }
+    ).processWithHeartbeats(job, message);
+
+    expect(vi.getTimerCount()).toBe(0);
+    expect(repository.process).toHaveBeenCalledOnce();
+  });
+
+  it('clears a long retention wait when the worker shuts down', async () => {
+    vi.useFakeTimers();
+    const service = new ActivityWorkerService({} as never, {} as never, null);
+    const wait = (
+      service as unknown as { wait: (milliseconds: number) => Promise<void> }
+    ).wait;
+    const pending = wait.call(service, 86_400_000);
+
+    expect(vi.getTimerCount()).toBe(1);
+    await service.onModuleDestroy();
+    await pending;
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
