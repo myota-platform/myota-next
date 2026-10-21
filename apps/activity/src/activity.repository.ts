@@ -925,7 +925,7 @@ export class ActivityRepository {
       );
       await client.query(
         `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at,correlation_id)
-         VALUES ($1,$2,'activity-service','activity_job',$1,$3::jsonb,now(),now(),$4)`,
+         VALUES ($1::uuid,$2,'activity-service','activity_job',$1::uuid::text,$3::jsonb,now(),now(),$4)`,
         [id, workEventType(kind), JSON.stringify({ jobId: id }), randomUUID()],
       );
       return jobRecord(result.rows[0]);
