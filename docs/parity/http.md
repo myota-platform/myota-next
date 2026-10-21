@@ -33,6 +33,12 @@ to clients when an upstream provides them.
 Configured upstream base URLs may end in multiple slashes; the Gateway and
 Geodata deletion cascade remove all trailing slashes before appending a path,
 matching the Python reference.
+The PostgreSQL-backed HTTP integration check starts Identity, Activity, and
+Gateway as separate Nest applications on ephemeral ports and accesses them
+through loopback. It exercises
+the `/v1` login, current-account, refresh, activation, QSO, and close workflow
+through Gateway, verifying upstream routing and the Core/Activity database
+ownership boundary together.
 It bypasses request-body parsing, streams incoming bodies to the owning API,
 and preserves the declared `Content-Length` for binary and JSON payloads.
 When it forwards an already parsed JSON body, its serializer preserves exact
