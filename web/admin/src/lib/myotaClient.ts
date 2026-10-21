@@ -359,7 +359,13 @@ export const myotaClient = {
       idempotencyKey,
     );
   },
-  patchAward<T = unknown>(id: string, body: unknown) {
-    return write<T>(`/v1/awards/${encodeURIComponent(id)}`, 'PATCH', body);
+  patchAward<T = unknown>(id: string, body: unknown, idempotencyKey?: string) {
+    return write<T>(
+      `/v1/awards/${encodeURIComponent(id)}`,
+      'PATCH',
+      body,
+      undefined,
+      idempotencyKey,
+    );
   },
 };

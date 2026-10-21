@@ -43,10 +43,11 @@ export class AwardsController {
   @Post()
   create(
     @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
     @Body() body: Record<string, any>,
     @Res({ passthrough: true }) response: Response,
   ) {
-    return this.awards.save(authorization, undefined, body).then((saved) => {
+    return this.awards.save(authorization, key, body).then((saved) => {
       response.status(saved.statusCode);
       return saved.award;
     });

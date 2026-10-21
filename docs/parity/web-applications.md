@@ -46,7 +46,10 @@ requester and operator, and confirmations explain the effect of applying versus
 rejecting. This target extension lacks browser-level compatibility coverage.
 Award browser checks cover programme-
 scoped draft creation, its idempotency key and condition/level payload, and
-the submit, approve, and publish lifecycle. Master data browser checks cover shared
+the submit, approve, and publish lifecycle. Award creation, definition edits,
+and lifecycle state changes retain idempotency keys for same-tab retries across
+reloads.
+Master data browser checks cover shared
 category creation, geometry type selection, inactive lifecycle, and the
 idempotency key. Programme category assignment and removal retain their
 idempotency keys across same-tab retries and reloads. Shared category saves

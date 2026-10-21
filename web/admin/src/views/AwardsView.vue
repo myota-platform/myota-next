@@ -6,6 +6,7 @@ import PageNavigation from '../components/PageNavigation.vue';
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { apiRequest } from '../lib/api';
 import { myotaClient } from '../lib/myotaClient';
+import { createPendingIdempotencyKeys } from '../lib/pendingIdempotencyKeys';
 import { useAppStore } from '../stores/app';
 import { bytesFromBase64, inspectArtwork } from '../lib/awardArtwork';
 import { utcInput, utcInputValue } from '../lib/utc';
@@ -45,6 +46,9 @@ interface AwardPage<T> {
 }
 
 const store = useAppStore();
+const pendingAwardMutationKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_award_mutations',
+);
 const canManage = computed(() => hasAnyScope(store.account, 'awards.admin'));
 const loading = ref(false);
 let loadGeneration = 0;
@@ -494,52 +498,77 @@ async function save(): Promise<void> {
   saving.value = true;
   error.value = '';
   try {
-    const saved = await apiRequest<Award>(
-      selected.value?.id
-        ? `/v1/awards/${encodeURIComponent(selected.value.id)}`
-        : '/v1/awards',
-      {
-        method: selected.value?.id ? 'PATCH' : 'POST',
-        body: JSON.stringify({
-          awardId: selected.value?.id,
-          programmeSlug: programme.value,
-          code: form.code,
-          name: form.name,
-          description: form.description,
-          category: form.category,
-          achievementMetric: form.achievementMetric,
-          condition: JSON.parse(form.condition),
-          levels: JSON.parse(form.levels),
-          backgroundAsset: {
-            ...selected.value?.backgroundAsset,
-            ...selectedBackground.value,
-            kind: 'BACKGROUND',
-            name: selectedBackground.value?.name || `${form.name} background`,
-            objectKey: form.backgroundKey,
-            mediaType: form.backgroundType,
-            widthPx: Number(form.width),
-            heightPx: Number(form.height),
-          },
-          printSpec: {
-            ...selected.value?.printSpec,
-            page: form.page,
-            orientation: form.orientation,
-            dpi: Number(form.dpi),
-          },
-          template: {
-            ...selected.value?.template,
-            elements: templateElements.value,
-          },
-          signatureAssetId: form.signatureAssetId || null,
-          managerName: form.managerName,
-          effectiveFrom: utcInputValue(
-            form.effectiveFrom,
-            selected.value?.effectiveFrom,
-          ),
-        }),
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
+    const body = {
+      awardId: selected.value?.id,
+      programmeSlug: programme.value,
+      code: form.code,
+      name: form.name,
+      description: form.description,
+      category: form.category,
+      achievementMetric: form.achievementMetric,
+      condition: JSON.parse(form.condition),
+      levels: JSON.parse(form.levels),
+      backgroundAsset: {
+        ...selected.value?.backgroundAsset,
+        ...selectedBackground.value,
+        kind: 'BACKGROUND',
+        name: selectedBackground.value?.name || `${form.name} background`,
+        objectKey: form.backgroundKey,
+        mediaType: form.backgroundType,
+        widthPx: Number(form.width),
+        heightPx: Number(form.height),
       },
-    );
+      printSpec: {
+        ...selected.value?.printSpec,
+        page: form.page,
+        orientation: form.orientation,
+        dpi: Number(form.dpi),
+      },
+      template: {
+        ...selected.value?.template,
+        elements: templateElements.value,
+      },
+      signatureAssetId: form.signatureAssetId || null,
+      managerName: form.managerName,
+      effectiveFrom: utcInputValue(
+        form.effectiveFrom,
+        selected.value?.effectiveFrom,
+      ),
+    };
+    let saved: Award;
+    if (selected.value?.id) {
+      const id = selected.value.id;
+      const requestPath = `/v1/awards/${encodeURIComponent(id)}`;
+      const fingerprint = JSON.stringify([
+        store.account?.id,
+        requestPath,
+        'PATCH',
+        body,
+      ]);
+      saved = await myotaClient.patchAward<Award>(
+        id,
+        body,
+        await pendingAwardMutationKeys.getOrCreate(fingerprint),
+      );
+      await pendingAwardMutationKeys.complete(fingerprint);
+    } else {
+      const requestPath = '/v1/awards';
+      const fingerprint = JSON.stringify([
+        store.account?.id,
+        requestPath,
+        'POST',
+        body,
+      ]);
+      saved = await apiRequest<Award>('/v1/awards', {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: {
+          'Idempotency-Key':
+            await pendingAwardMutationKeys.getOrCreate(fingerprint),
+        },
+      });
+      await pendingAwardMutationKeys.complete(fingerprint);
+    }
     message.value = 'Award draft saved.';
     await load(saved.id);
   } catch (cause) {
@@ -572,7 +601,20 @@ async function action(actionName: string, decision?: string): Promise<void> {
           : actionName === 'retire'
             ? { status: 'RETIRED', retiredBy: store.account?.id }
             : { status: 'UNDER_REVIEW', submitterId: store.account?.id };
-    await myotaClient.patchAward(selected.value.id, body);
+    const id = selected.value.id;
+    const requestPath = `/v1/awards/${encodeURIComponent(id)}`;
+    const fingerprint = JSON.stringify([
+      store.account?.id,
+      requestPath,
+      'PATCH',
+      body,
+    ]);
+    await myotaClient.patchAward(
+      id,
+      body,
+      await pendingAwardMutationKeys.getOrCreate(fingerprint),
+    );
+    await pendingAwardMutationKeys.complete(fingerprint);
     message.value = `Award ${actionName === 'publish' ? 'published' : `${actionName}ed`}.`;
     await load(selected.value.id);
   } catch (cause) {
