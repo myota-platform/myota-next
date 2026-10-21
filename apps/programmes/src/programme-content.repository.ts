@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
 
@@ -40,21 +41,29 @@ export class ProgrammeContentRepository {
     client: PoolClient,
     id: string,
   ): Promise<ProgrammeContentRecord | undefined> {
-    const result = await client.query<{ payload: ProgrammeContentRecord }>(
-      'SELECT payload FROM public.programme_content WHERE id=$1 FOR UPDATE',
+    const result = await client.query<{ payload_text: string }>(
+      'SELECT payload::text AS payload_text FROM public.programme_content WHERE id=$1 FOR UPDATE',
       [id],
     );
-    return result.rows[0]?.payload;
+    return result.rows[0]
+      ? (parseJsonWithExactIntegers(
+          result.rows[0].payload_text,
+        ) as ProgrammeContentRecord)
+      : undefined;
   }
 
   async get(id: string): Promise<ProgrammeContentRecord | undefined> {
     const client = await this.connect();
     try {
-      const result = await client.query<{ payload: ProgrammeContentRecord }>(
-        'SELECT payload FROM public.programme_content WHERE id=$1',
+      const result = await client.query<{ payload_text: string }>(
+        'SELECT payload::text AS payload_text FROM public.programme_content WHERE id=$1',
         [id],
       );
-      return result.rows[0]?.payload;
+      return result.rows[0]
+        ? (parseJsonWithExactIntegers(
+            result.rows[0].payload_text,
+          ) as ProgrammeContentRecord)
+        : undefined;
     } finally {
       client.release();
     }

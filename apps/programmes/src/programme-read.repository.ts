@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { parsePageTotal, type PageInteger } from '@app/platform/pagination.js';
 
 export interface SnapshotPage {
@@ -45,7 +46,7 @@ export class ProgrammeReadRepository {
     const client = await this.connect();
     try {
       const result = await client.query<{
-        items: Record<string, unknown>[];
+        items_text: string;
         total: string;
       }>(
         `WITH filtered AS MATERIALIZED (
@@ -70,13 +71,18 @@ export class ProgrammeReadRepository {
                     page.locale COLLATE "C",
                     page.content_order) FROM page),
                   '[]'::jsonb
-                ) AS items,
+                )::text AS items_text,
                 (SELECT count(*)::text FROM filtered) AS total`,
         [programmeSlug, locale ?? null, status ?? null, pageSize, offset],
       );
       const row = result.rows[0];
       return {
-        items: row?.items ?? [],
+        items: row
+          ? (parseJsonWithExactIntegers(row.items_text) as Record<
+              string,
+              unknown
+            >[])
+          : [],
         total: parsePageTotal(row?.total ?? '0'),
       };
     } finally {
@@ -90,7 +96,10 @@ export class ProgrammeReadRepository {
   ): Promise<PublishedContentPage> {
     const client = await this.connect();
     try {
-      const result = await client.query<PublishedContentPage>(
+      const result = await client.query<{
+        programmeFound: boolean;
+        items_text: string;
+      }>(
         `WITH eligible AS MATERIALIZED (
            SELECT content.id,content.content_key,content.locale,content.payload,
                   row_number() OVER (
@@ -122,10 +131,17 @@ export class ProgrammeReadRepository {
                     ) ORDER BY content_key COLLATE "C",locale COLLATE "C"
                   ) FROM visible),
                   '[]'::jsonb
-                ) AS items`,
+                )::text AS items_text`,
         [programmeSlug, locale ?? null],
       );
-      return result.rows[0] ?? { programmeFound: false, items: [] };
+      return result.rows[0]
+        ? {
+            programmeFound: result.rows[0].programmeFound,
+            items: parseJsonWithExactIntegers(
+              result.rows[0].items_text,
+            ) as Record<string, unknown>[],
+          }
+        : { programmeFound: false, items: [] };
     } finally {
       client.release();
     }
@@ -140,7 +156,7 @@ export class ProgrammeReadRepository {
     const client = await this.connect();
     try {
       const result = await client.query<{
-        items: Record<string, unknown>[];
+        items_text: string;
         total: string;
       }>(
         `WITH filtered AS MATERIALIZED (
@@ -157,13 +173,18 @@ export class ProgrammeReadRepository {
                   (SELECT jsonb_agg(page.value ORDER BY
                     page.updated_at COLLATE "C" DESC, page.id COLLATE "C") FROM page),
                   '[]'::jsonb
-                ) AS items,
+                )::text AS items_text,
                 (SELECT count(*)::text FROM filtered) AS total`,
         [programmeSlug, type ?? null, pageSize, offset],
       );
       const row = result.rows[0];
       return {
-        items: row?.items ?? [],
+        items: row
+          ? (parseJsonWithExactIntegers(row.items_text) as Record<
+              string,
+              unknown
+            >[])
+          : [],
         total: parsePageTotal(row?.total ?? '0'),
       };
     } finally {

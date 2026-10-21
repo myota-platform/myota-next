@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 
 export type EntityTypeRecord = Record<string, unknown> & { code: string };
@@ -25,12 +26,17 @@ export class ProgrammeEntityTypeRepository {
   }
 
   async listAll(client: PoolClient): Promise<Record<string, EntityTypeRecord>> {
-    const result = await client.query<{ payload: EntityTypeRecord }>(
-      `SELECT payload FROM public.programme_entity_type
+    const result = await client.query<{ payload_text: string }>(
+      `SELECT payload::text AS payload_text FROM public.programme_entity_type
         ORDER BY code COLLATE "C"`,
     );
     return Object.fromEntries(
-      result.rows.map(({ payload }) => [payload.code, payload]),
+      result.rows.map(({ payload_text }) => {
+        const payload = parseJsonWithExactIntegers(
+          payload_text,
+        ) as EntityTypeRecord;
+        return [payload.code, payload];
+      }),
     );
   }
 

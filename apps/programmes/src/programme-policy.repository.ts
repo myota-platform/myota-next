@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
 
@@ -41,21 +42,29 @@ export class ProgrammePolicyRepository {
     client: PoolClient,
     id: string,
   ): Promise<ProgrammePolicyDraft | undefined> {
-    const result = await client.query<{ payload: ProgrammePolicyDraft }>(
-      'SELECT payload FROM public.programme_policy_draft WHERE id=$1 FOR UPDATE',
+    const result = await client.query<{ payload_text: string }>(
+      'SELECT payload::text AS payload_text FROM public.programme_policy_draft WHERE id=$1 FOR UPDATE',
       [id],
     );
-    return result.rows[0]?.payload;
+    return result.rows[0]
+      ? (parseJsonWithExactIntegers(
+          result.rows[0].payload_text,
+        ) as ProgrammePolicyDraft)
+      : undefined;
   }
 
   async get(id: string): Promise<ProgrammePolicyDraft | undefined> {
     const client = await this.connect();
     try {
-      const result = await client.query<{ payload: ProgrammePolicyDraft }>(
-        'SELECT payload FROM public.programme_policy_draft WHERE id=$1',
+      const result = await client.query<{ payload_text: string }>(
+        'SELECT payload::text AS payload_text FROM public.programme_policy_draft WHERE id=$1',
         [id],
       );
-      return result.rows[0]?.payload;
+      return result.rows[0]
+        ? (parseJsonWithExactIntegers(
+            result.rows[0].payload_text,
+          ) as ProgrammePolicyDraft)
+        : undefined;
     } finally {
       client.release();
     }

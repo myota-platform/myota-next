@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { parsePageTotal, type PageInteger } from '@app/platform/pagination.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import type { ProgrammeRecord } from './programme.types.js';
@@ -22,7 +23,7 @@ export class ProgrammeRepository {
     const client = await this.connect();
     try {
       const result = await client.query<{
-        items: ProgrammeRecord[];
+        items_text: string;
         total: string;
       }>(
         `WITH page AS (
@@ -34,13 +35,15 @@ export class ProgrammeRepository {
                   (SELECT jsonb_agg(page.payload ORDER BY page.record_order)
                      FROM page),
                   '[]'::jsonb
-                ) AS items,
+                )::text AS items_text,
                 (SELECT count(*)::text FROM public.programme_record) AS total`,
         [pageSize, offset],
       );
       const row = result.rows[0];
       return {
-        items: row?.items ?? [],
+        items: row
+          ? (parseJsonWithExactIntegers(row.items_text) as ProgrammeRecord[])
+          : [],
         total: parsePageTotal(row?.total ?? '0'),
       };
     } finally {
@@ -49,19 +52,24 @@ export class ProgrammeRepository {
   }
 
   async listAll(client: PoolClient): Promise<ProgrammeRecord[]> {
-    const result = await client.query<{ payload: ProgrammeRecord }>(
-      `SELECT payload FROM public.programme_record ORDER BY record_order`,
+    const result = await client.query<{ payload_text: string }>(
+      `SELECT payload::text AS payload_text FROM public.programme_record ORDER BY record_order`,
     );
-    return result.rows.map((row) => row.payload);
+    return result.rows.map(
+      (row) => parseJsonWithExactIntegers(row.payload_text) as ProgrammeRecord,
+    );
   }
 
   async all(): Promise<ProgrammeRecord[]> {
     const client = await this.connect();
     try {
-      const result = await client.query<{ payload: ProgrammeRecord }>(
-        `SELECT payload FROM public.programme_record ORDER BY record_order`,
+      const result = await client.query<{ payload_text: string }>(
+        `SELECT payload::text AS payload_text FROM public.programme_record ORDER BY record_order`,
       );
-      return result.rows.map((row) => row.payload);
+      return result.rows.map(
+        (row) =>
+          parseJsonWithExactIntegers(row.payload_text) as ProgrammeRecord,
+      );
     } finally {
       client.release();
     }
@@ -70,11 +78,15 @@ export class ProgrammeRepository {
   async get(slug: string): Promise<ProgrammeRecord | undefined> {
     const client = await this.connect();
     try {
-      const result = await client.query<{ payload: ProgrammeRecord }>(
-        'SELECT payload FROM public.programme_record WHERE slug=$1',
+      const result = await client.query<{ payload_text: string }>(
+        'SELECT payload::text AS payload_text FROM public.programme_record WHERE slug=$1',
         [slug],
       );
-      return result.rows[0]?.payload;
+      return result.rows[0]
+        ? (parseJsonWithExactIntegers(
+            result.rows[0].payload_text,
+          ) as ProgrammeRecord)
+        : undefined;
     } finally {
       client.release();
     }
@@ -84,11 +96,15 @@ export class ProgrammeRepository {
     client: PoolClient,
     slug: string,
   ): Promise<ProgrammeRecord | undefined> {
-    const result = await client.query<{ payload: ProgrammeRecord }>(
-      'SELECT payload FROM public.programme_record WHERE slug=$1 FOR UPDATE',
+    const result = await client.query<{ payload_text: string }>(
+      'SELECT payload::text AS payload_text FROM public.programme_record WHERE slug=$1 FOR UPDATE',
       [slug],
     );
-    return result.rows[0]?.payload;
+    return result.rows[0]
+      ? (parseJsonWithExactIntegers(
+          result.rows[0].payload_text,
+        ) as ProgrammeRecord)
+      : undefined;
   }
 
   async create(
