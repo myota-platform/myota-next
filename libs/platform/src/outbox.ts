@@ -9,7 +9,7 @@ interface OutboxEventInput {
   payload: Record<string, unknown>;
   producer?: string;
   correlationId?: string;
-  occurredAt?: Date;
+  occurredAt?: Date | string;
 }
 
 export async function writeOutboxEvent(
@@ -20,7 +20,8 @@ export async function writeOutboxEvent(
     `INSERT INTO public.outbox_event
        (event_id, event_type, producer, aggregate_type, aggregate_id,
         payload, occurred_at, correlation_id)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb,
+             COALESCE($7::timestamptz, clock_timestamp()), $8)`,
     [
       randomUUID(),
       event.eventType,
@@ -28,7 +29,7 @@ export async function writeOutboxEvent(
       event.aggregateType,
       event.aggregateId,
       stringifyJsonWithBigInts(event.payload),
-      event.occurredAt ?? new Date(),
+      event.occurredAt ?? null,
       event.correlationId ?? randomUUID(),
     ],
   );
@@ -47,19 +48,14 @@ export async function writeSecurityEvent(
       : typeof payload.actorId === 'string'
         ? payload.actorId
         : 'system';
-  const occurredAt = new Date();
-
-  await client.query(
+  const securityEvent = await client.query<{ occurred_at: string }>(
     `INSERT INTO public.security_event (id, account_id, event_type, payload, occurred_at)
-     VALUES ($1, $2, $3, $4::jsonb, $5)`,
-    [
-      randomUUID(),
-      accountId,
-      eventType,
-      stringifyJsonWithBigInts(payload),
-      occurredAt,
-    ],
+     VALUES ($1, $2, $3, $4::jsonb, clock_timestamp())
+     RETURNING to_char(occurred_at AT TIME ZONE 'UTC',
+       'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at`,
+    [randomUUID(), accountId, eventType, stringifyJsonWithBigInts(payload)],
   );
+  const occurredAt = securityEvent.rows[0].occurred_at;
   await writeOutboxEvent(client, {
     eventType,
     aggregateType: 'account',

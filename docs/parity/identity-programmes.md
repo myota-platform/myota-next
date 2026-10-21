@@ -9,6 +9,8 @@ Security-event feeds, account exports, and idempotency replays parse stored
 JSONB text directly, preserving those integers on read as well.
 Programme's Core database pool installs an exact integer JSONB parser for
 programme records, entity types, policy drafts, content, and idempotency reads.
+Shared outbox and security-event occurrence timestamps come from PostgreSQL's
+microsecond clock, retaining the reference's fractional-second precision.
 
 Focused Nest email-worker tests now cover the Python worker's allowlisted
 participant and administrator commands, rejection of sensitive extra fields
