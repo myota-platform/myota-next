@@ -228,14 +228,10 @@ export class ActivityWorkRepository {
         await this.processAdifImport(client, job.payload);
       } else if (job.kind === 'QSO_INGESTION') {
         const activationResult = await client.query(
-          `SELECT *,
-            to_char(started_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS started_at_iso,
-            to_char(validity_expires_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS validity_expires_at_iso
-           FROM activity_activation WHERE id=$1`,
+          'SELECT id FROM activity_activation WHERE id=$1',
           [job.payload.activationId],
         );
-        let activation = activationResult.rows[0];
-        if (!activation) throw new Error('activation not found');
+        if (!activationResult.rows[0]) throw new Error('activation not found');
         const records = job.payload.records;
         if (!Array.isArray(records) || records.length === 0)
           throw new Error('ingestion records are empty');
@@ -259,7 +255,7 @@ export class ActivityWorkRepository {
            FROM activity_activation WHERE id=$1 FOR UPDATE`,
           [job.payload.activationId],
         );
-        activation = lockedActivationResult.rows[0];
+        const activation = lockedActivationResult.rows[0];
         if (!activation) throw new Error('activation not found');
         if (activation.status !== 'OPEN')
           throw new Error('activation is not open');
