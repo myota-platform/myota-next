@@ -23,7 +23,7 @@
   completes after connectivity returns. A second fault drops connectivity
   after claim and before retry-state persistence; the worker retains the
   JetStream delivery, persists the queued retry after recovery, and completes
-  the redelivery. The Activity worker also reconnects and resumes durable work
+  the retry after its queued command is dispatched. The Activity worker also reconnects and resumes durable work
   delivery after a single-server JetStream restart with its file store
   retained. PostgreSQL process outages, cluster failover, and retention
   recovery evidence remain open. Transient PostgreSQL failures while claiming

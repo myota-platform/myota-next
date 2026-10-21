@@ -209,7 +209,7 @@ through a local fault proxy while claiming a queued job, then confirms that it
 completes after connectivity returns. It also interrupts retry-state
 persistence after a claimed job fails, verifies the delivery remains pending
 and the job remains leased, then confirms the retry is persisted and completes
-after connectivity returns. The same check restarts JetStream
+after connectivity returns when the queued retry is dispatched. The same check restarts JetStream
 with its file store retained and verifies the worker reconnects and completes
 another queued job. PostgreSQL process outages, cluster failover, and retention
 recovery remain open.

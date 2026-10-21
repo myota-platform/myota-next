@@ -199,6 +199,9 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           result.rows[0]?.status === 'QUEUED' && result.rows[0]?.attempts === 1
         );
       }, 'Activity worker did not persist retry state after PostgreSQL recovered');
+      // Mirror the outbox dispatch that republishes a queued retry after its
+      // database state is committed, so this check does not depend on NAK timing.
+      await publishWork(publisher, registry, jobs[1]!);
       await waitForJob(pool, jobs[1]!);
 
       await stopJetStream(server);
