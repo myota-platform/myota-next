@@ -49,6 +49,11 @@ persistence, error, or workflow parity.
 | Activity       | Activation lifecycle; single and batch QSO writes with import provenance; ADIF and QSO ingestion; correction requests and review; public history, results, leaderboards and statistics; statistics rebuild; award design and lifecycle; conditions, levels, evaluation and progress; requests, issuance, assets, previews, certificate rendering and artifact retrieval; notification records and authorized operational views.                   |
 | Email delivery | Preserve the `email.send.v1` work contract, Identity-owned recipient lookup, allowlisted templates, TLS SMTP, Core-owned deduplication and dead-letter ledger, bounded retry, audited recovery, privacy-safe telemetry, and separate worker deployment. The NestJS consumer, audited redrive CLI, Prometheus metrics, and optional OTLP traces, metrics, and logs are implemented; Identity production and deployment qualification remain gated. |
 
+Programme policy service coverage now exercises a rules draft through save,
+submit, approval, and publication, including offset timestamp normalization,
+review history, rules replacement, policy version increment, and the publication
+fact. The Python reference separately pins the UTC conversion behavior.
+
 The email worker accepts the schema's trailing uppercase `Z` timestamp with
 either `T` or `t` as the date/time separator, matching Python's RFC3339
 validation. It preserves a leading UTF-8 BOM for `JSON.parse` to reject,
