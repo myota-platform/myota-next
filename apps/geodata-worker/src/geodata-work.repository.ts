@@ -984,7 +984,7 @@ export class GeodataWorkRepository {
            ST_SetSRID(ST_GeomFromGeoJSON(s.candidate_payload->>'geometry'),4326),
            $5::jsonb,s.candidate_payload->>'sourceRef',
            s.candidate_payload->>'sourceHash',
-           jsonb_build_object('adapter',$6,'sourceHash',s.candidate_payload->>'sourceHash'),
+           jsonb_build_object('adapter',$6::text,'sourceHash',s.candidate_payload->>'sourceHash'),
            (s.candidate_payload->'properties') || jsonb_build_object(
              'entityType',$4::jsonb->0,'entityTypes',$4::jsonb,
              'entityTypeCodes',$4::jsonb,
