@@ -439,19 +439,22 @@ async function submitProposal(entityType, feature) {
     throw new Error('Sign in is required to submit a proposal.');
   }
   if (!awardAccount) awardAccount = await awardApi('/v1/identity/me');
+  const body = {
+    programmeSlug: $('programme-select').value,
+    entityTypes: [entityType],
+    source: {
+      name: 'Participant community proposal',
+      license: 'programme-supplied',
+    },
+    feature,
+  };
+  const request = pendingParticipantMutation('proposal-create', body, body);
   await awardApi('/v1/geodata/proposals', {
     method: 'POST',
-    headers: { 'Idempotency-Key': crypto.randomUUID() },
-    body: JSON.stringify({
-      programmeSlug: $('programme-select').value,
-      entityTypes: [entityType],
-      source: {
-        name: 'Participant community proposal',
-        license: 'programme-supplied',
-      },
-      feature,
-    }),
+    headers: { 'Idempotency-Key': request.key },
+    body: JSON.stringify(request.body),
   });
+  completePendingParticipantMutation(request.id);
   $('proposal-status').textContent = 'Proposal submitted for review.';
   await loadProgramme($('programme-select').value);
 }

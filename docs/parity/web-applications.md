@@ -28,7 +28,9 @@ operator's activation history, since the close API rejects requests for an
 activation that is no longer open. Browser checks also cover profile details editing,
 image crop/upload, an eligible award
 request, safe biography Markdown preview, and existing-candidate and map-picked
-point proposals with intercepted API responses. Admin browser checks also cover
+point proposals with intercepted API responses. Proposal submissions retain
+their exact request body and idempotency key for same-tab retries across reloads.
+Admin browser checks also cover
 sign-in, session bootstrap,
 scope denial, Identity account creation with a permitted role grant and custom
 role creation from the permission catalogue, account search and edits that
