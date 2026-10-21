@@ -169,9 +169,38 @@ test('selects a programme and renders its public content and entity catalogue', 
     'Proposal submitted for review.',
   );
 
+  await page.getByRole('button', { name: 'Pick coordinates on map' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Cancel map selection' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#map').scrollIntoViewIfNeeded();
+  const mapBounds = await page.locator('#public-map-overlay').boundingBox();
+  expect(mapBounds).not.toBeNull();
+  await page.mouse.click(
+    mapBounds!.x + mapBounds!.width / 2,
+    mapBounds!.y + mapBounds!.height / 2,
+  );
+  await expect(page.locator('#proposal-status')).toContainText('Selected ');
+  const latitude = Number(
+    await page.locator('#proposal-latitude').inputValue(),
+  );
+  const longitude = Number(
+    await page.locator('#proposal-longitude').inputValue(),
+  );
+  expect(latitude).toBeGreaterThanOrEqual(-90);
+  expect(latitude).toBeLessThanOrEqual(90);
+  expect(longitude).toBeGreaterThanOrEqual(-180);
+  expect(longitude).toBeLessThanOrEqual(180);
+
+  await page.locator('#proposal-name').fill('Map-picked shelter');
+  await page.getByRole('button', { name: 'Submit location proposal' }).click();
+  await expect(page.locator('#proposal-status')).toHaveText(
+    'Proposal submitted for review.',
+  );
+
   await page.getByRole('button', { name: 'Reset map view' }).click();
-  expect(entityRequests).toEqual(['alpine', 'coast', 'coast']);
-  expect(proposalRequests).toHaveLength(1);
+  expect(entityRequests).toEqual(['alpine', 'coast', 'coast', 'coast']);
+  expect(proposalRequests).toHaveLength(2);
   expect(proposalRequests[0].idempotencyKey).not.toBe('');
   expect(proposalRequests[0].body).toMatchObject({
     programmeSlug: 'coast',
@@ -184,6 +213,23 @@ test('selects a programme and renders its public content and entity catalogue', 
       type: 'Feature',
       properties: { name: 'coast candidate site' },
       geometry: { type: 'Point', coordinates: [7.1, 46.1] },
+    },
+  });
+  expect(proposalRequests[1].idempotencyKey).not.toBe('');
+  expect(proposalRequests[1].body).toMatchObject({
+    programmeSlug: 'coast',
+    entityTypes: ['PARK'],
+    source: {
+      name: 'Participant community proposal',
+      license: 'programme-supplied',
+    },
+    feature: {
+      type: 'Feature',
+      properties: { name: 'Map-picked shelter' },
+      geometry: {
+        type: 'Point',
+        coordinates: [longitude, latitude],
+      },
     },
   });
   expect(pageErrors).toEqual([]);

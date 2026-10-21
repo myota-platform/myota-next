@@ -475,7 +475,7 @@ function publicTileMap() {
     surface = document.createElement('div');
   surface.className = 'public-tile-surface';
   map.innerHTML =
-    '<div id="public-tile-layer"></div><svg id="public-map-overlay" viewBox="0 0 ' +
+    '<div id="public-tile-layer"></div><svg id="public-map-overlay" class="public-map-overlay" viewBox="0 0 ' +
     width +
     ' ' +
     height +

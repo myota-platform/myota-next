@@ -315,6 +315,7 @@ a {
   height: 355px;
   inset: 0;
   overflow: visible;
+  pointer-events: all;
   position: absolute;
   width: 100%;
 }

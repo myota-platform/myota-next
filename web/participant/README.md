@@ -17,5 +17,5 @@ public programme selector, content, and entity catalogue have an initial
 Chromium browser check with intercepted API responses. The current activation
 flow is also browser-checked through sign-in, activation start, QSO entry, and
 close, profile details editing, image crop/upload, and an eligible award
-request. Existing-candidate proposals are covered; new-point map-pick proposals
-still need browser-level compatibility coverage.
+request. Existing-candidate and map-picked point proposals are covered; broader
+accessibility, responsive behavior, and service integration still need review.
