@@ -69,6 +69,12 @@ live CI browser workflow creates an isolated programme, activation, QSO, and
 correction, applies the correction in Admin, and verifies the updated QSO
 through Gateway.
 
+A live Admin browser workflow creates two shared categories, creates a
+programme with one category, then assigns and removes the other through the
+programme editor and Gateway. It verifies the resulting Core catalogue and
+programme records, idempotency keys, and catalogue, assignment, and removal
+outbox events.
+
 An additional live browser workflow seeds an isolated Geodata entity and a
 catalogue-backed country value, signs in as the bootstrap administrator, edits
 the entity's country and city through Admin and Gateway, then verifies the
