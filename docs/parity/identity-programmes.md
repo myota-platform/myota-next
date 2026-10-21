@@ -184,7 +184,7 @@ by the Python reference, confirming the shared scrypt parameters and
 unpadded base64url encoding for account migration.
 The internal email-recipient resolver rejects revoked service tokens before
 scope checks and maps malformed UUID forms to the same unavailable-recipient
-response as the Python handler.
+response as the Python handler, including its quoted `KeyError` detail.
 Service-token issuance keeps the email client-credentials flow on its fixed
 `identity.email.resolve` scope and `myota-identity` audience with a five-minute
 expiry. Other service tokens require `identity.service.issue` and cannot claim

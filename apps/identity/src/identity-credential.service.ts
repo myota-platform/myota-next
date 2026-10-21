@@ -11,7 +11,10 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
-import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import {
+  pythonKeyErrorDetail,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import type { IdentityAuthService } from './auth.service.js';
 
@@ -151,7 +154,9 @@ export class IdentityCredentialService {
       }
       const normalizedAccountId = normalizePythonUuid(accountId);
       if (!normalizedAccountId)
-        throw new NotFoundException('recipient is unavailable');
+        throw new NotFoundException(
+          pythonKeyErrorDetail('recipient is unavailable'),
+        );
       const result = await client.query<{ email: string | null }>(
         `SELECT email::text AS email
            FROM public.account
@@ -160,7 +165,9 @@ export class IdentityCredentialService {
       );
       const email = result.rows[0]?.email;
       if (!email || !trimPythonWhitespace(email)) {
-        throw new NotFoundException('recipient is unavailable');
+        throw new NotFoundException(
+          pythonKeyErrorDetail('recipient is unavailable'),
+        );
       }
       return { deliverableAddress: email };
     } finally {
