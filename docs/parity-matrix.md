@@ -26,7 +26,8 @@ Requests with no body reach handlers as an empty object, matching the Python
 request parser's zero-length body behavior. Non-object JSON values are rejected
 with `JSON body must be an object`, matching the reference parser.
 The Gateway forwards W3C `traceparent` and `tracestate` headers to the owning
-API and passes trace headers back to clients when an upstream provides them.
+API, permits them in browser preflight requests, and passes trace headers back
+to clients when an upstream provides them.
 It bypasses request-body parsing, streams incoming bodies to the owning API,
 and preserves the declared `Content-Length` for binary and JSON payloads.
 Paged endpoints accept arbitrary-size Python integer page values and preserve

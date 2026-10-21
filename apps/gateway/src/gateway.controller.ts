@@ -169,7 +169,7 @@ export class GatewayController {
       response.setHeader('Access-Control-Allow-Origin', '*');
       response.setHeader(
         'Access-Control-Allow-Headers',
-        'Content-Type, Authorization, Idempotency-Key, If-Match, X-Request-ID, X-Correlation-ID',
+        'Content-Type, Authorization, Idempotency-Key, If-Match, X-Request-ID, X-Correlation-ID, traceparent, tracestate',
       );
       response.setHeader(
         'Access-Control-Allow-Methods',
