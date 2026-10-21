@@ -461,7 +461,9 @@ Python path. Geometry bounds use Python-compatible chained comparisons, so
 non-finite transformed coordinates such as `NaN` are rejected. Web Mercator
 exponential overflow rejects the feature as in Python.
 Pasted KML and GPX are converted to GeoJSON with XML document types rejected
-and bounded feature/coordinate counts. Resumable KML and GPX uploads are
+and bounded feature/coordinate counts. Queued KML and GPX uploads that contain
+no supported feature complete with zero features, matching the reference
+streaming importer. Resumable KML and GPX uploads are
 streamed from object storage through a SAX parser, verify the completed source
 hash, and apply the configured upload, per-feature, feature-count, and vertex
 limits while sending worker heartbeats. A Linux RSS qualification checks 50,000

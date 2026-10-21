@@ -289,8 +289,6 @@ export async function* streamXmlFeatures(
     failure = new Error(
       'geodata import source hash does not match its queued record',
     );
-  if (!failure && featureCount === 0)
-    failure = new Error(`${format} contains no supported features`);
   if (failure)
     throw new Error(`invalid ${format} document: ${failure.message}`);
   while (output.length) yield output.shift()!;
