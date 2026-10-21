@@ -173,6 +173,21 @@ export class ProgrammeContentService {
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
+    const decision = body.decision;
+    const missing = [
+      ...(!pythonTruthy(decision) ? ['decision'] : []),
+      ...(!pythonTruthy(body.reviewerId) ? ['reviewerId'] : []),
+    ];
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `missing required fields: ${missing.join(', ')}`,
+      );
+    }
+    if (decision !== 'APPROVED' && decision !== 'CHANGES_REQUESTED') {
+      throw new BadRequestException(
+        'decision must be APPROVED or CHANGES_REQUESTED',
+      );
+    }
     return this.contents.mutate(idempotencyKey, async (client) => {
       await this.contents.lockRecord(client, contentId);
       const content = await this.requireContentRecord(client, contentId);
@@ -181,11 +196,11 @@ export class ProgrammeContentService {
           'only content under review can be decided',
         );
       }
-      content.status = body.decision;
+      content.status = decision;
       content.reviewedAt = new Date().toISOString();
       content.updatedAt = new Date().toISOString();
       content.reviewHistory.push({
-        action: body.decision,
+        action: decision,
         reviewerId: body.reviewerId,
         note: body.note ?? null,
         occurredAt: content.reviewedAt,
@@ -209,7 +224,16 @@ export class ProgrammeContentService {
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
-    const effectiveFrom = normalizeUtcTimestamp(body.effectiveFrom);
+    const missing = [
+      ...(!pythonTruthy(body.effectiveFrom) ? ['effectiveFrom'] : []),
+      ...(!pythonTruthy(body.publisherId) ? ['publisherId'] : []),
+    ];
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `missing required fields: ${missing.join(', ')}`,
+      );
+    }
+    const effectiveFrom = normalizeUtcTimestamp(String(body.effectiveFrom));
     return this.contents.mutate(idempotencyKey, async (client) => {
       await this.contents.lockRecord(client, contentId);
       const content = await this.requireContentRecord(client, contentId);
@@ -249,37 +273,26 @@ export class ProgrammeContentService {
       return this.submit(authorization, slug, contentId, idempotencyKey);
     }
     if (body.status === 'APPROVED' || body.status === 'CHANGES_REQUESTED') {
-      if (!pythonTruthy(body.reviewerId)) {
-        throw new BadRequestException('reviewerId is required');
-      }
       return this.review(
         authorization,
         slug,
         contentId,
         {
           decision: body.status,
-          reviewerId: body.reviewerId as string,
+          reviewerId: body.reviewerId,
           note: body.note,
         },
         idempotencyKey,
       );
     }
     if (body.status === 'PUBLISHED') {
-      if (
-        !pythonTruthy(body.effectiveFrom) ||
-        !pythonTruthy(body.publisherId)
-      ) {
-        throw new BadRequestException(
-          'effectiveFrom and publisherId are required',
-        );
-      }
       return this.publish(
         authorization,
         slug,
         contentId,
         {
-          effectiveFrom: body.effectiveFrom as string,
-          publisherId: body.publisherId as string,
+          effectiveFrom: body.effectiveFrom,
+          publisherId: body.publisherId,
         },
         idempotencyKey,
       );

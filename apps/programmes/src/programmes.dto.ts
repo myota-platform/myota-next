@@ -94,26 +94,22 @@ export class SaveProgrammeContentDto {
 }
 
 export class ReviewProgrammeContentDto {
-  @IsIn(['APPROVED', 'CHANGES_REQUESTED'])
-  decision!: 'APPROVED' | 'CHANGES_REQUESTED';
+  @Allow()
+  decision!: unknown;
 
-  @IsString()
-  @MinLength(1)
-  reviewerId!: string;
+  @Allow()
+  reviewerId!: unknown;
 
-  @IsOptional()
-  @IsString()
-  note?: string | null;
+  @Allow()
+  note?: unknown;
 }
 
 export class PublishProgrammeContentDto {
-  @IsString()
-  @MinLength(1)
-  effectiveFrom!: string;
+  @Allow()
+  effectiveFrom!: unknown;
 
-  @IsString()
-  @MinLength(1)
-  publisherId!: string;
+  @Allow()
+  publisherId!: unknown;
 }
 
 export class PatchProgrammeContentDto {

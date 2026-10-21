@@ -253,7 +253,9 @@ a content edit after loading the record, matching the Python handler's action
 dispatch and error order. Truthy status values dispatch before general field
 validation; recognized workflow actions ignore unrelated supplied fields, as
 the corresponding Python handlers do. Required review and publication fields
-use Python JSON truthiness, including for array and object values.
+use Python JSON truthiness, including for array and object values. Direct
+content review and publication also authorize before required-field and action
+validation, then resolve the content record, matching the Python handlers.
 
 Activity has an initial activation and single-QSO slice: activation list/create/read/close,
 normalized QSO writes, validity checks, ownership checks, subject aggregates,
