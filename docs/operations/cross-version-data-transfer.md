@@ -178,8 +178,11 @@ staging, Core Email data merge, and read-only per-owner database validation
 report are implemented. The report does not establish complete function
 parity and does not compare object-store data or JetStream messages. The
 report now compares known forward-migration transformations as well as stable
-table rows; the workflow has not been rehearsed against disposable PostgreSQL
-databases.
+table rows. CI applies source-compatible baseline SQL, adopts its Python-format
+ledger into the separate NestJS ledger, and runs forward migrations for all
+three owners on disposable databases. This does not exercise `pg_dump` restore,
+data copying, legacy Email merge, or the full preflight and validation reports;
+the complete transfer workflow remains unrehearsed.
 
 Do not run a production transfer until the tool has been rehearsed on
 disposable copies of all four source databases and three target databases,

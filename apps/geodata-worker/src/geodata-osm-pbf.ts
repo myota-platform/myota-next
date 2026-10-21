@@ -246,6 +246,7 @@ async function* runOsmium(
   let pending = '';
   const decoder = new StringDecoder('utf8');
   let streamError: unknown;
+  let completed = false;
   try {
     for await (const chunk of child.stdout) {
       pending += decoder.write(chunk);
@@ -276,11 +277,12 @@ async function* runOsmium(
         );
       yield trimmed;
     }
+    completed = true;
   } catch (error) {
     streamError = error;
     child.kill('SIGTERM');
   } finally {
-    if (child.exitCode === null && child.signalCode === null)
+    if (!completed && child.exitCode === null && child.signalCode === null)
       child.kill('SIGTERM');
     await closed;
   }

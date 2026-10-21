@@ -46,6 +46,7 @@
     "test:browser": "playwright test",
     "test:geodata-maidenhead": "node tools/check-geodata-maidenhead.mjs",
     "prepare:parity-databases": "node tools/create-parity-databases.mjs",
+    "test:transfer-ledger": "node tools/check-transfer-ledger.mjs",
     "docs:api-traceability": "node tools/generate-api-operation-traceability.mjs",
     "docs:api-traceability:check": "node tools/generate-api-operation-traceability.mjs --check",
     "lint": "oxlint --type-aware apps libs tools && node tools/check-nest-observability.mjs && node tools/check-database-ownership.mjs && node tools/check-openapi-nest-routes.mjs && node tools/check-exact-json-integers.mjs && node tools/generate-api-operation-traceability.mjs --check",

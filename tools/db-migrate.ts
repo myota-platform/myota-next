@@ -48,10 +48,10 @@ async function main(): Promise<void> {
         PRIMARY KEY (owner,migration)
       )`,
     );
-    for (const [index, file] of files.entries()) {
+    for (const file of files) {
       if (!/^\d{3}_[a-z0-9_]+\.sql$/.test(file))
         throw new Error(`Invalid migration filename: ${file}`);
-      const migration = index === 0 ? 'baseline-v1' : file;
+      const migration = file;
       const sql = await readFile(join(directory, file), 'utf8');
       const checksum = createHash('sha256').update(sql).digest('hex');
       const recorded = await client.query(

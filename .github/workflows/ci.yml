@@ -49,6 +49,7 @@ jobs:
       - run: npm run migrate:db -- --owner=activity
       - run: npm run migrate:db -- --owner=geo
       - run: npm run test:geodata-maidenhead
+      - run: npm run test:transfer-ledger
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
