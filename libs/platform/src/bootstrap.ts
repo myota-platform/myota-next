@@ -93,6 +93,10 @@ export async function bootstrapHttpService(
     next();
   });
   app.use(express.urlencoded({ extended: true, limit: jsonLimit }));
+  app.use((request: Request, _response: Response, next: NextFunction) => {
+    if (request.body === undefined) request.body = {};
+    next();
+  });
   if (preserveBigIntJson)
     app.use((_request: Request, response: Response, next: NextFunction) => {
       const originalJson = response.json.bind(response);

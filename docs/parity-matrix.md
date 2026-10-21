@@ -17,6 +17,8 @@ behavior: invalid credentials return 400, while permission and rate-limit
 failures return 403. Other NestJS 401 permission exceptions also map to 403.
 Malformed JSON and oversized JSON bodies use the reference's 400
 `invalid_request` response shape and details.
+Requests with no body reach handlers as an empty object, matching the Python
+request parser's zero-length body behavior.
 The Gateway forwards W3C `traceparent` and `tracestate` headers to the owning
 API and passes trace headers back to clients when an upstream provides them.
 Paged endpoints accept arbitrary-size Python integer page values and preserve
