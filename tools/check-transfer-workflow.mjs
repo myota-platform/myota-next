@@ -71,7 +71,7 @@ async function run(args, env) {
                 .filter((check) => check.status === 'failed')
                 .map(
                   (check) =>
-                    `${owner}/${check.name}: ${check.detail ?? 'check failed'}`,
+                    `${owner}/${check.name}: ${check.detail ?? 'check failed'}; source=${JSON.stringify(check.source)}; target=${JSON.stringify(check.target)}`,
                 ),
           );
           if (failures.length)

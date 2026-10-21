@@ -770,8 +770,8 @@ async function validateCoreTransforms(
          WHERE snapshot.service='identity'
       )
       SELECT account.id,
-             CASE WHEN legacy.id IS NOT NULL THEN lower(btrim(legacy.email))
-                  ELSE lower(btrim(account.email::text)) END AS email
+             CASE WHEN legacy.id IS NOT NULL THEN legacy.email
+                  ELSE account.email::text END AS email
         FROM public.account AS account
         LEFT JOIN legacy_emails AS legacy ON legacy.id=account.id
     `,
