@@ -100,8 +100,10 @@ writes if role authorization fails. The PUT retains its roles-only request
 shape while deferring DTO validation to that authorized sequence.
 Focused Identity fixtures verify profile-image normalization against Pillow
 and pin service-token signing to a Python-generated HS256 token, including
-Bearer and expiry rejection. Account, callsign, recovery, and authorization
-sequence behavior still require broader automated compatibility coverage.
+Bearer and expiry rejection. Login tests verify the eight-attempt general
+limit and the global-operator bypass. Account, callsign, recovery, and
+authorization sequence behavior still require broader automated compatibility
+coverage.
 Profile-image uploads accept JPEG, PNG, or WebP up to 5 MiB, reject animation
 and dimensions above 4096 pixels, honor EXIF orientation, center-crop to 512 by
 512, remove source metadata, and try WebP qualities 85, 75, 65, and 55 under a
