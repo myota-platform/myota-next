@@ -652,6 +652,7 @@ export class AwardsService {
         CALLSIGN: 'EA7TEST',
         PERSON_NAME: 'Demo Radio Operator',
         DATE_OBTAINED: new Date().toISOString().slice(0, 10),
+        MANAGER_SIGNATURE: 'Signature preview',
         MANAGER_NAME: Array.from(
           pythonString(
             pythonTruthy(body.managerName)
