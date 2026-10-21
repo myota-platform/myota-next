@@ -197,8 +197,11 @@ verifies that the reclaimed jobs complete. The statistics rebuild checks its
 expected summary snapshots, both award jobs check computed progress and
 eligible levels, and QSO ingestion checks the persisted QSO, activation and
 subject counts, and downstream award job. This qualifies database lease
-takeover for four Activity job kinds; broader compatibility and broker-outage
-recovery qualification remain outstanding.
+takeover for four Activity job kinds. A separate recovery check also restarts
+JetStream with its file store retained while a live Activity worker remains
+connected, then verifies that the worker reconnects and completes a second
+queued job. Cluster failover, database-outage, and recovery qualification for
+the ADIF and PDF render jobs remain open.
 Failed or queued Activity jobs can be redriven by administrators with
 an audited reason. Failed-job redrive preserves the delivery-attempt counter,
 matching the pinned Python repository. Long-running Activity jobs now extend their 120-second leases

@@ -19,6 +19,7 @@ const result = spawnSync(
     'node_modules/vitest/vitest.mjs',
     'run',
     'apps/activity-worker/src/activity-worker-recovery.spec.ts',
+    'apps/activity-worker/src/activity-worker.restart-recovery.spec.ts',
     '--maxWorkers=1',
     '--no-file-parallelism',
   ],
