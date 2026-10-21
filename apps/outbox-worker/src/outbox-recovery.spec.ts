@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createServer } from 'node:net';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { connect } from '@nats-io/transport-node';
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import type { Pool } from 'pg';
@@ -269,4 +273,202 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
       await pool.end();
     }
   }, 30_000);
+
+  it('reconnects and publishes after a real JetStream server restart', async () => {
+    const databaseUrl = process.env.OUTBOX_DATABASE_URL;
+    if (!databaseUrl) throw new Error('OUTBOX_DATABASE_URL is required');
+    const owner = process.env.OUTBOX_OWNER;
+    const eventOwners: Record<string, string[]> = {
+      core: ['identity-service', 'programme-service'],
+      activity: ['activity-service'],
+      geodata: ['geodata-service'],
+    };
+    const registeredOwners = owner ? eventOwners[owner] : undefined;
+    if (!owner || !registeredOwners)
+      throw new Error('OUTBOX_OWNER must be core, activity, or geodata');
+
+    const [{ Pool }, { OutboxWorkerService }, registry] = await Promise.all([
+      import('pg'),
+      import('./outbox-worker.service.js'),
+      loadOutboxRegistry(),
+    ]);
+    const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+    const directory = await mkdtemp(join(tmpdir(), 'myota-outbox-recovery-'));
+    const port = await reserveLocalPort();
+    const natsUrl = `nats://127.0.0.1:${port}`;
+    let server: ReturnType<typeof spawn> | undefined;
+    let connection: Awaited<ReturnType<typeof connect>> | undefined;
+    const eventId = randomUUID();
+
+    try {
+      server = await startJetStream(port, directory);
+      connection = await connect({
+        servers: natsUrl,
+        name: `outbox-${owner}-restart-recovery`,
+        maxReconnectAttempts: -1,
+        reconnectTimeWait: 100,
+      });
+      const manager = await jetstreamManager(connection);
+      await manager.streams.add({
+        name: 'MYOTA_EVENTS',
+        subjects: ['myota.events.>'],
+        retention: 'limits',
+        storage: 'file',
+        num_replicas: 1,
+        max_age: 3_600_000_000_000,
+        max_bytes: 16 * 1024 * 1024,
+        max_msgs: 1000,
+        max_msg_size: 1024 * 1024,
+      });
+
+      const eventType = registry.events.find((event) =>
+        registeredOwners.includes(event.owner),
+      );
+      const producer = eventType
+        ? registry.producerNamesByOwner[eventType.owner]?.[0]
+        : undefined;
+      if (!eventType || !producer)
+        throw new Error(
+          `${owner} fact route is missing from the event registry`,
+        );
+
+      await pool.query(
+        `INSERT INTO public.outbox_event
+          (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at)
+         VALUES ($1,$2,$3,'recovery_test',$4,$5::jsonb,now()-interval '100 years')`,
+        [
+          eventId,
+          eventType.eventType,
+          producer,
+          randomUUID(),
+          '{"probe":"server-restart-recovery"}',
+        ],
+      );
+      const service = new OutboxWorkerService(pool as Pool);
+      const serviceInternals = service as unknown as {
+        relay: Pick<ReturnType<typeof jetstream>, 'publish'>;
+        claim: () => Promise<ClaimedOutboxEvent | null>;
+        publish: (
+          event: ClaimedOutboxEvent,
+          registry: Awaited<ReturnType<typeof loadOutboxRegistry>>,
+        ) => Promise<void>;
+      };
+      serviceInternals.relay = jetstream(connection);
+      const attempt = await serviceInternals.claim();
+      expect(attempt).toMatchObject({ eventId, attempts: 1 });
+      if (!attempt) throw new Error('outbox relay did not claim the fixture');
+
+      await stopJetStream(server);
+      server = undefined;
+      await serviceInternals.publish(attempt, registry);
+      const failed = await pool.query(
+        `SELECT attempts,published_at,last_error,available_at>now() AS delayed
+         FROM public.outbox_event WHERE event_id=$1`,
+        [eventId],
+      );
+      expect(failed.rows[0]?.attempts).toBe(1);
+      expect(failed.rows[0]?.published_at).toBeNull();
+      expect(failed.rows[0]?.last_error).toBeTruthy();
+      expect(failed.rows[0]?.delayed).toBe(true);
+
+      server = await startJetStream(port, directory);
+      await waitForStream(manager);
+      await pool.query(
+        'UPDATE public.outbox_event SET available_at=now() WHERE event_id=$1',
+        [eventId],
+      );
+      const retry = await serviceInternals.claim();
+      expect(retry).toMatchObject({ eventId, attempts: 2 });
+      if (!retry) throw new Error('outbox relay did not reclaim the fixture');
+      await serviceInternals.publish(retry, registry);
+
+      const recovered = await pool.query(
+        `SELECT attempts,published_at,last_error FROM public.outbox_event
+         WHERE event_id=$1`,
+        [eventId],
+      );
+      expect(recovered.rows[0]).toMatchObject({
+        attempts: 2,
+        last_error: null,
+      });
+      expect(recovered.rows[0]?.published_at).toBeInstanceOf(Date);
+    } finally {
+      if (server) await stopJetStream(server).catch(() => undefined);
+      await connection?.drain().catch(() => undefined);
+      await pool.query('DELETE FROM public.outbox_event WHERE event_id=$1', [
+        eventId,
+      ]);
+      await pool.end();
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 30_000);
 });
+
+async function reserveLocalPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string')
+    throw new Error('could not reserve a local JetStream port');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+  return address.port;
+}
+
+async function startJetStream(port: number, storeDirectory: string) {
+  const server = spawn(
+    'nats-server',
+    ['-js', '-p', String(port), '-sd', storeDirectory],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  let output = '';
+  server.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+    output += chunk;
+  });
+  server.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+    output += chunk;
+  });
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    if (server.exitCode !== null || server.signalCode !== null)
+      throw new Error(`JetStream server exited during startup: ${output}`);
+    if (output.includes('Server is ready')) return server;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  server.kill('SIGKILL');
+  throw new Error(`JetStream server did not start: ${output}`);
+}
+
+async function stopJetStream(server: ReturnType<typeof spawn>) {
+  if (server.exitCode !== null || server.signalCode !== null) return;
+  server.kill('SIGKILL');
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error('JetStream server did not stop')),
+      5000,
+    );
+    server.once('exit', () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+}
+
+async function waitForStream(
+  manager: Awaited<ReturnType<typeof jetstreamManager>>,
+) {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    try {
+      await manager.streams.info('MYOTA_EVENTS');
+      return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  throw new Error('JetStream client did not reconnect to MYOTA_EVENTS');
+}
