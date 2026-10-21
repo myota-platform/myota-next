@@ -4,7 +4,7 @@ import { Readable } from 'node:stream';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
-import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
+import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint.js';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
 
 const recoveryTestName =
