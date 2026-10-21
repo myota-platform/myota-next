@@ -21,7 +21,8 @@ this page summarizes the current state and remaining release gates.
 - **Web applications:** Admin and Participant applications are separate
   deployable artifacts and use the NestJS APIs. The Admin build is part of CI.
   Chromium browser checks cover Admin sign-in, session bootstrap, scope denial,
-  account creation with a permitted role grant, custom-role creation, programme
+  account creation with a permitted role grant, account search and edits that
+  preserve unchanged scoped role assignments, custom-role creation, programme
   creation, policy draft review/publication, version-checked Geodata review,
   and Geodata entity metadata conflict recovery by explicitly reloading the
   latest server version; Activity activation/QSO details, statistics rebuild
