@@ -587,8 +587,9 @@ idempotency key and job status refresh. Award browser checks cover programme-
 scoped draft creation, its idempotency key and condition/level payload, and
 the submit, approve, and publish lifecycle. Master data browser checks cover shared
 category creation, geometry type selection, inactive lifecycle, and the
-idempotency key. Other Admin workflows still lack browser-level compatibility
-coverage. The award catalogue follows all API
+idempotency key. Conflation review browser checks cover a keep-separate
+decision, survivor selection, reviewer attribution, and note. Other Admin
+workflows still lack browser-level compatibility coverage. The award catalogue follows all API
 pages. Remaining work includes accessibility/visual review and deployment
 integration. Its public map renders point, line, polygon, and multipart entity
 geometries.
