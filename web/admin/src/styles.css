@@ -1031,6 +1031,29 @@ select:focus-visible {
   font-weight: 700;
   padding: 0 5px;
 }
+.callsign-management {
+  border-top: 1px solid var(--line);
+  margin-top: 20px;
+  padding-top: 18px;
+}
+.callsign-row {
+  flex-wrap: wrap;
+}
+.callsign-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.callsign-form {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 16px;
+}
+.callsign-form h4 {
+  margin: 0;
+}
 @media (max-width: 1000px) {
   .identity-grid {
     grid-template-columns: 1fr;

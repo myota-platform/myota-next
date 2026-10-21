@@ -29,8 +29,21 @@ interface User {
   email?: string;
   status: string;
   participationType?: string;
+  primaryCallsignId?: string | null;
+  callsigns?: Callsign[];
   roles?: RoleAssignment[];
   scopes?: string[];
+}
+interface Callsign {
+  id: string;
+  value: string;
+  status: string;
+  source?: string | null;
+  verificationSource?: string | null;
+  verifiedAt?: string | null;
+  validFrom?: string | null;
+  validTo?: string | null;
+  evidenceIds: string[];
 }
 interface Permission {
   code: string;
@@ -120,6 +133,29 @@ const accountForm = reactive({
   password: '',
   selectedRoles: [] as string[],
 });
+const callsignForm = reactive({ callsign: '' });
+const evidenceForm = reactive({
+  callsignId: '',
+  evidenceType: '',
+  source: '',
+  checksum: '',
+});
+const retireReplacement = ref('');
+const retiringCallsignId = ref('');
+const retiringCallsign = computed(() =>
+  selectedAccount.value?.callsigns?.find(
+    (callsign) => callsign.id === retiringCallsignId.value,
+  ),
+);
+const canManageSelectedCallsigns = computed(
+  () =>
+    Boolean(selectedAccount.value) &&
+    (selectedAccount.value?.id === store.account?.id ||
+      hasAnyScope(store.account, '*')),
+);
+const canVerifyCallsigns = computed(() =>
+  hasAnyScope(store.account, 'callsign.verify'),
+);
 const roleForm = reactive({
   code: '',
   name: '',
@@ -174,6 +210,106 @@ function editAccount(account: User): void {
     password: '',
     selectedRoles: [...new Set((account.roles || []).map((role) => role.role))],
   });
+}
+async function refreshSelectedCallsigns(accountId: string): Promise<void> {
+  await fetchData();
+  if (selectedAccount.value?.id !== accountId) return;
+  const updated = accounts.value.find((account) => account.id === accountId);
+  if (updated) {
+    selectedAccount.value = {
+      ...selectedAccount.value,
+      primaryCallsignId: updated.primaryCallsignId,
+      callsigns: updated.callsigns || [],
+    };
+  }
+}
+async function addCallsign(): Promise<void> {
+  const account = selectedAccount.value;
+  if (!account || !canManageSelectedCallsigns.value) return;
+  await feedback.run(
+    async () => {
+      await myotaClient.addIdentityCallsign(account.id, {
+        callsign: callsignForm.callsign.trim(),
+      });
+      callsignForm.callsign = '';
+      await refreshSelectedCallsigns(account.id);
+    },
+    { mutation: true, success: 'Callsign added.' },
+  );
+}
+async function submitCallsignEvidence(): Promise<void> {
+  const account = selectedAccount.value;
+  const callsignId = evidenceForm.callsignId;
+  if (!account || !callsignId || !canManageSelectedCallsigns.value) return;
+  await feedback.run(
+    async () => {
+      await myotaClient.submitIdentityCallsignEvidence(account.id, callsignId, {
+        evidenceType: evidenceForm.evidenceType.trim(),
+        source: evidenceForm.source.trim(),
+        checksum: evidenceForm.checksum.trim() || undefined,
+      });
+      evidenceForm.callsignId = '';
+      evidenceForm.evidenceType = '';
+      evidenceForm.source = '';
+      evidenceForm.checksum = '';
+      await refreshSelectedCallsigns(account.id);
+    },
+    { mutation: true, success: 'Callsign evidence submitted.' },
+  );
+}
+async function verifyCallsign(callsign: Callsign): Promise<void> {
+  const account = selectedAccount.value;
+  if (!account || !canVerifyCallsigns.value || !callsign.evidenceIds.length)
+    return;
+  await feedback.run(
+    async () => {
+      await myotaClient.verifyIdentityCallsign(account.id, callsign.id, {
+        source: 'manual-review',
+      });
+      await refreshSelectedCallsigns(account.id);
+    },
+    { mutation: true, success: 'Callsign verified.' },
+  );
+}
+async function setPrimaryCallsign(callsign: Callsign): Promise<void> {
+  const account = selectedAccount.value;
+  if (!account || !canManageSelectedCallsigns.value) return;
+  await feedback.run(
+    async () => {
+      await myotaClient.setPrimaryIdentityCallsign(account.id, callsign.id);
+      await refreshSelectedCallsigns(account.id);
+    },
+    { mutation: true, success: 'Primary callsign updated.' },
+  );
+}
+async function retireCallsign(callsign: Callsign): Promise<void> {
+  const account = selectedAccount.value;
+  if (!account || !canManageSelectedCallsigns.value) return;
+  const isPrimary = account.primaryCallsignId === callsign.id;
+  if (isPrimary && !retireReplacement.value) return;
+  if (!window.confirm(`Retire callsign ${callsign.value}?`)) return;
+  await feedback.run(
+    async () => {
+      await myotaClient.retireIdentityCallsign(account.id, callsign.id, {
+        ...(isPrimary ? { newPrimaryCallsignId: retireReplacement.value } : {}),
+      });
+      retireReplacement.value = '';
+      retiringCallsignId.value = '';
+      await refreshSelectedCallsigns(account.id);
+    },
+    { mutation: true, success: 'Callsign retired.' },
+  );
+}
+async function requestCallsignRetirement(callsign: Callsign): Promise<void> {
+  if (selectedAccount.value?.primaryCallsignId === callsign.id) {
+    retiringCallsignId.value = callsign.id;
+    retireReplacement.value = '';
+    return;
+  }
+  await retireCallsign(callsign);
+}
+async function confirmCallsignRetirement(): Promise<void> {
+  if (retiringCallsign.value) await retireCallsign(retiringCallsign.value);
 }
 function editRole(role: Role | null): void {
   selectedRole.value = role ? JSON.parse(JSON.stringify(role)) : null;
@@ -669,6 +805,195 @@ onMounted(load);
           </div>
         </fieldset>
       </form>
+      <section v-if="selectedAccount" class="callsign-management wide">
+        <div class="panel-heading">
+          <h3>Callsigns</h3>
+          <span class="field-help">
+            {{ selectedAccount.callsigns?.length || 0 }} registered
+          </span>
+        </div>
+        <p v-if="!selectedAccount.callsigns?.length" class="empty muted">
+          No callsigns are registered on this account.
+        </p>
+        <div v-else class="table-list">
+          <div
+            v-for="callsign in selectedAccount.callsigns"
+            :key="callsign.id"
+            class="table-row callsign-row"
+          >
+            <span>
+              <strong>{{ callsign.value }}</strong>
+              <small>
+                {{ callsign.status }}
+                <template
+                  v-if="selectedAccount.primaryCallsignId === callsign.id"
+                >
+                  · Primary
+                </template>
+                <template v-if="callsign.verificationSource">
+                  · Verified by {{ callsign.verificationSource }}
+                </template>
+              </small>
+              <small class="field-help">
+                {{ callsign.evidenceIds.length }} evidence record(s)
+                <template v-if="callsign.validTo">
+                  · Valid to {{ utcDisplay(callsign.validTo) }}
+                </template>
+              </small>
+            </span>
+            <span class="callsign-actions">
+              <button
+                v-if="
+                  canVerifyCallsigns &&
+                  callsign.status !== 'VERIFIED' &&
+                  callsign.status !== 'RETIRED'
+                "
+                class="secondary"
+                type="button"
+                :disabled="saving || !callsign.evidenceIds.length"
+                :title="
+                  callsign.evidenceIds.length
+                    ? ''
+                    : 'Evidence is required before verification.'
+                "
+                @click="verifyCallsign(callsign)"
+              >
+                Verify
+              </button>
+              <button
+                v-if="
+                  canManageSelectedCallsigns &&
+                  selectedAccount.primaryCallsignId !== callsign.id &&
+                  callsign.status !== 'RETIRED'
+                "
+                class="secondary"
+                type="button"
+                :disabled="saving"
+                @click="setPrimaryCallsign(callsign)"
+              >
+                Make primary
+              </button>
+              <button
+                v-if="
+                  canManageSelectedCallsigns && callsign.status !== 'RETIRED'
+                "
+                class="danger"
+                type="button"
+                :disabled="saving"
+                @click="requestCallsignRetirement(callsign)"
+              >
+                Retire
+              </button>
+            </span>
+          </div>
+        </div>
+        <form
+          v-if="canManageSelectedCallsigns"
+          class="form-grid callsign-form"
+          :aria-busy="saving"
+          @submit.prevent="addCallsign"
+        >
+          <h4 class="wide">Add callsign</h4>
+          <label class="wide">
+            Callsign
+            <input v-model="callsignForm.callsign" required />
+          </label>
+          <div class="form-actions wide">
+            <button class="primary" type="submit" :disabled="saving">
+              Add callsign
+            </button>
+          </div>
+        </form>
+        <form
+          v-if="
+            canManageSelectedCallsigns &&
+            selectedAccount.callsigns?.some(
+              (callsign) => callsign.status !== 'RETIRED',
+            )
+          "
+          class="form-grid callsign-form"
+          :aria-busy="saving"
+          @submit.prevent="submitCallsignEvidence"
+        >
+          <h4 class="wide">Submit verification evidence</h4>
+          <label>
+            Callsign
+            <select v-model="evidenceForm.callsignId" required>
+              <option disabled value="">Choose a callsign</option>
+              <option
+                v-for="callsign in selectedAccount.callsigns?.filter(
+                  (item) => item.status !== 'RETIRED',
+                )"
+                :key="callsign.id"
+                :value="callsign.id"
+              >
+                {{ callsign.value }}
+              </option>
+            </select>
+          </label>
+          <label>
+            Evidence type
+            <input v-model="evidenceForm.evidenceType" required />
+          </label>
+          <label>
+            Source
+            <input v-model="evidenceForm.source" required />
+          </label>
+          <label>
+            Checksum (optional)
+            <input v-model="evidenceForm.checksum" />
+          </label>
+          <div class="form-actions wide">
+            <button class="primary" type="submit" :disabled="saving">
+              Submit evidence
+            </button>
+          </div>
+        </form>
+        <form
+          v-if="retiringCallsign"
+          class="form-grid callsign-form"
+          :aria-busy="saving"
+          @submit.prevent="confirmCallsignRetirement"
+        >
+          <h4 class="wide">Retire {{ retiringCallsign.value }}</h4>
+          <label class="wide">
+            Replacement primary callsign
+            <select v-model="retireReplacement" required>
+              <option disabled value="">Choose an active callsign</option>
+              <option
+                v-for="callsign in selectedAccount?.callsigns?.filter(
+                  (item) =>
+                    item.id !== retiringCallsignId && item.status !== 'RETIRED',
+                )"
+                :key="callsign.id"
+                :value="callsign.id"
+              >
+                {{ callsign.value }}
+              </option>
+            </select>
+          </label>
+          <div class="form-actions wide">
+            <button
+              class="danger"
+              type="submit"
+              :disabled="saving || !retireReplacement"
+            >
+              Retire callsign
+            </button>
+            <button
+              class="secondary"
+              type="button"
+              :disabled="saving"
+              @click="
+                retiringCallsignId = '';
+                retireReplacement = '';
+              "
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </section>
     </article>
   </div>
   <div v-if="activeTab === 'roles'" class="identity-grid">

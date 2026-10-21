@@ -110,6 +110,56 @@ export const myotaClient = {
   createIdentityAccount<T = unknown>(body: unknown) {
     return write<T>('/v1/identity/accounts', 'POST', body);
   },
+  addIdentityCallsign<T = unknown>(accountId: string, body: unknown) {
+    return write<T>(
+      `/v1/identity/accounts/${encodeURIComponent(accountId)}/callsigns`,
+      'POST',
+      body,
+    );
+  },
+  submitIdentityCallsignEvidence<T = unknown>(
+    accountId: string,
+    callsignId: string,
+    body: unknown,
+  ) {
+    return write<T>(
+      `/v1/identity/accounts/${encodeURIComponent(accountId)}/callsigns/${encodeURIComponent(callsignId)}/evidence`,
+      'POST',
+      body,
+    );
+  },
+  verifyIdentityCallsign<T = unknown>(
+    accountId: string,
+    callsignId: string,
+    body: unknown,
+  ) {
+    return write<T>(
+      `/v1/identity/accounts/${encodeURIComponent(accountId)}/callsigns/${encodeURIComponent(callsignId)}/verify`,
+      'POST',
+      body,
+    );
+  },
+  setPrimaryIdentityCallsign<T = unknown>(
+    accountId: string,
+    callsignId: string,
+  ) {
+    return write<T>(
+      `/v1/identity/accounts/${encodeURIComponent(accountId)}/primary-callsign`,
+      'PUT',
+      { callsignId },
+    );
+  },
+  retireIdentityCallsign<T = unknown>(
+    accountId: string,
+    callsignId: string,
+    body: unknown,
+  ) {
+    return write<T>(
+      `/v1/identity/accounts/${encodeURIComponent(accountId)}/callsigns/${encodeURIComponent(callsignId)}/retire`,
+      'POST',
+      body,
+    );
+  },
   createIdentityRole<T = unknown>(body: unknown) {
     return write<T>('/v1/identity/roles', 'POST', body);
   },
