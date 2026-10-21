@@ -864,10 +864,10 @@ export class ActivityWorkRepository {
             programme,
             category,
             stringifyJsonWithBigInts({
-              participants: Number(row.participants),
-              qsos: Number(row.qsos),
-              activations: Number(row.activations),
-              maxQsos: Number(row.max_qsos),
+              participants: postgresIntegerJson(row.participants),
+              qsos: postgresIntegerJson(row.qsos),
+              activations: postgresIntegerJson(row.activations),
+              maxQsos: postgresIntegerJson(row.max_qsos),
             }),
             algorithmVersion,
           ],
@@ -894,9 +894,9 @@ export class ActivityWorkRepository {
               statisticType,
               String(group.scope_key),
               stringifyJsonWithBigInts({
-                participants: Number(group.participants),
-                qsos: Number(group.qsos),
-                activations: Number(group.activations),
+                participants: postgresIntegerJson(group.participants),
+                qsos: postgresIntegerJson(group.qsos),
+                activations: postgresIntegerJson(group.activations),
               }),
               algorithmVersion,
             ],
@@ -1086,6 +1086,14 @@ export class ActivityWorkRepository {
       throw new ServiceUnavailableException('Activity database is unavailable');
     }
   }
+}
+
+function postgresIntegerJson(value: unknown): number | bigint {
+  const integer = BigInt(String(value));
+  return integer >= BigInt(Number.MIN_SAFE_INTEGER) &&
+    integer <= BigInt(Number.MAX_SAFE_INTEGER)
+    ? Number(integer)
+    : integer;
 }
 
 async function upsertSubject(

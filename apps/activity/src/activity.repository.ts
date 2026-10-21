@@ -156,7 +156,7 @@ export class ActivityRepository {
       );
       const total = parsePageTotal(count.rows[0]?.total ?? '0');
       const result = await client.query(
-        `SELECT id,programme_slug,statistic_type,scope_key,metric_values,algorithm_version,generated_at,
+        `SELECT id,programme_slug,statistic_type,scope_key,metric_values::text AS metric_values_text,algorithm_version,generated_at,
                 ${statisticTimestampProjection}
          FROM activity_statistic_snapshot${where} ORDER BY generated_at DESC
          LIMIT $${filters.length + 1} OFFSET $${filters.length + 2}`,
@@ -169,7 +169,7 @@ export class ActivityRepository {
           programme: row.programme_slug,
           type: row.statistic_type,
           scope: row.scope_key,
-          values: row.metric_values,
+          values: parseJsonWithExactIntegers(String(row.metric_values_text)),
           algorithmVersion: row.algorithm_version,
           generatedAt: timestamp(row.generated_at_iso ?? row.generated_at),
         })),

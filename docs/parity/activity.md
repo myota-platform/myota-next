@@ -70,6 +70,9 @@ through review and response serialization.
 Activity JSONB records, request idempotency responses, and award event payloads
 also preserve exact integer tokens at the persistence boundary, matching
 Python's arbitrary-precision JSON integers.
+Statistics rebuilds keep PostgreSQL aggregate counts exact when storing metric
+snapshots, and statistics reads parse those JSONB values without JavaScript
+number rounding.
 Administrator access and
 required-field validation order also match the reference. Missing activation,
 ADIF import, work job, and correction lookups preserve the reference's quoted-ID
