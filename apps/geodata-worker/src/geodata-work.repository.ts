@@ -41,6 +41,7 @@ import {
   streamGeoJsonFeatures,
 } from './geodata-geojson-stream.js';
 import { decodeOsmPbfStream } from './geodata-osm-pbf.js';
+import { streamXmlFeatures } from './geodata-xml-stream.js';
 import { normalizeAdapterFeature } from './geodata-adapter.js';
 
 interface ImportRun {
@@ -508,6 +509,14 @@ export class GeodataWorkRepository {
       features = streamShapefileFeatures(
         object.Body as AsyncIterable<Uint8Array>,
         filename,
+        run.source_hash,
+        featureLimit,
+        () => this.heartbeat(run),
+      );
+    } else if (format === 'KML' || format === 'GPX') {
+      features = streamXmlFeatures(
+        format,
+        object.Body as AsyncIterable<Uint8Array>,
         run.source_hash,
         featureLimit,
         () => this.heartbeat(run),

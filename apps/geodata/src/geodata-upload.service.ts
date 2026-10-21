@@ -587,7 +587,7 @@ export class GeodataUploadService {
   }
 }
 
-function validateCreate(body: Record<string, unknown>) {
+export function validateCreate(body: Record<string, unknown>) {
   const adapter = typeof body.adapter === 'string' ? body.adapter : '';
   if (!['PARKSERVE_US', 'OSM', 'GOVERNMENT_GIS', 'MANUAL'].includes(adapter))
     throw new BadRequestException('unsupported import adapter');
@@ -632,10 +632,18 @@ function validateCreate(body: Record<string, unknown>) {
       'sha256 must be a 64-character hexadecimal digest',
     );
   if (
-    !['GEOJSON', 'SHAPEFILE', 'SHP', 'PARKSERVE_US', 'OSM_PBF'].includes(format)
+    ![
+      'GEOJSON',
+      'KML',
+      'GPX',
+      'SHAPEFILE',
+      'SHP',
+      'PARKSERVE_US',
+      'OSM_PBF',
+    ].includes(format)
   )
     throw new BadRequestException(
-      'this import path accepts GeoJSON, Shapefile ZIP archives, or OSM PBF files',
+      'this import path accepts GeoJSON, KML, GPX, Shapefile ZIP archives, or OSM PBF files',
     );
   const normalizedFormat =
     format === 'SHP' || format === 'PARKSERVE_US' ? 'SHAPEFILE' : format;

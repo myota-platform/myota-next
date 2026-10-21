@@ -1,13 +1,17 @@
 import { createReadStream, createWriteStream } from 'node:fs';
+import { execFile } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { promisify } from 'node:util';
 import {
   readGeoJsonDocumentMetadata,
   streamGeoJsonFeatures,
 } from './geodata-geojson-stream.js';
+
+const execFileAsync = promisify(execFile);
 
 describe('GeoJSON streaming reference parity', () => {
   it('streams Feature records from a top-level array', async () => {
@@ -45,6 +49,30 @@ describe('GeoJSON streaming reference parity', () => {
   it.skipIf(process.platform !== 'linux')(
     'streams the Python 300,000-feature GeoJSON RSS workload',
     async () => {
+      if (process.env.MYOTA_GEOJSON_RSS_ISOLATED !== '1') {
+        const isolatedEnv = {
+          ...process.env,
+          MYOTA_GEOJSON_RSS_ISOLATED: '1',
+        };
+        for (const key of Object.keys(isolatedEnv))
+          if (key.startsWith('VITEST_')) delete isolatedEnv[key];
+        await execFileAsync(
+          process.execPath,
+          [
+            'node_modules/vitest/vitest.mjs',
+            'run',
+            'apps/geodata-worker/src/geodata-geojson-stream.spec.ts',
+            '-t',
+            'streams the Python 300,000-feature GeoJSON RSS workload',
+            '--maxWorkers=1',
+            '--no-file-parallelism',
+            '--pool=forks',
+          ],
+          { env: isolatedEnv, maxBuffer: 1024 * 1024 },
+        );
+        return;
+      }
+
       const directory = await mkdtemp(join(tmpdir(), 'myota-geojson-rss-'));
       const sourcePath = join(directory, 'large.geojson');
       const featureCount = 300_000;

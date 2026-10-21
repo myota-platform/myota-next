@@ -103,9 +103,9 @@ export function parseXmlImport(
         placemark.lines.push([]);
       }
     } else if (['wpt', 'rtept'].includes(name)) {
-      const attributes = tag.attributes as Record<string, string>;
-      const longitude = Number(attributes.lon);
-      const latitude = Number(attributes.lat);
+      const attributes = tag.attributes as Record<string, unknown>;
+      const longitude = Number(attributeValue(attributes.lon));
+      const latitude = Number(attributeValue(attributes.lat));
       if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
         fail('GPX point has invalid longitude or latitude');
       } else {
@@ -117,9 +117,9 @@ export function parseXmlImport(
     } else if (name === 'trkseg') {
       trackPoints = [];
     } else if (name === 'trkpt' && trackPoints && stack.at(-2) === 'trkseg') {
-      const attributes = tag.attributes as Record<string, string>;
-      const longitude = Number(attributes.lon);
-      const latitude = Number(attributes.lat);
+      const attributes = tag.attributes as Record<string, unknown>;
+      const longitude = Number(attributeValue(attributes.lon));
+      const latitude = Number(attributeValue(attributes.lat));
       if (!Number.isFinite(longitude) || !Number.isFinite(latitude))
         fail('GPX track point has invalid longitude or latitude');
       else {
@@ -259,4 +259,13 @@ function countCoordinatePairs(value: unknown): number {
     if (count > maximumCoordinates) return count;
   }
   return count;
+}
+
+function attributeValue(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object' && 'value' in value) {
+    const raw = (value as { value?: unknown }).value;
+    return typeof raw === 'string' ? raw : undefined;
+  }
+  return undefined;
 }

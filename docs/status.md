@@ -67,8 +67,11 @@ behavioral parity or production readiness.
 - Compare Geodata worker throughput and resource limits with the reference under
   representative loads. CI bounds OSM PBF process-tree RSS growth at 50,000 and
   250,000 features, GeoJSON stream RSS growth at 300,000 features, and
-  Shapefile stream RSS growth at 50,000 records. Larger datasets and full worker
-  throughput remain unqualified. Per-durable NestJS concurrency is configurable,
+  Shapefile stream RSS growth at 50,000 records, and KML/GPX stream RSS growth at
+  50,000 features each. Larger datasets and full worker throughput remain
+  unqualified. The local full-suite run exceeded the GeoJSON 96 MiB RSS-growth
+  threshold, while its isolated check passed; confirm this qualification in CI.
+  Per-durable NestJS concurrency is configurable,
   but the reference thread-pool settings do not map directly to its durable
   consumers.
 

@@ -450,11 +450,16 @@ projections use the normalized `unsupported CRS EPSG:<id>` error. WGS84 input
 retains extra ordinates, the Web Mercator special case emits XY only, and other
 projected CRS transforms preserve ordinates beyond XY, matching the pinned
 Python path. Web Mercator exponential overflow rejects the feature as in Python.
-Pasted KML and GPX are
-also converted to GeoJSON with XML document types rejected and bounded
-feature/coordinate counts. Multipart uploads accept GeoJSON and bounded
-Shapefile ZIP archives with matching sidecars (`SHAPEFILE`, `SHP`, and the
-legacy `PARKSERVE_US` format alias); Shapefile member extensions and matching
+Pasted KML and GPX are converted to GeoJSON with XML document types rejected
+and bounded feature/coordinate counts. Resumable KML and GPX uploads are
+streamed from object storage through a SAX parser, verify the completed source
+hash, and apply the configured upload, per-feature, feature-count, and vertex
+limits while sending worker heartbeats. A Linux RSS qualification checks 50,000
+features in each format against a 96 MiB Node RSS-growth limit. The Python
+reference uses the same feature counts and a 96 MiB absolute process-RSS limit,
+so the measurements are not directly comparable. Multipart uploads accept GeoJSON and
+bounded Shapefile ZIP archives with matching sidecars (`SHAPEFILE`, `SHP`, and
+the legacy `PARKSERVE_US` format alias); Shapefile member extensions and matching
 sidecars are case-insensitive as in PyShp. Shapefile coordinates are reprojected from
 the supplied `.prj` to WGS84, and NULL shape records fail preprocessing as in
 PyShp's GeoJSON conversion. OSM PBF uploads are decoded by
@@ -493,8 +498,10 @@ time, bounded by the per-feature and total-feature limits, into staged batches b
 `MYOTA_IMPORT_BATCH_SIZE` and `MYOTA_IMPORT_BATCH_BYTES` (100 features and
 32 MiB by default),
 with the configured per-feature byte limit (16 MiB by default), 250,000 vertex
-limit, and configured feature cap. GeoJSON multipart uploads stream their
-source and yield one parsed
+limit, and configured feature cap. KML and GPX uploads use the shared upload
+cap, validate their source hash as the worker streams, and yield placemarks,
+waypoints, or track segments incrementally. GeoJSON multipart uploads stream
+their source and yield one parsed
 feature at a time, with the same shared API/worker 1 GiB upload cap or optional
 format-specific override, 16 MiB
 per-feature size by default, 250,000 vertices, and the configured feature
