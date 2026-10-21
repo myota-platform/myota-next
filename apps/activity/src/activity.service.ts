@@ -469,6 +469,31 @@ export class ActivityService {
     return this.repository.reviewCorrection(qsoId, correctionId, body);
   }
 
+  async listCorrections(
+    authorization: string | undefined,
+    query: {
+      status?: string;
+      programme?: string;
+      page?: string;
+      pageSize?: string;
+    },
+  ) {
+    this.authorize(authorization, ['activity.admin']);
+    const requestedStatus = query.status || 'PENDING';
+    if (!['PENDING', 'APPLIED', 'REJECTED', 'ALL'].includes(requestedStatus))
+      throw new BadRequestException(
+        'status must be PENDING, APPLIED, REJECTED, or ALL',
+      );
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
+    return this.repository.listCorrections(
+      requestedStatus === 'ALL' ? undefined : requestedStatus,
+      query.programme,
+      page,
+      pageSize,
+    );
+  }
+
   async listStatistics(
     authorization: string | undefined,
     query: { programme?: string; page?: string; pageSize?: string },

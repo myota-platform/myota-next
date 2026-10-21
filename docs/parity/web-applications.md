@@ -33,7 +33,9 @@ policy draft save, review, and publication, and
 version-checked candidate review, and conflict recovery for entity metadata
 edits by reloading the latest server version. Activity browser checks cover
 activation/QSO detail viewing and statistics rebuild submission with an
-idempotency key and job status refresh. Award browser checks cover programme-
+idempotency key and job status refresh. The Admin Activity screen also lists,
+filters, pages, and reviews QSO correction requests; this workflow lacks
+browser-level compatibility coverage. Award browser checks cover programme-
 scoped draft creation, its idempotency key and condition/level payload, and
 the submit, approve, and publish lifecycle. Master data browser checks cover shared
 category creation, geometry type selection, inactive lifecycle, and the

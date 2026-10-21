@@ -4,7 +4,7 @@ This generated index maps each operation in `contracts/openapi.yaml` to its Nest
 
 Regenerate with `npm run docs:api-traceability`. The mapping must cover every operation in the copied contract; target-only operations are documented separately in [API baseline notes](api-baseline.md).
 
-Contract baseline: [140 operations](../contracts/openapi.yaml).
+Contract baseline: [141 operations](../contracts/openapi.yaml).
 
 | OpenAPI operation                                                        | NestJS controller                                                                                                                 | Status                                                                |
 | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -137,6 +137,7 @@ Contract baseline: [140 operations](../contracts/openapi.yaml).
 | `POST /v1/adif/imports`                                                  | [apps/activity/src/adif-import.controller.ts#L16](../apps/activity/src/adif-import.controller.ts#L16)                             | Route mapped; behavior qualification is tracked in the parity matrix. |
 | `POST /v1/qsos/{qsoId}/corrections`                                      | [apps/activity/src/qso-correction.controller.ts#L15](../apps/activity/src/qso-correction.controller.ts#L15)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
 | `POST /v1/qsos/{qsoId}/corrections/{correctionId}/review`                | [apps/activity/src/qso-correction.controller.ts#L24](../apps/activity/src/qso-correction.controller.ts#L24)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
+| `GET /v1/qso-corrections`                                                | [apps/activity/src/qso-admin.controller.ts#L9](../apps/activity/src/qso-admin.controller.ts#L9)                                   | Route mapped; behavior qualification is tracked in the parity matrix. |
 | `GET /v1/public/activations`                                             | [apps/activity/src/public-activity.controller.ts#L9](../apps/activity/src/public-activity.controller.ts#L9)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
 | `GET /v1/public/programmes/{slug}/content`                               | [apps/programmes/src/public-programme-content.controller.ts#L9](../apps/programmes/src/public-programme-content.controller.ts#L9) | Route mapped; behavior qualification is tracked in the parity matrix. |
 | `GET /v1/public/leaderboards`                                            | [apps/activity/src/public-activity.controller.ts#L22](../apps/activity/src/public-activity.controller.ts#L22)                     | Route mapped; behavior qualification is tracked in the parity matrix. |

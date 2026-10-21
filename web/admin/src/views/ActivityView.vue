@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { apiRequest } from '../lib/api';
 import { hasAnyScope } from '../lib/adminAccess';
 import PageHeader from '../components/PageHeader.vue';
@@ -62,6 +62,26 @@ interface ActivityJob {
   completedAt?: string | null;
 }
 
+interface QsoCorrection {
+  id: string;
+  qsoId: string;
+  requestedBy: string;
+  reason: string;
+  proposedValues: Record<string, unknown>;
+  status: string;
+  programmeSlug?: string;
+  entityId?: string;
+  createdAt?: string;
+  qso: {
+    activationId: string;
+    operatorCallsign?: string;
+    workedCallsign?: string;
+    timestamp?: string;
+    band?: string;
+    mode?: string;
+  };
+}
+
 interface Page<T> {
   items: T[];
   page: number;
@@ -71,7 +91,7 @@ interface Page<T> {
 
 const store = useAppStore();
 const feedback = usePageFeedback();
-const { error, loading } = feedback;
+const { error, loading, saving } = feedback;
 const items = ref<Activation[]>([]);
 const activationPage = ref(1);
 const activationNextPage = ref<number | null>(null);
@@ -81,6 +101,12 @@ const statisticsPage = ref(1);
 const statisticsNextPage = ref<number | null>(null);
 const statisticsTotal = ref(0);
 const notifications = ref<ActivityNotification[]>([]);
+const corrections = ref<QsoCorrection[]>([]);
+const correctionPage = ref(1);
+const correctionNextPage = ref<number | null>(null);
+const correctionTotal = ref(0);
+const correctionStatus = ref('PENDING');
+const correctionReviewNotes = reactive<Record<string, string>>({});
 const selected = ref<Activation | null>(null);
 const detailLoading = ref(false);
 const detailError = ref('');
@@ -91,6 +117,9 @@ const canRead = computed(() =>
   hasAnyScope(store.account, 'activity.read', 'activity.admin'),
 );
 const canRebuild = computed(() => hasAnyScope(store.account, 'activity.admin'));
+const canReviewCorrections = computed(() =>
+  hasAnyScope(store.account, 'activity.admin'),
+);
 const programme = computed(() => store.currentProgramme || '');
 
 function scopedPath(path: string): string {
@@ -123,11 +152,77 @@ async function load(): Promise<void> {
     statisticsTotal.value = statisticPage.total || 0;
     statisticsNextPage.value = statisticPage.nextPage ?? null;
     await loadNotifications();
+    if (canReviewCorrections.value) await loadCorrections();
     if (selected.value) {
       const fresh = items.value.find((item) => item.id === selected.value?.id);
       if (!fresh) selected.value = null;
     }
   });
+}
+
+async function loadCorrections(page = correctionPage.value): Promise<void> {
+  if (!canReviewCorrections.value) {
+    corrections.value = [];
+    correctionTotal.value = 0;
+    correctionNextPage.value = null;
+    return;
+  }
+  const query = new URLSearchParams({
+    page: String(page),
+    pageSize: '20',
+    status: correctionStatus.value,
+  });
+  if (programme.value) query.set('programme', programme.value);
+  const result = await apiRequest<Page<QsoCorrection>>(
+    `/v1/qso-corrections?${query.toString()}`,
+  );
+  corrections.value = result.items || [];
+  correctionPage.value = result.page || page;
+  correctionTotal.value = result.total || 0;
+  correctionNextPage.value = result.nextPage ?? null;
+}
+
+async function changeCorrectionPage(page: number): Promise<void> {
+  if (page < 1 || loading.value) return;
+  await feedback.run(() => loadCorrections(page));
+}
+
+async function changeCorrectionStatus(status: string): Promise<void> {
+  correctionStatus.value = status;
+  correctionPage.value = 1;
+  await feedback.run(() => loadCorrections(1));
+}
+
+async function reviewCorrection(
+  correction: QsoCorrection,
+  decision: 'APPLIED' | 'REJECTED',
+): Promise<void> {
+  const reviewedBy = store.account?.id;
+  if (!canReviewCorrections.value || !reviewedBy) return;
+  await feedback.run(
+    async () => {
+      await apiRequest(
+        `/v1/qsos/${encodeURIComponent(correction.qsoId)}/corrections/${encodeURIComponent(correction.id)}/review`,
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          body: JSON.stringify({
+            decision,
+            reviewedBy,
+            reviewNote: correctionReviewNotes[correction.id] || undefined,
+          }),
+        },
+      );
+      await loadCorrections();
+    },
+    {
+      mutation: true,
+      success:
+        decision === 'APPLIED'
+          ? 'QSO correction applied.'
+          : 'QSO correction rejected.',
+    },
+  );
 }
 
 async function changeActivationPage(page: number): Promise<void> {
@@ -240,6 +335,7 @@ onMounted(() => {
 watch(programme, () => {
   activationPage.value = 1;
   statisticsPage.value = 1;
+  correctionPage.value = 1;
   selected.value = null;
   if (canRead.value) void load();
 });
@@ -360,6 +456,106 @@ watch(programme, () => {
         </div>
       </template>
     </section>
+  </article>
+
+  <article v-if="canReviewCorrections" class="panel">
+    <div class="panel-heading">
+      <div>
+        <h2>QSO correction requests</h2>
+        <p class="muted">
+          Review requests for {{ programme || 'all programmes' }}.
+        </p>
+      </div>
+      <label class="toolbar-field">
+        Status
+        <select
+          :value="correctionStatus"
+          :disabled="loading || saving"
+          @change="
+            changeCorrectionStatus(($event.target as HTMLSelectElement).value)
+          "
+        >
+          <option value="PENDING">Pending</option>
+          <option value="APPLIED">Applied</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="ALL">All</option>
+        </select>
+      </label>
+    </div>
+    <div class="table-list correction-list">
+      <article
+        v-for="correction in corrections"
+        :key="correction.id"
+        class="correction-card"
+      >
+        <div class="panel-heading">
+          <div>
+            <strong>{{
+              correction.qso.workedCallsign || 'Unknown callsign'
+            }}</strong>
+            <small>
+              {{ correction.qso.operatorCallsign || correction.requestedBy }} ·
+              {{
+                correction.qso.timestamp
+                  ? utcDisplay(correction.qso.timestamp)
+                  : 'Time unavailable'
+              }}
+            </small>
+          </div>
+          <span class="status-pill" :class="correction.status.toLowerCase()">
+            {{ correction.status }}
+          </span>
+        </div>
+        <p><strong>Reason:</strong> {{ correction.reason }}</p>
+        <p>
+          <strong>Proposed values:</strong>
+          <code>{{ formatValues(correction.proposedValues) }}</code>
+        </p>
+        <p class="muted">
+          {{ correction.programmeSlug || 'Unknown programme' }} ·
+          {{ correction.entityId || 'No entity' }} ·
+          {{
+            [correction.qso.band, correction.qso.mode]
+              .filter(Boolean)
+              .join(' · ') || '—'
+          }}
+        </p>
+        <label v-if="correction.status === 'PENDING'" class="correction-note">
+          Review note (optional)
+          <textarea v-model="correctionReviewNotes[correction.id]" rows="2" />
+        </label>
+        <div v-if="correction.status === 'PENDING'" class="form-actions">
+          <button
+            class="approve"
+            type="button"
+            :disabled="saving"
+            @click="reviewCorrection(correction, 'APPLIED')"
+          >
+            Apply correction
+          </button>
+          <button
+            class="danger"
+            type="button"
+            :disabled="saving"
+            @click="reviewCorrection(correction, 'REJECTED')"
+          >
+            Reject
+          </button>
+        </div>
+      </article>
+      <p v-if="!corrections.length && !loading" class="muted empty">
+        No correction requests match this filter.
+      </p>
+    </div>
+    <PageNavigation
+      :page="correctionPage"
+      :next-page="correctionNextPage"
+      :total="correctionTotal"
+      count-label="correction requests"
+      :busy="loading || saving"
+      label="correction requests"
+      @change="changeCorrectionPage"
+    />
   </article>
 
   <article class="panel">

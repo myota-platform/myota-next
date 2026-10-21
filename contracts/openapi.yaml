@@ -1498,6 +1498,20 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/QsoCorrectionReview' } } }
       responses: { '200': { description: Correction decision recorded } }
+  /v1/qso-corrections:
+    get:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: List and page QSO correction requests for Activity administrators
+      operationId: listQsoCorrections
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [PENDING, APPLIED, REJECTED, ALL], default: PENDING } }
+        - { in: query, name: programme, schema: { type: string } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200': { description: Paged correction requests with their associated QSO context }
+        '403': { description: activity.admin scope required }
   /v1/public/activations:
     get:
       tags: [Activity]

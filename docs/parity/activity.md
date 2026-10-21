@@ -72,6 +72,9 @@ timestamp. Correction requester ownership compares Python `str()` conversions
 on both IDs, including JSON float tokens such as `1.0` versus integer `1`.
 Proposed correction values preserve exact integer and float tokens from JSONB
 through review and response serialization.
+The target adds an Activity-admin-only paged correction inbox, filtered by
+status and programme and joined to the affected QSO context. This is a target
+API extension that makes pending review requests discoverable.
 Activity JSONB records, request idempotency responses, and award event payloads
 also preserve exact integer tokens at the persistence boundary, matching
 Python's arbitrary-precision JSON integers. Activity and award API reads parse

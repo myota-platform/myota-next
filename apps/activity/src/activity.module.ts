@@ -13,6 +13,7 @@ import { ActivityService } from './activity.service.js';
 import { QsoIngestionController } from './qso-ingestion.controller.js';
 import { PublicActivityController } from './public-activity.controller.js';
 import { QsoCorrectionController } from './qso-correction.controller.js';
+import { QsoCorrectionAdminController } from './qso-admin.controller.js';
 import { ActivityOperationsController } from './activity-operations.controller.js';
 import { AwardsController } from './awards.controller.js';
 import { AwardsService } from './awards.service.js';
@@ -33,6 +34,7 @@ import { AdifImportController } from './adif-import.controller.js';
     QsoIngestionController,
     PublicActivityController,
     QsoCorrectionController,
+    QsoCorrectionAdminController,
     ActivityOperationsController,
     AwardsController,
     AdifImportController,

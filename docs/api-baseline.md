@@ -11,8 +11,8 @@ The exact reference contract files are now preserved locally in
 `af9b9bd81c723f040ae3ddd407992cb53c89c18a6fbd4f5e147fa0df27025eba` and
 defines 135 operations across 113 paths. The target
 [`contracts/openapi.yaml`](../contracts/openapi.yaml) contains that baseline
-plus five target-only operations, for 140 operations across 118 paths. The table
-below inventories the target contract; the five added operations are extensions,
+plus six target-only operations, for 141 operations across 119 paths. The table
+below inventories the target contract; the added operations are extensions,
 not upstream OpenAPI parity requirements, and need separate evidence against
 current source behavior.
 
@@ -42,8 +42,9 @@ Target-only operations:
 - `POST /v1/geodata/imports/{runId}/processing-queues/{queueId}/redrive`
 - `POST /v1/qso-ingestions/csv`
 - `GET /v1/public/programmes/{slug}/content`
+- `GET /v1/qso-corrections`
 
-OpenAPI 3.1.0; 140 operations across 118 paths.
+OpenAPI 3.1.0; 141 operations across 119 paths.
 
 Every operation below has a matching NestJS route decorator. The controller link is route-level traceability only; behavioral parity still requires the checks described in the parity matrix.
 
@@ -179,6 +180,7 @@ Every operation below has a matching NestJS route decorator. The controller link
 | POST   | /v1/activity/work-jobs/{jobId}/redrive                            |                                            | [controller](../apps/activity/src/activity-operations.controller.ts) | Redrive a failed or recoverable Activity work job                                  |
 | POST   | /v1/qsos/{qsoId}/corrections                                      |                                            | [controller](../apps/activity/src/qso-correction.controller.ts)      | Request a QSO correction                                                           |
 | POST   | /v1/qsos/{qsoId}/corrections/{correctionId}/review                | reviewQsoCorrection                        | [controller](../apps/activity/src/qso-correction.controller.ts)      | Review a QSO correction under its QSO resource                                     |
+| GET    | /v1/qso-corrections                                               | listQsoCorrections                         | [controller](../apps/activity/src/qso-admin.controller.ts)           | List and page QSO correction requests for Activity administrators                  |
 | GET    | /v1/public/activations                                            |                                            | [controller](../apps/activity/src/public-activity.controller.ts)     | List public activation history                                                     |
 | GET    | /v1/public/leaderboards                                           |                                            | [controller](../apps/activity/src/public-activity.controller.ts)     | List public programme leaderboards                                                 |
 | GET    | /v1/public/results                                                |                                            | [controller](../apps/activity/src/public-activity.controller.ts)     | Download public activation results                                                 |

@@ -523,6 +523,76 @@ export class ActivityRepository {
     }
   }
 
+  async listCorrections(
+    status: string | undefined,
+    programme: string | undefined,
+    page: PageInteger,
+    pageSize: number,
+  ) {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const offset = pageOffset(page, pageSize);
+      const filters = [status ?? null, programme ?? null];
+      const count = await client.query(
+        `SELECT count(*)::text AS total
+           FROM activity_qso_correction c
+           JOIN activity_qso q ON q.id=c.qso_id
+          WHERE ($1::text IS NULL OR c.status=$1)
+            AND ($2::text IS NULL OR q.programme_slug=$2)`,
+        filters,
+      );
+      const result = await client.query(
+        `SELECT c.*, c.proposed_values::text AS proposed_values_text,
+                to_char(c.created_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_iso,
+                to_char(c.reviewed_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS reviewed_at_iso,
+                q.activation_id, q.programme_slug, q.operator_id,
+                q.operator_callsign, q.worked_callsign,
+                to_char(q.occurred_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS qso_timestamp_iso,
+                q.band, q.mode, a.entity_id
+           FROM activity_qso_correction c
+           JOIN activity_qso q ON q.id=c.qso_id
+           JOIN activity_activation a ON a.id=q.activation_id
+          WHERE ($1::text IS NULL OR c.status=$1)
+            AND ($2::text IS NULL OR q.programme_slug=$2)
+          ORDER BY c.created_at DESC, c.id DESC
+          LIMIT $3 OFFSET $4`,
+        [...filters, pageSize, offset],
+      );
+      const total = parsePageTotal(count.rows[0]?.total ?? '0');
+      await client.query('COMMIT');
+      return {
+        items: result.rows.map((row) => ({
+          ...correctionRecord(row),
+          programmeSlug: row.programme_slug,
+          entityId: row.entity_id,
+          qso: {
+            id: String(row.qso_id),
+            activationId: String(row.activation_id),
+            operatorId: row.operator_id,
+            operatorCallsign: row.operator_callsign,
+            workedCallsign: row.worked_callsign,
+            timestamp: timestamp(row.qso_timestamp_iso),
+            band: row.band,
+            mode: row.mode,
+          },
+        })),
+        page,
+        pageSize,
+        total,
+        nextPage: nextPageIfMore(page, pageSize, total),
+      };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async createCorrection(qsoId: string, body: JsonRecord): Promise<JsonRecord> {
     return this.mutate(undefined, async (client) => {
       const result = await client.query(
