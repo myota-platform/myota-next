@@ -465,8 +465,8 @@ function normalizeQsoFields(data: JsonRecord): JsonRecord {
   const timestamp = normalizeTimestamp(
     pythonTruthy(data.timestamp) ? data.timestamp : data.timeOn,
   );
-  const band = normalizeBand(data.band);
-  const mode = normalizeMode(data.mode);
+  const band = normalizeBand(data);
+  const mode = normalizeMode(data);
   const validBands = new Set([
     '2190M',
     '630M',
@@ -505,13 +505,21 @@ function normalizeQsoFields(data: JsonRecord): JsonRecord {
     'C4FM',
   ]);
   if (band && !validBands.has(band))
-    throw new BadRequestException(`unsupported band: ${data.band}`);
+    throw new BadRequestException(
+      `unsupported band: ${pythonStringJsonField(data, 'band')}`,
+    );
   if (mode && !validModes.has(mode))
-    throw new BadRequestException(`unsupported mode: ${data.mode}`);
+    throw new BadRequestException(
+      `unsupported mode: ${pythonStringJsonField(data, 'mode')}`,
+    );
   if (data.band != null && data.band !== '' && !band)
-    throw new BadRequestException(`unsupported band: ${data.band}`);
+    throw new BadRequestException(
+      `unsupported band: ${pythonStringJsonField(data, 'band')}`,
+    );
   if (data.mode != null && data.mode !== '' && !mode)
-    throw new BadRequestException(`unsupported mode: ${data.mode}`);
+    throw new BadRequestException(
+      `unsupported mode: ${pythonStringJsonField(data, 'mode')}`,
+    );
   const workedStationKey = `${workedCallsign}|${trimPythonWhitespace(
     pythonTruthy(data.workedLocator)
       ? pythonStringJsonField(data, 'workedLocator').toUpperCase()
@@ -527,22 +535,20 @@ function normalizeQsoFields(data: JsonRecord): JsonRecord {
   };
 }
 
-function normalizeBand(value: unknown): string | null {
+function normalizeBand(record: JsonRecord): string | null {
+  const value = record.band;
   if (value == null || value === '') return null;
-  return stringValue(value).toUpperCase().replaceAll(' ', '');
+  return pythonStringJsonField(record, 'band')
+    .toUpperCase()
+    .replaceAll(' ', '');
 }
 
-function normalizeMode(value: unknown): string | null {
+function normalizeMode(record: JsonRecord): string | null {
+  const value = record.mode;
   if (value == null || value === '') return null;
-  return stringValue(value).toUpperCase().replaceAll('-', '');
-}
-
-function stringValue(value: unknown) {
-  return typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-    ? String(value)
-    : (JSON.stringify(value) ?? '');
+  return pythonStringJsonField(record, 'mode')
+    .toUpperCase()
+    .replaceAll('-', '');
 }
 
 export function parseAdif(text: string): JsonRecord[] {
