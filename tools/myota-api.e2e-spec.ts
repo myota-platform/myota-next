@@ -101,6 +101,14 @@ describeWithDatabases(
         });
         expect(createdAccount.body.password).toBeUndefined();
 
+        const createdAccountRoles = await request(gatewayUrl)
+          .get(`/v1/identity/accounts/${createdAccount.body.id}/roles`)
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .expect(200);
+        expect(createdAccountRoles.body).toMatchObject([
+          { role: 'PARTICIPANT', accountId: createdAccount.body.id },
+        ]);
+
         const retriedAccountCreation = await request(gatewayUrl)
           .post('/v1/identity/accounts')
           .set('Authorization', `Bearer ${refreshed.body.accessToken}`)

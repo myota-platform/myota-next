@@ -1088,8 +1088,9 @@ export class IdentityAccountService {
         `INSERT INTO public.account_role
            (id, account_id, programme_id, role_code, jurisdiction_id,
             entity_type_code, scopes, programme_slug, jurisdiction_code, created_at)
-         VALUES ($1, $2, (SELECT id FROM public.programme WHERE slug = $3), $4,
-                 NULL, $5, $6::jsonb, $3, $7, $8)`,
+         VALUES ($1, $2,
+                 (SELECT id FROM public.programme WHERE slug = $3::text), $4,
+                 NULL, $5, $6::jsonb, $3::text, $7, $8)`,
         [
           id,
           accountId,
