@@ -590,7 +590,7 @@ function identityBaseUrl() {
     url.password
   )
     throw new Error('Identity URL must be an HTTP(S) URL without credentials');
-  return raw.replace(/\/$/, '');
+  return raw.replace(/\/+$/, '');
 }
 
 function validateEmail(address: string) {
