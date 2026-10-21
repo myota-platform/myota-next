@@ -189,23 +189,25 @@ export async function bootstrapHttpService(
     app.use((request: Request, _response: Response, next: NextFunction) => {
       const path = request.url?.split('?', 1)[0] ?? '';
       const exactIntegerRequest =
-        request.method === 'POST' &&
-        ([
-          '/v1/programmes',
-          '/v1/geodata/refresh-schedules',
-          '/v1/geodata/imports',
-        ].includes(path) ||
-          /^\/v1\/identity\/accounts\/[^/]+\/callsigns\/[^/]+\/evidence$/.test(
-            path,
-          ));
+        (request.method === 'POST' &&
+          ([
+            '/v1/programmes',
+            '/v1/geodata/refresh-schedules',
+            '/v1/geodata/imports',
+            '/v1/identity/admin/roles',
+            '/v1/identity/roles',
+          ].includes(path) ||
+            /^\/v1\/identity\/accounts\/[^/]+\/callsigns\/[^/]+\/evidence$/.test(
+              path,
+            ))) ||
+        (request.method === 'PATCH' &&
+          /^\/v1\/identity\/roles\/[^/]+$/.test(path));
       const floatMetadataRequest =
         (request.method === 'POST' &&
           ([
             '/v1/activations',
             '/v1/awards/evaluation-jobs',
             '/v1/entity-types',
-            '/v1/identity/admin/roles',
-            '/v1/identity/roles',
             '/v1/qso-ingestions',
           ].includes(path) ||
             /^\/v1\/programmes\/[^/]+\/entity-types$/.test(path) ||
@@ -216,9 +218,7 @@ export async function bootstrapHttpService(
           (/^\/v1\/qsos\/[^/]+\/corrections$/.test(path) ||
             /^\/v1\/geodata\/entity-deletion-jobs\/[^/]+\/confirm$/.test(
               path,
-            ))) ||
-        (request.method === 'PATCH' &&
-          /^\/v1\/identity\/roles\/[^/]+$/.test(path));
+            )));
       if (
         (exactIntegerRequest || floatMetadataRequest) &&
         Buffer.isBuffer((request as Request & { rawBody?: Buffer }).rawBody)

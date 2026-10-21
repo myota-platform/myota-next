@@ -53,7 +53,8 @@ Role-definition POST and PATCH authenticate before DTO validation; PATCH also
 resolves and rejects built-in definitions before validating the submitted
 fields, matching the Python handler's response precedence. Role creation checks
 truthy `code` and `name` values before applying Python `str()` conversion;
-create and update preserve JSON float tokens such as `1.0` in those fields.
+create and update preserve exact large integers and JSON float tokens such as
+`1.0` in those fields.
 Falsey custom-role descriptions normalize to the empty string on create and
 when explicitly supplied on update, matching the relational persistence path.
 Empty or duplicate normalized role codes return the reference's 400 response.
