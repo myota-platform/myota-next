@@ -354,9 +354,11 @@ export class IdentityAccountService {
         id: string;
         event_type: string;
         payload_text: string;
-        occurred_at: Date;
+        occurred_at: string;
       }>(
-        `SELECT id, event_type, payload::text AS payload_text, occurred_at
+        `SELECT id, event_type, payload::text AS payload_text,
+                to_char(occurred_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at
              FROM public.security_event
             ORDER BY occurred_at DESC, event_order ASC
             LIMIT $1 OFFSET $2`,
@@ -771,7 +773,9 @@ export class IdentityAccountService {
         [accountId],
       );
       const securityEvents = await client.query(
-        `SELECT id, event_type AS "eventType", occurred_at AS "occurredAt",
+        `SELECT id, event_type AS "eventType",
+                to_char(occurred_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "occurredAt",
                 payload::text AS "payloadText"
            FROM public.security_event
           WHERE payload ->> 'accountId' = $1

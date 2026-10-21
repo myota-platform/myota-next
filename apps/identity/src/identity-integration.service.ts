@@ -46,8 +46,8 @@ export class IdentityIntegrationService {
         client_id: string;
         scopes: string[] | null;
         enabled: boolean | null;
-        created_at: Date;
-        updated_at: Date;
+        created_at: string;
+        updated_at: string;
       }>(
         `INSERT INTO public.identity_oidc_provider_mapping
                (id, programme_slug, issuer, client_id, scopes, enabled,
@@ -55,7 +55,10 @@ export class IdentityIntegrationService {
              VALUES ($1, $2, $3, $4, $5, $6,
                      clock_timestamp(), clock_timestamp())
              RETURNING id, programme_slug, issuer, client_id, scopes, enabled,
-                       created_at, updated_at`,
+                       to_char(created_at AT TIME ZONE 'UTC',
+                         'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                       to_char(updated_at AT TIME ZONE 'UTC',
+                         'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
         [
           id,
           body.programmeSlug,
