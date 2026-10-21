@@ -165,6 +165,9 @@ the Python account projection.
 Account creation assigns `createdAt` and `updatedAt` independently, and an
 initial callsign advances the account's `updatedAt`, matching the reference's
 separate clock reads.
+Account creation preserves a truthy callsign's submitted type until
+normalization, so non-string values fail instead of being accepted through
+JavaScript string coercion.
 Initial callsigns trim only surrounding Python whitespace before uppercasing;
 internal whitespace is preserved as by the reference.
 Direct callsign creation also reads `verifiedAt`, `createdAt`, and `updatedAt`

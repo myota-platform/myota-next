@@ -118,7 +118,9 @@ export class IdentityAccountService {
       displayName: String(body.displayName),
       email: normalizedEmail,
       participationType: body.participationType as 'OPERATOR' | 'SWL',
-      callsign: pythonTruthy(body.callsign) ? String(body.callsign) : undefined,
+      callsign: pythonTruthy(body.callsign)
+        ? (body.callsign as string)
+        : undefined,
       roles: additionalAssignments,
     } as CreateAccountDto;
     let grants: RoleGrant[] = [];
