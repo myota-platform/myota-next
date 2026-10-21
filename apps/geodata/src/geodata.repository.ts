@@ -109,7 +109,7 @@ export class GeodataRepository {
         [id],
       );
       if (!result.rows[0])
-        throw new NotFoundException('geodata entity not found');
+        throw new NotFoundException(pythonKeyErrorDetail(id));
       return result.rows[0].entity;
     } finally {
       client.release();
@@ -170,7 +170,7 @@ export class GeodataRepository {
         [id],
       );
       if (!result.rows[0])
-        throw new NotFoundException('geodata import not found');
+        throw new NotFoundException(pythonKeyErrorDetail(id));
       return parseJsonWithExactIntegers(result.rows[0].run) as Record<
         string,
         unknown

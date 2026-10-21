@@ -83,7 +83,7 @@ export class GeodataImportMutationRepository {
       );
       const previous = selected.rows[0];
       if (!previous)
-        throw new NotFoundException('conflation candidate not found');
+        throw new NotFoundException(pythonKeyErrorDetail(candidateId));
       const responseId = String(previous.id).replaceAll('-', '');
       const occurredAt = new Date().toISOString();
       const history = Array.isArray(previous.resolution_history)
@@ -202,7 +202,10 @@ export class GeodataImportMutationRepository {
         [runId],
       );
       const run = found.rows[0];
-      if (!run) throw new BadRequestException('geodata import not found');
+      if (!run)
+        throw new NotFoundException(
+          pythonKeyErrorDetail(`import run ${runId} not found`),
+        );
       if (['QUEUED', 'PROCESSING'].includes(run.status))
         throw new BadRequestException(
           'an import cannot be finalized while it is still processing',
@@ -296,7 +299,10 @@ export class GeodataImportMutationRepository {
         [runId],
       );
       const run = result.rows[0];
-      if (!run) throw new BadRequestException('geodata import not found');
+      if (!run)
+        throw new NotFoundException(
+          pythonKeyErrorDetail('import run not found'),
+        );
       if (run.status === 'CANCELLED' || run.status === 'CANCELLING') {
         await client.query('COMMIT');
         return {

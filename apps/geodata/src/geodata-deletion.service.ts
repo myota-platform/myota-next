@@ -16,6 +16,7 @@ import {
   verifyAccessToken,
   type AccessTokenClaims,
 } from '@app/platform/access-token.js';
+import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import {
   lockRequest,
   readRequestResponse,
@@ -58,7 +59,7 @@ export class GeodataDeletionService {
         [entityId],
       );
       entity = result.rows[0];
-      if (!entity) throw new NotFoundException('geodata entity not found');
+      if (!entity) throw new NotFoundException(pythonKeyErrorDetail(entityId));
     } finally {
       client.release();
     }
@@ -149,7 +150,7 @@ export class GeodataDeletionService {
       );
       const job = result.rows[0]?.payload as
         Record<string, unknown> | undefined;
-      if (!job) throw new NotFoundException('entity deletion job not found');
+      if (!job) throw new NotFoundException(pythonKeyErrorDetail(jobId));
       const entity = {
         programme_slug: (job.entityContext as Record<string, unknown>)
           ?.programmeSlug,
@@ -212,7 +213,7 @@ export class GeodataDeletionService {
       );
       const job = selected.rows[0]?.payload as
         Record<string, unknown> | undefined;
-      if (!job) throw new NotFoundException('entity deletion job not found');
+      if (!job) throw new NotFoundException(pythonKeyErrorDetail(jobId));
       authorizeDelete(claims, {
         programme_slug: (job.entityContext as Record<string, unknown>)
           ?.programmeSlug,

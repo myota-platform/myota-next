@@ -11,6 +11,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { pythonFloatString } from '@app/platform/python-number.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
@@ -119,7 +120,7 @@ export class GeodataEntityMutationRepository {
         [id],
       );
       const row = result.rows[0];
-      if (!row) throw new NotFoundException('geodata entity not found');
+      if (!row) throw new NotFoundException(pythonKeyErrorDetail(id));
       assertReviewCoverage(claims, row);
       if (key) {
         const previous = await readRequestResponse(
@@ -372,7 +373,7 @@ export class GeodataEntityMutationRepository {
         [id],
       );
       const row = result.rows[0];
-      if (!row) throw new NotFoundException('geodata entity not found');
+      if (!row) throw new NotFoundException(pythonKeyErrorDetail(id));
       assertReviewCoverage(claims, row);
       if ('location' in body)
         assertGisAdminCoverage(claims, row, 'geodata.location.manage');
@@ -644,7 +645,7 @@ export class GeodataEntityMutationRepository {
         [id],
       );
       const row = selected.rows[0];
-      if (!row) throw new NotFoundException('geodata entity not found');
+      if (!row) throw new NotFoundException(pythonKeyErrorDetail(id));
       assertGisAdminCoverage(claims, row, 'geodata.location.manage');
       if (key) {
         const previous = await readRequestResponse(
@@ -819,7 +820,7 @@ export class GeodataEntityMutationRepository {
         [id],
       );
       const row = selected.rows[0];
-      if (!row) throw new NotFoundException('geodata entity not found');
+      if (!row) throw new NotFoundException(pythonKeyErrorDetail(id));
       assertReviewCoverage(claims, row);
       if (key) {
         const previous = await readRequestResponse(
@@ -1027,7 +1028,7 @@ export class GeodataEntityMutationRepository {
         [id],
       );
       const row = selected.rows[0];
-      if (!row) throw new NotFoundException('geodata entity not found');
+      if (!row) throw new NotFoundException(pythonKeyErrorDetail(id));
       assertReviewCoverage(claims, row);
       if (key) {
         const previous = await readRequestResponse(
