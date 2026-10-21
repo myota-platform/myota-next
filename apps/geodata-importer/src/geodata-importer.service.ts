@@ -303,6 +303,8 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
         fatal: true,
         ignoreBOM: true,
       }).decode(Buffer.concat(chunks, sourceBytes));
+      if (text.charCodeAt(0) === 0xfeff)
+        throw new Error('source JSON starts with a UTF-8 BOM');
       return { document: parseJsonWithExactIntegers(text) };
     } catch {
       throw new Error('source did not return valid JSON');
