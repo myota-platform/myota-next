@@ -3,6 +3,7 @@ import PageHeader from '../components/PageHeader.vue';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { apiRequest } from '../lib/api';
 import { myotaClient } from '../lib/myotaClient';
+import { createPendingIdempotencyKeys } from '../lib/pendingIdempotencyKeys';
 import { useAppStore } from '../stores/app';
 import type { EntityCategory, Programme } from '../types';
 
@@ -18,6 +19,9 @@ const message = ref('');
 const categorySelection = ref('');
 const categoryMutationStorageKey = 'myota_admin_pending_category_mutations';
 const pendingCategoryMutationKeys = restoreCategoryMutationKeys();
+const pendingProgrammeCreationKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_programme_creations',
+);
 const form = reactive({
   slug: '',
   name: '',
@@ -250,16 +254,29 @@ async function save(): Promise<void> {
       theme: { ...existing?.theme, primary: form.primary, accent: form.accent },
     };
     if (!selected.value) payload.entityTypes = form.entityTypes;
-    const saved = selected.value
-      ? await myotaClient.patchProgramme<Programme>(
-          selected.value.slug,
-          payload,
-        )
-      : await apiRequest<Programme>('/v1/programmes', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-          headers: { 'Idempotency-Key': crypto.randomUUID() },
-        });
+    let saved: Programme;
+    if (selected.value) {
+      saved = await myotaClient.patchProgramme<Programme>(
+        selected.value.slug,
+        payload,
+      );
+    } else {
+      const requestPath = '/v1/programmes';
+      const fingerprint = JSON.stringify([
+        store.account?.id,
+        requestPath,
+        payload,
+      ]);
+      saved = await apiRequest<Programme>(requestPath, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: {
+          'Idempotency-Key':
+            pendingProgrammeCreationKeys.getOrCreate(fingerprint),
+        },
+      });
+      pendingProgrammeCreationKeys.complete(fingerprint);
+    }
     await load(true);
     resetForm(saved);
     message.value = 'Programme saved.';

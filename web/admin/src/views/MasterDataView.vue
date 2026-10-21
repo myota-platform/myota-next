@@ -6,12 +6,15 @@ import PageHeader from '../components/PageHeader.vue';
 import PageFeedback from '../components/PageFeedback.vue';
 import { usePageFeedback } from '../composables/usePageFeedback';
 import { hasAnyScope } from '../lib/adminAccess';
+import { createPendingIdempotencyKeys } from '../lib/pendingIdempotencyKeys';
 import { useAppStore } from '../stores/app';
-const canEdit = computed(() =>
-  hasAnyScope(useAppStore().account, 'programme.admin'),
-);
+const store = useAppStore();
+const canEdit = computed(() => hasAnyScope(store.account, 'programme.admin'));
 const feedback = usePageFeedback();
 const { error, message, loading, saving } = feedback;
+const pendingMutationKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_master_data_mutations',
+);
 const geometryTypes = [
   'POINT',
   'LINESTRING',
@@ -72,18 +75,28 @@ async function save(): Promise<void> {
   }
   await feedback.run(
     async () => {
-      await apiRequest('/v1/entity-types', {
+      const requestPath = '/v1/entity-types';
+      const requestBody = {
+        code: form.code,
+        originalCode: selected.value?.code || form.code,
+        label: form.label,
+        description: form.description,
+        active: form.active,
+        geometryTypes: form.geometryTypes,
+      };
+      const fingerprint = JSON.stringify([
+        store.account?.id,
+        requestPath,
+        requestBody,
+      ]);
+      await apiRequest(requestPath, {
         method: 'POST',
-        body: JSON.stringify({
-          code: form.code,
-          originalCode: selected.value?.code || form.code,
-          label: form.label,
-          description: form.description,
-          active: form.active,
-          geometryTypes: form.geometryTypes,
-        }),
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify(requestBody),
+        headers: {
+          'Idempotency-Key': pendingMutationKeys.getOrCreate(fingerprint),
+        },
       });
+      pendingMutationKeys.complete(fingerprint);
       await fetchItems(form.code);
     },
     { mutation: true, success: 'Category saved.' },

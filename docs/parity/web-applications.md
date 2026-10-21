@@ -49,7 +49,9 @@ scoped draft creation, its idempotency key and condition/level payload, and
 the submit, approve, and publish lifecycle. Master data browser checks cover shared
 category creation, geometry type selection, inactive lifecycle, and the
 idempotency key. Programme category assignment and removal retain their
-idempotency keys across same-tab retries and reloads. Conflation review browser checks cover a keep-separate
+idempotency keys across same-tab retries and reloads. Shared category saves
+and programme creation also retain their keys across same-tab retries and
+reloads. Conflation review browser checks cover a keep-separate
 decision, survivor selection, reviewer attribution, and note. Other Admin
 workflows still lack browser-level compatibility coverage. Refresh schedule
 checks cover programme-scoped schedule creation and queuing a complete manual
