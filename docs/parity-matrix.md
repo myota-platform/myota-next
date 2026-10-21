@@ -463,7 +463,9 @@ exponential overflow rejects the feature as in Python.
 Pasted KML and GPX are converted to GeoJSON with XML document types rejected
 and bounded feature/coordinate counts. Queued KML and GPX uploads that contain
 no supported feature complete with zero features, matching the reference
-streaming importer. Resumable KML and GPX uploads are
+streaming importer. GPX text properties retain XML text-presence semantics:
+whitespace-only values become empty strings and can replace earlier values.
+KML continues to use the first direct `name` element. Resumable KML and GPX uploads are
 streamed from object storage through a SAX parser, verify the completed source
 hash, and apply the configured upload, per-feature, feature-count, and vertex
 limits while sending worker heartbeats. GPX uploads emit waypoint and route

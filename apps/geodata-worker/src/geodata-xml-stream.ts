@@ -188,12 +188,13 @@ export async function* streamXmlFeatures(
   parser.oncdata = captureText;
   parser.onclosetag = (qualifiedName) => {
     const name = local(qualifiedName);
-    const value =
-      textCapture?.name === name
-        ? trimPythonWhitespace(textCapture.chunks.join(''))
-        : '';
+    const capturedText = textCapture?.name === name ? textCapture : undefined;
+    const hasCapturedText = (capturedText?.sizeBytes ?? 0) > 0;
+    const value = capturedText
+      ? trimPythonWhitespace(capturedText.chunks.join(''))
+      : '';
     if (format === 'KML' && placemark) {
-      if (name === 'name' && value && placemark.name === undefined)
+      if (name === 'name' && hasCapturedText && placemark.name === undefined)
         placemark.name = value;
       if (name === 'coordinates' && value) {
         for (const token of value.replaceAll('\n', ' ').split(/\s+/)) {
@@ -245,7 +246,11 @@ export async function* streamXmlFeatures(
         placemark = undefined;
       }
     } else if (format === 'GPX') {
-      if (gpxPoint && ['name', 'desc', 'type'].includes(name) && value)
+      if (
+        gpxPoint &&
+        ['name', 'desc', 'type'].includes(name) &&
+        hasCapturedText
+      )
         gpxPoint.properties[name] = value;
       if (gpxPoint && ['wpt', 'rtept'].includes(name)) {
         addFeature({
