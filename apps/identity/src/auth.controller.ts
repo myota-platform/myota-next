@@ -298,7 +298,7 @@ export class AuthController {
   @Patch('accounts/:accountId')
   updateAccount(
     @Headers('authorization') authorization: string | undefined,
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('accountId') accountId: string,
     @Body() body: unknown,
   ) {
     if (!authorization)
@@ -309,7 +309,7 @@ export class AuthController {
   @Put('accounts/:accountId/role-assignments')
   replaceAccountRoleAssignments(
     @Headers('authorization') authorization: string | undefined,
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('accountId') accountId: string,
     @Body() body: unknown,
   ) {
     if (!authorization)

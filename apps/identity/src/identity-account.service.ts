@@ -450,6 +450,7 @@ export class IdentityAccountService {
     if (!actorScopes.has('*') && !actorScopes.has('identity.admin')) {
       throw new ForbiddenException('identity.admin scope is required');
     }
+    this.validateAccountPathId(accountId);
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -467,7 +468,8 @@ export class IdentityAccountService {
         [accountId],
       );
       const account = result.rows[0];
-      if (!account) throw new NotFoundException('account not found');
+      if (!account)
+        throw new NotFoundException(pythonKeyErrorDetail(accountId));
 
       let profile: ReturnType<IdentityAccountService['normalizeProfile']> = {};
       let emailKey: string | null = null;

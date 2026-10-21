@@ -52,7 +52,10 @@ Role arrays preserve assignment order, including multi-role replacements that
 share a creation timestamp.
 Role replacement also shares one timestamp between expiring prior assignments
 and creating their replacements, matching the Python handler.
-Administrative account updates now preserve profile, password, status,
+Administrative account PATCH and role-assignment PUT authorize before resolving
+the target ID; malformed or absent targets return the quoted-ID 404 from the
+Python dictionary lookup before request-body validation. These routes preserve
+profile, password, status,
 anonymization, and role replacement behavior in Core transactions. As in the
 reference handler, changing status alone does not anonymize the account or
 revoke its sessions; existing refresh sessions also remain rotatable, and both
