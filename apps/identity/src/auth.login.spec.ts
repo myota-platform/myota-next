@@ -40,6 +40,17 @@ describe('IdentityAuthService.login rate limits', () => {
           rateCount++;
           return { rows: [{ request_count: rateCount }], rowCount: 1 };
         }
+        if (sql.includes('INSERT INTO public.account_credential')) {
+          account.failed_attempts = Number(values[1]);
+          if (account.failed_attempts >= 5)
+            account.locked_until = new Date(Date.now() + 900_000);
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes('UPDATE public.account_credential')) {
+          account.failed_attempts = 0;
+          account.locked_until = null;
+          return { rows: [], rowCount: 1 };
+        }
         return { rows: [], rowCount: 0 };
       },
       release: () => undefined,
@@ -106,6 +117,26 @@ describe('IdentityAuthService.login rate limits', () => {
 
     expect(fixture.rateCount).toBe(0);
     expect(fixture.globalOperatorChecks).toBe(12);
+  });
+
+  it('still locks a global operator after five bad passwords', async () => {
+    const fixture = harness(true);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await expect(
+        fixture.service.login(
+          { email: 'standard@example.test', password: 'incorrect password' },
+          { userAgent: null, remoteAddr: '192.0.2.10' },
+        ),
+      ).rejects.toThrow('invalid credentials');
+    }
+
+    await expect(
+      fixture.service.login(
+        { email: 'standard@example.test', password },
+        { userAgent: null, remoteAddr: '192.0.2.10' },
+      ),
+    ).rejects.toThrow('account temporarily locked');
+    expect(fixture.rateCount).toBe(0);
   });
 
   it('verifies a Python hashlib.scrypt credential with the shared encoding', async () => {

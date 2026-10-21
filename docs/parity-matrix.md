@@ -186,7 +186,9 @@ Failed login attempts for known accounts without a password credential now
 create lockout state in Core and trigger the same five-attempt, fifteen-minute
 lockout as other known accounts. The credential row can hold this state with a
 null password hash and password-change timestamp; password setup fills those
-fields and clears the lockout state.
+fields and clears the lockout state. Global operators bypass the general
+attempt throttle but still enter this password-failure lockout after five bad
+passwords, matching the Python login handler.
 NestJS login also verifies a fixed-salt `hashlib.scrypt` credential generated
 by the Python reference, confirming the shared scrypt parameters and
 unpadded base64url encoding for account migration.
