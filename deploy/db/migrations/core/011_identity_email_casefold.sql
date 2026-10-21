@@ -1545,7 +1545,7 @@ STABLE
 STRICT
 PARALLEL SAFE
 AS $$
-  SELECT coalesce(string_agg(coalesce(mapping.folded, part.character), '' ORDER BY part.ordinality), '')
+  SELECT coalesce(string_agg(coalesce(mapping.folded, part.char_value), '' ORDER BY part.ordinality), '')
     FROM regexp_split_to_table(value, '') WITH ORDINALITY AS part(char_value, ordinality)
     LEFT JOIN public.identity_casefold_mapping AS mapping
       ON mapping.code_point = ascii(part.char_value)
