@@ -336,7 +336,13 @@ class GeoJsonResourceGuard {
 
   takeCompletedFeatureJson(): string | undefined {
     const result = this.completedFeatureJson[this.completedFeatureReadIndex];
-    if (result !== undefined) this.completedFeatureReadIndex += 1;
+    if (result !== undefined) {
+      this.completedFeatureReadIndex += 1;
+      if (this.completedFeatureReadIndex >= 256) {
+        this.completedFeatureJson.splice(0, this.completedFeatureReadIndex);
+        this.completedFeatureReadIndex = 0;
+      }
+    }
     return result;
   }
 
