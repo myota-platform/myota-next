@@ -923,6 +923,7 @@ $('award-login').onsubmit = (event) => {
 let profileCrop = null;
 let profileSourceUrl = null;
 let profileDisplayUrl = null;
+let profileCallsignBusy = false;
 const profileCanvas = $('profile-crop-canvas');
 const profileContext = profileCanvas.getContext('2d');
 
@@ -998,6 +999,7 @@ async function loadProfile() {
   } catch (error) {
     $('profile-status').textContent = error.message;
     $('profile-form').hidden = true;
+    $('profile-callsigns').hidden = true;
     $('profile-image-editor').hidden = true;
     revokeProfileSource();
     clearProfileImage();
@@ -1020,6 +1022,30 @@ function fillCallsignSelect(select, callsigns, prompt) {
     option.value = callsign.id;
     option.textContent = `${callsign.value} · ${callsign.status}`;
     select.append(option);
+  }
+}
+
+function setProfileCallsignControlsDisabled(disabled) {
+  $('profile-callsigns')
+    .querySelectorAll('button, input, select, textarea')
+    .forEach((control) => {
+      control.disabled = disabled;
+    });
+}
+
+async function runProfileCallsignMutation(progress, success, action) {
+  if (profileCallsignBusy) return;
+  profileCallsignBusy = true;
+  setProfileCallsignControlsDisabled(true);
+  $('profile-status').textContent = progress;
+  try {
+    await action();
+    await refreshProfileCallsigns(success);
+  } catch (error) {
+    $('profile-status').textContent = error.message;
+  } finally {
+    profileCallsignBusy = false;
+    setProfileCallsignControlsDisabled(false);
   }
 }
 
@@ -1093,6 +1119,7 @@ function renderProfileCallsigns(account) {
     'Choose a callsign',
   );
   updateProfileRetirementReplacement();
+  if (profileCallsignBusy) setProfileCallsignControlsDisabled(true);
 }
 
 function updateProfileRetirementReplacement() {
@@ -1133,23 +1160,23 @@ async function refreshProfileCallsigns(status) {
 }
 
 async function setProfilePrimaryCallsign(callsign) {
-  $('profile-status').textContent = 'Updating primary callsign…';
-  try {
-    await profileApi(
-      `/v1/identity/accounts/${encodeURIComponent(awardAccount.id)}/primary-callsign`,
-      {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': crypto.randomUUID(),
+  await runProfileCallsignMutation(
+    'Updating primary callsign…',
+    'Primary callsign updated.',
+    async () => {
+      await profileApi(
+        `/v1/identity/accounts/${encodeURIComponent(awardAccount.id)}/primary-callsign`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': crypto.randomUUID(),
+          },
+          body: JSON.stringify({ callsignId: callsign.id }),
         },
-        body: JSON.stringify({ callsignId: callsign.id }),
-      },
-    );
-    await refreshProfileCallsigns('Primary callsign updated.');
-  } catch (error) {
-    $('profile-status').textContent = error.message;
-  }
+      );
+    },
+  );
 }
 
 $('profile-callsign-add').onsubmit = async (event) => {
@@ -1159,24 +1186,24 @@ $('profile-callsign-add').onsubmit = async (event) => {
   const validTo = $('profile-callsign-valid-to').value.trim();
   if (validFrom) body.validFrom = validFrom;
   if (validTo) body.validTo = validTo;
-  $('profile-status').textContent = 'Adding callsign…';
-  try {
-    await profileApi(
-      `/v1/identity/accounts/${encodeURIComponent(awardAccount.id)}/callsigns`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': crypto.randomUUID(),
+  await runProfileCallsignMutation(
+    'Adding callsign…',
+    'Callsign added.',
+    async () => {
+      await profileApi(
+        `/v1/identity/accounts/${encodeURIComponent(awardAccount.id)}/callsigns`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': crypto.randomUUID(),
+          },
+          body: JSON.stringify(body),
         },
-        body: JSON.stringify(body),
-      },
-    );
-    $('profile-callsign-add').reset();
-    await refreshProfileCallsigns('Callsign added.');
-  } catch (error) {
-    $('profile-status').textContent = error.message;
-  }
+      );
+      $('profile-callsign-add').reset();
+    },
+  );
 };
 
 $('profile-callsign-evidence').onsubmit = async (event) => {
@@ -1206,21 +1233,21 @@ $('profile-callsign-evidence').onsubmit = async (event) => {
     ...(metadata === undefined ? {} : { metadata }),
   };
   const callsignId = $('profile-evidence-callsign').value;
-  $('profile-status').textContent = 'Submitting callsign evidence…';
-  try {
-    await profileApi(
-      `/v1/identity/accounts/${encodeURIComponent(awardAccount.id)}/callsigns/${encodeURIComponent(callsignId)}/evidence`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      },
-    );
-    $('profile-callsign-evidence').reset();
-    await refreshProfileCallsigns('Callsign evidence submitted.');
-  } catch (error) {
-    $('profile-status').textContent = error.message;
-  }
+  await runProfileCallsignMutation(
+    'Submitting callsign evidence…',
+    'Callsign evidence submitted.',
+    async () => {
+      await profileApi(
+        `/v1/identity/accounts/${encodeURIComponent(awardAccount.id)}/callsigns/${encodeURIComponent(callsignId)}/evidence`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      );
+      $('profile-callsign-evidence').reset();
+    },
+  );
 };
 
 $('profile-retire-callsign').addEventListener(
@@ -1244,22 +1271,22 @@ $('profile-callsign-retire').onsubmit = async (event) => {
   if (callsignId === awardAccount.primaryCallsignId) {
     body.newPrimaryCallsignId = $('profile-retire-replacement').value;
   }
-  $('profile-status').textContent = 'Retiring callsign…';
-  try {
-    await profileApi(
-      `/v1/identity/accounts/${encodeURIComponent(awardAccount.id)}/callsigns/${encodeURIComponent(callsignId)}/retire`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      },
-    );
-    $('profile-callsign-retire').hidden = true;
-    $('profile-callsign-retire').reset();
-    await refreshProfileCallsigns('Callsign retired.');
-  } catch (error) {
-    $('profile-status').textContent = error.message;
-  }
+  await runProfileCallsignMutation(
+    'Retiring callsign…',
+    'Callsign retired.',
+    async () => {
+      await profileApi(
+        `/v1/identity/accounts/${encodeURIComponent(awardAccount.id)}/callsigns/${encodeURIComponent(callsignId)}/retire`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      );
+      $('profile-callsign-retire').hidden = true;
+      $('profile-callsign-retire').reset();
+    },
+  );
 };
 
 $('profile-biography').addEventListener('input', (event) => {
