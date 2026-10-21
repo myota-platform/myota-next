@@ -472,6 +472,13 @@ comparable. Inputs above 250,000 features and less common OSM geometries still
 need qualification. Area and way vertex limits use the reference errors;
 the CLI decoder checks after osmium emits a record, bounded by the decoded
 feature-size cap, while PyOsmium checks areas before GeoJSON materialization.
+CI also streams a generated 300,000-feature GeoJSON FeatureCollection through
+the metadata scan and feature pass, with Node RSS growth under 96 MiB; a
+top-level feature array has a separate correctness fixture. The Python stress
+fixture uses the same GeoJSON feature count and a 96 MiB absolute process-RSS
+limit, while the Nest check measures growth from its test-worker baseline, so
+these RSS values are not directly comparable. The stream regression check
+guards that current feature source JSON is released as each item is consumed.
 Shapefile and PBF working directories use `MYOTA_UPLOAD_SPOOL_DIR` when set,
 and otherwise use the OS temporary directory. PBF source bytes stream to disk
 with checksum verification. API admission and
