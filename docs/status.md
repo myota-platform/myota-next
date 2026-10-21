@@ -52,7 +52,9 @@ behavioral parity or production readiness.
   replica sharing, durable resume after a worker restart, and audited dead-letter
   redrive. It also verifies Activity statistics-job lease takeover after a
   worker process kill and Geodata import preprocessing replay after committed
-  staging; other worker and object-store recovery paths remain to be qualified.
+  staging. A fault-injection check verifies an Activity outbox event is retried
+  after a broker publish failure and marked published after JetStream recovery;
+  other worker and object-store recovery paths remain to be qualified.
 - Complete the semantic review and rehearsal for cross-version database
   transfer, backup, restore, and rollback. CI exercises the transfer commands
   end to end on disposable databases with Identity, Programme, Activity,
