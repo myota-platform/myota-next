@@ -76,8 +76,10 @@ validity fields; evidence submission with checksum and metadata; verification
 for callers with `callsign.verify` and a configurable verification source;
 primary selection; and retirement with an optional effective date. Owner and
 global-scope checks follow the API authorization rules. The Participant
-profile exposes the owner-authorized callsign actions. These
-callsign controls do not yet have browser-level compatibility coverage. Admin
+profile exposes the owner-authorized callsign actions. Browser checks now
+exercise Admin callsign creation, evidence submission, verification, primary
+selection, and retirement with replacement, plus the Participant owner flow
+for creation, evidence, primary selection, and primary retirement. Admin
 account creation and both clients' callsign creation and primary-selection
 retries reuse their idempotency key for the same request across page reloads in
 the same tab. The Participant client reports profile-refresh failure separately
