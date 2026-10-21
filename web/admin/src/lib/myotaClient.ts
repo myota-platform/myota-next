@@ -39,12 +39,13 @@ function write<T>(
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body: unknown = {},
   version?: number,
+  idempotencyKey: string = crypto.randomUUID(),
 ): Promise<T> {
   return apiRequest<T>(path, {
     method,
     body: JSON.stringify(body),
     headers: {
-      'Idempotency-Key': crypto.randomUUID(),
+      'Idempotency-Key': idempotencyKey,
       ...(version === undefined ? {} : { 'If-Match': `"${version}"` }),
     },
   });
@@ -110,11 +111,17 @@ export const myotaClient = {
   createIdentityAccount<T = unknown>(body: unknown) {
     return write<T>('/v1/identity/accounts', 'POST', body);
   },
-  addIdentityCallsign<T = unknown>(accountId: string, body: unknown) {
+  addIdentityCallsign<T = unknown>(
+    accountId: string,
+    body: unknown,
+    idempotencyKey?: string,
+  ) {
     return write<T>(
       `/v1/identity/accounts/${encodeURIComponent(accountId)}/callsigns`,
       'POST',
       body,
+      undefined,
+      idempotencyKey,
     );
   },
   submitIdentityCallsignEvidence<T = unknown>(
@@ -142,11 +149,14 @@ export const myotaClient = {
   setPrimaryIdentityCallsign<T = unknown>(
     accountId: string,
     callsignId: string,
+    idempotencyKey?: string,
   ) {
     return write<T>(
       `/v1/identity/accounts/${encodeURIComponent(accountId)}/primary-callsign`,
       'PUT',
       { callsignId },
+      undefined,
+      idempotencyKey,
     );
   },
   retireIdentityCallsign<T = unknown>(

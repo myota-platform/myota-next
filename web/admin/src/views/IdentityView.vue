@@ -151,6 +151,11 @@ const retireReplacement = ref('');
 const retireValidTo = ref('');
 const retiringCallsignId = ref('');
 const verificationSource = ref('manual-review');
+const pendingCallsignMutationStorageKey =
+  'myota_admin_pending_callsign_mutations';
+const restoredCallsignMutations = restorePendingCallsignMutations();
+const pendingCallsignCreates = restoredCallsignMutations.create;
+const pendingPrimaryCallsignChanges = restoredCallsignMutations.primary;
 const retiringCallsign = computed(() =>
   selectedAccount.value?.callsigns?.find(
     (callsign) => callsign.id === retiringCallsignId.value,
@@ -165,6 +170,55 @@ const canManageSelectedCallsigns = computed(
 const canVerifyCallsigns = computed(() =>
   hasAnyScope(store.account, 'callsign.verify'),
 );
+
+function restorePendingCallsignMutations(): {
+  create: Map<string, string>;
+  primary: Map<string, string>;
+} {
+  try {
+    const saved = JSON.parse(
+      sessionStorage.getItem(pendingCallsignMutationStorageKey) || '{}',
+    );
+    const create = new Map<string, string>(
+      Array.isArray(saved.create)
+        ? saved.create.filter(
+            (entry: unknown) =>
+              Array.isArray(entry) &&
+              typeof entry[0] === 'string' &&
+              typeof entry[1] === 'string',
+          )
+        : [],
+    );
+    const primary = new Map<string, string>(
+      Array.isArray(saved.primary)
+        ? saved.primary.filter(
+            (entry: unknown) =>
+              Array.isArray(entry) &&
+              typeof entry[0] === 'string' &&
+              typeof entry[1] === 'string',
+          )
+        : [],
+    );
+    return { create, primary };
+  } catch {
+    return { create: new Map(), primary: new Map() };
+  }
+}
+
+function persistPendingCallsignMutations(): void {
+  try {
+    sessionStorage.setItem(
+      pendingCallsignMutationStorageKey,
+      JSON.stringify({
+        create: [...pendingCallsignCreates.entries()],
+        primary: [...pendingPrimaryCallsignChanges.entries()],
+      }),
+    );
+  } catch {
+    // In-memory retry keys remain available when browser storage is unavailable.
+  }
+}
+
 const roleForm = reactive({
   code: '',
   name: '',
@@ -235,16 +289,30 @@ async function refreshSelectedCallsigns(accountId: string): Promise<void> {
 async function addCallsign(): Promise<void> {
   const account = selectedAccount.value;
   if (!account || !canManageSelectedCallsigns.value) return;
+  const payload: Record<string, string> = {
+    callsign: callsignForm.callsign.trim(),
+  };
+  if (callsignForm.status) payload.status = callsignForm.status;
+  if (callsignForm.source) payload.source = callsignForm.source;
+  if (callsignForm.validFrom) payload.validFrom = callsignForm.validFrom;
+  if (callsignForm.validTo) payload.validTo = callsignForm.validTo;
+  const fingerprint = JSON.stringify([account.id, payload]);
+  let idempotencyKey = pendingCallsignCreates.get(fingerprint);
+  if (!idempotencyKey) {
+    idempotencyKey = crypto.randomUUID();
+    pendingCallsignCreates.set(fingerprint, idempotencyKey);
+    persistPendingCallsignMutations();
+  }
   await feedback.run(
     async () => {
-      const payload: Record<string, string> = {
-        callsign: callsignForm.callsign.trim(),
-      };
-      if (callsignForm.status) payload.status = callsignForm.status;
-      if (callsignForm.source) payload.source = callsignForm.source;
-      if (callsignForm.validFrom) payload.validFrom = callsignForm.validFrom;
-      if (callsignForm.validTo) payload.validTo = callsignForm.validTo;
-      await myotaClient.addIdentityCallsign(account.id, payload);
+      await myotaClient.addIdentityCallsign(
+        account.id,
+        payload,
+        idempotencyKey,
+      );
+      await refreshSelectedCallsigns(account.id);
+      pendingCallsignCreates.delete(fingerprint);
+      persistPendingCallsignMutations();
       Object.assign(callsignForm, {
         callsign: '',
         status: '',
@@ -252,7 +320,6 @@ async function addCallsign(): Promise<void> {
         validFrom: '',
         validTo: '',
       });
-      await refreshSelectedCallsigns(account.id);
     },
     { mutation: true, success: 'Callsign added.' },
   );
@@ -319,10 +386,23 @@ async function verifyCallsign(callsign: Callsign): Promise<void> {
 async function setPrimaryCallsign(callsign: Callsign): Promise<void> {
   const account = selectedAccount.value;
   if (!account || !canManageSelectedCallsigns.value) return;
+  const requestId = JSON.stringify([account.id, callsign.id]);
+  let idempotencyKey = pendingPrimaryCallsignChanges.get(requestId);
+  if (!idempotencyKey) {
+    idempotencyKey = crypto.randomUUID();
+    pendingPrimaryCallsignChanges.set(requestId, idempotencyKey);
+    persistPendingCallsignMutations();
+  }
   await feedback.run(
     async () => {
-      await myotaClient.setPrimaryIdentityCallsign(account.id, callsign.id);
+      await myotaClient.setPrimaryIdentityCallsign(
+        account.id,
+        callsign.id,
+        idempotencyKey,
+      );
       await refreshSelectedCallsigns(account.id);
+      pendingPrimaryCallsignChanges.delete(requestId);
+      persistPendingCallsignMutations();
     },
     { mutation: true, success: 'Primary callsign updated.' },
   );
