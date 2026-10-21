@@ -1128,7 +1128,7 @@ export class ActivityRepository {
     );
     if (created.rows[0])
       await client.query(
-        `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at,correlation_id) VALUES ($1,$3,'activity-service','activity_job',$1,$4::jsonb,now(),now(),$2) ON CONFLICT DO NOTHING`,
+        `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at,correlation_id) VALUES ($1::uuid,$3,'activity-service','activity_job',$1::uuid::text,$4::jsonb,now(),now(),$2) ON CONFLICT DO NOTHING`,
         [id, randomUUID(), workEventType(kind), JSON.stringify({ jobId: id })],
       );
   }

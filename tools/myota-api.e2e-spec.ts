@@ -76,7 +76,7 @@ describeWithDatabases(
         await request(gatewayUrl)
           .post('/v1/identity/auth/refresh')
           .send({ refreshToken: login.body.refreshToken })
-          .expect(401);
+          .expect(403);
 
         const programmeSlug = `gateway-e2e-${randomUUID()}`;
         const programme = await request(gatewayUrl)
@@ -128,7 +128,7 @@ describeWithDatabases(
           .expect(201);
         expect(activation.body.status).toBe('OPEN');
 
-        const qso = await request(gatewayUrl)
+        const qsoResponse = await request(gatewayUrl)
           .post(`/v1/activations/${activation.body.id}/qsos`)
           .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
           .set('Idempotency-Key', randomUUID())
@@ -137,12 +137,14 @@ describeWithDatabases(
             timestamp: startedAt,
             band: '20M',
             mode: 'SSB',
-          })
-          .expect(201);
-        expect(qso.body.workedCallsign).toBe('F4E2E');
+          });
+        expect(qsoResponse.status, JSON.stringify(qsoResponse.body)).toBe(201);
+        const qso = qsoResponse.body.qso;
+        expect(qso.workedCallsign).toBe('F4E2E');
+        expect(qsoResponse.body.qsoCount).toBe(1);
 
         const correction = await request(gatewayUrl)
-          .post(`/v1/qsos/${qso.body.id}/corrections`)
+          .post(`/v1/qsos/${qso.id}/corrections`)
           .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
           .send({
             requestedBy: login.body.account.id,
@@ -169,15 +171,13 @@ describeWithDatabases(
           items: [
             {
               id: correction.body.id,
-              qso: { id: qso.body.id, workedCallsign: 'F4E2E' },
+              qso: { id: qso.id, workedCallsign: 'F4E2E' },
             },
           ],
         });
 
         const reviewedCorrection = await request(gatewayUrl)
-          .post(
-            `/v1/qsos/${qso.body.id}/corrections/${correction.body.id}/review`,
-          )
+          .post(`/v1/qsos/${qso.id}/corrections/${correction.body.id}/review`)
           .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
           .send({
             decision: 'APPLIED',
@@ -192,7 +192,7 @@ describeWithDatabases(
           .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
           .expect(200);
         expect(activationRead.body.qsos).toMatchObject([
-          { id: qso.body.id, workedCallsign: 'F4E2X', status: 'CORRECTED' },
+          { id: qso.id, workedCallsign: 'F4E2X', status: 'CORRECTED' },
         ]);
 
         const closed = await request(gatewayUrl)

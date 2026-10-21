@@ -36,10 +36,12 @@ matching the Python reference.
 The PostgreSQL-backed HTTP integration check starts Identity, Programmes,
 Activity, and Gateway as separate Nest applications on ephemeral ports and
 accesses them through loopback. It exercises the `/v1` login, current-account,
-refresh, programme creation/read, activation, QSO, and close workflow through
-Gateway, plus a programme-filtered Geodata page. This verifies upstream
+refresh and refresh-token replay, programme creation/read, activation, QSO,
+correction request, paged admin inbox, correction review, and close workflow
+through Gateway, plus a programme-filtered Geodata page. This verifies upstream
 routing, the shared Core database, and separate Activity and Geodata databases
-together.
+together. Refresh-token replay returns 403, consistent with the reference's
+mapping of authentication failures.
 It bypasses request-body parsing, streams incoming bodies to the owning API,
 and preserves the declared `Content-Length` for binary and JSON payloads.
 When it forwards an already parsed JSON body, its serializer preserves exact

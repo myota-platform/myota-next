@@ -27,6 +27,7 @@ const ROUTES: Array<[string, string]> = [
   ['/v1/activations', 'ACTIVITY'],
   ['/v1/awards', 'ACTIVITY'],
   ['/v1/qso-ingestions', 'ACTIVITY'],
+  ['/v1/qso-corrections', 'ACTIVITY'],
   ['/v1/adif/', 'ACTIVITY'],
   ['/v1/qsos', 'ACTIVITY'],
   ['/v1/statistics', 'ACTIVITY'],
