@@ -210,8 +210,9 @@ when validation uses the `rules` alias. Timestamp normalization accepts lowercas
 one-character date/time separators, and fractional-second time-zone offsets
 supported by Python's
 `datetime.fromisoformat`; Activity tests cover date-only, ISO week, compact
-offset, fractional offset-second, and invalid lowercase-`z` cases. QSO
-ingestion requests also persist bounded,
+offset, fractional offset-second, and invalid lowercase-`z` cases. A Python
+fixture also verifies QSO normalization and the SHA-256 deduplication key.
+QSO ingestion requests also persist bounded,
 owner-scoped jobs with a status read path. `sourceFormat` defaults only when
 omitted and otherwise reaches the worker unchanged, matching the Python
 handler. The separate Activity worker consumes its six registered JetStream

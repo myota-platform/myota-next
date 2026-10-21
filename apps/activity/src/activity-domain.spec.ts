@@ -1,6 +1,7 @@
 import {
   adifAwardRecalculationKey,
   calculateAdifRejectedRecords,
+  normalizeQso,
   normalizeTimestamp,
   parseTimestamp,
 } from './activity-domain.js';
@@ -53,5 +54,52 @@ describe('Python datetime.fromisoformat timestamp compatibility', () => {
     expect(() => parseTimestamp('2026-10-21T10:20:30z')).toThrow(
       'timestamp is invalid',
     );
+  });
+});
+
+describe('QSO normalization compatibility', () => {
+  it('matches the Python callsign, frequency, station, timestamp, and dedupe forms', () => {
+    const qso = normalizeQso(
+      {
+        workedCallsign: ' f4xyz ',
+        timestamp: '2026-W43-3T10:20:30.123456+02:30',
+        band: '20 m',
+        mode: 'ft-8',
+        workedLocator: ' fn31pr ',
+        hunterId: 'hunter-1',
+        workedEntityId: 'entity-1',
+      },
+      'activation-1',
+    );
+
+    expect(qso).toMatchObject({
+      workedCallsign: 'F4XYZ',
+      timestamp: '2026-10-21T07:50:30.123456Z',
+      band: '20M',
+      mode: 'FT8',
+      workedStationKey: 'F4XYZ|FN31PR',
+      activationId: 'activation-1',
+      source: 'manual',
+      deduplicationKey:
+        'ed0f7490bec700666ebff17a2ea103c1a91c70516e5736e9cd8936c0273eda2a',
+    });
+    expect(qso.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+  });
+
+  it('rejects unsupported bands and modes', () => {
+    expect(() =>
+      normalizeQso(
+        { workedCallsign: 'F4XYZ', timeOn: '2026-10-21', band: '5M' },
+        'activation-1',
+      ),
+    ).toThrow('unsupported band: 5M');
+    expect(() =>
+      normalizeQso(
+        { workedCallsign: 'F4XYZ', timeOn: '2026-10-21', mode: 'FT2' },
+        'activation-1',
+      ),
+    ).toThrow('unsupported mode: FT2');
   });
 });
