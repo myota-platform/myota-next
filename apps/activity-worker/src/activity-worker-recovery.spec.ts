@@ -14,6 +14,10 @@ const recoveryCases = [
     kind: 'AWARD_RECALCULATE',
     testName: 'reclaims award recalculation after worker process death',
   },
+  {
+    kind: 'QSO_INGESTION',
+    testName: 'reclaims QSO ingestion after worker process death',
+  },
 ];
 
 describe('Activity worker process recovery', () => {
@@ -66,6 +70,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
   const pool = new Pool({ connectionString: databaseUrl, max: 3 });
   const jobId = randomUUID();
   const programmeSlug = `worker-recovery-${jobId}`;
+  const activationId = jobKind === 'QSO_INGESTION' ? randomUUID() : undefined;
   const awardId = jobKind === 'AWARD_RECALCULATE' ? randomUUID() : undefined;
   const subjectId = `worker-recovery-subject-${jobId}`;
   const workerEnvironment = {
@@ -80,6 +85,14 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
   let worker: ReturnType<typeof spawnRecoveryWorker> | undefined;
 
   try {
+    if (activationId) {
+      await pool.query(
+        `INSERT INTO activity_activation
+           (id,programme_slug,entity_id,entity_type,operator_id,operator_callsign,started_at)
+         VALUES ($1,$2,'recovery-entity','SOTA','worker-recovery-operator','N0CALL','2026-01-01T00:00:00Z')`,
+        [activationId, programmeSlug],
+      );
+    }
     if (awardId) {
       const definition = {
         id: awardId,
@@ -119,7 +132,19 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
         stringifyJsonWithBigInts(
           jobKind === 'STATISTICS_REBUILD'
             ? { programmeSlug }
-            : { programmeSlug, subjectIds: [subjectId] },
+            : jobKind === 'AWARD_RECALCULATE'
+              ? { programmeSlug, subjectIds: [subjectId] }
+              : {
+                  activationId,
+                  records: [
+                    {
+                      workedCallsign: 'K1RECOVERY',
+                      timestamp: '2026-01-01T00:05:00Z',
+                      band: '20M',
+                      mode: 'SSB',
+                    },
+                  ],
+                },
         ),
       ],
     );
@@ -153,7 +178,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
         attempts: 2,
         snapshots: 2,
       });
-    } else {
+    } else if (jobKind === 'AWARD_RECALCULATE') {
       const result = await pool.query(
         `SELECT job.status,job.attempts,progress.evaluation
          FROM activity_job job LEFT JOIN activity_award_progress progress
@@ -172,6 +197,37 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
           levels: [{ id: 'level-5', eligible: true }],
         },
       });
+    } else {
+      const result = await pool.query(
+        `SELECT job.status,job.attempts,activation.qso_count,
+                count(DISTINCT qso.id)::int AS qsos,
+                aggregate.qso_count::int AS operator_qsos,
+                count(DISTINCT event.event_id)::int AS qso_events,
+                count(DISTINCT downstream.id)::int AS award_jobs
+         FROM activity_job job
+         JOIN activity_activation activation ON activation.id=$2
+         LEFT JOIN activity_qso qso ON qso.activation_id=activation.id
+         LEFT JOIN activity_subject_aggregate aggregate
+           ON aggregate.programme_slug=activation.programme_slug
+             AND aggregate.subject_id=activation.operator_id
+             AND aggregate.category='ACTIVATOR'
+         LEFT JOIN outbox_event event
+           ON event.aggregate_type='qso' AND event.aggregate_id=qso.id::text
+         LEFT JOIN activity_job downstream
+           ON downstream.idempotency_key LIKE 'batch:' || activation.id::text || ':%'
+             AND downstream.kind='AWARD_RECALCULATE'
+         WHERE job.id=$1 GROUP BY job.id,activation.id,aggregate.qso_count`,
+        [jobId, activationId],
+      );
+      expect(result.rows[0]).toMatchObject({
+        status: 'SUCCEEDED',
+        attempts: 2,
+        qso_count: 1,
+        qsos: 1,
+        operator_qsos: 1,
+        qso_events: 1,
+        award_jobs: 1,
+      });
     }
   } finally {
     if (worker && worker.exitCode === null) {
@@ -184,6 +240,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
       programmeSlug,
       awardId,
       subjectId,
+      activationId,
     );
   }
 }
@@ -194,6 +251,7 @@ async function cleanupRecoveryFixture(
   programmeSlug: string,
   awardId?: string,
   subjectId?: string,
+  activationId?: string,
 ) {
   let cleanupError: unknown;
   try {
@@ -219,6 +277,47 @@ async function cleanupRecoveryFixture(
         'DELETE FROM activity_subject_aggregate WHERE programme_slug=$1 AND subject_id=$2',
         [programmeSlug, subjectId],
       );
+    }
+    if (activationId) {
+      await pool.query(
+        `DELETE FROM outbox_event
+         WHERE aggregate_type='qso' AND aggregate_id IN
+           (SELECT id::text FROM activity_qso WHERE activation_id=$1)`,
+        [activationId],
+      );
+      await pool.query(
+        `DELETE FROM outbox_event
+         WHERE aggregate_type='activity_job' AND aggregate_id IN
+           (SELECT id::text FROM activity_job
+            WHERE idempotency_key LIKE 'batch:' || $1::text || ':%')`,
+        [activationId],
+      );
+      await pool.query(
+        `DELETE FROM activity_job
+         WHERE idempotency_key LIKE 'batch:' || $1::text || ':%'`,
+        [activationId],
+      );
+      await pool.query(
+        `DELETE FROM activity_subject_callsign
+         WHERE programme_slug=$1 AND subject_id='worker-recovery-operator'`,
+        [programmeSlug],
+      );
+      await pool.query(
+        `DELETE FROM activity_subject_entity
+         WHERE programme_slug=$1 AND subject_id='worker-recovery-operator'`,
+        [programmeSlug],
+      );
+      await pool.query(
+        `DELETE FROM activity_subject_aggregate
+         WHERE programme_slug=$1 AND subject_id='worker-recovery-operator'`,
+        [programmeSlug],
+      );
+      await pool.query('DELETE FROM activity_qso WHERE activation_id=$1', [
+        activationId,
+      ]);
+      await pool.query('DELETE FROM activity_activation WHERE id=$1', [
+        activationId,
+      ]);
     }
     await pool.query('DELETE FROM activity_job WHERE id=$1', [jobId]);
   } catch (error) {
