@@ -130,6 +130,7 @@ export async function readGeoJsonDocumentMetadata(
           : undefined,
     crsJsonTooLarge: rootValueGuard.rootValueWasTooLarge(crsSourceKey),
     rootType,
+    rootHasFeaturesArray: rootValueGuard.hasFeaturesArray(),
   };
 }
 
@@ -146,6 +147,7 @@ export async function* streamGeoJsonFeatures(
     crsSourceKey: string;
     crsJson?: string;
     crsJsonTooLarge?: boolean;
+    rootHasFeaturesArray?: boolean;
     sourceFeatureHashOverrides?: unknown[];
     rootType: unknown;
   },
@@ -188,7 +190,9 @@ export async function* streamGeoJsonFeatures(
         if (firstTokenOffset < part.length) {
           const rootIsArray = part[firstTokenOffset] === 0x5b;
           const rootIsCollection =
-            !rootIsArray && documentMetadata.rootType === 'FeatureCollection';
+            !rootIsArray &&
+            (documentMetadata.rootHasFeaturesArray ??
+              documentMetadata.rootType === 'FeatureCollection');
           parser = new JSONParser({
             paths: rootIsArray
               ? ['$.*']
@@ -373,6 +377,10 @@ class GeoJsonResourceGuard {
 
   rootValueWasTooLarge(key: string): boolean {
     return this.oversizedRootValues.has(key);
+  }
+
+  hasFeaturesArray(): boolean {
+    return this.sawFeaturesArray;
   }
 
   write(chunk: Uint8Array) {

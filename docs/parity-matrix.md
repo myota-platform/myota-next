@@ -564,7 +564,8 @@ DBF field, `.prj` text, and canonical source hash. PBF and less common geometry
 or CRS definitions still need fixtures. The direct JSON import path materializes
 the normalized collection and accepts the reference's feature arrays, single
 geometries, geometry wrappers, and empty collections, while multipart GeoJSON
-streams source features.
+streams source features. The streaming worker selects a root `features` array
+directly, matching the Python `ijson` path.
 The PyShp 2.3.1 MultiPointZ fixture verifies GeoJSON dimensionality: PyShp's
 `__geo_interface__` emits XY coordinates for this shape type, and the Nest
 streaming reader matches it. A nested Polygon fixture verifies that the reader
