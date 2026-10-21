@@ -336,7 +336,7 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
       if (!isRecord(tokenBody) || typeof tokenBody.accessToken !== 'string')
         throw new Error('Identity service returned an invalid token response');
       this.identityToken = tokenBody.accessToken;
-      const expiresIn = boundedInteger(tokenBody.expiresIn, 300, 30, 300);
+      const expiresIn = integerOrFallback(tokenBody.expiresIn, 300);
       this.identityTokenExpiresAt =
         tokenCheckTime + Math.min(Math.max(30, expiresIn - 30), 270) * 1000;
     }
@@ -610,16 +610,9 @@ function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function boundedInteger(
-  value: unknown,
-  fallback: number,
-  min: number,
-  max: number,
-) {
+function integerOrFallback(value: unknown, fallback: number) {
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= min && parsed <= max
-    ? parsed
-    : fallback;
+  return Number.isInteger(parsed) ? parsed : fallback;
 }
 
 function backoffMs(attempt: number) {
