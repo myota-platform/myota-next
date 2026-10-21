@@ -119,6 +119,9 @@ export class IdentityRoleService {
       ...source,
       code: pythonStringJsonField(source, 'code'),
       name: pythonStringJsonField(source, 'name'),
+      description: pythonTruthy(source.description)
+        ? source.description
+        : '',
     });
     const code = trimPythonWhitespace(body.code ?? '')
       .toUpperCase()
@@ -222,14 +225,14 @@ export class IdentityRoleService {
       const source = asRecord(rawBody);
       if ('name' in source && !pythonTruthy(source.name))
         throw new BadRequestException('missing required fields: name');
-      const body = await validateAdminRoleDefinitionBody(
-        'name' in source
-          ? {
-              ...source,
-              name: pythonStringJsonField(source, 'name'),
-            }
-          : source,
-      );
+      const normalizedSource = { ...source };
+      if ('name' in source)
+        normalizedSource.name = pythonStringJsonField(source, 'name');
+      if ('description' in source)
+        normalizedSource.description = pythonTruthy(source.description)
+          ? source.description
+          : '';
+      const body = await validateAdminRoleDefinitionBody(normalizedSource);
       const name =
         'name' in source ? trimPythonWhitespace(body.name ?? '') : current.name;
       const description = body.description ?? current.description;
