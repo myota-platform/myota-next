@@ -258,12 +258,8 @@ export class ActivityService {
     return this.repository.redriveFailedWorkJob(id, claims.sub, reason, key);
   }
 
-  async getAdifImport(authorization: string | undefined, id: string) {
-    const claims = verifyAccessToken(authorization);
-    const record = await this.repository.getAdifImport(id);
-    const activation = await this.repository.get(record.activationId);
-    this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
-    return record;
+  async getAdifImport(id: string) {
+    return this.repository.getAdifImport(id);
   }
 
   async createAdifImport(authorization: string | undefined, body: JsonRecord) {

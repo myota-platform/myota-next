@@ -23,10 +23,7 @@ export class AdifImportController {
   }
 
   @Get(':importId')
-  get(
-    @Headers('authorization') authorization: string | undefined,
-    @Param('importId') id: string,
-  ) {
-    return this.activity.getAdifImport(authorization, id);
+  get(@Param('importId') id: string) {
+    return this.activity.getAdifImport(id);
   }
 }
