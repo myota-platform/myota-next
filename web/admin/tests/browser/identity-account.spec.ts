@@ -47,9 +47,9 @@ test('creates a participant account with a permitted role grant', async ({
         json: {
           items: [
             {
-              code: 'ACTIVITY_READER',
-              name: 'Activity Reader',
-              scopes: ['activity.read'],
+              code: 'ACTIVITY_ADMIN',
+              name: 'Activity administrator',
+              scopes: ['activity.read', 'activity.admin'],
               system: true,
             },
             {
@@ -98,7 +98,7 @@ test('creates a participant account with a permitted role grant', async ({
   await page.getByLabel('Display name').fill(' Casey Operator ');
   await page.getByLabel('Email').last().fill(' casey@example.test ');
   await page.getByLabel('Initial callsign (optional)').fill(' dl1abc ');
-  await page.getByLabel(/Activity Reader/).check();
+  await page.getByLabel(/Activity administrator/).check();
   await expect(page.getByLabel(/Global administrator/)).toHaveCount(0);
   await page.getByRole('button', { name: 'Create account' }).last().click();
 
@@ -114,6 +114,6 @@ test('creates a participant account with a permitted role grant', async ({
     email: 'casey@example.test',
     participationType: 'OPERATOR',
     callsign: 'dl1abc',
-    roles: [{ role: 'ACTIVITY_READER' }],
+    roles: [{ role: 'ACTIVITY_ADMIN' }],
   });
 });

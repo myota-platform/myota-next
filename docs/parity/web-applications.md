@@ -25,10 +25,12 @@ creation, evidence submission, primary selection, and retirement. Chromium brows
 exercise Admin sign-in, identity session bootstrap, scope denial, Participant
 programme selection and public content, and its activation, QSO, and close
 workflow. In CI, live browser checks sign into Admin and load its dashboard,
-and create a programme through Gateway before Participant loads its catalogue,
-published-content response, and empty Geodata entity page through the Vite
-proxy and running NestJS services. Other browser workflows continue to use
-intercepted API responses. Activation creation and QSO recording retain their
+create a participant account with an authorized Activity role through Gateway,
+and create a programme through
+Gateway before Participant loads its catalogue, published-content response,
+and empty Geodata entity page through the Vite proxy and running NestJS
+services. Other browser workflows continue to use intercepted API responses.
+Activation creation and QSO recording retain their
 request body and
 idempotency key for retries with unchanged inputs, including a page reload in
 the same tab. Activation close confirms an uncertain response by refreshing the

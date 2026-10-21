@@ -88,8 +88,10 @@ describeWithDatabases(
           .post('/v1/identity/accounts')
           .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
           .set('Idempotency-Key', accountCreationKey)
-          .send(createdAccountRequest)
-          .expect(201);
+          .send(createdAccountRequest);
+        expect(createdAccount.status, JSON.stringify(createdAccount.body)).toBe(
+          201,
+        );
         expect(createdAccount.body).toMatchObject({
           displayName: 'Gateway-created participant',
           email: createdAccountRequest.email.trim().toLowerCase(),
