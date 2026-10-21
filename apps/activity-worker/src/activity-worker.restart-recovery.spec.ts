@@ -53,7 +53,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
     const port = await reserveLocalPort();
     const natsUrl = `nats://127.0.0.1:${port}`;
     const originalNatsUrl = process.env.NATS_URL;
-    const jobs = [randomUUID(), randomUUID()];
+    const jobs = [randomUUID(), randomUUID(), randomUUID()];
     const programmeSlugs = jobs.map((id) => `worker-restart-${id}`);
     let server: ReturnType<typeof spawn> | undefined;
     let publisher: Awaited<ReturnType<typeof connect>> | undefined;
@@ -109,8 +109,19 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       }
 
       databaseProxy.setAvailable(false);
+      const workRepository = new ActivityWorkRepository(workerPool);
+      const processWork = workRepository.process.bind(workRepository);
+      let injectSettlementFailure = true;
+      workRepository.process = async (job) => {
+        if (job.id === jobs[1] && injectSettlementFailure) {
+          injectSettlementFailure = false;
+          databaseProxy.setAvailable(false);
+          throw new Error('injected failure before retry-state persistence');
+        }
+        return processWork(job);
+      };
       worker = new ActivityWorkerService(
-        new ActivityWorkRepository(workerPool),
+        workRepository,
         new ActivityRetentionRepository(workerPool),
         workerPool,
       );
@@ -151,6 +162,44 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       );
       expect(recoveredJob.rows[0]?.attempts).toBe(1);
 
+      await queueStatisticsJob(pool, jobs[1]!, programmeSlugs[1]!);
+      const rejectedBeforeSettlementOutage =
+        databaseProxy.rejectedConnections();
+      await publishWork(publisher, registry, jobs[1]!);
+      await waitFor(async () => {
+        const consumer = await manager.consumers.info(
+          registry.activityWorkStream,
+          statisticsDurable,
+        );
+        return (
+          !injectSettlementFailure &&
+          databaseProxy.rejectedConnections() >
+            rejectedBeforeSettlementOutage &&
+          consumer.num_ack_pending > 0
+        );
+      }, 'Activity worker did not retain the delivery while retry state was unavailable');
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const pendingRetry = await pool.query<{
+        status: string;
+        attempts: number;
+      }>('SELECT status,attempts FROM activity_job WHERE id=$1', [jobs[1]]);
+      expect(pendingRetry.rows[0]).toMatchObject({
+        status: 'RUNNING',
+        attempts: 1,
+      });
+
+      databaseProxy.setAvailable(true);
+      await waitFor(async () => {
+        const result = await pool.query<{
+          status: string;
+          attempts: number;
+        }>('SELECT status,attempts FROM activity_job WHERE id=$1', [jobs[1]]);
+        return (
+          result.rows[0]?.status === 'QUEUED' && result.rows[0]?.attempts === 1
+        );
+      }, 'Activity worker did not persist retry state after PostgreSQL recovered');
+      await waitForJob(pool, jobs[1]!);
+
       await stopJetStream(server);
       server = undefined;
       await waitFor(
@@ -164,15 +213,15 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         'worker did not reconnect to JetStream',
       );
       await waitForPublisher(publisher, registry.activityWorkStream);
-      await queueStatisticsJob(pool, jobs[1]!, programmeSlugs[1]!);
-      await publishWork(publisher, registry, jobs[1]!);
-      await waitForJob(pool, jobs[1]!);
+      await queueStatisticsJob(pool, jobs[2]!, programmeSlugs[2]!);
+      await publishWork(publisher, registry, jobs[2]!);
+      await waitForJob(pool, jobs[2]!);
       const snapshots = await pool.query<{ count: number }>(
         `SELECT count(*)::int AS count FROM activity_statistic_snapshot
          WHERE programme_slug=ANY($1::text[]) AND algorithm_version='activity-v2'`,
         [programmeSlugs],
       );
-      expect(snapshots.rows[0]?.count).toBeGreaterThanOrEqual(2);
+      expect(snapshots.rows[0]?.count).toBeGreaterThanOrEqual(3);
     } finally {
       if (worker) await worker.onModuleDestroy().catch(() => undefined);
       await workerPool.end().catch(() => undefined);

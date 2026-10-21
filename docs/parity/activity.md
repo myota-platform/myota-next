@@ -205,8 +205,11 @@ downstream award job, ADIF checks its import result and QSO notification, and
 PDF rendering checks the persisted ready artifact and PDF bytes. This
 qualifies database lease takeover for all six Activity job kinds. A live
 recovery check also makes PostgreSQL TCP connections temporarily unavailable
-through a local fault proxy, verifies that a queued job remains unclaimed,
-restores connectivity, and confirms the job completes. The same check restarts JetStream
+through a local fault proxy while claiming a queued job, then confirms that it
+completes after connectivity returns. It also interrupts retry-state
+persistence after a claimed job fails, verifies the delivery remains pending
+and the job remains leased, then confirms the retry is persisted and completes
+after connectivity returns. The same check restarts JetStream
 with its file store retained and verifies the worker reconnects and completes
 another queued job. PostgreSQL process outages, cluster failover, and retention
 recovery remain open.
