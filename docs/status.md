@@ -19,23 +19,11 @@ this page summarizes the current state and remaining release gates.
   outboxes, leases, retries, dead letters, and audited redrive are present for
   the documented workflows.
 - **Web applications:** Admin and Participant applications are separate
-  deployable artifacts and use the NestJS APIs. The Admin build is part of CI.
-  Chromium browser checks cover Admin sign-in, session bootstrap, scope denial,
-  account creation with a permitted role grant, account search and edits that
-  preserve unchanged scoped role assignments, account export and confirmed
-  deactivation/anonymization, custom-role creation, programme creation, policy
-  draft review/publication, version-checked Geodata review,
-  and Geodata entity metadata conflict recovery by explicitly reloading the
-  latest server version; Activity activation/QSO details, statistics rebuild
-  submission, and job status refresh; award draft creation, review, and
-  publication; shared category creation with geometry and inactive lifecycle
-  settings; Geodata conflation decisions with survivor and reviewer notes;
-  refresh schedule creation and manual complete-snapshot submission; pasted
-  GeoJSON import creation, preprocessed candidate review, and durable candidate
-  promotion;
-  Participant catalogue browsing, activation and QSO lifecycle, profile details
-  and image editing, safe biography Markdown preview, eligible award requests,
-  and candidate and map-picked point proposals.
+  deployable artifacts and use the NestJS APIs. CI builds Admin and runs
+  Chromium workflows across account and role administration, programme and
+  award management, Geodata review/import, and Participant activation, QSO,
+  profile, and award flows. The parity matrix lists covered scenarios and
+  remaining browser gaps.
 - **Build and deployment:** CI runs unit and browser suites, checks and builds
   the NestJS applications, and builds container images. Helm charts describe the applications and optional single-instance
   PostgreSQL for the three owners. Local Compose provisions the development
