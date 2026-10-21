@@ -463,13 +463,13 @@ references, and emit the configured hiking, protected-area, point, path, and
 multipolygon features using a temporary disk-backed node-location index.
 The checked-in OSM XML/PBF fixture covers tagged nodes, linear and closed ways,
 a multipolygon relation with an inner ring, filtering, output order, and source
-hashes against the Python importer. CI also decodes a generated 50,000-feature
-PBF and checks that Linux Node plus `osmium` subprocess-tree RSS growth stays
-within 96 MiB above the test-worker baseline. This uses the Python stress
-fixture's feature count and memory limit, but measures a different RSS scope;
-the values are not directly comparable. Larger input scaling and less common
-OSM geometries still need qualification. Area and way vertex limits use the
-reference errors;
+hashes against the Python importer. CI decodes generated 50,000-feature and
+250,000-feature PBFs and checks that Linux Node plus `osmium` subprocess-tree
+RSS growth stays within 96 MiB and 192 MiB, respectively, above the test-worker
+baseline. The 50,000-feature case matches the Python stress fixture's count and
+limit, but measures a different RSS scope; the values are not directly
+comparable. Inputs above 250,000 features and less common OSM geometries still
+need qualification. Area and way vertex limits use the reference errors;
 the CLI decoder checks after osmium emits a record, bounded by the decoded
 feature-size cap, while PyOsmium checks areas before GeoJSON materialization.
 Shapefile and PBF working directories use `MYOTA_UPLOAD_SPOOL_DIR` when set,
