@@ -71,16 +71,30 @@ export const myotaClient = {
       body,
     );
   },
-  assignProgrammeEntityCategory<T = unknown>(slug: string, code: string) {
+  assignProgrammeEntityCategory<T = unknown>(
+    slug: string,
+    code: string,
+    idempotencyKey?: string,
+  ) {
     return write<T>(
       `/v1/programmes/${encodeURIComponent(slug)}/entity-types/${encodeURIComponent(code)}`,
       'PUT',
+      {},
+      undefined,
+      idempotencyKey,
     );
   },
-  unassignProgrammeEntityCategory<T = unknown>(slug: string, code: string) {
+  unassignProgrammeEntityCategory<T = unknown>(
+    slug: string,
+    code: string,
+    idempotencyKey?: string,
+  ) {
     return write<T>(
       `/v1/programmes/${encodeURIComponent(slug)}/entity-types/${encodeURIComponent(code)}`,
       'DELETE',
+      {},
+      undefined,
+      idempotencyKey,
     );
   },
   patchProgrammeContent<T = unknown>(slug: string, id: string, body: unknown) {

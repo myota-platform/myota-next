@@ -16,6 +16,8 @@ const error = ref('');
 let selectionRequest = 0;
 const message = ref('');
 const categorySelection = ref('');
+const categoryMutationStorageKey = 'myota_admin_pending_category_mutations';
+const pendingCategoryMutationKeys = restoreCategoryMutationKeys();
 const form = reactive({
   slug: '',
   name: '',
@@ -30,6 +32,38 @@ const form = reactive({
   primary: '#0f766e',
   accent: '#f59e0b',
 });
+
+function restoreCategoryMutationKeys(): Map<string, string> {
+  try {
+    const saved = JSON.parse(
+      sessionStorage.getItem(categoryMutationStorageKey) || '[]',
+    );
+    return new Map(
+      Array.isArray(saved)
+        ? saved.filter(
+            (entry: unknown) =>
+              Array.isArray(entry) &&
+              typeof entry[0] === 'string' &&
+              typeof entry[1] === 'string',
+          )
+        : [],
+    );
+  } catch {
+    return new Map();
+  }
+}
+
+function persistCategoryMutationKeys(): void {
+  try {
+    sessionStorage.setItem(
+      categoryMutationStorageKey,
+      JSON.stringify([...pendingCategoryMutationKeys.entries()]),
+    );
+  } catch {
+    // In-memory retry keys remain available when browser storage is unavailable.
+  }
+}
+
 const availableCategories = computed(() =>
   categories.value.filter(
     (category) =>
@@ -104,15 +138,32 @@ async function edit(programme: Programme): Promise<void> {
 
 async function assignCategory(category: EntityCategory): Promise<void> {
   if (selected.value) {
+    const programmeSlug = selected.value.slug;
+    const requestId = JSON.stringify([
+      store.account?.id,
+      'assign',
+      programmeSlug,
+      category.code,
+    ]);
+    let idempotencyKey = pendingCategoryMutationKeys.get(requestId);
+    if (!idempotencyKey) {
+      idempotencyKey = crypto.randomUUID();
+      pendingCategoryMutationKeys.set(requestId, idempotencyKey);
+      persistCategoryMutationKeys();
+    }
     try {
       const response = await myotaClient.assignProgrammeEntityCategory<{
         items: EntityCategory[];
-      }>(selected.value.slug, category.code);
-      form.entityTypes = response.items || [
-        ...form.entityTypes,
-        JSON.parse(JSON.stringify(category)),
-      ];
-      (selected.value as any).entityTypes = form.entityTypes;
+      }>(programmeSlug, category.code, idempotencyKey);
+      if (selected.value?.slug === programmeSlug) {
+        form.entityTypes = response.items || [
+          ...form.entityTypes,
+          JSON.parse(JSON.stringify(category)),
+        ];
+        (selected.value as any).entityTypes = form.entityTypes;
+      }
+      pendingCategoryMutationKeys.delete(requestId);
+      persistCategoryMutationKeys();
       message.value = 'Category assigned.';
     } catch (cause) {
       error.value =
@@ -123,13 +174,31 @@ async function assignCategory(category: EntityCategory): Promise<void> {
 }
 async function removeCategory(code: string): Promise<void> {
   if (selected.value) {
+    const programmeSlug = selected.value.slug;
+    const requestId = JSON.stringify([
+      store.account?.id,
+      'unassign',
+      programmeSlug,
+      code,
+    ]);
+    let idempotencyKey = pendingCategoryMutationKeys.get(requestId);
+    if (!idempotencyKey) {
+      idempotencyKey = crypto.randomUUID();
+      pendingCategoryMutationKeys.set(requestId, idempotencyKey);
+      persistCategoryMutationKeys();
+    }
     try {
       const response = await myotaClient.unassignProgrammeEntityCategory<{
         items: EntityCategory[];
-      }>(selected.value.slug, code);
-      form.entityTypes =
-        response.items || form.entityTypes.filter((item) => item.code !== code);
-      (selected.value as any).entityTypes = form.entityTypes;
+      }>(programmeSlug, code, idempotencyKey);
+      if (selected.value?.slug === programmeSlug) {
+        form.entityTypes =
+          response.items ||
+          form.entityTypes.filter((item) => item.code !== code);
+        (selected.value as any).entityTypes = form.entityTypes;
+      }
+      pendingCategoryMutationKeys.delete(requestId);
+      persistCategoryMutationKeys();
       message.value = 'Category unassigned.';
     } catch (cause) {
       error.value =
