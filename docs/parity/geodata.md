@@ -365,6 +365,12 @@ using Python truthiness and preserves submitted whitespace. Proposal feature
 objects follow adapter normalization without an extra `type` requirement.
 Falsey feature properties default to an empty object, while truthy non-object
 properties are rejected as malformed input.
+The pinned Python source also defines and unit-tests `change_geometry_type`,
+but does not register it in the route table; the Admin UI changes the GeoJSON
+type through the registered geometry replacement route instead. Accordingly,
+`geodata.entity.geometry-type-changed.v1` is retained in the copied event
+registry as a source-derived schema, but it is not an active HTTP parity
+requirement; geometry replacement emits `geodata.entity.geometry-updated.v1`.
 Proposal and direct-import idempotency scopes keys by owner and actual request
 path, fingerprints the parsed request body before validation, and rejects
 changed-body reuse while preserving integer versus float values. The request
