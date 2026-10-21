@@ -54,8 +54,10 @@ behavioral parity or production readiness.
 - Complete the semantic review and rehearsal for cross-version database
   transfer, backup, restore, and rollback. CI exercises the transfer commands
   end to end on disposable databases with Identity, Programme, Activity,
-  Geodata, and Email fixture data; production-sized rehearsal and role/grant, object-store,
-  NATS, and rollback qualification remain open.
+  Geodata, and Email fixture data, then restores all three captured pre-apply
+  recovery dumps after simulated partial target changes. Production-sized
+  rehearsal, destination role/grant review, object-store and NATS reconciliation,
+  and rollback for writes accepted after cutover remain open.
 - Expand browser workflow checks across Admin and Participant payload parity,
   accessibility, responsive behavior, and failure states.
   Current browser checks use intercepted API responses and do not test
