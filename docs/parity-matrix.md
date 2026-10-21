@@ -716,11 +716,14 @@ geometries.
   retry, redacted poison-event dead-lettering, and audited CLI redrive are
   implemented, with outcome and unresolved-dead-letter metrics. If NATS setup
   fails after connecting, the Nest worker now drains that connection before
-  startup exits, matching the Python consumer's cleanup path. Falsey event
-  types use the Python worker's `unknown` fallback in poison-event records.
+  startup exits, matching the Python consumer's cleanup path. A disposable
+  JetStream CI test also verifies that two Nest replicas share the durable and
+  a restarted replica resumes it. Falsey event types use the Python worker's
+  `unknown` fallback in poison-event records.
   Named replay
   durables require an explicit start sequence, and optional message limits allow
-  bounded replay runs. Recovery evidence remains open.
+  bounded replay runs. Broker/database outage, exhaustion, and redrive recovery
+  qualification remains open.
 - Geodata workers: registered JetStream consumers for import preprocessing and
   promotion, confirmed entity deletion, and location enrichment are implemented.
   Each durable is polled concurrently up to its registered `max_ack_pending`

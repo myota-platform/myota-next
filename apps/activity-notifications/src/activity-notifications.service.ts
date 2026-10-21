@@ -37,7 +37,7 @@ const METRICS_PORT = Math.max(
   0,
   Number(process.env.ACTIVITY_NOTIFICATION_METRICS_PORT ?? 9110),
 );
-const SUBJECTS = [
+export const ACTIVITY_NOTIFICATION_SUBJECTS = [
   'myota.events.geodata.entity.reviewed.v1',
   'myota.events.geodata.entity.status-changed.v1',
   'myota.events.identity.account.admin-updated.v1',
@@ -284,7 +284,7 @@ export class ActivityNotificationsService
     );
     if (
       JSON.stringify(config.filter_subjects ?? []) !==
-        JSON.stringify(SUBJECTS) ||
+        JSON.stringify(ACTIVITY_NOTIFICATION_SUBJECTS) ||
       String(config.ack_policy).toLowerCase() !== 'explicit' ||
       String(config.deliver_policy).toLowerCase() !==
         (startSequence === undefined ? 'all' : 'by_start_sequence') ||
@@ -601,7 +601,7 @@ function replayConsumerConfig(): ConsumerConfig {
     throw new Error('Replay durable requires a start sequence');
   return {
     durable_name: DURABLE,
-    filter_subjects: SUBJECTS,
+    filter_subjects: ACTIVITY_NOTIFICATION_SUBJECTS,
     ack_policy: AckPolicy.Explicit,
     deliver_policy: DeliverPolicy.StartSequence,
     opt_start_seq: START_SEQUENCE,
