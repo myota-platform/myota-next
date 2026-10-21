@@ -167,7 +167,8 @@ expired sessions retain the Python handler's 400 status and detail. The
 response's suggested part size retains the reference's 5 MiB S3 minimum even
 when the configured hard limit is lower.
 Missing upload sessions and import-processing queues preserve the quoted
-`KeyError` detail used by the Python handlers.
+`KeyError` detail used by the Python handlers. Upload status reads include
+`importRunId` only for completed sessions, as the reference response does.
 `GEODATA_MAX_IMPORT_FEATURES` uses Python-compatible integer parsing in
 both API and worker, including zero and negative limits; malformed values fail
 instead of silently falling back. The `MYOTA_IMPORT_MAX_FEATURE_VERTICES` and

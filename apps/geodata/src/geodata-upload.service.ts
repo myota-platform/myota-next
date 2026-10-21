@@ -158,7 +158,9 @@ export class GeodataUploadService {
         status: session.status,
         filename: session.filename,
         expectedSize: Number(session.expected_size),
-        importRunId: session.import_run_id,
+        ...(session.status === 'COMPLETED'
+          ? { importRunId: session.import_run_id }
+          : {}),
         parts: (session.status === 'COMPLETED' ? [] : parts.rows).map(
           (part) => ({
             partNumber: part.part_number,
