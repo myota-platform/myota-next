@@ -24,7 +24,8 @@ this page summarizes the current state and remaining release gates.
   account creation with a permitted role grant, custom-role creation, programme
   creation, policy draft review/publication, version-checked Geodata review,
   and Geodata entity metadata conflict recovery by explicitly reloading the
-  latest server version;
+  latest server version; Activity activation/QSO details, statistics rebuild
+  submission, and job status refresh;
   Participant catalogue browsing, activation and QSO lifecycle, profile details
   and image editing, eligible award requests, and candidate and map-picked point
   proposals.
