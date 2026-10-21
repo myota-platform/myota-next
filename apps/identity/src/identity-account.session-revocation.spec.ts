@@ -29,6 +29,13 @@ describe('IdentityAccountService session revocation parity', () => {
         queries.push({ sql, values });
         if (sql.includes('FROM public.account a'))
           return { rows: [account], rowCount: 1 };
+        if (sql.includes('INSERT INTO public.security_event'))
+          return {
+            rows: [{ occurred_at: '2026-10-21T12:00:00.000000Z' }],
+            rowCount: 1,
+          };
+        if (sql.includes('INSERT INTO public.outbox_event'))
+          return { rows: [], rowCount: 1 };
         return { rows: [], rowCount: 0 };
       },
       release: () => undefined,

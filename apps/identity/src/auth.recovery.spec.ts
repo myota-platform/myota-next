@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 import { IdentityAuthService } from './auth.service.js';
 
 describe('IdentityAuthService recovery compatibility', () => {
+  const accountId = '55555555-5555-4555-8555-555555555555';
   let originalEnvironment: string | undefined;
 
   beforeEach(() => {
@@ -26,7 +27,7 @@ describe('IdentityAuthService recovery compatibility', () => {
         queries.push({ sql, values });
         if (sql.includes('SELECT id FROM public.account')) {
           return {
-            rows: accountExists ? [{ id: 'account-1' }] : [],
+            rows: accountExists ? [{ id: accountId }] : [],
             rowCount: accountExists ? 1 : 0,
           };
         }
@@ -39,7 +40,7 @@ describe('IdentityAuthService recovery compatibility', () => {
         ) {
           const isValid = values[0] === recoveryTokenHash && !tokenUsed;
           return {
-            rows: isValid ? [{ account_id: 'account-1' }] : [],
+            rows: isValid ? [{ account_id: accountId }] : [],
             rowCount: isValid ? 1 : 0,
           };
         }
@@ -55,10 +56,13 @@ describe('IdentityAuthService recovery compatibility', () => {
           sessionRevocationAccount = String(values[0]);
           return { rows: [], rowCount: 2 };
         }
-        if (
-          sql.includes('INSERT INTO public.security_event') ||
-          sql.includes('INSERT INTO public.outbox_event')
-        ) {
+        if (sql.includes('INSERT INTO public.security_event')) {
+          return {
+            rows: [{ occurred_at: '2026-10-21T12:00:00.000000Z' }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('INSERT INTO public.outbox_event')) {
           return { rows: [], rowCount: 1 };
         }
         return { rows: [], rowCount: 0 };
@@ -122,7 +126,7 @@ describe('IdentityAuthService recovery compatibility', () => {
     ).resolves.toEqual({ status: 'password_reset' });
     expect(fixture.tokenUsed).toBe(true);
     expect(fixture.credentialHash).toMatch(/^scrypt\$/);
-    expect(fixture.sessionRevocationAccount).toBe('account-1');
+    expect(fixture.sessionRevocationAccount).toBe(accountId);
     const sessionUpdate = fixture.queries.find((item) =>
       item.sql.includes('UPDATE public.auth_session SET revoked_at'),
     );

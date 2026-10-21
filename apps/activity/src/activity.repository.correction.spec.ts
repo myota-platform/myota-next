@@ -4,9 +4,11 @@ import { ActivityRepository } from './activity.repository.js';
 describe('ActivityRepository QSO correction review', () => {
   it('applies proposed fields to the correction QSO and queues recalculation', async () => {
     const queries: Array<{ sql: string; values: unknown[] }> = [];
+    const correctionId = '11111111-1111-4111-8111-111111111111';
+    const qsoId = '22222222-2222-4222-8222-222222222222';
     const correction = {
-      id: 'correction-1',
-      qso_id: 'qso-1',
+      id: correctionId,
+      qso_id: qsoId,
       requested_by: 'participant-1',
       reason: 'Correct callsign and time',
       proposed_values: {
@@ -21,7 +23,7 @@ describe('ActivityRepository QSO correction review', () => {
       reviewed_at: null,
     };
     const qso = {
-      id: 'qso-1',
+      id: qsoId,
       programme_slug: 'alpine',
       operator_id: 'operator-1',
       hunter_id: 'hunter-1',
@@ -36,7 +38,10 @@ describe('ActivityRepository QSO correction review', () => {
           return { rows: [qso], rowCount: 1 };
         }
         if (sql.includes('INSERT INTO activity_job')) {
-          return { rows: [{ id: 'recalculation-job-1' }], rowCount: 1 };
+          return {
+            rows: [{ id: '33333333-3333-4333-8333-333333333333' }],
+            rowCount: 1,
+          };
         }
         if (sql.includes('UPDATE activity_qso_correction')) {
           return {
@@ -61,13 +66,13 @@ describe('ActivityRepository QSO correction review', () => {
 
     const result = await repository.reviewCorrection(
       'wrong-nested-qso-id',
-      'correction-1',
+      correctionId,
       { decision: 'APPLIED', reviewedBy: 'admin-1', reviewNote: 'Verified' },
     );
 
     expect(result).toMatchObject({
-      id: 'correction-1',
-      qsoId: 'qso-1',
+      id: correctionId,
+      qsoId,
       status: 'APPLIED',
       reviewedBy: 'admin-1',
       reviewNote: 'Verified',
@@ -76,11 +81,7 @@ describe('ActivityRepository QSO correction review', () => {
       item.sql.startsWith('UPDATE activity_qso SET'),
     );
     expect(qsoUpdate?.sql).toContain("status='CORRECTED'");
-    expect(qsoUpdate?.values).toEqual([
-      'F4XYZ',
-      '2026-10-21T10:20:30Z',
-      'qso-1',
-    ]);
+    expect(qsoUpdate?.values).toEqual(['F4XYZ', '2026-10-21T10:20:30Z', qsoId]);
     expect(
       queries
         .find((item) => item.sql.includes('INSERT INTO activity_job'))
@@ -91,7 +92,7 @@ describe('ActivityRepository QSO correction review', () => {
         programmeSlug: 'alpine',
         subjectIds: ['operator-1', 'hunter-1'],
       }),
-      'correction:correction-1',
+      `correction:${correctionId}`,
     ]);
     expect(queries.some((item) => item.sql === 'COMMIT')).toBe(true);
   });

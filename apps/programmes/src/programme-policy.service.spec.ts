@@ -22,7 +22,12 @@ describe('ProgrammePolicyService lifecycle compatibility', () => {
       awards: [],
       updatedAt: '2025-01-01T00:00:00Z',
     };
-    const client = {} as PoolClient;
+    const client = {
+      query: async () => ({
+        rows: [{ timestamp: '2026-10-21T12:00:00.000000Z' }],
+        rowCount: 1,
+      }),
+    } as unknown as PoolClient;
     const mutations = {
       mutate: async <T>(
         _key: string | undefined,

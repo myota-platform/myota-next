@@ -47,9 +47,13 @@ describe('IdentityAccountService update validation order', () => {
     );
 
     await expect(
-      service.updateAccount('Bearer admin', 'missing-account', {
-        status: 'INVALID',
-      }),
+      service.updateAccount(
+        'Bearer admin',
+        '66666666-6666-4666-8666-666666666666',
+        {
+          status: 'INVALID',
+        },
+      ),
     ).rejects.toBeInstanceOf(NotFoundException);
 
     expect(queries[0]).toBe('BEGIN');

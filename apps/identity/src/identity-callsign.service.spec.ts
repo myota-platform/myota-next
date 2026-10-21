@@ -4,7 +4,7 @@ import type { IdentityAuthService } from './auth.service.js';
 import { IdentityCallsignService } from './identity-callsign.service.js';
 
 describe('IdentityCallsignService Python compatibility', () => {
-  const accountId = 'account-1';
+  const accountId = '77777777-7777-4777-8777-777777777777';
 
   function harness(
     participationType = 'OPERATOR',
@@ -170,7 +170,7 @@ describe('IdentityCallsignService Python compatibility', () => {
   it('allows a retired value to be added again and does not auto-select an SWL callsign', async () => {
     const fixture = harness('SWL', [
       {
-        id: 'retired-callsign',
+        id: '88888888-8888-4888-8888-888888888888',
         account_id: accountId,
         value: 'EA7TEST',
         lifecycle_status: 'RETIRED',
@@ -188,7 +188,7 @@ describe('IdentityCallsignService Python compatibility', () => {
   it('rejects a duplicate active value and rolls back the transaction', async () => {
     const fixture = harness('OPERATOR', [
       {
-        id: 'active-callsign',
+        id: '99999999-9999-4999-8999-999999999999',
         account_id: accountId,
         value: 'EA7TEST',
         lifecycle_status: 'UNVERIFIED',

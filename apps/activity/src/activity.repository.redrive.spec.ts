@@ -4,6 +4,7 @@ import { ActivityRepository } from './activity.repository.js';
 describe('ActivityRepository work-job redrive', () => {
   it('preserves delivery attempts when requeueing a failed job', async () => {
     const queries: Array<{ sql: string; values: unknown[] }> = [];
+    const jobId = '44444444-4444-4444-8444-444444444444';
     const client = {
       query: async (sql: string, values: unknown[] = []) => {
         queries.push({ sql, values });
@@ -11,7 +12,7 @@ describe('ActivityRepository work-job redrive', () => {
           return {
             rows: [
               {
-                id: 'job-1',
+                id: jobId,
                 kind: 'QSO_INGESTION',
                 status: 'FAILED',
                 attempts: 4,
@@ -27,12 +28,12 @@ describe('ActivityRepository work-job redrive', () => {
     const repository = new ActivityRepository(pool);
 
     const result = await repository.redriveFailedWorkJob(
-      'job-1',
+      jobId,
       'admin-1',
       'Investigate failed delivery',
     );
 
-    expect(result).toMatchObject({ jobId: 'job-1', status: 'QUEUED' });
+    expect(result).toMatchObject({ jobId, status: 'QUEUED' });
     const requeue = queries.find((query) =>
       query.sql.includes("UPDATE activity_job SET status='QUEUED'"),
     );
