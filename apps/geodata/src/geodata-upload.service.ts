@@ -558,6 +558,7 @@ export class GeodataUploadService {
             'content-length': String(size),
           },
           body: stream as never,
+          signal: AbortSignal.timeout(120_000),
           duplex: 'half',
         } as RequestInit & { duplex: 'half' });
         if (!response.ok)
