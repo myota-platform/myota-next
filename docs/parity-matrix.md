@@ -418,6 +418,10 @@ PyShp's GeoJSON conversion. OSM PBF uploads are decoded by
 `osmium-tool` in the Geodata worker image, preserve OSM tags and type/id source
 references, and emit the configured hiking, protected-area, point, path, and
 multipolygon features using a temporary disk-backed node-location index.
+The checked-in OSM XML/PBF fixture covers tagged nodes, linear and closed ways,
+a multipolygon relation, filtering, output order, and source hashes against the
+Python importer. Large-file resource behavior and less common OSM geometries
+still need qualification.
 Shapefile and PBF working directories use `MYOTA_UPLOAD_SPOOL_DIR` when set,
 and otherwise use the OS temporary directory. PBF source bytes stream to disk
 with checksum verification. API admission and

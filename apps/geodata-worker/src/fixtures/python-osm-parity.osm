@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="myota-parity-fixture">
+  <node id="1" lat="37.39" lon="-5.99">
+    <tag k="leisure" v="park" />
+    <tag k="name" v="Node Park" />
+  </node>
+  <node id="2" lat="37.39" lon="-5.98" />
+  <node id="3" lat="37.40" lon="-5.98" />
+  <node id="4" lat="37.40" lon="-5.99" />
+  <node id="5" lat="37.41" lon="-5.97">
+    <tag k="highway" v="path" />
+  </node>
+  <way id="10">
+    <nd ref="1" />
+    <nd ref="2" />
+    <tag k="highway" v="path" />
+    <tag k="name" v="Trail" />
+  </way>
+  <way id="20">
+    <nd ref="1" />
+    <nd ref="2" />
+    <nd ref="3" />
+    <nd ref="4" />
+    <nd ref="1" />
+    <tag k="leisure" v="park" />
+    <tag k="name" v="Closed Park" />
+  </way>
+  <way id="30">
+    <nd ref="2" />
+    <nd ref="3" />
+    <nd ref="4" />
+    <tag k="highway" v="footway" />
+    <tag k="name" v="Excluded Open Way" />
+  </way>
+  <relation id="40">
+    <member type="way" ref="20" role="outer" />
+    <tag k="type" v="multipolygon" />
+    <tag k="boundary" v="protected_area" />
+    <tag k="name" v="Protected Relation" />
+  </relation>
+</osm>
