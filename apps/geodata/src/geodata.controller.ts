@@ -57,21 +57,19 @@ export class GeodataController {
   createEntityDeletionJob(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') key: string | undefined,
-    @Body() body: Record<string, unknown>,
+    @Body() body: Record<string, unknown> | null,
     @Req() request: Request,
   ) {
-    const claims = verifyAccessToken(authorization);
-    const idempotency = scopedRequestIdempotency(
-      key,
-      claims.sub,
-      request,
-      body,
-    );
+    const requestBody = body ?? {};
+    const rawBody = (
+      request as Request & { rawBody?: Buffer }
+    ).rawBody?.toString('utf8');
     return this.deletions.create(
       authorization,
-      idempotency.key,
-      body,
-      idempotency.requestHash,
+      key,
+      requestBody,
+      key ? fingerprintJsonRequest(requestBody, rawBody) : undefined,
+      request.originalUrl,
     );
   }
 

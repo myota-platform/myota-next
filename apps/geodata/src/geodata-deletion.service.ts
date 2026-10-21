@@ -36,24 +36,25 @@ export class GeodataDeletionService {
 
   async create(
     authorization: string | undefined,
-    key: string | undefined,
+    requestKey: string | undefined,
     body: Record<string, unknown>,
     requestHash?: string,
+    requestPath = '/v1/geodata/entity-deletion-jobs',
   ) {
-    const claims = verifyAccessToken(authorization);
-    if (key && requestHash) {
-      const replay = await replayRequest(
-        () => this.connect(),
-        'geodata-entity-deletion',
-        key,
-        requestHash,
+    const missing = ['entityId', 'requestedBy'].filter(
+      (field) => !pythonTruthy(body[field]),
+    );
+    if (missing.length)
+      throw new BadRequestException(
+        `missing required fields: ${missing.join(', ')}`,
       );
-      if (replay.found) return replay.response;
-    }
-    const entityId = typeof body.entityId === 'string' ? body.entityId : '';
+    const entityId =
+      typeof body.entityId === 'string'
+        ? body.entityId
+        : pythonStringJsonField(body, 'entityId');
     const requestedBy = body.requestedBy;
-    if (!entityId || !pythonTruthy(requestedBy))
-      throw new BadRequestException('entityId and requestedBy are required');
+    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(entityId))
+      throw new NotFoundException(pythonKeyErrorDetail(entityId));
     const client = await this.connect();
     let entity: Record<string, unknown>;
     try {
@@ -66,11 +67,24 @@ export class GeodataDeletionService {
     } finally {
       client.release();
     }
+    const claims = verifyAccessToken(authorization);
     authorizeDelete(claims, entity);
     if (!hasGlobalRole(claims) && entity.lifecycle_status !== 'REJECTED')
       throw new ForbiddenException(
         'only global administrators can delete non-rejected entities',
       );
+    const key = requestKey
+      ? `http:${claims.sub}:${requestPath}:${requestKey}`
+      : undefined;
+    if (key && requestHash) {
+      const replay = await replayRequest(
+        () => this.connect(),
+        'geodata-entity-deletion',
+        key,
+        requestHash,
+      );
+      if (replay.found) return replay.response;
+    }
     const impact = await this.activityImpact(authorization as string, entityId);
     const id = randomUUID();
     const timestamp = new Date().toISOString();
@@ -241,10 +255,6 @@ export class GeodataDeletionService {
       if (job.status !== 'AWAITING_CONFIRMATION')
         throw new ConflictException(
           'deletion job is not awaiting confirmation',
-        );
-      if (!claims.scp.includes('*') && !claims.scp.includes('activity.admin'))
-        throw new ForbiddenException(
-          'activity.admin scope is required to confirm entity deletion',
         );
       const updated = {
         ...job,
