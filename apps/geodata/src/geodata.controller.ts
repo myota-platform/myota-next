@@ -671,7 +671,7 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
     @Req() request: Request,
   ) {
-    const claims = authorizeReview(authorization);
+    const claims = verifyAccessToken(authorization);
     const idempotency = scopedRequestIdempotency(
       key,
       claims.sub,

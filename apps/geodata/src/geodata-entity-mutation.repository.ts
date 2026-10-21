@@ -796,21 +796,12 @@ export class GeodataEntityMutationRepository {
       if (replay.found) return replay.response;
     }
     const editorId = body.editorId;
-    if (!pythonTruthy(editorId))
-      throw new BadRequestException('editorId is required');
     const rawTypes = firstTruthyCategoryInput([
       body.entityTypes,
       body.entityTypeCodes,
       body.entityType,
     ]);
     const entityTypes = normalizeEntityTypeCodes(rawTypes);
-    if (
-      !entityTypes.length ||
-      entityTypes.some((code) => !/^[A-Z][A-Z0-9_]{1,63}$/.test(code))
-    )
-      throw new BadRequestException(
-        'one or more valid entity type codes are required',
-      );
     const note = body.note === undefined ? null : body.note;
     const expectedVersion = parseIfMatch(ifMatch);
     const client = await this.connect();
@@ -826,6 +817,8 @@ export class GeodataEntityMutationRepository {
       const row = selected.rows[0];
       if (!row) throw new NotFoundException(pythonKeyErrorDetail(id));
       assertReviewCoverage(claims, row);
+      if (!pythonTruthy(editorId))
+        throw new BadRequestException('editorId is required');
       if (key) {
         const previous = await readRequestResponse(
           client,
@@ -842,6 +835,13 @@ export class GeodataEntityMutationRepository {
         throw new ConflictException('entity version is stale');
       if (row.lifecycle_status === 'RETIRED')
         throw new ConflictException('retired entities cannot change category');
+      if (
+        !entityTypes.length ||
+        entityTypes.some((code) => !/^[A-Z][A-Z0-9_]{1,63}$/.test(code))
+      )
+        throw new BadRequestException(
+          'one or more valid entity type codes are required',
+        );
       const currentCategories = await client.query(
         'SELECT category_code FROM geodata_entity_category WHERE entity_id=$1 ORDER BY ordinal',
         [id],
