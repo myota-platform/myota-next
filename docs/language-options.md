@@ -2,8 +2,9 @@
 
 ## Decision status
 
-Node.js and NestJS remain the current implementation baseline. The language
-choice is open for user confirmation before committing to a replacement. There
+Node.js and NestJS remain the selected implementation baseline, following the
+user's explicit choice. This document compares alternatives without changing
+that decision. Any switch to another stack requires the user's direction. There
 is no apples-to-apples runtime benchmark for this platform, so this document
 does not claim that one candidate is faster for MyOTA as a whole.
 
@@ -36,5 +37,5 @@ constant so a language result is not actually a database-plan difference.
 
 Until a candidate demonstrates a material improvement on the workload that
 matters, replacing the current implementation adds a large parity-rebuild cost
-without measured performance evidence. The current stack remains in place
-pending the user's choice.
+without measured performance evidence. The current Node.js/NestJS stack remains
+in place unless the user directs a change.
