@@ -68,6 +68,14 @@ status filtering, review notes, paging, and both apply and reject outcomes. A
 live CI browser workflow creates an isolated programme, activation, QSO, and
 correction, applies the correction in Admin, and verifies the updated QSO
 through Gateway.
+
+An additional live browser workflow seeds an isolated Geodata entity and a
+catalogue-backed country value, signs in as the bootstrap administrator, edits
+the entity's country and city through Admin and Gateway, then verifies the
+persisted manual-field markers, revision, and audit event in the Geodata
+database. This complements the intercepted location-form checks with evidence
+across the live browser, API, authorization, transaction, and database
+boundaries.
 Award browser checks cover programme-
 scoped draft creation, its idempotency key and condition/level payload, and
 the submit, approve, and publish lifecycle. Award creation, definition edits,
