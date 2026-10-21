@@ -140,11 +140,11 @@ describe('ActivityWorkRepository ADIF failure notifications', () => {
 
     try {
       await internal.processAdifImport(client, { importId: 'import-1' });
+      expect(read).toHaveBeenCalledOnce();
     } finally {
       read.mockRestore();
     }
 
-    expect(read).toHaveBeenCalledOnce();
     const finish = queries.find(({ sql }) =>
       sql.startsWith('UPDATE activity_import'),
     );
