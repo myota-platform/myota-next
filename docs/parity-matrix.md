@@ -823,11 +823,11 @@ geometries.
   `npm run outbox:admin` lists bounded dead-letter metadata and transactionally
   redrives one retained event against its owning database, recording the prior
   attempts and error. See [outbox recovery](operations/outbox-recovery.md).
-  CI injects a transient publish failure for an Activity fact, verifies the
-  retry delay and retained outbox row, then publishes it to JetStream and
-  verifies the row is marked published. This does not yet qualify Core and
-  Geodata relay outages, attempt exhaustion, or audited dead-letter redrive
-  against the broker.
+  CI runs the same fault-injection check against Core, Activity, and Geodata
+  separately: a transient publish failure leaves the owner-scoped outbox row
+  retryable, then JetStream accepts the retry and the row is marked published.
+  Actual NATS outages, attempt exhaustion, and audited dead-letter redrive
+  against the broker remain unqualified.
 - Runtime: preserve migrations, health/readiness, metrics, logs, traces,
   backups, restore paths, NATS topology, object storage buckets, and separate
   service/worker deployment units. Activity database pools honor the
