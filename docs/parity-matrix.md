@@ -400,9 +400,11 @@ bounded reconciler republishes stale queued work and expired leases through the
 transactional outbox. Scheduled retention removes eligible import history and
 owned source objects, expires stale multipart uploads, and preserves materialized
 entities. Activity deletion-impact counts preserve exact PostgreSQL integers
-through the Activity response and Geodata's stored confirmation job. Outage and
-recovery evidence remains outstanding. Activity lease extension is supported
-for long-running jobs.
+through the Activity response and Geodata's stored confirmation job. CI restarts
+a single-server JetStream with its file store retained and verifies the live
+Geodata worker resumes its entity-deletion durable. Database outages and other
+Geodata worker recovery paths remain open. Activity lease extension is
+supported for long-running jobs.
 Geodata's PostGIS Maidenhead-cell function is checked in CI against the
 reference Python outputs for point, contained polygon, boundary-crossing
 polygon, and line fixtures. CI applies all three owner baselines to three
@@ -811,6 +813,10 @@ geometries.
   implementation has no equivalent pass and does not reuse that label for
   individual writes.
   Stale queued and expired work is re-enqueued through the owner outbox.
+  A live-worker CI check restarts a single-server JetStream with its file store
+  retained and verifies the entity-deletion durable processes new work after
+  reconnection. This checks broker reconnect behavior through one durable; it
+  does not establish recovery for the other three durables.
   Scheduled import and upload-session retention is implemented. CI restarts the
   pinned SeaweedFS image during a Geodata multipart upload, verifies a failed
   part leaves no database record, retries it after restart, and checks the

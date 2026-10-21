@@ -53,8 +53,9 @@ behavioral parity or production readiness.
   JetStream restart with its file store retained, confirmed notification ACKs,
   duplicate-event idempotency, and audited dead-letter redrive. It also verifies
   Activity statistics-job lease takeover after a worker process kill and
-  Geodata import preprocessing replay after committed staging. A fault-injection
-  check verifies outbox retry and successful
+  Geodata import preprocessing replay after committed staging, plus live
+  Geodata worker delivery after a single-server JetStream restart with retained
+  file storage. A fault-injection check verifies outbox retry and successful
   publication, attempt exhaustion, and audited redrive for Core, Activity, and
   Geodata events against their separate databases. It also kills and restarts
   an isolated JetStream server with its file store retained, then verifies
