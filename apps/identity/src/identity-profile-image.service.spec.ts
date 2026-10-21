@@ -68,4 +68,54 @@ describe('IdentityProfileImageService Pillow compatibility', () => {
     );
     expect(maximumAlphaDifference).toBeLessThanOrEqual(2);
   });
+
+  it('applies EXIF orientation and removes source metadata like Pillow', async () => {
+    const source = await readFile(
+      new URL('./fixtures/profile-image-exif-orientation.jpg', import.meta.url),
+    );
+    const expected = await readFile(
+      new URL(
+        './fixtures/profile-image-exif-orientation-pillow.webp',
+        import.meta.url,
+      ),
+    );
+    expect(await sharp(source).metadata()).toMatchObject({
+      width: 80,
+      height: 40,
+      orientation: 6,
+    });
+
+    const service = new IdentityProfileImageService(
+      null,
+      null as unknown as IdentityAuthService,
+    );
+    const internal = service as unknown as {
+      normalize: (
+        contentType: string,
+        input: AsyncIterable<Uint8Array>,
+      ) => Promise<Buffer>;
+    };
+    const input = (async function* () {
+      yield source;
+    })();
+    const actual = await internal.normalize('image/jpeg', input);
+    const metadata = await sharp(actual).metadata();
+    expect(metadata).toMatchObject({ format: 'webp', width: 512, height: 512 });
+    expect(metadata.exif).toBeUndefined();
+    expect(actual.toString('latin1')).not.toContain(
+      'orientation parity fixture metadata',
+    );
+
+    const expectedPixels = await sharp(expected).removeAlpha().raw().toBuffer();
+    const actualPixels = await sharp(actual).removeAlpha().raw().toBuffer();
+    const differences = Array.from(actualPixels, (value, index) =>
+      Math.abs(value - expectedPixels[index]!),
+    ).sort((left, right) => left - right);
+    const mean =
+      differences.reduce((sum, value) => sum + value, 0) / differences.length;
+    expect(mean).toBeLessThanOrEqual(2.5);
+    expect(
+      differences[Math.floor((differences.length - 1) * 0.99)],
+    ).toBeLessThanOrEqual(8);
+  });
 });

@@ -130,8 +130,10 @@ visible RGB difference is 1.20/255, the 99th percentile is 5/255, mean alpha
 difference is 0.013/255, and maximum alpha difference is 2/255. The encoded
 WebP files are not byte-identical (10,050 bytes from Sharp and 9,994 from
 Pillow); the compatibility test therefore guards decoded image appearance and
-size limits. Sharp explicitly matches Pillow's shared WebP quality, alpha
-quality, effort, lossless, preset, and transparent-pixel options.
+size limits. A separate Pillow 12.3.0 EXIF-orientation fixture checks the
+oriented crop and source-metadata removal. Sharp explicitly matches Pillow's
+shared WebP quality, alpha quality, effort, lossless, preset, and
+transparent-pixel options.
 Sharp inspects all WebP frames and reads APNG animation-control chunks before
 applying the reference's animation rejection rule, including APNG files with a
 separate default image. Pixel decoding remains limited to one frame and 4096
