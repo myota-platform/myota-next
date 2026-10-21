@@ -64,11 +64,17 @@ export const myotaClient = {
   createAwardPreview<T = unknown>(body: unknown) {
     return write<T>('/v1/awards/previews', 'POST', body);
   },
-  patchProgramme<T = unknown>(slug: string, body: unknown) {
+  patchProgramme<T = unknown>(
+    slug: string,
+    body: unknown,
+    idempotencyKey?: string,
+  ) {
     return write<T>(
       `/v1/programmes/${encodeURIComponent(slug)}`,
       'PATCH',
       body,
+      undefined,
+      idempotencyKey,
     );
   },
   assignProgrammeEntityCategory<T = unknown>(
@@ -97,22 +103,32 @@ export const myotaClient = {
       idempotencyKey,
     );
   },
-  patchProgrammeContent<T = unknown>(slug: string, id: string, body: unknown) {
+  patchProgrammeContent<T = unknown>(
+    slug: string,
+    id: string,
+    body: unknown,
+    idempotencyKey?: string,
+  ) {
     return write<T>(
       `/v1/programmes/${encodeURIComponent(slug)}/content/${encodeURIComponent(id)}`,
       'PATCH',
       body,
+      undefined,
+      idempotencyKey,
     );
   },
   patchProgrammePolicyDraft<T = unknown>(
     slug: string,
     id: string,
     body: unknown,
+    idempotencyKey?: string,
   ) {
     return write<T>(
       `/v1/programmes/${encodeURIComponent(slug)}/policy-drafts/${encodeURIComponent(id)}`,
       'PATCH',
       body,
+      undefined,
+      idempotencyKey,
     );
   },
   patchIdentityAccount<T = unknown>(id: string, body: unknown) {

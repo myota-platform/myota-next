@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { apiRequest } from '../lib/api';
 import { myotaClient } from '../lib/myotaClient';
+import { createPendingIdempotencyKeys } from '../lib/pendingIdempotencyKeys';
 import { useAppStore } from '../stores/app';
 import { utcInput, utcInputValue } from '../lib/utc';
 
@@ -25,6 +26,9 @@ interface Page<T> {
   nextPage: number | null;
 }
 const store = useAppStore();
+const pendingPolicyMutationKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_policy_mutations',
+);
 const policies = ref<Policy[]>([]);
 const policyPage = ref(1);
 const policyNextPage = ref<number | null>(null);
@@ -96,22 +100,32 @@ async function save(): Promise<void> {
   await feedback.run(
     async () => {
       const creating = !selected.value?.id;
-      const saved = await apiRequest<Policy>(
-        `/v1/programmes/${encodeURIComponent(programme.value)}/policy-drafts`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            draftId: selected.value?.id,
-            type: form.type,
-            name: form.name.trim(),
-            schema: JSON.parse(form.schema),
-            effectiveFrom: utcInputValue(
-              form.effectiveFrom,
-              selected.value?.effectiveFrom,
-            ),
-          }),
+      const body = {
+        draftId: selected.value?.id,
+        type: form.type,
+        name: form.name.trim(),
+        schema: JSON.parse(form.schema),
+        effectiveFrom: utcInputValue(
+          form.effectiveFrom,
+          selected.value?.effectiveFrom,
+        ),
+      };
+      const requestPath = `/v1/programmes/${encodeURIComponent(programme.value)}/policy-drafts`;
+      const fingerprint = JSON.stringify([
+        store.account?.id,
+        requestPath,
+        'POST',
+        body,
+      ]);
+      const saved = await apiRequest<Policy>(requestPath, {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: {
+          'Idempotency-Key':
+            await pendingPolicyMutationKeys.getOrCreate(fingerprint),
         },
-      );
+      });
+      await pendingPolicyMutationKeys.complete(fingerprint);
       if (creating) policyPage.value = 1;
       await fetchItems(saved.id);
     },
@@ -143,7 +157,20 @@ async function action(action: string, decision?: string): Promise<void> {
                 publisherId: store.account?.id,
               }
             : { status: 'UNDER_REVIEW', submitterId: store.account?.id };
-      await myotaClient.patchProgrammePolicyDraft(programme.value, id, body);
+      const requestPath = `/v1/programmes/${encodeURIComponent(programme.value)}/policy-drafts/${encodeURIComponent(id)}`;
+      const fingerprint = JSON.stringify([
+        store.account?.id,
+        requestPath,
+        'PATCH',
+        body,
+      ]);
+      await myotaClient.patchProgrammePolicyDraft(
+        programme.value,
+        id,
+        body,
+        await pendingPolicyMutationKeys.getOrCreate(fingerprint),
+      );
+      await pendingPolicyMutationKeys.complete(fingerprint);
       message.value = `Policy ${action === 'publish' ? 'published' : action === 'review' ? 'reviewed' : 'submitted for review'}.`;
       await fetchItems(id);
     },

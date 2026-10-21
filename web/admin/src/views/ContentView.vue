@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { apiRequest } from '../lib/api';
 import { myotaClient } from '../lib/myotaClient';
+import { createPendingIdempotencyKeys } from '../lib/pendingIdempotencyKeys';
 import { useAppStore } from '../stores/app';
 import { utcInput, utcInputValue } from '../lib/utc';
 import PageHeader from '../components/PageHeader.vue';
@@ -25,6 +26,9 @@ interface Page<T> {
   nextPage: number | null;
 }
 const store = useAppStore();
+const pendingContentMutationKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_content_mutations',
+);
 const programme = ref(
   store.currentProgramme || store.programmes[0]?.slug || '',
 );
@@ -98,19 +102,29 @@ async function save(): Promise<void> {
   await feedback.run(
     async () => {
       const creating = !selected.value?.id;
-      const saved = await apiRequest<ContentItem>(
-        `/v1/programmes/${encodeURIComponent(programme.value)}/content`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            contentId: selected.value?.id,
-            key: form.key.trim(),
-            locale: form.locale.trim(),
-            fallbackLocale: form.fallbackLocale.trim() || null,
-            value: form.value,
-          }),
+      const body = {
+        contentId: selected.value?.id,
+        key: form.key.trim(),
+        locale: form.locale.trim(),
+        fallbackLocale: form.fallbackLocale.trim() || null,
+        value: form.value,
+      };
+      const requestPath = `/v1/programmes/${encodeURIComponent(programme.value)}/content`;
+      const fingerprint = JSON.stringify([
+        store.account?.id,
+        requestPath,
+        'POST',
+        body,
+      ]);
+      const saved = await apiRequest<ContentItem>(requestPath, {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: {
+          'Idempotency-Key':
+            await pendingContentMutationKeys.getOrCreate(fingerprint),
         },
-      );
+      });
+      await pendingContentMutationKeys.complete(fingerprint);
       if (creating) contentPage.value = 1;
       await fetchItems(saved.id);
     },
@@ -138,7 +152,20 @@ async function action(actionName: string, decision?: string): Promise<void> {
                 publisherId: store.account?.id,
               }
             : { status: 'UNDER_REVIEW', submitterId: store.account?.id };
-      await myotaClient.patchProgrammeContent(programme.value, id, body);
+      const requestPath = `/v1/programmes/${encodeURIComponent(programme.value)}/content/${encodeURIComponent(id)}`;
+      const fingerprint = JSON.stringify([
+        store.account?.id,
+        requestPath,
+        'PATCH',
+        body,
+      ]);
+      await myotaClient.patchProgrammeContent(
+        programme.value,
+        id,
+        body,
+        await pendingContentMutationKeys.getOrCreate(fingerprint),
+      );
+      await pendingContentMutationKeys.complete(fingerprint);
       message.value = `Content ${actionName === 'publish' ? 'published' : actionName === 'review' ? 'reviewed' : 'submitted for review'}.`;
       await fetchItems(id);
     },

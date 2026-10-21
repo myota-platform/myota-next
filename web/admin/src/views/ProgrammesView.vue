@@ -22,6 +22,9 @@ const pendingCategoryMutationKeys = restoreCategoryMutationKeys();
 const pendingProgrammeCreationKeys = createPendingIdempotencyKeys(
   'myota_admin_pending_programme_creations',
 );
+const pendingProgrammeMutationKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_programme_mutations',
+);
 const form = reactive({
   slug: '',
   name: '',
@@ -256,15 +259,25 @@ async function save(): Promise<void> {
     if (!selected.value) payload.entityTypes = form.entityTypes;
     let saved: Programme;
     if (selected.value) {
+      const requestPath = `/v1/programmes/${encodeURIComponent(selected.value.slug)}`;
+      const fingerprint = JSON.stringify([
+        store.account?.id,
+        requestPath,
+        'PATCH',
+        payload,
+      ]);
       saved = await myotaClient.patchProgramme<Programme>(
         selected.value.slug,
         payload,
+        await pendingProgrammeMutationKeys.getOrCreate(fingerprint),
       );
+      await pendingProgrammeMutationKeys.complete(fingerprint);
     } else {
       const requestPath = '/v1/programmes';
       const fingerprint = JSON.stringify([
         store.account?.id,
         requestPath,
+        'POST',
         payload,
       ]);
       saved = await apiRequest<Programme>(requestPath, {
@@ -292,7 +305,21 @@ async function save(): Promise<void> {
 async function archive(): Promise<void> {
   if (!selected.value || !window.confirm(`Archive ${selected.value.slug}?`))
     return;
-  await myotaClient.patchProgramme(selected.value.slug, { status: 'ARCHIVED' });
+  const slug = selected.value.slug;
+  const body = { status: 'ARCHIVED' };
+  const requestPath = `/v1/programmes/${encodeURIComponent(slug)}`;
+  const fingerprint = JSON.stringify([
+    store.account?.id,
+    requestPath,
+    'PATCH',
+    body,
+  ]);
+  await myotaClient.patchProgramme(
+    slug,
+    body,
+    await pendingProgrammeMutationKeys.getOrCreate(fingerprint),
+  );
+  await pendingProgrammeMutationKeys.complete(fingerprint);
   await load(true);
   resetForm();
 }
