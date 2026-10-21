@@ -21,7 +21,10 @@ import {
   pageOffset,
   parsePageInteger,
 } from '@app/platform/pagination.js';
-import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import {
+  pythonString,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { ActivityRepository } from './activity.repository.js';
 import { ActivityAwardsRepository } from './activity-awards.repository.js';
@@ -243,7 +246,7 @@ export class AwardsService {
     if (!body.awardId || !body.subjectId)
       throw new BadRequestException('awardId and subjectId are required');
     let facts = body.facts;
-    if (claims.sub !== body.subjectId) {
+    if (pythonString(claims.sub) !== pythonString(body.subjectId)) {
       this.authorize(claims.scp, [
         'awards.read',
         'awards.request',

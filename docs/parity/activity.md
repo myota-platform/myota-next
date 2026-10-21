@@ -57,8 +57,10 @@ same detail for missing records. Award definition draft, review, publish, and
 retire APIs are implemented.
 Award progress reads and
 evaluation/recalculation job APIs persist versioned progress and qualification
-notifications through the Activity worker. Award requests validate eligibility,
-issuance is transactional and permanent, and PDF render jobs store artifacts in
+notifications through the Activity worker. Evaluation-job self-access compares
+Python `str()` conversions of account IDs, including truthy non-string JSON
+values. Award requests validate eligibility; issuance is transactional and
+permanent, and PDF render jobs store artifacts in
 S3-compatible storage with authorized presigned download URLs. Qualification
 notice payloads and deduplication also preserve the worker split: recalculation
 notices include `awardCode` and eligible-level IDs in dedupe keys; direct
