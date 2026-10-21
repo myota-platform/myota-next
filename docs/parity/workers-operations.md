@@ -17,14 +17,17 @@
   PostgreSQL failures with capped jittered backoff. Process-kill
   qualifications cover lease takeover for all six Activity job kinds. The
   checks inspect rebuilt snapshots, award progress, ingested and imported QSOs,
-  import notification state, and rendered PDF artifacts. The Activity worker
-  also reconnects and resumes durable work delivery after a single-server
-  JetStream restart with its file store retained. Cluster failover, database
-  outages, and retention recovery evidence remain open. Transient
+  import notification state, and rendered PDF artifacts. A live connection
+  recovery check injects a temporary PostgreSQL TCP connection loss through a
+  local fault proxy, then verifies the queued job completes after connectivity
+  returns. The Activity worker also reconnects and resumes durable work
+  delivery after a single-server JetStream restart with its file store
+  retained. PostgreSQL process outages, cluster failover, and retention
+  recovery evidence remain open. Transient
   PostgreSQL failures while
   claiming work or persisting retry/dead-letter state extend the current ACK
-  and retry in place with capped jittered backoff; live outage recovery
-  remains unqualified.
+  and retry in place with capped jittered backoff; live recovery of those
+  retry-state failure paths remains unqualified.
 - Identity maintenance: expired recovery tokens, revoked sessions, expired
   revocations, rate-limit windows, old security events, and aged orphan profile
   images are cleaned by a separate Core-owned worker. Transient PostgreSQL

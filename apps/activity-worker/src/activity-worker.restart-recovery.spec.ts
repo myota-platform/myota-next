@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { createServer } from 'node:net';
+import { createConnection, createServer } from 'node:net';
+import type { Socket } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -29,8 +30,8 @@ const enabled =
   process.env.MYOTA_ACTIVITY_WORKER_RECOVERY_TEST === '1' &&
   Boolean(process.env.ACTIVITY_DATABASE_URL);
 
-describe.skipIf(!enabled)('Activity worker broker restart', () => {
-  it('reconnects to JetStream and resumes durable work delivery', async () => {
+describe.skipIf(!enabled)('Activity worker connection recovery', () => {
+  it('recovers after PostgreSQL connection loss and JetStream restart', async () => {
     const databaseUrl = process.env.ACTIVITY_DATABASE_URL;
     if (!databaseUrl) throw new Error('ACTIVITY_DATABASE_URL is required');
     if (
@@ -41,11 +42,17 @@ describe.skipIf(!enabled)('Activity worker broker restart', () => {
       throw new Error('broker restart recovery requires local Postgres');
 
     const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+    const databaseProxy = await startDatabaseProxy(databaseUrl);
+    const workerPool = new Pool({
+      connectionString: databaseProxy.connectionString,
+      max: 4,
+      connectionTimeoutMillis: 1000,
+    });
     const directory = await mkdtemp(join(tmpdir(), 'myota-activity-worker-'));
     const port = await reserveLocalPort();
     const natsUrl = `nats://127.0.0.1:${port}`;
     const originalNatsUrl = process.env.NATS_URL;
-    const jobs = [randomUUID(), randomUUID()];
+    const jobs = [randomUUID(), randomUUID(), randomUUID()];
     const programmeSlugs = jobs.map((id) => `worker-restart-${id}`);
     let server: ReturnType<typeof spawn> | undefined;
     let publisher: Awaited<ReturnType<typeof connect>> | undefined;
@@ -95,10 +102,11 @@ describe.skipIf(!enabled)('Activity worker broker restart', () => {
         } as ConsumerConfig);
       }
 
+      await workerPool.query('SELECT 1');
       worker = new ActivityWorkerService(
-        new ActivityWorkRepository(pool),
-        new ActivityRetentionRepository(pool),
-        pool,
+        new ActivityWorkRepository(workerPool),
+        new ActivityRetentionRepository(workerPool),
+        workerPool,
       );
       await worker.onModuleInit();
       const workerState = worker as unknown as { natsUp: boolean };
@@ -110,6 +118,31 @@ describe.skipIf(!enabled)('Activity worker broker restart', () => {
       await queueStatisticsJob(pool, jobs[0]!, programmeSlugs[0]!);
       await publishWork(publisher, registry, jobs[0]!);
       await waitForJob(pool, jobs[0]!);
+
+      await queueStatisticsJob(pool, jobs[1]!, programmeSlugs[1]!);
+      const rejectedBeforeOutage = databaseProxy.rejectedConnections();
+      databaseProxy.setAvailable(false);
+      await publishWork(publisher, registry, jobs[1]!);
+      await waitFor(
+        () => databaseProxy.rejectedConnections() > rejectedBeforeOutage,
+        'Activity worker did not retry a failed PostgreSQL connection',
+      );
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const waitingJob = await pool.query<{
+        status: string;
+        attempts: number;
+      }>('SELECT status,attempts FROM activity_job WHERE id=$1', [jobs[1]]);
+      expect(waitingJob.rows[0]).toMatchObject({
+        status: 'QUEUED',
+        attempts: 0,
+      });
+      databaseProxy.setAvailable(true);
+      await waitForJob(pool, jobs[1]!);
+      const recoveredJob = await pool.query<{ attempts: number }>(
+        'SELECT attempts FROM activity_job WHERE id=$1',
+        [jobs[1]],
+      );
+      expect(recoveredJob.rows[0]?.attempts).toBe(1);
 
       await stopJetStream(server);
       server = undefined;
@@ -124,17 +157,18 @@ describe.skipIf(!enabled)('Activity worker broker restart', () => {
         'worker did not reconnect to JetStream',
       );
       await waitForPublisher(publisher, registry.activityWorkStream);
-      await queueStatisticsJob(pool, jobs[1]!, programmeSlugs[1]!);
-      await publishWork(publisher, registry, jobs[1]!);
-      await waitForJob(pool, jobs[1]!);
+      await queueStatisticsJob(pool, jobs[2]!, programmeSlugs[2]!);
+      await publishWork(publisher, registry, jobs[2]!);
+      await waitForJob(pool, jobs[2]!);
       const snapshots = await pool.query<{ count: number }>(
         `SELECT count(*)::int AS count FROM activity_statistic_snapshot
          WHERE programme_slug=ANY($1::text[]) AND algorithm_version='activity-v2'`,
         [programmeSlugs],
       );
-      expect(snapshots.rows[0]?.count).toBeGreaterThanOrEqual(2);
+      expect(snapshots.rows[0]?.count).toBeGreaterThanOrEqual(3);
     } finally {
       if (worker) await worker.onModuleDestroy().catch(() => undefined);
+      await workerPool.end().catch(() => undefined);
       if (publisher) await publisher.drain().catch(() => undefined);
       if (server) await stopJetStream(server).catch(() => undefined);
       await pool
@@ -148,6 +182,7 @@ describe.skipIf(!enabled)('Activity worker broker restart', () => {
         .query('DELETE FROM activity_job WHERE id=ANY($1::uuid[])', [jobs])
         .catch(() => undefined);
       await pool.end();
+      await databaseProxy.close();
       await rm(directory, { recursive: true, force: true });
       if (originalNatsUrl === undefined) delete process.env.NATS_URL;
       else process.env.NATS_URL = originalNatsUrl;
@@ -228,6 +263,67 @@ async function waitFor(
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error(message);
+}
+
+type DatabaseProxy = {
+  connectionString: string;
+  rejectedConnections: () => number;
+  setAvailable: (available: boolean) => void;
+  close: () => Promise<void>;
+};
+
+async function startDatabaseProxy(databaseUrl: string): Promise<DatabaseProxy> {
+  const target = new URL(databaseUrl);
+  const sockets = new Set<Socket>();
+  let available = true;
+  let rejected = 0;
+  const server = createServer((client) => {
+    sockets.add(client);
+    client.once('close', () => sockets.delete(client));
+    if (!available) {
+      rejected++;
+      client.destroy();
+      return;
+    }
+    const upstream = createConnection({
+      host: target.hostname.replace(/^\[|\]$/g, ''),
+      port: Number(target.port || 5432),
+    });
+    sockets.add(upstream);
+    upstream.once('close', () => sockets.delete(upstream));
+    client.once('error', () => upstream.destroy());
+    upstream.once('error', () => client.destroy());
+    client.pipe(upstream);
+    upstream.pipe(client);
+  });
+  const port = await new Promise<number>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        reject(new Error('could not start the PostgreSQL fault proxy'));
+        return;
+      }
+      resolve(address.port);
+    });
+  });
+  const proxiedUrl = new URL(databaseUrl);
+  proxiedUrl.hostname = '127.0.0.1';
+  proxiedUrl.port = String(port);
+  return {
+    connectionString: proxiedUrl.toString(),
+    rejectedConnections: () => rejected,
+    setAvailable(next) {
+      available = next;
+      if (!available) for (const socket of sockets) socket.destroy();
+    },
+    async close() {
+      for (const socket of sockets) socket.destroy();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    },
+  };
 }
 
 async function reserveLocalPort() {

@@ -198,11 +198,13 @@ statistics rebuild checks its expected summary snapshots, both award jobs
 check computed progress and eligible levels, QSO ingestion checks its QSO and
 downstream award job, ADIF checks its import result and QSO notification, and
 PDF rendering checks the persisted ready artifact and PDF bytes. This
-qualifies database lease takeover for all six Activity job kinds. A separate
-recovery check also restarts JetStream with its file store retained while a
-live Activity worker remains connected, then verifies that the worker
-reconnects and completes a second queued job. Cluster failover, database
-outages, and retention recovery remain open.
+qualifies database lease takeover for all six Activity job kinds. A live
+recovery check also injects a temporary PostgreSQL TCP connection loss through
+a local fault proxy, verifies that a queued job remains unclaimed, restores the
+connection, and confirms the job completes. The same check restarts JetStream
+with its file store retained and verifies the worker reconnects and completes
+another queued job. PostgreSQL process outages, cluster failover, and retention
+recovery remain open.
 Failed or queued Activity jobs can be redriven by administrators with
 an audited reason. Failed-job redrive preserves the delivery-attempt counter,
 matching the pinned Python repository. Long-running Activity jobs now extend their 120-second leases
