@@ -268,8 +268,11 @@ export class IdentityProfileImageService {
 
   private async normalize(
     contentType: string | undefined,
-    content: Buffer,
+    input: Buffer | AsyncIterable<Uint8Array>,
   ): Promise<Buffer> {
+    const content = Buffer.isBuffer(input)
+      ? input
+      : await bufferProfileImageInput(input);
     const mediaType = trimPythonWhitespace(
       (contentType ?? '').split(';', 1)[0],
     );
@@ -395,6 +398,29 @@ export class IdentityProfileImageService {
       throw new ServiceUnavailableException('Identity database is unavailable');
     }
   }
+}
+
+async function bufferProfileImageInput(
+  input: AsyncIterable<Uint8Array>,
+): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of input) {
+    const part = Buffer.from(chunk);
+    size += part.length;
+    if (size > MAX_INPUT_BYTES) {
+      throw new BadRequestException(
+        'profile image must be between 1 byte and 5 MiB',
+      );
+    }
+    chunks.push(part);
+  }
+  if (size === 0) {
+    throw new BadRequestException(
+      'profile image must be between 1 byte and 5 MiB',
+    );
+  }
+  return Buffer.concat(chunks, size);
 }
 
 async function readProfileImageBody(
