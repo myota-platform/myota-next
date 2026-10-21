@@ -34,7 +34,9 @@ Identity API. A separate workflow creates a
 programme through Gateway before Participant loads its catalogue,
 published-content response, and empty Geodata entity page through the Vite
 proxy and running NestJS services. Other browser workflows continue to use
-intercepted API responses.
+intercepted API responses. Participant activation creation, QSO recording, and
+activation closing now run through live Activity APIs; the entity catalogue is
+seeded by the browser fixture for this workflow.
 Activation creation and QSO recording retain their
 request body and
 idempotency key for retries with unchanged inputs, including a page reload in

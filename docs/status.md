@@ -40,7 +40,9 @@ production readiness.
   correction review, and policy publication against running NestJS services
   through the Gateway. Participant profile editing and owner callsign creation,
   evidence submission, primary selection, and retirement also run against live
-  Identity APIs. Participant public catalogue loading uses the live services as well.
+  Identity APIs. Participant activation creation, QSO recording, and closing
+  run through live Activity APIs. Public catalogue loading uses live services
+  as well.
   Most other browser workflows still use intercepted API responses;
   broader payload coverage, accessibility, responsive behavior, and failure
   states remain to be qualified.

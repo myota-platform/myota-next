@@ -492,6 +492,179 @@ test('manages participant-owned callsigns through the live Identity API', async 
   expect(failedResponses).toEqual([]);
 });
 
+test('records and closes an activation in Participant through live Activity APIs', async ({
+  page,
+  request,
+}) => {
+  test.skip(!hasApiDatabases, 'requires the CI PostgreSQL databases');
+
+  const adminEmail =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL ?? 'browser-e2e-admin@example.test';
+  const adminPassword =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD ?? 'browser-e2e-password-7!Q';
+  const login = await request.post(
+    'http://127.0.0.1:8080/v1/identity/auth/login',
+    { data: { email: adminEmail, password: adminPassword } },
+  );
+  expect(login.ok()).toBeTruthy();
+  const { accessToken } = await login.json();
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const accountId = (
+    await request
+      .get('http://127.0.0.1:8080/v1/identity/me', { headers })
+      .then((response) => response.json())
+  ).id as string;
+  const programmeSlug = `browser-activation-${randomUUID()}`;
+  const entityTypeCode = `E2E_${randomUUID().replaceAll('-', '').slice(0, 10)}`;
+  const programmeResponse = await request.post(
+    'http://127.0.0.1:8080/v1/programmes',
+    {
+      headers: { ...headers, 'Idempotency-Key': randomUUID() },
+      data: {
+        slug: programmeSlug,
+        name: 'Live Participant activation programme',
+        description: 'Created for the Participant live Activity workflow.',
+        entityTypes: [
+          {
+            code: entityTypeCode,
+            label: 'Integration point',
+            geometryTypes: ['POINT'],
+          },
+        ],
+        rules: {
+          activationValidityDays: 7,
+          minimumQsos: { activation: 1, hunter: 1 },
+          publicAccessRequired: false,
+          requireLocation: true,
+        },
+      },
+    },
+  );
+  expect(programmeResponse.status()).toBe(201);
+
+  const callsignResponse = await request.post(
+    `http://127.0.0.1:8080/v1/identity/accounts/${accountId}/callsigns`,
+    {
+      headers: { ...headers, 'Idempotency-Key': randomUUID() },
+      data: { callsign: `DL${randomUUID().replaceAll('-', '').slice(0, 7)}` },
+    },
+  );
+  expect(callsignResponse.status()).toBe(201);
+  const callsign = (await callsignResponse.json()).callsign as {
+    id: string;
+    value: string;
+  };
+  const evidence = await request.post(
+    `http://127.0.0.1:8080/v1/identity/accounts/${accountId}/callsigns/${callsign.id}/evidence`,
+    {
+      headers,
+      data: { evidenceType: 'LICENSE', source: 'browser integration fixture' },
+    },
+  );
+  expect(evidence.status()).toBe(201);
+  const verification = await request.post(
+    `http://127.0.0.1:8080/v1/identity/accounts/${accountId}/callsigns/${callsign.id}/verify`,
+    { headers, data: { source: 'browser integration fixture' } },
+  );
+  expect(verification.status()).toBe(200);
+
+  const entityId = `browser-entity-${randomUUID()}`;
+  await page.route('**/v1/geodata/entities**', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              id: entityId,
+              name: 'Live Activity integration point',
+              entityType: entityTypeCode,
+              status: 'APPROVED',
+              centroid: { lat: 46.1, lon: 7.2 },
+              geometry: { type: 'Point', coordinates: [7.2, 46.1] },
+            },
+          ],
+          page: 1,
+          total: 1,
+          nextPage: null,
+        },
+      });
+      return;
+    }
+    await route.continue();
+  });
+  const failedResponses: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('/v1/') && response.status() >= 400)
+      failedResponses.push(`${response.status()} ${response.url()}`);
+  });
+  page.on('dialog', (dialog) => dialog.accept());
+  await page.goto('http://127.0.0.1:8091');
+  await page.locator('#award-email').fill(adminEmail);
+  await page.locator('#award-password').fill(adminPassword);
+  await page.locator('#award-login button[type="submit"]').click();
+  await expect(page.locator('#activation-start-form')).toBeVisible();
+  await page.locator('#programme-select').selectOption(programmeSlug);
+  await page.locator('#activation-entity').selectOption(entityId);
+  await page.locator('#activation-callsign').selectOption(callsign.id);
+
+  const startResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === '/v1/activations',
+  );
+  await page.getByRole('button', { name: 'Start activation' }).click();
+  const started = await startResponse;
+  expect(started.status()).toBe(201);
+  const activation = await started.json();
+  await expect(page.locator('#activation-status')).toHaveText(
+    'Activation started.',
+  );
+  await expect(page.locator('#qso-form')).toBeVisible();
+
+  await page.getByLabel('Worked callsign').fill('F4LIVE');
+  await page.getByLabel('Band').fill('20M');
+  await page.getByLabel('Mode').fill('SSB');
+  const qsoResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname ===
+        `/v1/activations/${activation.id}/qsos`,
+  );
+  await page.getByRole('button', { name: 'Record contact' }).click();
+  expect((await qsoResponse).status()).toBe(201);
+  await expect(page.locator('#activation-status')).toHaveText(
+    'Contact recorded.',
+  );
+
+  const closeResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' &&
+      new URL(response.url()).pathname === `/v1/activations/${activation.id}`,
+  );
+  await page.getByRole('button', { name: 'Close activation' }).click();
+  expect((await closeResponse).status()).toBe(200);
+  await expect(page.locator('#activation-status')).toHaveText(
+    'Activation closed.',
+  );
+
+  const persisted = await request.get(
+    `http://127.0.0.1:8080/v1/activations/${activation.id}`,
+    { headers },
+  );
+  expect(persisted.status()).toBe(200);
+  expect(await persisted.json()).toMatchObject({
+    id: activation.id,
+    programmeSlug,
+    entityId,
+    operatorId: accountId,
+    operatorCallsign: callsign.value.toUpperCase(),
+    status: 'CLOSED',
+    qsoCount: 1,
+    qsos: [{ workedCallsign: 'F4LIVE', band: '20M', mode: 'SSB' }],
+  });
+  expect(failedResponses).toEqual([]);
+});
+
 test('reviews a live QSO correction in Admin and verifies the updated QSO', async ({
   page,
   request,
