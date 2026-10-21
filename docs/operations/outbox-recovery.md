@@ -29,3 +29,9 @@ dead-letter rows, records the prior attempt count and error in
 commits both changes together. The relay resolves the dead-letter record after
 JetStream acknowledges the republished event. The command does not rewrite the
 event payload or clear the dead letter before successful publication.
+
+CI qualifies an owner-scoped relay against a real JetStream process stop and
+restart. If JetStream is unavailable, the relay records a retryable failure;
+after the server returns, the client reconnects and the retained event is
+published. This exercises one broker process and retained local file store. It
+does not qualify clustered failover or production NATS deployment recovery.

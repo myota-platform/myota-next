@@ -828,8 +828,11 @@ geometries.
   retryable, then JetStream accepts the retry and the row is marked published.
   It also exhausts retries for an owner-scoped event, invokes the audited
   redrive CLI, verifies the recorded prior attempts and error, and confirms
-  successful republishing resolves the dead letter. Actual NATS outages remain
-  unqualified.
+  successful republishing resolves the dead letter. A second check starts an
+  isolated JetStream server for each owner, kills it after an outbox claim,
+  verifies the event stays retryable, restarts the server with its file store,
+  and confirms publication after client reconnection. Cluster failover and
+  deployment-level NATS recovery remain unqualified.
 - Runtime: preserve migrations, health/readiness, metrics, logs, traces,
   backups, restore paths, NATS topology, object storage buckets, and separate
   service/worker deployment units. Activity database pools honor the

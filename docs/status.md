@@ -54,8 +54,10 @@ behavioral parity or production readiness.
   worker process kill and Geodata import preprocessing replay after committed
   staging. A fault-injection check verifies outbox retry and successful
   publication, attempt exhaustion, and audited redrive for Core, Activity, and
-  Geodata events against their separate databases; other worker and
-  object-store recovery paths remain to be qualified.
+  Geodata events against their separate databases. It also kills and restarts
+  an isolated JetStream server with its file store retained, then verifies
+  outbox retry and publication for each owner. Other worker and object-store
+  recovery paths remain to be qualified.
 - Complete the semantic review and rehearsal for cross-version database
   transfer, backup, restore, and rollback. CI exercises the transfer commands
   end to end on disposable databases with Identity, Programme, Activity,
