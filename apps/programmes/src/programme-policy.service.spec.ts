@@ -1,6 +1,11 @@
+import { ValidationPipe } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
 import type { PoolClient } from 'pg';
+import request from 'supertest';
+import { ApiProblemFilter } from '../../../libs/platform/src/http-problem.js';
 import { signAccessToken } from '../../../libs/platform/src/access-token.js';
 import type { ProgrammeMutationRepository } from './programme-mutation.repository.js';
+import { ProgrammePolicyController } from './programme-policy.controller.js';
 import type { ProgrammePolicyRepository } from './programme-policy.repository.js';
 import type { ProgrammeReadRepository } from './programme-read.repository.js';
 import type { ProgrammeRepository } from './programme.repository.js';
@@ -128,5 +133,67 @@ describe('ProgrammePolicyService lifecycle compatibility', () => {
       aggregateId: draftId,
       payload: { status: 'PUBLISHED' },
     });
+  });
+});
+
+describe('ProgrammePolicyController validation precedence', () => {
+  async function createApp() {
+    const service = new ProgrammePolicyService(
+      {} as ProgrammeMutationRepository,
+      {} as ProgrammeReadRepository,
+      { get: async () => undefined } as unknown as ProgrammePolicyRepository,
+      {} as ProgrammeRepository,
+    );
+    const module = await Test.createTestingModule({
+      controllers: [ProgrammePolicyController],
+      providers: [{ provide: ProgrammePolicyService, useValue: service }],
+    }).compile();
+    const app = module.createNestApplication();
+    app.setGlobalPrefix('v1');
+    app.useGlobalPipes(
+      new ValidationPipe({ transform: true, whitelist: true }),
+    );
+    app.useGlobalFilters(new ApiProblemFilter());
+    await app.init();
+    return app;
+  }
+
+  it('authorizes before validating a policy draft request body', async () => {
+    const app = await createApp();
+    try {
+      const response = await request(app.getHttpServer())
+        .post('/v1/programmes/alpine/policy-drafts')
+        .send({ type: 'INVALID' })
+        .expect(403);
+      expect(response.body.detail).toBe('Bearer authentication is required');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('authorizes review transitions before checking reviewer fields', async () => {
+    const app = await createApp();
+    try {
+      const response = await request(app.getHttpServer())
+        .patch('/v1/programmes/alpine/policy-drafts/draft-1')
+        .send({ status: 'APPROVED' })
+        .expect(403);
+      expect(response.body.detail).toBe('Bearer authentication is required');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('resolves an unknown-status patch draft before authorizing its save', async () => {
+    const app = await createApp();
+    try {
+      const response = await request(app.getHttpServer())
+        .patch('/v1/programmes/alpine/policy-drafts/missing-draft')
+        .send({ status: 'UNSUPPORTED' })
+        .expect(400);
+      expect(response.body.detail).toBe('policy draft not found');
+    } finally {
+      await app.close();
+    }
   });
 });

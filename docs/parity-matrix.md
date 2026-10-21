@@ -52,7 +52,10 @@ persistence, error, or workflow parity.
 Programme policy service coverage now exercises a rules draft through save,
 submit, approval, and publication, including offset timestamp normalization,
 review history, rules replacement, policy version increment, and the publication
-fact. The Python reference separately pins the UTC conversion behavior.
+fact. Policy body validation follows the reference's authorization order, while
+an unknown-status PATCH resolves the draft before checking authorization; HTTP
+fixtures pin both sequences. The Python reference separately pins the UTC
+conversion behavior.
 
 The email worker accepts the schema's trailing uppercase `Z` timestamp with
 either `T` or `t` as the date/time separator, matching Python's RFC3339

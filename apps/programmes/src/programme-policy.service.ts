@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ValidationPipe,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { verifyAccessToken } from '@app/platform/access-token.js';
@@ -18,8 +19,7 @@ import {
   ProgrammePolicyRepository,
   type ProgrammePolicyDraft,
 } from './programme-policy.repository.js';
-import type {
-  PatchProgrammePolicyDraftDto,
+import {
   PublishProgrammePolicyDraftDto,
   ReviewProgrammePolicyDraftDto,
   SaveProgrammePolicyDraftDto,
@@ -66,10 +66,11 @@ export class ProgrammePolicyService {
   async save(
     authorization: string | undefined,
     slug: string,
-    body: SaveProgrammePolicyDraftDto,
+    rawBody: unknown,
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
+    const body = await validatePolicyBody(rawBody, SaveProgrammePolicyDraftDto);
     if (
       !body.type ||
       !body.name ||
@@ -152,10 +153,14 @@ export class ProgrammePolicyService {
     authorization: string | undefined,
     slug: string,
     draftId: string,
-    body: ReviewProgrammePolicyDraftDto,
+    rawBody: unknown,
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
+    const body = await validatePolicyBody(
+      rawBody,
+      ReviewProgrammePolicyDraftDto,
+    );
     return this.policies.mutate(idempotencyKey, async (client) => {
       await this.policies.lockRecord(client, draftId);
       const draft = await this.requireDraft(client, draftId);
@@ -182,10 +187,14 @@ export class ProgrammePolicyService {
     authorization: string | undefined,
     slug: string,
     draftId: string,
-    body: PublishProgrammePolicyDraftDto,
+    rawBody: unknown,
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
+    const body = await validatePolicyBody(
+      rawBody,
+      PublishProgrammePolicyDraftDto,
+    );
     const effectiveFrom = normalizeUtcTimestamp(body.effectiveFrom);
     return this.mutations.mutate(idempotencyKey, async (client) => {
       await this.policies.lockRecord(client, draftId);
@@ -242,39 +251,35 @@ export class ProgrammePolicyService {
     authorization: string | undefined,
     slug: string,
     draftId: string,
-    body: PatchProgrammePolicyDraftDto,
+    rawBody: unknown,
     idempotencyKey?: string,
   ) {
+    const body = policyBodyRecord(rawBody);
     if (body.status === 'UNDER_REVIEW') {
       return this.submit(authorization, slug, draftId, idempotencyKey);
     }
     if (body.status === 'APPROVED' || body.status === 'CHANGES_REQUESTED') {
-      if (!body.reviewerId) {
-        throw new BadRequestException('reviewerId is required');
-      }
       return this.review(
         authorization,
         slug,
         draftId,
         {
           decision: body.status,
-          reviewerId: body.reviewerId,
-          note: body.note,
+          reviewerId: body.reviewerId as string,
+          note: body.note as string | null | undefined,
         },
         idempotencyKey,
       );
     }
     if (body.status === 'PUBLISHED') {
-      if (!body.effectiveFrom || !body.publisherId) {
-        throw new BadRequestException(
-          'effectiveFrom and publisherId are required',
-        );
-      }
       return this.publish(
         authorization,
         slug,
         draftId,
-        { effectiveFrom: body.effectiveFrom, publisherId: body.publisherId },
+        {
+          effectiveFrom: body.effectiveFrom as string,
+          publisherId: body.publisherId as string,
+        },
         idempotencyKey,
       );
     }
@@ -318,4 +323,27 @@ export class ProgrammePolicyService {
     draft.reviewHistory ??= [];
     return draft;
   }
+}
+
+const policyBodyValidationPipe = new ValidationPipe({
+  transform: true,
+  whitelist: true,
+});
+
+async function validatePolicyBody<T>(
+  body: unknown,
+  metatype: new () => T,
+): Promise<T> {
+  return (await policyBodyValidationPipe.transform(body, {
+    type: 'body',
+    metatype,
+  })) as T;
+}
+
+function policyBodyRecord(body: unknown): Record<string, unknown> {
+  if (!isTruthyJsonValue(body)) return {};
+  if (typeof body !== 'object' || Array.isArray(body)) {
+    throw new BadRequestException('policy draft body must be an object');
+  }
+  return body as Record<string, unknown>;
 }

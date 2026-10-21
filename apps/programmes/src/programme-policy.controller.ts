@@ -12,12 +12,6 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { firstQueryValue } from '@app/platform/query.js';
-import {
-  PatchProgrammePolicyDraftDto,
-  PublishProgrammePolicyDraftDto,
-  ReviewProgrammePolicyDraftDto,
-  SaveProgrammePolicyDraftDto,
-} from './programmes.dto.js';
 import { ProgrammePolicyService } from './programme-policy.service.js';
 
 @Controller('programmes/:slug/policy-drafts')
@@ -47,7 +41,7 @@ export class ProgrammePolicyController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
-    @Body() body: SaveProgrammePolicyDraftDto,
+    @Body() body: unknown,
     @Res({ passthrough: true }) response: Response,
   ) {
     const { statusCode, draft } = await this.policies.save(
@@ -78,7 +72,7 @@ export class ProgrammePolicyController {
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
     @Param('draftId') draftId: string,
-    @Body() body: ReviewProgrammePolicyDraftDto,
+    @Body() body: unknown,
   ) {
     return this.policies.review(
       authorization,
@@ -96,7 +90,7 @@ export class ProgrammePolicyController {
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
     @Param('draftId') draftId: string,
-    @Body() body: PublishProgrammePolicyDraftDto,
+    @Body() body: unknown,
   ) {
     return this.policies.publish(
       authorization,
@@ -114,7 +108,7 @@ export class ProgrammePolicyController {
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
     @Param('draftId') draftId: string,
-    @Body() body: PatchProgrammePolicyDraftDto,
+    @Body() body: unknown,
   ) {
     return this.policies.patch(
       authorization,
