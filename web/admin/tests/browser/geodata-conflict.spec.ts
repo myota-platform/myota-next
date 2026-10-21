@@ -146,7 +146,9 @@ test('reloads the server version after an optimistic edit conflict', async ({
     .getByPlaceholder('Explain this name change')
     .fill('Checked the source map.');
   await page.getByRole('button', { name: 'Save details' }).click();
-  await expect(page.getByText('Entity details saved.')).toBeVisible();
+  await expect(
+    page.locator('#workspace-content').getByText('Entity details saved.'),
+  ).toBeVisible();
   await expect(page.getByLabel('Display name')).toHaveValue(
     'Verified summit name',
   );
