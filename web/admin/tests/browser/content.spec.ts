@@ -118,7 +118,7 @@ test('retries a content draft after reload and completes its review lifecycle', 
 
   const fillDraft = async () => {
     await page.getByLabel('Content key').fill('programme.description');
-    await page.getByLabel('Locale').fill('en');
+    await page.getByLabel('Locale', { exact: true }).fill('en');
     await page.getByLabel('Fallback locale').fill('');
     await page
       .getByLabel('Text or content value')

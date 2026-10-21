@@ -70,7 +70,10 @@ candidate listing and review, plus idempotent durable candidate promotion.
 Single-item decisions and bulk candidate promotion or rejection retain their
 idempotency keys across same-tab retries and reloads. Pasted imports retain
 their exact request body and idempotency key for same-tab retries after reload.
-Geodata deletion job creation and confirmation also retain their keys across
+Geodata deletion browser coverage now verifies impact preparation, explicit
+confirmation, cascade completion, removal from the entity list, and reuse of
+the same preparation and confirmation keys after uncertain responses and page
+reloads. Deletion job creation and confirmation retain their keys across
 same-tab retries and reloads. Entity reviews, metadata/category/geometry/location
 updates, enrichment requests, manual proposals, and import finalization use the
 same persistence. Refresh schedule creation and runs plus conflation decisions
