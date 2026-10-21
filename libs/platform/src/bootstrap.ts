@@ -48,6 +48,32 @@ export async function bootstrapHttpService(
     );
     next();
   });
+  if (
+    ['identity-api', 'programmes-api', 'activity-api', 'geodata-api'].includes(
+      serviceId,
+    )
+  )
+    app.use((request: Request, response: Response, next: NextFunction) => {
+      response.setHeader('Access-Control-Allow-Origin', '*');
+      response.setHeader(
+        'Access-Control-Allow-Headers',
+        serviceId === 'geodata-api'
+          ? 'Content-Type, Authorization, Idempotency-Key, If-Match, X-Request-ID, X-Correlation-ID, traceparent, tracestate'
+          : 'Content-Type, Authorization, Idempotency-Key, X-Request-ID, X-Correlation-ID, traceparent, tracestate',
+      );
+      response.setHeader(
+        'Access-Control-Allow-Methods',
+        'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+      );
+      if (request.method !== 'OPTIONS') {
+        next();
+        return;
+      }
+      response.setHeader('Content-Type', 'application/json; charset=utf-8');
+      response.setHeader('Content-Length', '0');
+      response.statusCode = 204;
+      response.end();
+    });
   if (parseRequestBodies) {
     for (const { method, path, maxBytes, detail } of declaredBodyLimits)
       app.use((request: Request, response: Response, next: NextFunction) => {
