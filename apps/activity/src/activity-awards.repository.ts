@@ -9,12 +9,14 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { stringifyJsonWithMetadata } from '@app/platform/json-bigint.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { parsePageTotal, type PageInteger } from '@app/platform/pagination.js';
 import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import { normalizeTimestamp, type JsonRecord } from './activity-domain.js';
 
 const awardRequestTimestampProjection = `to_char(requested_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS requested_at_iso,
                    to_char(issued_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS issued_at_iso`;
+const awardRequestProjection = `${awardRequestTimestampProjection}, facts::text AS facts_text`;
 
 @Injectable()
 export class ActivityAwardsRepository {
@@ -84,7 +86,7 @@ export class ActivityAwardsRepository {
       const limitParameter = values.length + 1;
       values.push(pageSize);
       const result = await client.query(
-        `SELECT total.value,page_rows.definition
+        `SELECT total.value,page_rows.definition::text AS definition_text
          FROM (
            SELECT count(*) AS value
            FROM activity_award_definition
@@ -100,8 +102,13 @@ export class ActivityAwardsRepository {
       );
       return {
         items: result.rows
-          .filter((row) => row.definition !== null)
-          .map((row) => row.definition),
+          .filter((row) => row.definition_text !== null)
+          .map(
+            (row) =>
+              parseJsonWithExactIntegers(
+                String(row.definition_text),
+              ) as JsonRecord,
+          ),
         total: parsePageTotal(result.rows[0]?.value ?? '0'),
       };
     } finally {
@@ -113,12 +120,14 @@ export class ActivityAwardsRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        'SELECT definition FROM activity_award_definition WHERE id=$1',
+        'SELECT definition::text AS definition_text FROM activity_award_definition WHERE id=$1',
         [id],
       );
       if (!result.rows[0])
         throw new NotFoundException(pythonKeyErrorDetail(id));
-      return result.rows[0].definition;
+      return parseJsonWithExactIntegers(
+        String(result.rows[0].definition_text),
+      ) as JsonRecord;
     } finally {
       client.release();
     }
@@ -128,12 +137,14 @@ export class ActivityAwardsRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        'SELECT metadata FROM activity_asset WHERE id=$1',
+        'SELECT metadata::text AS metadata_text FROM activity_asset WHERE id=$1',
         [id],
       );
       if (!result.rows[0])
         throw new NotFoundException(pythonKeyErrorDetail(id));
-      return result.rows[0].metadata;
+      return parseJsonWithExactIntegers(
+        String(result.rows[0].metadata_text),
+      ) as JsonRecord;
     } finally {
       client.release();
     }
@@ -146,7 +157,7 @@ export class ActivityAwardsRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        `SELECT total.value,page_rows.metadata
+        `SELECT total.value,page_rows.metadata::text AS metadata_text
          FROM (SELECT count(*) AS value FROM activity_asset) total
          LEFT JOIN LATERAL (
            SELECT metadata FROM activity_asset
@@ -157,8 +168,13 @@ export class ActivityAwardsRepository {
       );
       return {
         items: result.rows
-          .filter((row) => row.metadata !== null)
-          .map((row) => row.metadata),
+          .filter((row) => row.metadata_text !== null)
+          .map(
+            (row) =>
+              parseJsonWithExactIntegers(
+                String(row.metadata_text),
+              ) as JsonRecord,
+          ),
         total: parsePageTotal(result.rows[0]?.value ?? '0'),
       };
     } finally {
@@ -173,12 +189,16 @@ export class ActivityAwardsRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        `SELECT metadata FROM activity_asset
+        `SELECT metadata::text AS metadata_text FROM activity_asset
          WHERE kind=$1 AND object_key=$2
          ORDER BY created_at,id LIMIT 1`,
         [kind, objectKey],
       );
-      return result.rows[0]?.metadata ?? null;
+      return result.rows[0]
+        ? (parseJsonWithExactIntegers(
+            String(result.rows[0].metadata_text),
+          ) as JsonRecord)
+        : null;
     } finally {
       client.release();
     }
@@ -232,7 +252,7 @@ export class ActivityAwardsRepository {
         ],
       );
       const saved = await client.query(
-        `SELECT *, ${awardRequestTimestampProjection}
+        `SELECT *, ${awardRequestProjection}
          FROM activity_award_request WHERE award_id=$1 AND level_id=$2 AND subject_id=$3`,
         [record.awardId, record.levelId, record.subjectId],
       );
@@ -274,7 +294,7 @@ export class ActivityAwardsRepository {
            ${where}
          ) total
          LEFT JOIN LATERAL (
-           SELECT *, ${awardRequestTimestampProjection}
+           SELECT *, ${awardRequestProjection}
            FROM activity_award_request
            ${where}
            ORDER BY requested_at DESC
@@ -297,7 +317,7 @@ export class ActivityAwardsRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        `SELECT *, ${awardRequestTimestampProjection}
+        `SELECT *, ${awardRequestProjection}
          FROM activity_award_request WHERE id=$1`,
         [id],
       );
@@ -316,7 +336,7 @@ export class ActivityAwardsRepository {
   ): Promise<JsonRecord> {
     return this.mutate(key, async (client) => {
       const locked = await client.query(
-        `SELECT *, ${awardRequestTimestampProjection}
+        `SELECT *, ${awardRequestProjection}
          FROM activity_award_request WHERE id=$1 FOR UPDATE`,
         [requestId],
       );
@@ -361,7 +381,7 @@ export class ActivityAwardsRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        `SELECT total.value,page_rows.issuance
+        `SELECT total.value,page_rows.issuance::text AS issuance_text
          FROM (SELECT count(*) AS value FROM activity_award_issuance) total
          LEFT JOIN LATERAL (
            SELECT issuance FROM activity_award_issuance
@@ -372,8 +392,13 @@ export class ActivityAwardsRepository {
       );
       return {
         items: result.rows
-          .filter((row) => row.issuance !== null)
-          .map((row) => row.issuance),
+          .filter((row) => row.issuance_text !== null)
+          .map(
+            (row) =>
+              parseJsonWithExactIntegers(
+                String(row.issuance_text),
+              ) as JsonRecord,
+          ),
         total: parsePageTotal(result.rows[0]?.value ?? '0'),
       };
     } finally {
@@ -385,12 +410,14 @@ export class ActivityAwardsRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        'SELECT issuance FROM activity_award_issuance WHERE id=$1',
+        'SELECT issuance::text AS issuance_text FROM activity_award_issuance WHERE id=$1',
         [id],
       );
       if (!result.rows[0])
         throw new NotFoundException(pythonKeyErrorDetail(id));
-      return result.rows[0].issuance;
+      return parseJsonWithExactIntegers(
+        String(result.rows[0].issuance_text),
+      ) as JsonRecord;
     } finally {
       client.release();
     }
@@ -421,12 +448,14 @@ export class ActivityAwardsRepository {
           [key],
         );
         const previous = await client.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          'SELECT response::text AS response_text FROM idempotency_record WHERE service=$1 AND key=$2',
           ['activity-service', key],
         );
         if (previous.rows[0]) {
           await client.query('COMMIT');
-          return previous.rows[0].response as T;
+          return parseJsonWithExactIntegers(
+            String(previous.rows[0].response_text),
+          ) as T;
         }
       }
       const result = await operation(client);
@@ -484,7 +513,10 @@ function awardRequestRecord(row: any): JsonRecord {
     category: row.category,
     callsign: row.callsign,
     personName: row.person_name,
-    facts: row.facts,
+    facts:
+      row.facts_text == null
+        ? row.facts
+        : parseJsonWithExactIntegers(String(row.facts_text)),
     status: row.status,
     issuedAwardId: row.issued_award_id ? String(row.issued_award_id) : null,
     requestedAt: timestamp(row.requested_at_iso ?? row.requested_at),

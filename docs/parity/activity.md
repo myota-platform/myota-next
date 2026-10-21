@@ -69,7 +69,8 @@ Proposed correction values preserve exact integer and float tokens from JSONB
 through review and response serialization.
 Activity JSONB records, request idempotency responses, and award event payloads
 also preserve exact integer tokens at the persistence boundary, matching
-Python's arbitrary-precision JSON integers.
+Python's arbitrary-precision JSON integers. Activity and award API reads parse
+JSONB text directly so those values remain exact through response and replay.
 Statistics rebuilds keep PostgreSQL aggregate counts exact when storing metric
 snapshots, and statistics reads parse those JSONB values without JavaScript
 number rounding. Activation, QSO, subject-fact, and leaderboard count fields

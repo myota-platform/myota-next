@@ -36,6 +36,10 @@ const activationTimestampProjection = `to_char(started_at AT TIME ZONE 'UTC','YY
   to_char(validity_expires_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS validity_expires_at_iso,
   to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_iso,
   to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at_iso`;
+const activationRecordProjection = `${activationTimestampProjection},
+  location::text AS location_text,
+  programme_rules::text AS programme_rules_text,
+  rule_evaluation::text AS rule_evaluation_text`;
 const qsoTimestampProjection = `to_char(occurred_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at_iso,
   to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_iso`;
 const statisticTimestampProjection = timestampProjection('generated_at');
@@ -69,7 +73,7 @@ export class ActivityRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        `SELECT *, ${activationTimestampProjection} FROM activity_activation${programme || operatorId ? ' WHERE ' : ''}${programme ? 'programme_slug=$1' : ''}${programme && operatorId ? ' AND ' : ''}${operatorId ? `operator_id=$${programme ? 2 : 1}` : ''} ORDER BY started_at DESC`,
+        `SELECT *, ${activationRecordProjection} FROM activity_activation${programme || operatorId ? ' WHERE ' : ''}${programme ? 'programme_slug=$1' : ''}${programme && operatorId ? ' AND ' : ''}${operatorId ? `operator_id=$${programme ? 2 : 1}` : ''} ORDER BY started_at DESC`,
         [programme, operatorId].filter((v) => v !== undefined),
       );
       return result.rows.map((row) => activationRecord(row));
@@ -105,7 +109,7 @@ export class ActivityRepository {
       const total = parsePageTotal(count.rows[0]?.total ?? '0');
       const limitIndex = filters.length + 1;
       const result = await client.query(
-        `SELECT *, ${activationTimestampProjection} FROM activity_activation${where}
+        `SELECT *, ${activationRecordProjection} FROM activity_activation${where}
          ORDER BY started_at DESC LIMIT $${limitIndex} OFFSET $${limitIndex + 1}`,
         [...filters, pageSize, pageOffset(page, pageSize)],
       );
@@ -196,7 +200,7 @@ export class ActivityRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        `SELECT id,recipient_id,notification_type,payload,status,created_at,delivered_at,
+        `SELECT id,recipient_id,notification_type,payload::text AS payload_text,status,created_at,delivered_at,
                 ${notificationTimestampProjection}
          FROM activity_notification WHERE recipient_id=$1 ORDER BY created_at DESC`,
         [recipientId],
@@ -205,7 +209,7 @@ export class ActivityRepository {
         id: String(row.id),
         recipientId: row.recipient_id,
         type: row.notification_type,
-        payload: row.payload,
+        payload: parseJsonWithExactIntegers(String(row.payload_text)),
         status: row.status,
         createdAt: timestamp(row.created_at_iso ?? row.created_at),
         deliveredAt: timestamp(row.delivered_at_iso ?? row.delivered_at),
@@ -635,7 +639,7 @@ export class ActivityRepository {
           CASE WHEN $9::double precision IS NULL THEN NULL
             ELSE $8::timestamptz + ($9 * interval '1 day') END,
           $10::jsonb,$11::jsonb)
-        RETURNING *, ${activationTimestampProjection}`,
+        RETURNING *, ${activationRecordProjection}`,
         [
           id,
           data.programmeSlug,
@@ -796,7 +800,7 @@ export class ActivityRepository {
     requireCanonicalUuid(id);
     return this.mutate(undefined, async (client) => {
       const found = await client.query(
-        `SELECT *, ${activationTimestampProjection} FROM activity_activation WHERE id=$1 FOR UPDATE`,
+        `SELECT *, ${activationRecordProjection} FROM activity_activation WHERE id=$1 FOR UPDATE`,
         [id],
       );
       if (!found.rows[0]) throw new NotFoundException(pythonKeyErrorDetail(id));
@@ -817,7 +821,7 @@ export class ActivityRepository {
       );
       const status = evaluation.valid ? 'CLOSED' : 'CLOSED_INVALID';
       const updated = await client.query(
-        `UPDATE activity_activation SET status=$1,ended_at=$2::timestamptz,rule_evaluation=$3::jsonb,updated_at=now() WHERE id=$4 RETURNING *, ${activationTimestampProjection}`,
+        `UPDATE activity_activation SET status=$1,ended_at=$2::timestamptz,rule_evaluation=$3::jsonb,updated_at=now() WHERE id=$4 RETURNING *, ${activationRecordProjection}`,
         [status, normalizedEndedAt, stringifyJsonWithMetadata(evaluation), id],
       );
       const record = activationRecord(updated.rows[0], qsos.rows);
@@ -964,7 +968,7 @@ export class ActivityRepository {
     id: string,
   ): Promise<JsonRecord> {
     const result = await client.query(
-      `SELECT *, ${activationTimestampProjection} FROM activity_activation WHERE id=$1`,
+      `SELECT *, ${activationRecordProjection} FROM activity_activation WHERE id=$1`,
       [id],
     );
     if (!result.rows[0]) throw new NotFoundException(pythonKeyErrorDetail(id));
@@ -989,12 +993,14 @@ export class ActivityRepository {
           [key],
         );
         const previous = await client.query(
-          'SELECT response FROM idempotency_record WHERE service=$1 AND key=$2',
+          'SELECT response::text AS response_text FROM idempotency_record WHERE service=$1 AND key=$2',
           ['activity-service', key],
         );
         if (previous.rows[0]) {
           await client.query('COMMIT');
-          return previous.rows[0].response as T;
+          return parseJsonWithExactIntegers(
+            String(previous.rows[0].response_text),
+          ) as T;
         }
       }
       const result = await operation(client);
@@ -1171,9 +1177,18 @@ function activationRecord(row: any, qsos?: any[]) {
       row.validity_expires_at_iso ?? row.validity_expires_at,
     ),
     status: row.status,
-    location: row.location ?? {},
-    programmeRules: row.programme_rules ?? {},
-    ruleEvaluation: row.rule_evaluation ?? {},
+    location:
+      row.location_text == null
+        ? (row.location ?? {})
+        : parseJsonWithExactIntegers(String(row.location_text)),
+    programmeRules:
+      row.programme_rules_text == null
+        ? (row.programme_rules ?? {})
+        : parseJsonWithExactIntegers(String(row.programme_rules_text)),
+    ruleEvaluation:
+      row.rule_evaluation_text == null
+        ? (row.rule_evaluation ?? {})
+        : parseJsonWithExactIntegers(String(row.rule_evaluation_text)),
     qsoCount: parsePageTotal(row.qso_count),
     uniqueCallsignCount: parsePageTotal(row.unique_callsign_count),
     uniqueEntityCount: parsePageTotal(row.unique_entity_count),
