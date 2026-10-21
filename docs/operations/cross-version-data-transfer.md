@@ -6,7 +6,10 @@ command checks the three application database owners and the legacy Email
 database. The transfer stages four source dumps and three destination recovery
 dumps, restores the three owner databases, merges legacy Email data into Core,
 adopts the verified migration ledgers, and applies NestJS forward migrations.
-Disposable-database rehearsal and full parity review remain outstanding.
+CI rehearses the complete command sequence against disposable source and
+destination databases with fixture data. Production-sized rehearsal, ACL and
+grant review, object-store and NATS reconciliation, and full parity sign-off
+remain outstanding.
 
 Set `LEGACY_CORE_DATABASE_URL`, `LEGACY_ACTIVITY_DATABASE_URL`,
 `LEGACY_GEO_DATABASE_URL`, and `LEGACY_EMAIL_DATABASE_URL` to the frozen
@@ -175,18 +178,17 @@ Core after that migration creates the target tables.
 
 The restore/apply command, ledger adoption, four-source/three-target dump
 staging, Core Email data merge, and read-only per-owner database validation
-report are implemented. The report does not establish complete function
-parity and does not compare object-store data or JetStream messages. The
-report now compares known forward-migration transformations as well as stable
-table rows. CI applies source-compatible baseline SQL, adopts its Python-format
-ledger into the separate NestJS ledger, and runs forward migrations for all
-three owners on disposable databases. This does not exercise `pg_dump` restore,
-data copying, legacy Email merge, or the full preflight and validation reports;
-the complete transfer workflow remains unrehearsed.
+report are implemented. CI runs these commands end to end with disposable
+PostgreSQL databases and one fixture row in each legacy Email table. This
+qualifies archive creation and restore, ledger adoption, forward migrations,
+Email data copying, sequence restoration, and the validation report for that
+fixture. It does not establish complete function parity or compare object-store
+data and JetStream messages. The report compares known forward-migration
+transformations as well as stable table rows.
 
 Do not run a production transfer until the tool has been rehearsed on
-disposable copies of all four source databases and three target databases,
-destination role and grant handling is verified, validation reports match the
-source, and rollback has been rehearsed. The current database backup and
-restore tools remain useful for same-schema recovery and are not a substitute
-for this workflow.
+production-sized copies of all four source databases and three target
+databases, destination role and grant handling is verified, validation reports
+match the source, and rollback has been rehearsed. The current database backup
+and restore tools remain useful for same-schema recovery and are not a
+substitute for this workflow.

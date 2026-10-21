@@ -45,7 +45,9 @@ jobs:
           node-version: '24'
           cache: npm
       - name: Install OSM PBF decoder
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends --yes osmium-tool nats-server
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends --yes osmium-tool nats-server postgresql-client-16
+      - name: Select PostgreSQL 16 client tools
+        run: echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
       - name: Start isolated JetStream for broker recovery coverage
         run: |
           sudo systemctl stop nats-server || true
@@ -66,6 +68,7 @@ jobs:
       - run: npm run migrate:db -- --owner=geo
       - run: npm run test:geodata-maidenhead
       - run: npm run test:transfer-ledger
+      - run: npm run test:transfer-workflow
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck

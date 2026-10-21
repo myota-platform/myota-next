@@ -52,7 +52,10 @@ behavioral parity or production readiness.
   replica sharing, durable resume after a worker restart, and audited dead-letter
   redrive; other worker and object-store recovery paths remain to be qualified.
 - Complete the semantic review and rehearsal for cross-version database
-  transfer, backup, restore, and rollback.
+  transfer, backup, restore, and rollback. CI exercises the transfer commands
+  end to end on disposable databases with fixture Email data; production-sized
+  rehearsal and role/grant, object-store, NATS, and rollback qualification
+  remain open.
 - Expand browser workflow checks across Admin and Participant payload parity,
   accessibility, responsive behavior, and failure states.
   Current browser checks use intercepted API responses and do not test
