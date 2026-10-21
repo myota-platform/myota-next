@@ -13,6 +13,8 @@ let awardAccount = null;
 let awardAccessToken = localStorage.getItem('myota_public_access') || '';
 let awardRefreshToken = localStorage.getItem('myota_public_refresh') || '';
 let awardRefreshInFlight = null;
+let profileCallsignAddRequest = null;
+const profilePrimaryCallsignRequestKeys = new Map();
 const escapeHtml = (value) =>
   String(value ?? '').replace(
     /[&<>"']/g,
@@ -44,6 +46,8 @@ function clearParticipantSession() {
   awardAccessToken = '';
   awardRefreshToken = '';
   awardAccount = null;
+  profileCallsignAddRequest = null;
+  profilePrimaryCallsignRequestKeys.clear();
   localStorage.removeItem('myota_public_access');
   localStorage.removeItem('myota_public_refresh');
   if ($('activation-start-form')) $('activation-start-form').hidden = true;
@@ -1039,10 +1043,16 @@ async function runProfileCallsignMutation(progress, success, action) {
   setProfileCallsignControlsDisabled(true);
   $('profile-status').textContent = progress;
   try {
-    await action();
+    try {
+      await action();
+    } catch (error) {
+      $('profile-status').textContent = error.message;
+      return;
+    }
     await refreshProfileCallsigns(success);
   } catch (error) {
-    $('profile-status').textContent = error.message;
+    $('profile-status').textContent =
+      `${success} Profile refresh failed: ${error.message}. Reload the profile to confirm the latest state.`;
   } finally {
     profileCallsignBusy = false;
     setProfileCallsignControlsDisabled(false);
@@ -1161,6 +1171,11 @@ async function refreshProfileCallsigns(status) {
 }
 
 async function setProfilePrimaryCallsign(callsign) {
+  let idempotencyKey = profilePrimaryCallsignRequestKeys.get(callsign.id);
+  if (!idempotencyKey) {
+    idempotencyKey = crypto.randomUUID();
+    profilePrimaryCallsignRequestKeys.set(callsign.id, idempotencyKey);
+  }
   await runProfileCallsignMutation(
     'Updating primary callsign…',
     'Primary callsign updated.',
@@ -1171,11 +1186,12 @@ async function setProfilePrimaryCallsign(callsign) {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'Idempotency-Key': crypto.randomUUID(),
+            'Idempotency-Key': idempotencyKey,
           },
           body: JSON.stringify({ callsignId: callsign.id }),
         },
       );
+      profilePrimaryCallsignRequestKeys.delete(callsign.id);
     },
   );
 }
@@ -1187,6 +1203,13 @@ $('profile-callsign-add').onsubmit = async (event) => {
   const validTo = $('profile-callsign-valid-to').value.trim();
   if (validFrom) body.validFrom = validFrom;
   if (validTo) body.validTo = validTo;
+  const fingerprint = `${awardAccount.id}:${JSON.stringify(body)}`;
+  if (profileCallsignAddRequest?.fingerprint !== fingerprint) {
+    profileCallsignAddRequest = {
+      fingerprint,
+      key: crypto.randomUUID(),
+    };
+  }
   await runProfileCallsignMutation(
     'Adding callsign…',
     'Callsign added.',
@@ -1197,11 +1220,12 @@ $('profile-callsign-add').onsubmit = async (event) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Idempotency-Key': crypto.randomUUID(),
+            'Idempotency-Key': profileCallsignAddRequest.key,
           },
           body: JSON.stringify(body),
         },
       );
+      profileCallsignAddRequest = null;
       $('profile-callsign-add').reset();
     },
   );
