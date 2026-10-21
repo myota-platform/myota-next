@@ -11,6 +11,7 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import type { AccessTokenClaims } from '@app/platform/access-token.js';
 import { parsePageTotal, type PageInteger } from '@app/platform/pagination.js';
+import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { assertReviewCoverage } from './geodata-entity-mutation.repository.js';
 import {
@@ -740,7 +741,9 @@ export class GeodataImportMutationRepository {
       );
       const previous = selected.rows[0];
       if (!previous)
-        throw new NotFoundException('import processing queue not found');
+        throw new NotFoundException(
+          pythonKeyErrorDetail('import processing queue not found'),
+        );
       if (previous.status !== 'FAILED')
         throw new BadRequestException(
           'only failed promotion queues can be redriven',

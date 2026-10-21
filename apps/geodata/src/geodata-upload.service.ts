@@ -21,6 +21,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import {
   MAX_GEOJSON_UPLOAD_BYTES,
   MAX_OSM_PBF_UPLOAD_BYTES,
@@ -527,7 +528,10 @@ export class GeodataUploadService {
       [id, owner],
     );
     const row = result.rows[0];
-    if (!row) throw new NotFoundException('upload session not found');
+    if (!row)
+      throw new NotFoundException(
+        pythonKeyErrorDetail('upload session not found'),
+      );
     if (allowCompleted && row.status === 'COMPLETED') return row;
     if (!['UPLOADING', 'COMPLETING'].includes(row.status))
       throw new ConflictException(

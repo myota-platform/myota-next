@@ -16,7 +16,10 @@ import {
 } from '@app/platform/pagination.js';
 import { firstQueryValue } from '@app/platform/query.js';
 import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
-import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import {
+  pythonKeyErrorDetail,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
 import { parsePythonFloatText } from '@app/platform/python-numeric.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { canonicalPythonGeneratedJson } from './geodata-request-fingerprint.js';
@@ -266,7 +269,9 @@ export class GeodataRepository {
       );
       const row = result.rows[0];
       if (!row)
-        throw new NotFoundException('import processing queue not found');
+        throw new NotFoundException(
+          pythonKeyErrorDetail('import processing queue not found'),
+        );
       return {
         id: row.id,
         importRunId: row.import_run_id,
