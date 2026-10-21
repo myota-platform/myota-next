@@ -1,9 +1,10 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { pythonString } from './python-strings.js';
 
 export async function renderCertificatePdf(input: {
   printSpec: Record<string, unknown>;
   elements: Record<string, unknown>[];
-  values: Record<string, string>;
+  values: Record<string, unknown>;
   background?: Buffer;
   signature?: Buffer;
 }) {
@@ -49,14 +50,13 @@ export async function renderCertificatePdf(input: {
       });
       continue;
     }
-    const text = (
-      input.values[String(item.kind)] ??
-      (item.kind === 'MANAGER_SIGNATURE'
-        ? 'Signature preview'
-        : typeof item.label === 'string'
-          ? item.label
-          : '')
-    ).slice(0, 200);
+    const kind = String(item.kind);
+    const value = Object.hasOwn(input.values, kind)
+      ? input.values[kind]
+      : Object.hasOwn(item, 'label')
+        ? item.label
+        : '';
+    const text = Array.from(pythonString(value)).slice(0, 200).join('');
     if (!text) continue;
     let fontSize = Math.max(8, boxHeight * 0.55);
     const textWidth = font.widthOfTextAtSize(text, fontSize);

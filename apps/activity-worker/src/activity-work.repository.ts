@@ -755,11 +755,11 @@ export class ActivityWorkRepository {
       String(signatureAsset.objectKey),
     );
     const values: Record<string, string> = {
-      AWARD_NAME: String(issuance.awardName ?? ''),
-      CALLSIGN: String(issuance.callsign ?? ''),
-      PERSON_NAME: String(issuance.personName ?? ''),
+      AWARD_NAME: pythonString(issuance.awardName),
+      CALLSIGN: pythonString(issuance.callsign),
+      PERSON_NAME: pythonString(issuance.personName),
       DATE_OBTAINED: pythonString(issuance.dateObtained),
-      MANAGER_NAME: String(issuance.managerName ?? ''),
+      MANAGER_NAME: pythonString(issuance.managerName),
     };
     const pdfBytes = await renderCertificatePdf({
       printSpec: spec.printSpec as JsonRecord,

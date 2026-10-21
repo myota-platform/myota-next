@@ -117,7 +117,8 @@ Preview name and manager labels use Python truthiness and `str()` conversion;
 preview DPI accepts the reference's finite fractional values in the 150–300
 range.
 Issuance preserves the submitted `dateObtained` value and defaults it only
-when omitted; certificate rendering converts that value with Python `str()`.
+when omitted; certificate rendering converts award values and element-label
+fallbacks with Python `str()`.
 Award-request fact lookup passes stored programme and category values through,
 with `HUNTER` used only when the stored category is absent.
 ADIF uploads use the reference's shared `MYOTA_UPLOAD_MAX_BYTES` cap (1 GiB by
