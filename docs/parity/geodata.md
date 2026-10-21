@@ -272,7 +272,9 @@ normalizes filename and size before the idempotency lookup, then replays a
 matching key by filename and expected size before validating digest, category,
 and format details. New session metadata stores the first normalized category
 as `entityType`, alongside the complete `entityTypes` list. Reusing a key with
-a different filename or expected size returns HTTP 400.
+a different filename or expected size returns HTTP 400. A truthy `sha256`
+value is converted with Python string semantics before its hexadecimal digest
+validation.
 Multipart upload creation accepts the Python `JSON` format alias and stores it
 as `GEOJSON`, including when inferred from the filename extension.
 Local object-size and malware scan failures delete the assembled object and

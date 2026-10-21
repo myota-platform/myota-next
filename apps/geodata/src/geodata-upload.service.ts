@@ -27,7 +27,10 @@ import {
   pythonKeyErrorDetail,
   pythonString,
 } from '@app/platform/python-strings.js';
-import { missingPythonTruthyFields } from '@app/platform/python-truthiness.js';
+import {
+  missingPythonTruthyFields,
+  pythonTruthy,
+} from '@app/platform/python-truthiness.js';
 import {
   MAX_GEOJSON_UPLOAD_BYTES,
   MAX_OSM_PBF_UPLOAD_BYTES,
@@ -686,8 +689,9 @@ export function validateCreate(
     throw new BadRequestException(
       'entityTypes must contain at least one category',
     );
-  const sha256 =
-    typeof body.sha256 === 'string' ? body.sha256.toLowerCase() : null;
+  const sha256 = pythonTruthy(body.sha256)
+    ? pythonString(body.sha256).toLowerCase()
+    : null;
   if (sha256 && !/^[a-f0-9]{64}$/.test(sha256))
     throw new BadRequestException(
       'sha256 must be a 64-character hexadecimal digest',
