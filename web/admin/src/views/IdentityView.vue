@@ -149,6 +149,7 @@ const evidenceForm = reactive({
 });
 const retireReplacement = ref('');
 const retiringCallsignId = ref('');
+const verificationSource = ref('manual-review');
 const retiringCallsign = computed(() =>
   selectedAccount.value?.callsigns?.find(
     (callsign) => callsign.id === retiringCallsignId.value,
@@ -305,7 +306,9 @@ async function verifyCallsign(callsign: Callsign): Promise<void> {
   await feedback.run(
     async () => {
       await myotaClient.verifyIdentityCallsign(account.id, callsign.id, {
-        source: 'manual-review',
+        ...(verificationSource.value
+          ? { source: verificationSource.value }
+          : {}),
       });
       await refreshSelectedCallsigns(account.id);
     },
@@ -852,6 +855,12 @@ onMounted(load);
           <span class="field-help">
             {{ selectedAccount.callsigns?.length || 0 }} registered
           </span>
+        </div>
+        <div v-if="canVerifyCallsigns" class="form-grid callsign-form">
+          <label class="wide">
+            Verification source
+            <input v-model="verificationSource" placeholder="manual-review" />
+          </label>
         </div>
         <p v-if="!selectedAccount.callsigns?.length" class="empty muted">
           No callsigns are registered on this account.
