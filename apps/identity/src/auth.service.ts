@@ -106,12 +106,12 @@ interface CallsignRow {
   status: string;
   verificationSource: string | null;
   source: string | null;
-  verifiedAt: Date | null;
-  validFrom: Date | null;
-  validTo: Date | null;
+  verifiedAt: string | null;
+  validFrom: string | null;
+  validTo: string | null;
   primary: boolean | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
   evidenceIds: string[];
 }
 
@@ -940,9 +940,16 @@ export class IdentityAuthService {
       `SELECT c.account_id AS "accountId", c.id, c.value,
               c.lifecycle_status AS status, c.source,
               c.verification_source AS "verificationSource",
-              c.verified_at AS "verifiedAt", c.valid_from AS "validFrom",
-              c.valid_to AS "validTo", c.created_at AS "createdAt",
-              c.updated_at AS "updatedAt",
+              to_char(c.verified_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "verifiedAt",
+              to_char(c.valid_from AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "validFrom",
+              to_char(c.valid_to AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "validTo",
+              to_char(c.created_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt",
+              to_char(c.updated_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "updatedAt",
               coalesce(
                 array_agg(e.id ORDER BY e.evidence_order)
                   FILTER (WHERE e.id IS NOT NULL),

@@ -36,10 +36,10 @@ interface AccountRecord {
   biography_markdown: string | null;
   profile_image_id: string | null;
   profile_image_media_type: string | null;
-  profile_image_updated_at: Date | null;
+  profile_image_updated_at: string | null;
   primary_callsign_id: string | null;
-  created_at: Date;
-  updated_at: Date;
+  created_at: string;
+  updated_at: string;
 }
 
 @Injectable()
@@ -96,21 +96,25 @@ export class IdentityCallsignService {
       const verifiedAt =
         status === 'VERIFIED'
           ? (
-              await client.query<{ verified_at: Date }>(
-                'SELECT clock_timestamp() AS verified_at',
+              await client.query<{ verified_at: string }>(
+                `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS verified_at`,
               )
             ).rows[0].verified_at
           : null;
       const callsignResult = await client.query<{
-        created_at: Date;
-        updated_at: Date;
+        created_at: string;
+        updated_at: string;
       }>(
         `INSERT INTO public.callsign
            (id, account_id, value, lifecycle_status, source, verification_source,
             verified_at, valid_from, valid_to, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
                  clock_timestamp(), clock_timestamp())
-         RETURNING created_at, updated_at`,
+         RETURNING to_char(created_at AT TIME ZONE 'UTC',
+                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                   to_char(updated_at AT TIME ZONE 'UTC',
+                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
         [
           id,
           accountId,
@@ -266,22 +270,13 @@ export class IdentityCallsignService {
       if (!callsign.rowCount) throw new NotFoundException('callsign not found');
       const evidenceId = randomUUID();
       const metadata = body.metadata === undefined ? {} : body.metadata;
-      const evidence = {
-        id: evidenceId,
-        callsignId,
-        accountId,
-        evidenceType: body.evidenceType,
-        source: body.source,
-        checksum: body.checksum ?? null,
-        metadata,
-        submittedAt: new Date(),
-        status: 'PENDING',
-      };
-      await client.query(
+      const evidenceResult = await client.query<{ submitted_at: string }>(
         `INSERT INTO public.callsign_evidence
            (id, callsign_id, submitted_by, evidence_type, source,
             checksum, metadata, status, submitted_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, 'PENDING', $8)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, 'PENDING', clock_timestamp())
+         RETURNING to_char(submitted_at AT TIME ZONE 'UTC',
+           'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS submitted_at`,
         [
           evidenceId,
           callsignId,
@@ -290,9 +285,19 @@ export class IdentityCallsignService {
           body.source,
           body.checksum ?? null,
           stringifyJsonWithBigInts(metadata),
-          evidence.submittedAt,
         ],
       );
+      const evidence = {
+        id: evidenceId,
+        callsignId,
+        accountId,
+        evidenceType: body.evidenceType,
+        source: body.source,
+        checksum: body.checksum ?? null,
+        metadata,
+        submittedAt: evidenceResult.rows[0].submitted_at,
+        status: 'PENDING',
+      };
       await writeOutboxEvent(client, {
         eventType: 'identity.callsign.evidence-submitted.v1',
         aggregateType: 'callsign',
@@ -628,9 +633,15 @@ export class IdentityCallsignService {
   private async readAccountView(client: PoolClient, accountId: string) {
     const accountResult = await client.query<AccountRecord>(
       `SELECT a.id, a.display_name, a.email::text AS email,
-              a.participation_type, a.status, a.created_at, a.updated_at,
+              a.participation_type, a.status,
+              to_char(a.created_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+              to_char(a.updated_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at,
               p.website_url, p.biography_markdown, p.profile_image_id,
-              p.profile_image_media_type, p.profile_image_updated_at,
+              p.profile_image_media_type,
+              to_char(p.profile_image_updated_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS profile_image_updated_at,
               primary_call.callsign_id AS primary_callsign_id
          FROM public.account a
          LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
@@ -644,9 +655,16 @@ export class IdentityCallsignService {
     const callsigns = await client.query(
       `SELECT c.id, c.value, c.lifecycle_status AS status, c.source,
               c.verification_source AS "verificationSource",
-              c.verified_at AS "verifiedAt", c.valid_from AS "validFrom",
-              c.valid_to AS "validTo", c.created_at AS "createdAt",
-              c.updated_at AS "updatedAt",
+              to_char(c.verified_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "verifiedAt",
+              to_char(c.valid_from AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "validFrom",
+              to_char(c.valid_to AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "validTo",
+              to_char(c.created_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt",
+              to_char(c.updated_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "updatedAt",
               coalesce(
                 array_agg(e.id ORDER BY e.evidence_order)
                   FILTER (WHERE e.id IS NOT NULL),
