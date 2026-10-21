@@ -1143,6 +1143,7 @@ function updateProfileRetirementReplacement() {
 function beginProfileCallsignRetirement(callsign) {
   $('profile-callsign-retire').hidden = false;
   $('profile-retire-callsign').value = callsign.id;
+  $('profile-retire-valid-to').value = '';
   updateProfileRetirementReplacement();
   $('profile-callsign-retire').scrollIntoView({
     behavior: 'smooth',
@@ -1271,6 +1272,8 @@ $('profile-callsign-retire').onsubmit = async (event) => {
   if (callsignId === awardAccount.primaryCallsignId) {
     body.newPrimaryCallsignId = $('profile-retire-replacement').value;
   }
+  const validTo = $('profile-retire-valid-to').value.trim();
+  if (validTo) body.validTo = validTo;
   await runProfileCallsignMutation(
     'Retiring callsign…',
     'Callsign retired.',

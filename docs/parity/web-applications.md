@@ -46,9 +46,9 @@ candidate listing and review, plus idempotent durable candidate promotion.
 The Identity account editor exposes callsign creation with status, source, and
 validity fields; evidence submission with checksum and metadata; verification
 for callers with `callsign.verify` and a configurable verification source;
-primary selection; and retirement. Owner and global-scope checks follow the
-API authorization rules.
-The Participant profile exposes the owner-authorized callsign actions. These
+primary selection; and retirement with an optional effective date. Owner and
+global-scope checks follow the API authorization rules. The Participant
+profile exposes the owner-authorized callsign actions. These
 callsign controls do not yet have browser-level compatibility coverage.
 The Admin import form also supports resumable KML and GPX file uploads up to
 1 GiB, alongside GeoJSON, OSM PBF, and Shapefile ZIP uploads. The API can

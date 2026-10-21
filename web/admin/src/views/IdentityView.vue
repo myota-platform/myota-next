@@ -148,6 +148,7 @@ const evidenceForm = reactive({
   metadata: '',
 });
 const retireReplacement = ref('');
+const retireValidTo = ref('');
 const retiringCallsignId = ref('');
 const verificationSource = ref('manual-review');
 const retiringCallsign = computed(() =>
@@ -334,10 +335,16 @@ async function retireCallsign(callsign: Callsign): Promise<void> {
   if (!window.confirm(`Retire callsign ${callsign.value}?`)) return;
   await feedback.run(
     async () => {
-      await myotaClient.retireIdentityCallsign(account.id, callsign.id, {
-        ...(isPrimary ? { newPrimaryCallsignId: retireReplacement.value } : {}),
-      });
+      const payload: Record<string, string> = {};
+      if (isPrimary) payload.newPrimaryCallsignId = retireReplacement.value;
+      if (retireValidTo.value) payload.validTo = retireValidTo.value;
+      await myotaClient.retireIdentityCallsign(
+        account.id,
+        callsign.id,
+        payload,
+      );
       retireReplacement.value = '';
+      retireValidTo.value = '';
       retiringCallsignId.value = '';
       await refreshSelectedCallsigns(account.id);
     },
@@ -345,12 +352,9 @@ async function retireCallsign(callsign: Callsign): Promise<void> {
   );
 }
 async function requestCallsignRetirement(callsign: Callsign): Promise<void> {
-  if (selectedAccount.value?.primaryCallsignId === callsign.id) {
-    retiringCallsignId.value = callsign.id;
-    retireReplacement.value = '';
-    return;
-  }
-  await retireCallsign(callsign);
+  retiringCallsignId.value = callsign.id;
+  retireReplacement.value = '';
+  retireValidTo.value = '';
 }
 async function confirmCallsignRetirement(): Promise<void> {
   if (retiringCallsign.value) await retireCallsign(retiringCallsign.value);
@@ -1045,7 +1049,10 @@ onMounted(load);
           @submit.prevent="confirmCallsignRetirement"
         >
           <h4 class="wide">Retire {{ retiringCallsign.value }}</h4>
-          <label class="wide">
+          <label
+            v-if="selectedAccount?.primaryCallsignId === retiringCallsign.id"
+            class="wide"
+          >
             Replacement primary callsign
             <select v-model="retireReplacement" required>
               <option disabled value="">Choose an active callsign</option>
@@ -1061,11 +1068,22 @@ onMounted(load);
               </option>
             </select>
           </label>
+          <label class="wide">
+            Valid to (ISO 8601, optional)
+            <input
+              v-model="retireValidTo"
+              placeholder="Defaults to the current time"
+            />
+          </label>
           <div class="form-actions wide">
             <button
               class="danger"
               type="submit"
-              :disabled="saving || !retireReplacement"
+              :disabled="
+                saving ||
+                (selectedAccount?.primaryCallsignId === retiringCallsign.id &&
+                  !retireReplacement)
+              "
             >
               Retire callsign
             </button>
@@ -1076,6 +1094,7 @@ onMounted(load);
               @click="
                 retiringCallsignId = '';
                 retireReplacement = '';
+                retireValidTo = '';
               "
             >
               Cancel
