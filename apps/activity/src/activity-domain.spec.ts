@@ -1,6 +1,7 @@
 import {
   adifAwardRecalculationKey,
   calculateAdifRejectedRecords,
+  evaluateActivation,
   normalizeQso,
   normalizeTimestamp,
   parseTimestamp,
@@ -101,5 +102,50 @@ describe('QSO normalization compatibility', () => {
         'activation-1',
       ),
     ).toThrow('unsupported mode: FT2');
+  });
+});
+
+describe('activation rule evaluation compatibility', () => {
+  it('preserves the reference violation order and evaluation metadata', () => {
+    const result = evaluateActivation(
+      {
+        startedAt: '2026-10-21T10:00:00Z',
+        validityExpiresAt: '2026-10-21T12:00:00Z',
+        programmeRules: {
+          version: 'rules-v3',
+          minimumQsos: 2,
+          allowedBands: ['20M'],
+          allowedModes: ['FT8'],
+        },
+      },
+      [{ band: '40M', mode: 'SSB' }],
+      '2026-10-21T13:00:00Z',
+    );
+
+    expect(result).toMatchObject({
+      valid: false,
+      violations: [
+        'activation exceeded its validity window',
+        'minimum QSO requirement was not met',
+        'band 40M is not allowed',
+        'mode SSB is not allowed',
+      ],
+      qsoCount: 1,
+      ruleVersion: 'rules-v3',
+    });
+    expect(result.evaluatedAt).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/,
+    );
+  });
+
+  it('ignores a falsey endedAt value like the Python reference', () => {
+    const result = evaluateActivation(
+      { startedAt: '2026-10-21T10:00:00Z', programmeRules: {} },
+      [],
+      '',
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.violations).toEqual([]);
   });
 });
