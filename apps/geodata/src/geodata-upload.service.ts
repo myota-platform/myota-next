@@ -484,15 +484,13 @@ export class GeodataUploadService {
     try {
       const session = await this.findSession(client, id, owner);
       if (session.status !== 'ABORTED') {
-        await this.s3()
-          .send(
-            new AbortMultipartUploadCommand({
-              Bucket: session.bucket,
-              Key: session.object_key,
-              UploadId: session.multipart_upload_id,
-            }),
-          )
-          .catch(() => undefined);
+        await this.s3().send(
+          new AbortMultipartUploadCommand({
+            Bucket: session.bucket,
+            Key: session.object_key,
+            UploadId: session.multipart_upload_id,
+          }),
+        );
         await client.query(
           "UPDATE geodata_upload_session SET status='ABORTED',updated_at=now() WHERE id=$1",
           [id],

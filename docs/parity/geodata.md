@@ -278,6 +278,9 @@ as `GEOJSON`, including when inferred from the filename extension.
 Local object-size and malware scan failures delete the assembled object and
 mark the upload session `FAILED`; scanner service outages leave the completion
 handoff retryable, matching the Python error paths.
+Abort requests mark a session `ABORTED` only after object storage confirms the
+multipart abort; storage failures propagate and preserve the current session
+status.
 For multipart upload scanning, NestJS maps
 a ClamAV non-2xx response and transport failure to HTTP 500 with the reference
 scanner-unavailable detail. Local malware detection remains HTTP 400. Both
