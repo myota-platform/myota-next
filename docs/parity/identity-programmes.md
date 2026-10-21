@@ -142,8 +142,13 @@ permission and validation precedence plus Identity-administrator role
 escalation denial to the Python handler. Recovery fixtures cover account
 enumeration behavior, one-time token use, password length, and session
 revocation. Login tests verify the eight-attempt general limit and the
-global-operator bypass. Account, callsign, recovery, and authorization sequence
-behavior still require broader automated compatibility coverage.
+global-operator bypass. An account-export fixture now verifies owner scoping
+before database access, a repeatable-read snapshot, and stable order across
+account callsigns, roles, callsign evidence, and security events. It also checks
+that evidence metadata and event payload integers beyond JavaScript's safe
+range remain exact after export. Broader account, callsign, recovery, and
+authorization sequence behavior still require automated compatibility
+coverage.
 The PostgreSQL-backed Identity HTTP fixture also exercises bootstrap account
 provisioning, password login, the authenticated current-account route, and
 single-use refresh rotation through the real Nest controller and service.
@@ -158,6 +163,10 @@ participant through Gateway, verifies the returned account and pending setup
 message, grants an additional permitted Activity role, and confirms the account
 appears in the refreshed list. It then adds a callsign, submits verification
 evidence, and verifies the callsign through the live Identity API.
+The same browser workflow exports the resulting account and checks that its
+security events retain account-creation, evidence-submission, and verification
+order. This complements the service fixture's snapshot, access-control, and
+exact-integer export checks with persisted database behavior.
 Login, refresh, recovery request/reset, and OIDC mapping use the reference's
 Python-truthy required-field checks before authentication or persistence, with
 the same `missing required fields` response precedence.
