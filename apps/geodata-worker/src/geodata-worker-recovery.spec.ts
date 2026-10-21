@@ -75,7 +75,14 @@ async function verifyBrokerRecovery() {
 
   const completedJobs = new Set<string>();
   const executionOrder: string[] = [];
+  const processedPreprocessing: string[] = [];
+  const processedPromotions: string[] = [];
+  const processedEnrichments: string[] = [];
   const workRepository = {
+    claim: vi.fn(async (importRunId: string) => ({ importRunId })),
+    preprocess: vi.fn(async ({ importRunId }: { importRunId: string }) => {
+      processedPreprocessing.push(importRunId);
+    }),
     staleCancellationIds: vi.fn(async () => []),
     recoverExpiredWorkDispatches: vi.fn(async () => ({
       preprocessing: 0,
@@ -83,6 +90,21 @@ async function verifyBrokerRecovery() {
       deletion: 0,
       enrichment: 0,
     })),
+  };
+  const promotion = {
+    claimPromotion: vi.fn(async (queueId: string) => ({ queueId })),
+    processPromotion: vi.fn(async ({ queueId }: { queueId: string }) => {
+      processedPromotions.push(queueId);
+    }),
+  };
+  const enrichment = {
+    claim: vi.fn(async (entityId: string, requestId: string) => ({
+      entityId,
+      requestId,
+    })),
+    process: vi.fn(async ({ requestId }: { requestId: string }) => {
+      processedEnrichments.push(requestId);
+    }),
   };
   const deletions = {
     claim: vi.fn(async (jobId: string) =>
@@ -106,6 +128,10 @@ async function verifyBrokerRecovery() {
   let publisher: Awaited<ReturnType<typeof connect>> | undefined;
   let worker: GeodataWorkerService | undefined;
   const jobIds = [randomUUID(), randomUUID()];
+  const importRunId = randomUUID();
+  const queueId = randomUUID();
+  const entityId = randomUUID();
+  const requestId = randomUUID();
   try {
     server = await startRecoveryJetStream(natsPort, directory);
     publisher = await connect({
@@ -174,8 +200,8 @@ async function verifyBrokerRecovery() {
 
     worker = new GeodataWorkerService(
       workRepository as never,
-      {} as never,
-      {} as never,
+      promotion as never,
+      enrichment as never,
       deletions as never,
       retention as never,
       null,
@@ -214,12 +240,46 @@ async function verifyBrokerRecovery() {
     const restartedManager = await jetstreamManager(publisher);
     await restartedManager.streams.info('MYOTA_GEODATA_WORK');
     await publishDeletion(publisher, jobIds[1]!);
+    await publishGeodataWork(
+      publisher,
+      'geodata.import-preprocess.v1',
+      importRunId,
+      { type: 'import_run', id: importRunId },
+      { importRunId },
+    );
+    await publishGeodataWork(
+      publisher,
+      'geodata.import-promotion.v1',
+      queueId,
+      { type: 'import_processing_queue', id: queueId },
+      { queueId },
+    );
+    await publishGeodataWork(
+      publisher,
+      'geodata.location-enrichment.v1',
+      requestId,
+      { type: 'entity', id: entityId },
+      {
+        entityId,
+        requestId,
+        geometryHash: 'a'.repeat(64),
+        onlyMissing: true,
+        reason: 'restart-recovery',
+      },
+    );
     await waitForRecovery(
-      () => completedJobs.has(jobIds[1]!),
-      'Geodata durable did not resume delivery after broker restart',
+      () =>
+        completedJobs.has(jobIds[1]!) &&
+        processedPreprocessing.includes(importRunId) &&
+        processedPromotions.includes(queueId) &&
+        processedEnrichments.includes(requestId),
+      'Geodata work durables did not resume delivery after broker restart',
     );
 
     expect(executionOrder).toEqual(jobIds);
+    expect(processedPreprocessing).toEqual([importRunId]);
+    expect(processedPromotions).toEqual([queueId]);
+    expect(processedEnrichments).toEqual([requestId]);
     expect(deletions.execute).toHaveBeenCalledTimes(2);
   } finally {
     if (worker) await worker.onModuleDestroy().catch(() => undefined);
@@ -237,17 +297,33 @@ async function publishDeletion(
   publisher: Awaited<ReturnType<typeof connect>>,
   jobId: string,
 ) {
+  await publishGeodataWork(
+    publisher,
+    'geodata.entity-delete.v1',
+    jobId,
+    { type: 'entity_deletion_job', id: jobId },
+    { jobId },
+  );
+}
+
+async function publishGeodataWork(
+  publisher: Awaited<ReturnType<typeof connect>>,
+  workType: string,
+  workId: string,
+  aggregate: { type: string; id: string },
+  payload: Record<string, unknown>,
+) {
   await jetstream(publisher).publish(
-    'myota.work.geodata.entity-delete.v1',
+    `myota.work.${workType}`,
     new TextEncoder().encode(
       stringifyJsonWithBigInts({
         envelopeVersion: 1,
-        workId: jobId,
-        workType: 'geodata.entity-delete.v1',
+        workId,
+        workType,
         producer: 'geodata',
         createdAt: new Date().toISOString(),
-        aggregate: { type: 'entity_deletion_job', id: jobId },
-        payload: { jobId },
+        aggregate,
+        payload,
       }),
     ),
   );
