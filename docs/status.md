@@ -28,6 +28,7 @@ this page summarizes the current state and remaining release gates.
   submission, and job status refresh; award draft creation, review, and
   publication; shared category creation with geometry and inactive lifecycle
   settings; Geodata conflation decisions with survivor and reviewer notes;
+  refresh schedule creation and manual complete-snapshot submission;
   Participant catalogue browsing, activation and QSO lifecycle, profile details
   and image editing, eligible award requests, and candidate and map-picked point
   proposals.

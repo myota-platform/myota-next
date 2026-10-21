@@ -589,7 +589,9 @@ the submit, approve, and publish lifecycle. Master data browser checks cover sha
 category creation, geometry type selection, inactive lifecycle, and the
 idempotency key. Conflation review browser checks cover a keep-separate
 decision, survivor selection, reviewer attribution, and note. Other Admin
-workflows still lack browser-level compatibility coverage. The award catalogue follows all API
+workflows still lack browser-level compatibility coverage. Refresh schedule
+checks cover programme-scoped schedule creation and queuing a complete manual
+GeoJSON snapshot. The award catalogue follows all API
 pages. Remaining work includes accessibility/visual review and deployment
 integration. Its public map renders point, line, polygon, and multipart entity
 geometries.
