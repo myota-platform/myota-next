@@ -30,6 +30,9 @@ with `JSON body must be an object`, matching the reference parser.
 The Gateway forwards W3C `traceparent` and `tracestate` headers to the owning
 API, permits them in browser preflight requests, and passes trace headers back
 to clients when an upstream provides them.
+Configured upstream base URLs may end in multiple slashes; the Gateway and
+Geodata deletion cascade remove all trailing slashes before appending a path,
+matching the Python reference.
 It bypasses request-body parsing, streams incoming bodies to the owning API,
 and preserves the declared `Content-Length` for binary and JSON payloads.
 When it forwards an already parsed JSON body, its serializer preserves exact
