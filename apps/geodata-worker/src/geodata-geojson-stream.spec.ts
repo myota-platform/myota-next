@@ -10,6 +10,38 @@ import {
 } from './geodata-geojson-stream.js';
 
 describe('GeoJSON streaming reference parity', () => {
+  it('streams Feature records from a top-level array', async () => {
+    const source = Buffer.from(
+      '[{"type":"Feature","properties":{"name":"Array feature"},"geometry":{"type":"Point","coordinates":[-5.99,37.39]}}]',
+    );
+    async function* chunks() {
+      yield source;
+    }
+
+    const features = [];
+    for await (const feature of streamGeoJsonFeatures(
+      chunks(),
+      '',
+      10,
+      {
+        crs: undefined,
+        crsSourceKey: 'spatialReference',
+        rootType: undefined,
+      },
+      async () => undefined,
+    )) {
+      features.push(feature);
+    }
+
+    expect(features).toMatchObject([
+      {
+        type: 'Feature',
+        properties: { name: 'Array feature' },
+        geometry: { type: 'Point', coordinates: [-5.99, 37.39] },
+      },
+    ]);
+  });
+
   it.skipIf(process.platform !== 'linux')(
     'streams the Python 300,000-feature GeoJSON RSS workload',
     async () => {

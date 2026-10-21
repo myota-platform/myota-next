@@ -14,10 +14,6 @@ import {
 const MAX_NESTING_DEPTH = 128;
 const PARSER_CHUNK_BYTES = 64 * 1024;
 const MAX_ROOT_KEY_BYTES = 1024;
-// @streamparser/json exports these enum values as a const enum, unavailable
-// under this project's isolated module compilation.
-const TOKEN_PARSER_OBJECT_MODE = 0;
-const TOKEN_PARSER_ARRAY_MODE = 1;
 const sourceJsonByFeature = new WeakMap<
   object,
   {
@@ -79,8 +75,7 @@ export async function readGeoJsonDocumentMetadata(
   const sourceLimit = MAX_GEOJSON_UPLOAD_BYTES;
 
   parser.onValue = ({ value, key, stack }) => {
-    if (stack.length !== 1 || stack[0]?.mode !== TOKEN_PARSER_OBJECT_MODE)
-      return;
+    if (stack.length !== 1 || key === undefined) return;
     if (key === 'type' && !hasRootType) {
       rootType = value;
       hasRootType = true;
@@ -188,17 +183,14 @@ export async function* streamGeoJsonFeatures(
             keepStack: false,
             stringBufferSize: 64 * 1024,
           });
-          parser.onValue = ({ value, stack }) => {
+          parser.onValue = ({ value, parent, stack }) => {
             const isTopLevelArrayItem =
-              rootIsArray &&
-              stack.length === 1 &&
-              stack[0]?.mode === TOKEN_PARSER_ARRAY_MODE;
+              rootIsArray && stack.length === 1 && Array.isArray(parent);
             const isFeatureCollectionItem =
               rootIsCollection &&
               stack.length === 2 &&
-              stack[0]?.mode === TOKEN_PARSER_OBJECT_MODE &&
-              stack[1]?.mode === TOKEN_PARSER_ARRAY_MODE &&
-              stack[1]?.key === 'features';
+              stack[1]?.key === 'features' &&
+              Array.isArray(parent);
             const isSingleObject =
               !rootIsArray && !rootIsCollection && stack.length === 0;
             if (
