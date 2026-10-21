@@ -13,6 +13,7 @@ import {
 import { parsePythonFloatText } from '@app/platform/python-numeric.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
 import { createUploadSpoolDirectory } from '@app/platform/upload-spool.js';
+import { canonicalPythonGeneratedJson } from '../../geodata/src/geodata-request-fingerprint.js';
 
 type Feature = {
   type: 'Feature';
@@ -22,6 +23,11 @@ type Feature = {
 
 const parserChunkBytes = 64 * 1024;
 const maximumHeartbeatBytes = 32 * 1024 * 1024;
+const nonfiniteTrackCoordinateMarkers = {
+  nan: '\u0000myota-nan',
+  positiveInfinity: '\u0000myota-positive-infinity',
+  negativeInfinity: '\u0000myota-negative-infinity',
+};
 
 /** Stream KML placemarks or GPX waypoints and track segments from an uploaded object. */
 export async function* streamXmlFeatures(
@@ -68,7 +74,7 @@ export async function* streamXmlFeatures(
   };
   const local = (name: string) => name.split(':').at(-1) ?? name;
   const addFeature = (feature: Feature, deferForGpxOrder = false) => {
-    const encoded = stringifyJsonWithBigInts(feature) ?? 'null';
+    const encoded = canonicalPythonGeneratedJson(feature, () => true);
     if (Buffer.byteLength(encoded, 'utf8') > MAX_IMPORT_FEATURE_BYTES)
       fail(
         `a source feature exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
@@ -76,7 +82,8 @@ export async function* streamXmlFeatures(
     featureCount++;
     if (featureCount > featureLimit)
       fail(`geodata import contains more than ${featureLimit} features`);
-    if (deferForGpxOrder) deferredTrackOutput.push(encoded);
+    if (deferForGpxOrder)
+      deferredTrackOutput.push(serializeDeferredTrackFeature(feature));
     else output.push(feature);
   };
   const flushDeferredTrackOutput = async () => {
@@ -348,7 +355,8 @@ export async function* streamXmlFeatures(
         input: createReadStream(trackSpoolPath!),
         crlfDelay: Infinity,
       });
-      for await (const line of lines) yield JSON.parse(line) as Feature;
+      for await (const line of lines)
+        yield deserializeDeferredTrackFeature(line);
     }
   } finally {
     await trackSpool?.close().catch(() => undefined);
@@ -372,4 +380,45 @@ function parseCoordinateNumber(value: string): number | undefined {
   } catch {
     return undefined;
   }
+}
+
+function serializeDeferredTrackFeature(feature: Feature): string {
+  const encoded = stringifyJsonWithBigInts({
+    ...feature,
+    geometry: {
+      ...feature.geometry,
+      coordinates: mapTrackCoordinateMarkers(
+        feature.geometry.coordinates,
+        false,
+      ),
+    },
+  });
+  return encoded ?? 'null';
+}
+
+function deserializeDeferredTrackFeature(line: string): Feature {
+  const feature = JSON.parse(line) as Feature;
+  feature.geometry.coordinates = mapTrackCoordinateMarkers(
+    feature.geometry.coordinates,
+    true,
+  );
+  return feature;
+}
+
+function mapTrackCoordinateMarkers(value: unknown, restore: boolean): unknown {
+  if (Array.isArray(value))
+    return value.map((child) => mapTrackCoordinateMarkers(child, restore));
+  if (!restore && typeof value === 'number' && !Number.isFinite(value)) {
+    if (Number.isNaN(value)) return nonfiniteTrackCoordinateMarkers.nan;
+    return value > 0
+      ? nonfiniteTrackCoordinateMarkers.positiveInfinity
+      : nonfiniteTrackCoordinateMarkers.negativeInfinity;
+  }
+  if (restore && value === nonfiniteTrackCoordinateMarkers.nan)
+    return Number.NaN;
+  if (restore && value === nonfiniteTrackCoordinateMarkers.positiveInfinity)
+    return Number.POSITIVE_INFINITY;
+  if (restore && value === nonfiniteTrackCoordinateMarkers.negativeInfinity)
+    return Number.NEGATIVE_INFINITY;
+  return value;
 }
