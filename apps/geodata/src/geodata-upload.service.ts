@@ -627,7 +627,7 @@ export class GeodataUploadService {
       row.filename !== input.filename ||
       Number(row.expected_size) !== input.expectedSize
     )
-      throw new ConflictException(
+      throw new BadRequestException(
         'Idempotency-Key was already used for different upload metadata',
       );
     return {
