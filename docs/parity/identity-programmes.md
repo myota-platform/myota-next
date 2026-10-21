@@ -40,7 +40,10 @@ Role definitions sort by code point, matching Python's string ordering for
 custom codes containing underscores.
 Role-definition POST and PATCH authenticate before DTO validation; PATCH also
 resolves and rejects built-in definitions before validating the submitted
-fields, matching the Python handler's response precedence.
+fields, matching the Python handler's response precedence. Role creation checks
+truthy `code` and `name` values before applying Python `str()` conversion;
+create and update preserve JSON float tokens such as `1.0` in those fields.
+Empty or duplicate normalized role codes return the reference's 400 response.
 An authorized PATCH for a missing custom role returns the reference's quoted
 role-code 404 detail.
 Owner profile updates authenticate and check revocation and account availability

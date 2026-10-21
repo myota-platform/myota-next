@@ -34,7 +34,16 @@ function parseJson(rawBody: string, preserveLargeIntegers: boolean): unknown {
         return Number(integer);
       return integer;
     }
-    if (Array.isArray(value)) return value.map(materialize);
+    if (Array.isArray(value)) {
+      let floatKeys: Set<string> | undefined;
+      const items = value.map((item, index) => {
+        if (item instanceof JsonNumber && item.floating)
+          (floatKeys ??= new Set()).add(String(index));
+        return materialize(item);
+      });
+      if (floatKeys) floatingFields.set(items, floatKeys);
+      return items;
+    }
     if (isRecord(value)) {
       let floatKeys: Set<string> | undefined;
       for (const [key, item] of Object.entries(value)) {

@@ -152,6 +152,8 @@ export async function bootstrapHttpService(
               '/v1/entity-types',
               '/v1/activations',
               '/v1/awards/evaluation-jobs',
+              '/v1/identity/admin/roles',
+              '/v1/identity/roles',
             ].includes(path) ||
             /^\/v1\/geodata\/imports\/[^/]+\/(?:candidates\/validate|process|processed)$/.test(
               path,
@@ -168,7 +170,8 @@ export async function bootstrapHttpService(
               path,
             ) ||
             /^\/v1\/qsos\/[^/]+\/corrections$/.test(path) ||
-            /^\/v1\/programmes\/[^/]+\/entity-types$/.test(path)
+            /^\/v1\/programmes\/[^/]+\/entity-types$/.test(path) ||
+            /^\/v1\/identity\/roles\/[^/]+$/.test(path)
           )
             Object.assign(request, { rawBody: buffer });
         },
@@ -189,6 +192,8 @@ export async function bootstrapHttpService(
             '/v1/activations',
             '/v1/awards/evaluation-jobs',
             '/v1/entity-types',
+            '/v1/identity/admin/roles',
+            '/v1/identity/roles',
           ].includes(path) ||
             /^\/v1\/programmes\/[^/]+\/entity-types$/.test(path))) ||
         (request.method === 'PATCH' &&
@@ -197,7 +202,9 @@ export async function bootstrapHttpService(
           (/^\/v1\/qsos\/[^/]+\/corrections$/.test(path) ||
             /^\/v1\/geodata\/entity-deletion-jobs\/[^/]+\/confirm$/.test(
               path,
-            )));
+            ))) ||
+        (request.method === 'PATCH' &&
+          /^\/v1\/identity\/roles\/[^/]+$/.test(path));
       if (
         (exactIntegerRequest || floatMetadataRequest) &&
         Buffer.isBuffer((request as Request & { rawBody?: Buffer }).rawBody)

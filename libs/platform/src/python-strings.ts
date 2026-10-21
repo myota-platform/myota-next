@@ -53,10 +53,15 @@ export function pythonString(value: unknown): string {
   if (value === null) return 'None';
   if (typeof value === 'boolean') return value ? 'True' : 'False';
   if (Array.isArray(value))
-    return `[${value.map(pythonRepr).join(', ')}]`;
+    return `[${value
+      .map((item, index) => pythonRepr(item, value, String(index)))
+      .join(', ')}]`;
   if (typeof value === 'object') {
     return `{${Object.entries(value)
-      .map(([key, item]) => `${pythonKeyErrorDetail(key)}: ${pythonRepr(item)}`)
+      .map(
+        ([key, item]) =>
+          `${pythonKeyErrorDetail(key)}: ${pythonRepr(item, value, key)}`,
+      )
       .join(', ')}}`;
   }
   if (typeof value === 'number' || typeof value === 'bigint')
@@ -76,10 +81,10 @@ export function pythonStringJsonField(
   return pythonString(value);
 }
 
-function pythonRepr(value: unknown): string {
-  return typeof value === 'string'
-    ? pythonKeyErrorDetail(value)
-    : pythonString(value);
+function pythonRepr(value: unknown, parent: object, field: string): string {
+  if (typeof value === 'number' && isJsonFloatingField(parent, field))
+    return pythonFloatString(value);
+  return typeof value === 'string' ? pythonKeyErrorDetail(value) : pythonString(value);
 }
 
 export function collapsePythonWhitespace(value: string): string {

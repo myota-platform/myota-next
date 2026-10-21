@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -13,8 +12,10 @@ import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
 import {
   pythonKeyErrorDetail,
+  pythonStringJsonField,
   trimPythonWhitespace,
 } from '@app/platform/python-strings.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { IdentityAuthService } from './auth.service.js';
 import { AdminRoleDefinitionDto } from './auth.dto.js';
 import {
@@ -106,18 +107,26 @@ export class IdentityRoleService {
       ['identity.roles.manage'],
       'identity.roles.manage scope is required',
     );
-    const body = await validateAdminRoleDefinitionBody(rawBody);
-    if (!body.code || !body.name) {
-      throw new BadRequestException('code and name are required');
-    }
-    const code = trimPythonWhitespace(body.code)
+    const source = asRecord(rawBody);
+    const missing = ['code', 'name'].filter(
+      (field) => !pythonTruthy(source[field]),
+    );
+    if (missing.length)
+      throw new BadRequestException(
+        `missing required fields: ${missing.join(', ')}`,
+      );
+    const body = await validateAdminRoleDefinitionBody({
+      ...source,
+      code: pythonStringJsonField(source, 'code'),
+      name: pythonStringJsonField(source, 'name'),
+    });
+    const code = trimPythonWhitespace(body.code ?? '')
       .toUpperCase()
       .replace(/[^A-Z0-9_]+/g, '_')
       .replace(/^_+|_+$/g, '');
-    const name = trimPythonWhitespace(body.name);
-    if (!code || !name) {
-      throw new BadRequestException('role code and name must not be empty');
-    }
+    const name = trimPythonWhitespace(body.name ?? '');
+    if (!code)
+      throw new BadRequestException('role code is empty or already exists');
     const scopes = this.validateScopes(body.scopes ?? []);
     const client = await this.connect();
     try {
@@ -130,7 +139,7 @@ export class IdentityRoleService {
         exists.rowCount ||
         DEFAULT_ROLE_DEFINITIONS.some((role) => role.code === code)
       ) {
-        throw new ConflictException('role code is empty or already exists');
+        throw new BadRequestException('role code is empty or already exists');
       }
       const result = await client.query<{
         code: string;
@@ -159,7 +168,7 @@ export class IdentityRoleService {
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       if (isUniqueViolation(error)) {
-        throw new ConflictException('role code is empty or already exists');
+        throw new BadRequestException('role code is empty or already exists');
       }
       throw error;
     } finally {
@@ -210,12 +219,19 @@ export class IdentityRoleService {
           'built-in role definitions cannot be edited',
         );
       }
-      const body = await validateAdminRoleDefinitionBody(rawBody);
+      const source = asRecord(rawBody);
+      if ('name' in source && !pythonTruthy(source.name))
+        throw new BadRequestException('missing required fields: name');
+      const body = await validateAdminRoleDefinitionBody(
+        'name' in source
+          ? {
+              ...source,
+              name: pythonStringJsonField(source, 'name'),
+            }
+          : source,
+      );
       const name =
-        body.name === undefined
-          ? current.name
-          : trimPythonWhitespace(body.name);
-      if (!name) throw new BadRequestException('role name must not be empty');
+        'name' in source ? trimPythonWhitespace(body.name ?? '') : current.name;
       const description = body.description ?? current.description;
       const scopes =
         body.scopes === undefined
@@ -321,6 +337,12 @@ function isUniqueViolation(error: unknown): boolean {
     'code' in error &&
     error.code === '23505'
   );
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 const adminRoleValidationPipe = new ValidationPipe({
