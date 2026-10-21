@@ -70,10 +70,11 @@ async function applySql(url, sql) {
   }
 }
 
-async function query(url, sql, values = []) {
+async function query(url, sql, values = [], setupSql) {
   const client = new Client({ connectionString: url });
   await client.connect();
   try {
+    if (setupSql) await client.query(setupSql);
     return await client.query(sql, values);
   } finally {
     await client.end();
@@ -183,6 +184,8 @@ try {
     `INSERT INTO public.geodata_entity (id,name,geom)
      VALUES ('00000000-0000-4000-8000-000000000004','Transfer Fixture',
              ST_SetSRID(ST_Point(13.405,52.52),4326))`,
+    [],
+    `SELECT set_config('myota.geodata_writer','row-v1',false)`,
   );
 
   const emailName = names['email-source'];
