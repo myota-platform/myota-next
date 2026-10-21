@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { verifyAccessToken } from '@app/platform/access-token.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   nextPageIfMore,
   pageOffset,
@@ -248,7 +249,7 @@ export class ProgrammeContentService {
       return this.submit(authorization, slug, contentId, idempotencyKey);
     }
     if (body.status === 'APPROVED' || body.status === 'CHANGES_REQUESTED') {
-      if (!body.reviewerId) {
+      if (!pythonTruthy(body.reviewerId)) {
         throw new BadRequestException('reviewerId is required');
       }
       return this.review(
@@ -257,14 +258,17 @@ export class ProgrammeContentService {
         contentId,
         {
           decision: body.status,
-          reviewerId: body.reviewerId,
+          reviewerId: body.reviewerId as string,
           note: body.note,
         },
         idempotencyKey,
       );
     }
     if (body.status === 'PUBLISHED') {
-      if (!body.effectiveFrom || !body.publisherId) {
+      if (
+        !pythonTruthy(body.effectiveFrom) ||
+        !pythonTruthy(body.publisherId)
+      ) {
         throw new BadRequestException(
           'effectiveFrom and publisherId are required',
         );
@@ -273,7 +277,10 @@ export class ProgrammeContentService {
         authorization,
         slug,
         contentId,
-        { effectiveFrom: body.effectiveFrom, publisherId: body.publisherId },
+        {
+          effectiveFrom: body.effectiveFrom as string,
+          publisherId: body.publisherId as string,
+        },
         idempotencyKey,
       );
     }

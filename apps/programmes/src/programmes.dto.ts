@@ -11,18 +11,7 @@ import {
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 
 function validateContentPatchFields(object: { status?: unknown }) {
-  const status = object.status;
-  return (
-    !pythonTruthy(status) ||
-    (typeof status === 'string' &&
-      [
-        'DRAFT',
-        'CHANGES_REQUESTED',
-        'UNDER_REVIEW',
-        'APPROVED',
-        'PUBLISHED',
-      ].includes(status))
-  );
+  return !pythonTruthy(object.status);
 }
 
 export class CreateProgrammeDto {
