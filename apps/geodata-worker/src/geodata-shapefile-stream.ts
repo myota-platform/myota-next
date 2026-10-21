@@ -122,7 +122,7 @@ export async function* streamShapefileFeatures(
     }
 
     const shapeEntry = [...members.entries()].find(([, member]) =>
-      member.name.endsWith('.shp'),
+      member.name.toLowerCase().endsWith('.shp'),
     );
     if (!shapeEntry) throw new Error('Shapefile ZIP must contain a .shp file');
     const [shapeName, shape] = shapeEntry;

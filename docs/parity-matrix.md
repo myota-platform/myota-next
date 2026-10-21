@@ -411,7 +411,8 @@ Pasted KML and GPX are
 also converted to GeoJSON with XML document types rejected and bounded
 feature/coordinate counts. Multipart uploads accept GeoJSON and bounded
 Shapefile ZIP archives with matching sidecars (`SHAPEFILE`, `SHP`, and the
-legacy `PARKSERVE_US` format alias); Shapefile coordinates are reprojected from
+legacy `PARKSERVE_US` format alias); Shapefile member extensions and matching
+sidecars are case-insensitive as in PyShp. Shapefile coordinates are reprojected from
 the supplied `.prj` to WGS84, and NULL shape records fail preprocessing as in
 PyShp's GeoJSON conversion. OSM PBF uploads are decoded by
 `osmium-tool` in the Geodata worker image, preserve OSM tags and type/id source
