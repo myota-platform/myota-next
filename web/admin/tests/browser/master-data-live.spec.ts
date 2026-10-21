@@ -10,9 +10,10 @@ test('creates shared categories and assigns them to a live programme', async ({
   if (!databaseUrl) return;
 
   const fixtureId = randomUUID();
+  const categoryCodeSuffix = fixtureId.replaceAll('-', '').toUpperCase();
   const categoryCodes = [
-    `LIVE_${fixtureId.slice(0, 8).toUpperCase()}`,
-    `LIVE_${fixtureId.slice(8, 16).toUpperCase()}`,
+    `LIVE_${categoryCodeSuffix.slice(0, 8)}`,
+    `LIVE_${categoryCodeSuffix.slice(8, 16)}`,
   ];
   const programmeSlug = `live-${fixtureId.slice(0, 8)}`;
   const categoryLabels = [
@@ -62,6 +63,9 @@ test('creates shared categories and assigns them to a live programme', async ({
         .fill('Live shared category fixture.');
       await page.getByRole('button', { name: 'Save category' }).click();
       await expect(page.getByText('Category saved.')).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: new RegExp(categoryLabels[index]!) }),
+      ).toContainText('Active');
     }
 
     await page.goto('/programmes');
