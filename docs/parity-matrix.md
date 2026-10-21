@@ -343,8 +343,11 @@ normalized records can complete with its rejected-row errors. The persisted
 `recordsSeen - recordsAccepted + normalizationErrorCount`, including its
 additional count for normalization errors. ADIF-triggered award recalculation
 uses the Python batch key `batch:<activationId>:<firstQsoDeduplicationKey>`.
-Automated
-broader compatibility and outage/recovery qualification remain outstanding.
+CI kills an Activity statistics-rebuild worker after it claims a job, expires
+the lease, and verifies the reclaimed job completes with the expected summary
+snapshots. This qualifies database lease takeover for one Activity job kind;
+broader compatibility and broker-outage recovery qualification remain
+outstanding.
 Failed or queued Activity jobs can be redriven by administrators with
 an audited reason. Failed-job redrive preserves the delivery-attempt counter,
 matching the pinned Python repository. Long-running Activity jobs now extend their 120-second leases
@@ -734,8 +737,9 @@ geometries.
   processing settles, and long scheduled waits are cleared on shutdown.
   Notifications are handled by the separate consumer described below. ADIF
   source-object retention is scheduled, and queued jobs missing an outbox
-  command are repaired periodically; other retention and recovery evidence
-  remain open.
+  command are repaired periodically. A process-kill qualification covers
+  statistics-rebuild lease takeover; other job kinds, broker outages, and
+  retention recovery evidence remain open.
 - Identity maintenance: expired recovery tokens, revoked sessions, expired
   revocations, rate-limit windows, old security events, and aged orphan profile
   images are cleaned by a separate Core-owned worker.

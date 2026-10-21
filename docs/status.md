@@ -50,7 +50,9 @@ behavioral parity or production readiness.
 - Exercise broker and object-store outages, retries, recovery, and redrive
   against disposable infrastructure. CI now covers Activity notification
   replica sharing, durable resume after a worker restart, and audited dead-letter
-  redrive; other worker and object-store recovery paths remain to be qualified.
+  redrive. It also verifies Activity statistics-job lease takeover after a
+  worker process kill and Geodata import preprocessing replay after committed
+  staging; other worker and object-store recovery paths remain to be qualified.
 - Complete the semantic review and rehearsal for cross-version database
   transfer, backup, restore, and rollback. CI exercises the transfer commands
   end to end on disposable databases with Identity, Programme, Activity,
