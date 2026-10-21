@@ -21,7 +21,10 @@ single-QSO entry, profile editing and image management, and owner callsign
 creation, evidence submission, primary selection, and retirement. Chromium browser checks
 exercise Admin sign-in, identity session bootstrap, scope denial, Participant
 programme selection and public content, and its activation, QSO, and close
-workflow, profile details editing, image crop/upload, an eligible award
+workflow. Activation creation, QSO recording, and activation close retain their
+request body and idempotency key for retries with unchanged inputs, preventing
+duplicate mutations after an uncertain network response. Browser checks also
+cover profile details editing, image crop/upload, an eligible award
 request, safe biography Markdown preview, and existing-candidate and map-picked
 point proposals with intercepted API responses. Admin browser checks also cover
 sign-in, session bootstrap,

@@ -13,6 +13,7 @@ let awardAccount = null;
 let awardAccessToken = localStorage.getItem('myota_public_access') || '';
 let awardRefreshToken = localStorage.getItem('myota_public_refresh') || '';
 let awardRefreshInFlight = null;
+const pendingParticipantMutations = new Map();
 let profileCallsignAddRequest = null;
 const profilePrimaryCallsignRequestKeys = new Map();
 const escapeHtml = (value) =>
@@ -42,10 +43,20 @@ async function awardApi(path, options = {}) {
     );
   return body;
 }
+function pendingParticipantMutation(operation, identity, body) {
+  const id = JSON.stringify([operation, identity]);
+  let request = pendingParticipantMutations.get(id);
+  if (!request) {
+    request = { id, key: crypto.randomUUID(), body };
+    pendingParticipantMutations.set(id, request);
+  }
+  return request;
+}
 function clearParticipantSession() {
   awardAccessToken = '';
   awardRefreshToken = '';
   awardAccount = null;
+  pendingParticipantMutations.clear();
   profileCallsignAddRequest = null;
   profilePrimaryCallsignRequestKeys.clear();
   localStorage.removeItem('myota_public_access');
@@ -786,27 +797,32 @@ async function startActivation(event) {
     return;
   }
   $('activation-status').textContent = 'Starting activation…';
+  const identity = {
+    programmeSlug: programme.slug,
+    entityId: entity.id,
+    operatorId: awardAccount.id,
+    operatorCallsign: callsign.value,
+    callsignLifecycleStatus: callsign.status,
+    authorizedCallsigns: (awardAccount.callsigns || []).map(
+      (item) => item.value,
+    ),
+    programmeRules: programme.rules,
+    location: {
+      latitude: point.lat ?? point.latitude ?? null,
+      longitude: point.lon ?? point.longitude ?? null,
+    },
+  };
+  const request = pendingParticipantMutation('activation-start', identity, {
+    ...identity,
+    startedAt: new Date().toISOString(),
+  });
   try {
     await awardApi('/v1/activations', {
       method: 'POST',
-      headers: { 'Idempotency-Key': crypto.randomUUID() },
-      body: JSON.stringify({
-        programmeSlug: programme.slug,
-        entityId: entity.id,
-        operatorId: awardAccount.id,
-        operatorCallsign: callsign.value,
-        callsignLifecycleStatus: callsign.status,
-        authorizedCallsigns: (awardAccount.callsigns || []).map(
-          (item) => item.value,
-        ),
-        startedAt: new Date().toISOString(),
-        programmeRules: programme.rules,
-        location: {
-          latitude: point.lat ?? point.latitude ?? null,
-          longitude: point.lon ?? point.longitude ?? null,
-        },
-      }),
+      headers: { 'Idempotency-Key': request.key },
+      body: JSON.stringify(request.body),
     });
+    pendingParticipantMutations.delete(request.id);
     $('activation-status').textContent = 'Activation started.';
     await loadActivations();
   } catch (error) {
@@ -816,18 +832,26 @@ async function startActivation(event) {
 async function recordQso(event) {
   event.preventDefault();
   const activationId = $('qso-activation').value;
+  const identity = {
+    activationId,
+    workedCallsign: $('qso-callsign').value,
+    band: $('qso-band').value || null,
+    mode: $('qso-mode').value || null,
+  };
+  const request = pendingParticipantMutation('qso-create', identity, {
+    workedCallsign: identity.workedCallsign,
+    timestamp: new Date().toISOString(),
+    band: identity.band,
+    mode: identity.mode,
+  });
   $('activation-status').textContent = 'Recording contact…';
   try {
     await awardApi(`/v1/activations/${encodeURIComponent(activationId)}/qsos`, {
       method: 'POST',
-      headers: { 'Idempotency-Key': crypto.randomUUID() },
-      body: JSON.stringify({
-        workedCallsign: $('qso-callsign').value,
-        timestamp: new Date().toISOString(),
-        band: $('qso-band').value || null,
-        mode: $('qso-mode').value || null,
-      }),
+      headers: { 'Idempotency-Key': request.key },
+      body: JSON.stringify(request.body),
     });
+    pendingParticipantMutations.delete(request.id);
     $('qso-callsign').value = '';
     $('activation-status').textContent = 'Contact recorded.';
     await loadActivations();
@@ -838,15 +862,18 @@ async function recordQso(event) {
 async function closeActivation() {
   const activationId = $('qso-activation').value;
   if (!activationId || !confirm('Close this activation?')) return;
+  const request = pendingParticipantMutation(
+    'activation-close',
+    { activationId },
+    { status: 'CLOSED', endedAt: new Date().toISOString() },
+  );
   try {
     await awardApi(`/v1/activations/${encodeURIComponent(activationId)}`, {
       method: 'PATCH',
-      headers: { 'Idempotency-Key': crypto.randomUUID() },
-      body: JSON.stringify({
-        status: 'CLOSED',
-        endedAt: new Date().toISOString(),
-      }),
+      headers: { 'Idempotency-Key': request.key },
+      body: JSON.stringify(request.body),
     });
+    pendingParticipantMutations.delete(request.id);
     $('activation-status').textContent = 'Activation closed.';
     await loadActivations();
   } catch (error) {
