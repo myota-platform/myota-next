@@ -537,7 +537,8 @@ code-point key ordering. Direct and streamed GEOJSON/WFS imports preserve exact
 integer tokens through source storage and worker decoding, while retaining raw
 numeric tokens in feature hashes and injected root CRS values within the
 configured decoded-size limit (`MYOTA_IMPORT_MAX_FEATURE_BYTES`, 16 MiB by
-default).
+default). Root `crs` and `spatialReference` selection follows Python truthiness,
+last-key JSON behavior, and exact integer parsing.
 Streamed root geometry documents converted into Features retain those tokens as
 well. Direct ArcGIS FeatureServer imports hash raw source records before API
 normalization. The scheduled Node importer preserves source numeric tokens in

@@ -66,26 +66,20 @@ export async function readGeoJsonDocumentMetadata(
   });
   const rootValueGuard = new GeoJsonResourceGuard(undefined, false, true);
   let documentCrs: unknown;
-  let hasDocumentCrs = false;
   let spatialReference: unknown;
-  let hasSpatialReference = false;
   let rootType: unknown;
-  let hasRootType = false;
   let sourceBytes = 0;
   let lastHeartbeatBytes = 0;
   const sourceLimit = MAX_GEOJSON_UPLOAD_BYTES;
 
   parser.onValue = ({ value, key, stack }) => {
     if (stack.length !== 1 || key === undefined) return;
-    if (key === 'type' && !hasRootType) {
+    if (key === 'type') {
       rootType = value;
-      hasRootType = true;
-    } else if (key === 'crs' && !hasDocumentCrs) {
+    } else if (key === 'crs') {
       documentCrs = value;
-      hasDocumentCrs = true;
-    } else if (key === 'spatialReference' && !hasSpatialReference) {
+    } else if (key === 'spatialReference') {
       spatialReference = value;
-      hasSpatialReference = true;
     }
   };
 
@@ -106,14 +100,21 @@ export async function readGeoJsonDocumentMetadata(
   }
 
   if (!parser.isEnded) parser.end();
-  const crsSourceKey =
-    !hasDocumentCrs || documentCrs === null || documentCrs === undefined
-      ? 'spatialReference'
-      : 'crs';
+  const documentCrsJson = rootValueGuard.rootValueJsonFor('crs');
+  const spatialReferenceJson =
+    rootValueGuard.rootValueJsonFor('spatialReference');
+  if (documentCrsJson !== undefined)
+    documentCrs = parseJsonWithExactIntegers(documentCrsJson);
+  if (spatialReferenceJson !== undefined)
+    spatialReference = parseJsonWithExactIntegers(spatialReferenceJson);
+  const crsSourceKey = pythonTruthy(documentCrs) ? 'crs' : 'spatialReference';
   return {
     crs: crsSourceKey === 'spatialReference' ? spatialReference : documentCrs,
     crsSourceKey,
-    crsJson: rootValueGuard.rootValueJsonFor(crsSourceKey),
+    crsJson:
+      crsSourceKey === 'spatialReference'
+        ? spatialReferenceJson
+        : documentCrsJson,
     crsJsonTooLarge: rootValueGuard.rootValueWasTooLarge(crsSourceKey),
     rootType,
   };
@@ -660,11 +661,13 @@ class GeoJsonResourceGuard {
     if (this.activeRootValueKey !== undefined) {
       if (this.rootValueOverflow)
         this.oversizedRootValues.add(this.activeRootValueKey);
-      else
+      else {
+        this.oversizedRootValues.delete(this.activeRootValueKey);
         this.rootValueJson.set(
           this.activeRootValueKey,
           Buffer.concat(this.rootValueParts).toString('utf8'),
         );
+      }
     }
     this.activeRootValueKey = undefined;
     this.rootValueDepth = 0;
