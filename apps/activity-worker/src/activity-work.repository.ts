@@ -25,6 +25,7 @@ import {
   normalizeTimestamp,
   parseAdif,
   normalizeQso,
+  pythonInt,
   type JsonRecord,
 } from '../../activity/src/activity-domain.js';
 import { evaluateAward } from '../../activity/src/award-domain.js';
@@ -920,11 +921,17 @@ export class ActivityWorkRepository {
       [payload.programmeSlug],
     );
     for (const { definition: award } of result.rows) {
-      if (payload.awardId && String(award.id) !== String(payload.awardId))
+      if (
+        pythonTruthy(payload.awardId) &&
+        pythonString(award.id) !== pythonString(payload.awardId)
+      )
         continue;
       if (
         payload.ruleVersion != null &&
-        Number(award.version ?? 1) !== Number(payload.ruleVersion)
+        pythonInt(
+          Object.hasOwn(award, 'version') ? award.version : 1,
+          'version',
+        ) !== pythonInt(payload.ruleVersion, 'ruleVersion')
       )
         continue;
       const requestedSubjects: string[] = Array.isArray(payload.subjectIds)

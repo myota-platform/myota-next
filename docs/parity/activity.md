@@ -124,7 +124,8 @@ with `HUNTER` used only when the stored category is absent.
 Award recalculation preserves the submitted subject list in the queued payload;
 the worker filters it using Python truthiness and Python `str()` before sorting
 the subjects it recalculates. The deterministic idempotency key uses the same
-Python conversion and sorting.
+Python conversion and sorting. Worker award-ID filters use Python truthiness
+and `str()`, and rule-version filters use Python `int()` conversion.
 ADIF uploads use the reference's shared `MYOTA_UPLOAD_MAX_BYTES` cap (1 GiB by
 default), then pass authorization, malware checks, and object storage before
 durable queueing; the Activity worker enforces the same cap, parses records,
