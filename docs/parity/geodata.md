@@ -267,6 +267,8 @@ uploads are implemented with owner-scoped durable sessions, bounded binary
 parts, checksum and malware scanning, and transactional completion up to the
 worker's configured source limits. Repeated completion returns the Python
 handler's full persisted `importRun` object.
+Multipart upload creation accepts the Python `JSON` format alias and stores it
+as `GEOJSON`, including when inferred from the filename extension.
 For multipart upload scanning, NestJS maps
 a ClamAV non-2xx response and transport failure to HTTP 500 with the reference
 scanner-unavailable detail. Local malware detection remains HTTP 400. Both

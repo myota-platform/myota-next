@@ -644,7 +644,9 @@ export function validateCreate(body: Record<string, unknown>) {
     typeof body.format === 'string' && body.format
       ? body.format
       : fallbackFormat;
-  const format = formatValue.toUpperCase();
+  const normalizedFormatValue = formatValue.toUpperCase();
+  const format =
+    normalizedFormatValue === 'JSON' ? 'GEOJSON' : normalizedFormatValue;
   const sourceLimit = sourceUploadLimit(format);
   const parsedExpectedSize = pythonInteger(body.expectedSize);
   if (
