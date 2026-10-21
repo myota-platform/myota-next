@@ -21,7 +21,9 @@ review history, rules replacement, policy version increment, and the publication
 fact. Policy body validation follows the reference's authorization order, while
 an unknown-status PATCH resolves the draft before checking authorization; HTTP
 fixtures pin both sequences. The Python reference separately pins the UTC
-conversion behavior.
+conversion behavior. Content publication converts `effectiveFrom` with Python
+`str()` semantics before timestamp parsing, including floating-point JSON
+tokens.
 
 The email worker accepts the schema's trailing uppercase `Z` timestamp with
 either `T` or `t` as the date/time separator, matching Python's RFC3339

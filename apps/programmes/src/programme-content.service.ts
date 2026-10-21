@@ -7,7 +7,10 @@ import {
 import { randomUUID } from 'node:crypto';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
-import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
+import {
+  pythonKeyErrorDetail,
+  pythonStringJsonField,
+} from '@app/platform/python-strings.js';
 import {
   nextPageIfMore,
   pageOffset,
@@ -234,7 +237,12 @@ export class ProgrammeContentService {
         `missing required fields: ${missing.join(', ')}`,
       );
     }
-    const effectiveFrom = normalizeUtcTimestamp(String(body.effectiveFrom));
+    const effectiveFrom = normalizeUtcTimestamp(
+      pythonStringJsonField(
+        body as unknown as Record<string, unknown>,
+        'effectiveFrom',
+      ),
+    );
     return this.contents.mutate(idempotencyKey, async (client) => {
       await this.contents.lockRecord(client, contentId);
       const content = await this.requireContentRecord(client, contentId);
