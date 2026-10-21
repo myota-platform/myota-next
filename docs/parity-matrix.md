@@ -367,6 +367,9 @@ values up to 60 seconds are preserved to millisecond precision, allowing
 subsecond timeouts.
 The worker caches successful and failed provider results by rounded coordinates
 and locality language, with a 2,048-entry per-process LRU limit.
+Adapter fixtures cover unsupported format rejection, OpenStreetMap tag
+filtering, ArcGIS FeatureServer point conversion, and the existing EPSG:3031
+projection path.
 JSON GeoJSON, WFS GeoJSON, and ArcGIS FeatureServer JSON import creation stores
 normalized GeoJSON source documents in S3-compatible storage and queues
 idempotent import runs transactionally. ArcGIS geometries with WGS84 and
