@@ -183,7 +183,7 @@ test('creates a participant account in Admin through the live Identity API', asy
     callsignRows.filter({ hasText: 'Verified by manual-review' }),
   ).toContainText(callsignValue);
 
-  await page.getByLabel('Status').selectOption('ACTIVE');
+  await page.getByLabel('Status').first().selectOption('ACTIVE');
   const activationResponse = page.waitForResponse(
     (candidate) =>
       candidate.request().method() === 'PATCH' &&
