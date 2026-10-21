@@ -33,6 +33,77 @@ async function readProcessTreeRssBytes(rootPid: number): Promise<number> {
   return total;
 }
 
+async function measureOsmPbfRssGrowth(featureCount: number) {
+  const directory = await mkdtemp(join(tmpdir(), 'myota-osm-rss-'));
+  const xmlPath = join(directory, 'many-parks.osm');
+  const pbfPath = join(directory, 'many-parks.osm.pbf');
+  async function* osmXml() {
+    yield '<?xml version="1.0" encoding="UTF-8"?><osm version="0.6" generator="myota-parity">';
+    for (let start = 1; start <= featureCount; start += 1000) {
+      let chunk = '';
+      for (
+        let id = start;
+        id < Math.min(start + 1000, featureCount + 1);
+        id++
+      ) {
+        const longitude = -5.99 + (id % 100) / 100_000;
+        chunk += `<node id="${id}" lat="37.39" lon="${longitude}"><tag k="leisure" v="park"/></node>`;
+      }
+      yield chunk;
+    }
+    yield '</osm>';
+  }
+
+  try {
+    await pipeline(
+      Readable.from(osmXml()),
+      createWriteStream(xmlPath, { flags: 'wx', mode: 0o600 }),
+    );
+    await execFileAsync('osmium', [
+      'cat',
+      xmlPath,
+      '--output',
+      pbfPath,
+      '--output-format',
+      'pbf',
+    ]);
+
+    const beforeRssBytes = await readProcessTreeRssBytes(process.pid);
+    let peakRssBytes = beforeRssBytes;
+    let sampling = true;
+    const sample = (async () => {
+      while (sampling) {
+        peakRssBytes = Math.max(
+          peakRssBytes,
+          await readProcessTreeRssBytes(process.pid),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    })();
+    let decoded = 0;
+    try {
+      for await (const _feature of decodeOsmPbfStream(
+        createReadStream(pbfPath),
+        'many-parks.osm.pbf',
+        featureCount,
+        '',
+      )) {
+        decoded++;
+      }
+    } finally {
+      sampling = false;
+      await sample;
+      peakRssBytes = Math.max(
+        peakRssBytes,
+        await readProcessTreeRssBytes(process.pid),
+      );
+    }
+    return { decoded, rssGrowthBytes: peakRssBytes - beforeRssBytes };
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
 describe('OSM PBF reference parity', () => {
   it('matches Python node, way, and multipolygon features and hashes', async () => {
     const source = await readFile(
@@ -164,83 +235,22 @@ describe('OSM PBF reference parity', () => {
     }
   });
 
-  it.skipIf(process.platform !== 'linux')(
-    'matches the Python 50,000-feature PBF resource bound',
-    async () => {
-      const directory = await mkdtemp(join(tmpdir(), 'myota-osm-rss-'));
-      const xmlPath = join(directory, 'many-parks.osm');
-      const pbfPath = join(directory, 'many-parks.osm.pbf');
-      const featureCount = 50_000;
-      async function* osmXml() {
-        yield '<?xml version="1.0" encoding="UTF-8"?><osm version="0.6" generator="myota-parity">';
-        for (let start = 1; start <= featureCount; start += 1000) {
-          let chunk = '';
-          for (
-            let id = start;
-            id < Math.min(start + 1000, featureCount + 1);
-            id++
-          ) {
-            const longitude = -5.99 + (id % 100) / 100_000;
-            chunk += `<node id="${id}" lat="37.39" lon="${longitude}"><tag k="leisure" v="park"/></node>`;
-          }
-          yield chunk;
-        }
-        yield '</osm>';
-      }
-
-      try {
-        await pipeline(
-          Readable.from(osmXml()),
-          createWriteStream(xmlPath, { flags: 'wx', mode: 0o600 }),
-        );
-        await execFileAsync('osmium', [
-          'cat',
-          xmlPath,
-          '--output',
-          pbfPath,
-          '--output-format',
-          'pbf',
-        ]);
-
-        const beforeRssBytes = await readProcessTreeRssBytes(process.pid);
-        let peakRssBytes = beforeRssBytes;
-        let sampling = true;
-        const sample = (async () => {
-          while (sampling) {
-            peakRssBytes = Math.max(
-              peakRssBytes,
-              await readProcessTreeRssBytes(process.pid),
-            );
-            await new Promise((resolve) => setTimeout(resolve, 10));
-          }
-        })();
-        let decoded = 0;
-        try {
-          for await (const _feature of decodeOsmPbfStream(
-            createReadStream(pbfPath),
-            'many-parks.osm.pbf',
-            featureCount,
-            '',
-          )) {
-            decoded++;
-          }
-        } finally {
-          sampling = false;
-          await sample;
-          peakRssBytes = Math.max(
-            peakRssBytes,
-            await readProcessTreeRssBytes(process.pid),
-          );
-        }
-
-        expect(decoded).toBe(featureCount);
-        expect(peakRssBytes - beforeRssBytes).toBeLessThanOrEqual(
-          96 * 1024 * 1024,
-        );
-      } finally {
-        await rm(directory, { recursive: true, force: true });
-      }
+  describe.skipIf(process.platform !== 'linux')(
+    'PBF process-tree memory bounds',
+    () => {
+      it.each([
+        { featureCount: 50_000, rssLimitBytes: 96 * 1024 * 1024 },
+        { featureCount: 250_000, rssLimitBytes: 192 * 1024 * 1024 },
+      ])(
+        'decodes $featureCount features within its RSS growth limit',
+        async ({ featureCount, rssLimitBytes }) => {
+          const { decoded, rssGrowthBytes } =
+            await measureOsmPbfRssGrowth(featureCount);
+          expect(decoded).toBe(featureCount);
+          expect(rssGrowthBytes).toBeLessThanOrEqual(rssLimitBytes);
+        },
+        120_000,
+      );
     },
-    120_000,
   );
 });
