@@ -4,6 +4,43 @@ import { sourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 import { streamShapefileFeatures } from './geodata-shapefile-stream.js';
 
 describe('streamShapefileFeatures', () => {
+  it.skipIf(process.platform !== 'linux')(
+    'streams the Python 50,000-record Shapefile RSS workload',
+    async () => {
+      const source = await readFile(
+        new URL('./fixtures/python-shapefile-rss-50000.zip', import.meta.url),
+      );
+      const beforeMaxRssKb = process.resourceUsage().maxRSS;
+      async function* chunks() {
+        yield source;
+      }
+      let count = 0;
+      let firstName: unknown;
+      let lastName: unknown;
+      for await (const feature of streamShapefileFeatures(
+        chunks(),
+        'python-shapefile-rss-50000.zip',
+        '',
+        50_000,
+        async () => undefined,
+      )) {
+        const properties = (feature as { properties?: { name?: unknown } })
+          .properties;
+        if (count === 0) firstName = properties?.name;
+        lastName = properties?.name;
+        count++;
+      }
+      const rssGrowthBytes =
+        Math.max(0, process.resourceUsage().maxRSS - beforeMaxRssKb) * 1024;
+
+      expect(count).toBe(50_000);
+      expect(firstName).toBe('fixture-0');
+      expect(lastName).toBe('fixture-49999');
+      expect(rssGrowthBytes).toBeLessThanOrEqual(96 * 1024 * 1024);
+    },
+    120_000,
+  );
+
   it('preserves PyShp MultiPointZ GeoJSON coordinates', async () => {
     const source = await readFile(
       new URL('./fixtures/python-multipointz-shapefile.zip', import.meta.url),
