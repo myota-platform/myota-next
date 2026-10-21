@@ -1,4 +1,8 @@
 import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
+import { open, rm } from 'node:fs/promises';
+import { createInterface } from 'node:readline';
+import { join } from 'node:path';
 import { SAXParser, type SAXOptions } from 'sax';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
@@ -7,6 +11,7 @@ import {
   MAX_UPLOAD_BYTES,
 } from '@app/platform/import-limits.js';
 import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import { createUploadSpoolDirectory } from '@app/platform/upload-spool.js';
 
 type Feature = {
   type: 'Feature';
@@ -31,6 +36,7 @@ export async function* streamXmlFeatures(
     strictEntities: true,
   } as SAXOptions & { strictEntities: boolean });
   const output: Feature[] = [];
+  const deferredTrackOutput: string[] = [];
   const stack: string[] = [];
   const digest = createHash('sha256');
   const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -52,12 +58,15 @@ export async function* streamXmlFeatures(
   let sourceBytes = 0;
   let lastHeartbeatBytes = 0;
   let featureCount = 0;
+  let trackSpoolDirectory: string | undefined;
+  let trackSpoolPath: string | undefined;
+  let trackSpool: Awaited<ReturnType<typeof open>> | undefined;
 
   const fail = (message: string) => {
     failure ??= new Error(message);
   };
   const local = (name: string) => name.split(':').at(-1) ?? name;
-  const addFeature = (feature: Feature) => {
+  const addFeature = (feature: Feature, deferForGpxOrder = false) => {
     const encoded = stringifyJsonWithBigInts(feature) ?? 'null';
     if (Buffer.byteLength(encoded, 'utf8') > MAX_IMPORT_FEATURE_BYTES)
       fail(
@@ -66,7 +75,16 @@ export async function* streamXmlFeatures(
     featureCount++;
     if (featureCount > featureLimit)
       fail(`geodata import contains more than ${featureLimit} features`);
-    output.push(feature);
+    if (deferForGpxOrder) deferredTrackOutput.push(encoded);
+    else output.push(feature);
+  };
+  const flushDeferredTrackOutput = async () => {
+    if (!deferredTrackOutput.length) return;
+    trackSpoolDirectory ??= await createUploadSpoolDirectory('myota-gpx-');
+    trackSpoolPath ??= join(trackSpoolDirectory, 'tracks.ndjson');
+    trackSpool ??= await open(trackSpoolPath, 'a', 0o600);
+    await trackSpool.appendFile(`${deferredTrackOutput.join('\n')}\n`);
+    deferredTrackOutput.length = 0;
   };
   const readCoordinate = (raw: string) => {
     const values = raw.split(',');
@@ -239,11 +257,14 @@ export async function* streamXmlFeatures(
       }
       if (name === 'trkseg') {
         if (trackPoints && trackPoints.length >= 2)
-          addFeature({
-            type: 'Feature',
-            geometry: { type: 'LineString', coordinates: trackPoints },
-            properties: {},
-          });
+          addFeature(
+            {
+              type: 'Feature',
+              geometry: { type: 'LineString', coordinates: trackPoints },
+              properties: {},
+            },
+            true,
+          );
         trackPoints = undefined;
       }
     }
@@ -251,47 +272,72 @@ export async function* streamXmlFeatures(
     stack.pop();
   };
 
-  for await (const incoming of source) {
-    const chunk = Buffer.isBuffer(incoming) ? incoming : Buffer.from(incoming);
-    sourceBytes += chunk.length;
-    if (sourceBytes > MAX_UPLOAD_BYTES)
-      throw new Error('XML import source exceeds the configured upload limit');
-    digest.update(chunk);
-    try {
-      for (let offset = 0; offset < chunk.length; offset += parserChunkBytes) {
-        const text = decoder.decode(
-          chunk.subarray(offset, offset + parserChunkBytes),
-          { stream: true },
+  try {
+    for await (const incoming of source) {
+      const chunk = Buffer.isBuffer(incoming)
+        ? incoming
+        : Buffer.from(incoming);
+      sourceBytes += chunk.length;
+      if (sourceBytes > MAX_UPLOAD_BYTES)
+        throw new Error(
+          'XML import source exceeds the configured upload limit',
         );
-        if (text) parser.write(text);
-        if (failure) break;
-        while (output.length) yield output.shift()!;
+      digest.update(chunk);
+      try {
+        for (
+          let offset = 0;
+          offset < chunk.length;
+          offset += parserChunkBytes
+        ) {
+          const text = decoder.decode(
+            chunk.subarray(offset, offset + parserChunkBytes),
+            { stream: true },
+          );
+          if (text) parser.write(text);
+          await flushDeferredTrackOutput();
+          if (failure) break;
+          while (output.length) yield output.shift()!;
+        }
+      } catch (error) {
+        failure ??= error instanceof Error ? error : new Error(String(error));
       }
-    } catch (error) {
-      failure ??= error instanceof Error ? error : new Error(String(error));
+      if (failure) break;
+      if (sourceBytes - lastHeartbeatBytes >= maximumHeartbeatBytes) {
+        await heartbeat();
+        lastHeartbeatBytes = sourceBytes;
+      }
     }
-    if (failure) break;
-    if (sourceBytes - lastHeartbeatBytes >= maximumHeartbeatBytes) {
-      await heartbeat();
-      lastHeartbeatBytes = sourceBytes;
+    if (!failure) {
+      try {
+        const remainder = decoder.decode();
+        if (remainder) parser.write(remainder);
+        parser.close();
+        await flushDeferredTrackOutput();
+      } catch (error) {
+        failure ??= error instanceof Error ? error : new Error(String(error));
+      }
     }
+    if (!failure && digest.digest('hex') !== sourceHash)
+      failure = new Error(
+        'geodata import source hash does not match its queued record',
+      );
+    if (failure)
+      throw new Error(`invalid ${format} document: ${failure.message}`);
+    while (output.length) yield output.shift()!;
+    if (trackSpool) {
+      await trackSpool.close();
+      trackSpool = undefined;
+      const lines = createInterface({
+        input: createReadStream(trackSpoolPath!),
+        crlfDelay: Infinity,
+      });
+      for await (const line of lines) yield JSON.parse(line) as Feature;
+    }
+  } finally {
+    await trackSpool?.close().catch(() => undefined);
+    if (trackSpoolDirectory)
+      await rm(trackSpoolDirectory, { recursive: true, force: true });
   }
-  if (!failure) {
-    try {
-      const remainder = decoder.decode();
-      if (remainder) parser.write(remainder);
-      parser.close();
-    } catch (error) {
-      failure ??= error instanceof Error ? error : new Error(String(error));
-    }
-  }
-  if (!failure && digest.digest('hex') !== sourceHash)
-    failure = new Error(
-      'geodata import source hash does not match its queued record',
-    );
-  if (failure)
-    throw new Error(`invalid ${format} document: ${failure.message}`);
-  while (output.length) yield output.shift()!;
 }
 
 function attributeValue(value: unknown): string | undefined {

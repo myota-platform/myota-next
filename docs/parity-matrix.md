@@ -466,7 +466,10 @@ no supported feature complete with zero features, matching the reference
 streaming importer. Resumable KML and GPX uploads are
 streamed from object storage through a SAX parser, verify the completed source
 hash, and apply the configured upload, per-feature, feature-count, and vertex
-limits while sending worker heartbeats. A Linux RSS qualification checks 50,000
+limits while sending worker heartbeats. GPX uploads emit waypoint and route
+point features before track-segment features, matching the Python iterator;
+track features are spooled to disk to keep memory bounded. A Linux RSS
+qualification checks 50,000
 features in each format against a 96 MiB Node RSS-growth limit. The Python
 reference uses the same feature counts and a 96 MiB absolute process-RSS limit,
 so the measurements are not directly comparable. Multipart uploads accept GeoJSON and
