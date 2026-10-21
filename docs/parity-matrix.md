@@ -467,8 +467,9 @@ on reads, and the API returns them as numeric JSON tokens. Generic projected
 CRS transforms preserve ordinates beyond XY, and unsupported CRS identifiers
 use the reference domain error; the reference's Web Mercator special case
 emits XY only. Hash and feature
-parity still requires fixtures for binary formats and uncommon geometries or
-CRS definitions. The direct JSON import path materializes
+parity has a PyShp-generated point fixture covering the source feature,
+large-integer DBF field, `.prj` text, and canonical source hash. PBF and less
+common geometry or CRS definitions still need fixtures. The direct JSON import path materializes
 the normalized collection and accepts the reference's feature arrays, single
 geometries, geometry wrappers, and empty collections, while multipart GeoJSON
 streams source features.
