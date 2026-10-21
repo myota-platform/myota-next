@@ -26,16 +26,16 @@ describe('OSM PBF reference parity', () => {
       'node/5',
       'way/10',
       'way/30',
-      'relation/40',
       'way/20',
+      'relation/40',
     ]);
     expect(features.map(sourceFeatureHashOverride)).toEqual([
       '13973b672ce2f69a0f07ba88e1ff9add2754e5995fda3e4c781ddcefd67256c1',
       'cbbfe3a0521aae6530b2b9ca787c5b8c862d37e97cd3302979f4c563475c50b1',
       '95009a3e4b97c4c277e90c2014eb7bf93d6e5d00f6e86bed52be9f9298cb0676',
       '696a996c26e7047f91d35d4ff1bcf06036d335b6e4b3b2b20f70a5199b3ac6bf',
-      '843df4169b6a2f524955209eb5a19679aef7c3bf689e1b5ee9569d6731f66c23',
       'b03a53cef6bc6111f92e0676d059c6ab3f07c4d94bad3c06b62b92765553c967',
+      'ef6ceeccbf80adf546cda28a5f16adfb5b99f7ddc550072d61a3cde583147dde',
     ]);
     expect(features[0]).toMatchObject({
       type: 'Feature',
@@ -50,9 +50,29 @@ describe('OSM PBF reference parity', () => {
       },
       geometry: { type: 'Point', coordinates: [-5.99, 37.39] },
     });
-    expect(features[4]).toMatchObject({
+    expect(features[5]).toMatchObject({
       id: 'relation/40',
-      geometry: { type: 'MultiPolygon' },
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: [
+          [
+            [
+              [-5.99, 37.39],
+              [-5.98, 37.39],
+              [-5.98, 37.4],
+              [-5.99, 37.4],
+              [-5.99, 37.39],
+            ],
+            [
+              [-5.988, 37.392],
+              [-5.988, 37.398],
+              [-5.982, 37.398],
+              [-5.982, 37.392],
+              [-5.988, 37.392],
+            ],
+          ],
+        ],
+      },
       properties: {
         boundary: 'protected_area',
         name: 'Protected Relation',
