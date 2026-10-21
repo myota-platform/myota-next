@@ -7,6 +7,7 @@ export default defineConfig({
   test: {
     globals: true,
     root: './',
-    include: ['**/*.spec.ts'],
+    // Browser specs use Playwright and have their own test runner.
+    include: ['apps/**/*.spec.ts', 'libs/**/*.spec.ts', 'tools/**/*.spec.ts'],
   },
 });
