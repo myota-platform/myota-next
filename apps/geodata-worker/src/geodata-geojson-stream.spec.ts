@@ -90,6 +90,8 @@ describe('GeoJSON streaming reference parity', () => {
           async () => undefined,
         )) {
           decoded++;
+          if (decoded % 100 === 0)
+            await new Promise<void>((resolve) => setImmediate(resolve));
         }
         const rssGrowthBytes =
           Math.max(0, process.resourceUsage().maxRSS - beforeMaxRssKb) * 1024;
