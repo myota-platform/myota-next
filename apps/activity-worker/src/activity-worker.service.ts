@@ -436,11 +436,9 @@ function validateEnvelope(
   if (
     envelope.correlationId !== undefined &&
     (typeof envelope.correlationId !== 'string' ||
-      envelope.correlationId.length < 1 ||
-      envelope.correlationId.length > 128 ||
-      /[^\x21-\x7e]/.test(envelope.correlationId))
+      envelope.correlationId.length > 200)
   ) {
-    throw new Error('invalid_correlation_id');
+    throw new Error('work_contract_mismatch');
   }
 }
 
