@@ -16,7 +16,7 @@ import {
   trimPythonWhitespace,
 } from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
-import type { IdentityAuthService } from './auth.service.js';
+import { IdentityAuthService } from './auth.service.js';
 
 const SERVICE_TOKEN_SECONDS = 300;
 const EMAIL_SERVICE = 'email-service';

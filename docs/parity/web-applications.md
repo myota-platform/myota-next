@@ -24,7 +24,12 @@ single-QSO entry, profile editing and image management, and owner callsign
 creation, evidence submission, primary selection, and retirement. Chromium browser checks
 exercise Admin sign-in, identity session bootstrap, scope denial, Participant
 programme selection and public content, and its activation, QSO, and close
-workflow. Activation creation and QSO recording retain their request body and
+workflow. In CI, a live Participant browser check creates a programme through
+Gateway, then loads its catalogue, published-content response, and empty
+Geodata entity page through the Vite proxy and running NestJS services. This
+checks one public read workflow against real APIs; other browser workflows
+continue to use intercepted API responses. Activation creation and QSO
+recording retain their request body and
 idempotency key for retries with unchanged inputs, including a page reload in
 the same tab. Activation close confirms an uncertain response by refreshing the
 operator's activation history, since the close API rejects requests for an

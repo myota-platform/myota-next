@@ -67,7 +67,8 @@ export class IdentityBootstrapService implements OnModuleInit {
         }>(
           `INSERT INTO public.account
              (display_name, email, identity_email_key, participation_type, status)
-           VALUES ('Global Administrator', $1, $1, 'OPERATOR', 'ACTIVE')
+           VALUES ('Global Administrator', $1::public.citext, $1::text,
+                   'OPERATOR', 'ACTIVE')
            ON CONFLICT (identity_email_key)
              WHERE identity_email_key IS NOT NULL DO NOTHING
            RETURNING id,

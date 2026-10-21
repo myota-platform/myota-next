@@ -10,6 +10,18 @@ export default defineConfig({
     browserName: 'chromium',
   },
   webServer: [
+    ...(process.env.CORE_DATABASE_URL &&
+    process.env.ACTIVITY_DATABASE_URL &&
+    process.env.GEO_DATABASE_URL
+      ? [
+          {
+            command: 'node tools/run-browser-api-stack.mjs',
+            url: 'http://127.0.0.1:18080/readyz',
+            reuseExistingServer: !process.env.CI,
+            timeout: 90_000,
+          },
+        ]
+      : []),
     {
       command: 'npm run dev --prefix web/admin -- --host 127.0.0.1',
       url: 'http://127.0.0.1:8090',
@@ -18,7 +30,7 @@ export default defineConfig({
     },
     {
       command:
-        './node_modules/.bin/vite web/participant/web --host 127.0.0.1 --port 8091 --strictPort',
+        './node_modules/.bin/vite web/participant/web --config web/participant/vite.config.mjs --host 127.0.0.1 --port 8091 --strictPort',
       url: 'http://127.0.0.1:8091',
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,

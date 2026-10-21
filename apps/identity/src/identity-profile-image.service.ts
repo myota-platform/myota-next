@@ -23,7 +23,7 @@ import {
   trimPythonWhitespace,
 } from '@app/platform/python-strings.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
-import type { IdentityAuthService } from './auth.service.js';
+import { IdentityAuthService } from './auth.service.js';
 
 const MAX_INPUT_BYTES = 5 * 1024 * 1024;
 const MAX_INPUT_DIMENSION = 4096;

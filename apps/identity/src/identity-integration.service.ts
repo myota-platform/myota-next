@@ -10,7 +10,7 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
 import { missingPythonTruthyFields } from '@app/platform/python-truthiness.js';
-import type { IdentityAuthService } from './auth.service.js';
+import { IdentityAuthService } from './auth.service.js';
 import type { OidcProviderMappingDto } from './auth.dto.js';
 
 @Injectable()
