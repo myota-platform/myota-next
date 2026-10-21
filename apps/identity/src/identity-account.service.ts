@@ -464,6 +464,40 @@ export class IdentityAccountService {
       const account = result.rows[0];
       if (!account) throw new NotFoundException('account not found');
 
+      let profile: ReturnType<IdentityAccountService['normalizeProfile']> = {};
+      let emailKey: string | null = null;
+      if (!rolesOnly) {
+        const raw =
+          rawBody !== null &&
+          typeof rawBody === 'object' &&
+          !Array.isArray(rawBody)
+            ? (rawBody as Record<string, unknown>)
+            : {};
+        profile = this.normalizeProfile({
+          websiteUrl: raw.websiteUrl as UpdateAccountDto['websiteUrl'],
+          biographyMarkdown:
+            raw.biographyMarkdown as UpdateAccountDto['biographyMarkdown'],
+        });
+        if (Object.hasOwn(raw, 'email')) {
+          const candidate = pythonTruthy(raw.email) ? raw.email : null;
+          const normalizedEmail =
+            typeof candidate === 'string'
+              ? trimPythonWhitespace(candidate)
+              : '';
+          emailKey = normalizedEmail ? unicodeCaseFold(normalizedEmail) : null;
+          if (emailKey) {
+            const duplicate = await client.query(
+              `SELECT 1 FROM public.account
+                WHERE identity_email_key = $1 AND id <> $2`,
+              [emailKey, accountId],
+            );
+            if (duplicate.rowCount) {
+              throw new BadRequestException('email already exists');
+            }
+          }
+        }
+      }
+
       const body = rolesOnly
         ? {
             roles: (await validateRoleAssignmentBody(rawBody)).roles,
@@ -474,27 +508,9 @@ export class IdentityAccountService {
       const requestedRoles = body.roles?.length
         ? body.roles
         : (body.roleCodes ?? []).map((code) => ({ code }));
-      const profile = this.normalizeProfile(body);
       const nextStatus = body.status ?? account.status;
       const anonymize = Boolean(body.anonymize && nextStatus === 'DEACTIVATED');
-      let email: string | null | undefined;
-      let emailKey: string | null = null;
-      if (body.email !== undefined) {
-        email = body.email || null;
-        const normalizedEmail =
-          typeof email === 'string' ? trimPythonWhitespace(email) : '';
-        emailKey = normalizedEmail ? unicodeCaseFold(normalizedEmail) : null;
-        if (emailKey) {
-          const duplicate = await client.query(
-            `SELECT 1 FROM public.account
-              WHERE identity_email_key = $1 AND id <> $2`,
-            [emailKey, accountId],
-          );
-          if (duplicate.rowCount) {
-            throw new BadRequestException('email already exists');
-          }
-        }
-      }
+      const email = body.email === undefined ? undefined : body.email || null;
 
       const nextDisplayName = anonymize
         ? 'Deactivated account'
