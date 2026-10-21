@@ -17,6 +17,8 @@ behavior: invalid credentials return 400, while permission and rate-limit
 failures return 403. Other NestJS 401 permission exceptions also map to 403.
 Malformed JSON and oversized JSON bodies use the reference's 400
 `invalid_request` response shape and details.
+The shared parser accepts `application/json` and structured `application/*+json`
+media types, with parser failures using the same invalid request details.
 Requests with no body reach handlers as an empty object, matching the Python
 request parser's zero-length body behavior. Non-object JSON values are rejected
 with `JSON body must be an object`, matching the reference parser.

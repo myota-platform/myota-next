@@ -7,6 +7,7 @@ import { integerSetting } from './integer-setting.js';
 import {
   ApiProblemFilter,
   createApiProblem,
+  isJsonContentType,
   parserProblem,
   requestIds,
 } from './http-problem.js';
@@ -47,6 +48,7 @@ export async function bootstrapHttpService(
     express.json({
       limit: jsonLimit,
       strict: false,
+      type: (request) => isJsonContentType(request.headers['content-type']),
       verify: (request, _response, buffer) => {
         if (
           ['/v1/geodata/proposals', '/v1/geodata/imports'].includes(

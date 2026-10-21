@@ -10,6 +10,15 @@ import type { NextFunction, Request, Response } from 'express';
 export const REQUEST_ID_HEADER = 'x-request-id';
 export const CORRELATION_ID_HEADER = 'x-correlation-id';
 
+export function isJsonContentType(contentType: string | undefined): boolean {
+  const mediaType = contentType?.split(';', 1)[0]?.trim().toLowerCase();
+  return (
+    mediaType === 'application/json' ||
+    (mediaType?.startsWith('application/') === true &&
+      mediaType.endsWith('+json'))
+  );
+}
+
 export function safeRequestId(value: unknown): string | undefined {
   return typeof value === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(value)
     ? value
@@ -94,8 +103,7 @@ export function parserProblem(
   let detail =
     typeof error.message === 'string' ? error.message : 'invalid request body';
   const errorType = typeof error.type === 'string' ? error.type : '';
-  const isJson =
-    request.is('application/json') || request.is('application/*+json');
+  const isJson = isJsonContentType(request.get('content-type'));
   if (isJson && errorType === 'entity.parse.failed') {
     status = 400;
     detail = 'invalid JSON body';
