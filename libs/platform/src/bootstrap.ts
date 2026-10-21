@@ -155,6 +155,7 @@ export async function bootstrapHttpService(
               '/v1/entity-types',
               '/v1/activations',
               '/v1/awards/evaluation-jobs',
+              '/v1/qso-ingestions',
               '/v1/identity/admin/roles',
               '/v1/identity/roles',
             ].includes(path) ||
