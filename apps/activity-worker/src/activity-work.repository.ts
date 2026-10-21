@@ -140,7 +140,7 @@ export class ActivityWorkRepository {
         const inserted = await client.query(
           `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,
              payload,occurred_at,available_at)
-           VALUES ($1,$2,'activity-service','activity_job',$1,$3::jsonb,$4,$5)
+           VALUES ($1::uuid,$2,'activity-service','activity_job',$1::text,$3::jsonb,$4,$5)
            ON CONFLICT (event_id) DO NOTHING RETURNING event_id`,
           [
             job.id,

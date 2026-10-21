@@ -45,4 +45,13 @@ describe('health and readiness', () => {
     expect(status).toHaveBeenCalledWith(503);
     expect(json).toHaveBeenCalledWith({ status: 'not-ready' });
   });
+
+  it('handles errors from idle database connections', () => {
+    const on = vi.fn();
+    new DatabaseHealthService({ on } as unknown as Pool);
+
+    expect(on).toHaveBeenCalledWith('error', expect.any(Function));
+    const [, handlePoolError] = on.mock.calls[0]!;
+    expect(() => handlePoolError(new Error('connection reset'))).not.toThrow();
+  });
 });

@@ -2,6 +2,7 @@ import {
   DynamicModule,
   Inject,
   Injectable,
+  Logger,
   Module,
   OnModuleDestroy,
 } from '@nestjs/common';
@@ -12,9 +13,15 @@ export const DATABASE_HEALTH_POOL = Symbol('DATABASE_HEALTH_POOL');
 
 @Injectable()
 export class DatabaseHealthService implements OnModuleDestroy {
+  private readonly logger = new Logger(DatabaseHealthService.name);
+
   constructor(
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
-  ) {}
+  ) {
+    this.pool?.on('error', (error: Error) => {
+      this.logger.warn(`PostgreSQL idle connection failed: ${error.message}`);
+    });
+  }
 
   async isReady(): Promise<boolean> {
     if (!this.pool) return false;
