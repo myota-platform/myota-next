@@ -40,6 +40,8 @@ const endpoints = Object.fromEntries(
 );
 const admin = new Client({ connectionString: baseUrl });
 const created = [];
+const createdRoles = [];
+const geodataAclRoles = ['myota_geo_qgis_editor', 'myota_geo_qgis_readonly'];
 const workId = '00000000-0000-4000-8000-000000000001';
 const archiveParent = await mkdtemp(join(tmpdir(), 'myota-transfer-workflow-'));
 const archive = join(archiveParent, 'archive');
@@ -173,6 +175,13 @@ try {
     `INSERT INTO public.activity_job (id,kind,payload,status,attempts)
      VALUES ('00000000-0000-4000-8000-000000000003','transfer-fixture','{"fixture":true}'::jsonb,'QUEUED',0)`,
   );
+  for (const role of geodataAclRoles) {
+    const result = await admin.query(
+      'SELECT 1 FROM pg_roles WHERE rolname=$1',
+      [role],
+    );
+    if (!result.rowCount) createdRoles.push(role);
+  }
   await createSource('geo-source', [
     {
       path: 'deploy/db/migrations/geo/001_geodata_baseline.sql',
@@ -240,6 +249,9 @@ try {
     await admin.query(`CREATE DATABASE "${database}" TEMPLATE template0`);
     created.push(database);
   }
+  await admin.query(
+    `GRANT USAGE ON SCHEMA public TO ${geodataAclRoles.map((role) => `"${role}"`).join(', ')}`,
+  );
 
   const env = {
     LEGACY_CORE_DATABASE_URL: endpoints['core-source'],
@@ -339,6 +351,8 @@ try {
     await admin
       .query(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`)
       .catch(() => undefined);
+  for (const role of createdRoles)
+    await admin.query(`DROP ROLE IF EXISTS "${role}"`).catch(() => undefined);
   await admin.end().catch(() => undefined);
   await rm(archiveParent, { recursive: true, force: true });
 }
