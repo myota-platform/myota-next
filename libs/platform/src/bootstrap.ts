@@ -174,6 +174,7 @@ export async function bootstrapHttpService(
               path,
             ) ||
             /^\/v1\/qsos\/[^/]+\/corrections$/.test(path) ||
+            /^\/v1\/activations\/[^/]+\/qsos$/.test(path) ||
             /^\/v1\/programmes\/[^/]+\/entity-types$/.test(path) ||
             /^\/v1\/identity\/roles\/[^/]+$/.test(path) ||
             /^\/v1\/identity\/accounts\/[^/]+\/callsigns\/[^/]+\/evidence$/.test(

@@ -38,8 +38,13 @@ requirePattern(
 );
 requirePattern(
   'libs/platform/src/bootstrap.ts',
-  /express\.json\([\s\S]*?['\"]\/v1\/qso-ingestions['\"][\s\S]*?Object\.assign\(request, \{ rawBody: buffer \}\)/,
+  /express\.json\([\s\S]*?["']\/v1\/qso-ingestions["'][\s\S]*?Object\.assign\(request, \{ rawBody: buffer \}\)/,
   'QSO ingestion requests must retain raw JSON bytes for exact numeric parsing',
+);
+requirePattern(
+  'libs/platform/src/bootstrap.ts',
+  /express\.json\([\s\S]*?\^\\\/v1\\\/activations\\\/\[\^\/\]\+\\\/qsos\$[\s\S]*?Object\.assign\(request, \{ rawBody: buffer \}\)/,
+  'Direct QSO writes must retain raw JSON bytes for exact numeric parsing',
 );
 requirePattern(
   'libs/platform/src/bootstrap.ts',
