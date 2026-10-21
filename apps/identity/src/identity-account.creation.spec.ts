@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 import type { IdentityAuthService } from './auth.service.js';
 import { IdentityAccountService } from './identity-account.service.js';
 import type { IdentityRoleService } from './identity-role.service.js';
