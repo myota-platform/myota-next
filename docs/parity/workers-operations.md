@@ -14,7 +14,10 @@
   source-object retention is scheduled, and queued jobs missing an outbox
   command are repaired periodically. A process-kill qualification covers
   statistics-rebuild lease takeover; other job kinds, broker outages, and
-  retention recovery evidence remain open.
+  retention recovery evidence remain open. Transient PostgreSQL failures while
+  claiming work or persisting retry/dead-letter state extend the current ACK
+  and retry in place with capped backoff; live outage recovery remains
+  unqualified.
 - Identity maintenance: expired recovery tokens, revoked sessions, expired
   revocations, rate-limit windows, old security events, and aged orphan profile
   images are cleaned by a separate Core-owned worker.
@@ -34,8 +37,10 @@
   durables require an explicit start sequence, and optional message limits allow
   bounded replay runs. A recovery test restarts a single-server JetStream with
   file storage retained and verifies delivery resumes with confirmed ACKs and
-  duplicate-event idempotency. Cluster failover, database-outage, and retry
-  exhaustion recovery qualification remain open.
+  duplicate-event idempotency. Transient PostgreSQL errors during event
+  processing or dead-letter persistence extend the current ACK and retry with
+  capped backoff. Cluster failover, database-outage, and retry exhaustion
+  recovery qualification remain open.
 - Geodata workers: registered JetStream consumers for import preprocessing and
   promotion, confirmed entity deletion, and location enrichment are implemented.
   Each durable is polled concurrently up to its registered `max_ack_pending`
@@ -103,6 +108,10 @@
   completed object and queued import. Other object-store and worker outage paths
   remain open; see [object-store recovery](../operations/object-store-recovery.md).
 
+- Email worker: transient PostgreSQL errors during delivery claiming,
+  delivered/retry state updates, and dead-letter persistence extend the current
+  JetStream ACK and retry the transaction with capped backoff. The SMTP send
+  itself is not repeated while waiting for delivery-state persistence.
 - Gateway: routes public API requests to their owning services, protects
   Identity internal endpoints, streams request and response bodies, enforces
   configured proxy timeouts, and resolves Grafana identity and permissions from

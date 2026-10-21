@@ -20,6 +20,7 @@ import {
 } from '@app/platform/worker-probes.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
+import { retryTransientDatabaseOperation } from '@app/platform/database-retry.js';
 import {
   ActivityWorkRepository,
   type ClaimedJob,
@@ -219,12 +220,14 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
       validateEnvelope(definition, envelope, message.subject);
     } catch (error) {
       try {
-        await this.repository.recordWorkDeadLetter(
-          message.subject,
-          null,
-          null,
-          delivery,
-          'invalid_envelope',
+        await this.retryDatabase(message, 'recording invalid work', () =>
+          this.repository.recordWorkDeadLetter(
+            message.subject,
+            null,
+            null,
+            delivery,
+            'invalid_envelope',
+          ),
         );
         message.term();
       } catch (persistError) {
@@ -241,7 +244,9 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
     const workId = envelope.workId as string;
     let job: ClaimedJob | null = null;
     try {
-      job = await this.claimUntilReady(definition, message, workId, delivery);
+      job = await this.retryDatabase(message, 'claiming work', () =>
+        this.claimUntilReady(definition, message, workId, delivery),
+      );
       if (!job) return;
       await this.processWithHeartbeats(job, message);
       message.ack();
@@ -249,21 +254,23 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       const delaySeconds = Math.min(300, 2 ** Math.min(delivery, 8));
       try {
-        if (!job) {
-          message.nak(delaySeconds * 1000);
-        } else if (delivery >= MAX_DELIVERIES) {
-          await this.repository.failWorkJob(
-            job,
-            error,
-            message.subject,
-            definition.workType,
-            delivery,
-          );
-          message.ack();
-        } else {
-          await this.repository.retryWorkJob(job, error, delaySeconds);
-          message.nak(delaySeconds * 1000);
-        }
+        await this.retryDatabase(message, 'settling failed work', async () => {
+          if (!job) {
+            message.nak(delaySeconds * 1000);
+          } else if (delivery >= MAX_DELIVERIES) {
+            await this.repository.failWorkJob(
+              job,
+              error,
+              message.subject,
+              definition.workType,
+              delivery,
+            );
+            message.ack();
+          } else {
+            await this.repository.retryWorkJob(job, error, delaySeconds);
+            message.nak(delaySeconds * 1000);
+          }
+        });
       } catch (persistError) {
         this.logger.error(
           `Could not persist Activity work retry state: ${safeError(persistError)}`,
@@ -273,6 +280,24 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
         `Activity work ${workId} (${definition.kind}) failed: ${safeError(error)}`,
       );
     }
+  }
+
+  private async retryDatabase<T>(
+    message: JsMsg,
+    context: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return retryTransientDatabaseOperation(operation, {
+      stopping: () => this.stopping,
+      onRetry: (error, attempt) => {
+        this.extendMessageAck(message, context);
+        if (attempt === 1 || attempt % 12 === 0)
+          this.logger.warn(
+            `Activity worker is waiting for PostgreSQL while ${context}: ${safeError(error)}`,
+          );
+      },
+      wait: (milliseconds) => this.wait(milliseconds),
+    });
   }
 
   private async claimUntilReady(

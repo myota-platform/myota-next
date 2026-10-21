@@ -23,6 +23,7 @@ import {
 } from '@app/platform/geodata-consumer-policy.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { IMPORT_RUN_HEARTBEAT_SECONDS } from '@app/platform/import-limits.js';
+import { retryTransientDatabaseOperation } from '@app/platform/database-retry.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
 import {
   WorkerProbeServer,
@@ -329,9 +330,8 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
     error: unknown,
     delivery: number,
   ): Promise<void> {
-    let retry = 0;
-    while (!this.stopping) {
-      try {
+    await retryTransientDatabaseOperation(
+      async () => {
         if (job && definition.onFailure) await definition.onFailure(job, error);
         const state = await definition.getState(envelope);
         if (isTerminal(definition.workType, state, envelope)) {
@@ -358,19 +358,20 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
           ) * delivery,
         );
         message.nak(retrySeconds * 1000);
-        return;
-      } catch (persistError) {
-        if (!isTransientDatabaseError(persistError)) throw persistError;
-        retry += 1;
-        message.working();
-        if (retry === 1 || retry % 12 === 0)
-          this.logger.warn(
-            `Geodata worker is waiting for PostgreSQL before settling ${workId(envelope)}: ${safeError(persistError)}`,
-          );
-        const delayMs = Math.min(30_000, 1_000 * 2 ** Math.min(retry - 1, 5));
-        await abortableDelay(delayMs, this.stopController.signal);
-      }
-    }
+      },
+      {
+        stopping: () => this.stopping,
+        onRetry: (persistError, attempt) => {
+          message.working();
+          if (attempt === 1 || attempt % 12 === 0)
+            this.logger.warn(
+              `Geodata worker is waiting for PostgreSQL before settling ${workId(envelope)}: ${safeError(persistError)}`,
+            );
+        },
+        wait: (milliseconds) =>
+          abortableDelay(milliseconds, this.stopController.signal),
+      },
+    );
   }
 
   private async claimUntilReady(
@@ -753,42 +754,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID.test(value);
-}
-
-function isTransientDatabaseError(error: unknown): boolean {
-  const transientCodes = new Set([
-    'ECONNREFUSED',
-    'ECONNRESET',
-    'EHOSTUNREACH',
-    'ENETUNREACH',
-    'EPIPE',
-    'ETIMEDOUT',
-    '53300',
-    '55P03',
-    '57P01',
-    '57P02',
-    '57P03',
-    '40001',
-    '40P01',
-  ]);
-  const pending = [error];
-  const visited = new Set<unknown>();
-  while (pending.length > 0 && visited.size < 16) {
-    const current = pending.pop();
-    if (current === null || typeof current !== 'object' || visited.has(current))
-      continue;
-    visited.add(current);
-    const record = current as Record<string, unknown>;
-    const code = record.code;
-    if (
-      typeof code === 'string' &&
-      (code.startsWith('08') || transientCodes.has(code))
-    )
-      return true;
-    if (record.cause !== undefined) pending.push(record.cause);
-    if (Array.isArray(record.errors)) pending.push(...record.errors);
-  }
-  return false;
 }
 
 function isPythonUuid(value: string): boolean {

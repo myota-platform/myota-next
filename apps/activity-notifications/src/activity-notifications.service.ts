@@ -18,9 +18,11 @@ import type { Consumer, ConsumerConfig, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { abortableDelay } from '@app/platform/async-timers.js';
 import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
+import { retryTransientDatabaseOperation } from '@app/platform/database-retry.js';
 import { pythonString } from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 
@@ -89,6 +91,7 @@ export class ActivityNotificationsService
 {
   private readonly logger = new Logger(ActivityNotificationsService.name);
   private stopping = false;
+  private readonly stopController = new AbortController();
   private connection?: Awaited<ReturnType<typeof connect>>;
   private messages?: Consumer;
   private metricsServer?: Server;
@@ -154,6 +157,7 @@ export class ActivityNotificationsService
 
   async onModuleDestroy(): Promise<void> {
     this.stopping = true;
+    this.stopController.abort();
     if (this.metricsServer) {
       await new Promise<void>((resolve, reject) => {
         this.metricsServer!.close((error) =>
@@ -355,7 +359,11 @@ export class ActivityNotificationsService
         permanent = true;
         throw new Error('unsupported_event_version');
       }
-      const processed = await this.processEvent(envelope, eventType);
+      const processed = await this.retryDatabase(
+        message,
+        `processing ${eventType}`,
+        () => this.processEvent(envelope, eventType),
+      );
       try {
         if (!(await message.ackAck())) {
           this.countOutcome('ack_unconfirmed');
@@ -390,12 +398,17 @@ export class ActivityNotificationsService
       }
     } catch (error) {
       if (permanent || delivered >= MAX_DELIVERIES) {
-        await this.persistDeadLetter(
+        await this.retryDatabase(
           message,
-          envelope,
-          eventType,
-          delivered,
-          permanent,
+          'recording notification dead letter',
+          () =>
+            this.persistDeadLetter(
+              message,
+              envelope,
+              eventType,
+              delivered,
+              permanent,
+            ),
         );
         message.term();
         this.countOutcome('dead_lettered');
@@ -416,6 +429,25 @@ export class ActivityNotificationsService
         `Notification event ${eventType} failed: ${this.safeError(error)}`,
       );
     }
+  }
+
+  private async retryDatabase<T>(
+    message: JsMsg,
+    context: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return retryTransientDatabaseOperation(operation, {
+      stopping: () => this.stopping,
+      onRetry: (error, attempt) => {
+        message.working();
+        if (attempt === 1 || attempt % 12 === 0)
+          this.logger.warn(
+            `Activity notifications are waiting for PostgreSQL while ${context}: ${this.safeError(error)}`,
+          );
+      },
+      wait: (milliseconds) =>
+        abortableDelay(milliseconds, this.stopController.signal),
+    });
   }
 
   private async processEvent(

@@ -13,7 +13,9 @@ import type { createTransport } from 'nodemailer';
 import type { Pool, PoolClient } from 'pg';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { readFileSync } from 'node:fs';
+import { abortableDelay } from '@app/platform/async-timers.js';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { retryTransientDatabaseOperation } from '@app/platform/database-retry.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import { EmailWorkerTelemetry } from './email-worker-telemetry.js';
@@ -37,6 +39,7 @@ type Sender = { address: string; displayName: string };
 export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EmailWorkerService.name);
   private stopping = false;
+  private readonly stopController = new AbortController();
   private connection?: Awaited<ReturnType<typeof connect>>;
   private consumer?: Consumer;
   private manager?: Awaited<ReturnType<typeof jetstreamManager>>;
@@ -103,6 +106,7 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy() {
     this.stopping = true;
+    this.stopController.abort();
     this.telemetry.setReady(false);
     await this.loop;
     await this.connection?.drain();
@@ -159,13 +163,19 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
     try {
       command = parseEmailCommand(message.data);
     } catch {
-      await this.deadLetter(null, 'invalid_command');
+      await this.retryDatabase(message, 'recording invalid email command', () =>
+        this.deadLetter(null, 'invalid_command'),
+      );
       message.term();
       this.telemetry.record('invalid_command', 'unknown');
       this.logger.warn('Rejected an invalid email command');
       return;
     }
-    const state = await this.claim(command);
+    const state = await this.retryDatabase(
+      message,
+      'claiming email delivery',
+      () => this.claim(command),
+    );
     if (state === 'DELIVERED' || state === 'DEAD_LETTER') {
       message.ack();
       this.telemetry.record('duplicate', command.templateId);
@@ -203,7 +213,9 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
       span?.end();
       spanEnded = true;
       stage = 'delivery';
-      await this.markDelivered(command.workId);
+      await this.retryDatabase(message, 'recording email delivery', () =>
+        this.markDelivered(command.workId),
+      );
       message.ack();
       this.telemetry.record('delivered', command.templateId);
       this.telemetry.observeDuration(
@@ -220,7 +232,11 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
               : 'delivery failed',
         });
       if (error instanceof RecipientUnavailable) {
-        await this.deadLetter(command.workId, 'recipient_unavailable');
+        await this.retryDatabase(
+          message,
+          'recording unavailable recipient',
+          () => this.deadLetter(command.workId, 'recipient_unavailable'),
+        );
         message.term();
         this.telemetry.record('dead_letter', command.templateId);
         this.telemetry.observeDuration(
@@ -231,7 +247,11 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
         return;
       }
       if (message.info.deliveryCount >= MAX_DELIVERIES) {
-        await this.deadLetter(command.workId, 'delivery_exhausted');
+        await this.retryDatabase(
+          message,
+          'recording exhausted email delivery',
+          () => this.deadLetter(command.workId, 'delivery_exhausted'),
+        );
         message.term();
         this.telemetry.record('dead_letter', command.templateId);
         this.telemetry.observeDuration(
@@ -246,7 +266,11 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
         );
         return;
       }
-      const attempts = await this.retry(command.workId);
+      const attempts = await this.retryDatabase(
+        message,
+        'recording email retry state',
+        () => this.retry(command.workId),
+      );
       message.nak(backoffMs(Math.max(message.info.deliveryCount, attempts)));
       this.telemetry.record(
         stage === 'smtp'
@@ -505,6 +529,25 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
   private async connect(): Promise<PoolClient> {
     if (!this.pool) throw new Error('Core database is not configured');
     return this.pool.connect();
+  }
+
+  private async retryDatabase<T>(
+    message: JsMsg,
+    context: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return retryTransientDatabaseOperation(operation, {
+      stopping: () => this.stopping,
+      onRetry: (error, attempt) => {
+        message.working();
+        if (attempt === 1 || attempt % 12 === 0)
+          this.logger.warn(
+            `Email worker is waiting for PostgreSQL while ${context}: ${safeError(error)}`,
+          );
+      },
+      wait: (milliseconds) =>
+        abortableDelay(milliseconds, this.stopController.signal),
+    });
   }
 }
 
