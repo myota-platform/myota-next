@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  HttpException,
   Inject,
   Injectable,
   NotFoundException,
@@ -115,13 +116,15 @@ export class IdentityProfileImageService {
   }
 
   async uploadOwnProfileImage(
-    authorization: string,
+    authorization: string | undefined,
     contentType: string | undefined,
+    contentLength: string | undefined,
     input: AsyncIterable<Uint8Array>,
   ): Promise<Record<string, unknown>> {
-    const actor = await this.auth.currentAccount(authorization);
+    const content = await readProfileImageBody(input, contentLength);
+    const actor = await this.auth.currentAccount(authorization ?? '');
     const actorId = accountIdOf(actor);
-    const normalized = await this.normalize(contentType, input);
+    const normalized = await this.normalize(contentType, content);
     const imageId = randomUUID();
     const client = await this.connect();
     let previousImageId: string | null = null;
@@ -256,7 +259,7 @@ export class IdentityProfileImageService {
 
   private async normalize(
     contentType: string | undefined,
-    input: AsyncIterable<Uint8Array>,
+    content: Buffer,
   ): Promise<Buffer> {
     const mediaType = trimPythonWhitespace(
       (contentType ?? '').split(';', 1)[0],
@@ -265,23 +268,6 @@ export class IdentityProfileImageService {
     if (!format) {
       throw new BadRequestException('profile image must be JPEG, PNG, or WebP');
     }
-    const chunks: Buffer[] = [];
-    let size = 0;
-    for await (const chunk of input) {
-      size += chunk.byteLength;
-      if (size > MAX_INPUT_BYTES) {
-        throw new BadRequestException(
-          'profile image must be between 1 byte and 5 MiB',
-        );
-      }
-      chunks.push(Buffer.from(chunk));
-    }
-    if (!size) {
-      throw new BadRequestException(
-        'profile image must be between 1 byte and 5 MiB',
-      );
-    }
-    const content = Buffer.concat(chunks, size);
     try {
       const metadata = await sharp(content, { pages: -1 }).metadata();
       if (metadata.format !== format) {
@@ -400,6 +386,44 @@ export class IdentityProfileImageService {
       throw new ServiceUnavailableException('Identity database is unavailable');
     }
   }
+}
+
+async function readProfileImageBody(
+  input: AsyncIterable<Uint8Array>,
+  contentLength: string | undefined,
+): Promise<Buffer> {
+  const normalizedLength = trimPythonWhitespace(contentLength ?? '0');
+  if (!/^[+-]?\d(?:_?\d)*$/.test(normalizedLength))
+    throw new BadRequestException('invalid Content-Length');
+  const declaredLength = BigInt(normalizedLength.replaceAll('_', ''));
+  if (declaredLength <= 0n)
+    throw new BadRequestException('request body is required');
+  if (declaredLength > BigInt(MAX_INPUT_BYTES))
+    throw new HttpException(
+      { detail: 'profile image upload exceeds 5 MiB' },
+      413,
+    );
+
+  const chunks: Buffer[] = [];
+  let size = 0;
+  try {
+    for await (const chunk of input) {
+      const part = Buffer.from(chunk);
+      size += part.length;
+      if (size > MAX_INPUT_BYTES)
+        throw new HttpException(
+          { detail: 'profile image upload exceeds 5 MiB' },
+          413,
+        );
+      chunks.push(part);
+    }
+  } catch (error) {
+    if (error instanceof HttpException) throw error;
+    throw new BadRequestException('request body is incomplete');
+  }
+  if (BigInt(size) !== declaredLength)
+    throw new BadRequestException('request body is incomplete');
+  return Buffer.concat(chunks, size);
 }
 
 function isMissingObject(error: unknown): boolean {

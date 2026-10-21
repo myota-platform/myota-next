@@ -152,7 +152,10 @@ Profile-image uploads accept JPEG, PNG, or WebP up to 5 MiB, reject animation
 and dimensions above 4096 pixels, honor EXIF orientation, center-crop to 512 by
 512, remove source metadata, and try WebP qualities 85, 75, 65, and 55 under a
 256 KiB output cap in both the Pillow and Sharp paths. The raw Identity upload
-route streams past the JSON parser into bounded image normalization. Both paths use centered
+route streams past the JSON parser into bounded image normalization. Required
+body and 5 MiB size checks happen before authentication; media type and image
+decoding checks happen after authentication, matching Python's request order.
+Both paths use centered
 Lanczos-3 resizing; Sharp selects the kernel explicitly and ignores embedded
 ICC profiles to match Pillow's direct channel conversion. A transparent
 gradient fixture generated with the pinned Python profile-image normalizer

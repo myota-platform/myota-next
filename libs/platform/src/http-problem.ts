@@ -193,6 +193,7 @@ export function createApiProblem(
 
 function problemCode(status: number) {
   if (status === 404) return 'not_found';
+  if (status === 413) return 'payload_too_large';
   if (status === 403 || status === 401 || status === 429) return 'forbidden';
   if (status === 409) return 'conflict';
   if (status >= 500) return 'internal_error';

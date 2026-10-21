@@ -159,13 +159,13 @@ export class AuthController {
   uploadOwnProfileImage(
     @Headers('authorization') authorization: string | undefined,
     @Headers('content-type') contentType: string | undefined,
+    @Headers('content-length') contentLength: string | undefined,
     @Req() request: Request,
   ) {
-    if (!authorization)
-      throw new UnauthorizedException('Bearer authentication is required');
     return this.profileImages.uploadOwnProfileImage(
       authorization,
       contentType,
+      contentLength,
       request,
     );
   }
