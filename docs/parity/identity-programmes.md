@@ -183,8 +183,9 @@ fields and clears the lockout state. Global operators bypass the general
 attempt throttle but still enter this password-failure lockout after five bad
 passwords, matching the Python login handler.
 NestJS login also verifies a fixed-salt `hashlib.scrypt` credential generated
-by the Python reference, confirming the shared scrypt parameters and
-unpadded base64url encoding for account migration.
+by the Python reference, confirming the shared password-derivation parameters
+and unpadded base64url encoding. This is behavioral compatibility evidence;
+the new platform starts with empty databases and does not import old accounts.
 The internal email-recipient resolver rejects revoked service tokens before
 scope checks and maps malformed UUID forms to the same unavailable-recipient
 response as the Python handler, including its quoted `KeyError` detail.
