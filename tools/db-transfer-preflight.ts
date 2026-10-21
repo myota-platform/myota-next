@@ -146,7 +146,9 @@ async function main() {
              AND NOT (
                n.nspname='public'
                AND c.relname IN (
-                 'myota_schema_migration', 'myota_deployment_schema_state'
+                 'myota_schema_migration',
+                 'myota_nest_schema_migration',
+                 'myota_deployment_schema_state'
                )
              )
              AND NOT EXISTS (
@@ -483,6 +485,22 @@ async function inspectLedger(
   client: Client,
   owner: Owner,
 ): Promise<LedgerInspection> {
+  const nestColumns = await client.query<{ column_name: string }>(`
+    SELECT column_name
+      FROM information_schema.columns
+     WHERE table_schema='public'
+       AND table_name='myota_nest_schema_migration'
+  `);
+  const nestNames = new Set(nestColumns.rows.map((row) => row.column_name));
+  if (['owner', 'migration', 'checksum'].every((name) => nestNames.has(name))) {
+    const result = await client.query<{ migration: string }>(
+      'SELECT migration FROM public.myota_nest_schema_migration WHERE owner=$1 ORDER BY migration',
+      [owner],
+    );
+    return { kind: 'nestjs', rows: result.rows } as const;
+  }
+  if (nestNames.size) return { kind: 'unknown', rows: [] as [] } as const;
+
   const columns = await client.query<{ column_name: string }>(`
     SELECT column_name
       FROM information_schema.columns
@@ -505,10 +523,10 @@ async function inspectLedger(
     `);
     return { kind: 'python', rows: result.rows } as const;
   }
-  const nextLedger = ['owner', 'migration', 'checksum'].every((name) =>
+  const legacyNestLedger = ['owner', 'migration', 'checksum'].every((name) =>
     names.has(name),
   );
-  if (nextLedger) {
+  if (legacyNestLedger) {
     const result = await client.query<{ migration: string }>(
       'SELECT migration FROM public.myota_schema_migration WHERE owner=$1 ORDER BY migration',
       [owner],

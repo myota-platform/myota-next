@@ -395,8 +395,9 @@ recovery evidence remains outstanding. Activity lease extension is supported
 for long-running jobs.
 Geodata's PostGIS Maidenhead-cell function is checked in CI against the
 reference Python outputs for point, contained polygon, boundary-crossing
-polygon, and line fixtures; the check runs after the Geodata baseline migration
-on a disposable PostGIS database.
+polygon, and line fixtures. CI applies all three owner baselines to three
+separate disposable databases, then runs the cell check against the PostGIS
+database.
 Activity subject aggregate counts preserve PostgreSQL bigint precision in API
 facts and persisted award progress; award comparisons apply Python-compatible
 float conversion without first truncating the database values to JavaScript

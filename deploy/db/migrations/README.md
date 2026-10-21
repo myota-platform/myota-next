@@ -1,7 +1,8 @@
 # Database migrations
 
 Apply migrations to exactly one database owner per command. The Node runner
-records filenames and SHA-256 checksums in `public.myota_schema_migration`,
+records filenames and SHA-256 checksums in
+`public.myota_nest_schema_migration`,
 serializes concurrent runners with a PostgreSQL advisory lock, and commits each
 migration and its record atomically:
 
@@ -68,6 +69,11 @@ The verified source migration history and transfer requirements are recorded
 in [cross-version database transfer](../../../docs/operations/cross-version-data-transfer.md).
 Do not introduce cross-database foreign keys or combine the three restore
 boundaries.
+
+The baseline snapshots retain the Python-owned
+`public.myota_schema_migration` table for source-history comparison. The Node
+runner uses a separate `public.myota_nest_schema_migration` table so applying a
+baseline to a clean database does not collide with that legacy ledger.
 
 The original application and deployment SQL inputs are preserved as a
 non-executable comparison snapshot in

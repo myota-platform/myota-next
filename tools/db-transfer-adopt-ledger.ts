@@ -71,18 +71,21 @@ async function main() {
     );
     if (!sentinel.rows[0]?.relation)
       throw new Error(`${owner} destination is missing ${config.sentinel}`);
-    const columns = await client.query<{ column_name: string }>(`
+    const nestColumns = await client.query<{ column_name: string }>(`
       SELECT column_name
         FROM information_schema.columns
-       WHERE table_schema='public' AND table_name='myota_schema_migration'
+       WHERE table_schema='public'
+         AND table_name='myota_nest_schema_migration'
     `);
-    const names = new Set(columns.rows.map((row) => row.column_name));
-    if (['owner', 'migration', 'checksum'].every((name) => names.has(name))) {
+    const nestNames = new Set(nestColumns.rows.map((row) => row.column_name));
+    if (
+      ['owner', 'migration', 'checksum'].every((name) => nestNames.has(name))
+    ) {
       const entries = await client.query<{
         migration: string;
         checksum: string;
       }>(
-        'SELECT migration,checksum FROM public.myota_schema_migration WHERE owner=$1',
+        'SELECT migration,checksum FROM public.myota_nest_schema_migration WHERE owner=$1',
         [owner],
       );
       assertNestLedger(owner, entries.rows, expected);
@@ -90,6 +93,15 @@ async function main() {
       process.stdout.write(`${owner} ledger is already in NestJS format\n`);
       return;
     }
+    if (nestNames.size)
+      throw new Error('NestJS migration ledger has an unknown schema');
+
+    const columns = await client.query<{ column_name: string }>(`
+      SELECT column_name
+        FROM information_schema.columns
+       WHERE table_schema='public' AND table_name='myota_schema_migration'
+    `);
+    const names = new Set(columns.rows.map((row) => row.column_name));
     if (
       !['migration_id', 'checksum', 'application_mode', 'applied_at'].every(
         (name) => names.has(name),
@@ -104,23 +116,7 @@ async function main() {
     `);
     const mapped = assertPythonLedger(owner, legacy.rows, expected);
     await client.query(`
-      CREATE TEMP TABLE myota_transfer_migration_ledger (
-        owner text NOT NULL,
-        migration text NOT NULL,
-        checksum text NOT NULL,
-        applied_at timestamptz NOT NULL,
-        PRIMARY KEY (owner,migration)
-      ) ON COMMIT DROP
-    `);
-    for (const row of mapped)
-      await client.query(
-        `INSERT INTO myota_transfer_migration_ledger
-         (owner,migration,checksum,applied_at) VALUES ($1,$2,$3,$4)`,
-        [owner, row.migration, row.checksum, row.appliedAt],
-      );
-    await client.query('DROP TABLE public.myota_schema_migration');
-    await client.query(`
-      CREATE TABLE public.myota_schema_migration (
+      CREATE TABLE public.myota_nest_schema_migration (
         owner text NOT NULL,
         migration text NOT NULL,
         checksum text NOT NULL,
@@ -128,11 +124,12 @@ async function main() {
         PRIMARY KEY (owner,migration)
       )
     `);
-    await client.query(`
-      INSERT INTO public.myota_schema_migration(owner,migration,checksum,applied_at)
-      SELECT owner,migration,checksum,applied_at
-        FROM myota_transfer_migration_ledger
-    `);
+    for (const row of mapped)
+      await client.query(
+        `INSERT INTO public.myota_nest_schema_migration
+         (owner,migration,checksum,applied_at) VALUES ($1,$2,$3,$4)`,
+        [owner, row.migration, row.checksum, row.appliedAt],
+      );
     await client.query('COMMIT');
     process.stdout.write(
       `Converted ${owner} migration ledger for ${target}; run the owner migration command next.\n`,

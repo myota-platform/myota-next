@@ -63,12 +63,13 @@ must not create cross-database foreign keys or join data across these targets.
 
 ## Verified migration history
 
-The current Python checkout uses `deploy/db/migrations/run.sh` and records
+The Python checkout uses `deploy/db/migrations/run.sh` and records
 `migration_id`, `checksum`, and `application_mode` in
 `public.myota_schema_migration`. The NestJS checkout's `tools/db-migrate.ts`
-uses `owner`, `migration`, and `checksum` in that table. It cannot currently
-run against a database restored from the Python deployment because the ledger
-schemas differ.
+records `owner`, `migration`, and `checksum` in the separate
+`public.myota_nest_schema_migration` table. The ledger adoption step validates
+the restored Python history and copies its verified checksums into the NestJS
+ledger while preserving the Python ledger for audit and validation.
 
 The following baseline SQL files are byte-identical between the two
 checkouts:

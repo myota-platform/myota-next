@@ -31,6 +31,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      CORE_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_core
+      ACTIVITY_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_activity
       GEO_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_geo
       GEO_PARITY_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_geo
     steps:
@@ -39,7 +41,12 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - name: Install OSM PBF decoder
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends --yes osmium-tool
       - run: npm ci
+      - run: npm run prepare:parity-databases
+      - run: npm run migrate:db -- --owner=core
+      - run: npm run migrate:db -- --owner=activity
       - run: npm run migrate:db -- --owner=geo
       - run: npm run test:geodata-maidenhead
       - run: npm run format:check

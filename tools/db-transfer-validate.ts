@@ -504,7 +504,9 @@ async function applicationTables(client: Client) {
        AND c.relkind IN ('r','p')
        AND NOT c.relispartition
        AND c.relname NOT IN (
-         'myota_schema_migration', 'myota_deployment_schema_state'
+         'myota_schema_migration',
+         'myota_nest_schema_migration',
+         'myota_deployment_schema_state'
        )
        AND NOT EXISTS (
          SELECT 1 FROM pg_depend AS d

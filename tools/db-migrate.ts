@@ -40,7 +40,7 @@ async function main(): Promise<void> {
       lockKey,
     ]);
     await client.query(
-      `CREATE TABLE IF NOT EXISTS public.myota_schema_migration (
+      `CREATE TABLE IF NOT EXISTS public.myota_nest_schema_migration (
         owner text NOT NULL,
         migration text NOT NULL,
         checksum text NOT NULL,
@@ -48,19 +48,20 @@ async function main(): Promise<void> {
         PRIMARY KEY (owner,migration)
       )`,
     );
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
       if (!/^\d{3}_[a-z0-9_]+\.sql$/.test(file))
         throw new Error(`Invalid migration filename: ${file}`);
+      const migration = index === 0 ? 'baseline-v1' : file;
       const sql = await readFile(join(directory, file), 'utf8');
       const checksum = createHash('sha256').update(sql).digest('hex');
       const recorded = await client.query(
-        'SELECT checksum FROM public.myota_schema_migration WHERE owner=$1 AND migration=$2',
-        [owner, file],
+        'SELECT checksum FROM public.myota_nest_schema_migration WHERE owner=$1 AND migration=$2',
+        [owner, migration],
       );
       if (recorded.rows[0]) {
         if (recorded.rows[0].checksum !== checksum)
           throw new Error(
-            `Applied migration checksum changed: ${owner}/${file}`,
+            `Applied migration checksum changed: ${owner}/${migration}`,
           );
         continue;
       }
@@ -72,8 +73,8 @@ async function main(): Promise<void> {
         // by the baseline files, including CREATE FUNCTION and DO blocks.
         await client.query(sql);
         await client.query(
-          'INSERT INTO public.myota_schema_migration(owner,migration,checksum) VALUES ($1,$2,$3)',
-          [owner, file, checksum],
+          'INSERT INTO public.myota_nest_schema_migration(owner,migration,checksum) VALUES ($1,$2,$3)',
+          [owner, migration, checksum],
         );
         await client.query('COMMIT');
       } catch (error) {
