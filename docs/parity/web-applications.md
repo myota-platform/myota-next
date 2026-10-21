@@ -43,7 +43,8 @@ activation/QSO detail viewing and statistics rebuild submission with an
 idempotency key and job status refresh. The Admin Activity screen also lists,
 filters, pages, and reviews QSO correction requests. Review cards identify both
 requester and operator, and confirmations explain the effect of applying versus
-rejecting. This target extension lacks browser-level compatibility coverage.
+rejecting. Browser coverage verifies the affected QSO context, status filtering,
+review notes, paging, and both apply and reject outcomes.
 Award browser checks cover programme-
 scoped draft creation, its idempotency key and condition/level payload, and
 the submit, approve, and publish lifecycle. Award creation, definition edits,
