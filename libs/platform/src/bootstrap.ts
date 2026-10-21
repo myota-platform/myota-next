@@ -7,9 +7,9 @@ import { integerSetting } from './integer-setting.js';
 import {
   ApiProblemFilter,
   createApiProblem,
-  isJsonContentType,
   parserProblem,
   requestIds,
+  usesSharedJsonParser,
 } from './http-problem.js';
 import { ObserveInstrument } from './observe.js';
 import { containsBigInt, stringifyJsonWithBigInts } from './json-bigint.js';
@@ -40,15 +40,17 @@ export async function bootstrapHttpService(
     next();
   });
   for (const route of rawBodyRoutes)
-    app.use(
-      route,
-      express.raw({ type: 'application/octet-stream', limit: '16mb' }),
-    );
+    app.use(route, express.raw({ type: () => true, limit: '16mb' }));
   app.use(
     express.json({
       limit: jsonLimit,
       strict: false,
-      type: (request) => isJsonContentType(request.headers['content-type']),
+      type: (request) =>
+        usesSharedJsonParser(
+          request.method ?? '',
+          request.url ?? '',
+          request.headers['content-type'],
+        ),
       verify: (request, _response, buffer) => {
         if (
           ['/v1/geodata/proposals', '/v1/geodata/imports'].includes(
@@ -100,7 +102,6 @@ export async function bootstrapHttpService(
       );
     next();
   });
-  app.use(express.urlencoded({ extended: true, limit: jsonLimit }));
   app.use((request: Request, _response: Response, next: NextFunction) => {
     if (request.body === undefined) request.body = {};
     next();

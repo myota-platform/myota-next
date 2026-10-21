@@ -10,12 +10,22 @@ import type { NextFunction, Request, Response } from 'express';
 export const REQUEST_ID_HEADER = 'x-request-id';
 export const CORRELATION_ID_HEADER = 'x-correlation-id';
 
-export function isJsonContentType(contentType: string | undefined): boolean {
-  const mediaType = contentType?.split(';', 1)[0]?.trim().toLowerCase();
-  return (
-    mediaType === 'application/json' ||
-    (mediaType?.startsWith('application/') === true &&
-      mediaType.endsWith('+json'))
+export function usesSharedJsonParser(
+  method: string,
+  path: string,
+  contentType: string | string[] | undefined,
+): boolean {
+  const mediaType = (Array.isArray(contentType) ? contentType[0] : contentType)
+    ?.split(';', 1)[0]
+    ?.trim()
+    .toLowerCase();
+  const requestPath = path.split('?', 1)[0];
+  return !(
+    (method === 'POST' &&
+      requestPath === '/v1/geodata/imports' &&
+      mediaType === 'multipart/form-data') ||
+    (method === 'PUT' &&
+      /^\/v1\/awards\/assets\/[^/]+\/content$/.test(requestPath))
   );
 }
 
@@ -103,7 +113,11 @@ export function parserProblem(
   let detail =
     typeof error.message === 'string' ? error.message : 'invalid request body';
   const errorType = typeof error.type === 'string' ? error.type : '';
-  const isJson = isJsonContentType(request.get('content-type'));
+  const isJson = usesSharedJsonParser(
+    request.method,
+    request.path,
+    request.get('content-type'),
+  );
   if (isJson && errorType === 'entity.parse.failed') {
     status = 400;
     detail = 'invalid JSON body';
