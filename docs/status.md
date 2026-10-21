@@ -39,7 +39,7 @@ behavioral parity or production readiness.
 - Complete the semantic review and rehearsal for cross-version database
   transfer, backup, restore, and rollback.
 - Expand browser workflow checks across Admin and Participant payload parity,
-  candidate proposal flows, accessibility, responsive behavior, and failure
+  new-point proposal flows, accessibility, responsive behavior, and failure
   states.
   Current browser checks use intercepted API responses and do not test
   deployment or service integration.

@@ -34,11 +34,16 @@ test('selects a programme and renders its public content and entity catalogue', 
   page,
 }) => {
   const entityRequests: string[] = [];
+  const proposalRequests: Array<{
+    body: unknown;
+    idempotencyKey: string;
+  }> = [];
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
   await page.route('**/v1/**', async (route) => {
-    const url = new URL(route.request().url());
+    const request = route.request();
+    const url = new URL(request.url());
     if (url.pathname === '/v1/programmes') {
       await route.fulfill({
         json: { items: programmes, nextPage: null },
@@ -94,6 +99,40 @@ test('selects a programme and renders its public content and entity catalogue', 
       return;
     }
 
+    if (url.pathname === '/v1/identity/auth/login') {
+      await route.fulfill({
+        json: {
+          accessToken: 'participant-proposal-access-token',
+          refreshToken: 'participant-proposal-refresh-token',
+        },
+      });
+      return;
+    }
+
+    if (url.pathname === '/v1/identity/me') {
+      await route.fulfill({
+        json: {
+          id: 'participant-1',
+          email: 'operator@example.test',
+          displayName: 'Operator One',
+          callsigns: [],
+        },
+      });
+      return;
+    }
+
+    if (
+      url.pathname === '/v1/geodata/proposals' &&
+      request.method() === 'POST'
+    ) {
+      proposalRequests.push({
+        body: request.postDataJSON(),
+        idempotencyKey: request.headers()['idempotency-key'] || '',
+      });
+      await route.fulfill({ status: 201, json: { id: 'proposal-1' } });
+      return;
+    }
+
     await route.fulfill({ json: { items: [], nextPage: null, total: 0 } });
   });
 
@@ -120,8 +159,33 @@ test('selects a programme and renders its public content and entity catalogue', 
   await expect(page.locator('#programme-content')).toContainText(
     'coast eligibility',
   );
+
+  await page.locator('#award-email').fill('operator@example.test');
+  await page.locator('#award-password').fill('test-password');
+  await page.locator('#award-login button[type="submit"]').click();
+  await expect(page.locator('#profile-status')).toHaveText('Profile loaded.');
+  await page.locator('button.propose[data-id="coast-entity-2"]').click();
+  await expect(page.locator('#proposal-status')).toHaveText(
+    'Proposal submitted for review.',
+  );
+
   await page.getByRole('button', { name: 'Reset map view' }).click();
-  expect(entityRequests).toEqual(['alpine', 'coast']);
+  expect(entityRequests).toEqual(['alpine', 'coast', 'coast']);
+  expect(proposalRequests).toHaveLength(1);
+  expect(proposalRequests[0].idempotencyKey).not.toBe('');
+  expect(proposalRequests[0].body).toMatchObject({
+    programmeSlug: 'coast',
+    entityTypes: ['PARK'],
+    source: {
+      name: 'Participant community proposal',
+      license: 'programme-supplied',
+    },
+    feature: {
+      type: 'Feature',
+      properties: { name: 'coast candidate site' },
+      geometry: { type: 'Point', coordinates: [7.1, 46.1] },
+    },
+  });
   expect(pageErrors).toEqual([]);
   await expect(page).toHaveURL(/#coast$/);
 });
