@@ -755,7 +755,7 @@ async function loadActivations() {
   $('qso-form').hidden = !signedIn;
   if (!signedIn) {
     $('activations-list').innerHTML = '';
-    return;
+    return false;
   }
   try {
     const items = [];
@@ -794,8 +794,10 @@ async function loadActivations() {
           )
           .join('')}</ul>`
       : '<p class="small">No activations recorded for this programme yet.</p>';
+    return true;
   } catch (error) {
     $('activation-status').textContent = error.message;
+    return false;
   }
 }
 function renderOperatorCallsigns() {
@@ -904,22 +906,26 @@ async function recordQso(event) {
 async function closeActivation() {
   const activationId = $('qso-activation').value;
   if (!activationId || !confirm('Close this activation?')) return;
-  const request = pendingParticipantMutation(
-    'activation-close',
-    { activationId },
-    { status: 'CLOSED', endedAt: new Date().toISOString() },
-  );
   try {
     await awardApi(`/v1/activations/${encodeURIComponent(activationId)}`, {
       method: 'PATCH',
-      headers: { 'Idempotency-Key': request.key },
-      body: JSON.stringify(request.body),
+      body: JSON.stringify({
+        status: 'CLOSED',
+        endedAt: new Date().toISOString(),
+      }),
     });
-    completePendingParticipantMutation(request.id);
     $('activation-status').textContent = 'Activation closed.';
     await loadActivations();
   } catch (error) {
-    $('activation-status').textContent = error.message;
+    const refreshed = await loadActivations();
+    const activation = refreshed
+      ? activations.find((item) => item.id === activationId)
+      : null;
+    if (activation && activation.status !== 'OPEN') {
+      $('activation-status').textContent = 'Activation close was completed.';
+    } else {
+      $('activation-status').textContent = error.message;
+    }
   }
 }
 $('activation-start-form').onsubmit = startActivation;
