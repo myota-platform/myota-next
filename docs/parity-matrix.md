@@ -717,7 +717,9 @@ geometries.
   Each durable is polled concurrently up to its registered `max_ack_pending`
   limit.
   `/healthz` and `/readyz` expose liveness and Geodata PostgreSQL/NATS
-  readiness. Import run leases and database heartbeats use the Python-compatible
+  readiness. Worker heartbeat timers clear when jobs finish, and worker and
+  scheduled-import polling delays are cancelled on shutdown. Import run leases
+  and database heartbeats use the Python-compatible
   `MYOTA_IMPORT_LEASE_SECONDS` and `MYOTA_IMPORT_HEARTBEAT_SECONDS` settings;
   cancellation reconciliation uses `GEODATA_CANCELLATION_RECONCILE_SECONDS`
   (default 30 seconds, minimum 5); JetStream ACK extensions follow one third of

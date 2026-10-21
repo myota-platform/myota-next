@@ -11,6 +11,10 @@ import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import {
+  abortableDelay,
+  waitForTaskOrTimeout,
+} from '@app/platform/async-timers.js';
+import {
   WorkerProbeServer,
   workerProbePort,
 } from '@app/platform/worker-probes.js';
@@ -49,7 +53,7 @@ type WorkDefinition = {
 export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ActivityWorkerService.name);
   private stopping = false;
-  private readonly waiters = new Set<() => void>();
+  private readonly stopController = new AbortController();
   private connection?: Awaited<ReturnType<typeof connect>>;
   private loops: Promise<void>[] = [];
   private readonly probes = new WorkerProbeServer();
@@ -127,7 +131,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     this.stopping = true;
-    for (const wake of this.waiters) wake();
+    this.stopController.abort();
     await this.probes.close();
     await Promise.allSettled(this.loops);
     await this.connection?.drain();
@@ -194,7 +198,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
           this.logger.error(
             `Activity durable ${definition.durable} poll failed: ${safeError(error)}`,
           );
-          await pause(1000);
+          await abortableDelay(1000, this.stopController.signal);
         }
       }
     }
@@ -332,8 +336,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     const task = this.repository.process(job);
     while (true) {
-      const state = await waitForTaskOrTick(task, 30_000);
-      if (state === 'done') return;
+      if (await waitForTaskOrTimeout(task, 30_000)) return;
       const extended = await this.repository.heartbeat(job);
       if (!extended) throw new Error('worker lease was lost while processing');
       this.extendMessageAck(message, 'processing an Activity job');
@@ -379,17 +382,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async wait(milliseconds: number): Promise<void> {
-    if (this.stopping) return;
-    await new Promise<void>((resolve) => {
-      let timer: ReturnType<typeof setTimeout>;
-      const finish = () => {
-        clearTimeout(timer);
-        this.waiters.delete(finish);
-        resolve();
-      };
-      timer = setTimeout(finish, milliseconds);
-      this.waiters.add(finish);
-    });
+    await abortableDelay(milliseconds, this.stopController.signal);
   }
 }
 
@@ -487,27 +480,4 @@ function safeError(error: unknown): string {
   return (error instanceof Error ? error.message : String(error))
     .replace(/[\r\n\t]+/g, ' ')
     .slice(0, 300);
-}
-
-function pause(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-function waitForTaskOrTick(
-  task: Promise<void>,
-  milliseconds: number,
-): Promise<'done' | 'tick'> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => resolve('tick'), milliseconds);
-    task.then(
-      () => {
-        clearTimeout(timer);
-        resolve('done');
-      },
-      (error: unknown) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
 }

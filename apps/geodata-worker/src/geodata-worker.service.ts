@@ -12,6 +12,10 @@ import type { Consumer, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import {
+  abortableDelay,
+  waitForTaskOrTimeout,
+} from '@app/platform/async-timers.js';
 import { geodataConsumerPolicy } from '@app/platform/geodata-consumer-policy.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { IMPORT_RUN_HEARTBEAT_SECONDS } from '@app/platform/import-limits.js';
@@ -71,8 +75,7 @@ type WorkDefinition = {
 export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GeodataWorkerService.name);
   private stopping = false;
-  private readonly stopSignal: Promise<void>;
-  private resolveStop!: () => void;
+  private readonly stopController = new AbortController();
   private connection?: Awaited<ReturnType<typeof connect>>;
   private loops: Promise<void>[] = [];
   private readonly probes = new WorkerProbeServer();
@@ -96,9 +99,6 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
     this.enrichment = enrichment;
     this.deletions = deletions;
     this.retention = retention;
-    this.stopSignal = new Promise((resolve) => {
-      this.resolveStop = resolve;
-    });
   }
 
   async onModuleInit(): Promise<void> {
@@ -180,7 +180,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     this.stopping = true;
-    this.resolveStop();
+    this.stopController.abort();
     await this.probes.close();
     await Promise.allSettled(this.loops);
     await this.connection?.drain();
@@ -250,7 +250,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
           this.logger.error(
             `Geodata durable ${definition.durable} poll failed: ${safeError(error)}`,
           );
-          await pause(1000);
+          await abortableDelay(1000, this.stopController.signal);
         }
       }
     }
@@ -461,11 +461,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
           acknowledgementIntervalMs - (now - lastAcknowledgement),
         ),
       );
-      const result = await Promise.race([
-        task.then(() => 'done' as const),
-        pause(delay).then(() => 'tick' as const),
-      ]);
-      if (result === 'done') return;
+      if (await waitForTaskOrTimeout(task, delay)) return;
       const tickedAt = Date.now();
       if (tickedAt - lastDatabaseHeartbeat >= databaseHeartbeatMs) {
         if (definition.heartbeat && !(await definition.heartbeat(job)))
@@ -571,7 +567,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async wait(milliseconds: number): Promise<void> {
-    await Promise.race([pause(milliseconds), this.stopSignal]);
+    await abortableDelay(milliseconds, this.stopController.signal);
   }
 }
 
@@ -715,8 +711,4 @@ function safeError(error: unknown): string {
   return (error instanceof Error ? error.message : String(error))
     .replace(/[\r\n\t]+/g, ' ')
     .slice(0, 300);
-}
-
-function pause(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

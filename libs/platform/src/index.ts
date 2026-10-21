@@ -1,6 +1,7 @@
 export * from './bootstrap.js';
 export * from './certificate-renderer.js';
 export * from './access-token.js';
+export * from './async-timers.js';
 export * from './database.module.js';
 export * from './health.controller.js';
 export * from './http-problem.js';

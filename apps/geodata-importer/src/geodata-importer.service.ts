@@ -7,6 +7,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { signAccessToken } from '@app/platform/access-token.js';
+import { abortableDelay } from '@app/platform/async-timers.js';
 import { MAX_IMPORT_FEATURES } from '@app/platform/import-limits.js';
 import { scheduledFeatureHashOverrides } from '../../geodata/src/geodata-request-fingerprint.js';
 import { featuresFromDocument } from './geodata-importer-document.js';
@@ -32,12 +33,10 @@ type RefreshSchedule = {
 export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GeodataImporterService.name);
   private stopping = false;
-  private resolveStop!: () => void;
-  private readonly stopSignal = new Promise<void>((resolve) => {
-    this.resolveStop = resolve;
-  });
+  private readonly stopController = new AbortController();
   private readonly retryAfter = new Map<string, number>();
   private oneShotResult: unknown;
+  private loop?: Promise<void>;
 
   async onModuleInit() {
     const importSpec = process.env.GEODATA_IMPORT_SPEC;
@@ -57,7 +56,7 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     this.assertApiUrl(api);
     this.logger.log('Scheduled Geodata imports are enabled');
     await this.poll();
-    void this.runLoop();
+    this.loop = this.runLoop();
   }
 
   getOneShotResult(): unknown {
@@ -66,7 +65,8 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy() {
     this.stopping = true;
-    this.resolveStop();
+    this.stopController.abort();
+    await this.loop;
   }
 
   private async runLoop() {
@@ -77,7 +77,7 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
       3600,
     );
     while (!this.stopping) {
-      await Promise.race([pause(seconds * 1000), this.stopSignal]);
+      await abortableDelay(seconds * 1000, this.stopController.signal);
       if (!this.stopping) await this.poll();
     }
   }
@@ -327,10 +327,6 @@ function boundedInteger(
   return Number.isInteger(parsed) && parsed >= min && parsed <= max
     ? parsed
     : fallback;
-}
-
-function pause(milliseconds: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function safeError(error: unknown) {

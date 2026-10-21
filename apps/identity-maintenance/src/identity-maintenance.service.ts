@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { IdentityMaintenanceRepository } from './identity-maintenance.repository.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
+import { abortableDelay } from '@app/platform/async-timers.js';
 
 const INTERVAL_SECONDS = integerSetting(
   process.env.MYOTA_IDENTITY_MAINTENANCE_SECONDS,
@@ -49,7 +50,7 @@ export class IdentityMaintenanceService
       }
       if (INTERVAL_SECONDS < 0)
         throw new RangeError('sleep length must be non-negative');
-      await pause(INTERVAL_SECONDS * 1000, this.stopController.signal);
+      await abortableDelay(INTERVAL_SECONDS * 1000, this.stopController.signal);
     }
   }
 }
@@ -58,17 +59,4 @@ function safeError(error: unknown): string {
   return (error instanceof Error ? error.message : String(error))
     .replace(/[\r\n\t]+/g, ' ')
     .slice(0, 300);
-}
-
-function pause(milliseconds: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    if (signal.aborted) return resolve();
-    const finish = () => {
-      clearTimeout(timer);
-      signal.removeEventListener('abort', finish);
-      resolve();
-    };
-    const timer = setTimeout(finish, milliseconds);
-    signal.addEventListener('abort', finish, { once: true });
-  });
 }
