@@ -383,8 +383,39 @@ try {
     geoFixture.rows[0]?.name !== 'Transfer Fixture'
   )
     throw new Error('Owner database fixture data did not survive the transfer');
+
+  for (const key of ['core-target', 'activity-target', 'geo-target']) {
+    await applySql(
+      endpoints[key],
+      'CREATE TABLE public.rollback_marker (id integer PRIMARY KEY)',
+    );
+    const database = names[key];
+    await admin.query(`DROP DATABASE "${database}" WITH (FORCE)`);
+    await admin.query(`CREATE DATABASE "${database}" TEMPLATE template0`);
+  }
+  await run(
+    [
+      '--experimental-strip-types',
+      'tools/db-restore.ts',
+      join(archive, 'recovery-before-apply'),
+    ],
+    {
+      ...env,
+      MYOTA_RESTORE_CONFIRM: 'RESTORE recovery-before-apply',
+    },
+  );
+  const rollbackMarkers = await Promise.all(
+    ['core-target', 'activity-target', 'geo-target'].map((key) =>
+      query(
+        endpoints[key],
+        "SELECT to_regclass('public.rollback_marker') AS marker",
+      ),
+    ),
+  );
+  if (rollbackMarkers.some((result) => result.rows[0]?.marker !== null))
+    throw new Error('Rollback restore retained partial target state');
   process.stdout.write(
-    'Full disposable four-source to three-target transfer workflow verified.\n',
+    'Disposable four-source to three-target transfer and pre-apply rollback verified.\n',
   );
 } finally {
   for (const database of created.reverse())

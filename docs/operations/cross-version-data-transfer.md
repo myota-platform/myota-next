@@ -182,13 +182,17 @@ report are implemented. CI runs these commands end to end with disposable
 PostgreSQL databases and fixture data for Identity, Programme, Activity,
 Geodata, and each legacy Email table. This qualifies archive creation and restore, ledger
 adoption, forward migrations, Email data copying, sequence restoration, and
-the validation report for those fixtures. It does not establish complete
-function parity or compare object-store data and JetStream messages. The report
-compares known forward-migration transformations as well as stable table rows.
+the validation report for those fixtures. CI then recreates all three targets,
+adds simulated partial state, and restores the `recovery-before-apply` dumps to
+verify rollback to the captured pre-apply database state. This does not qualify
+production-sized rollback or recovery of writes accepted after cutover. The
+workflow does not establish complete function parity or compare object-store
+data and JetStream messages. The report compares known forward-migration
+transformations as well as stable table rows.
 
 Do not run a production transfer until the tool has been rehearsed on
 production-sized copies of all four source databases and three target
 databases, destination role and grant handling is verified, validation reports
-match the source, and rollback has been rehearsed. The current database backup
-and restore tools remain useful for same-schema recovery and are not a
-substitute for this workflow.
+match the source, and rollback has been rehearsed for the actual cutover plan.
+The current database backup and restore tools remain useful for same-schema
+recovery and are not a substitute for this workflow.
