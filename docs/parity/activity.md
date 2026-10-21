@@ -156,7 +156,10 @@ durable queueing; the Activity worker enforces the same cap, parses records,
 records successes and rejects, updates aggregates, and reports import status.
 ClamAV failures remain fail-closed. ADIF and award-asset uploads map scanner
 failures to HTTP 400, matching the Python handler's scanner `ValueError`; no
-upload is stored or queued after a scanner failure.
+upload is stored or queued after an API scanner failure. When ClamAV fails
+during queued ADIF processing, the worker records the shared scanner error
+`malware scanner is unavailable; upload was not stored`, matching the Python
+worker's persisted import error and notification reason.
 The HTTP JSON body limit defaults to 1 MiB for Identity, Programmes, and
 Activity, and 1 GiB for Geodata, matching the reference services.
 `MYOTA_MAX_BODY_BYTES` overrides the limit per service. Identity's image-based

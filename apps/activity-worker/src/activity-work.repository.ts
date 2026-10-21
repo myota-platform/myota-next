@@ -1297,6 +1297,6 @@ async function scanAdifContent(content: Buffer, filename: string) {
     });
     if (!response.ok) throw new Error('malware scanner rejected the upload');
   } catch {
-    throw new Error('malware scanner is unavailable; import was rejected');
+    throw new Error('malware scanner is unavailable; upload was not stored');
   }
 }
