@@ -134,7 +134,13 @@ export class ActivityRepository {
          ORDER BY qso_count DESC,subject_id LIMIT $3`,
         [programme, category, limit],
       );
-      return result.rows;
+      return result.rows.map((row) => ({
+        ...row,
+        qso_count: parsePageTotal(row.qso_count),
+        activation_count: parsePageTotal(row.activation_count),
+        unique_callsign_count: parsePageTotal(row.unique_callsign_count),
+        unique_entity_count: parsePageTotal(row.unique_entity_count),
+      }));
     } finally {
       client.release();
     }
@@ -780,7 +786,7 @@ export class ActivityRepository {
       return {
         activationId,
         qso: qsoRecord(row),
-        qsoCount: current.rows[0].qso_count,
+        qsoCount: parsePageTotal(current.rows[0].qso_count),
         duplicate,
       };
     });
@@ -1168,9 +1174,9 @@ function activationRecord(row: any, qsos?: any[]) {
     location: row.location ?? {},
     programmeRules: row.programme_rules ?? {},
     ruleEvaluation: row.rule_evaluation ?? {},
-    qsoCount: row.qso_count,
-    uniqueCallsignCount: row.unique_callsign_count,
-    uniqueEntityCount: row.unique_entity_count,
+    qsoCount: parsePageTotal(row.qso_count),
+    uniqueCallsignCount: parsePageTotal(row.unique_callsign_count),
+    uniqueEntityCount: parsePageTotal(row.unique_entity_count),
     createdAt: timestamp(row.created_at_iso ?? row.created_at),
     updatedAt: timestamp(row.updated_at_iso ?? row.updated_at),
   };

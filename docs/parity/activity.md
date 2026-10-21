@@ -72,7 +72,8 @@ also preserve exact integer tokens at the persistence boundary, matching
 Python's arbitrary-precision JSON integers.
 Statistics rebuilds keep PostgreSQL aggregate counts exact when storing metric
 snapshots, and statistics reads parse those JSONB values without JavaScript
-number rounding.
+number rounding. Activation, QSO, subject-fact, and leaderboard count fields
+also convert PostgreSQL `bigint` values to exact JSON integers.
 Administrator access and
 required-field validation order also match the reference. Missing activation,
 ADIF import, work job, and correction lookups preserve the reference's quoted-ID
