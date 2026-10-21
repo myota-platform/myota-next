@@ -113,18 +113,17 @@ export function validateTemplate(elements: unknown) {
     if (!item || typeof item !== 'object' || Array.isArray(item))
       throw new BadRequestException('template elements must be objects');
     const element = item as JsonRecord;
-    const kind = String(element.kind ?? '');
+    const kind = pythonString(
+      Object.hasOwn(element, 'kind') ? element.kind : '',
+    );
     if (!allowed.has(kind))
       throw new BadRequestException(
         `unsupported certificate element: ${kind || 'missing'}`,
       );
     seen.add(kind);
-    const label =
-      element.label === undefined
-        ? ''
-        : element.label === null
-          ? 'None'
-          : String(element.label);
+    const label = pythonString(
+      Object.hasOwn(element, 'label') ? element.label : '',
+    );
     if (kind === 'CUSTOM_TEXT' && !trimPythonWhitespace(label))
       throw new BadRequestException('custom text requires a label');
     for (const field of ['x', 'y', 'width', 'height']) {
@@ -320,10 +319,10 @@ function calculatePrintReadiness(
   background: JsonRecord,
   spec: JsonRecord,
 ): JsonRecord {
-  const page = String(
+  const page = pythonString(
     Object.hasOwn(spec, 'page') ? spec.page : 'A4',
   ).toUpperCase();
-  const orientation = String(
+  const orientation = pythonString(
     Object.hasOwn(spec, 'orientation') ? spec.orientation : 'PORTRAIT',
   ).toUpperCase();
   if (

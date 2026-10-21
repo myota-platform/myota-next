@@ -598,9 +598,13 @@ export class AwardsService {
         );
       validateTemplate(template.elements);
       const printSpec = asRecord(body.printSpec, 'printSpec');
-      const page = String(printSpec.page ?? 'A4').toUpperCase();
-      const orientation = String(
-        printSpec.orientation ?? 'PORTRAIT',
+      const page = pythonString(
+        Object.hasOwn(printSpec, 'page') ? printSpec.page : 'A4',
+      ).toUpperCase();
+      const orientation = pythonString(
+        Object.hasOwn(printSpec, 'orientation')
+          ? printSpec.orientation
+          : 'PORTRAIT',
       ).toUpperCase();
       const dpi = Number(printSpec.dpi ?? 300);
       if (
