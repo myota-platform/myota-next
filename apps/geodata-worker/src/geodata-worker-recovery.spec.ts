@@ -72,6 +72,9 @@ async function verifyBrokerRecovery() {
   });
   // The fault proxy deliberately destroys idle sockets during injected outages.
   databaseProbe.on('error', () => undefined);
+  databaseProbe.on('connect', (client) => {
+    client.on('error', () => undefined);
+  });
   const savedEnvironment = new Map<string, string | undefined>();
   for (const [name, value] of Object.entries({
     NATS_URL: natsUrl,
