@@ -118,6 +118,10 @@ enumeration behavior, one-time token use, password length, and session
 revocation. Login tests verify the eight-attempt general limit and the
 global-operator bypass. Account, callsign, recovery, and authorization sequence
 behavior still require broader automated compatibility coverage.
+The Python retired-permission fixtures are also covered in Nest: persisted
+custom-role definitions omit `operations.read`, and current-account scopes are
+recalculated from live role assignments instead of retaining that retired
+scope from an access token.
 Profile-image uploads accept JPEG, PNG, or WebP up to 5 MiB, reject animation
 and dimensions above 4096 pixels, honor EXIF orientation, center-crop to 512 by
 512, remove source metadata, and try WebP qualities 85, 75, 65, and 55 under a

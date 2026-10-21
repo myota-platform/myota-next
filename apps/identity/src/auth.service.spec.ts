@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { UnauthorizedException } from '@nestjs/common';
 import { IdentityAuthService } from './auth.service.js';
 
@@ -57,5 +58,88 @@ describe('Identity service token compatibility', () => {
     expect(() => service.verifyServiceToken(`Bearer ${token}`)).toThrow(
       'invalid or expired token',
     );
+  });
+
+  it('recalculates current scopes from live role assignments', async () => {
+    const accountId = '566b8475-bda2-4a2d-8ab8-d7a9a93c0041';
+    const timestamp = new Date('2026-01-01T00:00:00Z');
+    const client = {
+      query: async (sql: string) => {
+        if (sql.includes('auth_revocation')) return { rows: [], rowCount: 0 };
+        if (sql.includes('FROM public.account a'))
+          return {
+            rows: [
+              {
+                id: accountId,
+                display_name: 'Reader',
+                email: null,
+                created_at: timestamp,
+                updated_at: timestamp,
+                primary_callsign_id: null,
+                participation_type: 'INDIVIDUAL',
+                status: 'ACTIVE',
+                website_url: null,
+                biography_markdown: null,
+                profile_image_id: null,
+                profile_image_media_type: null,
+                profile_image_updated_at: null,
+              },
+            ],
+            rowCount: 1,
+          };
+        if (sql.includes('FROM public.account_role ar'))
+          return {
+            rows: [
+              {
+                accountId,
+                id: 'role-assignment-1',
+                role: 'CUSTOM_READER',
+                programmeId: null,
+                programmeSlug: null,
+                jurisdictionId: null,
+                jurisdiction: null,
+                entityType: null,
+                scopes: ['operations.read', 'observability.view'],
+                createdAt: timestamp,
+                validTo: null,
+              },
+            ],
+            rowCount: 1,
+          };
+        if (sql.includes('FROM public.callsign c'))
+          return { rows: [], rowCount: 0 };
+        throw new Error(`unexpected query: ${sql}`);
+      },
+      release: () => undefined,
+    };
+    const pool = {
+      connect: async () => client,
+    };
+    const auth = new IdentityAuthService(pool as never);
+    const header = Buffer.from(
+      JSON.stringify({ alg: 'HS256', typ: 'JWT', tokenType: 'access' }),
+    ).toString('base64url');
+    const claims = Buffer.from(
+      JSON.stringify({
+        sub: accountId,
+        sid: 'session-1',
+        jti: 'access-token-1',
+        iat: 1_800_000_000,
+        exp: 4_000_000_000,
+        tokenType: 'access',
+        scp: ['operations.read'],
+      }),
+    ).toString('base64url');
+    const signingInput = `${header}.${claims}`;
+    const signature = createHmac('sha256', 'test-auth-key')
+      .update(signingInput)
+      .digest('base64url');
+
+    const account = await auth.currentAccount(
+      `Bearer ${signingInput}.${signature}`,
+    );
+
+    expect(account.scopes).toEqual(['identity.me', 'observability.view']);
+    expect(account.scopes).not.toContain('operations.read');
   });
 });
