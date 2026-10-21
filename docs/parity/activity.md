@@ -65,6 +65,8 @@ a focused repository fixture covers that transaction and job payload. Correction
 timestamps use Python truthiness before parsing, so falsey values clear the
 timestamp. Correction requester ownership compares Python `str()` conversions
 on both IDs, including JSON float tokens such as `1.0` versus integer `1`.
+Proposed correction values preserve exact integer and float tokens from JSONB
+through review and response serialization.
 Administrator access and
 required-field validation order also match the reference. Missing activation,
 ADIF import, work job, and correction lookups preserve the reference's quoted-ID

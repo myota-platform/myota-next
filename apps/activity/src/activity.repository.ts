@@ -516,13 +516,14 @@ export class ActivityRepository {
     return this.mutate(undefined, async (client) => {
       const result = await client.query(
         `INSERT INTO activity_qso_correction(id,qso_id,requested_by,reason,proposed_values)
-         VALUES ($1,$2,$3,$4,$5::jsonb) RETURNING *, ${correctionTimestampProjection}`,
+         VALUES ($1,$2,$3,$4,$5::jsonb)
+         RETURNING *, proposed_values::text AS proposed_values_text, ${correctionTimestampProjection}`,
         [
           randomUUID(),
           qsoId,
           body.requestedBy,
           body.reason,
-          JSON.stringify(body.proposedValues),
+          stringifyJsonWithMetadata(body.proposedValues),
         ],
       );
       return correctionRecord(result.rows[0]);
@@ -538,7 +539,7 @@ export class ActivityRepository {
     requireCanonicalUuid(correctionId);
     return this.mutate(undefined, async (client) => {
       const correctionResult = await client.query(
-        `SELECT *, ${correctionTimestampProjection}
+        `SELECT *, proposed_values::text AS proposed_values_text, ${correctionTimestampProjection}
          FROM activity_qso_correction WHERE id=$1 FOR UPDATE`,
         [correctionId],
       );
@@ -567,7 +568,9 @@ export class ActivityRepository {
           hunterId: 'hunter_id',
           hunterCallsign: 'hunter_callsign',
         };
-        const values = correction.proposed_values as JsonRecord;
+        const values = parseJsonWithExactIntegers(
+          String(correction.proposed_values_text),
+        ) as JsonRecord;
         if (!values || typeof values !== 'object' || Array.isArray(values))
           throw new TypeError('correction proposedValues must be a mapping');
         const assignments = ["status='CORRECTED'", 'corrected_at=now()'];
@@ -599,7 +602,7 @@ export class ActivityRepository {
         );
       }
       const result = await client.query(
-        `UPDATE activity_qso_correction SET status=$1,reviewed_by=$2,review_note=$3,reviewed_at=now() WHERE id=$4 RETURNING *, ${correctionTimestampProjection}`,
+        `UPDATE activity_qso_correction SET status=$1,reviewed_by=$2,review_note=$3,reviewed_at=now() WHERE id=$4 RETURNING *, proposed_values::text AS proposed_values_text, ${correctionTimestampProjection}`,
         [body.decision, body.reviewedBy, body.reviewNote ?? null, correctionId],
       );
       return correctionRecord(result.rows[0]);
@@ -1250,7 +1253,9 @@ function correctionRecord(row: any) {
     qsoId: String(row.qso_id),
     requestedBy: row.requested_by,
     reason: row.reason,
-    proposedValues: row.proposed_values,
+    proposedValues: parseJsonWithExactIntegers(
+      String(row.proposed_values_text),
+    ),
     status: row.status,
     reviewedBy: row.reviewed_by,
     reviewNote: row.review_note,
