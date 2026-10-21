@@ -25,6 +25,7 @@ export function usesSharedJsonParser(
       requestPath === '/v1/geodata/imports' &&
       mediaType === 'multipart/form-data') ||
     isGeodataRawUploadPart(method, requestPath) ||
+    (method === 'PUT' && requestPath === '/v1/identity/me/profile-image') ||
     (method === 'PUT' &&
       /^\/v1\/awards\/assets\/[^/]+\/content$/.test(requestPath))
   );
