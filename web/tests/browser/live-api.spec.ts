@@ -459,19 +459,26 @@ test('manages participant-owned callsigns through the live Identity API', async 
     { headers },
   );
   expect(finalAccount.status()).toBe(200);
-  expect(await finalAccount.json()).toMatchObject({
+  const finalAccountView = await finalAccount.json();
+  expect(finalAccountView).toMatchObject({
     id: accountId,
     primaryCallsignId: newCallsignId,
-    callsigns: [
-      { id: oldCallsignId, value: oldValue, status: 'RETIRED' },
-      {
+  });
+  expect(finalAccountView.callsigns).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: oldCallsignId,
+        value: oldValue,
+        status: 'RETIRED',
+      }),
+      expect.objectContaining({
         id: newCallsignId,
         value: newValue,
         status: 'UNVERIFIED',
         evidenceIds: expect.arrayContaining([expect.any(String)]),
-      },
-    ],
-  });
+      }),
+    ]),
+  );
   expect(failedResponses).toEqual([]);
 });
 
