@@ -3,6 +3,7 @@ import {
   calculateAdifRejectedRecords,
   evaluateActivation,
   normalizeActivation,
+  parseAdif,
   normalizeQso,
   normalizeTimestamp,
   parseTimestamp,
@@ -227,5 +228,35 @@ describe('activation validation compatibility', () => {
         ...(additions as Record<string, unknown>),
       }),
     ).toThrow(message as string);
+  });
+});
+
+describe('ADIF parser compatibility', () => {
+  it('maps, slices, and normalizes common fields across multiple records', () => {
+    const records = parseAdif(
+      '<ADIF_VER:5>3.1.4<EOH><CALL:7> f4xyz <QSO_DATE:8>20261021<TIME_ON:6>102030<BAND:3>20m<MODE:3>FT8<GRIDSQUARE:6>fn31pr<EOR><CALL:4>DL1A<QSO_DATE_TIME>2026-10-21T10:30:00Z<RST_SENT:3>599<RST_RCVD:3>579<EOR>',
+    );
+
+    expect(records).toHaveLength(2);
+    expect(records[0]).toMatchObject({
+      workedCallsign: 'F4XYZ',
+      timestamp: '2026-10-21T10:20:30Z',
+      band: '20M',
+      mode: 'FT8',
+      workedLocator: 'fn31pr',
+      workedStationKey: 'F4XYZ|FN31PR',
+    });
+    expect(records[1]).toMatchObject({
+      workedCallsign: 'DL1A',
+      timestamp: '2026-10-21T10:30:00Z',
+      rst: '599',
+      rstReceived: '579',
+    });
+  });
+
+  it('ignores incomplete records without both a callsign and timestamp', () => {
+    expect(parseAdif('<CALL:5>F4XYZ<EOR><QSO_DATE:8>20261021<EOR>')).toEqual(
+      [],
+    );
   });
 });
