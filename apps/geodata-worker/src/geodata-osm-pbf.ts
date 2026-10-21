@@ -1,4 +1,5 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -122,7 +123,7 @@ async function* parseOsmiumFeatures(
     configPath,
     locationIndexPath,
   )) {
-    const parsed: unknown = JSON.parse(record);
+    const parsed: unknown = parseJsonWithExactIntegers(record);
     if (!isRecord(parsed) || parsed.type !== 'Feature') continue;
     const properties = isRecord(parsed.properties) ? parsed.properties : {};
     if (!isRecord(parsed.geometry)) continue;
@@ -131,7 +132,12 @@ async function* parseOsmiumFeatures(
       typeof properties.featureType === 'string' ? properties.featureType : '';
     const osmId = properties.osm_id;
     if (!['node', 'way', 'relation'].includes(osmType)) continue;
-    if (typeof osmId !== 'string' && typeof osmId !== 'number') continue;
+    if (
+      typeof osmId !== 'string' &&
+      typeof osmId !== 'number' &&
+      typeof osmId !== 'bigint'
+    )
+      continue;
     const tags = Object.entries(properties).filter(
       ([key]) => !['featureType', 'osm_id'].includes(key),
     );

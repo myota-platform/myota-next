@@ -473,7 +473,9 @@ the supplied `.prj` to WGS84, and NULL shape records fail preprocessing as in
 PyShp's GeoJSON conversion. OSM PBF uploads are decoded by
 `osmium-tool` in the Geodata worker image, preserve OSM tags and type/id source
 references, and emit the configured hiking, protected-area, point, path, and
-multipolygon features using a temporary disk-backed node-location index.
+multipolygon features using a temporary disk-backed node-location index. The
+worker parses emitted integer tokens exactly, so large OSM IDs retain their
+Python-compatible `sourceRef`, feature ID, and source hash.
 The checked-in OSM XML/PBF fixture covers tagged nodes, linear and closed ways,
 a multipolygon relation with an inner ring, filtering, output order, and source
 hashes against the Python importer. CI decodes generated 50,000-feature and
