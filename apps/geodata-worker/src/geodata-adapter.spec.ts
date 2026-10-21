@@ -1,6 +1,25 @@
 import { normalizeAdapterFeature } from './geodata-adapter.js';
 
 describe('normalizeAdapterFeature projection compatibility', () => {
+  it('uses Python dict semantics for iterable property pairs', () => {
+    const normalized = normalizeAdapterFeature('MANUAL', {
+      properties: [
+        ['name', 'Pair Park'],
+        ['sourceRef', 'pair-1'],
+      ],
+      geometry: null,
+    });
+
+    expect(normalized).toMatchObject({
+      properties: {
+        name: 'Pair Park',
+        sourceRef: 'pair-1',
+        attachments: [],
+      },
+      geometry: null,
+    });
+  });
+
   it('reprojects EPSG:3031 and preserves extra coordinate ordinates', () => {
     const normalized = normalizeAdapterFeature('GOVERNMENT_GIS', {
       properties: { name: 'Polar research site', sourceFormat: 'GEOJSON' },

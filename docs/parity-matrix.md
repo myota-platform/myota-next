@@ -489,7 +489,8 @@ coordinates convert those values before transformation, and streamed vertex
 limits count them as coordinates.
 Import adapters infer feature names from the reference alias catalogue before
 validation, using Python-compatible Unicode casefolding, whitespace collapse,
-and 300-code-point truncation. The worker validates WGS84
+and 300-code-point truncation. Adapter property mappings use the reference's
+`dict()` conversion, including iterable key/value pairs. The worker validates WGS84
 geometries, stages candidates with provenance and 50 m duplicate
 warnings, records errors, and emits the preprocessing fact. Conflation name
 similarity uses Python Unicode casefolding and whitespace stripping, plus the

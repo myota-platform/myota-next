@@ -6,6 +6,7 @@ import {
   validateGeometryCoordinates,
 } from '@app/geodata-domain';
 import { integerSetting } from '@app/platform/integer-setting.js';
+import { pythonDictionary } from '@app/platform/python-dictionary.js';
 import { inferFeatureName } from './geodata-feature-name.js';
 
 const OSM_REQUIRED_TAGS = [
@@ -55,7 +56,10 @@ export function normalizeAdapterFeature(
   const rawProperties = isTruthy(feature.properties)
     ? feature.properties
     : feature.tags;
-  const properties = isRecord(rawProperties) ? { ...rawProperties } : {};
+  const properties = pythonDictionary(
+    isTruthy(rawProperties) ? rawProperties : {},
+    'properties',
+  );
   properties.attachments = normalizeAttachmentMetadata(
     pythonOr(feature.attachments, properties.attachments, undefined),
   );
@@ -109,15 +113,15 @@ export function normalizeAdapterFeature(
 function normalizeGovernmentFeature(
   feature: Record<string, unknown>,
 ): NormalizedAdapterFeature {
-  const properties =
-    isTruthy(feature.properties) && isRecord(feature.properties)
-      ? { ...feature.properties }
-      : {};
+  const properties = pythonDictionary(
+    isTruthy(feature.properties) ? feature.properties : {},
+    'properties',
+  );
   properties.attachments = normalizeAttachmentMetadata(
     pythonOr(feature.attachments, properties.attachments, undefined),
   );
   const sourceFormat = String(
-    properties.sourceFormat || properties.format || 'GEOJSON',
+    (properties.sourceFormat || properties.format || 'GEOJSON') as string,
   ).toUpperCase();
   if (!GOVERNMENT_GIS_FORMATS.has(sourceFormat)) {
     throw new Error(`unsupported government GIS format ${sourceFormat}`);
