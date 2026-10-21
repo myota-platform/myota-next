@@ -45,6 +45,30 @@ export function pythonKeyErrorDetail(key: string): string {
   return `${quote}${escaped}${quote}`;
 }
 
+export function pythonString(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === null) return 'None';
+  if (typeof value === 'boolean') return value ? 'True' : 'False';
+  if (Array.isArray(value))
+    return `[${value.map(pythonRepr).join(', ')}]`;
+  if (typeof value === 'object') {
+    return `{${Object.entries(value)
+      .map(([key, item]) => `${pythonKeyErrorDetail(key)}: ${pythonRepr(item)}`)
+      .join(', ')}}`;
+  }
+  if (typeof value === 'number' || typeof value === 'bigint')
+    return String(value);
+  if (typeof value === 'symbol' || typeof value === 'function')
+    return String(value);
+  return 'None';
+}
+
+function pythonRepr(value: unknown): string {
+  return typeof value === 'string'
+    ? pythonKeyErrorDetail(value)
+    : pythonString(value);
+}
+
 export function collapsePythonWhitespace(value: string): string {
   const output: string[] = [];
   let pendingSpace = false;

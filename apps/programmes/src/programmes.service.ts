@@ -15,7 +15,10 @@ import {
   parsePageInteger,
 } from '@app/platform/pagination.js';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
-import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import {
+  pythonString,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
 import { nextPolicyVersion, type ProgrammeRecord } from './programme.types.js';
 import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
 import { ProgrammeRepository } from './programme.repository.js';
@@ -468,17 +471,12 @@ function normalizeEntityType(
       `missing required fields: ${missing.join(', ')}`,
     );
   }
-  const code = trimPythonWhitespace(String(body.code)).toUpperCase();
+  const code = trimPythonWhitespace(pythonString(body.code)).toUpperCase();
   const originalCodeValue = pythonTruthy(body.originalCode)
     ? body.originalCode
     : code;
   const originalCode = trimPythonWhitespace(
-    typeof originalCodeValue === 'string'
-      ? originalCodeValue
-      : typeof originalCodeValue === 'number' ||
-          typeof originalCodeValue === 'boolean'
-        ? String(originalCodeValue)
-        : '',
+    pythonString(originalCodeValue),
   ).toUpperCase();
   if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(code)) {
     throw new BadRequestException(
@@ -507,7 +505,7 @@ function normalizeEntityType(
   const geometryTypes = [
     ...new Set(
       geometryList.map((value) => {
-        const geometry = trimPythonWhitespace(String(value)).toUpperCase();
+        const geometry = trimPythonWhitespace(pythonString(value)).toUpperCase();
         return geometry === 'WAY' ? 'LINESTRING' : geometry;
       }),
     ),
@@ -517,7 +515,8 @@ function normalizeEntityType(
       'geometryTypes must contain only POINT, LINESTRING, MULTILINESTRING, POLYGON, or MULTIPOLYGON',
     );
   }
-  const label = trimPythonWhitespace(String(body.label));
+  const label = trimPythonWhitespace(pythonString(body.label));
+  if (!label) throw new BadRequestException('category label must not be empty');
   const activeValue =
     body.active !== undefined
       ? body.active
@@ -530,10 +529,9 @@ function normalizeEntityType(
     label,
     geometry: geometryTypes[0],
     geometryTypes,
-    description:
-      typeof body.description === 'string'
-        ? trimPythonWhitespace(body.description)
-        : '',
+    description: pythonTruthy(body.description)
+      ? trimPythonWhitespace(pythonString(body.description))
+      : '',
     active: pythonTruthy(activeValue),
     updatedAt: new Date().toISOString(),
   };
