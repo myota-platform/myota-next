@@ -20,7 +20,10 @@
   remains unqualified.
 - Identity maintenance: expired recovery tokens, revoked sessions, expired
   revocations, rate-limit windows, old security events, and aged orphan profile
-  images are cleaned by a separate Core-owned worker.
+  images are cleaned by a separate Core-owned worker. Transient PostgreSQL
+  failures retry the transactional record sweep with capped jittered backoff;
+  S3 cleanup failures remain isolated from the database sweep. Shutdown
+  cancels retry waits.
 - Activity notification consumption: exact durable validation, transactional
   processed-event/checkpoint and notification writes, deduplication, bounded
   retry, redacted poison-event dead-lettering, and audited CLI redrive are

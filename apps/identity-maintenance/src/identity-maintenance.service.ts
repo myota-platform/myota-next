@@ -7,6 +7,7 @@ import {
 import { IdentityMaintenanceRepository } from './identity-maintenance.repository.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { abortableDelay } from '@app/platform/async-timers.js';
+import { retryTransientDatabaseOperation } from '@app/platform/database-retry.js';
 
 const INTERVAL_SECONDS = integerSetting(
   process.env.MYOTA_IDENTITY_MAINTENANCE_SECONDS,
@@ -39,12 +40,26 @@ export class IdentityMaintenanceService
   private async run(): Promise<void> {
     while (!this.stopping) {
       try {
-        const result = await this.repository.runSweep();
+        const result = await retryTransientDatabaseOperation(
+          () => this.repository.runSweep(),
+          {
+            stopping: () => this.stopping,
+            onRetry: (error, attempt) => {
+              if (attempt === 1 || attempt % 12 === 0)
+                this.logger.warn(
+                  `Identity maintenance is waiting for PostgreSQL: ${safeError(error)}`,
+                );
+            },
+            wait: (milliseconds) =>
+              abortableDelay(milliseconds, this.stopController.signal),
+          },
+        );
         if (result.databaseRecordsRemoved || result.profileImagesRemoved)
           this.logger.log(
             `Identity maintenance completed: ${JSON.stringify(result)}`,
           );
       } catch (error) {
+        if (this.stopping) return;
         this.logger.error(`Identity maintenance failed: ${safeError(error)}`);
         throw error;
       }
