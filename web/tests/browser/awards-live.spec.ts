@@ -29,8 +29,13 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
   const awardCode = `LIVE_${fixtureId.replaceAll('-', '').slice(0, 12).toUpperCase()}`;
   const awardName = `Live browser award ${fixtureId.slice(0, 8)}`;
   const assetName = `Live background ${fixtureId.slice(0, 8)}`;
+  const accountEmail = `browser-award-${fixtureId}@example.test`;
+  const accountDisplayName = `Award participant ${fixtureId.slice(0, 8)}`;
   const failedResponses: string[] = [];
   let awardId: string | undefined;
+  let accountId: string | undefined;
+  let activationId: string | undefined;
+  let adminAccessToken: string | undefined;
 
   try {
     const login = await request.post(
@@ -39,6 +44,7 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
     );
     expect(login.ok()).toBeTruthy();
     const { accessToken } = await login.json();
+    adminAccessToken = accessToken as string;
     const createdProgramme = await request.post(
       'http://127.0.0.1:8080/v1/programmes',
       {
@@ -101,6 +107,21 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
       page.getByText('Image uploaded to the asset library.'),
     ).toBeVisible();
 
+    await page.getByLabel('Category').selectOption('ACTIVATOR');
+    await page
+      .getByLabel('Achievement metric')
+      .selectOption('ACTIVATION_COUNT');
+    await page.getByLabel('Condition JSON').fill(
+      JSON.stringify({
+        kind: 'AND',
+        conditions: [{ kind: 'ACTIVATION_COUNT', operator: 'GTE', value: 1 }],
+      }),
+    );
+    await page
+      .getByLabel('Levels JSON')
+      .fill(
+        JSON.stringify([{ id: 'level-1', name: '1 activation', threshold: 1 }]),
+      );
     await page.getByLabel('Code', { exact: true }).fill(awardCode);
     await page.getByLabel('Name', { exact: true }).fill(awardName);
     await page
@@ -120,6 +141,128 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
     await expect(
       page.getByRole('button', { name: new RegExp(`${awardName}.*PUBLISHED`) }),
     ).toBeVisible();
+
+    const createdAccount = await request.post(
+      'http://127.0.0.1:8080/v1/identity/accounts',
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Idempotency-Key': randomUUID(),
+        },
+        data: {
+          displayName: accountDisplayName,
+          email: accountEmail,
+          participationType: 'OPERATOR',
+        },
+      },
+    );
+    expect(createdAccount.status()).toBe(201);
+    const account = await createdAccount.json();
+    accountId = account.id as string;
+    const activatedAccount = await request.patch(
+      `http://127.0.0.1:8080/v1/identity/accounts/${accountId}`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        data: { status: 'ACTIVE' },
+      },
+    );
+    expect(activatedAccount.status()).toBe(200);
+
+    const recovery = await request.post(
+      'http://127.0.0.1:8080/v1/identity/auth/recovery/request',
+      { data: { email: accountEmail } },
+    );
+    expect(recovery.ok()).toBeTruthy();
+    const recoveryToken = (await recovery.json()).devResetToken as string;
+    const participantPassword = `Browser-${randomUUID()}-Password!`;
+    const reset = await request.post(
+      'http://127.0.0.1:8080/v1/identity/auth/recovery/reset',
+      { data: { token: recoveryToken, newPassword: participantPassword } },
+    );
+    expect(reset.status()).toBe(200);
+    const participantLogin = await request.post(
+      'http://127.0.0.1:8080/v1/identity/auth/login',
+      { data: { email: accountEmail, password: participantPassword } },
+    );
+    expect(participantLogin.status()).toBe(200);
+    const { accessToken: participantAccessToken } =
+      await participantLogin.json();
+    const participantHeaders = {
+      Authorization: `Bearer ${participantAccessToken}`,
+    };
+    const callsignCreated = await request.post(
+      `http://127.0.0.1:8080/v1/identity/accounts/${accountId}/callsigns`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Idempotency-Key': randomUUID(),
+        },
+        data: {
+          callsign: `DL${randomUUID().replaceAll('-', '').slice(0, 7).toUpperCase()}`,
+        },
+      },
+    );
+    expect(callsignCreated.status()).toBe(201);
+    const callsign = (await callsignCreated.json()).callsign as {
+      id: string;
+      value: string;
+    };
+    const evidence = await request.post(
+      `http://127.0.0.1:8080/v1/identity/accounts/${accountId}/callsigns/${callsign.id}/evidence`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        data: { evidenceType: 'LICENSE', source: 'live award browser test' },
+      },
+    );
+    expect(evidence.status()).toBe(201);
+    const verification = await request.post(
+      `http://127.0.0.1:8080/v1/identity/accounts/${accountId}/callsigns/${callsign.id}/verify`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        data: { source: 'live award browser test' },
+      },
+    );
+    expect(verification.status()).toBe(200);
+
+    const activation = await request.post(
+      'http://127.0.0.1:8080/v1/activations',
+      {
+        headers: {
+          ...participantHeaders,
+          'Idempotency-Key': randomUUID(),
+        },
+        data: {
+          programmeSlug,
+          entityId: `award-test-entity-${fixtureId}`,
+          entityType: categoryCode,
+          operatorId: accountId,
+          operatorCallsign: callsign.value,
+          callsignLifecycleStatus: 'VERIFIED',
+          authorizedCallsigns: [callsign.value],
+          programmeRules: {
+            activationValidityDays: 7,
+            minimumQsos: { activation: 1, hunter: 1 },
+            publicAccessRequired: false,
+          },
+          location: {},
+          startedAt: new Date().toISOString(),
+        },
+      },
+    );
+    expect(activation.status()).toBe(201);
+    activationId = (await activation.json()).id as string;
+
+    page.on('response', (response) => {
+      if (response.url().includes('/v1/') && response.status() >= 400)
+        failedResponses.push(`${response.status()} ${response.url()}`);
+    });
+    await page.goto(`http://127.0.0.1:8091/#${programmeSlug}`);
+    await page.locator('#award-email').fill(accountEmail);
+    await page.locator('#award-password').fill(participantPassword);
+    await page.getByRole('button', { name: /1 activation/ }).click();
+    await expect(page.locator('#award-request-status')).toHaveText(
+      'Award request submitted for programme review.',
+    );
     expect(failedResponses).toEqual([]);
 
     const award = await activityPool.query<{
@@ -139,6 +282,9 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
         programmeSlug,
         code: awardCode,
         name: awardName,
+        category: 'ACTIVATOR',
+        achievementMetric: 'ACTIVATION_COUNT',
+        levels: [{ id: 'level-1', name: '1 activation', threshold: 1 }],
         status: 'PUBLISHED',
         printReadiness: { printReady: true },
       },
@@ -170,6 +316,30 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
       { event_type: 'awards.definition.saved.v1', status: 'DRAFT' },
       { event_type: 'awards.definition.published.v1', status: 'PUBLISHED' },
     ]);
+
+    const awardRequests = await activityPool.query<{
+      level_id: string;
+      subject_id: string;
+      category: string;
+      callsign: string;
+      person_name: string;
+      facts: { activationCount: number };
+      status: string;
+    }>(
+      `SELECT level_id,subject_id,category,callsign,person_name,facts,status
+       FROM activity_award_request WHERE award_id=$1`,
+      [awardId],
+    );
+    expect(awardRequests.rows).toHaveLength(1);
+    expect(awardRequests.rows[0]).toMatchObject({
+      level_id: 'level-1',
+      subject_id: accountId,
+      category: 'ACTIVATOR',
+      callsign: callsign.value,
+      person_name: accountDisplayName,
+      facts: { activationCount: 1 },
+      status: 'REQUESTED',
+    });
   } finally {
     await activityPool.query('BEGIN');
     try {
@@ -181,9 +351,43 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
       const fixtureAwardIds = fixtureAwards.rows.map((row) => row.id);
       if (fixtureAwardIds.length)
         await activityPool.query(
+          'DELETE FROM activity_award_request WHERE award_id=ANY($1::uuid[])',
+          [fixtureAwardIds],
+        );
+      if (fixtureAwardIds.length)
+        await activityPool.query(
+          'DELETE FROM activity_award_progress WHERE award_id=ANY($1::uuid[])',
+          [fixtureAwardIds],
+        );
+      if (fixtureAwardIds.length)
+        await activityPool.query(
           `DELETE FROM outbox_event
            WHERE aggregate_type='award' AND aggregate_id=ANY($1::text[])`,
           [fixtureAwardIds],
+        );
+      if (accountId) {
+        await activityPool.query(
+          'DELETE FROM activity_subject_callsign WHERE programme_slug=$1 AND subject_id=$2',
+          [programmeSlug, accountId],
+        );
+        await activityPool.query(
+          'DELETE FROM activity_subject_entity WHERE programme_slug=$1 AND subject_id=$2',
+          [programmeSlug, accountId],
+        );
+        await activityPool.query(
+          'DELETE FROM activity_subject_aggregate WHERE programme_slug=$1 AND subject_id=$2',
+          [programmeSlug, accountId],
+        );
+      }
+      if (activationId)
+        await activityPool.query(
+          "DELETE FROM outbox_event WHERE aggregate_type='activation' AND aggregate_id=$1",
+          [activationId],
+        );
+      if (activationId)
+        await activityPool.query(
+          'DELETE FROM activity_activation WHERE id=$1',
+          [activationId],
         );
       await activityPool.query(
         'DELETE FROM activity_award_definition WHERE programme_slug=$1 AND code=$2',
@@ -197,6 +401,16 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
     } catch (error) {
       await activityPool.query('ROLLBACK').catch(() => undefined);
       throw error;
+    }
+    if (accountId && adminAccessToken) {
+      const anonymized = await request.patch(
+        `http://127.0.0.1:8080/v1/identity/accounts/${accountId}`,
+        {
+          headers: { Authorization: `Bearer ${adminAccessToken}` },
+          data: { status: 'DEACTIVATED', anonymize: true },
+        },
+      );
+      expect(anonymized.status()).toBe(200);
     }
     await activityPool.end();
   }

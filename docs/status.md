@@ -43,7 +43,9 @@ production readiness.
   through the Gateway. Participant profile editing and owner callsign creation,
   evidence submission, primary selection, and retirement also run against live
   Identity APIs. Participant activation creation, QSO recording, and closing
-  run through live Activity APIs. Public catalogue loading uses live services
+  run through live Activity APIs. Admin award publication and Participant
+  eligible-level requests now cross live Identity and Activity APIs and verify
+  the persisted award request facts. Public catalogue loading uses live services
   as well.
   Most other browser workflows still use intercepted API responses;
   broader payload coverage, accessibility, responsive behavior, and failure

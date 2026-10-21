@@ -75,11 +75,14 @@ programme editor and Gateway. It verifies the resulting Core catalogue and
 programme records, idempotency keys, and catalogue, assignment, and removal
 outbox events.
 
-Another live Admin workflow creates a printable background asset, saves an
-award draft, submits and approves it, and publishes it through Gateway. The
-browser API stack uses an ephemeral S3-compatible store for the upload and
-read-back; CI verifies the stored Activity asset, published award definition,
-print-readiness result, and saved and published outbox events.
+Another live Admin and Participant workflow creates a printable background
+asset, saves an activator award draft, submits and approves it, and publishes
+it through Gateway. It then creates and verifies a participant callsign,
+records a live activation, signs in through Participant, and requests the
+eligible award level. The browser API stack uses an ephemeral S3-compatible
+store for the artwork upload and read-back; CI verifies the stored Activity
+asset, published award definition, request facts, print-readiness result, and
+award lifecycle outbox events.
 
 An additional live browser workflow seeds an isolated Geodata entity and a
 catalogue-backed country value, signs in as the bootstrap administrator, edits
@@ -89,8 +92,9 @@ database. This complements the intercepted location-form checks with evidence
 across the live browser, API, authorization, transaction, and database
 boundaries.
 Award browser checks cover programme-
-scoped draft creation, its idempotency key and condition/level payload, and
-the submit, approve, and publish lifecycle. Award creation, definition edits,
+scoped draft creation, its idempotency key and condition/level payload, the
+live eligible participant request flow, and the submit, approve, and publish
+lifecycle. Award creation, definition edits,
 and lifecycle state changes retain idempotency keys for same-tab retries across
 reloads; a live CI browser workflow creates a programme and submits, approves,
 and publishes a RULES policy in Admin through Gateway. Intercepted award and
