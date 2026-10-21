@@ -583,7 +583,7 @@ export class GeodataUploadService {
     return {
       uploadId: row.id,
       status: row.status,
-      partSizeBytes: MAX_UPLOAD_PART_BYTES,
+      partSizeBytes: Math.max(5 * 1024 * 1024, MAX_UPLOAD_PART_BYTES),
       expiresInSeconds: 86400,
     };
   }

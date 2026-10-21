@@ -556,7 +556,8 @@ count. Resumable raw upload parts use `MYOTA_UPLOAD_PART_MAX_BYTES` as the
 request parser and service cap; empty and oversized parts return the same
 `upload part must be between 1 and <limit> bytes` validation detail as Python.
 Empty raw parts are rejected before authorization, matching the reference's
-request-body parsing order.
+request-body parsing order. The response's suggested part size retains the
+reference's 5 MiB S3 minimum even when the configured hard limit is lower.
 `GEODATA_MAX_IMPORT_FEATURES` uses Python-compatible integer parsing in
 both API and worker, including zero and negative limits; malformed values fail
 instead of silently falling back. The `MYOTA_IMPORT_MAX_FEATURE_VERTICES` and
