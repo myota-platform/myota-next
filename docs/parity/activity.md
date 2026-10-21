@@ -126,10 +126,11 @@ matching the pinned Python repository. Long-running Activity jobs now extend the
 from a separate database connection while processing. Statistics listing and rebuild-job APIs,
 transactional snapshot rebuilds, and owner-scoped notification reads are
 implemented. ADIF import creation, processing, and status reads are implemented.
-The pinned Python handler returns QSO-ingestion and statistics-rebuild job
-status without checking authorization. Nest preserves that behavior. These
-reads therefore differ from the OpenAPI bearer declaration, as they do in the
-Python implementation.
+The pinned Python handler returns QSO-ingestion, statistics-rebuild, and award
+job status without checking authorization. Award job reads also resolve only
+`jobId`, ignoring nested award and issuance IDs. Nest preserves that behavior.
+These reads therefore differ from the OpenAPI bearer declaration, as they do in
+the Python implementation.
 For early ADIF failures, the worker writes the notification under the
 activation ID, as the pinned Python worker does; the notice therefore does not
 appear in the activation owner's account feed. Missing-object notices also

@@ -64,10 +64,9 @@ export class AwardsController {
 
   @Get('evaluation-jobs/:jobId')
   getEvaluation(
-    @Headers('authorization') authorization: string | undefined,
     @Param('jobId') jobId: string,
   ) {
-    return this.awards.getAwardJob(authorization, jobId);
+    return this.awards.getAwardJob(jobId);
   }
 
   @Get('progress')
@@ -155,11 +154,9 @@ export class AwardsController {
 
   @Get('issuances/:issuanceId/render-jobs/:jobId')
   getRenderJob(
-    @Headers('authorization') authorization: string | undefined,
-    @Param('issuanceId') issuanceId: string,
     @Param('jobId') jobId: string,
   ) {
-    return this.awards.getRenderJob(authorization, issuanceId, jobId);
+    return this.awards.getRenderJob(jobId);
   }
 
   @Get('issuances/:issuanceId/artifact')
@@ -298,10 +295,9 @@ export class AwardsController {
 
   @Get(':awardId/recalculation-jobs/:jobId')
   getRecalculation(
-    @Headers('authorization') authorization: string | undefined,
     @Param('jobId') jobId: string,
   ) {
-    return this.awards.getAwardJob(authorization, jobId);
+    return this.awards.getAwardJob(jobId);
   }
 }
 

@@ -267,23 +267,8 @@ export class AwardsService {
     return { evaluationId: job.id, ...job };
   }
 
-  async getAwardJob(authorization: string | undefined, id: string) {
-    const claims = verifyAccessToken(authorization);
-    this.authorize(claims.scp, [
-      'awards.read',
-      'awards.request',
-      'awards.admin',
-    ]);
-    const job = await this.repository.getJob(id);
-    const subjectId = job.payload?.subjectId;
-    if (subjectId && claims.sub !== subjectId)
-      this.authorize(claims.scp, ['awards.read', 'awards.admin']);
-    else if (
-      !subjectId &&
-      !claims.scp.some((scope) => ['*', 'awards.admin'].includes(scope))
-    )
-      throw new ForbiddenException('awards.admin scope is required');
-    return job;
+  async getAwardJob(id: string) {
+    return this.repository.getJob(id);
   }
 
   async progress(
@@ -528,16 +513,8 @@ export class AwardsService {
     return { renderJobId: job.id, issuanceId: issuance.id, ...job };
   }
 
-  async getRenderJob(
-    authorization: string | undefined,
-    issuanceId: string,
-    jobId: string,
-  ) {
-    const issuance = await this.awardsRepository.getAwardIssuance(issuanceId);
-    const job = await this.getAwardJob(authorization, jobId);
-    if (job.kind !== 'PDF_RENDER' || job.payload?.issuanceId !== issuance.id)
-      throw new NotFoundException('certificate render job not found');
-    return job;
+  async getRenderJob(jobId: string) {
+    return this.getAwardJob(jobId);
   }
 
   async getArtifact(authorization: string | undefined, issuanceId: string) {
