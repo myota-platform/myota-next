@@ -457,7 +457,9 @@ prefers `wkid` over `latestWkid`, and unsupported
 projections use the normalized `unsupported CRS EPSG:<id>` error. WGS84 input
 retains extra ordinates, the Web Mercator special case emits XY only, and other
 projected CRS transforms preserve ordinates beyond XY, matching the pinned
-Python path. Web Mercator exponential overflow rejects the feature as in Python.
+Python path. Geometry bounds use Python-compatible chained comparisons, so
+non-finite transformed coordinates such as `NaN` are rejected. Web Mercator
+exponential overflow rejects the feature as in Python.
 Pasted KML and GPX are converted to GeoJSON with XML document types rejected
 and bounded feature/coordinate counts. Resumable KML and GPX uploads are
 streamed from object storage through a SAX parser, verify the completed source
