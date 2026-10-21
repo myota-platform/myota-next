@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { ActivityModule } from '../../activity/src/activity.module.js';
-import { IdentityModule } from './identity.module.js';
+import { ActivityModule } from '../apps/activity/src/activity.module.js';
+import { IdentityModule } from '../apps/identity/src/identity.module.js';
 
 const describeWithCoreDatabase = describe.skipIf(
   !process.env.CORE_DATABASE_URL || !process.env.ACTIVITY_DATABASE_URL,
