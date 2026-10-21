@@ -308,7 +308,8 @@ uses the Python batch key `batch:<activationId>:<firstQsoDeduplicationKey>`.
 Automated
 compatibility and outage/recovery qualification remain outstanding.
 Failed or queued Activity jobs can be redriven by administrators with
-an audited reason; long-running Activity jobs now extend their 120-second leases
+an audited reason. Failed-job redrive preserves the delivery-attempt counter,
+matching the pinned Python repository. Long-running Activity jobs now extend their 120-second leases
 from a separate database connection while processing. Statistics listing and rebuild-job APIs,
 transactional snapshot rebuilds, and owner-scoped notification reads are
 implemented. ADIF import creation, processing, and status reads are implemented.

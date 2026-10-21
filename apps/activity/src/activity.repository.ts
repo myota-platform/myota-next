@@ -884,7 +884,7 @@ export class ActivityRepository {
       const outboxEventId = randomUUID();
       if (job.status === 'FAILED')
         await client.query(
-          `UPDATE activity_job SET status='QUEUED',attempts=0,available_at=now(),
+          `UPDATE activity_job SET status='QUEUED',available_at=now(),
            started_at=NULL,completed_at=NULL,lease_expires_at=NULL,lease_token=NULL,last_error=NULL
            WHERE id=$1`,
           [id],
