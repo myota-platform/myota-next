@@ -165,12 +165,12 @@ describe('OSM PBF reference parity', () => {
   });
 
   it.skipIf(process.platform !== 'linux')(
-    'streams a large PBF while keeping decoder process-tree RSS growth below 96 MiB',
+    'matches the Python 50,000-feature PBF resource bound',
     async () => {
       const directory = await mkdtemp(join(tmpdir(), 'myota-osm-rss-'));
       const xmlPath = join(directory, 'many-parks.osm');
       const pbfPath = join(directory, 'many-parks.osm.pbf');
-      const featureCount = 250_000;
+      const featureCount = 50_000;
       async function* osmXml() {
         yield '<?xml version="1.0" encoding="UTF-8"?><osm version="0.6" generator="myota-parity">';
         for (let start = 1; start <= featureCount; start += 1000) {
