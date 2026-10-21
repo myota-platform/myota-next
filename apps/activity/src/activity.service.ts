@@ -132,9 +132,12 @@ export class ActivityService {
     activationId: string,
     body: JsonRecord,
   ) {
-    if (!pythonTruthy(body.workedCallsign) || !pythonTruthy(body.timestamp))
+    const missing = ['workedCallsign', 'timestamp'].filter(
+      (field) => !pythonTruthy(body[field]),
+    );
+    if (missing.length)
       throw new BadRequestException(
-        'workedCallsign and timestamp are required',
+        `missing required fields: ${missing.join(', ')}`,
       );
     const activation = await this.repository.get(activationId);
     const claims = verifyAccessToken(authorization);

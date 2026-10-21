@@ -7,8 +7,12 @@ jobs. Activation resource updates require `status=CLOSED`, and close ignores
 `Idempotency-Key`, so repeated closes fail after the first transition as in the
 reference. Participant tokens with `identity.me` can list activations only
 when filtering by their own operator ID; Activity readers and administrators
-retain their broader listing access. Explicit falsey `endedAt` values are treated as null. Activation
-validity defaults come from `programmeRules` only, even
+retain their broader listing access. Explicit falsey `endedAt` values are
+treated as null.
+Single-QSO writes check `workedCallsign` and `timestamp` with Python truthiness
+before activation lookup and return the same ordered `missing required fields`
+detail as the reference. Activation validity defaults come from
+`programmeRules` only, even
 when validation uses the `rules` alias. Timestamp normalization accepts lowercase `t`, ISO week dates,
 one-character date/time separators, and fractional-second time-zone offsets
 supported by Python's
