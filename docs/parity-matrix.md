@@ -604,8 +604,9 @@ point proposals with intercepted API responses. Admin browser checks also cover
 sign-in, session bootstrap,
 scope denial, Identity account creation with a permitted role grant and custom
 role creation from the permission catalogue, account search and edits that
-preserve unchanged scoped assignments, programme creation with policy/category
-settings, policy draft save, review, and publication, and
+preserve unchanged scoped assignments, account export and confirmed
+deactivation/anonymization, programme creation with policy/category settings,
+policy draft save, review, and publication, and
 version-checked candidate review, and conflict recovery for entity metadata
 edits by reloading the latest server version. Activity browser checks cover
 activation/QSO detail viewing and statistics rebuild submission with an
