@@ -286,7 +286,9 @@ export async function* streamGeoJsonFeatures(
                   ...(inheritedCrsJson !== undefined
                     ? { inheritedCrsJson }
                     : {}),
-                  ...(isSingleObject && documentMetadata.rootType !== 'Feature'
+                  ...(isSingleObject &&
+                  isRecord(exactValue) &&
+                  exactValue.type !== 'Feature'
                     ? { rootGeometryDocument: true }
                     : {}),
                   ...(sourceHashOverride !== undefined
@@ -746,9 +748,7 @@ function isJsonWhitespace(byte: number) {
 function toGeoJsonFeature(value: unknown) {
   if (!isRecord(value)) throw new Error('unsupported GeoJSON document type');
   if (value.type === 'FeatureCollection')
-    throw new Error(
-      'GeoJSON FeatureCollection must contain a features array',
-    );
+    throw new Error('GeoJSON FeatureCollection must contain a features array');
   if (value.type === 'Feature') return value;
   if (isRecord(value.geometry)) {
     const feature: Record<string, unknown> = {
