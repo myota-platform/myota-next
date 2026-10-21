@@ -14,7 +14,7 @@ const enabled = Boolean(
   process.env.NATS_TEST_URL,
 );
 
-describe.skipIf(!enabled)('Activity outbox broker recovery', () => {
+describe.skipIf(!enabled)('outbox broker recovery', () => {
   it('retries a broker failure and publishes the retained event once available', async () => {
     const databaseUrl = process.env.OUTBOX_DATABASE_URL;
     const natsUrl = process.env.NATS_TEST_URL;
@@ -25,13 +25,21 @@ describe.skipIf(!enabled)('Activity outbox broker recovery', () => {
         new URL(databaseUrl).hostname,
       )
     )
-      throw new Error('Activity outbox recovery requires local Postgres');
+      throw new Error('outbox recovery requires local Postgres');
     if (
       !['localhost', '127.0.0.1', '[::1]'].includes(new URL(natsUrl).hostname)
     )
-      throw new Error('Activity outbox recovery requires local JetStream');
+      throw new Error('outbox recovery requires local JetStream');
 
-    process.env.OUTBOX_OWNER = 'activity';
+    const owner = process.env.OUTBOX_OWNER;
+    const eventOwners: Record<string, string[]> = {
+      core: ['identity-service', 'programme-service'],
+      activity: ['activity-service'],
+      geodata: ['geodata-service'],
+    };
+    const registeredOwners = owner ? eventOwners[owner] : undefined;
+    if (!owner || !registeredOwners)
+      throw new Error('OUTBOX_OWNER must be core, activity, or geodata');
     const [{ Pool }, { OutboxWorkerService }, registry] = await Promise.all([
       import('pg'),
       import('./outbox-worker.service.js'),
@@ -54,12 +62,14 @@ describe.skipIf(!enabled)('Activity outbox broker recovery', () => {
     };
     const eventId = randomUUID();
     const aggregateId = randomUUID();
-    const eventType = registry.events.find(
-      (event) => event.owner === 'activity-service',
+    const eventType = registry.events.find((event) =>
+      registeredOwners.includes(event.owner),
     );
-    const producer = registry.producerNamesByOwner['activity-service']?.[0];
+    const producer = eventType
+      ? registry.producerNamesByOwner[eventType.owner]?.[0]
+      : undefined;
     if (!eventType || !producer)
-      throw new Error('Activity fact route is missing from the event registry');
+      throw new Error(`${owner} fact route is missing from the event registry`);
 
     let failFirstPublish = true;
     const realRelay = jetstream(connection);
@@ -92,7 +102,7 @@ describe.skipIf(!enabled)('Activity outbox broker recovery', () => {
       await pool.query(
         `INSERT INTO public.outbox_event
           (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at)
-         VALUES ($1,$2,$3,'recovery_test',$4,$5::jsonb,now())`,
+         VALUES ($1,$2,$3,'recovery_test',$4,$5::jsonb,now()-interval '100 years')`,
         [
           eventId,
           eventType.eventType,
