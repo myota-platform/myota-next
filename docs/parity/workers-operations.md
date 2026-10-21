@@ -46,7 +46,9 @@
   duplicate-event idempotency. Transient PostgreSQL errors during event
   processing or dead-letter persistence extend the current ACK and retry with
   capped jittered backoff. Cluster failover, database-outage, and retry
-  exhaustion recovery qualification remain open.
+  exhaustion recovery qualification remain open. The unresolved-dead-letter
+  gauge refreshes in the background every 15 seconds, so it does not block
+  consumer startup or issue a count query for every delivery.
 - Geodata workers: registered JetStream consumers for import preprocessing and
   promotion, confirmed entity deletion, and location enrichment are implemented.
   Each durable is polled concurrently up to its registered `max_ack_pending`

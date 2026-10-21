@@ -38,6 +38,7 @@ const MAX_MESSAGES = optionalPositiveSetting(
   'ACTIVITY_NOTIFICATION_MAX_MESSAGES',
 );
 const MAX_DELIVERIES = 8;
+const DEAD_LETTER_GAUGE_REFRESH_MS = 15_000;
 const METRICS_PORT = Math.max(
   0,
   Number(process.env.ACTIVITY_NOTIFICATION_METRICS_PORT ?? 9110),
@@ -95,6 +96,7 @@ export class ActivityNotificationsService
   private connection?: Awaited<ReturnType<typeof connect>>;
   private messages?: Consumer;
   private metricsServer?: Server;
+  private deadLetterGaugeLoop?: Promise<void>;
   private natsUp = false;
   private outcomes = new Map<string, number>();
   private unresolvedDeadLetters = 0;
@@ -137,8 +139,8 @@ export class ActivityNotificationsService
       this.messages = await js.consumers.get(STREAM, DURABLE);
       this.natsUp = true;
       void this.monitorNats();
-      await this.refreshDeadLetterGauge();
       this.startMetricsServer();
+      this.deadLetterGaugeLoop = this.refreshDeadLetterGaugePeriodically();
       void this.consume();
     } catch (error) {
       this.stopping = true;
@@ -165,6 +167,7 @@ export class ActivityNotificationsService
         );
       });
     }
+    await this.deadLetterGaugeLoop;
     await this.connection?.drain();
   }
 
@@ -268,6 +271,37 @@ export class ActivityNotificationsService
       [STREAM],
     );
     this.unresolvedDeadLetters = Number(result.rows[0]?.count ?? 0);
+  }
+
+  private async refreshDeadLetterGaugePeriodically(): Promise<void> {
+    while (!this.stopping) {
+      try {
+        await retryTransientDatabaseOperation(
+          () => this.refreshDeadLetterGauge(),
+          {
+            stopping: () => this.stopping,
+            onRetry: (error, attempt) => {
+              if (attempt === 1 || attempt % 12 === 0)
+                this.logger.warn(
+                  `Activity notifications are waiting for PostgreSQL while refreshing dead-letter metrics: ${this.safeError(error)}`,
+                );
+            },
+            wait: (milliseconds) =>
+              abortableDelay(milliseconds, this.stopController.signal),
+          },
+        );
+      } catch (error) {
+        if (this.stopping) return;
+        this.logger.warn(
+          `Unable to refresh dead-letter metrics: ${this.safeError(error)}`,
+        );
+      }
+      if (this.stopping) return;
+      await abortableDelay(
+        DEAD_LETTER_GAUGE_REFRESH_MS,
+        this.stopController.signal,
+      );
+    }
   }
 
   private validateConsumer(
@@ -381,11 +415,6 @@ export class ActivityNotificationsService
       }
       this.countOutcome(processed ? 'processed' : 'duplicate');
       this.completedMessages += 1;
-      void this.refreshDeadLetterGauge().catch((error: unknown) =>
-        this.logger.warn(
-          `Unable to refresh dead-letter metrics: ${this.safeError(error)}`,
-        ),
-      );
       if (
         MAX_MESSAGES !== undefined &&
         this.completedMessages >= MAX_MESSAGES
@@ -412,11 +441,6 @@ export class ActivityNotificationsService
         );
         message.term();
         this.countOutcome('dead_lettered');
-        void this.refreshDeadLetterGauge().catch((gaugeError: unknown) =>
-          this.logger.warn(
-            `Unable to refresh dead-letter metrics: ${this.safeError(gaugeError)}`,
-          ),
-        );
       } else {
         const delay = Math.min(
           300_000,
