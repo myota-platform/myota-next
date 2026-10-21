@@ -93,10 +93,10 @@ async function save(): Promise<void> {
         method: 'POST',
         body: JSON.stringify(requestBody),
         headers: {
-          'Idempotency-Key': pendingMutationKeys.getOrCreate(fingerprint),
+          'Idempotency-Key': await pendingMutationKeys.getOrCreate(fingerprint),
         },
       });
-      pendingMutationKeys.complete(fingerprint);
+      await pendingMutationKeys.complete(fingerprint);
       await fetchItems(form.code);
     },
     { mutation: true, success: 'Category saved.' },

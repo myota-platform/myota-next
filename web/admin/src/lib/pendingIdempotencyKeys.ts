@@ -19,6 +19,20 @@ export function createPendingIdempotencyKeys(storageKey: string) {
     storage = undefined;
   }
 
+  async function storageFingerprint(fingerprint: string): Promise<string> {
+    try {
+      const digest = await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(fingerprint),
+      );
+      return Array.from(new Uint8Array(digest), (byte) =>
+        byte.toString(16).padStart(2, '0'),
+      ).join('');
+    } catch {
+      return fingerprint;
+    }
+  }
+
   function persist(): void {
     try {
       storage?.setItem(storageKey, JSON.stringify([...values.entries()]));
@@ -28,17 +42,19 @@ export function createPendingIdempotencyKeys(storageKey: string) {
   }
 
   return {
-    getOrCreate(fingerprint: string): string {
-      let key = values.get(fingerprint);
+    async getOrCreate(fingerprint: string): Promise<string> {
+      const storedFingerprint = await storageFingerprint(fingerprint);
+      let key = values.get(storedFingerprint);
       if (!key) {
         key = crypto.randomUUID();
-        values.set(fingerprint, key);
+        values.set(storedFingerprint, key);
         persist();
       }
       return key;
     },
-    complete(fingerprint: string): void {
-      if (values.delete(fingerprint)) persist();
+    async complete(fingerprint: string): Promise<void> {
+      const storedFingerprint = await storageFingerprint(fingerprint);
+      if (values.delete(storedFingerprint)) persist();
     },
   };
 }

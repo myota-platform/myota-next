@@ -272,10 +272,10 @@ async function save(): Promise<void> {
         body: JSON.stringify(payload),
         headers: {
           'Idempotency-Key':
-            pendingProgrammeCreationKeys.getOrCreate(fingerprint),
+            await pendingProgrammeCreationKeys.getOrCreate(fingerprint),
         },
       });
-      pendingProgrammeCreationKeys.complete(fingerprint);
+      await pendingProgrammeCreationKeys.complete(fingerprint);
     }
     await load(true);
     resetForm(saved);

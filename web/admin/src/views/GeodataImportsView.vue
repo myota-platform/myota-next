@@ -148,6 +148,9 @@ const candidateAdvancePending = ref(false);
 const pendingCandidateActionKeys = createPendingIdempotencyKeys(
   'myota_admin_pending_geodata_candidate_actions',
 );
+const pendingPastedImportKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_pasted_imports',
+);
 const candidateActionQueueId = ref<string | null>(null);
 const candidatePendingAction = ref<
   'CANDIDATE' | 'APPROVED' | 'REJECTED' | null
@@ -186,6 +189,26 @@ function metadata(): UploadMetadata {
       retrievedAt: new Date().toISOString(),
     },
   };
+}
+const pastedImportTimestampStorageKey =
+  'myota_admin_pending_pasted_import_timestamp';
+function pastedImportRetrievedAt(): string {
+  const generated = new Date().toISOString();
+  try {
+    const saved = sessionStorage.getItem(pastedImportTimestampStorageKey);
+    if (saved) return saved;
+    sessionStorage.setItem(pastedImportTimestampStorageKey, generated);
+  } catch {
+    // Keep the request usable when browser storage is unavailable.
+  }
+  return generated;
+}
+function clearPastedImportRetrievedAt(): void {
+  try {
+    sessionStorage.removeItem(pastedImportTimestampStorageKey);
+  } catch {
+    // The completed request remains valid when browser storage is unavailable.
+  }
 }
 function clearFile(): void {
   file.value = null;
@@ -289,7 +312,7 @@ async function waitForPromotionQueue(
         (item) => item.candidateId === candidateId,
       );
       if (error) {
-        pendingCandidateActionKeys.complete(actionFingerprint);
+        await pendingCandidateActionKeys.complete(actionFingerprint);
         candidateActionQueueId.value = null;
         candidatePendingAction.value = null;
         throw new Error(
@@ -302,7 +325,7 @@ async function waitForPromotionQueue(
       const error = queue.result?.errors?.find(
         (item) => item.candidateId === candidateId,
       );
-      pendingCandidateActionKeys.complete(actionFingerprint);
+      await pendingCandidateActionKeys.complete(actionFingerprint);
       candidateActionQueueId.value = null;
       candidatePendingAction.value = null;
       throw new Error(
@@ -394,7 +417,8 @@ async function decideCandidate(
     requestPath,
     requestBody,
   ]);
-  const actionKey = pendingCandidateActionKeys.getOrCreate(actionFingerprint);
+  const actionKey =
+    await pendingCandidateActionKeys.getOrCreate(actionFingerprint);
   let actionSucceeded = false;
   candidateActionError.value = '';
   candidateActionStatus.value =
@@ -428,7 +452,7 @@ async function decideCandidate(
         actionFingerprint,
       );
     }
-    pendingCandidateActionKeys.complete(actionFingerprint);
+    await pendingCandidateActionKeys.complete(actionFingerprint);
     candidateActionQueueId.value = null;
     candidatePendingAction.value = null;
     actionSucceeded = true;
@@ -583,16 +607,32 @@ async function queueImport(): Promise<void> {
       });
       importRunId = result.importRunId;
     } else {
-      const run = await apiRequest<ImportRun>('/v1/geodata/imports', {
+      const requestPath = '/v1/geodata/imports';
+      const requestBody = {
+        ...requestMetadata,
+        source: {
+          ...requestMetadata.source,
+          retrievedAt: pastedImportRetrievedAt(),
+        },
+        filename: filename.value || `pasted-${format.value.toLowerCase()}`,
+        content: content.value,
+      };
+      const fingerprint = JSON.stringify([
+        store.account?.id,
+        requestPath,
+        requestBody,
+      ]);
+      const run = await apiRequest<ImportRun>(requestPath, {
         method: 'POST',
         signal: uploadController.signal,
-        body: JSON.stringify({
-          ...requestMetadata,
-          filename: filename.value || `pasted-${format.value.toLowerCase()}`,
-          content: content.value,
-        }),
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify(requestBody),
+        headers: {
+          'Idempotency-Key':
+            await pendingPastedImportKeys.getOrCreate(fingerprint),
+        },
       });
+      await pendingPastedImportKeys.complete(fingerprint);
+      clearPastedImportRetrievedAt();
       importRunId = run.id;
     }
     if (disposed) return;
@@ -706,10 +746,11 @@ async function processCandidates(
       method: 'POST',
       body: JSON.stringify(requestBody),
       headers: {
-        'Idempotency-Key': pendingCandidateActionKeys.getOrCreate(fingerprint),
+        'Idempotency-Key':
+          await pendingCandidateActionKeys.getOrCreate(fingerprint),
       },
     });
-    pendingCandidateActionKeys.complete(fingerprint);
+    await pendingCandidateActionKeys.complete(fingerprint);
     if (selectedRun.value?.id === id) selectedCandidateIds.value = [];
     message.value = `${ids.length} records queued for promotion to ${targetStatus.toLowerCase()}. The counts update as processing finishes.`;
     await refreshImports(true);
@@ -741,10 +782,11 @@ async function rejectCandidates(): Promise<void> {
       method: 'POST',
       body: JSON.stringify(requestBody),
       headers: {
-        'Idempotency-Key': pendingCandidateActionKeys.getOrCreate(fingerprint),
+        'Idempotency-Key':
+          await pendingCandidateActionKeys.getOrCreate(fingerprint),
       },
     });
-    pendingCandidateActionKeys.complete(fingerprint);
+    await pendingCandidateActionKeys.complete(fingerprint);
     if (selectedRun.value?.id === id) selectedCandidateIds.value = [];
     message.value = 'Rejected records were removed from the import.';
     await refreshImports(true);
