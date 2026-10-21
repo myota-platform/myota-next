@@ -26,12 +26,14 @@ const policies: Record<string, RegisteredGeodataConsumerPolicy> = {
     maxPending: 1,
     maxDeliveries: 100,
     maxPendingSetting: 'GEODATA_WORKER_PREPROCESSING_MAX_ACK_PENDING',
+    legacyMaxPendingSetting: 'MYOTA_IMPORT_WORKERS',
   },
   'geodata-import-promotion-v1': {
     ackWaitSeconds: 300,
     maxPending: 1,
     maxDeliveries: 100,
     maxPendingSetting: 'GEODATA_WORKER_PROMOTION_MAX_ACK_PENDING',
+    legacyMaxPendingSetting: 'MYOTA_IMPORT_WORKERS',
   },
   'geodata-entity-deletion-v1': {
     ackWaitSeconds: 120,
@@ -74,6 +76,30 @@ export function geodataConsumerPolicy(
   };
 }
 
+export function geodataImportConcurrency(
+  environment: NodeJS.ProcessEnv = process.env,
+): number {
+  const nativeSettings = [
+    'GEODATA_WORKER_PREPROCESSING_MAX_ACK_PENDING',
+    'GEODATA_WORKER_PROMOTION_MAX_ACK_PENDING',
+    'GEODATA_WORKER_MAX_ACK_PENDING',
+  ];
+  if (
+    nativeSettings.some(
+      (name) => environment[name] !== undefined && environment[name] !== '',
+    )
+  )
+    return (
+      geodataConsumerPolicy('geodata-preprocessing-v1', environment)
+        .maxPending +
+      geodataConsumerPolicy('geodata-import-promotion-v1', environment)
+        .maxPending
+    );
+  return (
+    optionalWorkerConcurrencySetting('MYOTA_IMPORT_WORKERS', environment) ?? 2
+  );
+}
+
 function optionalWorkerConcurrencySetting(
   name: string | undefined,
   environment: NodeJS.ProcessEnv,
@@ -95,7 +121,7 @@ function optionalPositiveSetting(
   environment: NodeJS.ProcessEnv,
 ): number | undefined {
   const raw = environment[name];
-  if (raw === undefined) return undefined;
+  if (raw === undefined || raw === '') return undefined;
   const normalized = normalizePythonIntegerText(raw);
   if (!/^[+-]?\d(?:_?\d)*$/.test(normalized))
     throw new Error(`${name} must be a base-10 integer`);

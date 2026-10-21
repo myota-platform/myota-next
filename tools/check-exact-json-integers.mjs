@@ -181,6 +181,16 @@ requirePattern(
   'Geodata JetStream acknowledgements must be extended independently at one third of the durable ACK wait',
 );
 requirePattern(
+  'libs/platform/src/geodata-consumer-policy.ts',
+  /'geodata-preprocessing-v1':[\s\S]*?legacyMaxPendingSetting: 'MYOTA_IMPORT_WORKERS'[\s\S]*?'geodata-import-promotion-v1':[\s\S]*?legacyMaxPendingSetting: 'MYOTA_IMPORT_WORKERS'[\s\S]*?export function geodataImportConcurrency[\s\S]*?optionalWorkerConcurrencySetting\('MYOTA_IMPORT_WORKERS', environment\) \?\? 2/,
+  'Legacy import concurrency must cover both import durable policies',
+);
+requirePattern(
+  'apps/geodata-worker/src/geodata-worker.service.ts',
+  /this\.importSemaphore = new AsyncSemaphore\(geodataImportConcurrency\(\)\)[\s\S]*?const importWork =[\s\S]*?this\.importSemaphore\.acquire\(\)/,
+  'Geodata preprocessing and promotion must share the configured import concurrency cap',
+);
+requirePattern(
   'libs/platform/src/import-limits.ts',
   /MAX_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_GEOJSON_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_OSM_PBF_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_SHAPEFILE_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_IMPORT_FEATURES = integerSetting\(\s*process\.env\.GEODATA_MAX_IMPORT_FEATURES,\s*5000,[\s\S]*?IMPORT_RUN_LEASE_SECONDS = Math\.max\([\s\S]*?MYOTA_IMPORT_LEASE_SECONDS,[\s\S]*?IMPORT_RUN_HEARTBEAT_SECONDS = Math\.max\([\s\S]*?MYOTA_IMPORT_HEARTBEAT_SECONDS,[\s\S]*?MAX_IMPORT_FEATURE_VERTICES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_FEATURE_VERTICES[\s\S]*?MAX_SHAPEFILE_EXPANDED_BYTES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES[\s\S]*?MAX_IMPORT_BATCH_BYTES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_BYTES[\s\S]*?MAX_IMPORT_BATCH_FEATURES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_SIZE/,
   'Geodata upload, decoder, and batch limits must use Python-compatible integer settings',

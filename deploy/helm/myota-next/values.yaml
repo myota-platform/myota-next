@@ -30,6 +30,7 @@ geodataWorker:
     deletion: ''
     enrichment: ''
   legacyConcurrency:
+    import: ''
     deletion: ''
     location: ''
 images:

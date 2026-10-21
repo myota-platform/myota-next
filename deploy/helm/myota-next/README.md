@@ -84,6 +84,9 @@ consumer's `max_ack_pending`. If provisioning is managed outside this chart,
 apply the same settings there. Existing consumer configuration is immutable in
 the provisioner; changing a policy requires an explicitly reviewed successor
 durable.
+The legacy aggregate import limit can be set with
+`geodataWorker.legacyConcurrency.import`; it applies across preprocessing and
+promotion when native import concurrency settings are absent.
 
 Workers expose internal health listeners only where their process supports
 them. The chart creates ClusterIP services for the four domain APIs and the

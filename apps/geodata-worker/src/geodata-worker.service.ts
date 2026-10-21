@@ -13,10 +13,14 @@ import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import {
+  AsyncSemaphore,
   abortableDelay,
   waitForTaskOrTimeout,
 } from '@app/platform/async-timers.js';
-import { geodataConsumerPolicy } from '@app/platform/geodata-consumer-policy.js';
+import {
+  geodataConsumerPolicy,
+  geodataImportConcurrency,
+} from '@app/platform/geodata-consumer-policy.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { IMPORT_RUN_HEARTBEAT_SECONDS } from '@app/platform/import-limits.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
@@ -76,6 +80,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GeodataWorkerService.name);
   private stopping = false;
   private readonly stopController = new AbortController();
+  private importSemaphore = new AsyncSemaphore(2);
   private connection?: Awaited<ReturnType<typeof connect>>;
   private loops: Promise<void>[] = [];
   private readonly probes = new WorkerProbeServer();
@@ -148,6 +153,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
           ...policy,
         });
       }
+      this.importSemaphore = new AsyncSemaphore(geodataImportConcurrency());
       this.natsUp = true;
       void this.monitorNats();
       await this.probes.listen(
@@ -241,10 +247,21 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async consume(definition: WorkDefinition): Promise<void> {
+    const importWork =
+      definition.workType === 'geodata.import-preprocess.v1' ||
+      definition.workType === 'geodata.import-promotion.v1';
     while (!this.stopping) {
       try {
-        const message = await definition.consumer.next({ expires: 1000 });
-        if (message) await this.handle(definition, message);
+        const releaseImportSlot = importWork
+          ? await this.importSemaphore.acquire()
+          : undefined;
+        try {
+          if (this.stopping) return;
+          const message = await definition.consumer.next({ expires: 1000 });
+          if (message) await this.handle(definition, message);
+        } finally {
+          releaseImportSlot?.();
+        }
       } catch (error) {
         if (!this.stopping) {
           this.logger.error(

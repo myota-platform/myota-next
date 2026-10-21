@@ -36,6 +36,10 @@ Geodata durable. If those settings are absent, `MYOTA_DELETION_WORKERS` and
 and location-enrichment durables. These legacy aliases clamp values below one
 to one, matching the Python worker-pool minimum; unset or empty values defer to
 the registered defaults. Otherwise registered per-durable defaults apply. A
+`MYOTA_IMPORT_WORKERS` value is a fallback for both preprocessing and promotion;
+the Geodata worker applies it as a shared per-process cap across those two
+durables. Native preprocessing, promotion, or shared pending settings override
+that legacy cap. A
 change to an existing durable's limit is treated as configuration drift and
 requires an explicitly reviewed successor durable.
 
