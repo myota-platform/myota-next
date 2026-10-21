@@ -270,7 +270,8 @@ handler's full persisted `importRun` object.
 Upload creation checks required fields using Python truthiness and order,
 normalizes filename and size before the idempotency lookup, then replays a
 matching key by filename and expected size before validating digest, category,
-and format details.
+and format details. New session metadata stores the first normalized category
+as `entityType`, alongside the complete `entityTypes` list.
 Multipart upload creation accepts the Python `JSON` format alias and stores it
 as `GEOJSON`, including when inferred from the filename extension.
 For multipart upload scanning, NestJS maps

@@ -732,6 +732,7 @@ export function validateCreate(
     source,
     adapter,
     format: normalizedFormat,
+    entityType: entityTypes[0],
     filename,
     entityTypes,
   };
