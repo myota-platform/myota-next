@@ -12,7 +12,7 @@ import {
 } from './geodata-source-feature-hash.js';
 
 const MAX_NESTING_DEPTH = 128;
-const PARSER_CHUNK_BYTES = 4 * 1024;
+const PARSER_CHUNK_BYTES = 64 * 1024;
 const MAX_ROOT_KEY_BYTES = 1024;
 const sourceJsonByFeature = new WeakMap<
   object,
