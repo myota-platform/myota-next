@@ -580,10 +580,13 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   private async reconcileCancellations(): Promise<void> {
     while (!this.stopping) {
       try {
-        const runIds = await this.repository.staleCancellationIds();
-        for (const runId of runIds)
-          await this.repository.finalizeStaleCancellation(runId);
+        await this.retryDatabase('reconciling cancellations', async () => {
+          const runIds = await this.repository.staleCancellationIds();
+          for (const runId of runIds)
+            await this.repository.finalizeStaleCancellation(runId);
+        });
       } catch (error) {
+        if (this.stopping) return;
         this.logger.error(
           `Geodata cancellation reconciliation failed: ${safeError(error)}`,
         );
@@ -595,12 +598,16 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   private async reconcileExpiredWork(): Promise<void> {
     while (!this.stopping) {
       try {
-        const recovered = await this.repository.recoverExpiredWorkDispatches();
+        const recovered = await this.retryDatabase(
+          'recovering expired work dispatches',
+          () => this.repository.recoverExpiredWorkDispatches(),
+        );
         if (Object.values(recovered).some((count) => count > 0))
           this.logger.warn(
             `Re-enqueued stale Geodata work: ${stringifyJsonWithBigInts(recovered)}`,
           );
       } catch (error) {
+        if (this.stopping) return;
         this.logger.error(`Geodata work recovery failed: ${safeError(error)}`);
       }
       await this.wait(WORK_RECONCILE_SECONDS * 1000);
@@ -610,12 +617,15 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   private async runRetention(): Promise<void> {
     while (!this.stopping) {
       try {
-        const result = await this.retention.purgeSweep();
+        const result = await this.retryDatabase('running retention', () =>
+          this.retention.purgeSweep(),
+        );
         if (result.eligible || result.uploadsExpired)
           this.logger.log(
             `Geodata retention sweep completed: ${stringifyJsonWithBigInts(result)}`,
           );
       } catch (error) {
+        if (this.stopping) return;
         this.logger.error(
           `Geodata retention sweep failed: ${safeError(error)}`,
         );
@@ -626,6 +636,22 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
 
   private async wait(milliseconds: number): Promise<void> {
     await abortableDelay(milliseconds, this.stopController.signal);
+  }
+
+  private retryDatabase<T>(
+    context: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return retryTransientDatabaseOperation(operation, {
+      stopping: () => this.stopping,
+      onRetry: (error, attempt) => {
+        if (attempt === 1 || attempt % 12 === 0)
+          this.logger.warn(
+            `Geodata worker is waiting for PostgreSQL while ${context}: ${safeError(error)}`,
+          );
+      },
+      wait: (milliseconds) => this.wait(milliseconds),
+    });
   }
 }
 

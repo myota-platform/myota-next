@@ -11,6 +11,7 @@ import {
 } from '@aws-sdk/client-s3';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { isTransientDatabaseError } from '@app/platform/database-retry.js';
 
 type ImportSource = { bucket: string; key: string } | null;
 
@@ -89,6 +90,7 @@ export class GeodataRetentionRepository {
             );
           if (await this.deleteRun(client, row.id, days)) purged++;
         } catch (error) {
+          if (isTransientDatabaseError(error)) throw error;
           failed.push(String(row.id));
           this.logger.error(
             `Failed to purge expired Geodata import ${row.id}: ${safeError(error)}`,

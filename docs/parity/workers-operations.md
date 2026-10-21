@@ -107,6 +107,9 @@
   extends the current message ACK and retries settlement for transient
   connection, shutdown, serialization, and deadlock errors with capped jittered
   backoff. Live database-outage recovery still needs qualification.
+  Periodic cancellation, expired-work, and retention passes also retry
+  transient database failures with capped jittered backoff. Retention repeats
+  object deletion safely before retrying its database state change.
   Scheduled import and upload-session retention is implemented. CI restarts the
   pinned SeaweedFS image during a Geodata multipart upload, verifies a failed
   part leaves no database record, retries it after restart, and checks the
