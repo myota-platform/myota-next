@@ -122,12 +122,11 @@ export class ActivityService {
     const entityIdValue = body.entityId;
     if (!pythonTruthy(entityIdValue))
       throw new BadRequestException('entityId is required');
-    const entityId =
-      typeof entityIdValue === 'string' ? entityIdValue : String(entityIdValue);
+    const entityId = pythonStringJsonField(body, 'entityId');
     const claims = this.authorize(authorization, ['activity.admin']);
     const deletedBy =
       claims.sub ||
-      (pythonTruthy(body.deletedBy) ? String(body.deletedBy) : 'administrator');
+      (pythonTruthy(body.deletedBy) ? body.deletedBy : 'administrator');
     return this.repository.cascadeDeleteEntity(entityId, deletedBy, key);
   }
 
