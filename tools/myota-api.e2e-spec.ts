@@ -30,6 +30,7 @@ describeWithDatabases(
         'MYOTA_ACTIVITY_URL',
         'MYOTA_GEODATA_URL',
         'MYOTA_ENV',
+        'MYOTA_EMAIL_SERVICE_CLIENT_SECRET',
         'PORT',
       ] as const;
       const previous = Object.fromEntries(
@@ -37,6 +38,8 @@ describeWithDatabases(
       );
       process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL = email;
       process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD = password;
+      const emailServiceSecret = `gateway-e2e-${randomUUID()}-email-service-client-secret`;
+      process.env.MYOTA_EMAIL_SERVICE_CLIENT_SECRET = emailServiceSecret;
       process.env.MYOTA_ENV = 'test';
       process.env.PORT = '0';
 
@@ -45,12 +48,14 @@ describeWithDatabases(
       let activityApp: INestApplication | undefined;
       let geodataApp: INestApplication | undefined;
       let gatewayApp: INestApplication | undefined;
+      let identityUrl = '';
       try {
         identityApp = await startIdentity();
         programmesApp = await startProgrammes();
         activityApp = await startActivity();
         geodataApp = await startGeodata();
-        process.env.MYOTA_IDENTITY_URL = await listen(identityApp);
+        identityUrl = await listen(identityApp);
+        process.env.MYOTA_IDENTITY_URL = identityUrl;
         process.env.MYOTA_PROGRAMMES_URL = await listen(programmesApp);
         process.env.MYOTA_ACTIVITY_URL = await listen(activityApp);
         process.env.MYOTA_GEODATA_URL = await listen(geodataApp);
@@ -78,6 +83,63 @@ describeWithDatabases(
         await request(gatewayUrl)
           .post('/v1/identity/auth/refresh')
           .send({ refreshToken: login.body.refreshToken })
+          .expect(403);
+
+        const emailServiceToken = await request(gatewayUrl)
+          .post('/v1/identity/auth/service-token')
+          .send({ service: 'email-service', clientSecret: emailServiceSecret })
+          .expect(200);
+        expect(emailServiceToken.body).toMatchObject({
+          tokenType: 'Bearer',
+          expiresIn: 300,
+        });
+        const recipient = await request(identityUrl)
+          .get(
+            `/v1/identity/internal/email-recipients/${login.body.account.id}`,
+          )
+          .set('Authorization', `Bearer ${emailServiceToken.body.accessToken}`)
+          .expect(200);
+        expect(recipient.body).toEqual({ deliverableAddress: email });
+
+        await request(identityUrl)
+          .post('/v1/identity/auth/service-token')
+          .send({
+            service: 'another-service',
+            scopes: ['activity.read'],
+            clientSecret: emailServiceSecret,
+          })
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .expect(400);
+        const scopedServiceToken = await request(gatewayUrl)
+          .post('/v1/identity/auth/service-token')
+          .send({ service: 'activity-worker', scopes: ['activity.read'] })
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .expect(200);
+        await request(identityUrl)
+          .get(
+            `/v1/identity/internal/email-recipients/${login.body.account.id}`,
+          )
+          .set('Authorization', `Bearer ${scopedServiceToken.body.accessToken}`)
+          .expect(403);
+        await request(gatewayUrl)
+          .post('/v1/identity/auth/service-token')
+          .send({
+            service: 'activity-worker',
+            scopes: ['activity.read', 'identity.email.resolve'],
+          })
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .expect(403);
+
+        await request(gatewayUrl)
+          .post('/v1/identity/auth/logout')
+          .set('Authorization', `Bearer ${emailServiceToken.body.accessToken}`)
+          .expect(200)
+          .expect(({ body }) => expect(body.status).toBe('logged_out'));
+        await request(identityUrl)
+          .get(
+            `/v1/identity/internal/email-recipients/${login.body.account.id}`,
+          )
+          .set('Authorization', `Bearer ${emailServiceToken.body.accessToken}`)
           .expect(403);
 
         const accountCreationKey = randomUUID();

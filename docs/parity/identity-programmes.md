@@ -243,7 +243,10 @@ Service-token issuance keeps the email client-credentials flow on its fixed
 `identity.email.resolve` scope and `myota-identity` audience with a five-minute
 expiry. Other service tokens require `identity.service.issue` and cannot claim
 the reserved email-recipient scope. Issuance audit events contain the service
-and granted scopes, never the client secret.
+and granted scopes, never the client secret. The Gateway integration now issues
+the email service token, resolves a live bootstrap recipient directly through
+Identity's internal endpoint, verifies reserved-scope denial for other service
+tokens, and confirms logout revocation prevents subsequent resolution.
 Identity startup now idempotently provisions the configured bootstrap account,
 sets its password only when no credential exists, ensures its global operator
 role, and writes the corresponding Core outbox and security events.
