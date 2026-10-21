@@ -85,6 +85,7 @@ export class ActivityRepository {
   ) {
     const client = await this.connect();
     try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       const clauses: string[] = [];
       const filters: unknown[] = [];
       if (programme) {
@@ -107,6 +108,7 @@ export class ActivityRepository {
          ORDER BY started_at DESC LIMIT $${limitIndex} OFFSET $${limitIndex + 1}`,
         [...filters, pageSize, pageOffset(page, pageSize)],
       );
+      await client.query('COMMIT');
       return {
         items: result.rows.map((row) => activationRecord(row)),
         page,
@@ -114,6 +116,9 @@ export class ActivityRepository {
         total,
         nextPage: nextPageIfMore(page, pageSize, total),
       };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
     } finally {
       client.release();
     }
@@ -141,6 +146,7 @@ export class ActivityRepository {
   ) {
     const client = await this.connect();
     try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
       const filters = programme ? [programme] : [];
       const where = programme ? ' WHERE programme_slug=$1' : '';
       const count = await client.query(
@@ -155,6 +161,7 @@ export class ActivityRepository {
          LIMIT $${filters.length + 1} OFFSET $${filters.length + 2}`,
         [...filters, pageSize, pageOffset(page, pageSize)],
       );
+      await client.query('COMMIT');
       return {
         items: result.rows.map((row) => ({
           id: String(row.id),
@@ -170,6 +177,9 @@ export class ActivityRepository {
         total,
         nextPage: nextPageIfMore(page, pageSize, total),
       };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
     } finally {
       client.release();
     }

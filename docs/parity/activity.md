@@ -153,7 +153,10 @@ activation ID. Broader Activity compatibility and outage/recovery qualification
 remain outstanding.
 Activity activation history, public activation history, and statistics pages
 apply database limits and offsets while retaining their existing page metadata;
-public result exports remain complete exports.
+public result exports remain complete exports. The private activation and
+statistics pagers read their count and page rows from one read-only
+repeatable-read snapshot, keeping totals consistent with the returned page
+under concurrent writes.
 Public leaderboard category values are uppercased and passed through to the
 aggregate query, matching the reference: unrecognized categories return an
 empty `items` array instead of a validation error; an absent or blank category
