@@ -186,7 +186,7 @@ export class IdentityAccountService {
         `INSERT INTO public.account
            (id, display_name, email, identity_email_key, participation_type,
             status, created_at, updated_at)
-         VALUES ($1, $2, $3, $3, $4, 'PENDING_SETUP',
+         VALUES ($1, $2, $3::text::public.citext, $3::text, $4, 'PENDING_SETUP',
                  clock_timestamp(), clock_timestamp())
          RETURNING to_char(created_at AT TIME ZONE 'UTC',
                     'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
