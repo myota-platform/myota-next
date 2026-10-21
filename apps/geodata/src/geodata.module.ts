@@ -9,6 +9,12 @@ import { GeodataRepository } from './geodata.repository.js';
 import { GeodataImportService } from './geodata-import.service.js';
 import { GeodataImportMutationRepository } from './geodata-import-mutation.repository.js';
 import { GeodataEntityMutationRepository } from './geodata-entity-mutation.repository.js';
+import { GeodataEntityMutationSupport } from './geodata-entity-mutation-support.js';
+import { GeodataEntityReviewRepository } from './geodata-entity-review.repository.js';
+import { GeodataEntityMetadataRepository } from './geodata-entity-metadata.repository.js';
+import { GeodataEntityEnrichmentRequestRepository } from './geodata-entity-enrichment.repository.js';
+import { GeodataEntityCategoryRepository } from './geodata-entity-categories.repository.js';
+import { GeodataEntityGeometryRepository } from './geodata-entity-geometry.repository.js';
 import { GeodataUploadService } from './geodata-upload.service.js';
 import { GeodataDeletionService } from './geodata-deletion.service.js';
 import { GeodataScheduleService } from './geodata-schedule.service.js';
@@ -31,6 +37,12 @@ import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
     GeodataRepository,
     GeodataImportService,
     GeodataImportMutationRepository,
+    GeodataEntityMutationSupport,
+    GeodataEntityReviewRepository,
+    GeodataEntityMetadataRepository,
+    GeodataEntityEnrichmentRequestRepository,
+    GeodataEntityCategoryRepository,
+    GeodataEntityGeometryRepository,
     GeodataEntityMutationRepository,
     GeodataUploadService,
     GeodataDeletionService,
