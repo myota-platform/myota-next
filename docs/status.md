@@ -49,10 +49,12 @@ behavioral parity or production readiness.
 - Add compatibility evidence for the implemented API and worker behavior.
 - Exercise broker and object-store outages, retries, recovery, and redrive
   against disposable infrastructure. CI now covers Activity notification
-  replica sharing, durable resume after a worker restart, and audited dead-letter
-  redrive. It also verifies Activity statistics-job lease takeover after a
-  worker process kill and Geodata import preprocessing replay after committed
-  staging. A fault-injection check verifies outbox retry and successful
+  replica sharing, durable resume after a worker restart, a single-server
+  JetStream restart with its file store retained, confirmed notification ACKs,
+  duplicate-event idempotency, and audited dead-letter redrive. It also verifies
+  Activity statistics-job lease takeover after a worker process kill and
+  Geodata import preprocessing replay after committed staging. A fault-injection
+  check verifies outbox retry and successful
   publication, attempt exhaustion, and audited redrive for Core, Activity, and
   Geodata events against their separate databases. It also kills and restarts
   an isolated JetStream server with its file store retained, then verifies
