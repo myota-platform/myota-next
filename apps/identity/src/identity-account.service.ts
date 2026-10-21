@@ -940,8 +940,9 @@ export class IdentityAccountService {
     }
 
     const changedAt = (
-      await client.query<{ timestamp: Date }>(
-        'SELECT clock_timestamp() AS timestamp',
+      await client.query<{ timestamp: string }>(
+        `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
       )
     ).rows[0].timestamp;
     await client.query(
@@ -1081,14 +1082,15 @@ export class IdentityAccountService {
     client: PoolClient,
     accountId: string,
     assignments: RoleGrant[],
-    createdAt?: Date,
+    createdAt?: string,
   ) {
     const result: Record<string, unknown>[] = [];
     const assignmentTime =
       createdAt ??
       (
-        await client.query<{ timestamp: Date }>(
-          'SELECT clock_timestamp() AS timestamp',
+        await client.query<{ timestamp: string }>(
+          `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
         )
       ).rows[0].timestamp;
     for (const assignment of assignments) {

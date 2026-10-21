@@ -46,10 +46,15 @@ export class IdentityBootstrapService implements OnModuleInit {
       );
       let selected = await client.query<{
         id: string;
-        created_at: Date;
-        updated_at: Date;
+        created_at: string;
+        updated_at: string;
       }>(
-        `SELECT id, created_at, updated_at FROM public.account
+        `SELECT id,
+                to_char(created_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                to_char(updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at
+           FROM public.account
           WHERE identity_email_key = $1 FOR UPDATE`,
         [email],
       );
@@ -57,15 +62,19 @@ export class IdentityBootstrapService implements OnModuleInit {
       if (!selected.rows[0]) {
         const inserted = await client.query<{
           id: string;
-          created_at: Date;
-          updated_at: Date;
+          created_at: string;
+          updated_at: string;
         }>(
           `INSERT INTO public.account
              (display_name, email, identity_email_key, participation_type, status)
            VALUES ('Global Administrator', $1, $1, 'OPERATOR', 'ACTIVE')
            ON CONFLICT (identity_email_key)
              WHERE identity_email_key IS NOT NULL DO NOTHING
-           RETURNING id, created_at, updated_at`,
+           RETURNING id,
+             to_char(created_at AT TIME ZONE 'UTC',
+               'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+             to_char(updated_at AT TIME ZONE 'UTC',
+               'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
           [email],
         );
         if (inserted.rows[0]) {
@@ -74,10 +83,15 @@ export class IdentityBootstrapService implements OnModuleInit {
         } else {
           selected = await client.query<{
             id: string;
-            created_at: Date;
-            updated_at: Date;
+            created_at: string;
+            updated_at: string;
           }>(
-            `SELECT id, created_at, updated_at FROM public.account
+            `SELECT id,
+                    to_char(created_at AT TIME ZONE 'UTC',
+                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                    to_char(updated_at AT TIME ZONE 'UTC',
+                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at
+               FROM public.account
               WHERE identity_email_key = $1 FOR UPDATE`,
             [email],
           );

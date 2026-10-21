@@ -105,7 +105,9 @@ administrator account reads also preserve microseconds in account and profile
 image timestamps.
 Role-definition and account-role reads preserve PostgreSQL microseconds in
 their creation and expiry timestamps as well. Security-event feeds and account
-exports, plus OIDC mapping creation, preserve those fractional seconds too.
+exports, OIDC mapping creation, role-replacement events, and bootstrap account
+creation events preserve those fractional seconds too. Role replacement uses a
+single microsecond-precise UTC value for the outgoing and incoming assignments.
 Callsign create, primary-selection, evidence, verification, and retirement defer
 account-ID resolution until after their respective authorization checks; a
 missing account returns the quoted-ID 404 before replaying an idempotent result
