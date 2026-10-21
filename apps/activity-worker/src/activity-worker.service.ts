@@ -337,8 +337,16 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
     const task = this.repository.process(job);
     while (true) {
       if (await waitForTaskOrTimeout(task, 30_000)) return;
-      const extended = await this.repository.heartbeat(job);
-      if (!extended) throw new Error('worker lease was lost while processing');
+      let extended: boolean | undefined;
+      try {
+        extended = await this.repository.heartbeat(job);
+      } catch (error) {
+        this.logger.warn(
+          `Activity work heartbeat failed; processing continues: ${safeError(error)}`,
+        );
+      }
+      if (extended === false)
+        throw new Error('worker lease was lost while processing');
       this.extendMessageAck(message, 'processing an Activity job');
     }
   }

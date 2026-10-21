@@ -4,8 +4,12 @@
   recalculation, certificate rendering, and statistics rebuild are consumed
   from their registered JetStream durables up to each durable's configured
   `max_ack_pending` concurrency. Database leases and message progress
-  acknowledgements protect long jobs. Heartbeat timers are cancelled when
-  processing settles, and long scheduled waits are cleared on shutdown.
+  acknowledgements protect long jobs. The Python worker sends heartbeat
+  exceptions through its retry handler. NestJS logs transient database
+  heartbeat failures and retries at the next interval while processing and
+  ACK extensions continue; a confirmed lost lease still fails the work.
+  Heartbeat timers are cancelled
+  when processing settles, and long scheduled waits are cleared on shutdown.
   Notifications are handled by the separate consumer described below. ADIF
   source-object retention is scheduled, and queued jobs missing an outbox
   command are repaired periodically. A process-kill qualification covers

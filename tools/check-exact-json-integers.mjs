@@ -166,6 +166,11 @@ requirePattern(
   'Geodata workers must continue after transient heartbeat errors and stop when lease ownership is lost',
 );
 requirePattern(
+  'apps/activity-worker/src/activity-worker.service.ts',
+  /let extended: boolean \| undefined[\s\S]*?this\.repository\.heartbeat\(job\)[\s\S]*?Activity work heartbeat failed; processing continues[\s\S]*?extended === false[\s\S]*?worker lease was lost while processing/,
+  'Activity workers must continue after transient heartbeat errors and stop when lease ownership is lost',
+);
+requirePattern(
   'apps/geodata-worker/src/geodata-worker.service.ts',
   /acknowledgementIntervalMs = Math\.max\([\s\S]*?definition\.ackWaitSeconds \* 1000\) \/ 3[\s\S]*?lastAcknowledgement/,
   'Geodata JetStream acknowledgements must be extended independently at one third of the durable ACK wait',
