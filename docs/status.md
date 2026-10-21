@@ -33,9 +33,11 @@ production readiness.
   outage, cluster failover, and other worker and object-store recovery paths
   remain open. See [worker and operations coverage](parity/workers-operations.md)
   and the [object-store recovery notes](operations/object-store-recovery.md).
-- **Web applications:** current browser workflows use intercepted API
-  responses. Service integration, broader payload coverage, accessibility,
-  responsive behavior, and failure states remain to be qualified.
+- **Web applications:** CI now checks Admin sign-in/dashboard and one public
+  Participant catalogue workflow against running NestJS services through the
+  Gateway. Most other browser workflows still use intercepted API responses;
+  broader payload coverage, accessibility, responsive behavior, and failure
+  states remain to be qualified.
 - **Production operations:** qualify persistent database operations, NATS,
   object storage, secrets, observability, deployment, and release automation.
 - **Geodata performance:** larger datasets and full worker throughput remain

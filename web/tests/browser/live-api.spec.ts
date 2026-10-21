@@ -68,3 +68,31 @@ test('loads a real programme catalogue through Gateway and Geodata', async ({
   );
   expect(failedResponses).toEqual([]);
 });
+
+test('signs into Admin through Gateway and loads its live dashboard', async ({
+  page,
+}) => {
+  test.skip(!hasApiDatabases, 'requires the CI PostgreSQL databases');
+
+  const email =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL ?? 'browser-e2e-admin@example.test';
+  const password =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD ?? 'browser-e2e-password-7!Q';
+  const failedResponses: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('/v1/') && response.status() >= 400)
+      failedResponses.push(`${response.status()} ${response.url()}`);
+  });
+
+  await page.goto('http://127.0.0.1:8090/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByText('API connected')).toBeVisible();
+  await expect(
+    page.getByText('available programme configurations'),
+  ).toBeVisible();
+  expect(failedResponses).toEqual([]);
+});
