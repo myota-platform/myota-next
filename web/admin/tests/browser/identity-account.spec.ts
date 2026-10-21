@@ -34,6 +34,7 @@ test('creates a participant account with a permitted role grant', async ({
                 'identity.accounts.create',
                 'identity.roles.assign',
                 'activity.read',
+                'activity.admin',
               ],
             },
           ],

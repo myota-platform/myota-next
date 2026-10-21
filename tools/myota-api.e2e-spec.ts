@@ -29,6 +29,7 @@ describeWithDatabases(
         'MYOTA_PROGRAMMES_URL',
         'MYOTA_ACTIVITY_URL',
         'MYOTA_GEODATA_URL',
+        'MYOTA_ENV',
         'PORT',
       ] as const;
       const previous = Object.fromEntries(
@@ -36,6 +37,7 @@ describeWithDatabases(
       );
       process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL = email;
       process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD = password;
+      process.env.MYOTA_ENV = 'test';
       process.env.PORT = '0';
 
       let identityApp: INestApplication | undefined;
@@ -132,6 +134,37 @@ describeWithDatabases(
               'passwords cannot be set during account creation; use the invitation setup flow',
             );
           });
+
+        const activatedAccount = await request(gatewayUrl)
+          .patch(`/v1/identity/accounts/${createdAccount.body.id}`)
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .send({ status: 'ACTIVE' })
+          .expect(200);
+        expect(activatedAccount.body.status).toBe('ACTIVE');
+
+        const recovery = await request(gatewayUrl)
+          .post('/v1/identity/auth/recovery/request')
+          .send({ email: createdAccount.body.email })
+          .expect(200);
+        expect(recovery.body.status).toBe('accepted');
+        expect(recovery.body.devResetToken).toEqual(expect.any(String));
+        const newPassword = `Recovered-${randomUUID()}-Password!`;
+        await request(gatewayUrl)
+          .post('/v1/identity/auth/recovery/reset')
+          .send({ token: recovery.body.devResetToken, newPassword })
+          .expect(200)
+          .expect(({ body }) => {
+            expect(body.status).toBe('password_reset');
+          });
+        await request(gatewayUrl)
+          .post('/v1/identity/auth/recovery/reset')
+          .send({ token: recovery.body.devResetToken, newPassword })
+          .expect(400);
+        const recoveredLogin = await request(gatewayUrl)
+          .post('/v1/identity/auth/login')
+          .send({ email: createdAccount.body.email, password: newPassword })
+          .expect(200);
+        expect(recoveredLogin.body.account.id).toBe(createdAccount.body.id);
 
         const programmeSlug = `gateway-e2e-${randomUUID()}`;
         const programme = await request(gatewayUrl)
