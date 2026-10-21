@@ -633,8 +633,6 @@ export class GeodataEntityMutationRepository {
       if (replay.found) return replay.response;
     }
     const editorId = body.editorId;
-    if (!pythonTruthy(editorId))
-      throw new BadRequestException('editorId is required');
     const expectedVersion = parseIfMatch(ifMatch);
     const client = await this.connect();
     try {
@@ -651,6 +649,8 @@ export class GeodataEntityMutationRepository {
       const row = selected.rows[0];
       if (!row) throw new NotFoundException(pythonKeyErrorDetail(id));
       assertGisAdminCoverage(claims, row, 'geodata.location.manage');
+      if (!pythonTruthy(editorId))
+        throw new BadRequestException('editorId is required');
       if (key) {
         const previous = await readRequestResponse(
           client,
