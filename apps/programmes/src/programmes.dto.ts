@@ -10,6 +10,21 @@ import {
 } from 'class-validator';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 
+function validateContentPatchFields(object: { status?: unknown }) {
+  const status = object.status;
+  return (
+    !pythonTruthy(status) ||
+    (typeof status === 'string' &&
+      [
+        'DRAFT',
+        'CHANGES_REQUESTED',
+        'UNDER_REVIEW',
+        'APPROVED',
+        'PUBLISHED',
+      ].includes(status))
+  );
+}
+
 export class CreateProgrammeDto {
   @IsString()
   slug!: string;
@@ -113,42 +128,50 @@ export class PublishProgrammeContentDto {
 }
 
 export class PatchProgrammeContentDto {
-  @ValidateIf((_object, value) => pythonTruthy(value))
-  @IsIn(['DRAFT', 'CHANGES_REQUESTED', 'UNDER_REVIEW', 'APPROVED', 'PUBLISHED'])
-  status?: string;
+  @Allow()
+  status?: unknown;
 
+  @ValidateIf(validateContentPatchFields)
   @IsOptional()
   @IsString()
   key?: string;
 
+  @ValidateIf(validateContentPatchFields)
   @IsOptional()
   @IsString()
   locale?: string;
 
+  @ValidateIf(validateContentPatchFields)
   @IsOptional()
   @Allow()
   value?: unknown;
 
+  @ValidateIf(validateContentPatchFields)
   @IsOptional()
   @IsString()
   fallbackLocale?: string | null;
 
+  @ValidateIf(validateContentPatchFields)
   @IsOptional()
   @IsIn(['APPROVED', 'CHANGES_REQUESTED'])
   decision?: 'APPROVED' | 'CHANGES_REQUESTED';
 
+  @ValidateIf(validateContentPatchFields)
   @IsOptional()
   @IsString()
   reviewerId?: string;
 
+  @ValidateIf(validateContentPatchFields)
   @IsOptional()
   @IsString()
   note?: string | null;
 
+  @ValidateIf(validateContentPatchFields)
   @IsOptional()
   @IsString()
   effectiveFrom?: string;
 
+  @ValidateIf(validateContentPatchFields)
   @IsOptional()
   @IsString()
   publisherId?: string;

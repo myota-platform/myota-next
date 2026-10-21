@@ -248,7 +248,9 @@ archive action: other supplied update fields are ignored, the policy version
 is unchanged, and the archive event contains only the slug.
 An invalid PATCH `status` is rejected before admin authorization and skips
 validation of other supplied fields, matching the Python handler's response
-order.
+order. Programme-content PATCH with an unrecognized truthy status falls back to
+a content edit after loading the record, matching the Python handler's action
+dispatch and error order.
 
 Activity has an initial activation and single-QSO slice: activation list/create/read/close,
 normalized QSO writes, validity checks, ownership checks, subject aggregates,
