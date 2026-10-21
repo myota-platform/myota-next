@@ -100,38 +100,53 @@ export class ActivityNotificationsService
 
   async onModuleInit(): Promise<void> {
     if (!this.pool) throw new Error('ACTIVITY_DATABASE_URL is required');
-    this.connection = await connect({
+    const connection = await connect({
       servers: process.env.NATS_URL ?? 'nats://nats:4222',
       name: CONSUMER,
       timeout: 5000,
       reconnect: true,
       maxReconnectAttempts: -1,
     });
-    const js = jetstream(this.connection);
-    const manager = await jetstreamManager(this.connection);
-    if (DURABLE !== DEFAULT_DURABLE && START_SEQUENCE === undefined)
-      throw new Error(
-        'ACTIVITY_NOTIFICATION_START_SEQUENCE is required for replay durables',
-      );
-    if (DURABLE === DEFAULT_DURABLE && START_SEQUENCE !== undefined)
-      throw new Error(
-        'ACTIVITY_NOTIFICATION_START_SEQUENCE requires a replay durable name',
-      );
-    let consumerInfo;
+    this.connection = connection;
     try {
-      consumerInfo = await manager.consumers.info(STREAM, DURABLE);
+      const js = jetstream(connection);
+      const manager = await jetstreamManager(connection);
+      if (DURABLE !== DEFAULT_DURABLE && START_SEQUENCE === undefined)
+        throw new Error(
+          'ACTIVITY_NOTIFICATION_START_SEQUENCE is required for replay durables',
+        );
+      if (DURABLE === DEFAULT_DURABLE && START_SEQUENCE !== undefined)
+        throw new Error(
+          'ACTIVITY_NOTIFICATION_START_SEQUENCE requires a replay durable name',
+        );
+      let consumerInfo;
+      try {
+        consumerInfo = await manager.consumers.info(STREAM, DURABLE);
+      } catch (error) {
+        if (DURABLE === DEFAULT_DURABLE || !isNotFound(error)) throw error;
+        await manager.consumers.add(STREAM, replayConsumerConfig());
+        consumerInfo = await manager.consumers.info(STREAM, DURABLE);
+      }
+      this.validateConsumer(consumerInfo.config, START_SEQUENCE);
+      this.messages = await js.consumers.get(STREAM, DURABLE);
+      this.natsUp = true;
+      void this.monitorNats();
+      await this.refreshDeadLetterGauge();
+      this.startMetricsServer();
+      void this.consume();
     } catch (error) {
-      if (DURABLE === DEFAULT_DURABLE || !isNotFound(error)) throw error;
-      await manager.consumers.add(STREAM, replayConsumerConfig());
-      consumerInfo = await manager.consumers.info(STREAM, DURABLE);
+      this.stopping = true;
+      this.connection = undefined;
+      this.messages = undefined;
+      try {
+        await connection.drain();
+      } catch (drainError) {
+        this.logger.warn(
+          `Unable to drain NATS after notification startup failure: ${this.safeError(drainError)}`,
+        );
+      }
+      throw error;
     }
-    this.validateConsumer(consumerInfo.config, START_SEQUENCE);
-    this.messages = await js.consumers.get(STREAM, DURABLE);
-    this.natsUp = true;
-    void this.monitorNats();
-    await this.refreshDeadLetterGauge();
-    this.startMetricsServer();
-    void this.consume();
   }
 
   async onModuleDestroy(): Promise<void> {
