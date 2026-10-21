@@ -106,8 +106,8 @@ async function verifyBrokerRecovery() {
       }
       return { status: 'QUEUED', leaseRemainingSeconds: 0 };
     }),
-    preprocess: vi.fn(async ({ importRunId }: { importRunId: string }) => {
-      processedPreprocessing.push(importRunId);
+    preprocess: vi.fn(async (run: { importRunId?: string; id?: string }) => {
+      processedPreprocessing.push(run.importRunId ?? run.id ?? '');
     }),
     renewHeartbeat: vi.fn(async () => true),
     staleCancellationIds: vi.fn(async () => []),
