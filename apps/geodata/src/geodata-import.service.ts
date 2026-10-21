@@ -394,10 +394,11 @@ function prepareImport(body: Record<string, unknown>) {
   if (format === 'ARCGIS_FEATURESERVER')
     document = normalizeArcGisDocument(document);
   let features: unknown[];
-  if (
-    document.type === 'FeatureCollection' &&
-    Array.isArray(document.features)
-  ) {
+  if (document.type === 'FeatureCollection') {
+    if (!Array.isArray(document.features))
+      throw new BadRequestException(
+        'GeoJSON FeatureCollection must contain a features array',
+      );
     features = document.features;
   } else if (document.type === 'Feature') {
     features = [document];
