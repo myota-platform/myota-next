@@ -1,5 +1,6 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
+import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import {
   BadRequestException,
   ConflictException,
@@ -175,7 +176,8 @@ export class GeodataScheduleService {
         [scheduleId],
       );
       schedule = result.rows[0]?.payload as RefreshSchedule;
-      if (!schedule) throw new NotFoundException('refresh schedule not found');
+      if (!schedule)
+        throw new NotFoundException(pythonKeyErrorDetail(scheduleId));
       if (!schedule.enabled)
         throw new ConflictException('refresh schedule is disabled');
     } finally {
