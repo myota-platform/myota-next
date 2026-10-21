@@ -350,8 +350,10 @@ export class GeodataDeletionRepository {
       );
     try {
       return await this.pool.connect();
-    } catch {
-      throw new ServiceUnavailableException('Geodata database is unavailable');
+    } catch (error) {
+      throw new ServiceUnavailableException('Geodata database is unavailable', {
+        cause: error instanceof Error ? error : new Error(String(error)),
+      });
     }
   }
 }
