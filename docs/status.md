@@ -29,7 +29,8 @@ this page summarizes the current state and remaining release gates.
   publication; shared category creation with geometry and inactive lifecycle
   settings; Geodata conflation decisions with survivor and reviewer notes;
   refresh schedule creation and manual complete-snapshot submission; pasted
-  GeoJSON import creation and preprocessed candidate review;
+  GeoJSON import creation, preprocessed candidate review, and durable candidate
+  promotion;
   Participant catalogue browsing, activation and QSO lifecycle, profile details
   and image editing, eligible award requests, and candidate and map-picked point
   proposals.

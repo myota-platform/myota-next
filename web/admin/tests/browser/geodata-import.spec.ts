@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('queues pasted GeoJSON and opens its preprocessed candidate for review', async ({
+test('queues pasted GeoJSON and promotes its preprocessed candidate', async ({
   page,
 }) => {
   const importRequests: Array<{ body: Record<string, any>; key: string }> = [];
@@ -21,6 +21,8 @@ test('queues pasted GeoJSON and opens its preprocessed candidate for review', as
     validationStatus: 'PENDING',
     geometry: { type: 'Point', coordinates: [7.2, 46.1] },
   };
+  let candidatePending = true;
+  const promotionRequests: Array<{ body: unknown; key: string }> = [];
 
   await page.route('**/v1/**', async (route) => {
     const request = route.request();
@@ -95,13 +97,42 @@ test('queues pasted GeoJSON and opens its preprocessed candidate for review', as
 
     if (url.pathname === '/v1/geodata/imports/import-1/candidates') {
       await route.fulfill({
-        json: { items: [feature], total: 1, nextPage: null },
+        json: {
+          items: candidatePending ? [feature] : [],
+          total: candidatePending ? 1 : 0,
+          nextPage: null,
+        },
+      });
+      return;
+    }
+
+    if (
+      url.pathname === '/v1/geodata/imports/import-1/process' &&
+      method === 'POST'
+    ) {
+      promotionRequests.push({
+        body: request.postDataJSON(),
+        key: request.headers()['idempotency-key'] || '',
+      });
+      candidatePending = false;
+      await route.fulfill({ status: 202, json: { id: 'promotion-queue-1' } });
+      return;
+    }
+
+    if (
+      url.pathname ===
+      '/v1/geodata/imports/import-1/processing-queues/promotion-queue-1'
+    ) {
+      await route.fulfill({
+        json: { id: 'promotion-queue-1', status: 'COMPLETED', result: {} },
       });
       return;
     }
 
     if (url.pathname === '/v1/geodata/imports/import-1') {
-      await route.fulfill({ json: run });
+      await route.fulfill({
+        json: { ...run, pendingCount: candidatePending ? 1 : 0 },
+      });
       return;
     }
 
@@ -144,7 +175,12 @@ test('queues pasted GeoJSON and opens its preprocessed candidate for review', as
     page.getByRole('button', { name: 'Example summit' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Example summit' }).click();
-  await expect(page.getByRole('dialog')).toContainText('PENDING');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('PENDING');
+  await dialog.getByRole('button', { name: 'Promote to candidate' }).click();
+  await expect(dialog.getByRole('status')).toContainText(
+    'The last pending item in this import has been processed.',
+  );
 
   expect(importRequests).toHaveLength(1);
   expect(importRequests[0].key).toMatch(/^[0-9a-f-]{36}$/i);
@@ -159,5 +195,12 @@ test('queues pasted GeoJSON and opens its preprocessed candidate for review', as
       license: 'CC BY 4.0',
       attribution: 'Local mapping group',
     },
+  });
+  expect(promotionRequests).toHaveLength(1);
+  expect(promotionRequests[0].key).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(promotionRequests[0].body).toEqual({
+    candidateIds: ['candidate-1'],
+    targetStatus: 'CANDIDATE',
+    processorId: 'geodata-importer-1',
   });
 });
