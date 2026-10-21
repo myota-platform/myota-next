@@ -22,6 +22,9 @@ const store = useAppStore();
 const pendingDeletionKeys = createPendingIdempotencyKeys(
   'myota_admin_pending_geodata_deletions',
 );
+const pendingEntityMutationKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_geodata_entity_mutations',
+);
 const canEdit = computed(() => hasAnyScope(store.account, 'geodata.review'));
 const canConvertGeometry = computed(
   () =>
@@ -253,6 +256,18 @@ watch(
 );
 
 const entityConflict = ref(false);
+async function runGeodataMutation<T>(
+  requestPath: string,
+  requestBody: unknown,
+  send: (idempotencyKey: string, body: unknown) => Promise<T>,
+): Promise<T> {
+  const body = JSON.parse(JSON.stringify(requestBody)) as unknown;
+  const fingerprint = JSON.stringify([store.account?.id, requestPath, body]);
+  const key = await pendingEntityMutationKeys.getOrCreate(fingerprint);
+  const result = await send(key, body);
+  await pendingEntityMutationKeys.complete(fingerprint);
+  return result;
+}
 function setError(value: unknown): void {
   entityConflict.value = value instanceof ApiError && value.status === 409;
   error.value = value instanceof Error ? value.message : String(value);
@@ -470,10 +485,16 @@ async function saveStatus(status: string): Promise<void> {
   }
   if (status === selected.value.status) return;
   try {
-    await myotaClient.postGeodataEntityReview(
-      selected.value.id,
-      { status, reviewerId: store.account?.id, note: editNote.value },
-      selected.value.version,
+    const id = selected.value.id;
+    const version = selected.value.version;
+    const requestPath = `/v1/geodata/entities/${encodeURIComponent(id)}/reviews`;
+    const requestBody = {
+      status,
+      reviewerId: store.account?.id,
+      note: editNote.value,
+    };
+    await runGeodataMutation(requestPath, requestBody, (idempotencyKey, body) =>
+      myotaClient.postGeodataEntityReview(id, body, version, idempotencyKey),
     );
     message.value = `Status changed to ${status}.`;
     await load();
@@ -496,19 +517,41 @@ async function bulkApprove(): Promise<void> {
       message.value = 'No selected candidates are eligible for approval.';
       return;
     }
-    await Promise.all(
-      eligible.map((entity) =>
-        myotaClient.postGeodataEntityReview(
-          entity.id,
-          {
-            status: 'APPROVED',
-            reviewerId: store.account?.id,
-            note: 'Bulk approval from Geodata Review',
-          },
-          entity.version,
-        ),
+    const results = await Promise.allSettled(
+      eligible.map((entity) => {
+        const requestPath = `/v1/geodata/entities/${encodeURIComponent(entity.id)}/reviews`;
+        const requestBody = {
+          status: 'APPROVED',
+          reviewerId: store.account?.id,
+          note: 'Bulk approval from Geodata Review',
+        };
+        return runGeodataMutation(
+          requestPath,
+          requestBody,
+          (idempotencyKey, body) =>
+            myotaClient.postGeodataEntityReview(
+              entity.id,
+              body,
+              entity.version,
+              idempotencyKey,
+            ),
+        );
+      }),
+    );
+    const failedIds = new Set(
+      results.flatMap((result, index) =>
+        result.status === 'rejected' ? [eligible[index].id] : [],
       ),
     );
+    if (failedIds.size) {
+      selectedIds.value = selectedIds.value.filter((id) => failedIds.has(id));
+      const approvedCount = eligible.length - failedIds.size;
+      message.value = `${approvedCount} candidates approved. Retry the remaining selected candidates.`;
+      await load();
+      throw new Error(
+        `${failedIds.size} candidate approvals failed or need confirmation.`,
+      );
+    }
     message.value = `${eligible.length} candidates approved.`;
     selectedIds.value = [];
     await load();
@@ -976,28 +1019,45 @@ async function saveEntityDetails(): Promise<void> {
   let metadataSaved = false;
   try {
     if (metadataChanged) {
-      await myotaClient.patchGeodataEntityMetadata(
-        entity.id,
-        {
-          name: editName.value.trim(),
-          website: editWebsite.value.trim() || null,
-          description: editDescription.value.trim() || null,
-          note: editNote.value,
-          editorId: store.account?.id,
-        },
-        entity.version,
+      const requestPath = `/v1/geodata/entities/${encodeURIComponent(entity.id)}`;
+      const requestBody = {
+        name: editName.value.trim(),
+        website: editWebsite.value.trim() || null,
+        description: editDescription.value.trim() || null,
+        note: editNote.value,
+        editorId: store.account?.id,
+      };
+      await runGeodataMutation(
+        requestPath,
+        requestBody,
+        (idempotencyKey, body) =>
+          myotaClient.patchGeodataEntityMetadata(
+            entity.id,
+            body,
+            entity.version,
+            idempotencyKey,
+          ),
       );
       metadataSaved = true;
       await refreshSelection();
     }
     if (categoriesChanged && selected.value) {
-      await myotaClient.putGeodataEntityCategories(
-        selected.value.id,
-        {
-          entityTypes: editTypes.value,
-          editorId: store.account?.id,
-        },
-        selected.value.version,
+      const selectedEntity = selected.value;
+      const requestPath = `/v1/geodata/entities/${encodeURIComponent(selectedEntity.id)}/categories`;
+      const requestBody = {
+        entityTypes: editTypes.value,
+        editorId: store.account?.id,
+      };
+      await runGeodataMutation(
+        requestPath,
+        requestBody,
+        (idempotencyKey, body) =>
+          myotaClient.putGeodataEntityCategories(
+            selectedEntity.id,
+            body,
+            selectedEntity.version,
+            idempotencyKey,
+          ),
       );
       await refreshSelection();
     }
@@ -1046,10 +1106,22 @@ async function saveGeometry(): Promise<void> {
   await saveEditorSection('Geometry', () => {
     const geometry = JSON.parse(geometryJson.value);
     geometry.type = geometryType.value;
-    return myotaClient.putGeodataEntityGeometry(
-      entity.id,
-      { geometry, note: geometryNote.value, editorId: store.account?.id },
-      entity.version,
+    const requestPath = `/v1/geodata/entities/${encodeURIComponent(entity.id)}/geometry`;
+    const requestBody = {
+      geometry,
+      note: geometryNote.value,
+      editorId: store.account?.id,
+    };
+    return runGeodataMutation(
+      requestPath,
+      requestBody,
+      (idempotencyKey, body) =>
+        myotaClient.putGeodataEntityGeometry(
+          entity.id,
+          body,
+          entity.version,
+          idempotencyKey,
+        ),
     );
   });
 }
@@ -1216,15 +1288,20 @@ async function saveLocation(): Promise<void> {
     region: locationForm.region || null,
     subdivision: locationForm.region || null,
   };
+  const requestPath = `/v1/geodata/entities/${encodeURIComponent(entity.id)}`;
+  const requestBody = {
+    location,
+    manualFields: locationManual.value,
+    editorId: store.account?.id,
+  };
   await saveEditorSection('Location', () =>
-    myotaClient.patchGeodataEntityMetadata(
-      entity.id,
-      {
-        location,
-        manualFields: locationManual.value,
-        editorId: store.account?.id,
-      },
-      entity.version,
+    runGeodataMutation(requestPath, requestBody, (idempotencyKey, body) =>
+      myotaClient.patchGeodataEntityMetadata(
+        entity.id,
+        body,
+        entity.version,
+        idempotencyKey,
+      ),
     ),
   );
 }
@@ -1233,10 +1310,16 @@ async function requestLocationEnrichment(): Promise<void> {
   locationEnrichmentSubmitting.value = true;
   error.value = '';
   try {
-    await myotaClient.postGeodataEntityLocationEnrichmentRequest(
-      selected.value.id,
-      { editorId: store.account?.id },
-      selected.value.version,
+    const entity = selected.value;
+    const requestPath = `/v1/geodata/entities/${encodeURIComponent(entity.id)}/location-enrichment-requests`;
+    const requestBody = { editorId: store.account?.id };
+    await runGeodataMutation(requestPath, requestBody, (idempotencyKey, body) =>
+      myotaClient.postGeodataEntityLocationEnrichmentRequest(
+        entity.id,
+        body,
+        entity.version,
+        idempotencyKey,
+      ),
     );
     message.value =
       'Location update queued. Results will be saved only if the entity geometry remains unchanged.';
@@ -1264,7 +1347,8 @@ async function createCandidate(): Promise<void> {
   }
   try {
     const geometry = JSON.parse(newGeometry.value);
-    await myotaClient.postGeodataProposal({
+    const requestPath = '/v1/geodata/proposals';
+    const requestBody = {
       source: {
         name: 'Manual administration proposal',
         license: 'programme-supplied',
@@ -1280,7 +1364,10 @@ async function createCandidate(): Promise<void> {
         },
         geometry,
       },
-    });
+    };
+    await runGeodataMutation(requestPath, requestBody, (idempotencyKey, body) =>
+      myotaClient.postGeodataProposal(body, idempotencyKey),
+    );
     message.value = 'New candidate submitted.';
     creating.value = false;
     newName.value = '';

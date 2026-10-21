@@ -6,6 +6,7 @@ import PageNavigation from '../components/PageNavigation.vue';
 import { usePageFeedback } from '../composables/usePageFeedback';
 import { apiRequest } from '../lib/api';
 import { myotaClient } from '../lib/myotaClient';
+import { createPendingIdempotencyKeys } from '../lib/pendingIdempotencyKeys';
 import { utcDisplay } from '../lib/utc';
 import { useAppStore } from '../stores/app';
 import type { EntityCategory } from '../types';
@@ -26,6 +27,9 @@ interface RefreshSchedule {
 }
 
 const store = useAppStore();
+const pendingScheduleMutationKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_geodata_schedule_mutations',
+);
 const feedback = usePageFeedback();
 const { error, loading } = feedback;
 const schedules = ref<RefreshSchedule[]>([]);
@@ -88,14 +92,27 @@ async function createSchedule(): Promise<void> {
   }
   saving.value = true;
   try {
-    await myotaClient.createGeodataRefreshSchedule({
-      programmeSlug: scheduleForm.programmeSlug || null,
-      adapter: scheduleForm.adapter,
-      entityTypes: scheduleForm.entityTypes,
-      source,
-      intervalSeconds: scheduleForm.intervalSeconds,
-      disappearancePolicy: scheduleForm.disappearancePolicy,
-    });
+    const requestPath = '/v1/geodata/refresh-schedules';
+    const requestBody = JSON.parse(
+      JSON.stringify({
+        programmeSlug: scheduleForm.programmeSlug || null,
+        adapter: scheduleForm.adapter,
+        entityTypes: scheduleForm.entityTypes,
+        source,
+        intervalSeconds: scheduleForm.intervalSeconds,
+        disappearancePolicy: scheduleForm.disappearancePolicy,
+      }),
+    ) as Record<string, unknown>;
+    const fingerprint = JSON.stringify([
+      store.account?.id,
+      requestPath,
+      requestBody,
+    ]);
+    await myotaClient.createGeodataRefreshSchedule(
+      requestBody,
+      await pendingScheduleMutationKeys.getOrCreate(fingerprint),
+    );
+    await pendingScheduleMutationKeys.complete(fingerprint);
     message.value = 'Refresh schedule created.';
     offset.value = 0;
     await load(0);
@@ -135,9 +152,19 @@ async function runSchedule(schedule: RefreshSchedule): Promise<void> {
         : null;
     if (!features)
       throw new Error('The file must contain a GeoJSON FeatureCollection.');
-    const result = await myotaClient.runGeodataRefreshSchedule(schedule.id, {
-      features,
-    });
+    const requestPath = `/v1/geodata/refresh-schedules/${encodeURIComponent(schedule.id)}/run`;
+    const requestBody = { features };
+    const fingerprint = JSON.stringify([
+      store.account?.id,
+      requestPath,
+      requestBody,
+    ]);
+    const result = await myotaClient.runGeodataRefreshSchedule(
+      schedule.id,
+      requestBody,
+      await pendingScheduleMutationKeys.getOrCreate(fingerprint),
+    );
+    await pendingScheduleMutationKeys.complete(fingerprint);
     message.value = `Snapshot queued for ${schedule.id}.`;
     await load();
     if (result && typeof result === 'object' && 'id' in result)

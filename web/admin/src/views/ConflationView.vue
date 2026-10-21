@@ -6,6 +6,7 @@ import PageNavigation from '../components/PageNavigation.vue';
 import { usePageFeedback } from '../composables/usePageFeedback';
 import { apiRequest } from '../lib/api';
 import { myotaClient } from '../lib/myotaClient';
+import { createPendingIdempotencyKeys } from '../lib/pendingIdempotencyKeys';
 import { utcDisplay } from '../lib/utc';
 import { useAppStore } from '../stores/app';
 
@@ -38,6 +39,9 @@ interface ConflationCandidate {
 }
 
 const store = useAppStore();
+const pendingConflationKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_geodata_conflation',
+);
 const feedback = usePageFeedback();
 const { error, loading } = feedback;
 const reviewerId = computed(() => store.account?.id || '');
@@ -89,12 +93,26 @@ async function resolve(item: ConflationCandidate): Promise<void> {
   message.value = '';
   resolveError.value = '';
   try {
-    await myotaClient.resolveGeodataConflation(item.id, {
-      decision: decisions[item.id] || 'OPEN',
-      reviewerId: reviewerId.value,
-      survivorEntityId: survivors[item.id] || undefined,
-      note: notes[item.id] || undefined,
-    });
+    const requestPath = `/v1/geodata/conflation/${encodeURIComponent(item.id)}/resolve`;
+    const requestBody = JSON.parse(
+      JSON.stringify({
+        decision: decisions[item.id] || 'OPEN',
+        reviewerId: reviewerId.value,
+        survivorEntityId: survivors[item.id] || undefined,
+        note: notes[item.id] || undefined,
+      }),
+    ) as Record<string, unknown>;
+    const fingerprint = JSON.stringify([
+      reviewerId.value,
+      requestPath,
+      requestBody,
+    ]);
+    await myotaClient.resolveGeodataConflation(
+      item.id,
+      requestBody,
+      await pendingConflationKeys.getOrCreate(fingerprint),
+    );
+    await pendingConflationKeys.complete(fingerprint);
     message.value = `Resolution recorded for ${item.id}.`;
     await load();
   } catch (cause) {

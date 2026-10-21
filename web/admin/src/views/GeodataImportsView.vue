@@ -151,6 +151,9 @@ const pendingCandidateActionKeys = createPendingIdempotencyKeys(
 const pendingPastedImportKeys = createPendingIdempotencyKeys(
   'myota_admin_pending_pasted_imports',
 );
+const pendingImportFinalizationKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_import_finalizations',
+);
 const candidateActionQueueId = ref<string | null>(null);
 const candidatePendingAction = ref<
   'CANDIDATE' | 'APPROVED' | 'REJECTED' | null
@@ -808,13 +811,22 @@ async function markProcessed(): Promise<void> {
     return;
   actionBusy.value = true;
   try {
-    const run = await apiRequest<ImportRun>(
-      `/v1/geodata/imports/${encodeURIComponent(id)}/processed`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ processedBy: store.account?.id }),
+    const requestPath = `/v1/geodata/imports/${encodeURIComponent(id)}/processed`;
+    const requestBody = { processedBy: store.account?.id };
+    const fingerprint = JSON.stringify([
+      store.account?.id,
+      requestPath,
+      requestBody,
+    ]);
+    const run = await apiRequest<ImportRun>(requestPath, {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+      headers: {
+        'Idempotency-Key':
+          await pendingImportFinalizationKeys.getOrCreate(fingerprint),
       },
-    );
+    });
+    await pendingImportFinalizationKeys.complete(fingerprint);
     if (selectedRun.value?.id === id) {
       selectedRun.value = run;
       candidates.value = [];

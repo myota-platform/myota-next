@@ -204,80 +204,117 @@ export const myotaClient = {
     id: string,
     body: unknown,
     version?: number,
+    idempotencyKey?: string,
   ) {
     return write<T>(
       `/v1/geodata/entities/${encodeURIComponent(id)}`,
       'PATCH',
       body,
       version,
+      idempotencyKey,
     );
   },
   postGeodataEntityLocationEnrichmentRequest<T = unknown>(
     id: string,
     body: unknown,
     version?: number,
+    idempotencyKey?: string,
   ) {
     return write<T>(
       `/v1/geodata/entities/${encodeURIComponent(id)}/location-enrichment-requests`,
       'POST',
       body,
       version,
+      idempotencyKey,
     );
   },
   putGeodataEntityGeometry<T = unknown>(
     id: string,
     body: unknown,
     version?: number,
+    idempotencyKey?: string,
   ) {
     return write<T>(
       `/v1/geodata/entities/${encodeURIComponent(id)}/geometry`,
       'PUT',
       body,
       version,
+      idempotencyKey,
     );
   },
   putGeodataEntityCategories<T = unknown>(
     id: string,
     body: unknown,
     version?: number,
+    idempotencyKey?: string,
   ) {
     return write<T>(
       `/v1/geodata/entities/${encodeURIComponent(id)}/categories`,
       'PUT',
       body,
       version,
+      idempotencyKey,
     );
   },
   postGeodataEntityReview<T = unknown>(
     id: string,
     body: unknown,
     version?: number,
+    idempotencyKey?: string,
   ) {
     return write<T>(
       `/v1/geodata/entities/${encodeURIComponent(id)}/reviews`,
       'POST',
       body,
       version,
+      idempotencyKey,
     );
   },
-  postGeodataProposal<T = unknown>(body: unknown) {
-    return write<T>('/v1/geodata/proposals', 'POST', body);
+  postGeodataProposal<T = unknown>(body: unknown, idempotencyKey?: string) {
+    return write<T>(
+      '/v1/geodata/proposals',
+      'POST',
+      body,
+      undefined,
+      idempotencyKey,
+    );
   },
-  resolveGeodataConflation<T = unknown>(id: string, body: unknown) {
+  resolveGeodataConflation<T = unknown>(
+    id: string,
+    body: unknown,
+    idempotencyKey?: string,
+  ) {
     return write<T>(
       `/v1/geodata/conflation/${encodeURIComponent(id)}/resolve`,
       'POST',
       body,
+      undefined,
+      idempotencyKey,
     );
   },
-  createGeodataRefreshSchedule<T = unknown>(body: unknown) {
-    return write<T>('/v1/geodata/refresh-schedules', 'POST', body);
+  createGeodataRefreshSchedule<T = unknown>(
+    body: unknown,
+    idempotencyKey?: string,
+  ) {
+    return write<T>(
+      '/v1/geodata/refresh-schedules',
+      'POST',
+      body,
+      undefined,
+      idempotencyKey,
+    );
   },
-  runGeodataRefreshSchedule<T = unknown>(id: string, body: unknown) {
+  runGeodataRefreshSchedule<T = unknown>(
+    id: string,
+    body: unknown,
+    idempotencyKey?: string,
+  ) {
     return write<T>(
       `/v1/geodata/refresh-schedules/${encodeURIComponent(id)}/run`,
       'POST',
       body,
+      undefined,
+      idempotencyKey,
     );
   },
   createGeodataEntityDeletionJob<T = unknown>(
