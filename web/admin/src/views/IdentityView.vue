@@ -133,7 +133,13 @@ const accountForm = reactive({
   password: '',
   selectedRoles: [] as string[],
 });
-const callsignForm = reactive({ callsign: '' });
+const callsignForm = reactive({
+  callsign: '',
+  status: '',
+  source: '',
+  validFrom: '',
+  validTo: '',
+});
 const evidenceForm = reactive({
   callsignId: '',
   evidenceType: '',
@@ -229,10 +235,21 @@ async function addCallsign(): Promise<void> {
   if (!account || !canManageSelectedCallsigns.value) return;
   await feedback.run(
     async () => {
-      await myotaClient.addIdentityCallsign(account.id, {
+      const payload: Record<string, string> = {
         callsign: callsignForm.callsign.trim(),
+      };
+      if (callsignForm.status) payload.status = callsignForm.status;
+      if (callsignForm.source) payload.source = callsignForm.source;
+      if (callsignForm.validFrom) payload.validFrom = callsignForm.validFrom;
+      if (callsignForm.validTo) payload.validTo = callsignForm.validTo;
+      await myotaClient.addIdentityCallsign(account.id, payload);
+      Object.assign(callsignForm, {
+        callsign: '',
+        status: '',
+        source: '',
+        validFrom: '',
+        validTo: '',
       });
-      callsignForm.callsign = '';
       await refreshSelectedCallsigns(account.id);
     },
     { mutation: true, success: 'Callsign added.' },
@@ -860,6 +877,9 @@ onMounted(load);
               </small>
               <small class="field-help">
                 {{ callsign.evidenceIds.length }} evidence record(s)
+                <template v-if="callsign.validFrom">
+                  · Valid from {{ utcDisplay(callsign.validFrom) }}
+                </template>
                 <template v-if="callsign.validTo">
                   · Valid to {{ utcDisplay(callsign.validTo) }}
                 </template>
@@ -921,6 +941,35 @@ onMounted(load);
           <label class="wide">
             Callsign
             <input v-model="callsignForm.callsign" required />
+          </label>
+          <label>
+            Initial status
+            <select v-model="callsignForm.status">
+              <option value="">Default (UNVERIFIED)</option>
+              <option>UNVERIFIED</option>
+              <option>VERIFIED</option>
+            </select>
+          </label>
+          <label>
+            Source
+            <input
+              v-model="callsignForm.source"
+              placeholder="Default: self-asserted"
+            />
+          </label>
+          <label>
+            Valid from (ISO 8601)
+            <input
+              v-model="callsignForm.validFrom"
+              placeholder="2026-10-21T12:00:00Z"
+            />
+          </label>
+          <label>
+            Valid to (ISO 8601)
+            <input
+              v-model="callsignForm.validTo"
+              placeholder="2026-10-21T12:00:00Z"
+            />
           </label>
           <div class="form-actions wide">
             <button class="primary" type="submit" :disabled="saving">

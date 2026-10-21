@@ -42,10 +42,10 @@ workflows still lack browser-level compatibility coverage. Refresh schedule
 checks cover programme-scoped schedule creation and queuing a complete manual
 GeoJSON snapshot. Import checks cover pasted GeoJSON queueing, source metadata,
 candidate listing and review, plus idempotent durable candidate promotion.
-The Identity account editor exposes callsign creation, evidence submission
-(including checksum and metadata), verification for callers with
-`callsign.verify`, primary selection, and retirement; owner and global-scope
-checks follow the API authorization rules.
+The Identity account editor exposes callsign creation with status, source, and
+validity fields; evidence submission with checksum and metadata; verification
+for callers with `callsign.verify`; primary selection; and retirement. Owner
+and global-scope checks follow the API authorization rules.
 These callsign controls do not yet have browser-level compatibility coverage.
 The Admin import form also supports resumable KML and GPX file uploads up to
 1 GiB, alongside GeoJSON, OSM PBF, and Shapefile ZIP uploads. The API can
