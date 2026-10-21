@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { parsePageTotal, type PageInteger } from '@app/platform/pagination.js';
+import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import { normalizeTimestamp, type JsonRecord } from './activity-domain.js';
 
 const awardRequestTimestampProjection = `to_char(requested_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS requested_at_iso,
@@ -114,7 +115,8 @@ export class ActivityAwardsRepository {
         'SELECT definition FROM activity_award_definition WHERE id=$1',
         [id],
       );
-      if (!result.rows[0]) throw new NotFoundException('award not found');
+      if (!result.rows[0])
+        throw new NotFoundException(pythonKeyErrorDetail(id));
       return result.rows[0].definition;
     } finally {
       client.release();
@@ -128,7 +130,8 @@ export class ActivityAwardsRepository {
         'SELECT metadata FROM activity_asset WHERE id=$1',
         [id],
       );
-      if (!result.rows[0]) throw new NotFoundException('award asset not found');
+      if (!result.rows[0])
+        throw new NotFoundException(pythonKeyErrorDetail(id));
       return result.rows[0].metadata;
     } finally {
       client.release();
@@ -298,7 +301,7 @@ export class ActivityAwardsRepository {
         [id],
       );
       if (!result.rows[0])
-        throw new NotFoundException('award request not found');
+        throw new NotFoundException(pythonKeyErrorDetail(id));
       return awardRequestRecord(result.rows[0]);
     } finally {
       client.release();
@@ -317,7 +320,7 @@ export class ActivityAwardsRepository {
         [requestId],
       );
       if (!locked.rows[0])
-        throw new NotFoundException('award request not found');
+        throw new NotFoundException(pythonKeyErrorDetail(requestId));
       const request = awardRequestRecord(locked.rows[0]);
       if (request.status !== 'REQUESTED')
         throw new BadRequestException('only requested awards can be issued');
@@ -385,7 +388,7 @@ export class ActivityAwardsRepository {
         [id],
       );
       if (!result.rows[0])
-        throw new NotFoundException('award issuance not found');
+        throw new NotFoundException(pythonKeyErrorDetail(id));
       return result.rows[0].issuance;
     } finally {
       client.release();
