@@ -13,6 +13,7 @@ import type { AccessTokenClaims } from '@app/platform/access-token.js';
 import { parsePageTotal, type PageInteger } from '@app/platform/pagination.js';
 import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import { assertReviewCoverage } from './geodata-entity-mutation.repository.js';
 import {
   lockRequest,
@@ -85,7 +86,7 @@ export class GeodataImportMutationRepository {
       if (!previous)
         throw new NotFoundException(pythonKeyErrorDetail(candidateId));
       const responseId = String(previous.id).replaceAll('-', '');
-      const occurredAt = new Date().toISOString();
+      const occurredAt = await utcTimestamp(client);
       const history = Array.isArray(previous.resolution_history)
         ? [...previous.resolution_history]
         : [];
@@ -678,7 +679,7 @@ export class GeodataImportMutationRepository {
         targetStatus,
         requestedBy,
         status: 'QUEUED',
-        requestedAt: new Date().toISOString(),
+        requestedAt: await utcTimestamp(client),
         queued: true,
       };
       if (key)
@@ -764,7 +765,7 @@ export class GeodataImportMutationRepository {
       const history = [
         ...priorHistory,
         {
-          requestedAt: new Date().toISOString(),
+          requestedAt: await utcTimestamp(client),
           requestedBy,
           reason,
           previousAttemptCount: Number(previous.attempt_count),
@@ -799,7 +800,7 @@ export class GeodataImportMutationRepository {
         targetStatus: previous.target_status,
         requestedBy,
         status: 'QUEUED',
-        requestedAt: new Date().toISOString(),
+        requestedAt: await utcTimestamp(client),
         redriven: true,
       };
       await client.query(

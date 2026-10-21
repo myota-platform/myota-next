@@ -15,6 +15,7 @@ import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import { parsePageTotal } from '@app/platform/pagination.js';
 import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
 import { pythonString } from '@app/platform/python-strings.js';
@@ -822,7 +823,7 @@ export class ActivityWorkRepository {
       renderStatus: 'READY',
       contentSha256: createHash('sha256').update(pdfBytes).digest('hex'),
       byteSize: pdfBytes.length,
-      renderedAt: new Date().toISOString(),
+      renderedAt: await utcTimestamp(client),
     });
     const updated = await client.query(
       'UPDATE activity_award_issuance SET issuance=$2::jsonb WHERE id=$1',

@@ -22,6 +22,7 @@ import {
   MAX_UPLOAD_BYTES,
 } from '@app/platform/import-limits.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import {
   firstPythonTruthy,
   normalizeEntityTypeCodes,
@@ -164,7 +165,7 @@ export class GeodataImportService {
         format: 'GEOJSON',
         status: 'QUEUED',
         queued: true,
-        startedAt: new Date().toISOString(),
+        startedAt: await utcTimestamp(client),
         stats: { featureCount: prepared.features.length },
         sourceHash,
       };

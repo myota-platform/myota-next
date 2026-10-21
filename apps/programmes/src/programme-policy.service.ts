@@ -8,15 +8,13 @@ import {
 import { randomUUID } from 'node:crypto';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import {
   nextPageIfMore,
   pageOffset,
   parsePageInteger,
 } from '@app/platform/pagination.js';
-import {
-  getUtcTimestamp,
-  ProgrammeMutationRepository,
-} from './programme-mutation.repository.js';
+import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
 import { ProgrammeReadRepository } from './programme-read.repository.js';
 import { ProgrammeRepository } from './programme.repository.js';
 import {
@@ -97,7 +95,7 @@ export class ProgrammePolicyService {
           'only draft policy versions can be edited',
         );
       }
-      const createdAt = previous?.createdAt ?? (await getUtcTimestamp(client));
+      const createdAt = previous?.createdAt ?? (await utcTimestamp(client));
       const draft: ProgrammePolicyDraft = {
         ...(previous ?? {
           id: draftId,
@@ -112,7 +110,7 @@ export class ProgrammePolicyService {
         effectiveFrom: body.effectiveFrom
           ? normalizeUtcTimestamp(body.effectiveFrom)
           : null,
-        updatedAt: await getUtcTimestamp(client),
+        updatedAt: await utcTimestamp(client),
       };
       await this.policies.save(client, draft);
       await this.policies.recordEvent(
@@ -142,8 +140,8 @@ export class ProgrammePolicyService {
         throw new BadRequestException('only draft policies can be submitted');
       }
       draft.status = 'UNDER_REVIEW';
-      draft.submittedAt = await getUtcTimestamp(client);
-      draft.updatedAt = await getUtcTimestamp(client);
+      draft.submittedAt = await utcTimestamp(client);
+      draft.updatedAt = await utcTimestamp(client);
       draft.reviewHistory.push({
         action: 'SUBMITTED',
         occurredAt: draft.submittedAt,
@@ -174,8 +172,8 @@ export class ProgrammePolicyService {
         );
       }
       draft.status = body.decision;
-      draft.reviewedAt = await getUtcTimestamp(client);
-      draft.updatedAt = await getUtcTimestamp(client);
+      draft.reviewedAt = await utcTimestamp(client);
+      draft.updatedAt = await utcTimestamp(client);
       draft.reviewHistory.push({
         action: body.decision,
         reviewerId: body.reviewerId,
@@ -212,9 +210,9 @@ export class ProgrammePolicyService {
       if (!programme) throw new NotFoundException(pythonKeyErrorDetail(slug));
       draft.status = 'PUBLISHED';
       draft.effectiveFrom = effectiveFrom;
-      draft.publishedAt = await getUtcTimestamp(client);
+      draft.publishedAt = await utcTimestamp(client);
       draft.publisherId = body.publisherId;
-      draft.updatedAt = await getUtcTimestamp(client);
+      draft.updatedAt = await utcTimestamp(client);
       draft.reviewHistory.push({
         action: 'PUBLISHED',
         publisherId: body.publisherId,
@@ -237,7 +235,7 @@ export class ProgrammePolicyService {
         });
         programme.awards = awards;
       }
-      programme.updatedAt = await getUtcTimestamp(client);
+      programme.updatedAt = await utcTimestamp(client);
       await this.programmes.save(client, programme);
       await this.policies.save(client, draft);
       await this.mutations.recordEvent(

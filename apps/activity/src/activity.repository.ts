@@ -24,6 +24,7 @@ import {
   trimPythonWhitespace,
 } from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import {
   evaluateActivation,
   normalizeTimestamp,
@@ -1239,13 +1240,6 @@ function timestampProjection(...columns: string[]) {
         `to_char(${column} AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS ${column}_iso`,
     )
     .join(',\n                   ');
-}
-
-async function utcTimestamp(client: PoolClient): Promise<string> {
-  const result = await client.query(
-    `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
-  );
-  return String(result.rows[0].timestamp);
 }
 
 function timestamp(value: unknown) {

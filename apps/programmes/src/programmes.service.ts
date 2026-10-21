@@ -15,6 +15,7 @@ import {
   parsePageInteger,
 } from '@app/platform/pagination.js';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import {
   pythonKeyErrorDetail,
   pythonString,
@@ -22,10 +23,7 @@ import {
   trimPythonWhitespace,
 } from '@app/platform/python-strings.js';
 import { nextPolicyVersion, type ProgrammeRecord } from './programme.types.js';
-import {
-  getUtcTimestamp,
-  ProgrammeMutationRepository,
-} from './programme-mutation.repository.js';
+import { ProgrammeMutationRepository } from './programme-mutation.repository.js';
 import { ProgrammeRepository } from './programme.repository.js';
 import { ProgrammeEntityTypeRepository } from './programme-entity-type.repository.js';
 import type {
@@ -129,8 +127,8 @@ export class ProgrammesService {
             : { primary: '#0f766e', accent: '#f59e0b' },
         oidc: body.oidc ?? null,
         status: 'ACTIVE',
-        createdAt: await getUtcTimestamp(client),
-        updatedAt: await getUtcTimestamp(client),
+        createdAt: await utcTimestamp(client),
+        updatedAt: await utcTimestamp(client),
       };
       await this.programmes.create(client, slug, programme);
       await this.mutations.recordEvent(
@@ -165,7 +163,7 @@ export class ProgrammesService {
       if (!programme) throw new NotFoundException(pythonKeyErrorDetail(slug));
       if (status === 'ARCHIVED') {
         programme.status = 'ARCHIVED';
-        programme.updatedAt = await getUtcTimestamp(client);
+        programme.updatedAt = await utcTimestamp(client);
         await this.programmes.save(client, programme);
         await this.mutations.recordEvent(
           client,
@@ -209,7 +207,7 @@ export class ProgrammesService {
       if (body.rules !== undefined || body.entityTypes !== undefined) {
         programme.policyVersion = nextPolicyVersion(programme.policyVersion);
       }
-      programme.updatedAt = await getUtcTimestamp(client);
+      programme.updatedAt = await utcTimestamp(client);
       await this.programmes.save(client, programme);
       await this.mutations.recordEvent(
         client,
@@ -403,7 +401,7 @@ export class ProgrammesService {
         programme.entityTypes = programme.entityTypeCodes.map(
           (assignedCode) => catalog[assignedCode],
         );
-        programme.updatedAt = await getUtcTimestamp(client);
+        programme.updatedAt = await utcTimestamp(client);
         updated.push(programme);
       }
     }
@@ -425,7 +423,7 @@ export class ProgrammesService {
     programme.entityTypeCodes = nextCodes;
     programme.entityTypes = nextCodes.map((current) => catalog[current]);
     programme.policyVersion = nextPolicyVersion(programme.policyVersion);
-    programme.updatedAt = await getUtcTimestamp(client);
+    programme.updatedAt = await utcTimestamp(client);
     await this.programmes.save(client, programme);
     await this.mutations.recordEvent(
       client,
@@ -556,8 +554,8 @@ async function normalizeEntityType(
       : existing && existing.active !== undefined
         ? existing.active
         : true;
-  const createdAt = existing?.createdAt ?? (await getUtcTimestamp(client));
-  const updatedAt = await getUtcTimestamp(client);
+  const createdAt = existing?.createdAt ?? (await utcTimestamp(client));
+  const updatedAt = await utcTimestamp(client);
   return {
     ...(existing ?? { createdAt }),
     code,

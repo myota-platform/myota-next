@@ -11,6 +11,7 @@ import { parsePageTotal } from '@app/platform/pagination.js';
 import { pythonRound } from '@app/platform/python-number.js';
 import { pythonStrip } from '@app/platform/python-string.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import {
   locationSnapshot,
   queueLocationEnrichment,
@@ -324,7 +325,7 @@ export class GeodataPromotionRepository {
         lifecycle_status: string;
         public_properties: Record<string, unknown>;
       }>) {
-        const occurredAt = new Date().toISOString();
+        const occurredAt = await utcTimestamp(client);
         const policy = requestedPolicy;
         const sourceState =
           policy === 'STALE'
@@ -364,7 +365,7 @@ export class GeodataPromotionRepository {
         disappeared += 1;
       }
     }
-    const reconciledAt = new Date().toISOString();
+    const reconciledAt = await utcTimestamp(client);
     await client.query(
       `UPDATE import_run SET source_metadata=source_metadata || jsonb_build_object(
         'snapshotReconciledAt',$2::text,'sourceSnapshotManifestId',$3::text

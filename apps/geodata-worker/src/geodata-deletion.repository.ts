@@ -9,6 +9,7 @@ import type { Pool, PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { signAccessToken } from '@app/platform/access-token.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 
 type DeletionJob = Record<string, any> & {
   id: string;
@@ -52,7 +53,7 @@ export class GeodataDeletionRepository {
         status: 'PROCESSING',
         attemptCount: Number(job.attemptCount ?? 0) + 1,
         leaseUntil: new Date(Date.now() + 120_000).toISOString(),
-        updatedAt: new Date().toISOString(),
+        updatedAt: await utcTimestamp(client),
       };
       await client.query(
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
@@ -210,7 +211,7 @@ export class GeodataDeletionRepository {
       }
       if (current.status !== 'PROCESSING')
         throw new ConflictException('deletion job is no longer leased');
-      const deletedAt = new Date().toISOString();
+      const deletedAt = await utcTimestamp(client);
       const deleted = {
         entityId: job.entityId,
         deleted: true,

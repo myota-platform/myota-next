@@ -14,6 +14,7 @@ import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import { parsePageTotal } from '@app/platform/pagination.js';
 import {
   MAX_IMPORT_BATCH_BYTES,
@@ -1289,7 +1290,7 @@ export class GeodataWorkRepository {
       id: string;
       lifecycle_status: string;
     }>) {
-      const occurredAt = new Date().toISOString();
+      const occurredAt = await utcTimestamp(client);
       const sourceState =
         policy === 'STALE'
           ? 'STALE'
@@ -1341,7 +1342,7 @@ export class GeodataWorkRepository {
     runId: string,
     manifestId: string,
   ): Promise<void> {
-    const reconciledAt = new Date().toISOString();
+    const reconciledAt = await utcTimestamp(client);
     await client.query(
       `UPDATE import_run SET source_metadata=source_metadata || jsonb_build_object(
         'snapshotReconciledAt',$2::text,'sourceSnapshotManifestId',$3::text

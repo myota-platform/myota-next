@@ -8,14 +8,6 @@ import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 
-export async function getUtcTimestamp(client: PoolClient): Promise<string> {
-  const result = await client.query<{ timestamp: string }>(
-    `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
-      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
-  );
-  return result.rows[0].timestamp;
-}
-
 @Injectable()
 export class ProgrammeMutationRepository {
   constructor(

@@ -7,6 +7,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 import {
   pythonKeyErrorDetail,
   pythonStringJsonField,
@@ -21,7 +22,6 @@ import {
   ProgrammeContentRepository,
   type ProgrammeContentRecord,
 } from './programme-content.repository.js';
-import { getUtcTimestamp } from './programme-mutation.repository.js';
 import type {
   PatchProgrammeContentDto,
   PublishProgrammeContentDto,
@@ -110,7 +110,7 @@ export class ProgrammeContentService {
       ) {
         throw new BadRequestException('only draft content can be edited');
       }
-      const createdAt = previous?.createdAt ?? (await getUtcTimestamp(client));
+      const createdAt = previous?.createdAt ?? (await utcTimestamp(client));
       const record: ProgrammeContentRecord = {
         ...(previous ?? {
           id: contentId,
@@ -123,7 +123,7 @@ export class ProgrammeContentService {
         locale: body.locale,
         value: body.value,
         fallbackLocale: body.fallbackLocale ?? null,
-        updatedAt: await getUtcTimestamp(client),
+        updatedAt: await utcTimestamp(client),
       };
       await this.contents.save(client, record);
       await this.contents.recordEvent(
@@ -153,8 +153,8 @@ export class ProgrammeContentService {
         throw new BadRequestException('only draft content can be submitted');
       }
       content.status = 'UNDER_REVIEW';
-      content.submittedAt = await getUtcTimestamp(client);
-      content.updatedAt = await getUtcTimestamp(client);
+      content.submittedAt = await utcTimestamp(client);
+      content.updatedAt = await utcTimestamp(client);
       content.reviewHistory.push({
         action: 'SUBMITTED',
         occurredAt: content.submittedAt,
@@ -202,8 +202,8 @@ export class ProgrammeContentService {
         );
       }
       content.status = decision;
-      content.reviewedAt = await getUtcTimestamp(client);
-      content.updatedAt = await getUtcTimestamp(client);
+      content.reviewedAt = await utcTimestamp(client);
+      content.updatedAt = await utcTimestamp(client);
       content.reviewHistory.push({
         action: decision,
         reviewerId: body.reviewerId,
@@ -252,9 +252,9 @@ export class ProgrammeContentService {
       }
       content.status = 'PUBLISHED';
       content.effectiveFrom = effectiveFrom;
-      content.publishedAt = await getUtcTimestamp(client);
+      content.publishedAt = await utcTimestamp(client);
       content.publisherId = body.publisherId;
-      content.updatedAt = await getUtcTimestamp(client);
+      content.updatedAt = await utcTimestamp(client);
       content.reviewHistory.push({
         action: 'PUBLISHED',
         publisherId: body.publisherId,

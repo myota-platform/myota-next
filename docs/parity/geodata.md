@@ -318,6 +318,9 @@ reference importer's `rstrip("/")` behavior. The
 shared `GEODATA_MAX_IMPORT_FEATURES` limit is checked consistently by the
 importer, API, and worker. The API retains the reference timestamp updates; the
 importer calculates automatic eligibility from `lastRunAt + intervalSeconds`.
+Import, conflation, promotion, source-reconciliation, and deletion lifecycle
+timestamps generated inside database transactions preserve six fractional
+seconds with independent UTC clock reads.
 `GEODATA_IMPORTER_ENABLED` keeps it opt-in. Deployment, live-source
 qualification, and outage/recovery evidence are outstanding.
 Refresh intervals preserve arbitrary-precision integer values and follow

@@ -13,6 +13,7 @@ import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { parsePageTotal, type PageInteger } from '@app/platform/pagination.js';
 import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import { normalizeTimestamp, type JsonRecord } from './activity-domain.js';
+import { utcTimestamp } from '@app/platform/utc-timestamp.js';
 
 const awardRequestTimestampProjection = `to_char(requested_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS requested_at_iso,
                    to_char(issued_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS issued_at_iso`;
@@ -27,10 +28,7 @@ export class ActivityAwardsRepository {
   async utcTimestamp(): Promise<string> {
     const client = await this.connect();
     try {
-      const result = await client.query(
-        `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
-      );
-      return String(result.rows[0].timestamp);
+      return await utcTimestamp(client);
     } finally {
       client.release();
     }
