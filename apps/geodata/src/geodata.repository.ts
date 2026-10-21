@@ -102,6 +102,8 @@ export class GeodataRepository {
   }
 
   async getEntity(id: string) {
+    if (!isCanonicalUuid(id))
+      throw new NotFoundException(pythonKeyErrorDetail(id));
     const client = await this.connect();
     try {
       const result = await client.query(
@@ -427,6 +429,10 @@ export class GeodataRepository {
       throw new ServiceUnavailableException('Geodata database is unavailable');
     }
   }
+}
+
+function isCanonicalUuid(value: string) {
+  return /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
 }
 
 export const entityProjection = `public_properties || jsonb_build_object(
