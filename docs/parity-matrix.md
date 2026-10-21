@@ -264,8 +264,9 @@ owner-scoped jobs with a status read path. `sourceFormat` defaults only when
 omitted and otherwise reaches the worker unchanged, matching the Python
 handler. The separate Activity worker consumes its six registered JetStream
 durables with database leases, progress acknowledgements, retries, and
-dead-letter state. Activity notification events use a separate durable
-consumer. Recovery evidence remains open. QSO correction requests and
+dead-letter state. Invalid work envelopes are dead-lettered without a work ID
+or work type, matching the Python consumer. Activity notification events use a
+separate durable consumer. Recovery evidence remains open. QSO correction requests and
 administrator review are also implemented, ignore `Idempotency-Key` as the
 reference does, and rely on the database relation for request QSO existence.
 Applied corrections update only the reference's writable QSO fields and queue

@@ -223,7 +223,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
         await this.repository.recordWorkDeadLetter(
           message.subject,
           null,
-          definition.workType,
+          null,
           delivery,
           'invalid_envelope',
         );
