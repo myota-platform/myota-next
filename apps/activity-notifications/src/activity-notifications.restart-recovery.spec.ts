@@ -173,10 +173,25 @@ async function waitForNotifications(
 async function waitForDurableIdle(
   manager: Awaited<ReturnType<typeof jetstreamManager>>,
 ) {
-  await waitFor(async () => {
-    const consumer = await manager.consumers.info(streamName, durableName);
-    return consumer.num_pending === 0 && consumer.num_ack_pending === 0;
-  }, 'notification durable did not settle after restart');
+  let lastInfo: Awaited<ReturnType<typeof manager.consumers.info>> | undefined;
+  try {
+    await waitFor(async () => {
+      lastInfo = await manager.consumers.info(streamName, durableName);
+      return lastInfo.num_pending === 0 && lastInfo.num_ack_pending === 0;
+    }, 'notification durable did not settle after restart');
+  } catch (error) {
+    const state = lastInfo
+      ? {
+          numPending: lastInfo.num_pending,
+          numAckPending: lastInfo.num_ack_pending,
+          delivered: lastInfo.delivered,
+          ackFloor: lastInfo.ack_floor,
+        }
+      : 'consumer info unavailable';
+    throw new Error(
+      `${String(error)}; consumer state: ${JSON.stringify(state)}`,
+    );
+  }
 }
 
 async function waitFor(
