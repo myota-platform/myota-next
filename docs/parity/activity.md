@@ -48,9 +48,11 @@ award recalculation for the stored QSO, even when the nested route QSO ID differ
 a focused repository fixture covers that transaction and job payload. Correction
 request fixtures verify requester ownership, administrator access, and required
 field validation order. Missing activation, ADIF import, work job, and correction
-lookups preserve the reference's quoted-ID 404 detail. Missing award definition,
-asset, request, issuance, and award-job lookups use the same detail for missing
-records. Award definition draft, review, publish, and retire APIs are implemented.
+lookups preserve the reference's quoted-ID 404 detail, including malformed
+activation, import, correction, and job IDs before PostgreSQL UUID casting.
+Missing award definition, asset, request, issuance, and award-job lookups use the
+same detail for missing records. Award definition draft, review, publish, and
+retire APIs are implemented.
 Award progress reads and
 evaluation/recalculation job APIs persist versioned progress and qualification
 notifications through the Activity worker. Award requests validate eligibility,

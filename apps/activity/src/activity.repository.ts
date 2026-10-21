@@ -196,6 +196,7 @@ export class ActivityRepository {
   }
 
   async get(id: string): Promise<JsonRecord> {
+    requireCanonicalUuid(id);
     const client = await this.connect();
     try {
       return await this.getWithClient(client, id);
@@ -338,6 +339,7 @@ export class ActivityRepository {
   }
 
   async getAdifImport(id: string): Promise<JsonRecord> {
+    requireCanonicalUuid(id);
     const client = await this.connect();
     try {
       const result = await client.query(
@@ -513,6 +515,7 @@ export class ActivityRepository {
     correctionId: string,
     body: JsonRecord,
   ): Promise<JsonRecord> {
+    requireCanonicalUuid(correctionId);
     return this.mutate(undefined, async (client) => {
       const correctionResult = await client.query(
         `SELECT *, ${correctionTimestampProjection}
@@ -646,6 +649,7 @@ export class ActivityRepository {
     qso: JsonRecord,
     key?: string,
   ): Promise<JsonRecord> {
+    requireCanonicalUuid(activationId);
     return this.mutate(key, async (client) => {
       const activationResult = await client.query(
         `SELECT *, $2::timestamptz < started_at AS qso_before_start,
@@ -762,6 +766,7 @@ export class ActivityRepository {
   }
 
   async close(id: string, endedAt: unknown): Promise<JsonRecord> {
+    requireCanonicalUuid(id);
     return this.mutate(undefined, async (client) => {
       const found = await client.query(
         `SELECT *, ${activationTimestampProjection} FROM activity_activation WHERE id=$1 FOR UPDATE`,
@@ -825,6 +830,7 @@ export class ActivityRepository {
   }
 
   async getJob(id: string): Promise<JsonRecord> {
+    requireCanonicalUuid(id);
     const client = await this.connect();
     try {
       const result = await client.query(
@@ -865,6 +871,7 @@ export class ActivityRepository {
       throw new BadRequestException(
         'actor and reason must be present and within the audit limits',
       );
+    requireCanonicalUuid(id);
     return this.mutate(key, async (client) => {
       const selected = await client.query(
         'SELECT id,kind,status,attempts FROM activity_job WHERE id=$1 FOR UPDATE',
@@ -1225,4 +1232,9 @@ function correctionRecord(row: any) {
     createdAt: timestamp(row.created_at_iso ?? row.created_at),
     reviewedAt: timestamp(row.reviewed_at_iso ?? row.reviewed_at),
   };
+}
+
+function requireCanonicalUuid(id: string) {
+  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id))
+    throw new NotFoundException(pythonKeyErrorDetail(id));
 }
