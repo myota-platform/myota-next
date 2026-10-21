@@ -3,9 +3,10 @@ import { expect, test } from '@playwright/test';
 test('saves, reviews, and publishes a programme policy draft', async ({
   page,
 }) => {
-  const draftPosts: unknown[] = [];
+  const draftPosts: Array<{ body: unknown; key: string }> = [];
   const policyPatches: unknown[] = [];
   let policy: Record<string, any> | null = null;
+  let failFirstSave = true;
 
   await page.route('**/v1/**', async (route) => {
     const request = route.request();
@@ -70,12 +71,23 @@ test('saves, reviews, and publishes a programme policy draft', async ({
       url.pathname === '/v1/programmes/alpine/policy-drafts' &&
       method === 'POST'
     ) {
-      draftPosts.push(body);
+      draftPosts.push({
+        body,
+        key: request.headers()['idempotency-key'] || '',
+      });
       policy = {
         ...(body as Record<string, unknown>),
         id: 'policy-1',
         status: 'DRAFT',
       };
+      if (failFirstSave) {
+        failFirstSave = false;
+        await route.fulfill({
+          status: 503,
+          json: { message: 'temporary policy save response failure' },
+        });
+        return;
+      }
       await route.fulfill({ status: 201, json: policy });
       return;
     }
@@ -105,6 +117,17 @@ test('saves, reviews, and publishes a programme policy draft', async ({
     .locator('textarea.code-editor')
     .fill('{"rules":{"minimumQsos":{"activation":5,"hunter":2}}}');
   await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(
+    page.getByText('temporary policy save response failure'),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(page).toHaveURL(/\/policies$/);
+  await page.getByLabel('Name', { exact: true }).fill('Winter summit rules');
+  await page
+    .locator('textarea.code-editor')
+    .fill('{"rules":{"minimumQsos":{"activation":5,"hunter":2}}}');
+  await page.getByRole('button', { name: 'Save draft' }).click();
   await expect(page.getByText('Policy draft saved.')).toBeVisible();
   await page.getByRole('button', { name: 'Submit for review' }).click();
   await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();
@@ -115,14 +138,16 @@ test('saves, reviews, and publishes a programme policy draft', async ({
   await page.getByRole('button', { name: 'Publish' }).click();
   await expect(page.getByText('Policy published.')).toBeVisible();
 
-  expect(draftPosts).toEqual([
-    {
-      type: 'RULES',
-      name: 'Winter summit rules',
-      schema: { rules: { minimumQsos: { activation: 5, hunter: 2 } } },
-      effectiveFrom: null,
-    },
-  ]);
+  expect(draftPosts).toHaveLength(2);
+  expect(draftPosts[0].key).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(draftPosts[1].key).toBe(draftPosts[0].key);
+  expect(draftPosts[1].body).toEqual(draftPosts[0].body);
+  expect(draftPosts[0].body).toEqual({
+    type: 'RULES',
+    name: 'Winter summit rules',
+    schema: { rules: { minimumQsos: { activation: 5, hunter: 2 } } },
+    effectiveFrom: null,
+  });
   expect(policyPatches).toEqual([
     {
       status: 'UNDER_REVIEW',

@@ -4,6 +4,7 @@ test('saves an award draft and submits it for review', async ({ page }) => {
   const saveRequests: Array<{ body: Record<string, any>; key: string }> = [];
   const actionRequests: unknown[] = [];
   let award: Record<string, any> | null = null;
+  let failFirstSave = true;
 
   await page.route('**/v1/**', async (route) => {
     const request = route.request();
@@ -85,6 +86,14 @@ test('saves an award draft and submits it for review', async ({ page }) => {
         id: 'award-1',
         status: 'DRAFT',
       };
+      if (failFirstSave) {
+        failFirstSave = false;
+        await route.fulfill({
+          status: 503,
+          json: { message: 'temporary award save response failure' },
+        });
+        return;
+      }
       await route.fulfill({ status: 201, json: award });
       return;
     }
@@ -119,6 +128,18 @@ test('saves an award draft and submits it for review', async ({ page }) => {
     .getByLabel('Description', { exact: true })
     .fill('Complete ten eligible contacts.');
   await page.getByRole('button', { name: 'Save award draft' }).click();
+  await expect(
+    page.getByText('temporary award save response failure'),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(page).toHaveURL(/\/awards$/);
+  await page.getByLabel('Code', { exact: true }).fill('ALPINE-10');
+  await page.getByLabel('Name', { exact: true }).fill('Alpine Ten Contacts');
+  await page
+    .getByLabel('Description', { exact: true })
+    .fill('Complete ten eligible contacts.');
+  await page.getByRole('button', { name: 'Save award draft' }).click();
 
   await expect(page.getByText('Award draft saved.')).toBeVisible();
   await expect(
@@ -132,8 +153,10 @@ test('saves an award draft and submits it for review', async ({ page }) => {
   await page.getByRole('button', { name: 'Publish' }).click();
   await expect(page.getByText('Award published.')).toBeVisible();
 
-  expect(saveRequests).toHaveLength(1);
+  expect(saveRequests).toHaveLength(2);
   expect(saveRequests[0].key).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(saveRequests[1].key).toBe(saveRequests[0].key);
+  expect(saveRequests[1].body).toEqual(saveRequests[0].body);
   expect(saveRequests[0].body).toMatchObject({
     programmeSlug: 'alpine',
     code: 'ALPINE-10',

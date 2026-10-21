@@ -48,7 +48,8 @@ Award browser checks cover programme-
 scoped draft creation, its idempotency key and condition/level payload, and
 the submit, approve, and publish lifecycle. Award creation, definition edits,
 and lifecycle state changes retain idempotency keys for same-tab retries across
-reloads.
+reloads; award and policy draft browser checks also retry an uncertain save
+after reload and verify reuse of the exact request body and key.
 Master data browser checks cover shared
 category creation, geometry type selection, inactive lifecycle, and the
 idempotency key. Programme category assignment and removal retain their
