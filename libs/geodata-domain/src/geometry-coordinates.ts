@@ -82,8 +82,7 @@ function pythonEqual(left: unknown, right: unknown): boolean {
     if (typeof leftNumber === 'bigint')
       return typeof rightNumber === 'bigint'
         ? leftNumber === rightNumber
-        : Number.isInteger(rightNumber) &&
-            BigInt(rightNumber) === leftNumber;
+        : Number.isInteger(rightNumber) && BigInt(rightNumber) === leftNumber;
     if (typeof rightNumber === 'bigint')
       return Number.isInteger(leftNumber) && BigInt(leftNumber) === rightNumber;
     return leftNumber === rightNumber;

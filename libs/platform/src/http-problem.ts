@@ -140,9 +140,11 @@ export function parserProblem(
   );
   if (
     isJson &&
-    ['entity.parse.failed', 'entity.verify.failed', 'encoding.unsupported'].includes(
-      errorType,
-    )
+    [
+      'entity.parse.failed',
+      'entity.verify.failed',
+      'encoding.unsupported',
+    ].includes(errorType)
   ) {
     status = 400;
     detail = 'invalid JSON body';

@@ -39,7 +39,8 @@ export function pythonKeyErrorDetail(key: string): string {
     else if (character === '\t') escaped += '\\t';
     else if (/[\p{C}\p{Zl}\p{Zp}]/u.test(character)) {
       const codePoint = character.codePointAt(0)!;
-      if (codePoint <= 0xff) escaped += `\\x${codePoint.toString(16).padStart(2, '0')}`;
+      if (codePoint <= 0xff)
+        escaped += `\\x${codePoint.toString(16).padStart(2, '0')}`;
       else if (codePoint <= 0xffff)
         escaped += `\\u${codePoint.toString(16).padStart(4, '0')}`;
       else escaped += `\\U${codePoint.toString(16).padStart(8, '0')}`;
@@ -84,7 +85,9 @@ export function pythonStringJsonField(
 function pythonRepr(value: unknown, parent: object, field: string): string {
   if (typeof value === 'number' && isJsonFloatingField(parent, field))
     return pythonFloatString(value);
-  return typeof value === 'string' ? pythonKeyErrorDetail(value) : pythonString(value);
+  return typeof value === 'string'
+    ? pythonKeyErrorDetail(value)
+    : pythonString(value);
 }
 
 export function collapsePythonWhitespace(value: string): string {

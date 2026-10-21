@@ -63,9 +63,7 @@ export class AwardsController {
   }
 
   @Get('evaluation-jobs/:jobId')
-  getEvaluation(
-    @Param('jobId') jobId: string,
-  ) {
+  getEvaluation(@Param('jobId') jobId: string) {
     return this.awards.getAwardJob(jobId);
   }
 
@@ -153,9 +151,7 @@ export class AwardsController {
   }
 
   @Get('issuances/:issuanceId/render-jobs/:jobId')
-  getRenderJob(
-    @Param('jobId') jobId: string,
-  ) {
+  getRenderJob(@Param('jobId') jobId: string) {
     return this.awards.getRenderJob(jobId);
   }
 
@@ -294,9 +290,7 @@ export class AwardsController {
   }
 
   @Get(':awardId/recalculation-jobs/:jobId')
-  getRecalculation(
-    @Param('jobId') jobId: string,
-  ) {
+  getRecalculation(@Param('jobId') jobId: string) {
     return this.awards.getAwardJob(jobId);
   }
 }

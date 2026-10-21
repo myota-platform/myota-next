@@ -92,7 +92,8 @@ function jsonFloatToken(value: number): string {
   const unsigned = negative ? mantissa.slice(1) : mantissa;
   const decimalIndex = unsigned.indexOf('.');
   const digits = unsigned.replace('.', '');
-  const decimalPosition = (decimalIndex < 0 ? digits.length : decimalIndex) + exponent;
+  const decimalPosition =
+    (decimalIndex < 0 ? digits.length : decimalIndex) + exponent;
   const sign = negative ? '-' : '';
   if (decimalPosition <= 0)
     return `${sign}0.${'0'.repeat(-decimalPosition)}${digits}`;

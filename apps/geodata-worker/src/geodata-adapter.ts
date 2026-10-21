@@ -212,10 +212,12 @@ function normalizeGeometry(value: unknown, crs: unknown) {
   if (
     coordinatePairs.some(
       ([longitude, latitude]) =>
-        !(longitude >= -180 &&
+        !(
+          longitude >= -180 &&
           longitude <= 180 &&
           latitude >= -90 &&
-          latitude <= 90),
+          latitude <= 90
+        ),
     )
   )
     throw new Error(
