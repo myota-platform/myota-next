@@ -559,7 +559,7 @@ async function scanUpload(content: Buffer, filename: string) {
     });
     if (!response.ok) throw new Error('malware scanner rejected the upload');
   } catch {
-    throw new ServiceUnavailableException(
+    throw new BadRequestException(
       'malware scanner is unavailable; upload was not stored',
     );
   }

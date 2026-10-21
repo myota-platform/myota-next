@@ -957,7 +957,7 @@ async function scanWithClamav(content: Buffer, filename: string) {
     if (!response.ok)
       throw new ServiceUnavailableException('malware scanner rejected upload');
   } catch {
-    throw new ServiceUnavailableException(
+    throw new BadRequestException(
       'malware scanner is unavailable; upload was not stored',
     );
   }
