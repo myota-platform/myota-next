@@ -1,4 +1,4 @@
-import type { PoolClient } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { S3Client } from '@aws-sdk/client-s3';
 import { ActivityWorkRepository } from './activity-work.repository.js';
 
@@ -159,6 +159,30 @@ describe('ActivityWorkRepository ADIF failure notifications', () => {
     expect(JSON.parse(String(notification?.values[2]))).toEqual({
       importId: 'import-1',
       reason: 'object unavailable',
+    });
+  });
+});
+
+describe('ActivityWorkRepository transient connection errors', () => {
+  it('preserves the pool connection error as the unavailable cause', async () => {
+    const cause = Object.assign(new Error('read ECONNRESET'), {
+      code: 'ECONNRESET',
+    });
+    const pool = {
+      connect: async () => {
+        throw cause;
+      },
+    };
+    const repository = new ActivityWorkRepository(pool as unknown as Pool);
+
+    await expect(
+      repository.claimWorkJob(
+        '0199c125-c321-7220-a123-456789abcdef',
+        'STATISTICS_REBUILD',
+      ),
+    ).rejects.toMatchObject({
+      message: 'Activity database is unavailable',
+      cause,
     });
   });
 });
