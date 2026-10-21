@@ -351,7 +351,21 @@ export class ActivityNotificationsService
         throw new Error('unsupported_event_version');
       }
       const processed = await this.processEvent(envelope, eventType);
-      await message.ackAck();
+      try {
+        if (!(await message.ackAck())) {
+          this.countOutcome('ack_unconfirmed');
+          this.logger.warn(
+            `Notification event ${eventType} ACK was not confirmed by JetStream`,
+          );
+          return;
+        }
+      } catch (error) {
+        this.countOutcome('ack_unconfirmed');
+        this.logger.warn(
+          `Notification event ${eventType} ACK confirmation failed: ${this.safeError(error)}`,
+        );
+        return;
+      }
       this.countOutcome(processed ? 'processed' : 'duplicate');
       this.completedMessages += 1;
       void this.refreshDeadLetterGauge().catch((error: unknown) =>

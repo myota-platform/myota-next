@@ -1,7 +1,7 @@
 import { ActivityNotificationsService } from './activity-notifications.service.js';
 
 describe('ActivityNotificationsService redelivery', () => {
-  it('does not repeat notification writes when the committed ACK is lost', async () => {
+  it('does not repeat notification writes when ACK confirmation is lost', async () => {
     let processed = false;
     const statements: string[] = [];
     const client = {
@@ -56,7 +56,12 @@ describe('ActivityNotificationsService redelivery', () => {
       ),
     ).toHaveLength(1);
     expect(message.ackAck).toHaveBeenCalledTimes(2);
-    expect(message.nak).toHaveBeenCalledOnce();
+    expect(message.nak).not.toHaveBeenCalled();
+    expect(
+      (service as unknown as { outcomes: Map<string, number> }).outcomes.get(
+        'ack_unconfirmed',
+      ),
+    ).toBe(1);
   });
 
   it('uses the Python fallback for a falsey event type in a poison record', async () => {
