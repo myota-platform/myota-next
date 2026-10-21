@@ -24,7 +24,9 @@ qualification gate. Identity recipient token expiry uses a monotonic clock
 measured from before token acquisition, matching the reference cache timing.
 The cached lifetime subtracts a 30-second margin and clamps the result to
 30–270 seconds, matching the Python worker even when Identity returns a short
-token lifetime.
+token lifetime. Token issuance and recipient resolution require HTTP 200;
+other successful recipient statuses are still treated as unavailable, as in
+the Python resolver.
 
 Programme policy service coverage now exercises a rules draft through save,
 submit, approval, and publication, including offset timestamp normalization,

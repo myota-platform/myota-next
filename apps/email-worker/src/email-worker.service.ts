@@ -330,7 +330,7 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
           signal: AbortSignal.timeout(5000),
         },
       );
-      if (!tokenResponse.ok)
+      if (tokenResponse.status !== 200)
         throw new Error('Identity service authentication failed');
       const tokenBody: unknown = await tokenResponse.json();
       if (!isRecord(tokenBody) || typeof tokenBody.accessToken !== 'string')
@@ -351,6 +351,7 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
       throw new RecipientUnavailable();
     if (!response.ok) throw new Error('Identity recipient lookup failed');
     const body: unknown = await response.json();
+    if (response.status !== 200) throw new RecipientUnavailable();
     if (!isRecord(body) || typeof body.deliverableAddress !== 'string')
       throw new RecipientUnavailable();
     return validateEmail(body.deliverableAddress);
