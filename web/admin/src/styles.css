@@ -646,13 +646,15 @@ select:focus-visible {
 }
 .status-pill.approved,
 .status-pill.published,
-.status-pill.active {
+.status-pill.active,
+.status-pill.applied {
   background: #e0f4e9;
   color: #14663c;
 }
 .status-pill.candidate,
 .status-pill.draft,
-.status-pill.under_review {
+.status-pill.under_review,
+.status-pill.pending {
   background: #fff5d9;
   color: #8a6417;
 }
