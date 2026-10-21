@@ -111,11 +111,14 @@
   Stale queued and expired work is re-enqueued through the owner outbox.
   A live-worker CI check restarts a single-server JetStream with its file store
   retained and verifies all four registered work durables process new work
-  after reconnection. The same check simulates a preprocessing repository
-  failure, makes the status lookup fail, then restores repository access and
-  verifies JetStream redelivery completes the work. This fault injection does
-  not stop PostgreSQL; actual database-outage and clustered failover recovery
-  remain open.
+  after reconnection. The same check injects a PostgreSQL connection outage
+  through a local TCP fault proxy while the Geodata worker claims a persisted
+  import and checks its state. It verifies the delivery remains pending while
+  those repository calls cannot connect, then restores PostgreSQL connectivity
+  and verifies the worker claims the run and resumes its handler. This qualifies
+  claim and state-lookup recovery for one import durable; database outages
+  during processing or settlement, the other worker repositories, and clustered
+  failover remain open.
   If PostgreSQL fails while the worker is recording a failed delivery, it
   extends the current message ACK and retries settlement for transient
   connection, shutdown, serialization, and deadlock errors with capped jittered

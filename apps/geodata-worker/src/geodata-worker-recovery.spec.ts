@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createServer } from 'node:net';
+import { createConnection, createServer, type Socket } from 'node:net';
 import { Readable } from 'node:stream';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -62,6 +62,14 @@ async function verifyBrokerRecovery() {
   const natsPort = await reserveLocalPort();
   const healthPort = await reserveLocalPort();
   const natsUrl = `nats://127.0.0.1:${natsPort}`;
+  const databaseProxy = await startDatabaseProxy(databaseUrl);
+  const { Pool } = await import('pg');
+  const directDatabase = new Pool({ connectionString: databaseUrl, max: 1 });
+  const databaseProbe = new Pool({
+    connectionString: databaseProxy.connectionString,
+    max: 1,
+    connectionTimeoutMillis: 500,
+  });
   const savedEnvironment = new Map<string, string | undefined>();
   for (const [name, value] of Object.entries({
     NATS_URL: natsUrl,
@@ -80,28 +88,28 @@ async function verifyBrokerRecovery() {
   const processedPromotions: string[] = [];
   const processedEnrichments: string[] = [];
   const outageImportRunId = randomUUID();
-  let databaseAvailable = true;
   let outageClaimAttempts = 0;
   let outageStateAttempts = 0;
+  const liveWorkRepository = new GeodataWorkRepository(databaseProbe as Pool);
   const workRepository = {
     claim: vi.fn(async (importRunId: string) => {
       if (importRunId === outageImportRunId) {
         outageClaimAttempts++;
-        if (!databaseAvailable)
-          throw new Error('simulated Geodata database outage');
+        return liveWorkRepository.claim(importRunId);
       }
       return { importRunId };
     }),
-    getRunState: vi.fn(async () => {
-      if (!databaseAvailable) {
+    getRunState: vi.fn(async (importRunId: string) => {
+      if (importRunId === outageImportRunId) {
         outageStateAttempts++;
-        throw new Error('simulated Geodata database outage');
+        return liveWorkRepository.getRunState(importRunId);
       }
       return { status: 'QUEUED', leaseRemainingSeconds: 0 };
     }),
     preprocess: vi.fn(async ({ importRunId }: { importRunId: string }) => {
       processedPreprocessing.push(importRunId);
     }),
+    renewHeartbeat: vi.fn(async () => true),
     staleCancellationIds: vi.fn(async () => []),
     recoverExpiredWorkDispatches: vi.fn(async () => ({
       preprocessing: 0,
@@ -152,6 +160,40 @@ async function verifyBrokerRecovery() {
   const entityId = randomUUID();
   const requestId = randomUUID();
   try {
+    const fixture = await directDatabase.connect();
+    try {
+      await fixture.query('BEGIN');
+      await fixture.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await fixture.query(
+        `INSERT INTO import_run
+          (id,adapter_code,source_metadata,status,source_key,source_hash)
+         VALUES ($1,'MANUAL',$2::jsonb,'QUEUED',$3,$4)`,
+        [
+          outageImportRunId,
+          stringifyJsonWithBigInts({
+            source: { name: 'database-outage-recovery' },
+            sourceObject: {
+              bucket: 'test-bucket',
+              key: `test/${outageImportRunId}.json`,
+            },
+            filename: `${outageImportRunId}.geojson`,
+            format: 'GEOJSON',
+            entityTypes: ['TEST_PARK'],
+          }),
+          `test/${outageImportRunId}.json`,
+          'a'.repeat(64),
+        ],
+      );
+      await fixture.query('COMMIT');
+    } catch (error) {
+      await fixture.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      fixture.release();
+    }
+
     server = await startRecoveryJetStream(natsPort, directory);
     publisher = await connect({
       servers: natsUrl,
@@ -295,7 +337,8 @@ async function verifyBrokerRecovery() {
       'Geodata work durables did not resume delivery after broker restart',
     );
 
-    databaseAvailable = false;
+    const rejectedBeforeOutage = databaseProxy.rejectedConnections();
+    databaseProxy.setAvailable(false);
     await publishGeodataWork(
       publisher,
       'geodata.import-preprocess.v1',
@@ -304,14 +347,34 @@ async function verifyBrokerRecovery() {
       { importRunId: outageImportRunId },
     );
     await waitForRecovery(
-      () => outageClaimAttempts === 1 && outageStateAttempts === 1,
-      'Geodata worker did not encounter the simulated database outage',
+      () =>
+        databaseProxy.rejectedConnections() >= rejectedBeforeOutage + 2 &&
+        outageClaimAttempts > 0 &&
+        outageStateAttempts > 0,
+      'Geodata worker did not encounter the PostgreSQL connection outage',
     );
-    databaseAvailable = true;
+    databaseProxy.setAvailable(true);
     await waitForRecovery(
       () => processedPreprocessing.includes(outageImportRunId),
       'Geodata preprocessing work did not recover after the database returned',
     );
+    await waitForRecovery(async () => {
+      const consumer = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        'geodata-preprocessing-v1',
+      );
+      return consumer.num_pending === 0 && consumer.num_ack_pending === 0;
+    }, 'Geodata worker did not acknowledge the recovered import delivery');
+    const claimedRun = await directDatabase.query<{
+      status: string;
+      attempt_count: number;
+    }>('SELECT status,attempt_count FROM import_run WHERE id=$1', [
+      outageImportRunId,
+    ]);
+    expect(claimedRun.rows[0]).toMatchObject({
+      status: 'PROCESSING',
+      attempt_count: 1,
+    });
 
     expect(executionOrder).toEqual(jobIds);
     expect(processedPreprocessing).toEqual([importRunId, outageImportRunId]);
@@ -323,12 +386,103 @@ async function verifyBrokerRecovery() {
     if (worker) await worker.onModuleDestroy().catch(() => undefined);
     if (publisher) await publisher.drain().catch(() => undefined);
     if (server) await stopRecoveryJetStream(server).catch(() => undefined);
+    databaseProxy.setAvailable(true);
+    await databaseProbe.end();
+    await databaseProxy.close();
+    const cleanup = await directDatabase.connect().catch(() => undefined);
+    if (cleanup) {
+      try {
+        await cleanup.query('BEGIN');
+        await cleanup.query(
+          "SELECT set_config('myota.geodata_writer','row-v1',true)",
+        );
+        await cleanup.query(
+          `DELETE FROM outbox_event
+            WHERE aggregate_type='import_run' AND aggregate_id=$1`,
+          [outageImportRunId],
+        );
+        await cleanup.query(
+          'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1',
+          [outageImportRunId],
+        );
+        await cleanup.query('DELETE FROM import_run WHERE id=$1', [
+          outageImportRunId,
+        ]);
+        await cleanup.query('COMMIT');
+      } catch {
+        await cleanup.query('ROLLBACK').catch(() => undefined);
+      } finally {
+        cleanup.release();
+      }
+    }
+    await directDatabase.end();
     for (const [name, value] of savedEnvironment) {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
     }
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+type DatabaseProxy = {
+  connectionString: string;
+  rejectedConnections: () => number;
+  setAvailable: (available: boolean) => void;
+  close: () => Promise<void>;
+};
+
+async function startDatabaseProxy(databaseUrl: string): Promise<DatabaseProxy> {
+  const target = new URL(databaseUrl);
+  const sockets = new Set<Socket>();
+  let available = true;
+  let rejected = 0;
+  const server = createServer((client) => {
+    sockets.add(client);
+    client.once('close', () => sockets.delete(client));
+    if (!available) {
+      rejected++;
+      client.destroy();
+      return;
+    }
+    const upstream = createConnection({
+      host: target.hostname.replace(/^\[|\]$/g, ''),
+      port: Number(target.port || 5432),
+    });
+    sockets.add(upstream);
+    upstream.once('close', () => sockets.delete(upstream));
+    client.once('error', () => upstream.destroy());
+    upstream.once('error', () => client.destroy());
+    client.pipe(upstream);
+    upstream.pipe(client);
+  });
+  const port = await new Promise<number>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        reject(new Error('could not start the Geodata PostgreSQL fault proxy'));
+        return;
+      }
+      resolve(address.port);
+    });
+  });
+  const proxiedUrl = new URL(databaseUrl);
+  proxiedUrl.hostname = '127.0.0.1';
+  proxiedUrl.port = String(port);
+  return {
+    connectionString: proxiedUrl.toString(),
+    rejectedConnections: () => rejected,
+    setAvailable(next) {
+      available = next;
+      if (!available) for (const socket of sockets) socket.destroy();
+    },
+    async close() {
+      for (const socket of sockets) socket.destroy();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    },
+  };
 }
 
 async function publishDeletion(
