@@ -378,7 +378,7 @@ try {
     ),
   ]);
   if (
-    coreFixture.rows[0]?.email !== 'transfer.fixture@example.test' ||
+    coreFixture.rows[0]?.email !== 'Transfer.Fixture@example.test' ||
     activityFixture.rowCount !== 1 ||
     geoFixture.rows[0]?.name !== 'Transfer Fixture'
   )
