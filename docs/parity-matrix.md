@@ -479,6 +479,11 @@ fixture uses the same GeoJSON feature count and a 96 MiB absolute process-RSS
 limit, while the Nest check measures growth from its test-worker baseline, so
 these RSS values are not directly comparable. The stream regression check
 guards that current feature source JSON is released as each item is consumed.
+CI also streams a PyShp 2.3.1 generated Shapefile with 50,000 records and
+checks that Node RSS growth stays within 96 MiB while preserving the first and
+last DBF names. The Python Shapefile fixture uses the same record count and
+absolute process-RSS limit; the Nest test measures growth above its worker
+baseline, so those RSS values are not directly comparable.
 Shapefile and PBF working directories use `MYOTA_UPLOAD_SPOOL_DIR` when set,
 and otherwise use the OS temporary directory. PBF source bytes stream to disk
 with checksum verification. API admission and
