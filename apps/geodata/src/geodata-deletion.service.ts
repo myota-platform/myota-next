@@ -16,7 +16,10 @@ import {
   verifyAccessToken,
   type AccessTokenClaims,
 } from '@app/platform/access-token.js';
-import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
+import {
+  pythonKeyErrorDetail,
+  pythonStringJsonField,
+} from '@app/platform/python-strings.js';
 import {
   lockRequest,
   readRequestResponse,
@@ -171,7 +174,6 @@ export class GeodataDeletionService {
     body: Record<string, unknown>,
     requestHash?: string,
   ) {
-    const claims = verifyAccessToken(authorization);
     if (key && requestHash) {
       const replay = await replayRequest(
         () => this.connect(),
@@ -181,15 +183,16 @@ export class GeodataDeletionService {
       );
       if (replay.found) return replay.response;
     }
-    const confirmation =
-      typeof body.confirmation === 'string'
-        ? body.confirmation.toUpperCase()
-        : '';
-    const deletedBy = body.deletedBy;
-    if (confirmation !== 'DELETE' || !pythonTruthy(deletedBy))
+    const missing = ['confirmation', 'deletedBy'].filter((field) =>
+      !pythonTruthy(body[field]),
+    );
+    if (missing.length)
       throw new BadRequestException(
-        'confirmation must be DELETE and deletedBy is required',
+        `missing required fields: ${missing.join(', ')}`,
       );
+    if (pythonStringJsonField(body, 'confirmation').toUpperCase() !== 'DELETE')
+      throw new BadRequestException('confirmation must be DELETE');
+    const deletedBy = body.deletedBy;
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -214,6 +217,7 @@ export class GeodataDeletionService {
       const job = selected.rows[0]?.payload as
         Record<string, unknown> | undefined;
       if (!job) throw new NotFoundException(pythonKeyErrorDetail(jobId));
+      const claims = verifyAccessToken(authorization);
       authorizeDelete(claims, {
         programme_slug: (job.entityContext as Record<string, unknown>)
           ?.programmeSlug,

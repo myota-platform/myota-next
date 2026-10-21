@@ -92,10 +92,10 @@ export class GeodataController {
     @Body() body: Record<string, unknown>,
     @Req() request: Request,
   ) {
-    const claims = verifyAccessToken(authorization);
+    const owner = key ? verifyAccessToken(authorization).sub : '';
     const idempotency = scopedRequestIdempotency(
       key,
-      claims.sub,
+      owner,
       request,
       body,
     );

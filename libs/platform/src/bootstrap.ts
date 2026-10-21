@@ -190,7 +190,10 @@ export async function bootstrapHttpService(
           '/v1/activations',
           '/v1/awards/evaluation-jobs',
         ].includes(path) ||
-          /^\/v1\/qsos\/[^/]+\/corrections$/.test(path)) &&
+          /^\/v1\/qsos\/[^/]+\/corrections$/.test(path) ||
+          /^\/v1\/geodata\/entity-deletion-jobs\/[^/]+\/confirm$/.test(
+            path,
+          )) &&
         Buffer.isBuffer((request as Request & { rawBody?: Buffer }).rawBody)
       )
         request.body = parseJsonWithExactIntegers(

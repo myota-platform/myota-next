@@ -14,6 +14,9 @@ through the Activity response and Geodata's stored confirmation job. CI restarts
 a single-server JetStream with its file store retained and verifies the live
 Geodata worker resumes all four registered work durables. Database outages,
 clustered failover, and other Geodata worker recovery paths remain open.
+Deletion confirmation reports missing fields in reference order, converts the
+confirmation value with Python `str().upper()`, and checks job-scoped GIS access
+after resolving the job.
 Activity lease extension is supported for long-running jobs.
 Geodata's PostGIS Maidenhead-cell function is checked in CI against the
 reference Python outputs for point, contained polygon, boundary-crossing
