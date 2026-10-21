@@ -3,7 +3,6 @@ import {
   Controller,
   Delete,
   Param,
-  ParseUUIDPipe,
   Get,
   Header,
   ForbiddenException,
@@ -28,8 +27,6 @@ import {
   CallsignEvidenceDto,
   SetPrimaryCallsignDto,
   AdminAccountsQueryDto,
-  RecoveryRequestDto,
-  RecoveryResetDto,
   RefreshTokenDto,
   SecurityEventsQueryDto,
   OidcProviderMappingDto,
@@ -63,37 +60,47 @@ export class AuthController {
 
   @Post('auth/login')
   @HttpCode(200)
-  login(@Body() body: LoginDto, @Req() request: Request) {
-    return this.auth.login(body, this.requestContext(request));
+  login(@Body() body: Record<string, unknown>, @Req() request: Request) {
+    return this.auth.login(
+      body as unknown as LoginDto,
+      this.requestContext(request),
+    );
   }
 
   @Post('auth/refresh')
   @HttpCode(200)
-  refresh(@Body() body: RefreshTokenDto, @Req() request: Request) {
-    return this.auth.refresh(body.refreshToken, this.requestContext(request));
+  refresh(@Body() body: Record<string, unknown>, @Req() request: Request) {
+    return this.auth.refresh(
+      body.refreshToken as string,
+      this.requestContext(request),
+    );
   }
 
   @Post('auth/recovery/request')
   @HttpCode(200)
-  requestRecovery(@Body() body: RecoveryRequestDto) {
-    return this.auth.requestRecovery(body.email);
+  requestRecovery(@Body() body: Record<string, unknown>) {
+    return this.auth.requestRecovery(body.email as string);
   }
 
   @Post('auth/recovery/reset')
   @HttpCode(200)
-  resetRecovery(@Body() body: RecoveryResetDto) {
-    return this.auth.resetRecovery(body.token, body.newPassword);
+  resetRecovery(@Body() body: Record<string, unknown>) {
+    return this.auth.resetRecovery(
+      body.token as string,
+      body.newPassword as string,
+    );
   }
 
   @Post('oidc/providers')
   @HttpCode(201)
   saveOidcMapping(
     @Headers('authorization') authorization: string | undefined,
-    @Body() body: OidcProviderMappingDto,
+    @Body() body: Record<string, unknown>,
   ) {
-    if (!authorization)
-      throw new UnauthorizedException('Bearer authentication is required');
-    return this.integrations.saveOidcMapping(authorization, body);
+    return this.integrations.saveOidcMapping(
+      authorization ?? '',
+      body as unknown as OidcProviderMappingDto,
+    );
   }
 
   @Post('auth/service-token')
@@ -323,14 +330,12 @@ export class AuthController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('accountId') accountId: string,
-    @Body() body: AddCallsignDto,
+    @Body() body: Record<string, unknown>,
   ) {
-    if (!authorization)
-      throw new UnauthorizedException('Bearer authentication is required');
     return this.callsigns.addCallsign(
-      authorization,
+      authorization ?? '',
       accountId,
-      body,
+      body as unknown as AddCallsignDto,
       idempotencyKey,
     );
   }
@@ -340,16 +345,14 @@ export class AuthController {
   submitCallsignEvidence(
     @Headers('authorization') authorization: string | undefined,
     @Param('accountId') accountId: string,
-    @Param('callsignId', new ParseUUIDPipe()) callsignId: string,
-    @Body() body: CallsignEvidenceDto,
+    @Param('callsignId') callsignId: string,
+    @Body() body: Record<string, unknown>,
   ) {
-    if (!authorization)
-      throw new UnauthorizedException('Bearer authentication is required');
     return this.callsigns.submitCallsignEvidence(
-      authorization,
+      authorization ?? '',
       accountId,
       callsignId,
-      body,
+      body as unknown as CallsignEvidenceDto,
     );
   }
 
@@ -358,7 +361,7 @@ export class AuthController {
   verifyCallsign(
     @Headers('authorization') authorization: string | undefined,
     @Param('accountId') accountId: string,
-    @Param('callsignId', new ParseUUIDPipe()) callsignId: string,
+    @Param('callsignId') callsignId: string,
     @Body() body: unknown,
   ) {
     if (!authorization)
@@ -376,14 +379,12 @@ export class AuthController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('accountId') accountId: string,
-    @Body() body: SetPrimaryCallsignDto,
+    @Body() body: Record<string, unknown>,
   ) {
-    if (!authorization)
-      throw new UnauthorizedException('Bearer authentication is required');
     return this.callsigns.setPrimaryCallsign(
-      authorization,
+      authorization ?? '',
       accountId,
-      body,
+      body as unknown as SetPrimaryCallsignDto,
       idempotencyKey,
     );
   }
@@ -393,7 +394,7 @@ export class AuthController {
   retireCallsign(
     @Headers('authorization') authorization: string | undefined,
     @Param('accountId') accountId: string,
-    @Param('callsignId', new ParseUUIDPipe()) callsignId: string,
+    @Param('callsignId') callsignId: string,
     @Body() body: unknown,
   ) {
     if (!authorization)
