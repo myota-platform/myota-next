@@ -90,7 +90,7 @@ export class IdentityRoleService {
       });
     }
     return [...definitions.values()].sort((left, right) =>
-      left.code.localeCompare(right.code),
+      left.code < right.code ? -1 : left.code > right.code ? 1 : 0,
     );
   }
 

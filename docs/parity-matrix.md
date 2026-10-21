@@ -61,6 +61,8 @@ reads, owner-only profile updates, account creation, and administrator account
 listing, owner/global account reads and account role reads in NestJS. The role catalogue endpoint returns built-in and persisted
 custom roles under the existing authorized scopes; custom role creation and
 partial updates are backed by Core transactions and security/outbox events.
+Role definitions sort by code point, matching Python's string ordering for
+custom codes containing underscores.
 Role-definition POST and PATCH authenticate before DTO validation; PATCH also
 resolves and rejects built-in definitions before validating the submitted
 fields, matching the Python handler's response precedence.
