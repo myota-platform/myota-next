@@ -49,6 +49,7 @@
     "test:geodata-worker-recovery": "node tools/run-geodata-worker-recovery.mjs",
     "test:geodata-storage-recovery": "node tools/run-geodata-storage-recovery.mjs",
     "test:activity-worker-recovery": "node tools/run-activity-worker-recovery.mjs",
+    "test:activity-notification-restart-recovery": "node tools/run-activity-notification-restart-recovery.mjs",
     "test:outbox-recovery": "node tools/run-outbox-recovery.mjs",
     "prepare:parity-databases": "node tools/create-parity-databases.mjs",
     "test:transfer-ledger": "node tools/check-transfer-ledger.mjs",
