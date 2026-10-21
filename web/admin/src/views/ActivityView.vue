@@ -199,6 +199,18 @@ async function reviewCorrection(
 ): Promise<void> {
   const reviewedBy = store.account?.id;
   if (!canReviewCorrections.value || !reviewedBy) return;
+  const action = decision === 'APPLIED' ? 'apply' : 'reject';
+  const qsoLabel = correction.qso.workedCallsign || correction.qsoId;
+  const effect =
+    decision === 'APPLIED'
+      ? 'This will update the QSO and queue award recalculation.'
+      : 'This will close the request without changing the QSO.';
+  if (
+    !window.confirm(
+      `Are you sure you want to ${action} the correction for ${qsoLabel}? ${effect}`,
+    )
+  )
+    return;
   await feedback.run(
     async () => {
       await apiRequest(
