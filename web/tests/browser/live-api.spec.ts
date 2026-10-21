@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
 const hasApiDatabases = Boolean(
@@ -141,7 +142,8 @@ test('creates a participant account in Admin through the live Identity API', asy
     ),
   ).toBeVisible();
   await expect(page.getByText(accountEmail)).toBeVisible();
-  expect(await response.json()).toMatchObject({
+  const createdAccount = await response.json();
+  expect(createdAccount).toMatchObject({
     displayName: accountName,
     email: accountEmail,
     status: 'PENDING_SETUP',
@@ -180,6 +182,64 @@ test('creates a participant account in Admin through the live Identity API', asy
   await expect(
     callsignRows.filter({ hasText: 'Verified by manual-review' }),
   ).toContainText(callsignValue);
+
+  await page.getByLabel('Status').selectOption('ACTIVE');
+  const activationResponse = page.waitForResponse(
+    (candidate) =>
+      candidate.request().method() === 'PATCH' &&
+      new URL(candidate.url()).pathname ===
+        `/v1/identity/accounts/${createdAccount.id}`,
+  );
+  await page.getByRole('button', { name: 'Save user' }).click();
+  expect((await activationResponse).status()).toBe(200);
+  await expect(
+    page.getByText(
+      'User saved. Existing scoped role assignments have been preserved.',
+    ),
+  ).toBeVisible();
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export account' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(
+    `myota-account-${createdAccount.id}.json`,
+  );
+  const exported = JSON.parse(await readFile((await download.path())!, 'utf8'));
+  expect(exported.account).toMatchObject({
+    id: createdAccount.id,
+    displayName: accountName,
+    status: 'ACTIVE',
+  });
+  expect(exported.callsignEvidence).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ source: 'regulator record' }),
+    ]),
+  );
+
+  const confirmations: string[] = [];
+  page.once('dialog', async (dialog) => {
+    confirmations.push(dialog.message());
+    await dialog.accept();
+  });
+  const deactivationResponse = page.waitForResponse(
+    (candidate) =>
+      candidate.request().method() === 'PATCH' &&
+      new URL(candidate.url()).pathname ===
+        `/v1/identity/accounts/${createdAccount.id}`,
+  );
+  await page.getByRole('button', { name: 'Deactivate and anonymize' }).click();
+  const deactivated = await deactivationResponse;
+  expect(deactivated.status()).toBe(200);
+  expect(await deactivated.json()).toMatchObject({
+    id: createdAccount.id,
+    displayName: 'Deactivated account',
+    email: null,
+    status: 'DEACTIVATED',
+  });
+  await expect(
+    page.getByText('Account deactivated and anonymized.'),
+  ).toBeVisible();
+  expect(confirmations).toEqual([`Deactivate and anonymize ${accountName}?`]);
   expect(failedResponses).toEqual([]);
 });
 
