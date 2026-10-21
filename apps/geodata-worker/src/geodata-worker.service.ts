@@ -430,8 +430,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
 
   private async heartbeat(workType: string, job: any): Promise<boolean> {
     if (workType === 'geodata.import-preprocess.v1') {
-      await this.repository.heartbeat(job);
-      return true;
+      return this.repository.renewHeartbeat(job);
     }
     return workType === 'geodata.entity-delete.v1'
       ? this.deletions.heartbeat(job)
@@ -464,8 +463,15 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
       if (await waitForTaskOrTimeout(task, delay)) return;
       const tickedAt = Date.now();
       if (tickedAt - lastDatabaseHeartbeat >= databaseHeartbeatMs) {
-        if (definition.heartbeat && !(await definition.heartbeat(job)))
-          throw new Error('Geodata work lease was lost');
+        let leaseHeld: boolean | undefined;
+        try {
+          leaseHeld = await definition.heartbeat?.(job);
+        } catch (error) {
+          this.logger.warn(
+            `Geodata work heartbeat failed; processing continues: ${safeError(error)}`,
+          );
+        }
+        if (leaseHeld === false) throw new Error('Geodata work lease was lost');
         lastDatabaseHeartbeat = tickedAt;
       }
       if (tickedAt - lastAcknowledgement >= acknowledgementIntervalMs) {

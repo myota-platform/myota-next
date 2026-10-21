@@ -157,8 +157,13 @@ requirePattern(
 );
 requirePattern(
   'apps/geodata-worker/src/geodata-worker.service.ts',
-  /heartbeatIntervalSeconds: IMPORT_RUN_HEARTBEAT_SECONDS[\s\S]*?this\.repository\.heartbeat\(job\)[\s\S]*?definition\.heartbeatIntervalSeconds \?\? 30/,
+  /heartbeatIntervalSeconds: IMPORT_RUN_HEARTBEAT_SECONDS[\s\S]*?this\.repository\.renewHeartbeat\(job\)[\s\S]*?definition\.heartbeatIntervalSeconds \?\? 30/,
   'Geodata imports must renew database leases at the configured Python-compatible heartbeat interval',
+);
+requirePattern(
+  'apps/geodata-worker/src/geodata-worker.service.ts',
+  /leaseHeld = await definition\.heartbeat\?\.\(job\)[\s\S]*?Geodata work heartbeat failed; processing continues[\s\S]*?leaseHeld === false[\s\S]*?Geodata work lease was lost/,
+  'Geodata workers must continue after transient heartbeat errors and stop when lease ownership is lost',
 );
 requirePattern(
   'apps/geodata-worker/src/geodata-worker.service.ts',

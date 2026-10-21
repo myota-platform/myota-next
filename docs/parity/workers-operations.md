@@ -40,8 +40,12 @@
   readiness. Worker heartbeat timers clear when jobs finish, and worker and
   scheduled-import polling delays are cancelled on shutdown. Import run leases
   and database heartbeats use the Python-compatible
-  `MYOTA_IMPORT_LEASE_SECONDS` and `MYOTA_IMPORT_HEARTBEAT_SECONDS` settings;
-  cancellation reconciliation uses `GEODATA_CANCELLATION_RECONCILE_SECONDS`
+  `MYOTA_IMPORT_LEASE_SECONDS` and `MYOTA_IMPORT_HEARTBEAT_SECONDS` settings.
+  A transient database heartbeat failure is logged and retried at the next
+  interval while the work task and JetStream ACK extensions continue; a
+  confirmed lost lease still fails the work. This follows the Python import
+  heartbeat thread's transient-error behavior. Cancellation reconciliation
+  uses `GEODATA_CANCELLATION_RECONCILE_SECONDS`
   (default 30 seconds, minimum 5); JetStream ACK extensions follow one third of
   the registered durable ACK wait. Optional `GEODATA_WORKER_ACK_WAIT_SECONDS`,
   `GEODATA_WORKER_MAX_ACK_PENDING`, and `GEODATA_WORKER_MAX_DELIVERIES` settings

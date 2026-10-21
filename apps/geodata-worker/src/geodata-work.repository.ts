@@ -1351,6 +1351,13 @@ export class GeodataWorkRepository {
   }
 
   async heartbeat(run: ImportRun): Promise<void> {
+    if (!(await this.renewHeartbeat(run)))
+      throw new Error(
+        'geodata import lease was superseded or cancellation was requested',
+      );
+  }
+
+  async renewHeartbeat(run: ImportRun): Promise<boolean> {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -1363,11 +1370,12 @@ export class GeodataWorkRepository {
          RETURNING id`,
         [run.id, run.attempt_count, IMPORT_RUN_LEASE_SECONDS],
       );
-      if (!renewed.rowCount)
-        throw new Error(
-          'geodata import lease was superseded or cancellation was requested',
-        );
+      if (!renewed.rowCount) {
+        await client.query('COMMIT');
+        return false;
+      }
       await client.query('COMMIT');
+      return true;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
