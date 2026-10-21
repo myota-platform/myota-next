@@ -24,7 +24,7 @@ SELECT entry.key,
          THEN snapshot.state #> '{data,content}'
          ELSE '{}'::jsonb
        END
-  ) AS entry(id, value)
+  ) AS entry(key, value)
  WHERE snapshot.service = 'programmes'
    AND jsonb_typeof(entry.value) = 'object';
 
