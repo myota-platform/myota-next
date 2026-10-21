@@ -49,7 +49,8 @@ behavioral parity or production readiness.
 - Add compatibility evidence for the implemented API and worker behavior.
 - Exercise broker and object-store outages, retries, recovery, and redrive
   against disposable infrastructure. CI now covers Activity notification
-  replica sharing and durable resume after a worker restart.
+  replica sharing, durable resume after a worker restart, and audited dead-letter
+  redrive; other worker and object-store recovery paths remain to be qualified.
 - Complete the semantic review and rehearsal for cross-version database
   transfer, backup, restore, and rollback.
 - Expand browser workflow checks across Admin and Participant payload parity,

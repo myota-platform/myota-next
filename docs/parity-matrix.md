@@ -717,8 +717,9 @@ geometries.
   implemented, with outcome and unresolved-dead-letter metrics. If NATS setup
   fails after connecting, the Nest worker now drains that connection before
   startup exits, matching the Python consumer's cleanup path. A disposable
-  JetStream CI test also verifies that two Nest replicas share the durable and
-  a restarted replica resumes it. Its eight-delivery policy configures the
+  JetStream CI test also verifies that two Nest replicas share the durable, a
+  restarted replica resumes it, and an audited CLI redrive republishes and
+  resolves a retained dead letter. Its eight-delivery policy configures the
   seven delays that can precede redelivery; NATS rejects a backoff list as long
   as `max_deliver`. Falsey event types use the Python worker's `unknown`
   fallback in poison-event records.
