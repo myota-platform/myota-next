@@ -67,6 +67,8 @@ const requestPage = ref(1);
 const requestTotal = ref(0);
 const issuancePage = ref(1);
 const issuanceTotal = ref(0);
+const issueManagerName = ref('');
+const issueSignatureAssetId = ref('');
 const message = ref('');
 const templateElements = ref<TemplateElement[]>(defaultElements());
 const error = ref('');
@@ -492,6 +494,52 @@ function setIssuancePage(page: number): void {
     return;
   issuancePage.value = page;
   void load();
+}
+async function issueAwardRequest(request: {
+  id: string;
+  status: string;
+  callsign: string;
+}): Promise<void> {
+  if (
+    !canManage.value ||
+    saving.value ||
+    request.status !== 'REQUESTED' ||
+    !issueManagerName.value.trim() ||
+    !issueSignatureAssetId.value
+  )
+    return;
+  saving.value = true;
+  error.value = '';
+  message.value = '';
+  const requestPath = `/v1/awards/requests/${encodeURIComponent(request.id)}/issuances`;
+  const body = {
+    managerName: issueManagerName.value.trim(),
+    signatureAssetId: issueSignatureAssetId.value,
+  };
+  const fingerprint = JSON.stringify([
+    store.account?.id,
+    requestPath,
+    'POST',
+    body,
+  ]);
+  try {
+    await apiRequest(requestPath, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: {
+        'Idempotency-Key':
+          await pendingAwardMutationKeys.getOrCreate(fingerprint),
+      },
+    });
+    await pendingAwardMutationKeys.complete(fingerprint);
+    message.value = `Award issued to ${request.callsign}.`;
+    await load(selected.value?.id);
+  } catch (cause) {
+    error.value =
+      cause instanceof Error ? cause.message : 'Award issuance failed.';
+  } finally {
+    saving.value = false;
+  }
 }
 async function save(): Promise<void> {
   if (!editable.value || saving.value) return;
@@ -1080,6 +1128,28 @@ onMounted(() => {
       <div class="panel-heading"><h2>Requests and issuances</h2></div>
       <div class="table-list">
         <h3>Requests · {{ requestTotal }}</h3>
+        <div v-if="canManage" class="form-grid">
+          <label
+            >Issuance manager name<input
+              v-model="issueManagerName"
+              maxlength="200"
+          /></label>
+          <label
+            >Issuance signature<select v-model="issueSignatureAssetId">
+              <option value="">Choose a registered signature…</option>
+              <option
+                v-for="asset in signatures"
+                :key="asset.id"
+                :value="asset.id"
+              >
+                {{ asset.name }}
+              </option>
+            </select></label
+          >
+          <small v-if="!signatures.length" class="field-help"
+            >Upload a signature asset above to issue requested awards.</small
+          >
+        </div>
         <div v-for="request in requests" :key="request.id" class="table-row">
           <span
             ><strong>{{ request.callsign }} · {{ request.personName }}</strong
@@ -1087,6 +1157,16 @@ onMounted(() => {
               >{{ request.programmeSlug }} · {{ request.levelId }}</small
             ></span
           ><span class="status-pill">{{ request.status }}</span>
+          <button
+            v-if="request.status === 'REQUESTED' && canManage"
+            type="button"
+            :disabled="
+              saving || !issueManagerName.trim() || !issueSignatureAssetId
+            "
+            @click="issueAwardRequest(request)"
+          >
+            Issue award for {{ request.callsign }}
+          </button>
         </div>
         <p v-if="!requests.length" class="muted empty">No award requests.</p>
         <PageNavigation

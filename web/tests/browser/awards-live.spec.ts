@@ -9,7 +9,7 @@ const hasApiDatabases = Boolean(
   process.env.GEO_DATABASE_URL,
 );
 
-test('creates, reviews, and publishes an award in Admin through Gateway', async ({
+test('publishes, requests, and issues an award across both web apps', async ({
   page,
   request,
 }) => {
@@ -29,10 +29,13 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
   const awardCode = `LIVE_${fixtureId.replaceAll('-', '').slice(0, 12).toUpperCase()}`;
   const awardName = `Live browser award ${fixtureId.slice(0, 8)}`;
   const assetName = `Live background ${fixtureId.slice(0, 8)}`;
+  const signatureName = `Live signature ${fixtureId.slice(0, 8)}`;
+  const managerName = `Award manager ${fixtureId.slice(0, 8)}`;
   const accountEmail = `browser-award-${fixtureId}@example.test`;
   const accountDisplayName = `Award participant ${fixtureId.slice(0, 8)}`;
   const failedResponses: string[] = [];
   let awardId: string | undefined;
+  let signatureAssetId: string | undefined;
   let accountId: string | undefined;
   let activationId: string | undefined;
   let adminAccessToken: string | undefined;
@@ -101,6 +104,28 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
       name: 'live-certificate-background.png',
       mimeType: 'image/png',
       buffer: background,
+    });
+    await page.getByRole('button', { name: 'Upload image asset' }).click();
+    await expect(
+      page.getByText('Image uploaded to the asset library.'),
+    ).toBeVisible();
+
+    const signature = await sharp({
+      create: {
+        width: 1200,
+        height: 400,
+        channels: 3,
+        background: { r: 24, g: 64, b: 120 },
+      },
+    })
+      .png()
+      .toBuffer();
+    await page.getByLabel('Asset type').selectOption('SIGNATURE');
+    await page.getByLabel('Display name').fill(signatureName);
+    await page.getByLabel('Image file').setInputFiles({
+      name: 'live-award-signature.png',
+      mimeType: 'image/png',
+      buffer: signature,
     });
     await page.getByRole('button', { name: 'Upload image asset' }).click();
     await expect(
@@ -263,6 +288,30 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
     await expect(page.locator('#award-request-status')).toHaveText(
       'Award request submitted for programme review.',
     );
+
+    const signatureAsset = await activityPool.query<{ id: string }>(
+      `SELECT id::text FROM activity_asset
+       WHERE kind='SIGNATURE' AND metadata->>'name'=$1
+         AND metadata->>'contentStatus'='STORED'`,
+      [signatureName],
+    );
+    expect(signatureAsset.rows).toHaveLength(1);
+    signatureAssetId = signatureAsset.rows[0]?.id;
+
+    await page.goto('http://127.0.0.1:8090/awards');
+    await page.locator('.programme-scope select').selectOption(programmeSlug);
+    await expect(page.getByText('Requests · 1')).toBeVisible();
+    await page.getByLabel('Issuance manager name').fill(managerName);
+    await page.getByLabel('Issuance signature').selectOption(signatureAssetId!);
+    const issueAwardButton = page.getByRole('button', {
+      name: `Issue award for ${callsign.value}`,
+    });
+    await expect(issueAwardButton).toBeEnabled();
+    await issueAwardButton.click();
+    await expect(page.getByRole('status')).toContainText(
+      `Award issued to ${callsign.value}.`,
+    );
+    await expect(page.getByText('ISSUED', { exact: true })).toBeVisible();
     expect(failedResponses).toEqual([]);
 
     const award = await activityPool.query<{
@@ -318,6 +367,7 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
     ]);
 
     const awardRequests = await activityPool.query<{
+      id: string;
       level_id: string;
       subject_id: string;
       category: string;
@@ -325,8 +375,9 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
       person_name: string;
       facts: { activationCount: number };
       status: string;
+      issued_award_id: string;
     }>(
-      `SELECT level_id,subject_id,category,callsign,person_name,facts,status
+      `SELECT id::text,level_id,subject_id,category,callsign,person_name,facts,status,issued_award_id::text
        FROM activity_award_request WHERE award_id=$1`,
       [awardId],
     );
@@ -338,8 +389,37 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
       callsign: callsign.value,
       person_name: accountDisplayName,
       facts: { activationCount: 1 },
-      status: 'REQUESTED',
+      status: 'ISSUED',
     });
+    const issuance = await activityPool.query<{
+      id: string;
+      request_id: string;
+      issuance: {
+        managerName: string;
+        signatureAssetId: string;
+        artifact: { downloadReady: boolean };
+      };
+    }>(
+      `SELECT id::text,request_id::text,issuance FROM activity_award_issuance
+       WHERE award_id=$1`,
+      [awardId],
+    );
+    expect(issuance.rows).toHaveLength(1);
+    expect(issuance.rows[0]).toMatchObject({
+      id: awardRequests.rows[0]?.issued_award_id,
+      request_id: awardRequests.rows[0]?.id,
+      issuance: {
+        managerName,
+        signatureAssetId,
+        artifact: { downloadReady: false },
+      },
+    });
+    const issuanceEvents = await activityPool.query<{ event_type: string }>(
+      `SELECT event_type FROM outbox_event
+       WHERE aggregate_type='award_issuance' AND aggregate_id=$1`,
+      [issuance.rows[0]?.id],
+    );
+    expect(issuanceEvents.rows).toEqual([{ event_type: 'awards.issued.v1' }]);
   } finally {
     await activityPool.query('BEGIN');
     try {
@@ -349,6 +429,32 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
         [programmeSlug, awardCode],
       );
       const fixtureAwardIds = fixtureAwards.rows.map((row) => row.id);
+      if (fixtureAwardIds.length) {
+        const fixtureRequests = await activityPool.query<{ id: string }>(
+          'SELECT id::text FROM activity_award_request WHERE award_id=ANY($1::uuid[])',
+          [fixtureAwardIds],
+        );
+        const fixtureRequestIds = fixtureRequests.rows.map((row) => row.id);
+        if (fixtureRequestIds.length)
+          await activityPool.query(
+            "DELETE FROM outbox_event WHERE aggregate_type='award_request' AND aggregate_id=ANY($1::text[])",
+            [fixtureRequestIds],
+          );
+        const fixtureIssuances = await activityPool.query<{ id: string }>(
+          'SELECT id::text FROM activity_award_issuance WHERE award_id=ANY($1::uuid[])',
+          [fixtureAwardIds],
+        );
+        const fixtureIssuanceIds = fixtureIssuances.rows.map((row) => row.id);
+        if (fixtureIssuanceIds.length)
+          await activityPool.query(
+            "DELETE FROM outbox_event WHERE aggregate_type='award_issuance' AND aggregate_id=ANY($1::text[])",
+            [fixtureIssuanceIds],
+          );
+        await activityPool.query(
+          'DELETE FROM activity_award_issuance WHERE award_id=ANY($1::uuid[])',
+          [fixtureAwardIds],
+        );
+      }
       if (fixtureAwardIds.length)
         await activityPool.query(
           'DELETE FROM activity_award_request WHERE award_id=ANY($1::uuid[])',
@@ -394,8 +500,8 @@ test('creates, reviews, and publishes an award in Admin through Gateway', async 
         [programmeSlug, awardCode],
       );
       await activityPool.query(
-        "DELETE FROM activity_asset WHERE metadata->>'name'=$1",
-        [assetName],
+        "DELETE FROM activity_asset WHERE metadata->>'name'=ANY($1::text[])",
+        [[assetName, signatureName]],
       );
       await activityPool.query('COMMIT');
     } catch (error) {
