@@ -393,6 +393,10 @@ entities. Activity deletion-impact counts preserve exact PostgreSQL integers
 through the Activity response and Geodata's stored confirmation job. Outage and
 recovery evidence remains outstanding. Activity lease extension is supported
 for long-running jobs.
+Geodata's PostGIS Maidenhead-cell function is checked in CI against the
+reference Python outputs for point, contained polygon, boundary-crossing
+polygon, and line fixtures; the check runs after the Geodata baseline migration
+on a disposable PostGIS database.
 Activity subject aggregate counts preserve PostgreSQL bigint precision in API
 facts and persisted award progress; award comparisons apply Python-compatible
 float conversion without first truncating the database values to JavaScript

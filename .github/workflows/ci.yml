@@ -16,6 +16,23 @@ jobs:
   checks:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    services:
+      geo-db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: myota_geo
+          POSTGRES_USER: myota
+          POSTGRES_PASSWORD: myota
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U myota -d myota_geo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      GEO_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_geo
+      GEO_PARITY_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_geo
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -23,6 +40,8 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - run: npm run migrate:db -- --owner=geo
+      - run: npm run test:geodata-maidenhead
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
