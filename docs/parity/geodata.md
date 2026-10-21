@@ -166,10 +166,11 @@ and remaining counts in persisted statistics. Import staging counts and
 source-manifest record totals avoid 32-bit casts. Import status reads parse the
 JSONB projection as exact-integer JSON, preserving large candidate totals and
 statistics through the API response.
-Entity reads reject malformed IDs before PostgreSQL UUID casting; missing entity
-reads, imports, conflation candidates, deletion jobs, and refresh schedules
-retain the reference's quoted-ID 404 details. Literal missing import-run errors
-preserve their quoted messages as well.
+Entity and import status reads reject malformed IDs before PostgreSQL UUID
+casting. Missing entity reads, imports, conflation candidates, deletion jobs,
+and refresh schedules retain the reference's quoted-ID 404 details; processing
+queue reads retain their fixed quoted missing-queue message. Literal missing
+import-run errors preserve their quoted messages as well.
 Record hashes use Python float formatting and Unicode
 code-point key ordering. Direct and streamed GEOJSON/WFS imports preserve exact
 integer tokens through source storage and worker decoding, while retaining raw

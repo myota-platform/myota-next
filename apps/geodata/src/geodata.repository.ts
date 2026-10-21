@@ -165,6 +165,8 @@ export class GeodataRepository {
   }
 
   async getImport(id: string) {
+    if (!isCanonicalUuid(id))
+      throw new NotFoundException(pythonKeyErrorDetail(id));
     const client = await this.connect();
     try {
       const result = await client.query(
@@ -261,6 +263,10 @@ export class GeodataRepository {
   }
 
   async getImportProcessingQueue(runId: string, queueId: string) {
+    if (!isCanonicalUuid(runId) || !isCanonicalUuid(queueId))
+      throw new NotFoundException(
+        pythonKeyErrorDetail('import processing queue not found'),
+      );
     const client = await this.connect();
     try {
       const result = await client.query(
