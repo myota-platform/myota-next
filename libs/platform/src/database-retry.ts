@@ -36,9 +36,13 @@ export async function retryTransientDatabaseOperation<T>(
       if (!isTransientDatabaseError(error) || options.stopping()) throw error;
       attempt += 1;
       options.onRetry(error, attempt);
-      const delay = Math.min(
+      const exponentialDelay = Math.min(
         options.maxDelayMs ?? 30_000,
         (options.baseDelayMs ?? 1_000) * 2 ** Math.min(attempt - 1, 5),
+      );
+      const delay = Math.max(
+        1,
+        Math.floor(exponentialDelay * (0.5 + Math.random() * 0.5)),
       );
       await options.wait(delay);
       if (options.stopping()) throw error;

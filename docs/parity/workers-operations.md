@@ -16,8 +16,8 @@
   statistics-rebuild lease takeover; other job kinds, broker outages, and
   retention recovery evidence remain open. Transient PostgreSQL failures while
   claiming work or persisting retry/dead-letter state extend the current ACK
-  and retry in place with capped backoff; live outage recovery remains
-  unqualified.
+  and retry in place with capped jittered backoff; live outage recovery
+  remains unqualified.
 - Identity maintenance: expired recovery tokens, revoked sessions, expired
   revocations, rate-limit windows, old security events, and aged orphan profile
   images are cleaned by a separate Core-owned worker.
@@ -39,8 +39,8 @@
   file storage retained and verifies delivery resumes with confirmed ACKs and
   duplicate-event idempotency. Transient PostgreSQL errors during event
   processing or dead-letter persistence extend the current ACK and retry with
-  capped backoff. Cluster failover, database-outage, and retry exhaustion
-  recovery qualification remain open.
+  capped jittered backoff. Cluster failover, database-outage, and retry
+  exhaustion recovery qualification remain open.
 - Geodata workers: registered JetStream consumers for import preprocessing and
   promotion, confirmed entity deletion, and location enrichment are implemented.
   Each durable is polled concurrently up to its registered `max_ack_pending`
@@ -100,7 +100,7 @@
   remain open.
   If PostgreSQL fails while the worker is recording a failed delivery, it
   extends the current message ACK and retries settlement for transient
-  connection, shutdown, serialization, and deadlock errors with capped
+  connection, shutdown, serialization, and deadlock errors with capped jittered
   backoff. Live database-outage recovery still needs qualification.
   Scheduled import and upload-session retention is implemented. CI restarts the
   pinned SeaweedFS image during a Geodata multipart upload, verifies a failed
@@ -110,8 +110,8 @@
 
 - Email worker: transient PostgreSQL errors during delivery claiming,
   delivered/retry state updates, and dead-letter persistence extend the current
-  JetStream ACK and retry the transaction with capped backoff. The SMTP send
-  itself is not repeated while waiting for delivery-state persistence.
+  JetStream ACK and retry the transaction with capped jittered backoff. The
+  SMTP send itself is not repeated while waiting for delivery-state persistence.
 - Gateway: routes public API requests to their owning services, protects
   Identity internal endpoints, streams request and response bodies, enforces
   configured proxy timeouts, and resolves Grafana identity and permissions from
