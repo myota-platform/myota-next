@@ -1,6 +1,8 @@
+import { createServer } from 'node:net';
 import type { JsMsg } from '@nats-io/jetstream';
 import { afterEach, vi } from 'vitest';
 import { EmailWorkerService } from './email-worker.service.js';
+import { createEmailSmtpTransport } from './email-smtp.js';
 import {
   parseEmailCommand,
   renderEmailMessage,
@@ -369,5 +371,80 @@ describe('email worker Python compatibility', () => {
     stubValidEmailEnvironment();
 
     expect(() => new EmailWorkerService(null)).not.toThrow();
+  });
+
+  it('starts STARTTLS before authentication and fails closed if TLS fails', async () => {
+    const commands: string[] = [];
+    const server = createServer((socket) => {
+      let buffered = '';
+      let upgradingToTls = false;
+      socket.write('220 smtp.example.test ESMTP\r\n');
+      socket.on('data', (chunk) => {
+        if (upgradingToTls) {
+          commands.push('TLS_HANDSHAKE');
+          socket.destroy();
+          return;
+        }
+        buffered += chunk.toString('ascii');
+        while (buffered.includes('\r\n')) {
+          const end = buffered.indexOf('\r\n');
+          const command = buffered.slice(0, end);
+          buffered = buffered.slice(end + 2);
+          commands.push(command.split(' ', 1)[0]!.toUpperCase());
+          if (command.startsWith('EHLO') || command.startsWith('HELO')) {
+            socket.write(
+              '250-smtp.example.test\r\n250-STARTTLS\r\n250 AUTH PLAIN LOGIN\r\n',
+            );
+          } else if (command.toUpperCase() === 'STARTTLS') {
+            upgradingToTls = true;
+            socket.write('220 Ready to start TLS\r\n');
+          } else if (command.toUpperCase() === 'QUIT') {
+            socket.end('221 Bye\r\n');
+          } else {
+            socket.write('250 OK\r\n');
+          }
+        }
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    const address = server.address();
+    if (!address || typeof address === 'string')
+      throw new Error('SMTP test server did not bind a TCP port');
+    const transport = createEmailSmtpTransport({
+      host: '127.0.0.1',
+      port: address.port,
+      username: 'myota',
+      password: 'smtp-test-password',
+      tlsMode: 'starttls',
+      timeoutMs: 2000,
+    });
+
+    try {
+      await expect(
+        transport.sendMail({
+          from: 'noreply@example.test',
+          to: 'alice@example.test',
+          subject: 'test',
+          text: 'test',
+        }),
+      ).rejects.toThrow();
+      expect(commands).toContain('EHLO');
+      expect(commands).toContain('STARTTLS');
+      expect(commands).toContain('TLS_HANDSHAKE');
+      expect(commands.indexOf('STARTTLS')).toBeLessThan(
+        commands.indexOf('TLS_HANDSHAKE'),
+      );
+      expect(commands.some((command) => command.startsWith('AUTH'))).toBe(
+        false,
+      );
+    } finally {
+      transport.close();
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
   });
 });

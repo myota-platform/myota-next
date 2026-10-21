@@ -8,7 +8,7 @@ import {
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import type { Consumer, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
-import { createTransport } from 'nodemailer';
+import type { createTransport } from 'nodemailer';
 import type { Pool, PoolClient } from 'pg';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { readFileSync } from 'node:fs';
@@ -16,6 +16,7 @@ import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import { EmailWorkerTelemetry } from './email-worker-telemetry.js';
+import { createEmailSmtpTransport, type SmtpConfig } from './email-smtp.js';
 import {
   parseEmailCommand,
   renderEmailMessage,
@@ -28,15 +29,6 @@ const SUBJECT = 'myota.work.email.send.v1';
 const ACK_WAIT_SECONDS = 90;
 const MAX_DELIVERIES = 8;
 const LEASE_SECONDS = 60;
-
-type SmtpConfig = {
-  host: string;
-  port: number;
-  username: string;
-  password: string;
-  tlsMode: 'starttls' | 'implicit';
-  timeoutMs: number;
-};
 
 type Sender = { address: string; displayName: string };
 
@@ -82,16 +74,7 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
       work.subject !== SUBJECT
     )
       throw new Error('Email work contract does not match the worker');
-    this.transporter = createTransport({
-      host: this.smtp.host,
-      port: this.smtp.port,
-      secure: this.smtp.tlsMode === 'implicit',
-      requireTLS: this.smtp.tlsMode === 'starttls',
-      auth: { user: this.smtp.username, pass: this.smtp.password },
-      connectionTimeout: this.smtp.timeoutMs,
-      greetingTimeout: this.smtp.timeoutMs,
-      socketTimeout: this.smtp.timeoutMs,
-    });
+    this.transporter = createEmailSmtpTransport(this.smtp);
     this.connection = await connect({
       servers: process.env.NATS_URL ?? 'nats://nats:4222',
       name: 'email-worker',
