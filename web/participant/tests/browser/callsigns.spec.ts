@@ -207,7 +207,9 @@ test('keeps a successful callsign save distinct from a failed profile refresh', 
     body: unknown;
     idempotencyKey: string;
   }> = [];
-  let mutationApplied = false;
+  let mutationSaved = false;
+  let successfulMutationResponse = false;
+  let failFirstSave = true;
   let failProfileRefresh = true;
 
   await page.route('**/v1/**', async (route) => {
@@ -231,7 +233,7 @@ test('keeps a successful callsign save distinct from a failed profile refresh', 
     }
 
     if (url.pathname === '/v1/identity/me' && method === 'GET') {
-      if (mutationApplied && failProfileRefresh) {
+      if (successfulMutationResponse && failProfileRefresh) {
         failProfileRefresh = false;
         await route.fulfill({
           status: 503,
@@ -251,13 +253,24 @@ test('keeps a successful callsign save distinct from a failed profile refresh', 
         body: request.postDataJSON(),
         idempotencyKey: request.headers()['idempotency-key'] || '',
       });
-      account.callsigns.push({
-        id: 'callsign-new',
-        value: 'DL2NEW',
-        status: 'UNVERIFIED',
-        evidenceIds: [],
-      });
-      mutationApplied = true;
+      if (!mutationSaved) {
+        account.callsigns.push({
+          id: 'callsign-new',
+          value: 'DL2NEW',
+          status: 'UNVERIFIED',
+          evidenceIds: [],
+        });
+        mutationSaved = true;
+      }
+      if (failFirstSave) {
+        failFirstSave = false;
+        await route.fulfill({
+          status: 503,
+          json: { message: 'Temporary callsign save response failure.' },
+        });
+        return;
+      }
+      successfulMutationResponse = true;
       await route.fulfill({ status: 201, json: account });
       return;
     }
@@ -276,14 +289,24 @@ test('keeps a successful callsign save distinct from a failed profile refresh', 
   await page.locator('#profile-callsign-value').fill('DL2NEW');
   await page.locator('#profile-callsign-add button[type="submit"]').click();
   await expect(page.locator('#profile-status')).toHaveText(
+    'Temporary callsign save response failure.',
+  );
+
+  await page.reload();
+  await expect(
+    page.locator('.profile-callsign-row').filter({ hasText: 'DL2NEW' }),
+  ).toBeVisible();
+  await page.locator('#profile-callsign-value').fill('DL2NEW');
+  await page.locator('#profile-callsign-add button[type="submit"]').click();
+  await expect(page.locator('#profile-status')).toHaveText(
     'Callsign added. Profile refresh failed: Profile refresh temporarily unavailable. Reload the profile to confirm the latest state.',
   );
-  expect(callsignRequests).toEqual([
-    {
-      body: { callsign: 'DL2NEW' },
-      idempotencyKey: expect.any(String),
-    },
-  ]);
+  expect(callsignRequests).toHaveLength(2);
+  expect(callsignRequests[0]).toEqual({
+    body: { callsign: 'DL2NEW' },
+    idempotencyKey: expect.any(String),
+  });
+  expect(callsignRequests[1]).toEqual(callsignRequests[0]);
   expect(callsignRequests[0].idempotencyKey).not.toBe('');
 
   await page.reload();
