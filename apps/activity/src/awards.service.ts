@@ -688,9 +688,10 @@ export class AwardsService {
         body[field] === ''
       )
         throw new BadRequestException(`${field} is required`);
+    const mediaType = pythonStringJsonField(body, 'mediaType');
     if (
       !['BACKGROUND', 'SIGNATURE'].includes(body.kind) ||
-      !String(body.mediaType).startsWith('image/')
+      !mediaType.startsWith('image/')
     )
       throw new BadRequestException(
         'asset kind must be BACKGROUND or SIGNATURE and mediaType must be an image',

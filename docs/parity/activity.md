@@ -91,7 +91,9 @@ defaults, so falsey values behave as absent.
 Registered award assets and bounded content storage are implemented. Award
 image uploads authorize the caller and validate the declared media type and
 20 MiB body limit before reading the body, matching the reference's request
-processing order.
+processing order. Media type validation converts non-string JSON values with
+Python `str()` semantics, so array values are not accidentally accepted by
+JavaScript's array-to-string conversion.
 asset dimensions use Python integer conversion, including float truncation,
 boolean inputs, and strict parsing of numeric strings. Paged asset, request,
 and issuance lists use the same timestamp ordering columns as the reference.
