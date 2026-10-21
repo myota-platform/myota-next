@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { vi } from 'vitest';
 import { sourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 import { decodeOsmPbfStream } from './geodata-osm-pbf.js';
 
@@ -57,5 +58,32 @@ describe('OSM PBF reference parity', () => {
         name: 'Protected Relation',
       },
     });
+  });
+
+  it('reports the Python-compatible OSM area vertex-limit error', async () => {
+    vi.resetModules();
+    vi.stubEnv('MYOTA_IMPORT_MAX_FEATURE_VERTICES', '4');
+    try {
+      const { decodeOsmPbfStream } = await import('./geodata-osm-pbf.js');
+      const source = await readFile(
+        new URL('./fixtures/python-osm-parity.osm.pbf', import.meta.url),
+      );
+      async function* chunks() {
+        yield source;
+      }
+      await expect(async () => {
+        for await (const _feature of decodeOsmPbfStream(
+          chunks(),
+          'python-osm-parity.osm.pbf',
+          20,
+          '',
+        )) {
+          // Consume records until the first oversized area.
+        }
+      }).rejects.toThrow('an OSM area exceeds the configured vertex limit (4)');
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
   });
 });

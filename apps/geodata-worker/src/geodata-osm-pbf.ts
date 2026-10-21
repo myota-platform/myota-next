@@ -177,10 +177,21 @@ async function* parseOsmiumFeatures(
       throw new Error(
         `an OSM feature exceeds the configured decoded-size limit (${MAX_IMPORT_FEATURE_BYTES} bytes)`,
       );
-    if (countVertices(geometry.coordinates) > MAX_IMPORT_FEATURE_VERTICES)
+    if (countVertices(geometry.coordinates) > MAX_IMPORT_FEATURE_VERTICES) {
+      if (isArea)
+        throw new Error(
+          'an OSM area exceeds the configured vertex limit ' +
+            `(${MAX_IMPORT_FEATURE_VERTICES})`,
+        );
+      if (isLine && osmType === 'way')
+        throw new Error(
+          'an OSM way exceeds the configured vertex limit ' +
+            `(${MAX_IMPORT_FEATURE_VERTICES})`,
+        );
       throw new Error(
         `an OSM feature exceeds the ${MAX_IMPORT_FEATURE_VERTICES} vertex limit`,
       );
+    }
     featureCount += 1;
     if (featureCount > featureLimit)
       throw new Error(`OSM PBF contains more than ${featureLimit} features`);

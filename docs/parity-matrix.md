@@ -421,7 +421,9 @@ multipolygon features using a temporary disk-backed node-location index.
 The checked-in OSM XML/PBF fixture covers tagged nodes, linear and closed ways,
 a multipolygon relation, filtering, output order, and source hashes against the
 Python importer. Large-file resource behavior and less common OSM geometries
-still need qualification.
+still need qualification. Area vertex counts use the reference error and limit;
+the CLI decoder checks after osmium emits a record, bounded by the decoded
+feature-size cap, while PyOsmium checks before GeoJSON materialization.
 Shapefile and PBF working directories use `MYOTA_UPLOAD_SPOOL_DIR` when set,
 and otherwise use the OS temporary directory. PBF source bytes stream to disk
 with checksum verification. API admission and
