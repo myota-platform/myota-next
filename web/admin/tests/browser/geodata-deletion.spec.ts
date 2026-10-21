@@ -179,7 +179,7 @@ test('confirms a prepared entity deletion and waits for cascade completion', asy
     .click();
   await page.getByRole('button', { name: 'Audit & deletion' }).click();
   await page.getByRole('button', { name: 'Permanently delete entity' }).click();
-  await expect(page.getByRole('alert')).toContainText(
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText(
     'Temporary preparation failure.',
   );
 
@@ -197,7 +197,7 @@ test('confirms a prepared entity deletion and waits for cascade completion', asy
   await dialog
     .getByRole('button', { name: 'Permanently delete entity' })
     .click();
-  await expect(page.getByRole('alert')).toContainText(
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText(
     'Temporary confirmation failure.',
   );
 

@@ -5,6 +5,8 @@ test('creates a programme with policy and shared category settings', async ({
 }) => {
   const loginPayloads: unknown[] = [];
   const createRequests: Array<{ body: any; idempotencyKey: string }> = [];
+  const editRequests: Array<{ body: any; idempotencyKey: string }> = [];
+  const archiveRequests: Array<{ body: any; idempotencyKey: string }> = [];
   const categories = [
     {
       code: 'SOTA',
@@ -15,6 +17,8 @@ test('creates a programme with policy and shared category settings', async ({
   ];
   let createdProgramme: any = null;
   let failFirstCreate = true;
+  let failFirstEdit = true;
+  let failFirstArchive = true;
 
   await page.route('**/v1/**', async (route) => {
     const request = route.request();
@@ -74,6 +78,45 @@ test('creates a programme with policy and shared category settings', async ({
         return;
       }
       await route.fulfill({ status: 201, json: createdProgramme });
+      return;
+    }
+
+    if (url.pathname === '/v1/programmes/summit-radio' && method === 'GET') {
+      await route.fulfill({ json: createdProgramme });
+      return;
+    }
+
+    if (url.pathname === '/v1/programmes/summit-radio' && method === 'PATCH') {
+      const requestRecord = {
+        body,
+        idempotencyKey: request.headers()['idempotency-key'] || '',
+      };
+      if (body?.status === 'ARCHIVED') {
+        archiveRequests.push(requestRecord);
+        createdProgramme = { ...createdProgramme, status: 'ARCHIVED' };
+        if (failFirstArchive) {
+          failFirstArchive = false;
+          await route.fulfill({
+            status: 503,
+            json: { message: 'temporary programme archive response failure' },
+          });
+          return;
+        }
+        await route.fulfill({ json: createdProgramme });
+        return;
+      }
+
+      editRequests.push(requestRecord);
+      createdProgramme = { ...createdProgramme, ...body };
+      if (failFirstEdit) {
+        failFirstEdit = false;
+        await route.fulfill({
+          status: 503,
+          json: { message: 'temporary programme edit response failure' },
+        });
+        return;
+      }
+      await route.fulfill({ json: createdProgramme });
       return;
     }
 
@@ -149,4 +192,61 @@ test('creates a programme with policy and shared category settings', async ({
       },
     ],
   });
+
+  await page
+    .getByLabel('Description')
+    .fill('Update the summit guidance and qualification examples.');
+  await page.getByRole('button', { name: 'Save programme' }).click();
+  await expect(
+    page.getByText('temporary programme edit response failure'),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(page).toHaveURL(/\/programmes$/);
+  await page.getByRole('button').filter({ hasText: 'summit-radio' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Edit Summit Radio' }),
+  ).toBeVisible();
+  await page
+    .getByLabel('Description')
+    .fill('Update the summit guidance and qualification examples.');
+  await page.getByRole('button', { name: 'Save programme' }).click();
+  await expect(page.getByText('Programme saved.')).toBeVisible();
+
+  expect(editRequests).toHaveLength(2);
+  expect(editRequests[0].idempotencyKey).not.toBe('');
+  expect(editRequests[1]).toEqual(editRequests[0]);
+
+  const confirmations: string[] = [];
+  page.on('dialog', async (dialog) => {
+    confirmations.push(dialog.message());
+    await dialog.accept();
+  });
+  await page.getByRole('button', { name: 'Archive programme' }).click();
+  await expect(
+    page.getByText('temporary programme archive response failure'),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(page).toHaveURL(/\/programmes$/);
+  await page.getByRole('button').filter({ hasText: 'Summit Radio' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Edit Summit Radio' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Archive programme' }).click();
+  await expect(page.getByText('Programme archived.')).toBeVisible();
+
+  await expect(archiveRequests).toHaveLength(2);
+  expect(archiveRequests[0]).toEqual({
+    body: { status: 'ARCHIVED' },
+    idempotencyKey: expect.any(String),
+  });
+  expect(archiveRequests[1]).toEqual(archiveRequests[0]);
+  expect(confirmations).toEqual([
+    'Archive summit-radio?',
+    'Archive summit-radio?',
+  ]);
+  await expect(
+    page.getByRole('button').filter({ hasText: 'ARCHIVED' }),
+  ).toBeVisible();
 });

@@ -91,7 +91,11 @@ account creation and both clients' callsign creation and primary-selection
 retries reuse their idempotency key for the same request across page reloads in
 the same tab. The Participant client reports profile-refresh failure separately
 from a successful mutation; Admin keeps the key until both the mutation and
-profile refresh succeed.
+profile refresh succeed. Programme browser coverage also verifies that
+uncertain edit and archive responses can be retried after reload with the same
+request body and idempotency key, after confirming the archive action. The
+programme editor reports archive failures and confirms success after the
+programme catalogue refreshes.
 The Admin import form also supports resumable KML and GPX file uploads up to
 1 GiB, alongside GeoJSON, OSM PBF, and Shapefile ZIP uploads. The API can
 enforce lower format-specific limits. The award catalogue follows all API

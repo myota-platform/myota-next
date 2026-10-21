@@ -303,7 +303,11 @@ async function save(): Promise<void> {
 }
 
 async function archive(): Promise<void> {
-  if (!selected.value || !window.confirm(`Archive ${selected.value.slug}?`))
+  if (
+    saving.value ||
+    !selected.value ||
+    !window.confirm(`Archive ${selected.value.slug}?`)
+  )
     return;
   const slug = selected.value.slug;
   const body = { status: 'ARCHIVED' };
@@ -314,14 +318,25 @@ async function archive(): Promise<void> {
     'PATCH',
     body,
   ]);
-  await myotaClient.patchProgramme(
-    slug,
-    body,
-    await pendingProgrammeMutationKeys.getOrCreate(fingerprint),
-  );
-  await pendingProgrammeMutationKeys.complete(fingerprint);
-  await load(true);
-  resetForm();
+  saving.value = true;
+  error.value = '';
+  message.value = '';
+  try {
+    await myotaClient.patchProgramme(
+      slug,
+      body,
+      await pendingProgrammeMutationKeys.getOrCreate(fingerprint),
+    );
+    await pendingProgrammeMutationKeys.complete(fingerprint);
+    await load(true);
+    resetForm();
+    message.value = 'Programme archived.';
+  } catch (cause) {
+    error.value =
+      cause instanceof Error ? cause.message : 'Unable to archive programme.';
+  } finally {
+    saving.value = false;
+  }
 }
 
 resetForm();
@@ -509,6 +524,7 @@ onMounted(() =>
             v-if="selected"
             class="danger-outline"
             type="button"
+            :disabled="saving || loadingEditor"
             @click="archive"
           >
             Archive programme
