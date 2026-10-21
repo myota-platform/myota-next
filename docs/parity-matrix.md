@@ -576,10 +576,12 @@ exercise Admin sign-in, identity session bootstrap, scope denial, Participant
 programme selection and public content, and its activation, QSO, and close
 workflow, profile details editing, image crop/upload, an eligible award
 request, and existing-candidate and map-picked point proposals with intercepted
-API responses. The remaining Admin workflows still lack browser-level
-compatibility coverage. The award catalogue follows all API pages. Remaining
-work includes accessibility/visual review and deployment integration. Its
-public map renders point, line, polygon, and multipart entity geometries.
+API responses. Admin browser checks also cover sign-in, session bootstrap,
+scope denial, and programme creation with policy and category settings. The
+remaining Admin workflows still lack browser-level compatibility coverage. The
+award catalogue follows all API pages. Remaining work includes
+accessibility/visual review and deployment integration. Its public map renders
+point, line, polygon, and multipart entity geometries.
 
 ## Workers and operations
 
