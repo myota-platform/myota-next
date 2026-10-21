@@ -86,4 +86,31 @@ describe('OSM PBF reference parity', () => {
       vi.resetModules();
     }
   });
+
+  it('reports the Python-compatible OSM way vertex-limit error', async () => {
+    vi.resetModules();
+    vi.stubEnv('MYOTA_IMPORT_MAX_FEATURE_VERTICES', '2');
+    try {
+      const { decodeOsmPbfStream } = await import('./geodata-osm-pbf.js');
+      const source = await readFile(
+        new URL('./fixtures/python-osm-parity.osm.pbf', import.meta.url),
+      );
+      async function* chunks() {
+        yield source;
+      }
+      await expect(async () => {
+        for await (const _feature of decodeOsmPbfStream(
+          chunks(),
+          'python-osm-parity.osm.pbf',
+          20,
+          '',
+        )) {
+          // Consume records until the first oversized way.
+        }
+      }).rejects.toThrow('an OSM way exceeds the configured vertex limit (2)');
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
 });
