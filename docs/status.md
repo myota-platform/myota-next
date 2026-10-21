@@ -38,8 +38,10 @@ production readiness.
 - **Web applications:** CI exercises Admin sign-in/dashboard, Identity account
   creation and callsign management through export and anonymization, Activity
   correction review, and policy publication against running NestJS services
-  through the Gateway. Participant public catalogue loading also uses the live
-  services. Most other browser workflows still use intercepted API responses;
+  through the Gateway. Participant owner callsign creation, evidence
+  submission, primary selection, and retirement also run against live Identity
+  APIs. Participant public catalogue loading uses the live services as well.
+  Most other browser workflows still use intercepted API responses;
   broader payload coverage, accessibility, responsive behavior, and failure
   states remain to be qualified.
 - **Production operations:** qualify persistent database operations, NATS,

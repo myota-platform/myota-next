@@ -319,6 +319,162 @@ test('creates a participant account in Admin through the live Identity API', asy
   expect(failedResponses).toEqual([]);
 });
 
+test('manages participant-owned callsigns through the live Identity API', async ({
+  page,
+  request,
+}) => {
+  test.skip(!hasApiDatabases, 'requires the CI PostgreSQL databases');
+
+  const adminEmail =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL ?? 'browser-e2e-admin@example.test';
+  const adminPassword =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD ?? 'browser-e2e-password-7!Q';
+  const adminLogin = await request.post(
+    'http://127.0.0.1:8080/v1/identity/auth/login',
+    { data: { email: adminEmail, password: adminPassword } },
+  );
+  expect(adminLogin.ok()).toBeTruthy();
+  const { accessToken: adminAccessToken } = await adminLogin.json();
+  const accountEmail = `browser-callsign-${randomUUID()}@example.test`;
+  const accountResponse = await request.post(
+    'http://127.0.0.1:8080/v1/identity/accounts',
+    {
+      headers: {
+        Authorization: `Bearer ${adminAccessToken}`,
+        'Idempotency-Key': randomUUID(),
+      },
+      data: {
+        displayName: `Browser callsign owner ${randomUUID()}`,
+        email: accountEmail,
+        participationType: 'OPERATOR',
+      },
+    },
+  );
+  expect(accountResponse.status()).toBe(201);
+  const account = await accountResponse.json();
+  const accountId = account.id as string;
+  const activated = await request.patch(
+    `http://127.0.0.1:8080/v1/identity/accounts/${accountId}`,
+    {
+      headers: { Authorization: `Bearer ${adminAccessToken}` },
+      data: { status: 'ACTIVE' },
+    },
+  );
+  expect(activated.status()).toBe(200);
+
+  const recovery = await request.post(
+    'http://127.0.0.1:8080/v1/identity/auth/recovery/request',
+    { data: { email: accountEmail } },
+  );
+  expect(recovery.ok()).toBeTruthy();
+  const recoveryToken = (await recovery.json()).devResetToken as string;
+  const password = `Browser-${randomUUID()}-Password!`;
+  const reset = await request.post(
+    'http://127.0.0.1:8080/v1/identity/auth/recovery/reset',
+    { data: { token: recoveryToken, newPassword: password } },
+  );
+  expect(reset.status()).toBe(200);
+  const participantLogin = await request.post(
+    'http://127.0.0.1:8080/v1/identity/auth/login',
+    { data: { email: accountEmail, password } },
+  );
+  expect(participantLogin.status()).toBe(200);
+  const { accessToken } = await participantLogin.json();
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const oldValue = `DL${randomUUID().replaceAll('-', '').slice(0, 7).toUpperCase()}`;
+  const seededCallsign = await request.post(
+    `http://127.0.0.1:8080/v1/identity/accounts/${accountId}/callsigns`,
+    {
+      headers: { ...headers, 'Idempotency-Key': randomUUID() },
+      data: { callsign: oldValue },
+    },
+  );
+  expect(seededCallsign.status()).toBe(201);
+  const oldCallsignId = (await seededCallsign.json()).callsign.id as string;
+  const newValue = `DL${randomUUID().replaceAll('-', '').slice(0, 7).toUpperCase()}`;
+
+  const failedResponses: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('/v1/') && response.status() >= 400)
+      failedResponses.push(`${response.status()} ${response.url()}`);
+  });
+  page.on('dialog', (dialog) => dialog.accept());
+  await page.goto('http://127.0.0.1:8091');
+  await page.locator('#award-email').fill(accountEmail);
+  await page.locator('#award-password').fill(password);
+  await page.locator('#award-login button[type="submit"]').click();
+  await expect(page.locator('#profile-callsigns')).toBeVisible();
+
+  await page.locator('#profile-callsign-value').fill(newValue);
+  await page.locator('#profile-callsign-add button[type="submit"]').click();
+  await expect(page.locator('#profile-status')).toHaveText('Callsign added.');
+  const accountAfterAdd = await request.get(
+    'http://127.0.0.1:8080/v1/identity/me',
+    { headers },
+  );
+  expect(accountAfterAdd.status()).toBe(200);
+  const newCallsignId = (
+    (await accountAfterAdd.json()).callsigns as Array<{
+      id: string;
+      value: string;
+    }>
+  ).find((callsign) => callsign.value === newValue)?.id;
+  expect(newCallsignId).toBeTruthy();
+
+  await page.locator('#profile-evidence-callsign').selectOption(newCallsignId!);
+  await page.locator('#profile-evidence-type').fill('LICENSE');
+  await page.locator('#profile-evidence-source').fill('regulator record');
+  await page.locator('#profile-evidence-checksum').fill('sha256:browser-live');
+  await page
+    .locator('#profile-evidence-metadata')
+    .fill('{"reference":"browser-live"}');
+  await page
+    .locator('#profile-callsign-evidence button[type="submit"]')
+    .click();
+  await expect(page.locator('#profile-status')).toHaveText(
+    'Callsign evidence submitted.',
+  );
+
+  const newCallsign = page
+    .locator('.profile-callsign-row')
+    .filter({ hasText: newValue });
+  const oldCallsign = page
+    .locator('.profile-callsign-row')
+    .filter({ hasText: oldValue });
+  await newCallsign.getByRole('button', { name: 'Make primary' }).click();
+  await expect(newCallsign).toContainText('Primary');
+  await oldCallsign.getByRole('button', { name: 'Make primary' }).click();
+  await expect(oldCallsign).toContainText('Primary');
+  await oldCallsign.getByRole('button', { name: 'Retire' }).click();
+  await page
+    .locator('#profile-retire-replacement')
+    .selectOption(newCallsignId!);
+  await page.locator('#profile-callsign-retire button[type="submit"]').click();
+  await expect(page.locator('#profile-status')).toHaveText('Callsign retired.');
+  await expect(oldCallsign).toContainText('RETIRED');
+  await expect(newCallsign).toContainText('Primary');
+
+  const finalAccount = await request.get(
+    'http://127.0.0.1:8080/v1/identity/me',
+    { headers },
+  );
+  expect(finalAccount.status()).toBe(200);
+  expect(await finalAccount.json()).toMatchObject({
+    id: accountId,
+    primaryCallsignId: newCallsignId,
+    callsigns: [
+      { id: oldCallsignId, value: oldValue, status: 'RETIRED' },
+      {
+        id: newCallsignId,
+        value: newValue,
+        status: 'UNVERIFIED',
+        evidenceIds: expect.arrayContaining([expect.any(String)]),
+      },
+    ],
+  });
+  expect(failedResponses).toEqual([]);
+});
+
 test('reviews a live QSO correction in Admin and verifies the updated QSO', async ({
   page,
   request,
