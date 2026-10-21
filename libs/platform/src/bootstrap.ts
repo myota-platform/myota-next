@@ -195,7 +195,8 @@ export async function bootstrapHttpService(
             '/v1/identity/admin/roles',
             '/v1/identity/roles',
           ].includes(path) ||
-            /^\/v1\/programmes\/[^/]+\/entity-types$/.test(path))) ||
+            /^\/v1\/programmes\/[^/]+\/entity-types$/.test(path) ||
+            /^\/v1\/activations\/[^/]+\/qsos$/.test(path))) ||
         (request.method === 'PATCH' &&
           /^\/v1\/geodata\/entities\/[^/]+$/.test(path)) ||
         (request.method === 'POST' &&

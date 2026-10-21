@@ -5,6 +5,7 @@ import { pythonDictionary } from '@app/platform/python-dictionary.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   collapsePythonWhitespace,
+  pythonStringJsonField,
   trimPythonWhitespace,
 } from '@app/platform/python-strings.js';
 
@@ -439,9 +440,9 @@ export function normalizeQso(
     timestamp.replace(/Z$/, '+00:00'),
     band ?? '',
     mode ?? '',
-    pythonTruthy(data.hunterId) ? pythonScalarString(data.hunterId) : '',
+    pythonTruthy(data.hunterId) ? pythonStringJsonField(data, 'hunterId') : '',
     pythonTruthy(data.workedEntityId)
-      ? pythonScalarString(data.workedEntityId)
+      ? pythonStringJsonField(data, 'workedEntityId')
       : '',
   ].join('|');
   const deduplicationKey = createHash('sha256').update(canonical).digest('hex');
@@ -456,7 +457,11 @@ export function normalizeQso(
 }
 
 function normalizeQsoFields(data: JsonRecord): JsonRecord {
-  const workedCallsign = normalizeCallsign(data.workedCallsign);
+  const workedCallsign = normalizeCallsign(
+    Object.hasOwn(data, 'workedCallsign')
+      ? pythonStringJsonField(data, 'workedCallsign')
+      : data.workedCallsign,
+  );
   const timestamp = normalizeTimestamp(
     pythonTruthy(data.timestamp) ? data.timestamp : data.timeOn,
   );
@@ -508,9 +513,9 @@ function normalizeQsoFields(data: JsonRecord): JsonRecord {
   if (data.mode != null && data.mode !== '' && !mode)
     throw new BadRequestException(`unsupported mode: ${data.mode}`);
   const workedStationKey = `${workedCallsign}|${trimPythonWhitespace(
-    String(
-      pythonTruthy(data.workedLocator) ? data.workedLocator : '',
-    ).toUpperCase(),
+    pythonTruthy(data.workedLocator)
+      ? pythonStringJsonField(data, 'workedLocator').toUpperCase()
+      : '',
   )}`;
   return {
     ...data,
