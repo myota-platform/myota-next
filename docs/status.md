@@ -25,7 +25,8 @@ this page summarizes the current state and remaining release gates.
   creation, policy draft review/publication, version-checked Geodata review,
   and Geodata entity metadata conflict recovery by explicitly reloading the
   latest server version; Activity activation/QSO details, statistics rebuild
-  submission, and job status refresh;
+  submission, and job status refresh; award draft creation, review, and
+  publication;
   Participant catalogue browsing, activation and QSO lifecycle, profile details
   and image editing, eligible award requests, and candidate and map-picked point
   proposals.
