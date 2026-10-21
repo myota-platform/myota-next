@@ -140,7 +140,6 @@ export class ProgrammesService {
     body: UpdateProgrammeDto,
     idempotencyKey?: string,
   ): Promise<Record<string, unknown>> {
-    this.authorizeAdmin(authorization, slug);
     const status = body.status;
     if (
       status !== undefined &&
@@ -150,6 +149,7 @@ export class ProgrammesService {
     ) {
       throw new BadRequestException('status must be ACTIVE or ARCHIVED');
     }
+    this.authorizeAdmin(authorization, slug);
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
       if (!programme) throw new NotFoundException('programme not found');

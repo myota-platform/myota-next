@@ -236,38 +236,67 @@ export class PatchProgrammePolicyDraftDto {
 }
 
 export class UpdateProgrammeDto {
-  @ValidateIf((object) => object.status !== 'ARCHIVED')
+  @ValidateIf(
+    (object) =>
+      object.status === undefined ||
+      object.status === null ||
+      object.status === 'ACTIVE',
+  )
   @IsOptional()
   @IsString()
   name?: string;
 
-  @ValidateIf((object) => object.status !== 'ARCHIVED')
+  @ValidateIf(
+    (object) =>
+      object.status === undefined ||
+      object.status === null ||
+      object.status === 'ACTIVE',
+  )
   @IsOptional()
   @IsString()
   description?: string;
 
-  @ValidateIf((object) => object.status !== 'ARCHIVED')
+  @ValidateIf(
+    (object) =>
+      object.status === undefined ||
+      object.status === null ||
+      object.status === 'ACTIVE',
+  )
   @IsOptional()
   @IsArray()
   @IsObject({ each: true })
   entityTypes?: Record<string, unknown>[];
 
-  @ValidateIf((object) => object.status !== 'ARCHIVED')
+  @ValidateIf(
+    (object) =>
+      object.status === undefined ||
+      object.status === null ||
+      object.status === 'ACTIVE',
+  )
   @IsOptional()
   @IsObject()
   rules?: Record<string, unknown>;
 
-  @ValidateIf((object) => object.status !== 'ARCHIVED')
+  @ValidateIf(
+    (object) =>
+      object.status === undefined ||
+      object.status === null ||
+      object.status === 'ACTIVE',
+  )
   @IsOptional()
   @IsObject()
   theme?: Record<string, unknown>;
 
-  @ValidateIf((object) => object.status !== 'ARCHIVED')
+  @ValidateIf(
+    (object) =>
+      object.status === undefined ||
+      object.status === null ||
+      object.status === 'ACTIVE',
+  )
   @IsOptional()
   @IsObject()
   oidc?: Record<string, unknown> | null;
 
-  @IsOptional()
-  @IsString()
-  status?: string | null;
+  @Allow()
+  status?: unknown;
 }
