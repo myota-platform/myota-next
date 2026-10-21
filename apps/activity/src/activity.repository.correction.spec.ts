@@ -16,6 +16,11 @@ describe('ActivityRepository QSO correction review', () => {
         occurredAt: '2026-10-21T10:20:30Z',
         ignoredField: 'not writable',
       },
+      proposed_values_text: JSON.stringify({
+        workedCallsign: 'F4XYZ',
+        occurredAt: '2026-10-21T10:20:30Z',
+        ignoredField: 'not writable',
+      }),
       status: 'PENDING',
       reviewed_by: null,
       review_note: null,
