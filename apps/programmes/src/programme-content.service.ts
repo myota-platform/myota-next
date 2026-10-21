@@ -318,7 +318,11 @@ export class ProgrammeContentService {
   }
 
   private requireContent(key: string, locale: string, value: unknown) {
-    if (!key || !locale || !isTruthyJsonValue(value)) {
+    if (
+      !pythonTruthy(key) ||
+      !pythonTruthy(locale) ||
+      !isTruthyJsonValue(value)
+    ) {
       throw new BadRequestException('key, locale, and value are required');
     }
   }

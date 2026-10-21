@@ -71,10 +71,10 @@ export class ProgrammesService {
     idempotencyKey?: string,
   ): Promise<Record<string, unknown>> {
     const missing = [
-      ...(!body.slug ? ['slug'] : []),
-      ...(!body.name ? ['name'] : []),
-      ...(body.entityTypes?.length ? [] : ['entityTypes']),
-      ...(body.rules && Object.keys(body.rules).length > 0 ? [] : ['rules']),
+      ...(!pythonTruthy(body.slug) ? ['slug'] : []),
+      ...(!pythonTruthy(body.name) ? ['name'] : []),
+      ...(!pythonTruthy(body.entityTypes) ? ['entityTypes'] : []),
+      ...(!pythonTruthy(body.rules) ? ['rules'] : []),
     ];
     if (missing.length) {
       throw new BadRequestException(

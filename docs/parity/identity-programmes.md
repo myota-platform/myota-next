@@ -223,7 +223,8 @@ Programme creation retains its required-field checks before admin authorization;
 Programme updates, entity-type writes, and content workflows perform their
 request checks after the same authorization and record-resolution steps as the
 reference handlers. Their services receive parsed request objects without
-global DTO validation preempting that order.
+global DTO validation preempting that order. Required programme and content
+fields use Python truthiness, so empty arrays and objects remain falsey.
 Programme list pages and shared-category `assignedProgrammes` arrays preserve
 the reference's insertion order through a Core-owned record sequence; existing
 rows are backfilled by creation timestamp and slug. Shared entity-type catalogue
