@@ -14,6 +14,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -523,10 +524,9 @@ export class GeodataUploadService {
         } as RequestInit & { duplex: 'half' });
         if (!response.ok)
           throw new BadRequestException('malware scanner rejected the upload');
-      } catch (error) {
+      } catch {
         stream.destroy();
-        if (error instanceof BadRequestException) throw error;
-        throw new ServiceUnavailableException(
+        throw new InternalServerErrorException(
           'malware scanner is unavailable; import was not queued',
         );
       }
