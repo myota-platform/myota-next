@@ -12,7 +12,10 @@ import {
   usesSharedJsonParser,
 } from './http-problem.js';
 import { ObserveInstrument } from './observe.js';
-import { containsBigInt, stringifyJsonWithBigInts } from './json-bigint.js';
+import {
+  containsBigIntOrFloatMetadata,
+  stringifyJsonWithBigInts,
+} from './json-bigint.js';
 import {
   parseJsonWithExactIntegers,
   parseJsonWithFloatMetadata,
@@ -262,7 +265,7 @@ export async function bootstrapHttpService(
           )
             response.setHeader('ETag', `"${version}"`);
         }
-        if (!preserveBigIntJson || !containsBigInt(body))
+        if (!preserveBigIntJson || !containsBigIntOrFloatMetadata(body))
           return originalJson(body);
         const serialized = stringifyJsonWithBigInts(body);
         response.type('application/json');

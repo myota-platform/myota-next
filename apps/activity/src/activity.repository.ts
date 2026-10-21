@@ -12,6 +12,7 @@ import {
   stringifyJsonWithBigInts,
   stringifyJsonWithMetadata,
 } from '@app/platform/json-bigint.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import {
   nextPageIfMore,
   pageOffset,
@@ -833,7 +834,7 @@ export class ActivityRepository {
       const result = await client.query(
         `INSERT INTO activity_job(id,kind,payload,idempotency_key)
          VALUES ($1,$2,$3::jsonb,$4)
-         RETURNING id,kind,payload,status,attempts,available_at,started_at,completed_at,last_error,created_at,
+         RETURNING id,kind,payload::text AS payload_text,status,attempts,available_at,started_at,completed_at,last_error,created_at,
                    ${jobTimestampProjection}`,
         [id, kind, stringifyJsonWithMetadata(payload), key ?? null],
       );
@@ -851,7 +852,7 @@ export class ActivityRepository {
     const client = await this.connect();
     try {
       const result = await client.query(
-        `SELECT id,kind,payload,status,attempts,available_at,started_at,completed_at,last_error,created_at,
+        `SELECT id,kind,payload::text AS payload_text,status,attempts,available_at,started_at,completed_at,last_error,created_at,
          ${jobTimestampProjection},
          GREATEST(0,EXTRACT(EPOCH FROM (available_at-now()))) AS retry_after_seconds,
          GREATEST(0,EXTRACT(EPOCH FROM (lease_expires_at-now()))) AS lease_remaining_seconds
@@ -1225,7 +1226,7 @@ function jobRecord(row: any) {
   return {
     id: String(row.id),
     kind: row.kind,
-    payload: row.payload,
+    payload: parseJobPayload(row.payload_text),
     status: row.status,
     attempts: row.attempts,
     availableAt: timestamp(row.available_at_iso ?? row.available_at),
@@ -1234,6 +1235,13 @@ function jobRecord(row: any) {
     lastError: row.last_error,
     createdAt: timestamp(row.created_at_iso ?? row.created_at),
   };
+}
+
+function parseJobPayload(value: unknown): JsonRecord {
+  const payload = parseJsonWithExactIntegers(String(value));
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+    throw new Error('Activity job payload must be an object');
+  return payload as JsonRecord;
 }
 
 function correctionRecord(row: any) {

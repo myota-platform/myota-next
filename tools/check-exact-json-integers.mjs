@@ -218,8 +218,8 @@ if (
   errors.push('OSM PBF decoding must not impose an aggregate output-size cap');
 requirePattern(
   'libs/platform/src/bootstrap.ts',
-  /containsBigInt\(body\)[\s\S]*?stringifyJsonWithBigInts\(body\)/,
-  'shared HTTP bootstrap must serialize BigInt responses as JSON integers',
+  /containsBigIntOrFloatMetadata\(body\)[\s\S]*?stringifyJsonWithBigInts\(body\)/,
+  'shared HTTP bootstrap must preserve exact number response tokens',
 );
 
 function visitTypeScript(directory) {

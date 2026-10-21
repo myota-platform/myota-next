@@ -1,7 +1,7 @@
-import { isJsonFloatingField } from './json-exact.js';
+import { hasJsonFloatMetadata, isJsonFloatingField } from './json-exact.js';
 import { pythonFloatString } from './python-number.js';
 
-export function containsBigInt(value: unknown): boolean {
+export function containsBigIntOrFloatMetadata(value: unknown): boolean {
   const visited = new Set<object>();
   const pending = [value];
   while (pending.length) {
@@ -10,6 +10,7 @@ export function containsBigInt(value: unknown): boolean {
     if (current === null || typeof current !== 'object' || visited.has(current))
       continue;
     visited.add(current);
+    if (hasJsonFloatMetadata(current)) return true;
     pending.push(...Object.values(current));
   }
   return false;

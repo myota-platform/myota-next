@@ -6,9 +6,14 @@ export class JsonNumber {
 }
 
 const floatingFields = new WeakMap<object, ReadonlySet<string>>();
+const valuesWithFloatingMetadata = new WeakSet<object>();
 
 export function isJsonFloatingField(value: object, field: string): boolean {
   return floatingFields.get(value)?.has(field) ?? false;
+}
+
+export function hasJsonFloatMetadata(value: object): boolean {
+  return valuesWithFloatingMetadata.has(value);
 }
 
 /** Parse JSON while keeping integer tokens exact outside JavaScript's safe range. */
@@ -36,22 +41,44 @@ function parseJson(rawBody: string, preserveLargeIntegers: boolean): unknown {
     }
     if (Array.isArray(value)) {
       let floatKeys: Set<string> | undefined;
+      let hasFloatingMetadata = false;
       const items = value.map((item, index) => {
-        if (item instanceof JsonNumber && item.floating)
+        if (item instanceof JsonNumber && item.floating) {
           (floatKeys ??= new Set()).add(String(index));
-        return materialize(item);
+          hasFloatingMetadata = true;
+        }
+        const result = materialize(item);
+        if (
+          result !== null &&
+          typeof result === 'object' &&
+          valuesWithFloatingMetadata.has(result)
+        )
+          hasFloatingMetadata = true;
+        return result;
       });
       if (floatKeys) floatingFields.set(items, floatKeys);
+      if (hasFloatingMetadata) valuesWithFloatingMetadata.add(items);
       return items;
     }
     if (isRecord(value)) {
       let floatKeys: Set<string> | undefined;
+      let hasFloatingMetadata = false;
       for (const [key, item] of Object.entries(value)) {
-        if (item instanceof JsonNumber && item.floating)
+        if (item instanceof JsonNumber && item.floating) {
           (floatKeys ??= new Set()).add(key);
-        value[key] = materialize(item);
+          hasFloatingMetadata = true;
+        }
+        const result = materialize(item);
+        if (
+          result !== null &&
+          typeof result === 'object' &&
+          valuesWithFloatingMetadata.has(result)
+        )
+          hasFloatingMetadata = true;
+        value[key] = result;
       }
       if (floatKeys) floatingFields.set(value, floatKeys);
+      if (hasFloatingMetadata) valuesWithFloatingMetadata.add(value);
     }
     return value;
   };
