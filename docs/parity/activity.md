@@ -107,6 +107,8 @@ field is omitted, and award-definition optional fields retain explicit null
 values where the reference uses dictionary defaults only for omitted fields.
 Award evaluation stringifies an explicit null metric as Python `None` instead
 of replacing it with the default metric.
+Award request IDs, subject IDs, and signature asset IDs are passed to the
+reference lookups without JavaScript string coercion.
 ADIF uploads use the reference's shared `MYOTA_UPLOAD_MAX_BYTES` cap (1 GiB by
 default), then pass authorization, malware checks, and object storage before
 durable queueing; the Activity worker enforces the same cap, parses records,

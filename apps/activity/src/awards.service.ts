@@ -363,15 +363,15 @@ export class AwardsService {
       this.authorize(claims.scp, ['identity.me']);
     else this.authorize(claims.scp, ['awards.request', 'awards.admin']);
 
-    const award = await this.getAwardDefinitionOrThrow(String(body.awardId));
+    const award = await this.getAwardDefinitionOrThrow(body.awardId);
     if (award.status !== 'PUBLISHED')
       throw new BadRequestException('only published awards can be requested');
     const facts = await this.repository.subjectFacts(
       String(award.programmeSlug),
-      String(body.subjectId),
+      body.subjectId,
       String(award.category ?? 'HUNTER'),
     );
-    const evaluation = evaluateAward(award, String(body.subjectId), facts);
+    const evaluation = evaluateAward(award, body.subjectId, facts);
     const level = evaluation.levels.find(
       (item: JsonRecord) => item.id === body.levelId,
     );
@@ -440,7 +440,7 @@ export class AwardsService {
       throw new BadRequestException('only requested awards can be issued');
     const award = await this.getAwardDefinitionOrThrow(String(request.awardId));
     const signature = await this.awardsRepository.getAwardAsset(
-      String(body.signatureAssetId),
+      body.signatureAssetId,
     );
     if (signature.kind !== 'SIGNATURE')
       throw new BadRequestException('a registered signature asset is required');
@@ -636,7 +636,7 @@ export class AwardsService {
       let signature: Buffer | undefined;
       if (pythonTruthy(body.signatureAssetId)) {
         const asset = await this.awardsRepository.getAwardAsset(
-          String(body.signatureAssetId),
+          body.signatureAssetId,
         );
         if (asset.kind !== 'SIGNATURE')
           throw new BadRequestException('choose a registered signature');
