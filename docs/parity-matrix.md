@@ -826,8 +826,10 @@ geometries.
   CI runs the same fault-injection check against Core, Activity, and Geodata
   separately: a transient publish failure leaves the owner-scoped outbox row
   retryable, then JetStream accepts the retry and the row is marked published.
-  Actual NATS outages, attempt exhaustion, and audited dead-letter redrive
-  against the broker remain unqualified.
+  It also exhausts retries for an owner-scoped event, invokes the audited
+  redrive CLI, verifies the recorded prior attempts and error, and confirms
+  successful republishing resolves the dead letter. Actual NATS outages remain
+  unqualified.
 - Runtime: preserve migrations, health/readiness, metrics, logs, traces,
   backups, restore paths, NATS topology, object storage buckets, and separate
   service/worker deployment units. Activity database pools honor the

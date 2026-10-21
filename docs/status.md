@@ -53,9 +53,9 @@ behavioral parity or production readiness.
   redrive. It also verifies Activity statistics-job lease takeover after a
   worker process kill and Geodata import preprocessing replay after committed
   staging. A fault-injection check verifies outbox retry and successful
-  publication for Core, Activity, and Geodata events against their separate
-  databases; other worker and object-store recovery paths remain to be
-  qualified.
+  publication, attempt exhaustion, and audited redrive for Core, Activity, and
+  Geodata events against their separate databases; other worker and
+  object-store recovery paths remain to be qualified.
 - Complete the semantic review and rehearsal for cross-version database
   transfer, backup, restore, and rollback. CI exercises the transfer commands
   end to end on disposable databases with Identity, Programme, Activity,
