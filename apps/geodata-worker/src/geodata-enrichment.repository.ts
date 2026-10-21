@@ -8,6 +8,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parsePythonFloatText } from '@app/platform/python-numeric.js';
 
 type EnrichmentJob = {
   id: string;
@@ -56,6 +57,9 @@ const codeParent: Record<string, string[]> = {
 };
 const reverseGeocodeCache = new Map<string, GeocodeResult>();
 const reverseGeocodeCacheLimit = 2048;
+const reverseGeocodeTimeoutSeconds = parsePythonFloatText(
+  process.env.BIGDATACLOUD_TIMEOUT_SECONDS ?? '10',
+);
 
 @Injectable()
 export class GeodataEnrichmentRepository {
@@ -421,24 +425,24 @@ async function reverseGeocode(
       geocodedAt: new Date().toISOString(),
       location: {},
     };
-  const endpoint =
-    process.env.BIGDATACLOUD_REVERSE_GEOCODE_URL ??
-    'https://api-bdc.net/data/reverse-geocode';
-  const url = new URL(endpoint);
-  url.searchParams.set('latitude', String(latitude));
-  url.searchParams.set('longitude', String(longitude));
-  url.searchParams.set('localityLanguage', language);
-  url.searchParams.set('key', key);
   let result: GeocodeResult;
+  let timeout: ReturnType<typeof reverseGeocodeTimeout> | undefined;
   try {
+    const endpoint =
+      process.env.BIGDATACLOUD_REVERSE_GEOCODE_URL ??
+      'https://api-bdc.net/data/reverse-geocode';
+    const url = new URL(endpoint);
+    url.searchParams.set('latitude', String(latitude));
+    url.searchParams.set('longitude', String(longitude));
+    url.searchParams.set('localityLanguage', language);
+    url.searchParams.set('key', key);
+    timeout = reverseGeocodeTimeout(reverseGeocodeTimeoutSeconds);
     const response = await fetch(url, {
       headers: {
         accept: 'application/json',
         'user-agent': 'MyOTA-geodata-service/1.0',
       },
-      signal: AbortSignal.timeout(
-        boundedTimeout(process.env.BIGDATACLOUD_TIMEOUT_SECONDS),
-      ),
+      signal: timeout.signal,
     });
     if (!response.ok)
       throw new Error(`reverse geocoder returned HTTP ${response.status}`);
@@ -525,6 +529,8 @@ async function reverseGeocode(
       location: {},
       error: error instanceof Error ? error.message : String(error),
     };
+  } finally {
+    timeout?.clear();
   }
   reverseGeocodeCache.set(cacheKey, result);
   if (reverseGeocodeCache.size > reverseGeocodeCacheLimit) {
@@ -544,11 +550,33 @@ function record(value: unknown): Record<string, any> {
     ? (value as Record<string, any>)
     : {};
 }
-function boundedTimeout(value: string | undefined) {
-  const seconds = Number(value ?? 10);
-  return Number.isFinite(seconds) && seconds > 0 && seconds <= 60
-    ? Math.max(1, Math.ceil(seconds * 1000))
-    : 10000;
+function reverseGeocodeTimeout(seconds: number) {
+  const milliseconds = Math.ceil(seconds * 1000);
+  if (!Number.isSafeInteger(milliseconds) || milliseconds <= 0)
+    throw new RangeError('BIGDATACLOUD_TIMEOUT_SECONDS is out of range');
+  const controller = new AbortController();
+  let remaining = milliseconds;
+  let timer: ReturnType<typeof setTimeout>;
+  const schedule = () => {
+    const delay = Math.min(remaining, 2_147_483_647);
+    remaining -= delay;
+    timer = setTimeout(() => {
+      if (remaining === 0)
+        controller.abort(
+          new DOMException(
+            'The operation was aborted due to timeout',
+            'TimeoutError',
+          ),
+        );
+      else schedule();
+    }, delay);
+    timer.unref();
+  };
+  schedule();
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(timer),
+  };
 }
 
 function reverseGeocodingProvenance(result: GeocodeResult) {

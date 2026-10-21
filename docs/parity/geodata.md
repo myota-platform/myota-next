@@ -61,9 +61,14 @@ returned a payload, matching the Python result shape for success and failure.
 The city field falls back to locality using Python truthiness, and administrative
 name/code selection follows the same first-truthy-value rule.
 `geocodedAt` is assigned after the provider response is parsed, matching the
-Python lookup timestamp. Positive fractional `BIGDATACLOUD_TIMEOUT_SECONDS`
-values up to 60 seconds are preserved to millisecond precision, allowing
-subsecond timeouts.
+Python lookup timestamp. `BIGDATACLOUD_TIMEOUT_SECONDS` uses Python-compatible
+float parsing and preserves positive fractional values to millisecond
+resolution. Timeouts above Node's per-timer limit use chained timers, so the
+worker does not silently replace long configured timeouts with 10 seconds.
+Malformed timeout text follows the reference's startup-time float conversion;
+non-positive or non-finite timeout values fail enrichment. Malformed provider
+URLs follow the same failed-enrichment result path as provider request
+failures.
 The worker caches successful and failed provider results by rounded coordinates
 and locality language, with a 2,048-entry per-process LRU limit.
 Adapter fixtures cover unsupported format rejection, OpenStreetMap tag
