@@ -124,6 +124,9 @@ describeWithDatabases(
             operatorId: login.body.account.id,
             operatorCallsign: 'EA0E2E',
             startedAt,
+            programmeRules: {
+              minimumQsos: { activation: 1, hunter: 1 },
+            },
           })
           .expect(201);
         expect(activation.body.status).toBe('OPEN');
