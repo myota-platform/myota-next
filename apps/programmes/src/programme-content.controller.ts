@@ -57,13 +57,13 @@ export class ProgrammeContentController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
-    @Body() body: SaveProgrammeContentDto,
+    @Body() body: Record<string, unknown>,
     @Res({ passthrough: true }) response: Response,
   ) {
     const { statusCode, content } = await this.content.save(
       authorization,
       slug,
-      body,
+      body as unknown as SaveProgrammeContentDto,
       idempotencyKey,
     );
     response.status(statusCode);
@@ -88,13 +88,13 @@ export class ProgrammeContentController {
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
     @Param('contentId') contentId: string,
-    @Body() body: ReviewProgrammeContentDto,
+    @Body() body: Record<string, unknown>,
   ) {
     return this.content.review(
       authorization,
       slug,
       contentId,
-      body,
+      body as unknown as ReviewProgrammeContentDto,
       idempotencyKey,
     );
   }
@@ -106,13 +106,13 @@ export class ProgrammeContentController {
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
     @Param('contentId') contentId: string,
-    @Body() body: PublishProgrammeContentDto,
+    @Body() body: Record<string, unknown>,
   ) {
     return this.content.publish(
       authorization,
       slug,
       contentId,
-      body,
+      body as unknown as PublishProgrammeContentDto,
       idempotencyKey,
     );
   }
@@ -124,13 +124,13 @@ export class ProgrammeContentController {
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
     @Param('contentId') contentId: string,
-    @Body() body: PatchProgrammeContentDto,
+    @Body() body: Record<string, unknown>,
   ) {
     return this.content.patch(
       authorization,
       slug,
       contentId,
-      body,
+      body as unknown as PatchProgrammeContentDto,
       idempotencyKey,
     );
   }

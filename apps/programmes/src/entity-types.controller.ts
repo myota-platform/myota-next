@@ -26,13 +26,13 @@ export class EntityTypesController {
   async save(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
-    @Body() body: EntityTypeDto,
+    @Body() body: Record<string, unknown>,
     @Res({ passthrough: true }) response: Response,
   ) {
     const { statusCode, ...result } =
       await this.programmes.saveEntityTypeCatalog(
         authorization,
-        body,
+        body as unknown as EntityTypeDto,
         idempotencyKey,
       );
     response.status(statusCode);
@@ -52,14 +52,14 @@ export class EntityTypesController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
-    @Body() body: EntityTypeDto,
+    @Body() body: Record<string, unknown>,
     @Res({ passthrough: true }) response: Response,
   ) {
     const { statusCode, ...result } =
       await this.programmes.saveAndAssignEntityType(
         authorization,
         slug,
-        body,
+        body as unknown as EntityTypeDto,
         idempotencyKey,
       );
     response.status(statusCode);

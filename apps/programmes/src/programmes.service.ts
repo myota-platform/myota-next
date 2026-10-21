@@ -459,11 +459,19 @@ function normalizeEntityType(
   body: EntityTypeDto | Record<string, unknown>,
   existing?: Record<string, unknown>,
 ): Record<string, unknown> & { code: string } {
-  const code =
-    typeof body.code === 'string'
-      ? trimPythonWhitespace(body.code).toUpperCase()
-      : '';
-  const originalCodeValue = body.originalCode || code;
+  const missing = [
+    ...(!pythonTruthy(body.code) ? ['code'] : []),
+    ...(!pythonTruthy(body.label) ? ['label'] : []),
+  ];
+  if (missing.length) {
+    throw new BadRequestException(
+      `missing required fields: ${missing.join(', ')}`,
+    );
+  }
+  const code = trimPythonWhitespace(String(body.code)).toUpperCase();
+  const originalCodeValue = pythonTruthy(body.originalCode)
+    ? body.originalCode
+    : code;
   const originalCode = trimPythonWhitespace(
     typeof originalCodeValue === 'string'
       ? originalCodeValue
@@ -482,35 +490,34 @@ function normalizeEntityType(
       'category codes are stable identifiers and cannot be renamed',
     );
   }
-  const rawGeometry =
+  const rawGeometryTypes =
     body.geometryTypes !== undefined ? body.geometryTypes : body.geometry;
-  const geometryList = Array.isArray(rawGeometry)
-    ? rawGeometry
-    : typeof rawGeometry === 'string'
-      ? [rawGeometry]
-      : [];
+  if (!Array.isArray(rawGeometryTypes) && typeof rawGeometryTypes !== 'string') {
+    throw new BadRequestException(
+      'geometryTypes must contain at least one supported GeoJSON geometry type',
+    );
+  }
+  const geometryList =
+    typeof rawGeometryTypes === 'string' ? [rawGeometryTypes] : rawGeometryTypes;
+  if (!geometryList.length) {
+    throw new BadRequestException(
+      'geometryTypes must contain at least one supported GeoJSON geometry type',
+    );
+  }
   const geometryTypes = [
     ...new Set(
       geometryList.map((value) => {
-        const geometry =
-          typeof value === 'string'
-            ? trimPythonWhitespace(value).toUpperCase()
-            : '';
+        const geometry = trimPythonWhitespace(String(value)).toUpperCase();
         return geometry === 'WAY' ? 'LINESTRING' : geometry;
       }),
     ),
   ];
-  if (
-    !geometryTypes.length ||
-    geometryTypes.some((item) => !GEOMETRY_TYPES.has(item))
-  ) {
+  if (geometryTypes.some((item) => !GEOMETRY_TYPES.has(item))) {
     throw new BadRequestException(
-      'geometryTypes must contain supported GeoJSON geometry types',
+      'geometryTypes must contain only POINT, LINESTRING, MULTILINESTRING, POLYGON, or MULTIPOLYGON',
     );
   }
-  const label =
-    typeof body.label === 'string' ? trimPythonWhitespace(body.label) : '';
-  if (!label) throw new BadRequestException('category label must not be empty');
+  const label = trimPythonWhitespace(String(body.label));
   const activeValue =
     body.active !== undefined
       ? body.active

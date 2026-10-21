@@ -36,9 +36,13 @@ export class ProgrammesController {
   create(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
-    @Body() body: CreateProgrammeDto,
+    @Body() body: Record<string, unknown>,
   ) {
-    return this.programmes.create(authorization, body, idempotencyKey);
+    return this.programmes.create(
+      authorization,
+      body as unknown as CreateProgrammeDto,
+      idempotencyKey,
+    );
   }
 
   @Get(':slug/policy')
@@ -51,9 +55,14 @@ export class ProgrammesController {
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Param('slug') slug: string,
-    @Body() body: UpdateProgrammeDto,
+    @Body() body: Record<string, unknown>,
   ) {
-    return this.programmes.update(authorization, slug, body, idempotencyKey);
+    return this.programmes.update(
+      authorization,
+      slug,
+      body as unknown as UpdateProgrammeDto,
+      idempotencyKey,
+    );
   }
 
   @Get(':slug')

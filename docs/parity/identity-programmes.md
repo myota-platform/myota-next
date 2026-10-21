@@ -219,6 +219,11 @@ Programme and entity-type creation, plus Programme-content and policy-draft
 creation, submission, review, and publication, retain independent timestamps
 for lifecycle events and `updatedAt`, matching the reference's separate clock
 reads.
+Programme creation retains its required-field checks before admin authorization;
+Programme updates, entity-type writes, and content workflows perform their
+request checks after the same authorization and record-resolution steps as the
+reference handlers. Their services receive parsed request objects without
+global DTO validation preempting that order.
 Programme list pages and shared-category `assignedProgrammes` arrays preserve
 the reference's insertion order through a Core-owned record sequence; existing
 rows are backfilled by creation timestamp and slug. Shared entity-type catalogue
