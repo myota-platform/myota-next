@@ -15,7 +15,10 @@ import {
   parsePageTotal,
   type PageInteger,
 } from '@app/platform/pagination.js';
-import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import {
+  pythonKeyErrorDetail,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import {
   evaluateActivation,
@@ -343,7 +346,7 @@ export class ActivityRepository {
         [id],
       );
       const row = result.rows[0];
-      if (!row) throw new NotFoundException('ADIF import not found');
+      if (!row) throw new NotFoundException(pythonKeyErrorDetail(id));
       return {
         id: String(row.id),
         activationId: String(row.activation_id),
@@ -517,7 +520,8 @@ export class ActivityRepository {
         [correctionId],
       );
       const correction = correctionResult.rows[0];
-      if (!correction) throw new NotFoundException('QSO correction not found');
+      if (!correction)
+        throw new NotFoundException(pythonKeyErrorDetail(correctionId));
       if (correction.status !== 'PENDING')
         throw new BadRequestException('correction is no longer pending');
       const correctionQsoId = String(correction.qso_id);
@@ -526,7 +530,8 @@ export class ActivityRepository {
         [correctionQsoId],
       );
       const qso = qsoResult.rows[0];
-      if (!qso) throw new NotFoundException('QSO not found');
+      if (!qso)
+        throw new NotFoundException(pythonKeyErrorDetail(correctionQsoId));
       if (body.decision === 'APPLIED') {
         const columns: Record<string, string> = {
           workedCallsign: 'worked_callsign',
@@ -649,7 +654,8 @@ export class ActivityRepository {
         [activationId, qso.timestamp],
       );
       const activationRow = activationResult.rows[0];
-      if (!activationRow) throw new NotFoundException('activation not found');
+      if (!activationRow)
+        throw new NotFoundException(pythonKeyErrorDetail(activationId));
       if (activationRow.status !== 'OPEN')
         throw new BadRequestException('activation is not open');
       if (activationRow.qso_before_start || activationRow.qso_after_expiry)
@@ -761,7 +767,8 @@ export class ActivityRepository {
         `SELECT *, ${activationTimestampProjection} FROM activity_activation WHERE id=$1 FOR UPDATE`,
         [id],
       );
-      if (!found.rows[0]) throw new NotFoundException('activation not found');
+      if (!found.rows[0])
+        throw new NotFoundException(pythonKeyErrorDetail(id));
       if (found.rows[0].status !== 'OPEN')
         throw new BadRequestException('activation is not open');
       const normalizedEndedAt = pythonTruthy(endedAt)
@@ -829,7 +836,7 @@ export class ActivityRepository {
         [id],
       );
       if (!result.rows[0])
-        throw new NotFoundException('activity job not found');
+        throw new NotFoundException(pythonKeyErrorDetail(id));
       return {
         ...jobRecord(result.rows[0]),
         retryAfterSeconds: Number(result.rows[0].retry_after_seconds),
@@ -864,7 +871,7 @@ export class ActivityRepository {
         [id],
       );
       const job = selected.rows[0];
-      if (!job) throw new NotFoundException('activity job not found');
+      if (!job) throw new NotFoundException(pythonKeyErrorDetail(id));
       if (!['FAILED', 'QUEUED'].includes(job.status))
         throw new BadRequestException(
           'only failed or recoverable queued work may be redriven',
@@ -927,7 +934,8 @@ export class ActivityRepository {
       `SELECT *, ${activationTimestampProjection} FROM activity_activation WHERE id=$1`,
       [id],
     );
-    if (!result.rows[0]) throw new NotFoundException('activation not found');
+    if (!result.rows[0])
+      throw new NotFoundException(pythonKeyErrorDetail(id));
     const qsos = await client.query(
       `SELECT *, ${qsoTimestampProjection}
        FROM activity_qso WHERE activation_id=$1 AND status<>'VOID' ORDER BY occurred_at`,

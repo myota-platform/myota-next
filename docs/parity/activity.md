@@ -47,7 +47,8 @@ Applied corrections update only the reference's writable QSO fields and queue
 award recalculation for the stored QSO, even when the nested route QSO ID differs;
 a focused repository fixture covers that transaction and job payload. Correction
 request fixtures verify requester ownership, administrator access, and required
-field validation order. Award definition draft,
+field validation order. Missing activation, ADIF import, work job, and correction
+lookups preserve the reference's quoted-ID 404 detail. Award definition draft,
 review, publish, and retire APIs are implemented. Award progress reads and
 evaluation/recalculation job APIs persist versioned progress and qualification
 notifications through the Activity worker. Award requests validate eligibility,
