@@ -93,6 +93,10 @@
   verifies JetStream redelivery completes the work. This fault injection does
   not stop PostgreSQL; actual database-outage and clustered failover recovery
   remain open.
+  If PostgreSQL fails while the worker is recording a failed delivery, it
+  extends the current message ACK and retries settlement for transient
+  connection, shutdown, serialization, and deadlock errors with capped
+  backoff. Live database-outage recovery still needs qualification.
   Scheduled import and upload-session retention is implemented. CI restarts the
   pinned SeaweedFS image during a Geodata multipart upload, verifies a failed
   part leaves no database record, retries it after restart, and checks the
