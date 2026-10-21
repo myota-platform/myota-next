@@ -58,23 +58,25 @@ export class ActivityRetentionRepository {
           await this.s3().send(
             new DeleteObjectCommand({ Bucket: bucket, Key: row.object_key }),
           );
-          const update = await this.connect();
-          try {
-            await update.query(
-              `UPDATE activity_import SET source_deleted_at=now()
-               WHERE id=$1 AND source_deleted_at IS NULL`,
-              [row.id],
-            );
-          } finally {
-            update.release();
-          }
-          deleted++;
         } catch (error) {
           failures.push(row.id);
           this.logger.error(
             `ADIF source cleanup failed for import ${row.id}: ${safeError(error)}`,
           );
+          continue;
         }
+
+        const update = await this.connect();
+        try {
+          await update.query(
+            `UPDATE activity_import SET source_deleted_at=now()
+             WHERE id=$1 AND source_deleted_at IS NULL`,
+            [row.id],
+          );
+        } finally {
+          update.release();
+        }
+        deleted++;
       }
       if (failures.length)
         throw new Error(

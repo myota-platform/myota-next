@@ -389,10 +389,24 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   private async runRetention(): Promise<void> {
     while (!this.stopping) {
       try {
-        const deleted = await this.retention.runSweep();
+        const deleted = await retryTransientDatabaseOperation(
+          () => this.retention.runSweep(),
+          {
+            stopping: () => this.stopping,
+            onRetry: (error, attempt) => {
+              if (attempt === 1 || attempt % 12 === 0)
+                this.logger.warn(
+                  `ADIF retention is waiting for PostgreSQL: ${safeError(error)}`,
+                );
+            },
+            wait: (milliseconds) =>
+              abortableDelay(milliseconds, this.stopController.signal),
+          },
+        );
         if (deleted)
           this.logger.log(`Deleted ${deleted} expired ADIF source objects`);
       } catch (error) {
+        if (this.stopping) return;
         this.logger.error(`ADIF retention sweep failed: ${safeError(error)}`);
       }
       await this.wait(RETENTION_INTERVAL_SECONDS * 1000);

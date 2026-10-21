@@ -11,8 +11,10 @@
   Heartbeat timers are cancelled
   when processing settles, and long scheduled waits are cleared on shutdown.
   Notifications are handled by the separate consumer described below. ADIF
-  source-object retention is scheduled, and queued jobs missing an outbox
-  command are repaired periodically. A process-kill qualification covers
+  source-object retention retries transient PostgreSQL failures with capped
+  jittered backoff; S3 delete failures remain isolated for later retry. Queued
+  jobs missing an outbox command are repaired periodically. A process-kill
+  qualification covers
   statistics-rebuild lease takeover; other job kinds, broker outages, and
   retention recovery evidence remain open. Transient PostgreSQL failures while
   claiming work or persisting retry/dead-letter state extend the current ACK
