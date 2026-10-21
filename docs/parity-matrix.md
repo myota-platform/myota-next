@@ -187,6 +187,9 @@ create lockout state in Core and trigger the same five-attempt, fifteen-minute
 lockout as other known accounts. The credential row can hold this state with a
 null password hash and password-change timestamp; password setup fills those
 fields and clears the lockout state.
+NestJS login also verifies a fixed-salt `hashlib.scrypt` credential generated
+by the Python reference, confirming the shared scrypt parameters and
+unpadded base64url encoding for account migration.
 The internal email-recipient resolver rejects revoked service tokens before
 scope checks and maps malformed UUID forms to the same unavailable-recipient
 response as the Python handler.

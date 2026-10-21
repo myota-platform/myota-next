@@ -10,7 +10,7 @@ describe('IdentityAuthService.login rate limits', () => {
     passwordHash = await hashPassword(password);
   });
 
-  function harness(globalOperator: boolean) {
+  function harness(globalOperator: boolean, credentialHash = passwordHash) {
     const statements: Array<{ sql: string; values: unknown[] }> = [];
     let rateCount = 0;
     let globalOperatorChecks = 0;
@@ -23,7 +23,7 @@ describe('IdentityAuthService.login rate limits', () => {
       created_at: new Date('2025-01-01T00:00:00Z'),
       updated_at: new Date('2025-01-01T00:00:00Z'),
       primary_callsign_id: null,
-      password_hash: passwordHash,
+      password_hash: credentialHash,
       failed_attempts: 0,
       locked_until: null,
     };
@@ -106,5 +106,22 @@ describe('IdentityAuthService.login rate limits', () => {
 
     expect(fixture.rateCount).toBe(0);
     expect(fixture.globalOperatorChecks).toBe(12);
+  });
+
+  it('verifies a Python hashlib.scrypt credential with the shared encoding', async () => {
+    const referencePassword = 'MyOTA reference password ✓ 2026';
+    const referenceHash =
+      'scrypt$AAECAwQFBgcICQoLDA0ODw$kKwOz03nI_CbeT6fQ4niAmAyHKzlS_yYSDa4-HsV4yPkmgP8kagHbYyo2p-28BmjnKYW6kvYGWWAjyHcBOI6sg';
+    const fixture = harness(false, referenceHash);
+
+    await expect(
+      fixture.service.login(
+        { email: 'standard@example.test', password: referencePassword },
+        { userAgent: null, remoteAddr: '192.0.2.10' },
+      ),
+    ).resolves.toMatchObject({
+      accessToken: 'test-access-token',
+      refreshToken: 'test-refresh-token',
+    });
   });
 });
