@@ -57,6 +57,8 @@ export class IdentityProfileImageService {
     accountId: string,
   ): Promise<Buffer> {
     await this.authorizeTarget(authorization, accountId);
+    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(accountId))
+      throw new NotFoundException(pythonKeyErrorDetail(accountId));
     const client = await this.connect();
     let imageId: string | null;
     try {
@@ -69,7 +71,7 @@ export class IdentityProfileImageService {
         [accountId],
       );
       if (!result.rowCount)
-        throw new NotFoundException('profile image not found');
+        throw new NotFoundException(pythonKeyErrorDetail(accountId));
       const image = result.rows[0];
       imageId = image.profile_image_id;
       if (!imageId || image.profile_image_media_type !== 'image/webp') {
@@ -476,4 +478,15 @@ function accountIdOf(actor: Record<string, unknown>): string {
     throw new UnauthorizedException('account identity is unavailable');
   }
   return actor.id;
+}
+
+function pythonKeyErrorDetail(key: string): string {
+  const quote = key.includes("'") && !key.includes('"') ? '"' : "'";
+  const escaped = key
+    .replaceAll('\\', '\\\\')
+    .replaceAll(quote, `\\${quote}`)
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
+    .replaceAll('\t', '\\t');
+  return `${quote}${escaped}${quote}`;
 }

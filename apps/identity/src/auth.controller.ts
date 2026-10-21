@@ -278,7 +278,7 @@ export class AuthController {
   @Header('Cache-Control', 'private, no-store')
   getAccountProfileImage(
     @Headers('authorization') authorization: string | undefined,
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('accountId') accountId: string,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');

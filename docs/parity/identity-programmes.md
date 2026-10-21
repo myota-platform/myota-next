@@ -115,6 +115,11 @@ size limits. A separate Pillow 12.3.0 EXIF-orientation fixture checks the
 oriented crop and source-metadata removal. Sharp explicitly matches Pillow's
 shared WebP quality, alpha quality, effort, lossless, preset, and
 transparent-pixel options.
+Administrative profile-image reads authorize the caller before resolving the
+target account, matching the Python handler's error precedence. An authorized
+lookup for a malformed or absent account ID returns 404 with the quoted ID
+detail produced by Python's `KeyError`; an existing account without an image
+returns `profile image not found`.
 Sharp inspects all WebP frames and reads APNG animation-control chunks before
 applying the reference's animation rejection rule, including APNG files with a
 separate default image. A Pillow-generated APNG fixture with one animation
