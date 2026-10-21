@@ -494,7 +494,8 @@ watch(programme, () => {
               correction.qso.workedCallsign || 'Unknown callsign'
             }}</strong>
             <small>
-              {{ correction.qso.operatorCallsign || correction.requestedBy }} ·
+              Requested by {{ correction.requestedBy }} · Operator
+              {{ correction.qso.operatorCallsign || 'Unknown' }} ·
               {{
                 correction.qso.timestamp
                   ? utcDisplay(correction.qso.timestamp)
