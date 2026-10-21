@@ -84,4 +84,14 @@ describe('normalizeAdapterFeature projection compatibility', () => {
       }),
     ).toThrow('unsupported government GIS format CSV');
   });
+
+  it('formats integer-valued floating CRS identifiers like Python', () => {
+    expect(() =>
+      normalizeAdapterFeature('GOVERNMENT_GIS', {
+        properties: { sourceFormat: 'GEOJSON' },
+        crs: 1e21,
+        geometry: { type: 'Point', coordinates: [1, 2] },
+      }),
+    ).toThrow('unsupported CRS EPSG:1000000000000000000000');
+  });
 });

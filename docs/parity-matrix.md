@@ -482,7 +482,9 @@ common geometry types and CRS transformations that depend on datum grids still
 need compatibility qualification against the reference parser. Eight EPSG
 coordinate fixtures currently compare with PyProj 3.8.0 within `1e-7` degrees.
 Geometry type aliases use Python-compatible Unicode case folding, and CRS
-metadata selects the first Python-truthy identifier field.
+metadata selects the first Python-truthy identifier field. Integer-valued
+floating CRS identifiers use Python's decimal integer formatting, including
+values whose default JavaScript string form uses exponent notation.
 Geodata coordinate validation also preserves Python's `bool`-as-number
 behavior, including numeric-equivalent polygon ring closure; projected
 coordinates convert those values before transformation, and streamed vertex

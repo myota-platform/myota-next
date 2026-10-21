@@ -277,7 +277,7 @@ function sourceCrs(value: unknown): string {
   }
   if (typeof value === 'boolean') return `EPSG:${Number(value)}`;
   if (typeof value === 'number' && Number.isInteger(value))
-    return `EPSG:${value}`;
+    return `EPSG:${BigInt(value)}`;
   const text =
     typeof value === 'string' ||
     typeof value === 'number' ||
