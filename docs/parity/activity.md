@@ -46,8 +46,10 @@ Correction request and review required fields use the reference's ordered
 Applied corrections update only the reference's writable QSO fields and queue
 award recalculation for the stored QSO, even when the nested route QSO ID differs;
 a focused repository fixture covers that transaction and job payload. Correction
-request fixtures verify requester ownership, administrator access, and required
-field validation order. Missing activation, ADIF import, work job, and correction
+requester ownership compares Python `str()` conversions on both IDs, including
+truthy non-string JSON values. Administrator access and required-field
+validation order also match the reference. Missing activation, ADIF import,
+work job, and correction
 lookups preserve the reference's quoted-ID 404 detail, including malformed
 activation, import, correction, and job IDs before PostgreSQL UUID casting.
 Missing award definition, asset, request, issuance, and award-job lookups use the

@@ -21,6 +21,7 @@ import {
   verifyAccessToken,
 } from '@app/platform';
 import { parsePageInteger } from '@app/platform/pagination.js';
+import { pythonString } from '@app/platform/python-strings.js';
 import { ActivityRepository } from './activity.repository.js';
 import { parseQsoCsv } from './qso-csv.js';
 import {
@@ -439,7 +440,7 @@ export class ActivityService {
       );
     const claims = verifyAccessToken(authorization);
     if (
-      claims.sub !== body.requestedBy &&
+      pythonString(claims.sub) !== pythonString(body.requestedBy) &&
       !claims.scp.some((scope) => ['*', 'activity.admin'].includes(scope))
     )
       throw new ForbiddenException(
