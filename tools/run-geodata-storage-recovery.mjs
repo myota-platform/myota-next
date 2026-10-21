@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { chmod, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -67,7 +67,15 @@ async function waitForSeaweedFS() {
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  throw new Error('SeaweedFS did not become ready');
+  const state = spawnSync(
+    'docker',
+    ['inspect', '--format', '{{.State.Status}}', container],
+    { encoding: 'utf8' },
+  );
+  const logs = spawnSync('docker', ['logs', container], { encoding: 'utf8' });
+  throw new Error(
+    `SeaweedFS did not become ready (state: ${state.stdout?.trim() || 'unknown'}):\n${logs.stdout || ''}${logs.stderr || ''}`,
+  );
 }
 
 try {
@@ -85,6 +93,8 @@ try {
     },
   );
   if (process.exitCode) throw new Error('could not render SeaweedFS S3 config');
+  await chmod(directory, 0o755);
+  await chmod(config, 0o644);
   docker(['volume', 'create', volume]);
   volumeCreated = true;
   docker([
