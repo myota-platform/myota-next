@@ -695,7 +695,9 @@ geometries.
 - Activity notification consumption: exact durable validation, transactional
   processed-event/checkpoint and notification writes, deduplication, bounded
   retry, redacted poison-event dead-lettering, and audited CLI redrive are
-  implemented, with outcome and unresolved-dead-letter metrics. Named replay
+  implemented, with outcome and unresolved-dead-letter metrics. Falsey event
+  types use the Python worker's `unknown` fallback in poison-event records.
+  Named replay
   durables require an explicit start sequence, and optional message limits allow
   bounded replay runs. Recovery evidence remains open.
 - Geodata workers: registered JetStream consumers for import preprocessing and

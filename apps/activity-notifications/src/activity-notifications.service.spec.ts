@@ -57,4 +57,38 @@ describe('ActivityNotificationsService redelivery', () => {
     expect(message.ack).toHaveBeenCalledTimes(2);
     expect(message.nak).toHaveBeenCalledOnce();
   });
+
+  it('uses the Python fallback for a falsey event type in a poison record', async () => {
+    const values: unknown[][] = [];
+    const client = {
+      query: vi.fn(async (_sql: string, parameters: unknown[] = []) => {
+        values.push(parameters);
+        return { rowCount: 1, rows: [] };
+      }),
+      release: vi.fn(),
+    };
+    const pool = {
+      connect: vi.fn().mockResolvedValue(client),
+      query: vi.fn().mockResolvedValue({ rows: [{ count: '1' }] }),
+    };
+    const service = new ActivityNotificationsService(pool as never);
+    const message = {
+      data: new TextEncoder().encode(
+        JSON.stringify({
+          eventId: '22222222-2222-4222-8222-222222222222',
+          eventType: '',
+        }),
+      ),
+      subject: 'myota.events.identity.account.created.v1',
+      info: { deliveryCount: 1, streamSequence: 12 },
+      term: vi.fn(),
+    };
+
+    await (
+      service as unknown as { handle: (message: unknown) => Promise<void> }
+    ).handle(message);
+
+    expect(values[1]?.[1]).toBe('unknown');
+    expect(message.term).toHaveBeenCalledOnce();
+  });
 });

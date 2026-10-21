@@ -319,8 +319,9 @@ export class ActivityNotificationsService
         throw new Error('invalid_envelope');
       }
       envelope = decoded as Envelope;
-      eventType =
-        typeof envelope.eventType === 'string' ? envelope.eventType : 'unknown';
+      eventType = pythonTruthy(envelope.eventType)
+        ? String(envelope.eventType)
+        : 'unknown';
       if (!normalizeUuid(envelope.eventId)) {
         permanent = true;
         throw new Error('invalid_event_id');
