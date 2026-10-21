@@ -9,6 +9,7 @@ import {
 import { signAccessToken } from '@app/platform/access-token.js';
 import { MAX_IMPORT_FEATURES } from '@app/platform/import-limits.js';
 import { scheduledFeatureHashOverrides } from '../../geodata/src/geodata-request-fingerprint.js';
+import { featuresFromDocument } from './geodata-importer-document.js';
 
 const DEFAULT_POLL_SECONDS = 60;
 const SERVICE_SUBJECT = 'service:geodata-importer';
@@ -150,7 +151,7 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     const sourceUrl = schedule.source.url;
     if (typeof sourceUrl !== 'string')
       throw new Error('schedule source.url must be a string');
-    const { document, rawJson } = await this.fetchSource(sourceUrl);
+    const { document } = await this.fetchSource(sourceUrl);
     const formatValue = schedule.source.format;
     const format =
       typeof formatValue === 'string' ? formatValue.toUpperCase() : 'GEOJSON';
@@ -159,10 +160,7 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
       throw new Error(
         `source exceeds the ${MAX_IMPORT_FEATURES} feature limit`,
       );
-    const sourceFeatureHashOverrides = scheduledFeatureHashOverrides(
-      rawJson,
-      format,
-    );
+    const sourceFeatureHashOverrides = scheduledFeatureHashOverrides(features);
 
     const base = this.apiBase();
     const url = `${base}/v1/geodata/refresh-schedules/${encodeURIComponent(schedule.id)}/run`;
@@ -191,7 +189,7 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     const source = spec.source;
     if (typeof source.url !== 'string')
       throw new Error('GEODATA_IMPORT_SPEC source.url must be a string');
-    const { document, rawJson } = await this.fetchSource(source.url);
+    const { document } = await this.fetchSource(source.url);
     const format =
       typeof source.format === 'string' && source.format
         ? source.format.toUpperCase()
@@ -225,10 +223,7 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     const disappearancePolicy = Object.hasOwn(spec, 'disappearancePolicy')
       ? spec.disappearancePolicy
       : 'REVIEW_REQUIRED';
-    const sourceFeatureHashOverrides = scheduledFeatureHashOverrides(
-      rawJson,
-      format,
-    );
+    const sourceFeatureHashOverrides = scheduledFeatureHashOverrides(features);
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -254,7 +249,6 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
 
   private async fetchSource(rawUrl: string): Promise<{
     document: unknown;
-    rawJson: string;
   }> {
     const url = new URL(rawUrl);
     const allowedHosts = (process.env.GEODATA_SOURCE_ALLOWLIST ?? '')
@@ -295,7 +289,7 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     }
     const text = Buffer.concat(chunks).toString('utf8');
     try {
-      return { document: JSON.parse(text) as unknown, rawJson: text };
+      return { document: parseJsonWithExactIntegers(text) };
     } catch {
       throw new Error('source did not return valid JSON');
     }
@@ -317,45 +311,6 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
   private accessToken() {
     return signAccessToken(SERVICE_SUBJECT, IMPORT_SCOPES, [], 300);
   }
-}
-
-function featuresFromDocument(document: unknown, format: string) {
-  if (
-    isRecord(document) &&
-    document.type === 'FeatureCollection' &&
-    Array.isArray(document.features) &&
-    document.features.every(isRecord)
-  )
-    return document.features;
-  if (format === 'ARCGIS_FEATURESERVER' && isRecord(document)) {
-    if (isRecord(document.error))
-      throw new Error('ArcGIS source returned an error document');
-    if (!Array.isArray(document.features))
-      throw new Error('ArcGIS response has no features array');
-    return document.features.map((item) => {
-      if (!isRecord(item)) throw new Error('ArcGIS feature is invalid');
-      const geometry = isRecord(item.geometry) ? item.geometry : {};
-      const properties = isRecord(item.attributes) ? item.attributes : {};
-      let geoJsonGeometry: Record<string, unknown>;
-      if (Array.isArray(geometry.rings))
-        geoJsonGeometry = { type: 'Polygon', coordinates: geometry.rings };
-      else if (Array.isArray(geometry.paths))
-        geoJsonGeometry = {
-          type: 'MultiLineString',
-          coordinates: geometry.paths,
-        };
-      else if (typeof geometry.x === 'number' && typeof geometry.y === 'number')
-        geoJsonGeometry = {
-          type: 'Point',
-          coordinates: [geometry.x, geometry.y],
-        };
-      else throw new Error('ArcGIS feature geometry is unsupported');
-      return { type: 'Feature', properties, geometry: geoJsonGeometry };
-    });
-  }
-  throw new Error(
-    'source response must be a GeoJSON FeatureCollection or ArcGIS FeatureServer JSON',
-  );
 }
 
 function isRecord(value: unknown): value is Record<string, any> {

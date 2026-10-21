@@ -35,6 +35,7 @@
     { "path": "./apps/programmes/tsconfig.app.json" },
     { "path": "./apps/activity/tsconfig.app.json" },
     { "path": "./apps/geodata/tsconfig.app.json" },
+    { "path": "./apps/geodata-importer/tsconfig.app.json" },
     { "path": "./apps/activity-worker/tsconfig.app.json" },
     { "path": "./apps/activity-notifications/tsconfig.app.json" },
     { "path": "./apps/geodata-worker/tsconfig.app.json" },

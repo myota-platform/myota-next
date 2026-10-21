@@ -524,7 +524,8 @@ separate Node importer polls due schedules and also accepts the reference
 fetches GeoJSON or ArcGIS FeatureServer data only from allowlisted HTTPS hosts;
 it rejects redirects and reads the complete response. Scheduled fetches use the
 schedule run API; one-shot imports post to the ordinary complete-snapshot import
-API. The
+API. FeatureCollection members are passed through for per-record handling, and
+ArcGIS attributes use Python-compatible `dict()` conversion. The
 shared `GEODATA_MAX_IMPORT_FEATURES` limit is checked consistently by the
 importer, API, and worker. The API retains the reference timestamp updates; the
 importer calculates automatic eligibility from `lastRunAt + intervalSeconds`.
