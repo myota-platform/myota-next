@@ -251,7 +251,7 @@ try {
   }
   await query(
     endpoints['geo-target'],
-    `GRANT USAGE ON SCHEMA public TO ${geodataAclRoles.map((role) => `"${role}"`).join(', ')}`,
+    `GRANT USAGE ON SCHEMA public TO ${['myota', ...geodataAclRoles].map((role) => `"${role}"`).join(', ')}`,
   );
 
   const env = {
