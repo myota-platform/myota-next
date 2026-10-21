@@ -7,7 +7,6 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
-import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 
 @Injectable()
 export class ProgrammeMutationRepository {
@@ -27,16 +26,14 @@ export class ProgrammeMutationRepository {
           "SELECT pg_advisory_xact_lock(hashtextextended('programmes:' || $1, 0))",
           [idempotencyKey],
         );
-        const previous = await client.query<{ response_text: string }>(
-          `SELECT response::text AS response_text FROM public.idempotency_record
+        const previous = await client.query<{ response: T }>(
+          `SELECT response FROM public.idempotency_record
             WHERE service = 'programmes' AND key = $1`,
           [idempotencyKey],
         );
         if (previous.rows[0]) {
           await client.query('COMMIT');
-          return parseJsonWithExactIntegers(
-            previous.rows[0].response_text,
-          ) as T;
+          return previous.rows[0].response;
         }
       }
       const response = await operation(client);
