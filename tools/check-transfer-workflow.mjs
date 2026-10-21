@@ -195,6 +195,12 @@ try {
           timestamp,
         ],
       );
+      await query(
+        url,
+        `INSERT INTO public.service_state (service,state,updated_at)
+         VALUES ('programmes',$1::jsonb,$2::timestamptz)`,
+        [JSON.stringify({ items: {}, data: {} }), timestamp],
+      );
     },
   );
   await createSource('activity-source', [

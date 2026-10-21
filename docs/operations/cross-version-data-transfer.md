@@ -7,8 +7,8 @@ database. The transfer stages four source dumps and three destination recovery
 dumps, restores the three owner databases, merges legacy Email data into Core,
 adopts the verified migration ledgers, and applies NestJS forward migrations.
 CI rehearses the complete command sequence against disposable source and
-destination databases with Identity, Activity, Geodata, and legacy Email
-fixture data. Production-sized rehearsal, ACL and grant review, object-store
+destination databases with Identity, Programme, Activity, Geodata, and legacy
+Email fixture data. Production-sized rehearsal, ACL and grant review, object-store
 and NATS reconciliation, and full parity sign-off remain outstanding.
 
 Set `LEGACY_CORE_DATABASE_URL`, `LEGACY_ACTIVITY_DATABASE_URL`,
@@ -179,8 +179,8 @@ Core after that migration creates the target tables.
 The restore/apply command, ledger adoption, four-source/three-target dump
 staging, Core Email data merge, and read-only per-owner database validation
 report are implemented. CI runs these commands end to end with disposable
-PostgreSQL databases and fixture data for Identity, Activity, Geodata, and each
-legacy Email table. This qualifies archive creation and restore, ledger
+PostgreSQL databases and fixture data for Identity, Programme, Activity,
+Geodata, and each legacy Email table. This qualifies archive creation and restore, ledger
 adoption, forward migrations, Email data copying, sequence restoration, and
 the validation report for those fixtures. It does not establish complete
 function parity or compare object-store data and JetStream messages. The report
