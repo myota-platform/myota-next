@@ -51,7 +51,12 @@ test('creates shared categories and assigns them to a live programme', async ({
         await page.getByRole('button', { name: 'New category' }).click();
       await page.getByLabel('Category code').fill(categoryCodes[index]!);
       await page.getByLabel('Display name').fill(categoryLabels[index]!);
-      await page.getByLabel(index === 0 ? 'Point' : 'LineString').check();
+      await page
+        .getByRole('checkbox', {
+          name: index === 0 ? 'Point' : 'LineString',
+          exact: true,
+        })
+        .check();
       await page
         .getByLabel('Description')
         .fill('Live shared category fixture.');
