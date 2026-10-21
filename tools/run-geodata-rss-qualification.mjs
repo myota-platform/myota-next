@@ -10,7 +10,6 @@ const result = spawnSync(
     'streams the Python 300,000-feature GeoJSON RSS workload',
     '--maxWorkers=1',
     '--no-file-parallelism',
-    '--pool=forks',
   ],
   {
     stdio: 'inherit',
