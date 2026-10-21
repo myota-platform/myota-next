@@ -326,12 +326,18 @@ export class ActivityRepository {
         activationCount: activations.rows.length,
         awardRecalculationJobs,
       };
+      const eventPayload = {
+        entityId,
+        deletedBy,
+        qsoCount: qsoIds.length,
+        awardRecalculationJobs,
+      };
       await this.event(
         client,
         'activity.entity.cascade-deleted.v1',
         'entity',
         entityId,
-        result,
+        eventPayload,
       );
       return result;
     });

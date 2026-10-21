@@ -175,3 +175,6 @@ controls follow the read and admin scopes enforced by the API.
 Activity entity-deletion impact reads and idempotent cascades also remove
 linked QSOs and correction rows, rebuild subject aggregates, invalidate affected
 activations, and enqueue award recalculation jobs.
+The cascade API response includes `activationCount`, while its
+`activity.entity.cascade-deleted.v1` event omits that field, matching the
+reference's separate response and event payloads.
