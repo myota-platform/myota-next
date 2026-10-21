@@ -237,3 +237,6 @@ truthiness and string conversion to `entityId`, while preserving a truthy
 The cascade API response includes `activationCount`, while its
 `activity.entity.cascade-deleted.v1` event omits that field, matching the
 reference's separate response and event payloads.
+Award lifecycle, request, issuance, asset, activation-evaluation, and ADIF
+import timestamps preserve the reference's six fractional-second digits using
+independent UTC clock reads.

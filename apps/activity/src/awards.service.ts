@@ -103,6 +103,10 @@ export class AwardsService {
         throw new BadRequestException('only draft awards can be edited');
     }
     const record = validateAwardDraft(body, existing);
+    const updatedAt = await this.awardsRepository.utcTimestamp();
+    const createdAt = await this.awardsRepository.utcTimestamp();
+    record.updatedAt = updatedAt;
+    record.createdAt = existing?.createdAt ?? createdAt;
     if (record.signatureAssetId) {
       const asset = await this.awardsRepository.getAwardAsset(
         record.signatureAssetId,
@@ -153,7 +157,7 @@ export class AwardsService {
     if (!['DRAFT', 'CHANGES_REQUESTED'].includes(award.status))
       throw new BadRequestException('only draft awards can be submitted');
     award.status = 'UNDER_REVIEW';
-    award.submittedAt = new Date().toISOString();
+    award.submittedAt = await this.awardsRepository.utcTimestamp();
     return this.awardsRepository.saveAwardDefinition(award, key);
   }
 
@@ -177,7 +181,7 @@ export class AwardsService {
     award.review = {
       reviewerId: body.reviewerId,
       note: body.note,
-      reviewedAt: new Date().toISOString(),
+      reviewedAt: await this.awardsRepository.utcTimestamp(),
     };
     return this.awardsRepository.saveAwardDefinition(award, key);
   }
@@ -207,7 +211,7 @@ export class AwardsService {
       status: 'PUBLISHED',
       effectiveFrom: effectiveFrom.toISOString(),
       publisherId: body.publisherId,
-      publishedAt: new Date().toISOString(),
+      publishedAt: await this.awardsRepository.utcTimestamp(),
     });
     return this.awardsRepository.saveAwardDefinition(
       award,
@@ -382,7 +386,7 @@ export class AwardsService {
       throw new BadRequestException(
         'the requested award level is not currently eligible',
       );
-    const now = new Date().toISOString();
+    const now = await this.awardsRepository.utcTimestamp();
     const saved = await this.awardsRepository.createAwardRequest({
       id: randomUUID(),
       awardId: award.id,
@@ -447,7 +451,7 @@ export class AwardsService {
     );
     if (signature.kind !== 'SIGNATURE')
       throw new BadRequestException('a registered signature asset is required');
-    const issuedAt = new Date().toISOString();
+    const issuedAt = await this.awardsRepository.utcTimestamp();
     const dateObtained = Object.hasOwn(body, 'dateObtained')
       ? body.dateObtained
       : issuedAt;
@@ -739,7 +743,7 @@ export class AwardsService {
         process.env.MYOTA_OBJECT_STORAGE_ENDPOINT ??
         'http://seaweedfs:8333',
       contentStatus: 'MISSING',
-      createdAt: new Date().toISOString(),
+      createdAt: await this.awardsRepository.utcTimestamp(),
     };
     return this.awardsRepository.saveAwardAsset(asset);
   }
@@ -781,7 +785,7 @@ export class AwardsService {
       contentStatus: 'STORED',
       contentSha256: sha256,
       contentSize: content.length,
-      storedAt: new Date().toISOString(),
+      storedAt: await this.awardsRepository.utcTimestamp(),
     });
     return this.awardsRepository.saveAwardAsset(asset);
   }

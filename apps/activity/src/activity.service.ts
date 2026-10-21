@@ -30,7 +30,6 @@ import {
   normalizeActivation,
   normalizeCallsign,
   normalizeQso,
-  normalizeTimestamp,
   type JsonRecord,
 } from './activity-domain.js';
 
@@ -162,7 +161,7 @@ export class ActivityService {
     this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
     const endedAt = Object.hasOwn(body, 'endedAt')
       ? body.endedAt
-      : normalizeTimestamp(new Date());
+      : await this.repository.utcTimestamp();
     return this.repository.close(activationId, endedAt);
   }
 

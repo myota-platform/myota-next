@@ -408,7 +408,7 @@ export class ActivityRepository {
   ): Promise<JsonRecord> {
     return this.mutate(undefined, async (client) => {
       const id = randomUUID();
-      const createdAt = new Date().toISOString();
+      const createdAt = await utcTimestamp(client);
       const record: JsonRecord = {
         id,
         activationId,
@@ -814,10 +814,12 @@ export class ActivityRepository {
          FROM activity_qso WHERE activation_id=$1 AND status<>'VOID' ORDER BY occurred_at`,
         [id],
       );
+      const evaluatedAt = await utcTimestamp(client);
       const evaluation = evaluateActivation(
         activationRecord(found.rows[0]),
         qsos.rows.map(qsoRecord),
         normalizedEndedAt,
+        evaluatedAt,
       );
       const status = evaluation.valid ? 'CLOSED' : 'CLOSED_INVALID';
       const updated = await client.query(
@@ -1160,6 +1162,15 @@ export class ActivityRepository {
       throw new ServiceUnavailableException('Activity database is unavailable');
     }
   }
+
+  async utcTimestamp(): Promise<string> {
+    const client = await this.connect();
+    try {
+      return await utcTimestamp(client);
+    } finally {
+      client.release();
+    }
+  }
 }
 
 function activationRecord(row: any, qsos?: any[]) {
@@ -1228,6 +1239,13 @@ function timestampProjection(...columns: string[]) {
         `to_char(${column} AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS ${column}_iso`,
     )
     .join(',\n                   ');
+}
+
+async function utcTimestamp(client: PoolClient): Promise<string> {
+  const result = await client.query(
+    `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
+  );
+  return String(result.rows[0].timestamp);
 }
 
 function timestamp(value: unknown) {

@@ -24,6 +24,18 @@ export class ActivityAwardsRepository {
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
   ) {}
 
+  async utcTimestamp(): Promise<string> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
+      );
+      return String(result.rows[0].timestamp);
+    } finally {
+      client.release();
+    }
+  }
+
   async saveAwardDefinition(
     record: JsonRecord,
     key?: string,

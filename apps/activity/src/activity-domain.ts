@@ -646,6 +646,7 @@ export function evaluateActivation(
   activation: JsonRecord,
   qsos: JsonRecord[],
   endedAt: unknown,
+  evaluatedAt = normalizeTimestamp(new Date()),
 ): JsonRecord {
   const rules = pythonTruthy(activation.programmeRules)
     ? activation.programmeRules
@@ -693,7 +694,7 @@ export function evaluateActivation(
   return {
     valid: violations.length === 0,
     violations,
-    evaluatedAt: normalizeTimestamp(new Date()),
+    evaluatedAt,
     qsoCount: qsos.length,
     ruleVersion: rules.version ?? null,
   };
