@@ -320,6 +320,8 @@ decisions to proposer IDs. Their stored payloads contain only event type and ID.
 The Admin can
 render transient PDF previews from mock data and registered assets without
 creating an issuance or object; preview and issuance use the same renderer.
+Preview requests enforce the reference's 64 KiB declared-body limit before
+JSON decoding, returning `preview design exceeds 64 KiB` when exceeded.
 Award definition saves and eligible award requests return HTTP 201 when created
 and 200 when they return an existing record, matching the reference handlers.
 Optional preview artwork and signature inputs use the reference's truthiness

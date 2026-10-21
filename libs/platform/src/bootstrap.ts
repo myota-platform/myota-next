@@ -16,6 +16,13 @@ import { containsBigInt, stringifyJsonWithBigInts } from './json-bigint.js';
 import { parseJsonWithExactIntegers } from './json-exact.js';
 import { recordHttpRequest } from './http-metrics.js';
 
+type DeclaredBodyLimit = {
+  method: string;
+  path: string;
+  maxBytes: number;
+  detail: string;
+};
+
 export async function bootstrapHttpService(
   rootModule: Type<unknown>,
   defaultPort: number,
@@ -27,6 +34,7 @@ export async function bootstrapHttpService(
   globalPrefixExclusions: { path: string; method: RequestMethod }[] = [],
   preserveBigIntJson = false,
   serviceId = 'myota-api',
+  declaredBodyLimits: DeclaredBodyLimit[] = [],
 ): Promise<INestApplication> {
   const app = await NestFactory.create(rootModule, {
     bodyParser: false,
@@ -39,6 +47,21 @@ export async function bootstrapHttpService(
     );
     next();
   });
+  for (const { method, path, maxBytes, detail } of declaredBodyLimits)
+    app.use((request: Request, response: Response, next: NextFunction) => {
+      if (
+        request.method !== method ||
+        request.url?.split('?', 1)[0] !== path ||
+        Number(request.get('content-length') ?? 0) <= maxBytes
+      ) {
+        next();
+        return;
+      }
+      response
+        .status(400)
+        .type('application/json; charset=utf-8')
+        .json(createApiProblem(request, response, 400, detail));
+    });
   for (const route of rawBodyRoutes)
     app.use(
       route,

@@ -10,4 +10,12 @@ await bootstrapHttpService(
   [],
   true,
   'activity-api',
+  [
+    {
+      method: 'POST',
+      path: '/v1/awards/previews',
+      maxBytes: 64 * 1024,
+      detail: 'preview design exceeds 64 KiB',
+    },
+  ],
 );
