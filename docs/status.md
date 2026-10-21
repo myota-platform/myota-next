@@ -32,8 +32,8 @@ this page summarizes the current state and remaining release gates.
   GeoJSON import creation, preprocessed candidate review, and durable candidate
   promotion;
   Participant catalogue browsing, activation and QSO lifecycle, profile details
-  and image editing, eligible award requests, and candidate and map-picked point
-  proposals.
+  and image editing, safe biography Markdown preview, eligible award requests,
+  and candidate and map-picked point proposals.
 - **Build and deployment:** CI runs unit and browser suites, checks and builds
   the NestJS applications, and builds container images. Helm charts describe the applications and optional single-instance
   PostgreSQL for the three owners. Local Compose provisions the development

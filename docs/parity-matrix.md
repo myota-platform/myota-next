@@ -594,8 +594,9 @@ single-QSO entry, profile editing and image management. Chromium browser checks
 exercise Admin sign-in, identity session bootstrap, scope denial, Participant
 programme selection and public content, and its activation, QSO, and close
 workflow, profile details editing, image crop/upload, an eligible award
-request, and existing-candidate and map-picked point proposals with intercepted
-API responses. Admin browser checks also cover sign-in, session bootstrap,
+request, safe biography Markdown preview, and existing-candidate and map-picked
+point proposals with intercepted API responses. Admin browser checks also cover
+sign-in, session bootstrap,
 scope denial, Identity account creation with a permitted role grant and custom
 role creation from the permission catalogue, programme creation with
 policy/category settings, policy draft save, review, and publication, and
