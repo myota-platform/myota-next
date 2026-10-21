@@ -577,7 +577,7 @@ export class ActivityRepository {
           assignments.push(`${column}=$${parameters.length + 1}`);
           parameters.push(
             field === 'occurredAt'
-              ? values[field]
+              ? pythonTruthy(values[field])
                 ? normalizeTimestamp(values[field])
                 : null
               : values[field],

@@ -62,8 +62,10 @@ Correction request and review required fields use the reference's ordered
 Applied corrections update only the reference's writable QSO fields and queue
 award recalculation for the stored QSO, even when the nested route QSO ID differs;
 a focused repository fixture covers that transaction and job payload. Correction
-requester ownership compares Python `str()` conversions on both IDs, including
-JSON float tokens such as `1.0` versus integer `1`. Administrator access and
+timestamps use Python truthiness before parsing, so falsey values clear the
+timestamp. Correction requester ownership compares Python `str()` conversions
+on both IDs, including JSON float tokens such as `1.0` versus integer `1`.
+Administrator access and
 required-field validation order also match the reference. Missing activation,
 ADIF import, work job, and correction lookups preserve the reference's quoted-ID
 404 detail, including malformed
