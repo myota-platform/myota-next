@@ -580,7 +580,8 @@ API responses. Admin browser checks also cover sign-in, session bootstrap,
 scope denial, Identity account creation with a permitted role grant and custom
 role creation from the permission catalogue, programme creation with
 policy/category settings, policy draft save, review, and publication, and
-version-checked candidate review. The remaining Admin workflows still lack
+version-checked candidate review, and conflict recovery for entity metadata
+edits by reloading the latest server version. The remaining Admin workflows still lack
 browser-level compatibility coverage. The award catalogue follows all API
 pages. Remaining work includes accessibility/visual review and deployment
 integration. Its public map renders point, line, polygon, and multipart entity

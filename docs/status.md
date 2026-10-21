@@ -22,7 +22,9 @@ this page summarizes the current state and remaining release gates.
   deployable artifacts and use the NestJS APIs. The Admin build is part of CI.
   Chromium browser checks cover Admin sign-in, session bootstrap, scope denial,
   account creation with a permitted role grant, custom-role creation, programme
-  creation, policy draft review/publication, and version-checked Geodata review;
+  creation, policy draft review/publication, version-checked Geodata review,
+  and Geodata entity metadata conflict recovery by explicitly reloading the
+  latest server version;
   Participant catalogue browsing, activation and QSO lifecycle, profile details
   and image editing, eligible award requests, and candidate and map-picked point
   proposals.
