@@ -1,4 +1,5 @@
 import type { JsMsg } from '@nats-io/jetstream';
+import { afterEach, vi } from 'vitest';
 import { EmailWorkerService } from './email-worker.service.js';
 import {
   parseEmailCommand,
@@ -30,6 +31,10 @@ type WorkerHarness = {
   markDelivered(id: string): Promise<void>;
   retry(id: string): Promise<number>;
   deadLetter(id: string | null, code: string): Promise<void>;
+  identityToken: string;
+  identityTokenExpiresAt: number;
+  identityClientSecret: string;
+  identityUrl: string;
   telemetry: {
     startDeliverySpan(
       templateId: string,
@@ -56,18 +61,16 @@ function createWorker(
     claimState?: string;
     smtpError?: Error;
     retryAttempts?: number;
+    useActualResolver?: boolean;
+    identityToken?: string;
   } = {},
 ) {
-  return Object.assign(
+  const worker = Object.assign(
     Object.create(EmailWorkerService.prototype) as WorkerHarness,
     {
       claim: async (_parsed: EmailCommand) => {
         events.push('claim');
         return options.claimState ?? 'CLAIMED';
-      },
-      resolveRecipient: async (_accountId: string) => {
-        events.push('identity');
-        return 'alice@example.test';
       },
       markDelivered: async (_id: string) => {
         events.push('delivered');
@@ -94,12 +97,23 @@ function createWorker(
         },
       },
       sender: { address: 'noreply@example.test', displayName: 'MyOTA' },
+      identityToken: options.identityToken ?? 'cached-token',
+      identityTokenExpiresAt: Date.now() + 60_000,
+      identityClientSecret: 'email-service-secret-for-tests',
+      identityUrl: 'https://identity.example.test',
       logger: {
         warn: (message: string) => events.push(`warn:${message}`),
         error: (message: string) => events.push(`error:${message}`),
       },
     },
   );
+  if (!options.useActualResolver) {
+    worker.resolveRecipient = async (_accountId: string) => {
+      events.push('identity');
+      return 'alice@example.test';
+    };
+  }
+  return worker;
 }
 
 function deliveryMessage(events: string[], deliveryCount = 1): JsMsg {
@@ -111,6 +125,27 @@ function deliveryMessage(events: string[], deliveryCount = 1): JsMsg {
     term: () => events.push('term'),
   } as unknown as JsMsg;
 }
+
+function stubValidEmailEnvironment(overrides: Record<string, string> = {}) {
+  const values = {
+    EMAIL_SMTP_HOST: 'smtp.example.test',
+    EMAIL_SMTP_PORT: '587',
+    EMAIL_SMTP_USERNAME: 'myota',
+    EMAIL_SMTP_PASSWORD: 'smtp-test-password',
+    EMAIL_SMTP_PASSWORD_FILE: '',
+    EMAIL_SENDER_ADDRESS: 'noreply@example.test',
+    EMAIL_SENDER_DISPLAY_NAME: 'MyOTA',
+    MYOTA_EMAIL_SERVICE_CLIENT_SECRET: 'x'.repeat(32),
+    MYOTA_EMAIL_SERVICE_CLIENT_SECRET_FILE: '',
+    ...overrides,
+  };
+  for (const [name, value] of Object.entries(values)) vi.stubEnv(name, value);
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 describe('email worker Python compatibility', () => {
   it('parses allowlisted participant and administrator commands', () => {
@@ -236,5 +271,103 @@ describe('email worker Python compatibility', () => {
       'error:Email delivery exhausted its retry limit',
     );
     expect(events).not.toContain('retry');
+  });
+
+  it('caches an Identity service token while resolving current addresses', async () => {
+    const worker = createWorker([], {
+      useActualResolver: true,
+      identityToken: '',
+    });
+    const fetchMock = vi.fn();
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ accessToken: 'identity-token', expiresIn: 300 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ deliverableAddress: 'alice@example.test' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ deliverableAddress: 'alice@example.test' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(worker.resolveRecipient(recipientAccountId)).resolves.toBe(
+      'alice@example.test',
+    );
+    await expect(worker.resolveRecipient(recipientAccountId)).resolves.toBe(
+      'alice@example.test',
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'https://identity.example.test/v1/identity/auth/service-token',
+    );
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)).toEqual({
+      service: 'email-service',
+      clientSecret: 'email-service-secret-for-tests',
+    });
+    expect(fetchMock.mock.calls[1]?.[1]?.headers).toEqual({
+      authorization: 'Bearer identity-token',
+    });
+  });
+
+  it('dead-letters unavailable recipients before terminating delivery', async () => {
+    const events: string[] = [];
+    const worker = createWorker(events, { useActualResolver: true });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 404 }),
+    );
+
+    await worker.handle(deliveryMessage(events));
+
+    expect(events).toEqual([
+      'claim',
+      'dead-letter:recipient_unavailable',
+      'term',
+      'warn:Email recipient is unavailable',
+    ]);
+  });
+
+  it('retries temporary Identity failures without exposing response details', async () => {
+    const events: string[] = [];
+    const worker = createWorker(events, {
+      useActualResolver: true,
+      identityToken: '',
+      retryAttempts: 1,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new Error('identity response secret')),
+    );
+
+    await worker.handle(deliveryMessage(events));
+
+    expect(events.slice(0, 3)).toEqual(['claim', 'retry', 'nak:1000']);
+    expect(events.join('\n')).not.toContain('identity response secret');
+  });
+
+  it.each([
+    ['EMAIL_SMTP_PASSWORD', ''],
+    ['EMAIL_SMTP_TLS_MODE', 'none'],
+    ['EMAIL_SMTP_TIMEOUT_SECONDS', '31'],
+  ])('rejects unsafe SMTP configuration: %s', (name, value) => {
+    stubValidEmailEnvironment({ [name]: value });
+
+    expect(() => new EmailWorkerService(null)).toThrow(
+      'SMTP configuration is incomplete or outside bounds',
+    );
+  });
+
+  it('accepts the reference STARTTLS SMTP configuration', () => {
+    stubValidEmailEnvironment();
+
+    expect(() => new EmailWorkerService(null)).not.toThrow();
   });
 });

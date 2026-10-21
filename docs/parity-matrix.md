@@ -53,9 +53,10 @@ Focused Nest email-worker tests now cover the Python worker's allowlisted
 participant and administrator commands, rejection of sensitive extra fields
 and BOM-prefixed JSON, HTML escaping, and delivery-state persistence before the
 JetStream acknowledgement. Duplicate acknowledgement, delayed retry, retry
-exhaustion, and redacted SMTP error logging are also covered. Identity outage,
-recipient-unavailable handling, and SMTP/TLS configuration still need
-worker-level automated compatibility coverage.
+exhaustion, and redacted SMTP error logging are also covered. The tests also
+cover cached Identity token use, transient Identity failure, unavailable
+recipients, and SMTP configuration validation. SMTP/TLS handshake behavior
+still needs worker-level compatibility coverage.
 
 Programme policy service coverage now exercises a rules draft through save,
 submit, approval, and publication, including offset timestamp normalization,
