@@ -142,8 +142,8 @@ handler's error precedence. An authorized malformed or absent target ID returns
 escaping of quotes, control characters, and non-printing Unicode. Account-role
 reads also authorize first; because the Python handler filters assignments
 without resolving an account, an authorized malformed or absent target returns
-an empty role list. An existing account without a profile image returns
-`profile image not found`.
+an empty role list. An existing account without a readable profile image
+returns the quoted `KeyError` detail `'profile image not found'`.
 Sharp inspects all WebP frames and reads APNG animation-control chunks before
 applying the reference's animation rejection rule, including APNG files with a
 separate default image. A Pillow-generated APNG fixture with one animation

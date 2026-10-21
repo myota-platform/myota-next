@@ -78,7 +78,9 @@ export class IdentityProfileImageService {
       const image = result.rows[0];
       imageId = image.profile_image_id;
       if (!imageId || image.profile_image_media_type !== 'image/webp') {
-        throw new NotFoundException('profile image not found');
+        throw new NotFoundException(
+          pythonKeyErrorDetail('profile image not found'),
+        );
       }
     } finally {
       client.release();
@@ -112,7 +114,9 @@ export class IdentityProfileImageService {
         throw error;
       }
       if (isMissingObject(error)) {
-        throw new NotFoundException('profile image not found');
+        throw new NotFoundException(
+          pythonKeyErrorDetail('profile image not found'),
+        );
       }
       throw new ServiceUnavailableException(
         'profile image storage is unavailable',
