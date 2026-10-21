@@ -147,6 +147,11 @@ behavior still require broader automated compatibility coverage.
 The PostgreSQL-backed Identity HTTP fixture also exercises bootstrap account
 provisioning, password login, the authenticated current-account route, and
 single-use refresh rotation through the real Nest controller and service.
+The Gateway-to-Identity integration creates an account using an email with
+surrounding whitespace and mixed case, then verifies normalized email,
+`PENDING_SETUP`, the default `PARTICIPANT` role, and exact idempotent replay.
+It also confirms that account creation rejects a permanent password with the
+reference's invitation-setup detail.
 Login, refresh, recovery request/reset, and OIDC mapping use the reference's
 Python-truthy required-field checks before authentication or persistence, with
 the same `missing required fields` response precedence.

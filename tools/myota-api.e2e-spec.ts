@@ -78,6 +78,51 @@ describeWithDatabases(
           .send({ refreshToken: login.body.refreshToken })
           .expect(403);
 
+        const accountCreationKey = randomUUID();
+        const createdAccountRequest = {
+          displayName: 'Gateway-created participant',
+          email: `  Participant-${randomUUID()}@Example.Test  `,
+          participationType: 'OPERATOR',
+        };
+        const createdAccount = await request(gatewayUrl)
+          .post('/v1/identity/accounts')
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .set('Idempotency-Key', accountCreationKey)
+          .send(createdAccountRequest)
+          .expect(201);
+        expect(createdAccount.body).toMatchObject({
+          displayName: 'Gateway-created participant',
+          email: createdAccountRequest.email.trim().toLowerCase(),
+          participationType: 'OPERATOR',
+          status: 'PENDING_SETUP',
+          roles: [{ role: 'PARTICIPANT' }],
+        });
+        expect(createdAccount.body.password).toBeUndefined();
+
+        const retriedAccountCreation = await request(gatewayUrl)
+          .post('/v1/identity/accounts')
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .set('Idempotency-Key', accountCreationKey)
+          .send(createdAccountRequest)
+          .expect(201);
+        expect(retriedAccountCreation.body).toEqual(createdAccount.body);
+
+        await request(gatewayUrl)
+          .post('/v1/identity/accounts')
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .send({
+            displayName: 'Password must use setup flow',
+            email: `password-${randomUUID()}@example.test`,
+            participationType: 'SWL',
+            password: 'must-use-invitation-setup',
+          })
+          .expect(400)
+          .expect(({ body }) => {
+            expect(body.detail).toBe(
+              'passwords cannot be set during account creation; use the invitation setup flow',
+            );
+          });
+
         const programmeSlug = `gateway-e2e-${randomUUID()}`;
         const programme = await request(gatewayUrl)
           .post('/v1/programmes')
