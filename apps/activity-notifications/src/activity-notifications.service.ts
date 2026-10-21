@@ -351,7 +351,7 @@ export class ActivityNotificationsService
         throw new Error('unsupported_event_version');
       }
       const processed = await this.processEvent(envelope, eventType);
-      message.ack();
+      await message.ackAck();
       this.countOutcome(processed ? 'processed' : 'duplicate');
       this.completedMessages += 1;
       void this.refreshDeadLetterGauge().catch((error: unknown) =>

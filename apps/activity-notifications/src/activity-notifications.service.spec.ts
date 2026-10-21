@@ -31,9 +31,10 @@ describe('ActivityNotificationsService redelivery', () => {
       ),
       subject: 'myota.events.identity.account.created.v1',
       info: { deliveryCount: 1, streamSequence: 12 },
-      ack: vi.fn(() => {
+      ackAck: vi.fn(async () => {
         ackAttempts += 1;
         if (ackAttempts === 1) throw new Error('ack response lost');
+        return true;
       }),
       nak: vi.fn(),
     };
@@ -54,7 +55,7 @@ describe('ActivityNotificationsService redelivery', () => {
         sql.startsWith('INSERT INTO public.consumer_processed_event'),
       ),
     ).toHaveLength(1);
-    expect(message.ack).toHaveBeenCalledTimes(2);
+    expect(message.ackAck).toHaveBeenCalledTimes(2);
     expect(message.nak).toHaveBeenCalledOnce();
   });
 
