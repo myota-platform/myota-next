@@ -15,6 +15,7 @@ import {
   pythonKeyErrorDetail,
   trimPythonWhitespace,
 } from '@app/platform/python-strings.js';
+import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { IdentityAuthService } from './auth.service.js';
 import type {
   AddCallsignDto,
@@ -52,6 +53,7 @@ export class IdentityCallsignService {
     body: AddCallsignDto,
     idempotencyKey?: string,
   ) {
+    requireCallsignFields(body, ['callsign']);
     await this.authorizeAccountTarget(authorization, accountId);
     this.validateAccountPathId(accountId);
     const client = await this.connect();
@@ -173,6 +175,7 @@ export class IdentityCallsignService {
     body: SetPrimaryCallsignDto,
     idempotencyKey?: string,
   ) {
+    requireCallsignFields(body, ['callsignId']);
     await this.authorizeAccountTarget(authorization, accountId);
     this.validateAccountPathId(accountId);
     const client = await this.connect();
@@ -233,6 +236,7 @@ export class IdentityCallsignService {
     callsignId: string,
     body: CallsignEvidenceDto,
   ) {
+    requireCallsignFields(body, ['evidenceType', 'source']);
     const actor = await this.auth.currentAccount(authorization);
     const actorScopes = new Set(actor.scopes as string[]);
     if (actor.id !== accountId && !actorScopes.has('*')) {
@@ -637,6 +641,19 @@ export class IdentityCallsignService {
       [accountId],
     );
     return { ...this.accountView(account), callsigns: callsigns.rows };
+  }
+}
+
+function requireCallsignFields(
+  body: object,
+  names: string[],
+) {
+  const fields = body as Record<string, unknown>;
+  const missing = names.filter((name) => !pythonTruthy(fields[name]));
+  if (missing.length) {
+    throw new BadRequestException(
+      `missing required fields: ${missing.join(', ')}`,
+    );
   }
 }
 

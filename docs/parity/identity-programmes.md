@@ -77,6 +77,9 @@ or resolving a callsign.
 Callsign verification authenticates and resolves its target, then requires
 evidence before validating the optional verification source, matching the
 reference's error precedence.
+Callsign creation, primary selection, and evidence submission check required
+fields with Python truthiness before authorization, preserving the reference's
+`missing required fields` response and precedence.
 Administrator account PATCH and role-assignment PUT authenticate and resolve
 the target account before validating the request body, matching the reference's
 response precedence. Account-update fixtures pin admin permission denial
