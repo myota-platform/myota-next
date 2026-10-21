@@ -1169,18 +1169,18 @@ export class GeodataWorkRepository {
         `INSERT INTO outbox_event
           (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
          VALUES ($1,'geodata.import.preprocessed.v1','geodata-worker','import_run',$2,
-           jsonb_build_object('importRunId',$2::text,'adapter',$4,
+           jsonb_build_object('importRunId',$2::text,'adapter',$4::text,
              'preprocessed',${preprocessedCandidates},'created','[]'::jsonb,
              'updated','[]'::jsonb,'skipped',${skippedSummaries},
              'errors',${errorSummaries},'disappeared',$12::jsonb,
              'conflationCandidates',${conflationSummaries},
-             'manifest',jsonb_build_object('runId',$2::text,'adapter',$4,
-               'source',$5::jsonb,'sourceHash',$6,'recordCount',$7::bigint,
+             'manifest',jsonb_build_object('runId',$2::text,'adapter',$4::text,
+               'source',$5::jsonb,'sourceHash',$6::text,'recordCount',$7::bigint,
                'records',${sourceRecordMap},
                'retrievedAt',$5::jsonb->>'retrievedAt',
                'license',$5::jsonb->>'license',
                'attribution',$5::jsonb->>'attribution',
-               'sourceChanged',$8,'featureCount',$9,'stats',$10::jsonb)),now(),$11)`,
+               'sourceChanged',$8::boolean,'featureCount',$9::bigint,'stats',$10::jsonb)),now(),$11)`,
         [
           randomUUID(),
           run.id,
