@@ -181,17 +181,10 @@ export class GeodataUploadService {
   ) {
     if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10000)
       throw new BadRequestException('partNumber must be between 1 and 10000');
-    if (
-      !Buffer.isBuffer(body) ||
-      body.length === 0 ||
-      body.length > MAX_UPLOAD_PART_BYTES
-    )
+    if (!Buffer.isBuffer(body) || body.length === 0)
       throw new BadRequestException(
         `upload part must be between 1 and ${MAX_UPLOAD_PART_BYTES} bytes`,
       );
-    const sha256 = createHash('sha256').update(body).digest('hex');
-    if (declared && declared.toLowerCase() !== sha256)
-      throw new BadRequestException('upload part checksum does not match');
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -200,6 +193,13 @@ export class GeodataUploadService {
         [id, partNumber],
       );
       const session = await this.findSession(client, id, owner, true);
+      if (body.length > MAX_UPLOAD_PART_BYTES)
+        throw new BadRequestException(
+          'upload part exceeds the configured part limit',
+        );
+      const sha256 = createHash('sha256').update(body).digest('hex');
+      if (declared && declared.toLowerCase() !== sha256)
+        throw new BadRequestException('upload part checksum does not match');
       const total = await client.query(
         `SELECT COALESCE(sum(size_bytes),0)::bigint AS bytes FROM geodata_upload_part
          WHERE upload_session_id=$1 AND part_number<>$2`,
@@ -450,8 +450,6 @@ export class GeodataUploadService {
     const client = await this.connect();
     try {
       const session = await this.findSession(client, id, owner);
-      if (session.status === 'COMPLETED')
-        throw new ConflictException('completed upload cannot be aborted');
       if (session.status !== 'ABORTED') {
         await this.s3()
           .send(
@@ -567,11 +565,11 @@ export class GeodataUploadService {
       );
     if (allowCompleted && row.status === 'COMPLETED') return row;
     if (!['UPLOADING', 'COMPLETING'].includes(row.status))
-      throw new ConflictException(
+      throw new BadRequestException(
         `upload session is ${String(row.status).toLowerCase()}`,
       );
     if (new Date(row.expires_at).getTime() <= Date.now())
-      throw new ConflictException('upload session has expired');
+      throw new BadRequestException('upload session has expired');
     return row;
   }
 

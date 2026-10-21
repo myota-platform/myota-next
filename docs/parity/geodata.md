@@ -160,9 +160,12 @@ per-feature size by default, 250,000 vertices, and the configured feature
 count. Resumable raw upload parts use `MYOTA_UPLOAD_PART_MAX_BYTES` as the
 request parser and service cap; empty and oversized parts return the same
 `upload part must be between 1 and <limit> bytes` validation detail as Python.
-Empty raw parts are rejected before authorization, matching the reference's
-request-body parsing order. The response's suggested part size retains the
-reference's 5 MiB S3 minimum even when the configured hard limit is lower.
+Empty and oversized raw parts are rejected before authorization, matching the
+reference's request-body parsing order. For accepted parts, the owner-scoped
+session and expiry are resolved before checksum validation. Inactive and
+expired sessions retain the Python handler's 400 status and detail. The
+response's suggested part size retains the reference's 5 MiB S3 minimum even
+when the configured hard limit is lower.
 Missing upload sessions and import-processing queues preserve the quoted
 `KeyError` detail used by the Python handlers.
 `GEODATA_MAX_IMPORT_FEATURES` uses Python-compatible integer parsing in
