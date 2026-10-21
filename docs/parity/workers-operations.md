@@ -14,10 +14,10 @@
   source-object retention retries transient PostgreSQL failures with capped
   jittered backoff; S3 delete failures remain isolated for later retry. Queued
   jobs missing an outbox command are repaired periodically, retrying transient
-  PostgreSQL failures with capped jittered backoff. A process-kill
-  qualification covers
-  statistics-rebuild lease takeover; other job kinds, broker outages, and
-  retention recovery evidence remain open. Transient PostgreSQL failures while
+  PostgreSQL failures with capped jittered backoff. Process-kill
+  qualifications cover statistics-rebuild and award-recalculation lease
+  takeover; other job kinds, broker outages, and retention recovery evidence
+  remain open. Transient PostgreSQL failures while
   claiming work or persisting retry/dead-letter state extend the current ACK
   and retry in place with capped jittered backoff; live outage recovery
   remains unqualified.
