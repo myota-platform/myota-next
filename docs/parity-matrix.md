@@ -402,9 +402,9 @@ owned source objects, expires stale multipart uploads, and preserves materialize
 entities. Activity deletion-impact counts preserve exact PostgreSQL integers
 through the Activity response and Geodata's stored confirmation job. CI restarts
 a single-server JetStream with its file store retained and verifies the live
-Geodata worker resumes its entity-deletion durable. Database outages and other
-Geodata worker recovery paths remain open. Activity lease extension is
-supported for long-running jobs.
+Geodata worker resumes all four registered work durables. Database outages,
+clustered failover, and other Geodata worker recovery paths remain open.
+Activity lease extension is supported for long-running jobs.
 Geodata's PostGIS Maidenhead-cell function is checked in CI against the
 reference Python outputs for point, contained polygon, boundary-crossing
 polygon, and line fixtures. CI applies all three owner baselines to three
@@ -814,9 +814,9 @@ geometries.
   individual writes.
   Stale queued and expired work is re-enqueued through the owner outbox.
   A live-worker CI check restarts a single-server JetStream with its file store
-  retained and verifies the entity-deletion durable processes new work after
-  reconnection. This checks broker reconnect behavior through one durable; it
-  does not establish recovery for the other three durables.
+  retained and verifies all four registered work durables process new work
+  after reconnection. Database-outage and clustered failover recovery remain
+  open.
   Scheduled import and upload-session retention is implemented. CI restarts the
   pinned SeaweedFS image during a Geodata multipart upload, verifies a failed
   part leaves no database record, retries it after restart, and checks the
