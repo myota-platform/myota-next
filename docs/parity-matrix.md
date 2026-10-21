@@ -12,7 +12,9 @@ not behavioral completion. Current implementation reference:
 NestJS HTTP APIs format framework and parser failures with the shared `Problem`
 schema in the OpenAPI contract. Responses carry request and correlation IDs in
 headers and in the problem body. `X-Trace-ID` follows the request ID used by
-Nest observability. Identity login preserves the reference status
+Nest observability, and API responses include `API-Version: v1`. Geodata JSON
+responses with an integer `version` also include the reference's quoted
+version `ETag`. Identity login preserves the reference status
 behavior: invalid credentials return 400, while permission and rate-limit
 failures return 403. Other NestJS 401 permission exceptions also map to 403.
 Malformed JSON and oversized JSON bodies use the reference's 400

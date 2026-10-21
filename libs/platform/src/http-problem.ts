@@ -68,6 +68,7 @@ export function requestIds(
   response.setHeader('X-Request-ID', requestId);
   response.setHeader('X-Trace-ID', requestId);
   response.setHeader('X-Correlation-ID', correlationId);
+  response.setHeader('API-Version', 'v1');
   response.setHeader(
     'Access-Control-Expose-Headers',
     'X-Request-ID, X-Correlation-ID, traceparent, tracestate, X-Trace-ID',

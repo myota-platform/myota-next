@@ -179,11 +179,20 @@ export async function bootstrapHttpService(
         );
     });
   }
-  if (preserveBigIntJson)
+  if (preserveBigIntJson || serviceId === 'geodata-api')
     app.use((_request: Request, response: Response, next: NextFunction) => {
       const originalJson = response.json.bind(response);
       response.json = (body: unknown) => {
-        if (!containsBigInt(body)) return originalJson(body);
+        if (serviceId === 'geodata-api' && isRecordBody(body)) {
+          const version = body.version;
+          if (
+            typeof version === 'bigint' ||
+            (typeof version === 'number' && Number.isInteger(version))
+          )
+            response.setHeader('ETag', `"${version}"`);
+        }
+        if (!preserveBigIntJson || !containsBigInt(body))
+          return originalJson(body);
         const serialized = stringifyJsonWithBigInts(body);
         response.type('application/json');
         return response.send(serialized ?? 'null');
@@ -204,4 +213,8 @@ export async function bootstrapHttpService(
   app.enableShutdownHooks();
   await app.listen(Number(process.env.PORT ?? defaultPort), '0.0.0.0');
   return app;
+}
+
+function isRecordBody(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
