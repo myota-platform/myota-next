@@ -984,12 +984,12 @@ onBeforeUnmount(() => {
             @change="chooseFile"
           />
           <small class="field-help"
-            >The server enforces the upload limit, which defaults to 1 GiB and
-            can be overridden per format. Shapefile archives may expand to 1
-            GiB. Imported features have configured size, vertex, and count
-            limits. Shapefile ZIP archives must include matching .shp, .shx, and
-            .dbf files. To resume an interrupted upload, choose the original
-            file and the same import settings.</small
+            >Files can be up to 1 GiB. The server may enforce a lower limit for
+            the selected format. Shapefile archives may expand to 1 GiB.
+            Imported features have configured size, vertex, and count limits.
+            Shapefile ZIP archives must include matching .shp, .shx, and .dbf
+            files. To resume an interrupted upload, choose the original file and
+            the same import settings.</small
           >
           <small v-if="file" class="field-help"
             >Selected: {{ file.name }} ({{
