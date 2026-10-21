@@ -261,9 +261,13 @@ join this pipeline, and community proposals and imported features preserve
 validated attachment metadata before promotion. Multipart/resumable
 uploads are implemented with owner-scoped durable sessions, bounded binary
 parts, checksum and malware scanning, and transactional completion up to the
-worker's configured source limits. GeoJSON, Shapefile, and PBF multipart
-uploads use their larger configurable limits. Durable object references from the configured
-import bucket are bounded, hash-checked, validated, and staged as normalized
+worker's configured source limits. For multipart upload scanning, NestJS maps
+a ClamAV non-2xx response to HTTP 400 and a transport failure to HTTP 503. The
+Python storage path wraps either failure as a runtime error, which the handler
+returns as HTTP 500. Both paths fail closed before queuing import work.
+GeoJSON, Shapefile, and PBF multipart uploads use their larger configurable
+limits. Durable object references from the configured import bucket are
+bounded, hash-checked, validated, and staged as normalized
 worker inputs; object keys retain their submitted value when checked. Shapefile
 ZIP intake selects the first `.shp` member and requires
 matching `.shx` and `.dbf` sidecars, following the reference importer.
