@@ -20,6 +20,7 @@ import {
   nextPageIfMore,
   pageOffset,
   parsePageInteger,
+  parsePageTotal,
 } from '@app/platform/pagination.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { missingPythonTruthyFields } from '@app/platform/python-truthiness.js';
@@ -80,10 +81,8 @@ interface AdminAccountRow extends AccountRow {
 }
 
 interface AdminAccountSearchRow {
-  id: string;
-  display_name: string;
-  email: string | null;
-  status: string;
+  id: string | null;
+  total: string;
 }
 
 interface RoleAssignmentRow {
@@ -607,27 +606,33 @@ export class IdentityAuthService {
     const client = await this.connect();
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-      const filter = '($1::text IS NULL OR a.status = $1)';
-      const searchResult = await client.query<AdminAccountSearchRow>(
-        `SELECT a.id, a.display_name, a.email::text AS email, a.status
-           FROM public.account a
-          WHERE ${filter}
-          ORDER BY a.insertion_order`,
-        [status],
-      );
-      const matchingAccounts = searchResult.rows.filter(
-        (account) =>
-          !search ||
-          unicodeCaseFold(account.display_name ?? '').includes(search) ||
-          unicodeCaseFold(account.email ?? '').includes(search),
-      );
-      const total = matchingAccounts.length;
       const offset = pageOffset(page, pageSize);
-      const accountIds = (
-        typeof offset === 'bigint'
-          ? []
-          : matchingAccounts.slice(offset, offset + pageSize)
-      ).map((account) => account.id);
+      const searchResult = await client.query<AdminAccountSearchRow>(
+        `WITH matching AS MATERIALIZED (
+           SELECT a.id, a.insertion_order
+             FROM public.account a
+            WHERE ($1::text IS NULL OR a.status = $1)
+              AND ($2::text = ''
+                OR strpos(public.identity_casefold(a.display_name), $2) > 0
+                OR strpos(public.identity_casefold(a.email::text), $2) > 0)
+         ), page_rows AS (
+           SELECT id, insertion_order
+             FROM matching
+            ORDER BY insertion_order
+            LIMIT $3 OFFSET $4
+         ), totals AS (
+           SELECT count(*)::text AS total FROM matching
+         )
+         SELECT page_rows.id, totals.total
+           FROM totals
+           LEFT JOIN page_rows ON true
+          ORDER BY page_rows.insertion_order`,
+        [status, search, pageSize, offset],
+      );
+      const total = parsePageTotal(searchResult.rows[0]?.total ?? '0');
+      const accountIds = searchResult.rows.flatMap((row) =>
+        row.id === null ? [] : [row.id],
+      );
       const [accountDetails, rolesByAccount, callsignsByAccount] =
         await Promise.all([
           accountIds.length

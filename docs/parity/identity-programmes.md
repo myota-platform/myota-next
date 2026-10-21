@@ -200,10 +200,11 @@ Identity startup now idempotently provisions the configured bootstrap account,
 sets its password only when no credential exists, ensures its global operator
 role, and writes the corresponding Core outbox and security events.
 Administrator account search now uses full default Unicode 15.0 case folding,
-matching the Python 3.12 reference. It scans only IDs, names, email addresses,
-and status for eligible accounts in reference insertion order, folds names and email addresses before
-slicing the result page, then loads profile, role, and callsign details only
-for that page. The Admin Identity view follows the returned page metadata and
+matching the Python 3.12 reference. A read-only repeatable-read Core query
+filters names and email addresses and returns only the requested account IDs
+in reference insertion order, while computing the exact matching total. The
+service then loads profile, role, and callsign details only for that page. The
+Admin Identity view follows the returned page metadata and
 lets administrators move between matching account pages without loading the
 full account list. Its security-event feed pages through the API's audit
 history in 20-event increments, using the Core `event_order` sequence to order
