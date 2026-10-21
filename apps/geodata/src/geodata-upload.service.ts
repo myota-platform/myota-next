@@ -19,7 +19,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
-import { Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { AsyncSemaphore } from '@app/platform/async-timers.js';
@@ -550,6 +550,21 @@ export class GeodataUploadService {
       const stream = Readable.from(
         scannedObject.Body as AsyncIterable<Uint8Array>,
       );
+      const abortController = new AbortController();
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      const refreshTimeout = () => {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(() => abortController.abort(), 120_000);
+      };
+      refreshTimeout();
+      const scannerBody = stream.pipe(
+        new Transform({
+          transform(chunk: Buffer, _encoding, callback) {
+            refreshTimeout();
+            callback(null, chunk);
+          },
+        }),
+      );
       try {
         const response = await fetch(scannerUrl, {
           method: 'POST',
@@ -557,17 +572,20 @@ export class GeodataUploadService {
             'content-type': 'application/octet-stream',
             'content-length': String(size),
           },
-          body: stream as never,
-          signal: AbortSignal.timeout(120_000),
+          body: scannerBody as never,
+          signal: abortController.signal,
           duplex: 'half',
         } as RequestInit & { duplex: 'half' });
         if (!response.ok)
           throw new BadRequestException('malware scanner rejected the upload');
       } catch {
         stream.destroy();
+        scannerBody.destroy();
         throw new InternalServerErrorException(
           'malware scanner is unavailable; import was not queued',
         );
+      } finally {
+        if (timeout) clearTimeout(timeout);
       }
     }
     return { size, sha256: hash.digest('hex') };

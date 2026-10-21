@@ -286,9 +286,9 @@ multipart abort; storage failures propagate and preserve the current session
 status.
 For multipart upload scanning, NestJS maps
 a ClamAV non-2xx response and transport failure to HTTP 500 with the reference
-scanner-unavailable detail and uses the reference's 120-second timeout. Local
-malware detection remains HTTP 400. Both paths fail closed before queuing
-import work.
+scanner-unavailable detail and uses the reference's 120-second socket
+inactivity timeout while streaming the object. Local malware detection remains
+HTTP 400. Both paths fail closed before queuing import work.
 GeoJSON, Shapefile, and PBF multipart uploads use their larger configurable
 limits. Durable object references from the configured import bucket are
 bounded, hash-checked, validated, and staged as normalized
