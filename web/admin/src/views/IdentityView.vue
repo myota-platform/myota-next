@@ -139,6 +139,7 @@ const evidenceForm = reactive({
   evidenceType: '',
   source: '',
   checksum: '',
+  metadata: '',
 });
 const retireReplacement = ref('');
 const retiringCallsignId = ref('');
@@ -241,17 +242,40 @@ async function submitCallsignEvidence(): Promise<void> {
   const account = selectedAccount.value;
   const callsignId = evidenceForm.callsignId;
   if (!account || !callsignId || !canManageSelectedCallsigns.value) return;
+  let metadata: Record<string, unknown> | null | undefined;
+  if (evidenceForm.metadata.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(evidenceForm.metadata);
+      if (
+        parsed !== null &&
+        (typeof parsed !== 'object' || Array.isArray(parsed))
+      )
+        throw new Error('Evidence metadata must be a JSON object or null.');
+      metadata = parsed as Record<string, unknown> | null;
+    } catch (cause) {
+      error.value =
+        cause instanceof SyntaxError
+          ? 'Evidence metadata must contain valid JSON.'
+          : cause instanceof Error
+            ? cause.message
+            : 'Evidence metadata must contain valid JSON.';
+      message.value = '';
+      return;
+    }
+  }
   await feedback.run(
     async () => {
       await myotaClient.submitIdentityCallsignEvidence(account.id, callsignId, {
         evidenceType: evidenceForm.evidenceType.trim(),
         source: evidenceForm.source.trim(),
         checksum: evidenceForm.checksum.trim() || undefined,
+        ...(metadata === undefined ? {} : { metadata }),
       });
       evidenceForm.callsignId = '';
       evidenceForm.evidenceType = '';
       evidenceForm.source = '';
       evidenceForm.checksum = '';
+      evidenceForm.metadata = '';
       await refreshSelectedCallsigns(account.id);
     },
     { mutation: true, success: 'Callsign evidence submitted.' },
@@ -942,6 +966,13 @@ onMounted(load);
           <label>
             Checksum (optional)
             <input v-model="evidenceForm.checksum" />
+          </label>
+          <label class="wide">
+            Metadata JSON (optional)
+            <textarea
+              v-model="evidenceForm.metadata"
+              placeholder='{"document":"reference"}'
+            ></textarea>
           </label>
           <div class="form-actions wide">
             <button class="primary" type="submit" :disabled="saving">
