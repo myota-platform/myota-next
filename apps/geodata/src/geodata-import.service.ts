@@ -1,4 +1,5 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import {
   BadRequestException,
   Inject,
@@ -377,7 +378,7 @@ function prepareImport(body: Record<string, unknown>) {
       };
     } else {
       try {
-        const parsed: unknown = JSON.parse(body.content);
+        const parsed: unknown = parseJsonWithExactIntegers(body.content);
         if (Array.isArray(parsed))
           document = { type: 'FeatureCollection', features: parsed };
         else if (isRecord(parsed)) document = parsed;

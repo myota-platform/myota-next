@@ -1,4 +1,5 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import {
   Inject,
   Injectable,
@@ -532,7 +533,9 @@ export class GeodataWorkRepository {
         throw new Error(
           'geodata import source hash does not match its queued record',
         );
-      const document: unknown = JSON.parse(raw.toString('utf8'));
+      const document: unknown = parseJsonWithExactIntegers(
+        raw.toString('utf8'),
+      );
       if (
         !isRecord(document) ||
         document.type !== 'FeatureCollection' ||

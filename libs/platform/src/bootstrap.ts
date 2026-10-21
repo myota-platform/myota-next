@@ -80,9 +80,11 @@ export async function bootstrapHttpService(
   app.use((request: Request, _response: Response, next: NextFunction) => {
     if (
       request.method === 'POST' &&
-      ['/v1/programmes', '/v1/geodata/refresh-schedules'].includes(
-        request.url?.split('?', 1)[0] ?? '',
-      ) &&
+      [
+        '/v1/programmes',
+        '/v1/geodata/refresh-schedules',
+        '/v1/geodata/imports',
+      ].includes(request.url?.split('?', 1)[0] ?? '') &&
       Buffer.isBuffer((request as Request & { rawBody?: Buffer }).rawBody)
     )
       request.body = parseJsonWithExactIntegers(
