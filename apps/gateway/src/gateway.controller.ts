@@ -77,7 +77,7 @@ export class GatewayController {
     let account: Record<string, unknown>;
     try {
       const result = await fetch(
-        `${identityBase.replace(/\/$/, '')}/v1/identity/me`,
+        `${identityBase.replace(/\/+$/, '')}/v1/identity/me`,
         {
           headers: { authorization },
           signal: AbortSignal.timeout(5000),
@@ -190,7 +190,7 @@ export class GatewayController {
     try {
       const base = new URL(servicePath);
       target = new URL(
-        `${base.pathname.replace(/\/$/, '')}${request.originalUrl}`,
+        `${base.pathname.replace(/\/+$/, '')}${request.originalUrl}`,
         base.origin,
       );
     } catch {

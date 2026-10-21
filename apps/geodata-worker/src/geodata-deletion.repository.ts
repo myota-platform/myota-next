@@ -159,7 +159,7 @@ export class GeodataDeletionRepository {
   private async activityCascade(job: DeletionJob) {
     const base = (
       process.env.MYOTA_ACTIVITY_URL ?? 'http://activity:8004'
-    ).replace(/\/$/, '');
+    ).replace(/\/+$/, '');
     const token = signAccessToken(
       job.executionClaims.sub,
       job.executionClaims.scp,
