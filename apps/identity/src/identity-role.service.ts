@@ -64,14 +64,23 @@ export class IdentityRoleService {
       description: string;
       scopes: string[];
       system: boolean;
-      created_at: Date;
-      updated_at: Date;
+      created_at: string;
+      updated_at: string;
     }>(
       `SELECT role_code AS code, display_name AS name, description, scopes,
-              is_system AS system, created_at, updated_at
+              is_system AS system,
+              to_char(created_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+              to_char(updated_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at
          FROM public.identity_role_definition`,
     );
-    const initialTimestamp = new Date();
+    const initialTimestamp = (
+      await client.query<{ timestamp: string }>(
+        `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
+      )
+    ).rows[0].timestamp;
     const definitions = new Map<string, RoleDefinition>(
       DEFAULT_ROLE_DEFINITIONS.map((definition) => [
         definition.code,
@@ -119,9 +128,7 @@ export class IdentityRoleService {
       ...source,
       code: pythonStringJsonField(source, 'code'),
       name: pythonStringJsonField(source, 'name'),
-      description: pythonTruthy(source.description)
-        ? source.description
-        : '',
+      description: pythonTruthy(source.description) ? source.description : '',
     });
     const code = trimPythonWhitespace(body.code ?? '')
       .toUpperCase()
@@ -150,14 +157,18 @@ export class IdentityRoleService {
         description: string;
         scopes: string[];
         system: boolean;
-        created_at: Date;
-        updated_at: Date;
+        created_at: string;
+        updated_at: string;
       }>(
         `INSERT INTO public.identity_role_definition
            (role_code, display_name, description, scopes, is_system)
          VALUES ($1, $2, $3, $4, false)
          RETURNING role_code AS code, display_name AS name, description, scopes,
-                   is_system AS system, created_at, updated_at`,
+                   is_system AS system,
+                   to_char(created_at AT TIME ZONE 'UTC',
+                     'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                   to_char(updated_at AT TIME ZONE 'UTC',
+                     'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
         [code, name, body.description ?? '', scopes],
       );
       const role = toRoleDefinition(result.rows[0]);
@@ -199,11 +210,15 @@ export class IdentityRoleService {
         description: string;
         scopes: string[];
         system: boolean;
-        created_at: Date;
-        updated_at: Date;
+        created_at: string;
+        updated_at: string;
       }>(
         `SELECT role_code AS code, display_name AS name, description, scopes,
-                is_system AS system, created_at, updated_at
+                is_system AS system,
+                to_char(created_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                to_char(updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at
            FROM public.identity_role_definition
           WHERE role_code = $1 FOR UPDATE`,
         [code],
@@ -245,7 +260,11 @@ export class IdentityRoleService {
             SET display_name = $2, description = $3, scopes = $4, updated_at = now()
           WHERE role_code = $1
           RETURNING role_code AS code, display_name AS name, description, scopes,
-                    is_system AS system, created_at, updated_at`,
+                    is_system AS system,
+                    to_char(created_at AT TIME ZONE 'UTC',
+                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                    to_char(updated_at AT TIME ZONE 'UTC',
+                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
         [code, name, description, scopes],
       );
       const role = toRoleDefinition(result.rows[0]);
@@ -319,8 +338,8 @@ function toRoleDefinition(row: {
   description: string;
   scopes: string[];
   system: boolean;
-  created_at: Date;
-  updated_at: Date;
+  created_at: string;
+  updated_at: string;
 }): RoleDefinition {
   return {
     code: row.code,

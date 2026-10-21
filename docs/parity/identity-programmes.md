@@ -103,6 +103,8 @@ through to PostgreSQL without JavaScript `Date` truncation. Account creation,
 login and refresh responses, current-account reads, profile updates, and
 administrator account reads also preserve microseconds in account and profile
 image timestamps.
+Role-definition and account-role reads preserve PostgreSQL microseconds in
+their creation and expiry timestamps as well.
 Callsign create, primary-selection, evidence, verification, and retirement defer
 account-ID resolution until after their respective authorization checks; a
 missing account returns the quoted-ID 404 before replaying an idempotent result

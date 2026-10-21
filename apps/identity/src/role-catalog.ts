@@ -4,8 +4,8 @@ export interface RoleDefinition {
   description: string;
   scopes: string[];
   system: boolean;
-  createdAt?: Date;
-  updatedAt?: Date;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export const ADMIN_PERMISSION_CATALOG = [

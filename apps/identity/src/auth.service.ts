@@ -95,8 +95,8 @@ interface RoleAssignmentRow {
   jurisdiction: string | null;
   entityType: string | null;
   scopes: string[];
-  createdAt: Date;
-  validTo: Date | null;
+  createdAt: string;
+  validTo: string | null;
 }
 
 interface CallsignRow {
@@ -927,7 +927,10 @@ export class IdentityAuthService {
               coalesce(ar.jurisdiction_code, j.code) AS "jurisdiction",
               ar.entity_type_code AS "entityType",
               coalesce(rd.scopes, ARRAY(SELECT jsonb_array_elements_text(ar.scopes))) AS scopes,
-              ar.created_at AS "createdAt", ar.valid_to AS "validTo"
+              to_char(ar.created_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt",
+              to_char(ar.valid_to AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "validTo"
          FROM public.account_role ar
          LEFT JOIN public.identity_role_definition rd ON rd.role_code = ar.role_code
          LEFT JOIN public.programme p ON p.id = ar.programme_id
