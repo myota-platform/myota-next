@@ -27,12 +27,21 @@ export function trimPythonWhitespace(value: string): string {
 
 export function pythonKeyErrorDetail(key: string): string {
   const quote = key.includes("'") && !key.includes('"') ? '"' : "'";
-  const escaped = key
-    .replaceAll('\\', '\\\\')
-    .replaceAll(quote, `\\${quote}`)
-    .replaceAll('\n', '\\n')
-    .replaceAll('\r', '\\r')
-    .replaceAll('\t', '\\t');
+  let escaped = '';
+  for (const character of key) {
+    if (character === '\\') escaped += '\\\\';
+    else if (character === quote) escaped += `\\${quote}`;
+    else if (character === '\n') escaped += '\\n';
+    else if (character === '\r') escaped += '\\r';
+    else if (character === '\t') escaped += '\\t';
+    else if (/[\p{C}\p{Zl}\p{Zp}]/u.test(character)) {
+      const codePoint = character.codePointAt(0)!;
+      if (codePoint <= 0xff) escaped += `\\x${codePoint.toString(16).padStart(2, '0')}`;
+      else if (codePoint <= 0xffff)
+        escaped += `\\u${codePoint.toString(16).padStart(4, '0')}`;
+      else escaped += `\\U${codePoint.toString(16).padStart(8, '0')}`;
+    } else escaped += character;
+  }
   return `${quote}${escaped}${quote}`;
 }
 

@@ -125,7 +125,8 @@ transparent-pixel options.
 Administrative profile-image, account-detail, and account-export reads
 authorize the caller before resolving the target account, matching the Python
 handler's error precedence. An authorized malformed or absent target ID returns
-404 with the quoted ID detail produced by Python's `KeyError`. Account-role
+404 with the quoted ID detail produced by Python's `KeyError`, including its
+escaping of quotes, control characters, and non-printing Unicode. Account-role
 reads also authorize first; because the Python handler filters assignments
 without resolving an account, an authorized malformed or absent target returns
 an empty role list. An existing account without a profile image returns
