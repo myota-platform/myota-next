@@ -267,6 +267,10 @@ uploads are implemented with owner-scoped durable sessions, bounded binary
 parts, checksum and malware scanning, and transactional completion up to the
 worker's configured source limits. Repeated completion returns the Python
 handler's full persisted `importRun` object.
+Upload creation checks required fields using Python truthiness and order,
+normalizes filename and size before the idempotency lookup, then replays a
+matching key by filename and expected size before validating digest, category,
+and format details.
 Multipart upload creation accepts the Python `JSON` format alias and stores it
 as `GEOJSON`, including when inferred from the filename extension.
 For multipart upload scanning, NestJS maps

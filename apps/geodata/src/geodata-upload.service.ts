@@ -23,7 +23,11 @@ import { Readable } from 'node:stream';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
 import { AsyncSemaphore } from '@app/platform/async-timers.js';
-import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
+import {
+  pythonKeyErrorDetail,
+  pythonString,
+} from '@app/platform/python-strings.js';
+import { missingPythonTruthyFields } from '@app/platform/python-truthiness.js';
 import {
   MAX_GEOJSON_UPLOAD_BYTES,
   MAX_OSM_PBF_UPLOAD_BYTES,
@@ -64,21 +68,27 @@ export class GeodataUploadService {
     key: string | undefined,
     body: Record<string, unknown>,
   ) {
-    const input = validateCreate(body);
+    const required = validateCreatePrerequisites(body);
     const idempotencyKey = key || randomUUID();
+    const lookupClient = await this.connect();
+    try {
+      const prior = await lookupClient.query(
+        `SELECT id::text, filename, expected_size, status FROM geodata_upload_session
+         WHERE owner_subject=$1 AND idempotency_key=$2`,
+        [owner, idempotencyKey],
+      );
+      if (prior.rows[0]) return this.createdResponse(prior.rows[0], required);
+    } finally {
+      lookupClient.release();
+    }
+
+    const input = validateCreate(body, required);
     const bucket =
       process.env.MYOTA_GEODATA_IMPORT_BUCKET ?? 'myota-geodata-imports';
     const id = randomUUID();
     const objectKey = `geodata-imports/${id}-${input.filename}`;
     const client = await this.connect();
     try {
-      const prior = await client.query(
-        `SELECT id::text, filename, expected_size, status FROM geodata_upload_session
-         WHERE owner_subject=$1 AND idempotency_key=$2`,
-        [owner, idempotencyKey],
-      );
-      if (prior.rows[0]) return this.createdResponse(prior.rows[0], input);
-
       const created = await this.s3().send(
         new CreateMultipartUploadCommand({
           Bucket: bucket,
@@ -126,7 +136,7 @@ export class GeodataUploadService {
             UploadId: created.UploadId,
           }),
         );
-        return this.createdResponse(raced.rows[0], input);
+        return this.createdResponse(raced.rows[0], required);
       } catch (error) {
         await this.s3()
           .send(
@@ -608,7 +618,10 @@ export class GeodataUploadService {
 
   private createdResponse(
     row: Record<string, unknown>,
-    input: ReturnType<typeof validateCreate>,
+    input: Pick<
+      ReturnType<typeof validateCreatePrerequisites>,
+      'filename' | 'expectedSize'
+    >,
   ) {
     if (
       row.filename !== input.filename ||
@@ -626,7 +639,11 @@ export class GeodataUploadService {
   }
 }
 
-export function validateCreate(body: Record<string, unknown>) {
+export function validateCreate(
+  body: Record<string, unknown>,
+  required = validateCreatePrerequisites(body),
+) {
+  const { filename, expectedSize } = required;
   const adapter = typeof body.adapter === 'string' ? body.adapter : '';
   if (!['PARKSERVE_US', 'OSM', 'GOVERNMENT_GIS', 'MANUAL'].includes(adapter))
     throw new BadRequestException('unsupported import adapter');
@@ -636,9 +653,6 @@ export function validateCreate(body: Record<string, unknown>) {
     Array.isArray(body.source)
   )
     throw new BadRequestException('source must be an object');
-  const filename =
-    typeof body.filename === 'string' ? body.filename.split(/[\\/]/).pop() : '';
-  if (!filename) throw new BadRequestException('filename must not be empty');
   const fallbackFormat = filename.slice(filename.lastIndexOf('.') + 1);
   const formatValue =
     typeof body.format === 'string' && body.format
@@ -648,16 +662,10 @@ export function validateCreate(body: Record<string, unknown>) {
   const format =
     normalizedFormatValue === 'JSON' ? 'GEOJSON' : normalizedFormatValue;
   const sourceLimit = sourceUploadLimit(format);
-  const parsedExpectedSize = pythonInteger(body.expectedSize);
-  if (
-    parsedExpectedSize === null ||
-    parsedExpectedSize < 1n ||
-    parsedExpectedSize > BigInt(sourceLimit)
-  )
+  if (expectedSize > sourceLimit)
     throw new BadRequestException(
       `upload size must be between 1 and ${sourceLimit} bytes`,
     );
-  const expectedSize = Number(parsedExpectedSize);
   const entityTypes = normalizeEntityTypeCodes(
     body.entityTypes,
     body.entityType,
@@ -730,6 +738,33 @@ export function validateCreate(body: Record<string, unknown>) {
   delete (metadata as Record<string, unknown>).expectedSize;
   delete (metadata as Record<string, unknown>).sha256;
   return { filename, expectedSize, sha256, metadata };
+}
+
+function validateCreatePrerequisites(body: Record<string, unknown>) {
+  const missing = missingPythonTruthyFields(body, [
+    'adapter',
+    'source',
+    'filename',
+    'expectedSize',
+    'entityTypes',
+  ]);
+  if (missing.length)
+    throw new BadRequestException(
+      `missing required fields: ${missing.join(', ')}`,
+    );
+  const filename =
+    pythonString(body.filename).replace(/\/+$/u, '').split('/').pop() ?? '';
+  if (!filename) throw new BadRequestException('filename must not be empty');
+  const parsedExpectedSize = pythonInteger(body.expectedSize);
+  if (
+    parsedExpectedSize === null ||
+    parsedExpectedSize < 1n ||
+    parsedExpectedSize > BigInt(MAX_UPLOAD_BYTES)
+  )
+    throw new BadRequestException(
+      `upload size must be between 1 and ${MAX_UPLOAD_BYTES} bytes`,
+    );
+  return { filename, expectedSize: Number(parsedExpectedSize) };
 }
 
 function integerEnv(name: string, fallback: number) {
