@@ -18,7 +18,10 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import sharp from 'sharp';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
-import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import {
+  pythonKeyErrorDetail,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
 import { writeSecurityEvent } from '@app/platform/outbox.js';
 import type { IdentityAuthService } from './auth.service.js';
 
@@ -478,15 +481,4 @@ function accountIdOf(actor: Record<string, unknown>): string {
     throw new UnauthorizedException('account identity is unavailable');
   }
   return actor.id;
-}
-
-function pythonKeyErrorDetail(key: string): string {
-  const quote = key.includes("'") && !key.includes('"') ? '"' : "'";
-  const escaped = key
-    .replaceAll('\\', '\\\\')
-    .replaceAll(quote, `\\${quote}`)
-    .replaceAll('\n', '\\n')
-    .replaceAll('\r', '\\r')
-    .replaceAll('\t', '\\t');
-  return `${quote}${escaped}${quote}`;
 }

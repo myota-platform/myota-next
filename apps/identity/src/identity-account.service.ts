@@ -17,7 +17,10 @@ import {
   parsePageTotal,
 } from '@app/platform/pagination.js';
 import { writeOutboxEvent, writeSecurityEvent } from '@app/platform/outbox.js';
-import { trimPythonWhitespace } from '@app/platform/python-strings.js';
+import {
+  pythonKeyErrorDetail,
+  trimPythonWhitespace,
+} from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import {
@@ -373,6 +376,7 @@ export class IdentityAccountService {
     accountId: string,
   ): Promise<Record<string, unknown>> {
     await this.authorizeAccountTarget(authorization, accountId);
+    this.validateAccountPathId(accountId);
     const client = await this.connect();
     try {
       const result = await client.query<AccountRecord>(
@@ -389,7 +393,8 @@ export class IdentityAccountService {
         [accountId],
       );
       const account = result.rows[0];
-      if (!account) throw new NotFoundException('account not found');
+      if (!account)
+        throw new NotFoundException(pythonKeyErrorDetail(accountId));
       const callsigns = await client.query(
         `SELECT c.id, c.value, c.lifecycle_status AS status,
                 c.source,
@@ -698,6 +703,7 @@ export class IdentityAccountService {
     accountId: string,
   ): Promise<Record<string, unknown>> {
     await this.authorizeAccountTarget(authorization, accountId);
+    this.validateAccountPathId(accountId);
     const client = await this.connect();
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
@@ -969,6 +975,11 @@ export class IdentityAccountService {
     }
   }
 
+  private validateAccountPathId(accountId: string) {
+    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(accountId))
+      throw new NotFoundException(pythonKeyErrorDetail(accountId));
+  }
+
   private validateRoleGrants(
     requested: RoleGrantDto[],
     actorScopes: Set<string>,
@@ -1109,7 +1120,8 @@ export class IdentityAccountService {
       [accountId],
     );
     const account = accountResult.rows[0];
-    if (!account) throw new NotFoundException('account not found');
+    if (!account)
+      throw new NotFoundException(pythonKeyErrorDetail(accountId));
     const callsigns = await client.query(
       `SELECT c.id, c.value, c.lifecycle_status AS status, c.source,
               c.verification_source AS "verificationSource",

@@ -256,7 +256,7 @@ export class AuthController {
   @Get('accounts/:accountId')
   getAccount(
     @Headers('authorization') authorization: string | undefined,
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('accountId') accountId: string,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
@@ -266,7 +266,7 @@ export class AuthController {
   @Get('accounts/:accountId/export')
   exportAccount(
     @Headers('authorization') authorization: string | undefined,
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('accountId') accountId: string,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
@@ -288,7 +288,7 @@ export class AuthController {
   @Get('accounts/:accountId/roles')
   listAccountRoles(
     @Headers('authorization') authorization: string | undefined,
-    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Param('accountId') accountId: string,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');

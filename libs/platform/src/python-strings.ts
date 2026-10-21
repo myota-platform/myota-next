@@ -25,6 +25,17 @@ export function trimPythonWhitespace(value: string): string {
   return characters.slice(start, end).join('');
 }
 
+export function pythonKeyErrorDetail(key: string): string {
+  const quote = key.includes("'") && !key.includes('"') ? '"' : "'";
+  const escaped = key
+    .replaceAll('\\', '\\\\')
+    .replaceAll(quote, `\\${quote}`)
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
+    .replaceAll('\t', '\\t');
+  return `${quote}${escaped}${quote}`;
+}
+
 export function collapsePythonWhitespace(value: string): string {
   const output: string[] = [];
   let pendingSpace = false;
