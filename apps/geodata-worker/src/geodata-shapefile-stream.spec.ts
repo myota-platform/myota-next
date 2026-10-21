@@ -36,6 +36,138 @@ describe('streamShapefileFeatures', () => {
     });
   });
 
+  it('organizes nested PyShp polygon rings like the reference importer', async () => {
+    const source = await readFile(
+      new URL(
+        './fixtures/python-polygon-nested-rings-shapefile.zip',
+        import.meta.url,
+      ),
+    );
+    async function* chunks() {
+      yield source;
+    }
+    const features: unknown[] = [];
+    for await (const feature of streamShapefileFeatures(
+      chunks(),
+      'python-polygon-nested-rings-shapefile.zip',
+      '',
+      10,
+      async () => undefined,
+    )) {
+      features.push(feature);
+    }
+
+    expect(features).toHaveLength(1);
+    expect(features[0]).toMatchObject({
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: [
+          [
+            [
+              [0, 0],
+              [0, 10],
+              [10, 10],
+              [10, 0],
+              [0, 0],
+            ],
+            [
+              [2, 2],
+              [8, 2],
+              [8, 8],
+              [2, 8],
+              [2, 2],
+            ],
+          ],
+          [
+            [
+              [3, 3],
+              [3, 4],
+              [4, 4],
+              [4, 3],
+              [3, 3],
+            ],
+          ],
+          [
+            [
+              [20, 0],
+              [20, 10],
+              [30, 10],
+              [30, 0],
+              [20, 0],
+            ],
+          ],
+        ],
+      },
+      properties: { name: 'nested rings' },
+    });
+  });
+
+  it('organizes nested PyShp polygon rings like the reference importer', async () => {
+    const source = await readFile(
+      new URL(
+        './fixtures/python-polygon-nested-rings-shapefile.zip',
+        import.meta.url,
+      ),
+    );
+    async function* chunks() {
+      yield source;
+    }
+    const features: unknown[] = [];
+    for await (const feature of streamShapefileFeatures(
+      chunks(),
+      'python-polygon-nested-rings-shapefile.zip',
+      '',
+      10,
+      async () => undefined,
+    )) {
+      features.push(feature);
+    }
+
+    expect(features).toHaveLength(1);
+    expect(features[0]).toMatchObject({
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: [
+          [
+            [
+              [0, 0],
+              [0, 10],
+              [10, 10],
+              [10, 0],
+              [0, 0],
+            ],
+            [
+              [2, 2],
+              [8, 2],
+              [8, 8],
+              [2, 8],
+              [2, 2],
+            ],
+          ],
+          [
+            [
+              [3, 3],
+              [3, 4],
+              [4, 4],
+              [4, 3],
+              [3, 3],
+            ],
+          ],
+          [
+            [
+              [20, 0],
+              [20, 10],
+              [30, 10],
+              [30, 0],
+              [20, 0],
+            ],
+          ],
+        ],
+      },
+      properties: { name: 'nested rings' },
+    });
+  });
+
   it.each([
     'python-point-shapefile.zip',
     'python-point-shapefile-uppercase.zip',
