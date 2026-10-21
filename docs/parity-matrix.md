@@ -209,7 +209,9 @@ validity defaults come from `programmeRules` only, even
 when validation uses the `rules` alias. Timestamp normalization accepts lowercase `t`, ISO week dates,
 one-character date/time separators, and fractional-second time-zone offsets
 supported by Python's
-`datetime.fromisoformat`. QSO ingestion requests also persist bounded,
+`datetime.fromisoformat`; Activity tests cover date-only, ISO week, compact
+offset, fractional offset-second, and invalid lowercase-`z` cases. QSO
+ingestion requests also persist bounded,
 owner-scoped jobs with a status read path. `sourceFormat` defaults only when
 omitted and otherwise reaches the worker unchanged, matching the Python
 handler. The separate Activity worker consumes its six registered JetStream
