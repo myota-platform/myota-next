@@ -16,7 +16,9 @@ before activation lookup and return the same ordered `missing required fields`
 detail as the reference. Direct QSO writes and queued QSO ingestion preserve
 Python string coercion for JSON float tokens in `workedCallsign`,
 `workedLocator`, `hunterId`, and `workedEntityId`; ingestion retains float-token
-metadata through the Activity JSONB job payload and worker read. Activation
+metadata through the Activity JSONB job payload and worker read. Single-QSO
+award-recalculation jobs retain a null `hunterId` entry in `subjectIds`, as the
+Python handler does. Activation
 validity defaults come from
 `programmeRules` only, even
 when validation uses the `rules` alias. Timestamp normalization accepts lowercase `t`, ISO week dates,

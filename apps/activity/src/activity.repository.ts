@@ -764,9 +764,7 @@ export class ActivityRepository {
           'AWARD_RECALCULATE',
           {
             programmeSlug: activationRow.programme_slug,
-            subjectIds: [activationRow.operator_id, qso.hunterId].filter(
-              Boolean,
-            ),
+            subjectIds: [activationRow.operator_id, qso.hunterId ?? null],
           },
           `qso:${row.id}`,
         );
