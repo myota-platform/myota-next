@@ -334,10 +334,12 @@ export class IdentityCallsignService {
         id: string;
         value: string;
         source: string | null;
-        valid_from: Date | null;
-        valid_to: Date | null;
+        valid_from: string | null;
+        valid_to: string | null;
       }>(
-        `SELECT id, value, source, valid_from, valid_to
+        `SELECT id, value, source,
+                to_char(valid_from AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS valid_from,
+                to_char(valid_to AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS valid_to
            FROM public.callsign WHERE id = $1 AND account_id = $2 FOR UPDATE`,
         [callsignId, accountId],
       );
@@ -355,13 +357,15 @@ export class IdentityCallsignService {
       }
       const body = await validateVerifyCallsignBody(rawBody);
       const verifiedAt = (
-        await client.query<{ timestamp: Date }>(
-          'SELECT clock_timestamp() AS timestamp',
+        await client.query<{ timestamp: string }>(
+          `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
         )
       ).rows[0].timestamp;
       const updatedAt = (
-        await client.query<{ timestamp: Date }>(
-          'SELECT clock_timestamp() AS timestamp',
+        await client.query<{ timestamp: string }>(
+          `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
         )
       ).rows[0].timestamp;
       const verificationSource =
@@ -433,12 +437,14 @@ export class IdentityCallsignService {
         value: string;
         source: string | null;
         verification_source: string | null;
-        verified_at: Date | null;
-        valid_from: Date | null;
-        valid_to: Date | null;
+        verified_at: string | null;
+        valid_from: string | null;
+        valid_to: string | null;
       }>(
-        `SELECT id, value, source, verification_source, verified_at,
-                valid_from, valid_to
+        `SELECT id, value, source, verification_source,
+                to_char(verified_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS verified_at,
+                to_char(valid_from AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS valid_from,
+                to_char(valid_to AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS valid_to
            FROM public.callsign WHERE id = $1 AND account_id = $2 FOR UPDATE`,
         [callsignId, accountId],
       );
@@ -473,12 +479,13 @@ export class IdentityCallsignService {
           WHERE callsign_id = $1 ORDER BY evidence_order`,
         [callsignId],
       );
-      let validTo: Date | null;
-      let responseValidTo: string | Date | null;
+      let validTo: string | null;
+      let responseValidTo: string | null;
       if (body.validTo === undefined) {
         validTo = (
-          await client.query<{ timestamp: Date }>(
-            'SELECT clock_timestamp() AS timestamp',
+          await client.query<{ timestamp: string }>(
+            `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC',
+              'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS timestamp`,
           )
         ).rows[0].timestamp;
         responseValidTo = validTo;
@@ -486,14 +493,15 @@ export class IdentityCallsignService {
         validTo = null;
         responseValidTo = null;
       } else {
-        validTo = new Date(body.validTo);
+        validTo = body.validTo;
         responseValidTo = body.validTo;
       }
-      const updatedAtResult = await client.query<{ updated_at: Date }>(
+      const updatedAtResult = await client.query<{ updated_at: string }>(
         `UPDATE public.callsign
             SET lifecycle_status = 'RETIRED', valid_to = $2,
                 updated_at = clock_timestamp()
-          WHERE id = $1 RETURNING updated_at`,
+          WHERE id = $1 RETURNING to_char(updated_at AT TIME ZONE 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
         [callsignId, validTo],
       );
       const updatedAt = updatedAtResult.rows[0].updated_at;

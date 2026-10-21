@@ -96,7 +96,9 @@ Callsign retirement authenticates and resolves the account and callsign before
 validating optional fields. It checks a primary replacement before reading
 evidence only when retiring the primary callsign; malformed replacement values
 are ignored when the target is not primary, matching the reference's branch
-behavior.
+behavior. Verification and retirement preserve PostgreSQL microseconds in
+callsign lifecycle timestamps and pass submitted `validTo` text through to
+PostgreSQL without JavaScript `Date` truncation.
 Callsign create, primary-selection, evidence, verification, and retirement defer
 account-ID resolution until after their respective authorization checks; a
 missing account returns the quoted-ID 404 before replaying an idempotent result
