@@ -39,8 +39,11 @@ production readiness.
 - **Production operations:** qualify persistent database operations, NATS,
   object storage, secrets, observability, deployment, and release automation.
 - **Geodata performance:** larger datasets and full worker throughput remain
-  unqualified. Python thread-pool limits do not map directly to Nest durable
-  consumer concurrency; compare throughput and resource use before tuning.
+  unqualified. `MYOTA_UPLOAD_WORKERS` caps multipart finalization per Geodata
+  API process. `MYOTA_IMPORT_WORKERS` caps preprocessing and promotion together
+  per worker process when native concurrency settings are absent. Replicas
+  multiply these process-local limits; compare throughput and resource use
+  before production tuning.
 
 ## References
 
