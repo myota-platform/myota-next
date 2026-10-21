@@ -20,6 +20,9 @@ The reference implementation is MyOTA monorepo commit
 - Keep three independent database targets: Core PostgreSQL, Activity
   PostgreSQL, and Geodata PostgreSQL with PostGIS.
 
+See [runtime language options](docs/language-options.md) for the performance
+tradeoffs under consideration before changing this baseline.
+
 The persistence library and production runtime qualification remain open. Email
 delivery now uses the Core database owner and a NestJS worker, while its Identity
 producer, deployment, and full telemetry qualification remain gated. See
