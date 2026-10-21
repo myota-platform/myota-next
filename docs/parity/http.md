@@ -18,6 +18,9 @@ The shared parser decodes JSON request bodies regardless of `Content-Type` or
 declared charset, as the reference does. It applies the same invalid request
 details to malformed JSON, invalid UTF-8, a leading UTF-8 BOM, and compressed
 request bodies, which the reference attempts to decode as plain UTF-8 JSON.
+Routes whose validation or string conversion depends on Python numeric values
+retain arbitrary-precision integer tokens and direct float-token metadata
+before the request reaches its service handler.
 The Geodata import creation route retains its dedicated multipart
 handling for `multipart/form-data`, and Activity award image uploads retain
 their route-specific binary handling.

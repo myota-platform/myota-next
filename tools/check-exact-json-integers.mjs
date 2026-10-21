@@ -33,8 +33,8 @@ requirePattern(
 );
 requirePattern(
   'libs/platform/src/bootstrap.ts',
-  /const exactIntegerRequest =[\s\S]*?request\.method === 'POST'[\s\S]*?'\/v1\/programmes'[\s\S]*?request\.body = exactIntegerRequest[\s\S]*?parseJsonWithExactIntegers/,
-  'Programme creation requests must preserve exact JSON integers',
+  /const exactIntegerRequest =[\s\S]*?request\.method === 'POST'[\s\S]*?'\/v1\/programmes'[\s\S]*?const jsonNumberRequest =[\s\S]*?request\.body = parseJsonWithExactIntegers/,
+  'Python numeric-sensitive requests must preserve exact integer and float tokens',
 );
 requirePattern(
   'libs/platform/src/bootstrap.ts',

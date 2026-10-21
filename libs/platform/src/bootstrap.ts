@@ -16,10 +16,7 @@ import {
   containsBigIntOrFloatMetadata,
   stringifyJsonWithBigInts,
 } from './json-bigint.js';
-import {
-  parseJsonWithExactIntegers,
-  parseJsonWithFloatMetadata,
-} from './json-exact.js';
+import { parseJsonWithExactIntegers } from './json-exact.js';
 import { recordHttpRequest } from './http-metrics.js';
 
 type DeclaredBodyLimit = {
@@ -202,7 +199,7 @@ export async function bootstrapHttpService(
             ))) ||
         (request.method === 'PATCH' &&
           /^\/v1\/identity\/roles\/[^/]+$/.test(path));
-      const floatMetadataRequest =
+      const jsonNumberRequest =
         (request.method === 'POST' &&
           ([
             '/v1/activations',
@@ -220,20 +217,12 @@ export async function bootstrapHttpService(
               path,
             )));
       if (
-        (exactIntegerRequest || floatMetadataRequest) &&
+        (exactIntegerRequest || jsonNumberRequest) &&
         Buffer.isBuffer((request as Request & { rawBody?: Buffer }).rawBody)
       )
-        request.body = exactIntegerRequest
-          ? parseJsonWithExactIntegers(
-              (request as Request & { rawBody: Buffer }).rawBody.toString(
-                'utf8',
-              ),
-            )
-          : parseJsonWithFloatMetadata(
-              (request as Request & { rawBody: Buffer }).rawBody.toString(
-                'utf8',
-              ),
-            );
+        request.body = parseJsonWithExactIntegers(
+          (request as Request & { rawBody: Buffer }).rawBody.toString('utf8'),
+        );
       next();
     });
     app.use((request: Request, _response: Response, next: NextFunction) => {
