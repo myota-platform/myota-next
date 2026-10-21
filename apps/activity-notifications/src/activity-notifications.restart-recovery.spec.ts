@@ -104,6 +104,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
       await waitFor(() => serviceState.natsUp, 'consumer did not connect');
       await publish(publisher, ids[0]!, recipient);
       await waitForNotifications(pool, dedupeKeys, 1);
+      await waitForDurableIdle(manager);
 
       await stopJetStream(server);
       server = undefined;
