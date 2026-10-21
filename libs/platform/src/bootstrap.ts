@@ -168,20 +168,29 @@ export async function bootstrapHttpService(
               request.url?.split('?', 1)[0] ?? '',
             ) ||
             request.url?.split('?', 1)[0] === '/v1/geodata/refresh-schedules' ||
-            request.url?.split('?', 1)[0] === '/v1/programmes'
+            request.url?.split('?', 1)[0] === '/v1/programmes' ||
+            request.url?.split('?', 1)[0] === '/v1/activations' ||
+            /^\/v1\/qsos\/[^/]+\/corrections$/.test(
+              request.url?.split('?', 1)[0] ?? '',
+            ) ||
+            request.url?.split('?', 1)[0] === '/v1/awards/evaluation-jobs'
           )
             Object.assign(request, { rawBody: buffer });
         },
       }),
     );
     app.use((request: Request, _response: Response, next: NextFunction) => {
+      const path = request.url?.split('?', 1)[0] ?? '';
       if (
         request.method === 'POST' &&
-        [
+        ([
           '/v1/programmes',
           '/v1/geodata/refresh-schedules',
           '/v1/geodata/imports',
-        ].includes(request.url?.split('?', 1)[0] ?? '') &&
+          '/v1/activations',
+          '/v1/awards/evaluation-jobs',
+        ].includes(path) ||
+          /^\/v1\/qsos\/[^/]+\/corrections$/.test(path)) &&
         Buffer.isBuffer((request as Request & { rawBody?: Buffer }).rawBody)
       )
         request.body = parseJsonWithExactIntegers(

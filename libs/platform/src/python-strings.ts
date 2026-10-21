@@ -1,3 +1,6 @@
+import { isJsonFloatingField } from './json-exact.js';
+import { pythonFloatString } from './python-number.js';
+
 export function isPythonWhitespace(codePoint: number): boolean {
   return (
     (codePoint >= 0x09 && codePoint <= 0x0d) ||
@@ -61,6 +64,16 @@ export function pythonString(value: unknown): string {
   if (typeof value === 'symbol' || typeof value === 'function')
     return String(value);
   return 'None';
+}
+
+export function pythonStringJsonField(
+  record: Record<string, unknown>,
+  field: string,
+): string {
+  const value = record[field];
+  if (typeof value === 'number' && isJsonFloatingField(record, field))
+    return pythonFloatString(value);
+  return pythonString(value);
 }
 
 function pythonRepr(value: unknown): string {

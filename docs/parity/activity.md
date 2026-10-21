@@ -9,8 +9,8 @@ reference. Participant tokens with `identity.me` can list activations only
 when filtering by their own operator ID; Activity readers and administrators
 retain their broader listing access. Explicit falsey `endedAt` values are
 treated as null. Activation owner authorization compares Python `str()` forms
-of the authenticated subject and submitted operator ID, including truthy
-non-string JSON values.
+of the authenticated subject and submitted operator ID, retaining JSON float
+tokens such as `1.0` as distinct from integer `1`.
 Single-QSO writes check `workedCallsign` and `timestamp` with Python truthiness
 before activation lookup and return the same ordered `missing required fields`
 detail as the reference. Activation validity defaults come from
@@ -49,10 +49,10 @@ Applied corrections update only the reference's writable QSO fields and queue
 award recalculation for the stored QSO, even when the nested route QSO ID differs;
 a focused repository fixture covers that transaction and job payload. Correction
 requester ownership compares Python `str()` conversions on both IDs, including
-truthy non-string JSON values. Administrator access and required-field
-validation order also match the reference. Missing activation, ADIF import,
-work job, and correction
-lookups preserve the reference's quoted-ID 404 detail, including malformed
+JSON float tokens such as `1.0` versus integer `1`. Administrator access and
+required-field validation order also match the reference. Missing activation,
+ADIF import, work job, and correction lookups preserve the reference's quoted-ID
+404 detail, including malformed
 activation, import, correction, and job IDs before PostgreSQL UUID casting.
 Missing award definition, asset, request, issuance, and award-job lookups use the
 same detail for missing records. Award definition draft, review, publish, and
@@ -60,9 +60,9 @@ retire APIs are implemented.
 Award progress reads and
 evaluation/recalculation job APIs persist versioned progress and qualification
 notifications through the Activity worker. Evaluation-job self-access compares
-Python `str()` conversions of account IDs, including truthy non-string JSON
-values. Award requests validate eligibility; issuance is transactional and
-permanent, and PDF render jobs store artifacts in
+Python `str()` conversions of account IDs, retaining JSON float tokens such as
+`1.0` as distinct from integer `1`. Award requests validate eligibility;
+issuance is transactional and permanent, and PDF render jobs store artifacts in
 S3-compatible storage with authorized presigned download URLs. Qualification
 notice payloads and deduplication also preserve the worker split: recalculation
 notices include `awardCode` and eligible-level IDs in dedupe keys; direct

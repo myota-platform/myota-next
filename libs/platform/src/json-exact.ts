@@ -5,7 +5,13 @@ export class JsonNumber {
   ) {}
 }
 
-/** Parse JSON while keeping integer tokens exact outside JavaScript's safe range. */
+const floatingFields = new WeakMap<object, ReadonlySet<string>>();
+
+export function isJsonFloatingField(value: object, field: string): boolean {
+  return floatingFields.get(value)?.has(field) ?? false;
+}
+
+/** Preserve large integers and direct float-token metadata while parsing JSON. */
 export function parseJsonWithExactIntegers(rawBody: string): unknown {
   const materialize = (value: unknown): unknown => {
     if (value instanceof JsonNumber) {
@@ -18,8 +24,13 @@ export function parseJsonWithExactIntegers(rawBody: string): unknown {
     }
     if (Array.isArray(value)) return value.map(materialize);
     if (isRecord(value)) {
-      for (const [key, item] of Object.entries(value))
+      let floatKeys: Set<string> | undefined;
+      for (const [key, item] of Object.entries(value)) {
+        if (item instanceof JsonNumber && item.floating)
+          (floatKeys ??= new Set()).add(key);
         value[key] = materialize(item);
+      }
+      if (floatKeys) floatingFields.set(value, floatKeys);
     }
     return value;
   };

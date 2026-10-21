@@ -21,7 +21,10 @@ import {
   verifyAccessToken,
 } from '@app/platform';
 import { parsePageInteger } from '@app/platform/pagination.js';
-import { pythonString } from '@app/platform/python-strings.js';
+import {
+  pythonString,
+  pythonStringJsonField,
+} from '@app/platform/python-strings.js';
 import { ActivityRepository } from './activity.repository.js';
 import { parseQsoCsv } from './qso-csv.js';
 import {
@@ -89,7 +92,7 @@ export class ActivityService {
       );
     const claims = verifyAccessToken(authorization);
     if (
-      pythonString(claims.sub) !== pythonString(activation.operatorId) &&
+      pythonString(claims.sub) !== pythonStringJsonField(body, 'operatorId') &&
       !claims.scp.some((scope) => ['*', 'activity.admin'].includes(scope))
     )
       throw new ForbiddenException(
@@ -440,7 +443,7 @@ export class ActivityService {
       );
     const claims = verifyAccessToken(authorization);
     if (
-      pythonString(claims.sub) !== pythonString(body.requestedBy) &&
+      pythonString(claims.sub) !== pythonStringJsonField(body, 'requestedBy') &&
       !claims.scp.some((scope) => ['*', 'activity.admin'].includes(scope))
     )
       throw new ForbiddenException(

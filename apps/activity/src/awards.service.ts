@@ -23,6 +23,7 @@ import {
 } from '@app/platform/pagination.js';
 import {
   pythonString,
+  pythonStringJsonField,
   trimPythonWhitespace,
 } from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
@@ -246,7 +247,9 @@ export class AwardsService {
     if (!body.awardId || !body.subjectId)
       throw new BadRequestException('awardId and subjectId are required');
     let facts = body.facts;
-    if (pythonString(claims.sub) !== pythonString(body.subjectId)) {
+    if (
+      pythonString(claims.sub) !== pythonStringJsonField(body, 'subjectId')
+    ) {
       this.authorize(claims.scp, [
         'awards.read',
         'awards.request',
