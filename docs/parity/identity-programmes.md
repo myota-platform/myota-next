@@ -144,6 +144,9 @@ enumeration behavior, one-time token use, password length, and session
 revocation. Login tests verify the eight-attempt general limit and the
 global-operator bypass. Account, callsign, recovery, and authorization sequence
 behavior still require broader automated compatibility coverage.
+The PostgreSQL-backed Identity HTTP fixture also exercises bootstrap account
+provisioning, password login, the authenticated current-account route, and
+single-use refresh rotation through the real Nest controller and service.
 Login, refresh, recovery request/reset, and OIDC mapping use the reference's
 Python-truthy required-field checks before authentication or persistence, with
 the same `missing required fields` response precedence.
