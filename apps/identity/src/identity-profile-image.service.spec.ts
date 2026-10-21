@@ -145,6 +145,32 @@ describe('IdentityProfileImageService Pillow compatibility', () => {
     );
   });
 
+  it('rejects animated WebP using Pillow compatible frame detection', async () => {
+    const source = await readFile(
+      new URL('./fixtures/profile-image-animated.webp', import.meta.url),
+    );
+    const metadata = await sharp(source, { pages: -1 }).metadata();
+    expect(metadata).toMatchObject({ format: 'webp', pages: 2 });
+
+    const service = new IdentityProfileImageService(
+      null,
+      null as unknown as IdentityAuthService,
+    );
+    const internal = service as unknown as {
+      normalize: (
+        contentType: string,
+        input: AsyncIterable<Uint8Array>,
+      ) => Promise<Buffer>;
+    };
+    const input = (async function* () {
+      yield source;
+    })();
+
+    await expect(internal.normalize('image/webp', input)).rejects.toThrow(
+      'animated profile images are not supported',
+    );
+  });
+
   it('matches Pillow rejection rules for media type and input limits', async () => {
     const source = await readFile(
       new URL('./fixtures/profile-image-rgba.png', import.meta.url),
