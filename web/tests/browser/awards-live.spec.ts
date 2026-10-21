@@ -367,7 +367,7 @@ test('publishes, requests, and issues an award across both web apps', async ({
       { headers: participantHeaders },
     );
     expect(artifactBeforeRender.status()).toBe(400);
-    expect((await artifactBeforeRender.json()).message).toContain(
+    expect((await artifactBeforeRender.json()).detail).toContain(
       'certificate is not ready for download',
     );
     const otherParticipantRequests = await request.get(
