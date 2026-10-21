@@ -276,7 +276,8 @@ a different filename or expected size returns HTTP 400. A truthy `sha256`
 value is converted with Python string semantics before its hexadecimal digest
 validation.
 Multipart upload creation accepts the Python `JSON` format alias and stores it
-as `GEOJSON`, including when inferred from the filename extension.
+as `GEOJSON`, including when inferred from the filename extension. A truthy
+format value is converted with Python string semantics before uppercasing.
 Local object-size and malware scan failures delete the assembled object and
 mark the upload session `FAILED`; scanner service outages leave the completion
 handoff retryable, matching the Python error paths.

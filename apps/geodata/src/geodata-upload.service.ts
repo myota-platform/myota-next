@@ -669,10 +669,9 @@ export function validateCreate(
   )
     throw new BadRequestException('source must be an object');
   const fallbackFormat = filename.slice(filename.lastIndexOf('.') + 1);
-  const formatValue =
-    typeof body.format === 'string' && body.format
-      ? body.format
-      : fallbackFormat;
+  const formatValue = pythonTruthy(body.format)
+    ? pythonString(body.format)
+    : fallbackFormat;
   const normalizedFormatValue = formatValue.toUpperCase();
   const format =
     normalizedFormatValue === 'JSON' ? 'GEOJSON' : normalizedFormatValue;
