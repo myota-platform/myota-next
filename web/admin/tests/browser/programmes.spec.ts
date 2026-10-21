@@ -14,6 +14,7 @@ test('creates a programme with policy and shared category settings', async ({
     },
   ];
   let createdProgramme: any = null;
+  let failFirstCreate = true;
 
   await page.route('**/v1/**', async (route) => {
     const request = route.request();
@@ -64,6 +65,14 @@ test('creates a programme with policy and shared category settings', async ({
         status: 'ACTIVE',
         policyVersion: 1,
       };
+      if (failFirstCreate) {
+        failFirstCreate = false;
+        await route.fulfill({
+          status: 503,
+          json: { message: 'temporary programme save response failure' },
+        });
+        return;
+      }
       await route.fulfill({ status: 201, json: createdProgramme });
       return;
     }
@@ -83,17 +92,29 @@ test('creates a programme with policy and shared category settings', async ({
   await page.getByRole('button', { name: 'Sign in' }).click();
 
   await expect(page).toHaveURL(/\/programmes$/);
-  await page.getByLabel('Programme identifier').fill('summit-radio');
-  await page.getByLabel('Programme name').fill('Summit Radio');
-  await page
-    .getByLabel('Description')
-    .fill('Activate summits and make contacts.');
-  await page.getByLabel('Minimum activation QSOs').fill('6');
-  await page.getByLabel('Minimum hunter QSOs').fill('2');
-  await page.getByLabel('Activation validity').selectOption('finite');
-  await page.getByLabel('Validity days').fill('30');
-  await page.getByLabel('Require public access').check();
-  await page.getByRole('combobox').nth(1).selectOption('SOTA');
+  const fillProgramme = async () => {
+    await page.getByLabel('Programme identifier').fill('summit-radio');
+    await page.getByLabel('Programme name').fill('Summit Radio');
+    await page
+      .getByLabel('Description')
+      .fill('Activate summits and make contacts.');
+    await page.getByLabel('Minimum activation QSOs').fill('6');
+    await page.getByLabel('Minimum hunter QSOs').fill('2');
+    await page.getByLabel('Activation validity').selectOption('finite');
+    await page.getByLabel('Validity days').fill('30');
+    await page.getByLabel('Require public access').check();
+    await page.getByRole('combobox').nth(1).selectOption('SOTA');
+  };
+
+  await fillProgramme();
+  await page.getByRole('button', { name: 'Save programme' }).click();
+  await expect(
+    page.getByText('temporary programme save response failure'),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(page).toHaveURL(/\/programmes$/);
+  await fillProgramme();
   await page.getByRole('button', { name: 'Save programme' }).click();
 
   await expect(page.getByText('Programme saved.')).toBeVisible();
@@ -103,8 +124,12 @@ test('creates a programme with policy and shared category settings', async ({
   expect(loginPayloads).toEqual([
     { email: 'admin@example.test', password: 'test-password' },
   ]);
-  expect(createRequests).toHaveLength(1);
+  expect(createRequests).toHaveLength(2);
   expect(createRequests[0].idempotencyKey).not.toBe('');
+  expect(createRequests[1].idempotencyKey).toBe(
+    createRequests[0].idempotencyKey,
+  );
+  expect(createRequests[1].body).toEqual(createRequests[0].body);
   expect(createRequests[0].body).toMatchObject({
     slug: 'summit-radio',
     name: 'Summit Radio',

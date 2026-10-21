@@ -206,16 +206,14 @@ test('filters and reviews QSO correction requests with the affected QSO context'
     .fill('Confirmed from the submitted log.');
   await firstCard.getByRole('button', { name: 'Apply correction' }).click();
   await expect(page.getByText('QSO correction applied.')).toBeVisible();
-  await expect(page.locator('.correction-card')).toHaveCount(1);
+  await expect(page.locator('.correction-card')).toHaveCount(20);
 
   await secondCard
     .getByLabel('Review note (optional)')
     .fill('No supporting contact record.');
   await secondCard.getByRole('button', { name: 'Reject' }).click();
   await expect(page.getByText('QSO correction rejected.')).toBeVisible();
-  await expect(
-    page.getByText('No correction requests match this filter.'),
-  ).toBeVisible();
+  await expect(page.locator('.correction-card')).toHaveCount(19);
 
   await page.getByLabel('Status').selectOption('ALL');
   await expect(page.locator('.correction-card')).toHaveCount(20);

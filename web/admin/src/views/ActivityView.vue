@@ -91,7 +91,7 @@ interface Page<T> {
 
 const store = useAppStore();
 const feedback = usePageFeedback();
-const { error, loading, saving } = feedback;
+const { error, loading, message, saving } = feedback;
 const items = ref<Activation[]>([]);
 const activationPage = ref(1);
 const activationNextPage = ref<number | null>(null);
@@ -355,7 +355,7 @@ watch(programme, () => {
 
 <template>
   <PageHeader :refresh="load" :busy="loading" />
-  <PageFeedback :error="error" :loading="loading" />
+  <PageFeedback :error="error" :message="message" :loading="loading" />
 
   <article v-if="canRebuild" class="panel">
     <div class="panel-heading">
