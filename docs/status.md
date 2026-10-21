@@ -65,8 +65,10 @@ behavioral parity or production readiness.
 - Qualify production deployment, persistent database operations, NATS topology,
   object storage, secrets, observability, and release automation.
 - Compare Geodata worker throughput and resource limits with the reference under
-  representative loads. Per-durable NestJS concurrency is configurable, but
-  the reference thread-pool settings do not map directly to its durable
+  representative loads. CI checks OSM PBF decoding at 50,000 features against
+  a bounded process-tree RSS growth limit; larger datasets and full worker
+  throughput remain unqualified. Per-durable NestJS concurrency is configurable,
+  but the reference thread-pool settings do not map directly to its durable
   consumers.
 
 ## References
