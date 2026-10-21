@@ -640,8 +640,8 @@ export class ActivityRepository {
           data.operatorCallsign ?? null,
           data.startedAt,
           validityDays,
-          JSON.stringify(data.location ?? {}),
-          JSON.stringify(data.programmeRules ?? {}),
+          stringifyJsonWithMetadata(data.location ?? {}),
+          stringifyJsonWithMetadata(data.programmeRules ?? {}),
         ],
       );
       const record = activationRecord(inserted.rows[0], []);
@@ -713,7 +713,7 @@ export class ActivityRepository {
           qso.source,
           qso.sourceImportId ?? null,
           qso.deduplicationKey,
-          JSON.stringify(qso),
+          stringifyJsonWithMetadata(qso),
         ],
       );
       const duplicate = inserted.rows.length === 0;
@@ -793,8 +793,7 @@ export class ActivityRepository {
         `SELECT *, ${activationTimestampProjection} FROM activity_activation WHERE id=$1 FOR UPDATE`,
         [id],
       );
-      if (!found.rows[0])
-        throw new NotFoundException(pythonKeyErrorDetail(id));
+      if (!found.rows[0]) throw new NotFoundException(pythonKeyErrorDetail(id));
       if (found.rows[0].status !== 'OPEN')
         throw new BadRequestException('activation is not open');
       const normalizedEndedAt = pythonTruthy(endedAt)
@@ -813,7 +812,7 @@ export class ActivityRepository {
       const status = evaluation.valid ? 'CLOSED' : 'CLOSED_INVALID';
       const updated = await client.query(
         `UPDATE activity_activation SET status=$1,ended_at=$2::timestamptz,rule_evaluation=$3::jsonb,updated_at=now() WHERE id=$4 RETURNING *, ${activationTimestampProjection}`,
-        [status, normalizedEndedAt, JSON.stringify(evaluation), id],
+        [status, normalizedEndedAt, stringifyJsonWithMetadata(evaluation), id],
       );
       const record = activationRecord(updated.rows[0], qsos.rows);
       await this.event(
@@ -962,8 +961,7 @@ export class ActivityRepository {
       `SELECT *, ${activationTimestampProjection} FROM activity_activation WHERE id=$1`,
       [id],
     );
-    if (!result.rows[0])
-      throw new NotFoundException(pythonKeyErrorDetail(id));
+    if (!result.rows[0]) throw new NotFoundException(pythonKeyErrorDetail(id));
     const qsos = await client.query(
       `SELECT *, ${qsoTimestampProjection}
        FROM activity_qso WHERE activation_id=$1 AND status<>'VOID' ORDER BY occurred_at`,
@@ -997,7 +995,7 @@ export class ActivityRepository {
       if (key)
         await client.query(
           'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
-          ['activity-service', key, JSON.stringify(result)],
+          ['activity-service', key, stringifyJsonWithMetadata(result)],
         );
       await client.query('COMMIT');
       return result;
@@ -1025,7 +1023,7 @@ export class ActivityRepository {
         type,
         aggregate,
         id,
-        JSON.stringify(payload),
+        stringifyJsonWithMetadata(payload),
         randomUUID(),
         producer,
       ],
@@ -1041,7 +1039,7 @@ export class ActivityRepository {
     const id = randomUUID();
     const created = await client.query(
       `INSERT INTO activity_job(id,kind,payload,idempotency_key) VALUES ($1,$2,$3::jsonb,$4) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`,
-      [id, kind, JSON.stringify(payload), key],
+      [id, kind, stringifyJsonWithMetadata(payload), key],
     );
     if (created.rows[0])
       await client.query(

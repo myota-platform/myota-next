@@ -67,6 +67,9 @@ timestamp. Correction requester ownership compares Python `str()` conversions
 on both IDs, including JSON float tokens such as `1.0` versus integer `1`.
 Proposed correction values preserve exact integer and float tokens from JSONB
 through review and response serialization.
+Activity JSONB records, request idempotency responses, and award event payloads
+also preserve exact integer tokens at the persistence boundary, matching
+Python's arbitrary-precision JSON integers.
 Administrator access and
 required-field validation order also match the reference. Missing activation,
 ADIF import, work job, and correction lookups preserve the reference's quoted-ID

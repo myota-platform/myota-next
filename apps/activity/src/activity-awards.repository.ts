@@ -8,6 +8,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { stringifyJsonWithMetadata } from '@app/platform/json-bigint.js';
 import { parsePageTotal, type PageInteger } from '@app/platform/pagination.js';
 import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import { normalizeTimestamp, type JsonRecord } from './activity-domain.js';
@@ -41,7 +42,7 @@ export class ActivityAwardsRepository {
           record.status ?? 'DRAFT',
           record.effectiveFrom ? new Date(record.effectiveFrom) : null,
           record.retiredAt ? new Date(record.retiredAt) : null,
-          JSON.stringify(record),
+          stringifyJsonWithMetadata(record),
         ],
       );
       if (eventType)
@@ -200,7 +201,7 @@ export class ActivityAwardsRepository {
           Number(asset.widthPx),
           Number(asset.heightPx),
           asset.contentStatus ?? 'MISSING',
-          JSON.stringify(asset),
+          stringifyJsonWithMetadata(asset),
         ],
       );
       return asset;
@@ -226,7 +227,7 @@ export class ActivityAwardsRepository {
           record.category,
           record.callsign,
           record.personName,
-          JSON.stringify(record.facts ?? {}),
+          stringifyJsonWithMetadata(record.facts ?? {}),
           new Date(String(record.requestedAt)),
         ],
       );
@@ -334,7 +335,7 @@ export class ActivityAwardsRepository {
           issuance.programmeSlug,
           issuance.levelId,
           issuance.subjectId,
-          JSON.stringify(issuance),
+          stringifyJsonWithMetadata(issuance),
         ],
       );
       await client.query(
@@ -432,7 +433,7 @@ export class ActivityAwardsRepository {
       if (key)
         await client.query(
           'INSERT INTO idempotency_record(service,key,response) VALUES ($1,$2,$3::jsonb)',
-          ['activity-service', key, JSON.stringify(result)],
+          ['activity-service', key, stringifyJsonWithMetadata(result)],
         );
       await client.query('COMMIT');
       return result;
@@ -460,7 +461,7 @@ export class ActivityAwardsRepository {
         type,
         aggregate,
         id,
-        JSON.stringify(payload),
+        stringifyJsonWithMetadata(payload),
         randomUUID(),
         producer,
       ],
