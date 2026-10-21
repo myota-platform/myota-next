@@ -250,33 +250,33 @@ async function main() {
 
 async function aclRoles(client: Client): Promise<string[]> {
   const result = await client.query<{ rolname: string }>(`
-    WITH acl_items AS (
-      SELECT unnest(n.nspacl) AS acl
+    WITH acl_lists AS (
+      SELECT n.nspacl AS acl
         FROM pg_namespace AS n
        WHERE n.nspname='public' AND n.nspacl IS NOT NULL
       UNION ALL
-      SELECT unnest(c.relacl) AS acl
+      SELECT c.relacl AS acl
         FROM pg_class AS c
         JOIN pg_namespace AS n ON n.oid=c.relnamespace
        WHERE n.nspname='public' AND c.relacl IS NOT NULL
       UNION ALL
-      SELECT unnest(p.proacl) AS acl
+      SELECT p.proacl AS acl
         FROM pg_proc AS p
         JOIN pg_namespace AS n ON n.oid=p.pronamespace
        WHERE n.nspname='public' AND p.proacl IS NOT NULL
       UNION ALL
-      SELECT unnest(d.defaclacl) AS acl
+      SELECT d.defaclacl AS acl
         FROM pg_default_acl AS d
        WHERE d.defaclnamespace='public'::regnamespace
          AND d.defaclacl IS NOT NULL
     ), acl_principals AS (
       SELECT privilege.grantee AS role_oid
-        FROM acl_items
-        CROSS JOIN LATERAL aclexplode(acl_items.acl) AS privilege
+        FROM acl_lists
+        CROSS JOIN LATERAL aclexplode(acl_lists.acl) AS privilege
       UNION
       SELECT privilege.grantor AS role_oid
-        FROM acl_items
-        CROSS JOIN LATERAL aclexplode(acl_items.acl) AS privilege
+        FROM acl_lists
+        CROSS JOIN LATERAL aclexplode(acl_lists.acl) AS privilege
     )
     SELECT DISTINCT role.rolname
       FROM acl_principals AS principal
