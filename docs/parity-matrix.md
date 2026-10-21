@@ -718,8 +718,10 @@ geometries.
   fails after connecting, the Nest worker now drains that connection before
   startup exits, matching the Python consumer's cleanup path. A disposable
   JetStream CI test also verifies that two Nest replicas share the durable and
-  a restarted replica resumes it. Falsey event types use the Python worker's
-  `unknown` fallback in poison-event records.
+  a restarted replica resumes it. Its eight-delivery policy configures the
+  seven delays that can precede redelivery; NATS rejects a backoff list as long
+  as `max_deliver`. Falsey event types use the Python worker's `unknown`
+  fallback in poison-event records.
   Named replay
   durables require an explicit start sequence, and optional message limits allow
   bounded replay runs. Broker/database outage, exhaustion, and redrive recovery

@@ -337,7 +337,7 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
       'activity-notifications-v1',
     );
     const notification = notificationInfo.config;
-    const backoff = [60, 120, 300, 300, 300, 300, 300, 300].map(
+    const backoff = [60, 120, 300, 300, 300, 300, 300].map(
       (seconds) => seconds * 1_000_000_000,
     );
     if (

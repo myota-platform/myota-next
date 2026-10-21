@@ -63,7 +63,7 @@ describe.skipIf(!enabled)('Activity notification JetStream recovery', () => {
         max_deliver: 8,
         max_ack_pending: 64,
         max_waiting: 32,
-        backoff: [60, 120, 300, 300, 300, 300, 300, 300].map(
+        backoff: [60, 120, 300, 300, 300, 300, 300].map(
           (seconds) => seconds * 1_000_000_000,
         ),
         num_replicas: 0,

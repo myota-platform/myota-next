@@ -195,7 +195,7 @@ function consumerSpecs(registry: EventRegistry, scope: string): ConsumerSpec[] {
       maxDeliveries: 8,
       maxAckPending: 64,
       maxWaiting: 32,
-      backoffSeconds: [60, 120, 300, 300, 300, 300, 300, 300],
+      backoffSeconds: [60, 120, 300, 300, 300, 300, 300],
     },
     ...workConsumers(registry, 'activity-work'),
     ...workConsumers(registry, 'geodata-work'),

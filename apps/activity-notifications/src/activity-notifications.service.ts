@@ -279,7 +279,7 @@ export class ActivityNotificationsService
     },
     startSequence?: number,
   ): void {
-    const backoff = [60, 120, 300, 300, 300, 300, 300, 300].map(
+    const backoff = [60, 120, 300, 300, 300, 300, 300].map(
       (seconds) => seconds * 1_000_000_000,
     );
     if (
@@ -610,7 +610,7 @@ function replayConsumerConfig(): ConsumerConfig {
     max_deliver: MAX_DELIVERIES,
     max_ack_pending: 64,
     max_waiting: 32,
-    backoff: [60, 120, 300, 300, 300, 300, 300, 300].map(
+    backoff: [60, 120, 300, 300, 300, 300, 300].map(
       (seconds) => seconds * 1_000_000_000,
     ),
     num_replicas: 0,
