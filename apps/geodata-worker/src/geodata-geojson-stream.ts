@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { JSONParser } from '@streamparser/json';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import {
   MAX_GEOJSON_UPLOAD_BYTES,
   MAX_IMPORT_FEATURE_BYTES,
@@ -200,10 +201,15 @@ export async function* streamGeoJsonFeatures(
             )
               return;
 
-            const feature = isSingleObject ? toGeoJsonFeature(value) : value;
-            const sourceJson = isObject(feature)
+            const sourceJson = isObject(value)
               ? guard.takeCompletedFeatureJson()
               : undefined;
+            const exactValue = sourceJson
+              ? parseJsonWithExactIntegers(sourceJson)
+              : value;
+            const feature = isSingleObject
+              ? toGeoJsonFeature(exactValue)
+              : exactValue;
             const sourceHashOverride =
               typeof documentMetadata.sourceFeatureHashOverrides?.[
                 featureCount

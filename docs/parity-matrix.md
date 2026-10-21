@@ -533,9 +533,9 @@ source-manifest record totals avoid 32-bit casts. Import status reads parse the
 JSONB projection as exact-integer JSON, preserving large candidate totals and
 statistics through the API response.
 Record hashes use Python float formatting and Unicode
-code-point key ordering. Direct GEOJSON/WFS imports preserve exact integer
-properties from the request through source storage and worker decoding, while
-retaining raw numeric tokens in feature hashes and injected root CRS values within the
+code-point key ordering. Direct and streamed GEOJSON/WFS imports preserve exact
+integer properties through source storage and worker decoding, while retaining
+raw numeric tokens in feature hashes and injected root CRS values within the
 configured decoded-size limit (`MYOTA_IMPORT_MAX_FEATURE_BYTES`, 16 MiB by
 default).
 Streamed root geometry documents converted into Features retain those tokens as
