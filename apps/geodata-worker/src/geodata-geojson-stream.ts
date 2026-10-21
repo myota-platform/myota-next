@@ -66,20 +66,26 @@ export async function readGeoJsonDocumentMetadata(
   });
   const rootValueGuard = new GeoJsonResourceGuard(undefined, false, true);
   let documentCrs: unknown;
+  let hasDocumentCrs = false;
   let spatialReference: unknown;
+  let hasSpatialReference = false;
   let rootType: unknown;
+  let hasRootType = false;
   let sourceBytes = 0;
   let lastHeartbeatBytes = 0;
   const sourceLimit = MAX_GEOJSON_UPLOAD_BYTES;
 
   parser.onValue = ({ value, key, stack }) => {
     if (stack.length !== 1 || key === undefined) return;
-    if (key === 'type') {
+    if (key === 'type' && !hasRootType) {
       rootType = value;
-    } else if (key === 'crs') {
+      hasRootType = true;
+    } else if (key === 'crs' && !hasDocumentCrs) {
       documentCrs = value;
-    } else if (key === 'spatialReference') {
+      hasDocumentCrs = true;
+    } else if (key === 'spatialReference' && !hasSpatialReference) {
       spatialReference = value;
+      hasSpatialReference = true;
     }
   };
 
@@ -103,18 +109,25 @@ export async function readGeoJsonDocumentMetadata(
   const documentCrsJson = rootValueGuard.rootValueJsonFor('crs');
   const spatialReferenceJson =
     rootValueGuard.rootValueJsonFor('spatialReference');
-  if (documentCrsJson !== undefined)
+  if (documentCrsJson !== undefined && hasDocumentCrs)
     documentCrs = parseJsonWithExactIntegers(documentCrsJson);
-  if (spatialReferenceJson !== undefined)
+  if (spatialReferenceJson !== undefined && hasSpatialReference)
     spatialReference = parseJsonWithExactIntegers(spatialReferenceJson);
-  const crsSourceKey = pythonTruthy(documentCrs) ? 'crs' : 'spatialReference';
+  const crsSourceKey =
+    !hasDocumentCrs || documentCrs === null || documentCrs === undefined
+      ? 'spatialReference'
+      : 'crs';
   return {
     crs: crsSourceKey === 'spatialReference' ? spatialReference : documentCrs,
     crsSourceKey,
     crsJson:
       crsSourceKey === 'spatialReference'
-        ? spatialReferenceJson
-        : documentCrsJson,
+        ? hasSpatialReference
+          ? spatialReferenceJson
+          : undefined
+        : hasDocumentCrs
+          ? documentCrsJson
+          : undefined,
     crsJsonTooLarge: rootValueGuard.rootValueWasTooLarge(crsSourceKey),
     rootType,
   };
@@ -322,6 +335,7 @@ class GeoJsonResourceGuard {
   private completedFeatureJson: string[] = [];
   private completedFeatureReadIndex = 0;
   private rootValueJson = new Map<string, string>();
+  private seenRootValues = new Set<string>();
   private oversizedRootValues = new Set<string>();
   private activeRootValueKey: string | undefined;
   private rootValueDepth = 0;
@@ -658,11 +672,14 @@ class GeoJsonResourceGuard {
         ),
       );
     }
-    if (this.activeRootValueKey !== undefined) {
-      if (this.rootValueOverflow)
+    if (
+      this.activeRootValueKey !== undefined &&
+      !this.seenRootValues.has(this.activeRootValueKey)
+    ) {
+      this.seenRootValues.add(this.activeRootValueKey);
+      if (this.rootValueOverflow) {
         this.oversizedRootValues.add(this.activeRootValueKey);
-      else {
-        this.oversizedRootValues.delete(this.activeRootValueKey);
+      } else {
         this.rootValueJson.set(
           this.activeRootValueKey,
           Buffer.concat(this.rootValueParts).toString('utf8'),
