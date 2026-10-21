@@ -467,8 +467,10 @@ streaming importer. GPX text properties retain XML text-presence semantics:
 whitespace-only values become empty strings and can replace earlier values.
 KML coordinates and GPX coordinate attributes use Python-compatible float
 parsing, including its rejection of blank values and non-decimal forms that
-JavaScript would coerce. KML continues to use the first direct `name` element.
-Resumable KML and GPX uploads are
+JavaScript would coerce. `NaN` and infinity remain parseable floats and are
+reported later as per-feature WGS84 geometry errors, as in the reference.
+KML continues to use the first direct `name` element. Resumable KML and GPX
+uploads are
 streamed from object storage through a SAX parser, verify the completed source
 hash, and apply the configured upload, per-feature, feature-count, and vertex
 limits while sending worker heartbeats. GPX uploads emit waypoint and route

@@ -92,7 +92,7 @@ export async function* streamXmlFeatures(
     if (values.length < 2) return undefined;
     const longitude = parseCoordinateNumber(values[0] ?? '');
     const latitude = parseCoordinateNumber(values[1] ?? '');
-    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+    if (longitude === undefined || latitude === undefined) {
       fail('XML import contains an invalid coordinate');
       return undefined;
     }
@@ -139,9 +139,15 @@ export async function* streamXmlFeatures(
       const attributes = tag.attributes as Record<string, unknown>;
       const longitudeText = attributeValue(attributes.lon);
       const latitudeText = attributeValue(attributes.lat);
-      const longitude = parseCoordinateNumber(longitudeText ?? '');
-      const latitude = parseCoordinateNumber(latitudeText ?? '');
-      if (!Number.isFinite(longitude) || !Number.isFinite(latitude))
+      const longitude =
+        longitudeText === undefined
+          ? undefined
+          : parseCoordinateNumber(longitudeText);
+      const latitude =
+        latitudeText === undefined
+          ? undefined
+          : parseCoordinateNumber(latitudeText);
+      if (longitude === undefined || latitude === undefined)
         fail('GPX point has invalid longitude or latitude');
       else gpxPoint = { coordinates: [longitude, latitude], properties: {} };
     } else if (name === 'trkseg') {
@@ -150,9 +156,15 @@ export async function* streamXmlFeatures(
       const attributes = tag.attributes as Record<string, unknown>;
       const longitudeText = attributeValue(attributes.lon);
       const latitudeText = attributeValue(attributes.lat);
-      const longitude = parseCoordinateNumber(longitudeText ?? '');
-      const latitude = parseCoordinateNumber(latitudeText ?? '');
-      if (!Number.isFinite(longitude) || !Number.isFinite(latitude))
+      const longitude =
+        longitudeText === undefined
+          ? undefined
+          : parseCoordinateNumber(longitudeText);
+      const latitude =
+        latitudeText === undefined
+          ? undefined
+          : parseCoordinateNumber(latitudeText);
+      if (longitude === undefined || latitude === undefined)
         fail('GPX track point has invalid longitude or latitude');
       else {
         trackPoints.push([longitude, latitude]);
@@ -354,10 +366,10 @@ function attributeValue(value: unknown): string | undefined {
   return undefined;
 }
 
-function parseCoordinateNumber(value: string): number {
+function parseCoordinateNumber(value: string): number | undefined {
   try {
     return parsePythonFloatText(value);
   } catch {
-    return Number.NaN;
+    return undefined;
   }
 }
