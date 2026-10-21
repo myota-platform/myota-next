@@ -15,6 +15,10 @@ const recoveryCases = [
     testName: 'reclaims award recalculation after worker process death',
   },
   {
+    kind: 'AWARD_EVALUATION',
+    testName: 'reclaims direct award evaluation after worker process death',
+  },
+  {
     kind: 'QSO_INGESTION',
     testName: 'reclaims QSO ingestion after worker process death',
   },
@@ -71,7 +75,10 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
   const jobId = randomUUID();
   const programmeSlug = `worker-recovery-${jobId}`;
   const activationId = jobKind === 'QSO_INGESTION' ? randomUUID() : undefined;
-  const awardId = jobKind === 'AWARD_RECALCULATE' ? randomUUID() : undefined;
+  const awardId =
+    jobKind === 'AWARD_RECALCULATE' || jobKind === 'AWARD_EVALUATION'
+      ? randomUUID()
+      : undefined;
   const subjectId = `worker-recovery-subject-${jobId}`;
   const workerEnvironment = {
     ...process.env,
@@ -134,17 +141,19 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
             ? { programmeSlug }
             : jobKind === 'AWARD_RECALCULATE'
               ? { programmeSlug, subjectIds: [subjectId] }
-              : {
-                  activationId,
-                  records: [
-                    {
-                      workedCallsign: 'K1RECOVERY',
-                      timestamp: '2026-01-01T00:05:00Z',
-                      band: '20M',
-                      mode: 'SSB',
-                    },
-                  ],
-                },
+              : jobKind === 'AWARD_EVALUATION'
+                ? { awardId, subjectId }
+                : {
+                    activationId,
+                    records: [
+                      {
+                        workedCallsign: 'K1RECOVERY',
+                        timestamp: '2026-01-01T00:05:00Z',
+                        band: '20M',
+                        mode: 'SSB',
+                      },
+                    ],
+                  },
         ),
       ],
     );
@@ -178,18 +187,30 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
         attempts: 2,
         snapshots: 2,
       });
-    } else if (jobKind === 'AWARD_RECALCULATE') {
+    } else if (
+      jobKind === 'AWARD_RECALCULATE' ||
+      jobKind === 'AWARD_EVALUATION'
+    ) {
       const result = await pool.query(
-        `SELECT job.status,job.attempts,progress.evaluation
+        `SELECT job.status,job.attempts,progress.evaluation,
+                (SELECT count(*)::int FROM activity_notification notification
+                 WHERE notification.recipient_id=$3
+                   AND notification.deduplication_key LIKE $4) AS notifications
          FROM activity_job job LEFT JOIN activity_award_progress progress
            ON progress.award_id=$2 AND progress.award_version=1
              AND progress.subject_id=$3
          WHERE job.id=$1`,
-        [jobId, awardId, subjectId],
+        [
+          jobId,
+          awardId,
+          subjectId,
+          `award-qualified:${awardId}:1:${subjectId}%`,
+        ],
       );
       expect(result.rows[0]).toMatchObject({
         status: 'SUCCEEDED',
         attempts: 2,
+        notifications: 1,
         evaluation: {
           conditionMet: true,
           metric: 'QSO_COUNT',
@@ -264,7 +285,7 @@ async function cleanupRecoveryFixture(
       await pool.query(
         `DELETE FROM activity_notification
          WHERE deduplication_key LIKE $1`,
-        [`award-qualified:${awardId}:1:${subjectId}:%`],
+        [`award-qualified:${awardId}:1:${subjectId}%`],
       );
       await pool.query(
         'DELETE FROM activity_award_progress WHERE award_id=$1',

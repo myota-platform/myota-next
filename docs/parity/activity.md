@@ -190,14 +190,14 @@ normalized records can complete with its rejected-row errors. The persisted
 `recordsSeen - recordsAccepted + normalizationErrorCount`, including its
 additional count for normalization errors. ADIF-triggered award recalculation
 uses the Python batch key `batch:<activationId>:<firstQsoDeduplicationKey>`.
-CI kills Activity statistics-rebuild, award-recalculation, and QSO-ingestion
-workers after they claim jobs, expires each lease, and verifies that the
-reclaimed jobs complete. The statistics rebuild checks its expected summary
-snapshots, award recalculation checks computed progress and eligible levels,
-and QSO ingestion checks the persisted QSO, activation and subject counts, and
-downstream award job. This qualifies database lease takeover for three Activity
-job kinds; broader compatibility and broker-outage recovery qualification
-remain outstanding.
+CI kills Activity statistics-rebuild, award-evaluation, award-recalculation,
+and QSO-ingestion workers after they claim jobs, expires each lease, and
+verifies that the reclaimed jobs complete. The statistics rebuild checks its
+expected summary snapshots, both award jobs check computed progress and
+eligible levels, and QSO ingestion checks the persisted QSO, activation and
+subject counts, and downstream award job. This qualifies database lease
+takeover for four Activity job kinds; broader compatibility and broker-outage
+recovery qualification remain outstanding.
 Failed or queued Activity jobs can be redriven by administrators with
 an audited reason. Failed-job redrive preserves the delivery-attempt counter,
 matching the pinned Python repository. Long-running Activity jobs now extend their 120-second leases
