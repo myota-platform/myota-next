@@ -24,7 +24,10 @@ import { GeodataRepository } from './geodata.repository.js';
 import { GeodataImportService } from './geodata-import.service.js';
 import { GeodataImportMutationRepository } from './geodata-import-mutation.repository.js';
 import { GeodataEntityMutationRepository } from './geodata-entity-mutation.repository.js';
-import { GeodataUploadService } from './geodata-upload.service.js';
+import {
+  GeodataUploadService,
+  MAX_UPLOAD_PART_BYTES,
+} from './geodata-upload.service.js';
 import { GeodataDeletionService } from './geodata-deletion.service.js';
 import { GeodataScheduleService } from './geodata-schedule.service.js';
 import { GeodataProposalService } from './geodata-proposal.service.js';
@@ -220,12 +223,17 @@ export class GeodataController {
     @Param('partNumber') partNumber: string,
     @Req() request: Request,
   ) {
+    const body: unknown = request.body;
+    if (!Buffer.isBuffer(body) || body.length === 0)
+      throw new BadRequestException(
+        `upload part must be between 1 and ${MAX_UPLOAD_PART_BYTES} bytes`,
+      );
     const claims = authorizeImport(authorization);
     return this.uploads.uploadPart(
       claims.sub,
       id,
       parseImportPartNumber(partNumber),
-      request.body as Buffer,
+      body,
       checksum,
     );
   }

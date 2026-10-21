@@ -31,7 +31,7 @@ import { integerSetting } from '@app/platform/integer-setting.js';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import { normalizeEntityTypeCodes } from './geodata-entity-types.js';
 
-const maxPartBytes = integerEnv(
+export const MAX_UPLOAD_PART_BYTES = integerEnv(
   'MYOTA_UPLOAD_PART_MAX_BYTES',
   16 * 1024 * 1024,
 );
@@ -169,10 +169,10 @@ export class GeodataUploadService {
     if (
       !Buffer.isBuffer(body) ||
       body.length === 0 ||
-      body.length > maxPartBytes
+      body.length > MAX_UPLOAD_PART_BYTES
     )
       throw new BadRequestException(
-        `upload part must be between 1 and ${maxPartBytes} bytes`,
+        `upload part must be between 1 and ${MAX_UPLOAD_PART_BYTES} bytes`,
       );
     const sha256 = createHash('sha256').update(body).digest('hex');
     if (declared && declared.toLowerCase() !== sha256)
@@ -583,7 +583,7 @@ export class GeodataUploadService {
     return {
       uploadId: row.id,
       status: row.status,
-      partSizeBytes: maxPartBytes,
+      partSizeBytes: MAX_UPLOAD_PART_BYTES,
       expiresInSeconds: 86400,
     };
   }
