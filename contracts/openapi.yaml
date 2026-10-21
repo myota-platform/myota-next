@@ -1510,7 +1510,9 @@ paths:
         - { $ref: '#/components/parameters/Page' }
         - { $ref: '#/components/parameters/PageSize' }
       responses:
-        '200': { description: Paged correction requests with their associated QSO context }
+        '200':
+          description: Paged correction requests with their associated QSO context
+          content: { application/json: { schema: { $ref: '#/components/schemas/QsoCorrectionPage' } } }
         '403': { description: activity.admin scope required }
   /v1/public/activations:
     get:
@@ -2514,6 +2516,49 @@ components:
         decision: { type: string, enum: [APPLIED, REJECTED] }
         reviewedBy: { type: string }
         reviewNote: { type: string }
+    QsoCorrectionPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/QsoCorrectionWithContext' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        nextPage: { type: integer, nullable: true }
+    QsoCorrectionWithContext:
+      allOf:
+        - $ref: '#/components/schemas/QsoCorrection'
+        - type: object
+          required: [programmeSlug, entityId, qso]
+          properties:
+            programmeSlug: { type: string }
+            entityId: { type: string, nullable: true }
+            qso:
+              type: object
+              required: [id, activationId]
+              properties:
+                id: { type: string, format: uuid }
+                activationId: { type: string, format: uuid }
+                operatorId: { type: string, nullable: true }
+                operatorCallsign: { type: string, nullable: true }
+                workedCallsign: { type: string, nullable: true }
+                timestamp: { type: string, format: date-time, nullable: true }
+                band: { type: string, nullable: true }
+                mode: { type: string, nullable: true }
+    QsoCorrection:
+      type: object
+      required: [id, qsoId, requestedBy, reason, proposedValues, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        qsoId: { type: string, format: uuid }
+        requestedBy: { type: string }
+        reason: { type: string }
+        proposedValues: { type: object, additionalProperties: true }
+        status: { type: string, enum: [PENDING, APPLIED, REJECTED] }
+        reviewedBy: { type: string, nullable: true }
+        reviewNote: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        reviewedAt: { type: string, format: date-time, nullable: true }
     AwardCondition:
       description: Programme-owned recursive AND/OR condition tree.
       oneOf:
