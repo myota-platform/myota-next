@@ -31,6 +31,7 @@
     "migrate:db": "node --experimental-strip-types tools/db-migrate.ts",
     "db:backup": "node --experimental-strip-types tools/db-backup.ts",
     "db:restore": "node --experimental-strip-types tools/db-restore.ts",
+    "test:db-backup-restore": "node tools/run-db-backup-restore.mjs",
     "provision:jetstream": "node --experimental-strip-types tools/provision-jetstream.ts",
     "outbox:admin": "node --experimental-strip-types tools/outbox-admin.ts",
     "redrive:email": "node --experimental-strip-types apps/email-worker/src/redrive-email.ts",

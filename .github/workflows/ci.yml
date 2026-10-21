@@ -66,6 +66,10 @@ jobs:
       - run: npm run migrate:db -- --owner=core
       - run: npm run migrate:db -- --owner=activity
       - run: npm run migrate:db -- --owner=geo
+      - name: Rehearse three-owner backup and restore
+        run: npm run test:db-backup-restore
+        env:
+          MYOTA_BACKUP_RESTORE_TEST_ALLOW: '1'
       - run: npm run test:geodata-maidenhead
       - run: npm run format:check
       - run: npm run lint

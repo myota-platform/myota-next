@@ -29,9 +29,11 @@ production readiness.
   and workflow behavior for the required operations and events. The parity
   pages record current coverage and gaps; route presence alone is not proof.
 - **Recovery:** single-server JetStream restart, selected worker lease recovery,
-  redrive, and Geodata multipart object-store recovery have evidence. PostgreSQL
-  outage, cluster failover, and other worker and object-store recovery paths
-  remain open. See [worker and operations coverage](parity/workers-operations.md)
+  redrive, Geodata multipart object-store recovery, and a three-owner backup and
+  restore rehearsal have evidence. PostgreSQL outage, cluster failover, and
+  other worker and object-store recovery paths remain open. See
+  [worker and operations coverage](parity/workers-operations.md), the
+  [database backup and restore notes](operations/database-backup-restore.md),
   and the [object-store recovery notes](operations/object-store-recovery.md).
 - **Web applications:** CI now checks Admin sign-in/dashboard and one public
   Participant catalogue workflow against running NestJS services through the

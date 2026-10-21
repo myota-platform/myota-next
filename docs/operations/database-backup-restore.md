@@ -31,3 +31,10 @@ owner fails, earlier databases remain restored. The commands back up database
 state only; object-store data and JetStream messages require separate recovery
 procedures. The new platform starts with empty databases; data transfer from
 the Python schema is out of scope.
+
+CI rehearses this path against its disposable Core, Activity, and Geodata
+databases. It writes a probe row to each owner, creates one backup, changes the
+rows, verifies that an incorrect restore confirmation is rejected, restores
+the backup, and checks that all three values return to their saved state. This
+qualifies the scripts and owner mapping on CI PostgreSQL; production operators
+still need to rehearse against their deployment configuration and storage.
