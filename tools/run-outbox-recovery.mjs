@@ -35,6 +35,7 @@ for (const [owner, databaseUrl] of databases) {
         ...process.env,
         OUTBOX_DATABASE_URL: databaseUrl,
         MYOTA_OUTBOX_RECOVERY_TEST: '1',
+        OUTBOX_MAX_ATTEMPTS: '12',
         OUTBOX_OWNER: owner,
       },
     },
