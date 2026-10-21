@@ -153,6 +153,9 @@ ADIF uploads use the reference's shared `MYOTA_UPLOAD_MAX_BYTES` cap (1 GiB by
 default), then pass authorization, malware checks, and object storage before
 durable queueing; the Activity worker enforces the same cap, parses records,
 records successes and rejects, updates aggregates, and reports import status.
+ClamAV failures remain fail-closed. NestJS reports scanner failures as HTTP 503,
+while the Python handler maps its scanner `ValueError` to HTTP 400; the upload
+is not queued in either case.
 The HTTP JSON body limit defaults to 1 MiB for Identity, Programmes, and
 Activity, and 1 GiB for Geodata, matching the reference services.
 `MYOTA_MAX_BODY_BYTES` overrides the limit per service. Identity's image-based
