@@ -32,7 +32,9 @@ import {
 } from '@app/platform/import-limits.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { normalizeEntityTypeCodes } from './geodata-entity-types.js';
+import { importProjection } from './geodata.repository.js';
 
 export const MAX_UPLOAD_PART_BYTES = integerEnv(
   'MYOTA_UPLOAD_PART_MAX_BYTES',
@@ -261,11 +263,22 @@ export class GeodataUploadService {
       await client.query('BEGIN');
       const session = await this.findSession(client, id, owner, true, true);
       if (session.status === 'COMPLETED') {
+        const result = session.import_run_id
+          ? await client.query(
+              `SELECT (${importProjection})::text AS run FROM import_run WHERE id=$1`,
+              [session.import_run_id],
+            )
+          : undefined;
         await client.query('COMMIT');
         return {
           uploadId: id,
           status: 'COMPLETED',
-          importRunId: session.import_run_id,
+          importRun: result?.rows[0]
+            ? (parseJsonWithExactIntegers(result.rows[0].run) as Record<
+                string,
+                unknown
+              >)
+            : { id: session.import_run_id },
         };
       }
       if (session.status !== 'UPLOADING' && session.status !== 'COMPLETING')

@@ -463,7 +463,7 @@ export const entityProjection = `public_properties || jsonb_build_object(
     'municipality',municipality,'locality',locality)
 )`;
 
-const importProjection = `(source_metadata - 'sourceFeatureHashOverrides') || jsonb_build_object(
+export const importProjection = `(source_metadata - 'sourceFeatureHashOverrides') || jsonb_build_object(
   'id',id::text,'adapter',adapter_code,'status',status,'startedAt',started_at,
   'completedAt',completed_at,'stats',stats,'attemptCount',attempt_count,
   'heartbeatAt',heartbeat_at,'leaseUntil',lease_until,'lastError',last_error,

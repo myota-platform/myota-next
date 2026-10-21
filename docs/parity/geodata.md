@@ -261,7 +261,9 @@ join this pipeline, and community proposals and imported features preserve
 validated attachment metadata before promotion. Multipart/resumable
 uploads are implemented with owner-scoped durable sessions, bounded binary
 parts, checksum and malware scanning, and transactional completion up to the
-worker's configured source limits. For multipart upload scanning, NestJS maps
+worker's configured source limits. Repeated completion returns the Python
+handler's full persisted `importRun` object.
+For multipart upload scanning, NestJS maps
 a ClamAV non-2xx response and transport failure to HTTP 500 with the reference
 scanner-unavailable detail. Local malware detection remains HTTP 400. Both
 paths fail closed before queuing import work.
