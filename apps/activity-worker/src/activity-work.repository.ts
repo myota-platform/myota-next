@@ -888,7 +888,7 @@ export class ActivityWorkRepository {
           client,
           award.programmeSlug,
           payload.subjectId,
-          award.category ?? 'HUNTER',
+          awardCategory(award),
         );
     const evaluation = evaluateAward(award, payload.subjectId, facts);
     await saveAwardProgress(client, award, payload.subjectId, facts, {
@@ -929,7 +929,9 @@ export class ActivityWorkRepository {
         continue;
       const requestedSubjects: string[] = Array.isArray(payload.subjectIds)
         ? [
-            ...new Set<string>(payload.subjectIds.filter(Boolean).map(String)),
+            ...new Set<string>(
+              payload.subjectIds.filter(pythonTruthy).map(pythonString),
+            ),
           ].sort()
         : [];
       const subjects: string[] = requestedSubjects.length
@@ -937,7 +939,7 @@ export class ActivityWorkRepository {
         : (
             await client.query(
               'SELECT DISTINCT subject_id FROM activity_subject_aggregate WHERE programme_slug=$1 AND category=$2 ORDER BY subject_id',
-              [payload.programmeSlug, award.category ?? 'HUNTER'],
+              [payload.programmeSlug, awardCategory(award)],
             )
           ).rows.map((row) => String(row.subject_id));
       for (const subjectId of subjects) {
@@ -945,7 +947,7 @@ export class ActivityWorkRepository {
           client,
           payload.programmeSlug,
           subjectId,
-          award.category ?? 'HUNTER',
+          awardCategory(award),
         );
         const evaluation = evaluateAward(award, subjectId, facts);
         const snapshot = {
@@ -1120,11 +1122,15 @@ async function saveAwardProgress(
       award.id,
       Number(award.version ?? 1),
       subjectId,
-      award.category ?? 'HUNTER',
+      awardCategory(award),
       stringifyJsonWithBigInts(facts),
       stringifyJsonWithBigInts(evaluation),
     ],
   );
+}
+
+function awardCategory(award: JsonRecord) {
+  return Object.hasOwn(award, 'category') ? award.category : 'HUNTER';
 }
 
 async function createAwardNotification(
