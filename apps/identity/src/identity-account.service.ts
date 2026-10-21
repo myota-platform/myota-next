@@ -734,8 +734,11 @@ export class IdentityAccountService {
       const evidence = await client.query(
         `SELECT e.id, e.callsign_id AS "callsignId", c.account_id AS "accountId",
                 e.evidence_type AS "evidenceType", e.source, e.checksum,
-                e.metadata::text AS "metadataText", e.status, e.submitted_at AS "submittedAt",
-                e.reviewed_at AS "reviewedAt"
+                e.metadata::text AS "metadataText", e.status,
+                to_char(e.submitted_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "submittedAt",
+                to_char(e.reviewed_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "reviewedAt"
            FROM public.callsign_evidence e
            JOIN public.callsign c ON c.id = e.callsign_id
           WHERE c.account_id = $1
