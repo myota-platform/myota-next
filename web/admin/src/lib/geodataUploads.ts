@@ -49,10 +49,6 @@ interface UploadOptions {
 }
 
 const DEFAULT_PART_SIZE = 16 * 1024 * 1024;
-export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-export const MAX_GEOJSON_UPLOAD_BYTES = 512 * 1024 * 1024;
-export const MAX_OSM_PBF_UPLOAD_BYTES = 512 * 1024 * 1024;
-export const MAX_SHAPEFILE_UPLOAD_BYTES = 512 * 1024 * 1024;
 
 function httpStatus(error: unknown): number | undefined {
   return error instanceof Error && 'status' in error
@@ -160,18 +156,7 @@ export async function uploadGeodataFile(
   metadata: UploadMetadata,
   options: UploadOptions,
 ): Promise<{ importRunId?: string; resumed: boolean }> {
-  const maxBytes =
-    metadata.format === 'OSM_PBF'
-      ? MAX_OSM_PBF_UPLOAD_BYTES
-      : metadata.format === 'GEOJSON'
-        ? MAX_GEOJSON_UPLOAD_BYTES
-        : metadata.format === 'SHAPEFILE' || metadata.format === 'SHP'
-          ? MAX_SHAPEFILE_UPLOAD_BYTES
-          : MAX_UPLOAD_BYTES;
-  if (!file.size || file.size > maxBytes)
-    throw new Error(
-      `Choose a non-empty supported import file up to ${Math.round(maxBytes / 1024 / 1024)} MiB.`,
-    );
+  if (!file.size) throw new Error('Choose a non-empty import file.');
   const { request, storage, signal } = options;
   const { key, legacyKey } = await storageKeys(file, metadata, options.ownerId);
   let saved = readSaved(storage, key);
