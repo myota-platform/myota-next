@@ -45,6 +45,7 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "test:browser": "playwright test",
     "test:geodata-maidenhead": "node tools/check-geodata-maidenhead.mjs",
+    "test:geodata-rss": "node tools/run-geodata-rss-qualification.mjs",
     "prepare:parity-databases": "node tools/create-parity-databases.mjs",
     "test:transfer-ledger": "node tools/check-transfer-ledger.mjs",
     "test:transfer-workflow": "node tools/check-transfer-workflow.mjs",
