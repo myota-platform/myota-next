@@ -15,12 +15,12 @@
   jittered backoff; S3 delete failures remain isolated for later retry. Queued
   jobs missing an outbox command are repaired periodically, retrying transient
   PostgreSQL failures with capped jittered backoff. Process-kill
-  qualifications cover statistics-rebuild, award-evaluation,
-  award-recalculation, and QSO-ingestion lease takeover. The Activity worker
+  qualifications cover lease takeover for all six Activity job kinds. The
+  checks inspect rebuilt snapshots, award progress, ingested and imported QSOs,
+  import notification state, and rendered PDF artifacts. The Activity worker
   also reconnects and resumes durable work delivery after a single-server
-  JetStream restart with its file store retained. ADIF and PDF render lease
-  takeover, cluster failover, database outages, and retention recovery evidence
-  remain open. Transient
+  JetStream restart with its file store retained. Cluster failover, database
+  outages, and retention recovery evidence remain open. Transient
   PostgreSQL failures while
   claiming work or persisting retry/dead-letter state extend the current ACK
   and retry in place with capped jittered backoff; live outage recovery

@@ -192,16 +192,17 @@ normalized records can complete with its rejected-row errors. The persisted
 additional count for normalization errors. ADIF-triggered award recalculation
 uses the Python batch key `batch:<activationId>:<firstQsoDeduplicationKey>`.
 CI kills Activity statistics-rebuild, award-evaluation, award-recalculation,
-and QSO-ingestion workers after they claim jobs, expires each lease, and
-verifies that the reclaimed jobs complete. The statistics rebuild checks its
-expected summary snapshots, both award jobs check computed progress and
-eligible levels, and QSO ingestion checks the persisted QSO, activation and
-subject counts, and downstream award job. This qualifies database lease
-takeover for four Activity job kinds. A separate recovery check also restarts
-JetStream with its file store retained while a live Activity worker remains
-connected, then verifies that the worker reconnects and completes a second
-queued job. Cluster failover, database-outage, and recovery qualification for
-the ADIF and PDF render jobs remain open.
+QSO-ingestion, ADIF-import, and PDF-render workers after they claim jobs,
+expires each lease, and verifies that the reclaimed jobs complete. The
+statistics rebuild checks its expected summary snapshots, both award jobs
+check computed progress and eligible levels, QSO ingestion checks its QSO and
+downstream award job, ADIF checks its import result and QSO notification, and
+PDF rendering checks the persisted ready artifact and PDF bytes. This
+qualifies database lease takeover for all six Activity job kinds. A separate
+recovery check also restarts JetStream with its file store retained while a
+live Activity worker remains connected, then verifies that the worker
+reconnects and completes a second queued job. Cluster failover, database
+outages, and retention recovery remain open.
 Failed or queued Activity jobs can be redriven by administrators with
 an audited reason. Failed-job redrive preserves the delivery-attempt counter,
 matching the pinned Python repository. Long-running Activity jobs now extend their 120-second leases

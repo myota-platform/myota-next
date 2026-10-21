@@ -1,5 +1,7 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint.js';
@@ -21,6 +23,14 @@ const recoveryCases = [
   {
     kind: 'QSO_INGESTION',
     testName: 'reclaims QSO ingestion after worker process death',
+  },
+  {
+    kind: 'ADIF_IMPORT',
+    testName: 'reclaims an ADIF import after worker process death',
+  },
+  {
+    kind: 'PDF_RENDER',
+    testName: 'reclaims a certificate render after worker process death',
   },
 ];
 
@@ -74,12 +84,25 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
   const pool = new Pool({ connectionString: databaseUrl, max: 3 });
   const jobId = randomUUID();
   const programmeSlug = `worker-recovery-${jobId}`;
-  const activationId = jobKind === 'QSO_INGESTION' ? randomUUID() : undefined;
-  const awardId =
-    jobKind === 'AWARD_RECALCULATE' || jobKind === 'AWARD_EVALUATION'
+  const activationId =
+    jobKind === 'QSO_INGESTION' || jobKind === 'ADIF_IMPORT'
       ? randomUUID()
       : undefined;
+  const awardId =
+    jobKind === 'AWARD_RECALCULATE' ||
+    jobKind === 'AWARD_EVALUATION' ||
+    jobKind === 'PDF_RENDER'
+      ? randomUUID()
+      : undefined;
+  const importId = jobKind === 'ADIF_IMPORT' ? randomUUID() : undefined;
+  const requestId = jobKind === 'PDF_RENDER' ? randomUUID() : undefined;
+  const issuanceId = jobKind === 'PDF_RENDER' ? randomUUID() : undefined;
   const subjectId = `worker-recovery-subject-${jobId}`;
+  const previousObjectStorageEndpoint =
+    process.env.MYOTA_OBJECT_STORAGE_ENDPOINT;
+  const previousObjectStorageAddressingStyle =
+    process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE;
+  let objectStore: RecoveryObjectStore | undefined;
   const workerEnvironment = {
     ...process.env,
     ACTIVITY_DATABASE_URL: databaseUrl,
@@ -92,6 +115,11 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
   let worker: ReturnType<typeof spawnRecoveryWorker> | undefined;
 
   try {
+    if (importId || issuanceId) {
+      objectStore = await startRecoveryObjectStore();
+      process.env.MYOTA_OBJECT_STORAGE_ENDPOINT = objectStore.endpoint;
+      process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE = 'path';
+    }
     if (activationId) {
       await pool.query(
         `INSERT INTO activity_activation
@@ -123,11 +151,89 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
           stringifyJsonWithBigInts(definition),
         ],
       );
+      if (jobKind === 'AWARD_RECALCULATE' || jobKind === 'AWARD_EVALUATION')
+        await pool.query(
+          `INSERT INTO activity_subject_aggregate
+             (programme_slug,subject_id,category,qso_count,activation_count)
+           VALUES ($1,$2,'ACTIVATOR',7,1)`,
+          [programmeSlug, subjectId],
+        );
+    }
+    if (importId && activationId && objectStore) {
+      const content = adifRecoveryContent();
+      objectStore.objects.set(
+        objectStoreKey('recovery-adif', `activity/${importId}.adi`),
+        content,
+      );
       await pool.query(
-        `INSERT INTO activity_subject_aggregate
-           (programme_slug,subject_id,category,qso_count,activation_count)
-         VALUES ($1,$2,'ACTIVATOR',7,1)`,
-        [programmeSlug, subjectId],
+        `INSERT INTO activity_import
+           (id,activation_id,filename,object_key,bucket,sha256,content_size,malware_status)
+         VALUES ($1,$2,'recovery.adi',$3,'recovery-adif',$4,$5,'CLEAN')`,
+        [
+          importId,
+          activationId,
+          `activity/${importId}.adi`,
+          createHash('sha256').update(content).digest('hex'),
+          content.length,
+        ],
+      );
+    }
+    if (awardId && requestId && issuanceId && objectStore) {
+      const image = await readFile(
+        'apps/identity/src/fixtures/profile-image-rgba.png',
+      );
+      const backgroundKey = `activity/${issuanceId}-background.png`;
+      const signatureKey = `activity/${issuanceId}-signature.png`;
+      objectStore.objects.set(
+        objectStoreKey('recovery-awards', backgroundKey),
+        image,
+      );
+      objectStore.objects.set(
+        objectStoreKey('recovery-awards', signatureKey),
+        image,
+      );
+      const artifactKey = `rendered/${issuanceId}.pdf`;
+      objectStore.artifactKey = objectStoreKey('recovery-awards', artifactKey);
+      const issuance = {
+        id: issuanceId,
+        awardId,
+        awardName: 'Worker recovery award',
+        callsign: 'N0CALL',
+        personName: 'Worker Recovery',
+        dateObtained: '2026-01-01',
+        managerName: 'MyOTA',
+        renderSpec: {
+          backgroundAsset: {
+            bucket: 'recovery-awards',
+            objectKey: backgroundKey,
+          },
+          signatureAsset: {
+            bucket: 'recovery-awards',
+            objectKey: signatureKey,
+          },
+          printSpec: { page: 'A4', orientation: 'PORTRAIT' },
+          elements: [],
+        },
+        artifact: { bucket: 'recovery-awards', objectKey: artifactKey },
+      };
+      await pool.query(
+        `INSERT INTO activity_award_request
+           (id,award_id,programme_slug,level_id,subject_id,category,callsign,person_name)
+         VALUES ($1,$2,$3,'level-5',$4,'ACTIVATOR','N0CALL','Worker Recovery')`,
+        [requestId, awardId, programmeSlug, subjectId],
+      );
+      await pool.query(
+        `INSERT INTO activity_award_issuance
+           (id,request_id,award_id,programme_slug,level_id,subject_id,issuance)
+         VALUES ($1,$2,$3,$4,'level-5',$5,$6::jsonb)`,
+        [
+          issuanceId,
+          requestId,
+          awardId,
+          programmeSlug,
+          subjectId,
+          stringifyJsonWithBigInts(issuance),
+        ],
       );
     }
     await pool.query(
@@ -143,17 +249,21 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
               ? { programmeSlug, subjectIds: [subjectId] }
               : jobKind === 'AWARD_EVALUATION'
                 ? { awardId, subjectId }
-                : {
-                    activationId,
-                    records: [
-                      {
-                        workedCallsign: 'K1RECOVERY',
-                        timestamp: '2026-01-01T00:05:00Z',
-                        band: '20M',
-                        mode: 'SSB',
+                : jobKind === 'ADIF_IMPORT'
+                  ? { importId }
+                  : jobKind === 'PDF_RENDER'
+                    ? { issuanceId }
+                    : {
+                        activationId,
+                        records: [
+                          {
+                            workedCallsign: 'K1RECOVERY',
+                            timestamp: '2026-01-01T00:05:00Z',
+                            band: '20M',
+                            mode: 'SSB',
+                          },
+                        ],
                       },
-                    ],
-                  },
         ),
       ],
     );
@@ -218,7 +328,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
           levels: [{ id: 'level-5', eligible: true }],
         },
       });
-    } else {
+    } else if (jobKind === 'QSO_INGESTION') {
       const result = await pool.query(
         `SELECT job.status,job.attempts,activation.qso_count,
                 count(DISTINCT qso.id)::int AS qsos,
@@ -249,20 +359,92 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
         qso_events: 1,
         award_jobs: 1,
       });
+    } else if (jobKind === 'ADIF_IMPORT') {
+      const result = await pool.query(
+        `SELECT job.status,job.attempts,import.status AS import_status,
+                import.records_seen,import.records_accepted,import.records_rejected,
+                count(DISTINCT qso.id)::int AS qsos,
+                count(DISTINCT event.event_id)::int AS qso_events,
+                count(DISTINCT notification.id)::int AS notifications
+         FROM activity_job job
+         JOIN activity_import import ON import.id=$2
+         LEFT JOIN activity_qso qso ON qso.source_import_id=import.id
+         LEFT JOIN outbox_event event
+           ON event.aggregate_type='qso' AND event.aggregate_id=qso.id::text
+         LEFT JOIN activity_notification notification
+           ON notification.deduplication_key='adif:' || import.id::text || ':completed'
+         WHERE job.id=$1 GROUP BY job.id,import.id`,
+        [jobId, importId],
+      );
+      expect(result.rows[0]).toMatchObject({
+        status: 'SUCCEEDED',
+        attempts: 2,
+        import_status: 'COMPLETED',
+        records_seen: 1,
+        records_accepted: 1,
+        records_rejected: 0,
+        qsos: 1,
+        qso_events: 1,
+        notifications: 1,
+      });
+    } else {
+      const result = await pool.query<{
+        status: string;
+        attempts: number;
+        issuance: string;
+      }>(
+        `SELECT job.status,job.attempts,issuance.issuance::text AS issuance
+         FROM activity_job job
+         JOIN activity_award_issuance issuance ON issuance.id=$2
+         WHERE job.id=$1`,
+        [jobId, issuanceId],
+      );
+      expect(result.rows[0]).toMatchObject({
+        status: 'SUCCEEDED',
+        attempts: 2,
+      });
+      const storedIssuance = JSON.parse(result.rows[0]!.issuance);
+      expect(storedIssuance.artifact).toMatchObject({
+        downloadReady: true,
+        renderStatus: 'READY',
+      });
+      expect(storedIssuance.artifact.contentSha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(
+        objectStore?.objects
+          .get(objectStore.artifactKey ?? '')
+          ?.toString('ascii', 0, 4),
+      ).toBe('%PDF');
     }
   } finally {
     if (worker && worker.exitCode === null) {
       worker.kill('SIGKILL');
       await waitForExit(worker).catch(() => undefined);
     }
-    await cleanupRecoveryFixture(
-      pool,
-      jobId,
-      programmeSlug,
-      awardId,
-      subjectId,
-      activationId,
-    );
+    try {
+      await cleanupRecoveryFixture(
+        pool,
+        jobId,
+        programmeSlug,
+        awardId,
+        subjectId,
+        activationId,
+        importId,
+        requestId,
+        issuanceId,
+      );
+    } finally {
+      if (objectStore) await stopRecoveryObjectStore(objectStore);
+      if (previousObjectStorageEndpoint === undefined)
+        delete process.env.MYOTA_OBJECT_STORAGE_ENDPOINT;
+      else
+        process.env.MYOTA_OBJECT_STORAGE_ENDPOINT =
+          previousObjectStorageEndpoint;
+      if (previousObjectStorageAddressingStyle === undefined)
+        delete process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE;
+      else
+        process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE =
+          previousObjectStorageAddressingStyle;
+    }
   }
 }
 
@@ -273,6 +455,9 @@ async function cleanupRecoveryFixture(
   awardId?: string,
   subjectId?: string,
   activationId?: string,
+  importId?: string,
+  requestId?: string,
+  issuanceId?: string,
 ) {
   let cleanupError: unknown;
   try {
@@ -282,6 +467,20 @@ async function cleanupRecoveryFixture(
       [programmeSlug],
     );
     if (awardId && subjectId) {
+      if (issuanceId) {
+        await pool.query(
+          `DELETE FROM outbox_event WHERE aggregate_type='award_issuance'
+           AND aggregate_id=$1`,
+          [issuanceId],
+        );
+        await pool.query('DELETE FROM activity_award_issuance WHERE id=$1', [
+          issuanceId,
+        ]);
+      }
+      if (requestId)
+        await pool.query('DELETE FROM activity_award_request WHERE id=$1', [
+          requestId,
+        ]);
       await pool.query(
         `DELETE FROM activity_notification
          WHERE deduplication_key LIKE $1`,
@@ -336,6 +535,19 @@ async function cleanupRecoveryFixture(
       await pool.query('DELETE FROM activity_qso WHERE activation_id=$1', [
         activationId,
       ]);
+      if (importId) {
+        await pool.query(
+          `DELETE FROM activity_notification
+           WHERE deduplication_key IN ($1,$2)`,
+          [`adif:${importId}:completed`, `adif:${importId}:failed`],
+        );
+        await pool.query(
+          `DELETE FROM outbox_event
+           WHERE aggregate_type='activity_import' AND aggregate_id=$1`,
+          [importId],
+        );
+        await pool.query('DELETE FROM activity_import WHERE id=$1', [importId]);
+      }
       await pool.query('DELETE FROM activity_activation WHERE id=$1', [
         activationId,
       ]);
@@ -346,6 +558,85 @@ async function cleanupRecoveryFixture(
   }
   await pool.end();
   if (cleanupError) throw cleanupError;
+}
+
+type RecoveryObjectStore = {
+  endpoint: string;
+  server: ReturnType<typeof createServer>;
+  objects: Map<string, Buffer>;
+  artifactKey?: string;
+};
+
+function adifRecoveryContent() {
+  return Buffer.from(
+    '<ADIF_VER:5>3.1.0<EOH>\n<CALL:8>K1RECOVR<QSO_DATE:8>20260101<TIME_ON:6>000500<BAND:3>20M<MODE:3>SSB<EOR>\n',
+  );
+}
+
+function objectStoreKey(bucket: string, key: string) {
+  return `/${bucket}/${key}`;
+}
+
+async function startRecoveryObjectStore() {
+  const objects = new Map<string, Buffer>();
+  const server = createServer((request, response) => {
+    const key = decodeURIComponent(
+      new URL(request.url ?? '/', 'http://127.0.0.1').pathname,
+    );
+    if (request.method === 'GET') {
+      const object = objects.get(key);
+      response.statusCode = object ? 200 : 404;
+      if (object) {
+        response.setHeader('content-type', 'application/octet-stream');
+        response.setHeader('content-length', object.length);
+        response.end(object);
+      } else {
+        response.end('<Error><Code>NoSuchKey</Code></Error>');
+      }
+      return;
+    }
+    if (request.method === 'PUT') {
+      const chunks: Buffer[] = [];
+      request.on('data', (chunk: Buffer | Uint8Array) =>
+        chunks.push(Buffer.from(chunk)),
+      );
+      request.on('end', () => {
+        const body = Buffer.concat(chunks);
+        objects.set(key, body);
+        response.statusCode = 200;
+        response.setHeader(
+          'ETag',
+          `"${createHash('md5').update(body).digest('hex')}"`,
+        );
+        response.end();
+      });
+      return;
+    }
+    response.statusCode = 405;
+    response.end();
+  });
+  const port = await new Promise<number>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        reject(new Error('could not start the Activity recovery object store'));
+        return;
+      }
+      resolve(address.port);
+    });
+  });
+  return {
+    endpoint: `http://127.0.0.1:${port}`,
+    server,
+    objects,
+  } satisfies RecoveryObjectStore;
+}
+
+async function stopRecoveryObjectStore(objectStore: RecoveryObjectStore) {
+  await new Promise<void>((resolve, reject) =>
+    objectStore.server.close((error) => (error ? reject(error) : resolve())),
+  );
 }
 
 function spawnRecoveryWorker(environment: NodeJS.ProcessEnv) {
