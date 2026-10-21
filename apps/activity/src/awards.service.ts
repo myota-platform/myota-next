@@ -296,7 +296,7 @@ export class AwardsService {
     const facts = await this.repository.subjectFacts(
       award.programmeSlug,
       participantId,
-      award.category ?? 'HUNTER',
+      Object.hasOwn(award, 'category') ? award.category : 'HUNTER',
     );
     const result = evaluateAward(award, participantId, facts);
     await this.repository.saveAwardProgress(
@@ -319,13 +319,18 @@ export class AwardsService {
     const subjects = pythonTruthy(body.subjectIds) ? body.subjectIds : [];
     if (!Array.isArray(subjects))
       throw new BadRequestException('subjectIds must be an array');
-    const sorted = subjects.map(String).sort();
+    const subjectRecord = subjects as unknown as Record<string, unknown>;
+    const sorted = subjects
+      .map((_subject, index) =>
+        pythonStringJsonField(subjectRecord, String(index)),
+      )
+      .sort();
     const jobKey =
       key ??
       `award-recalculate:${award.id}:${award.version ?? 1}:${sorted.join(',')}`;
     const payload = {
       programmeSlug: award.programmeSlug,
-      subjectIds: sorted,
+      subjectIds: subjects,
       awardId: award.id,
       ruleVersion: award.version ?? 1,
     };

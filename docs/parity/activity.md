@@ -121,6 +121,9 @@ when omitted; certificate rendering converts award values and element-label
 fallbacks with Python `str()`.
 Award-request fact lookup passes stored programme and category values through,
 with `HUNTER` used only when the stored category is absent.
+Award recalculation preserves the submitted subject list in the queued payload;
+Python string conversion and sorting are used only to form its deterministic
+idempotency key.
 ADIF uploads use the reference's shared `MYOTA_UPLOAD_MAX_BYTES` cap (1 GiB by
 default), then pass authorization, malware checks, and object storage before
 durable queueing; the Activity worker enforces the same cap, parses records,
