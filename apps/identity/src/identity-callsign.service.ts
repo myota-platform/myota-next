@@ -445,7 +445,7 @@ export class IdentityCallsignService {
       const body = await validateRetireCallsignBody(rawBody);
       if (account.rows[0].primary_callsign_id === callsignId) {
         const replacement = body.newPrimaryCallsignId;
-        if (!replacement) {
+        if (!isCanonicalUuid(replacement)) {
           throw new BadRequestException(
             'retiring the primary callsign requires an active replacement',
           );

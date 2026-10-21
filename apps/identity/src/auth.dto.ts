@@ -1,4 +1,5 @@
 import {
+  Allow,
   IsArray,
   IsBoolean,
   IsDateString,
@@ -279,9 +280,9 @@ export class SetPrimaryCallsignDto {
 }
 
 export class RetireCallsignDto {
+  @Allow()
   @IsOptional()
-  @IsUUID()
-  newPrimaryCallsignId?: string;
+  newPrimaryCallsignId?: unknown;
 
   @IsOptional()
   @IsDateString()

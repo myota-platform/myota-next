@@ -68,8 +68,10 @@ reference's callsign, evidence, and security-event insertion order through
 Core-owned order values. Existing rows are backfilled chronologically with IDs
 as deterministic tie-breakers.
 Callsign retirement authenticates and resolves the account and callsign before
-validating its optional fields, then validates a primary replacement before
-reading evidence, matching the reference's operation order.
+validating optional fields. It checks a primary replacement before reading
+evidence only when retiring the primary callsign; malformed replacement values
+are ignored when the target is not primary, matching the reference's branch
+behavior.
 Callsign create, primary-selection, evidence, verification, and retirement defer
 account-ID resolution until after their respective authorization checks; a
 missing account returns the quoted-ID 404 before replaying an idempotent result
