@@ -19,7 +19,8 @@ before activation lookup and return the same ordered `missing required fields`
 detail as the reference. Direct QSO writes and queued QSO ingestion preserve
 Python string coercion for JSON float tokens in `workedCallsign`,
 `workedLocator`, `hunterId`, and `workedEntityId`; ingestion retains float-token
-metadata through the Activity JSONB job payload and worker read. Single-QSO
+metadata through the Activity JSONB job payload and worker read, with exact
+integer and float-token parsing from PostgreSQL JSONB text. Single-QSO
 award-recalculation jobs retain a null `hunterId` entry in `subjectIds`, as the
 Python handler does. Batch QSO recalculation jobs filter raw Hunter IDs using
 Python truthiness and preserve their submitted values. Band and mode

@@ -12,6 +12,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { MAX_UPLOAD_BYTES } from '@app/platform/import-limits.js';
 import { parsePageTotal } from '@app/platform/pagination.js';
@@ -31,6 +32,13 @@ import {
 import { evaluateAward } from '../../activity/src/award-domain.js';
 
 const qsoTimestampProjection = `to_char(occurred_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at_iso`;
+
+function parseWorkPayload(value: unknown): JsonRecord {
+  const payload = parseJsonWithExactIntegers(String(value));
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+    throw new Error('Activity work job payload must be an object');
+  return payload as JsonRecord;
+}
 
 export interface ClaimedJob {
   id: string;
@@ -76,7 +84,7 @@ export class ActivityWorkRepository {
          started_at=COALESCE(started_at,now()),lease_expires_at=now()+make_interval(secs=>$3),lease_token=$4
          WHERE id=$1 AND kind=$2 AND available_at<=now()
            AND (status='QUEUED' OR (status='RUNNING' AND lease_expires_at<now()))
-         RETURNING id,kind,payload,attempts,lease_token`,
+         RETURNING id,kind,payload::text AS payload_text,attempts,lease_token`,
         [id, expectedKind, leaseSeconds, leaseToken],
       );
       const row = updated.rows[0];
@@ -84,7 +92,7 @@ export class ActivityWorkRepository {
       return {
         id: String(row.id),
         kind: row.kind,
-        payload: row.payload,
+        payload: parseWorkPayload(row.payload_text),
         attempts: row.attempts,
         leaseToken: String(row.lease_token),
       };
@@ -273,7 +281,7 @@ export class ActivityWorkRepository {
            ON CONFLICT (deduplication_key) DO NOTHING
            RETURNING *, ${qsoTimestampProjection}`,
           [
-            JSON.stringify(
+            stringifyJsonWithBigInts(
               normalized.map((qso) => ({
                 id: qso.id,
                 hunter_id: qso.hunterId ?? null,
@@ -496,7 +504,7 @@ export class ActivityWorkRepository {
            ON CONFLICT (deduplication_key) DO NOTHING
            RETURNING *, ${qsoTimestampProjection}`,
           [
-            JSON.stringify(
+            stringifyJsonWithBigInts(
               normalized.map(({ qso }) => ({
                 id: qso.id,
                 hunter_id: qso.hunterId ?? null,
