@@ -80,7 +80,7 @@ async function query(url, sql, values = []) {
   }
 }
 
-async function createSource(key, migrations) {
+async function createSource(key, migrations, beforeMigration) {
   const database = names[key];
   const exists = await admin.query(
     'SELECT 1 FROM pg_database WHERE datname=$1',
@@ -91,6 +91,7 @@ async function createSource(key, migrations) {
   await admin.query(`CREATE DATABASE "${database}" TEMPLATE template0`);
   created.push(database);
   for (const [index, migration] of migrations.entries()) {
+    if (index === 2 && beforeMigration) await beforeMigration(endpoints[key]);
     const sql = await readFile(migration.path, 'utf8');
     await applySql(endpoints[key], sql);
     if (migration.ledger) {
@@ -115,34 +116,74 @@ async function createSource(key, migrations) {
 try {
   await admin.connect();
   const sha256 = (sql) => createHash('sha256').update(sql).digest('hex');
-  await createSource('core-source', [
-    {
-      path: 'deploy/db/migrations/core/001_core_baseline.sql',
-      checksum: sha256,
+  await createSource(
+    'core-source',
+    [
+      {
+        path: 'deploy/db/migrations/core/001_core_baseline.sql',
+        checksum: sha256,
+      },
+      {
+        path: 'deploy/db/migrations/core/002_identity_auth_support.sql',
+        ledger: '002_identity_auth_support.sql',
+        checksum: sha256,
+      },
+      {
+        path: 'deploy/db/migrations/core/003_identity_auth_backfill.sql',
+        ledger: '003_identity_auth_backfill.sql',
+        checksum: sha256,
+      },
+    ],
+    async (url) => {
+      const accountId = '00000000-0000-4000-8000-000000000002';
+      const timestamp = '2026-01-02T03:04:05.000Z';
+      await query(
+        url,
+        `INSERT INTO public.service_state (service,state,updated_at)
+       VALUES ('identity',$1::jsonb,$2::timestamptz)`,
+        [
+          JSON.stringify({
+            items: {
+              [accountId]: {
+                id: accountId,
+                displayName: 'Transfer Fixture',
+                email: 'Transfer.Fixture@example.test',
+                participationType: 'OPERATOR',
+                status: 'ACTIVE',
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              },
+            },
+            data: {},
+          }),
+          timestamp,
+        ],
+      );
     },
-    {
-      path: 'deploy/db/migrations/core/002_identity_auth_support.sql',
-      ledger: '002_identity_auth_support.sql',
-      checksum: sha256,
-    },
-    {
-      path: 'deploy/db/migrations/core/003_identity_auth_backfill.sql',
-      ledger: '003_identity_auth_backfill.sql',
-      checksum: sha256,
-    },
-  ]);
+  );
   await createSource('activity-source', [
     {
       path: 'deploy/db/migrations/activity/001_activity_baseline.sql',
       checksum: sha256,
     },
   ]);
+  await query(
+    endpoints['activity-source'],
+    `INSERT INTO public.activity_job (id,kind,payload,status,attempts)
+     VALUES ('00000000-0000-4000-8000-000000000003','transfer-fixture','{"fixture":true}'::jsonb,'QUEUED',0)`,
+  );
   await createSource('geo-source', [
     {
       path: 'deploy/db/migrations/geo/001_geodata_baseline.sql',
       checksum: sha256,
     },
   ]);
+  await query(
+    endpoints['geo-source'],
+    `INSERT INTO public.geodata_entity (id,name,geom)
+     VALUES ('00000000-0000-4000-8000-000000000004','Transfer Fixture',
+             ST_SetSRID(ST_Point(13.405,52.52),4326))`,
+  );
 
   const emailName = names['email-source'];
   const emailExists = await admin.query(
@@ -264,6 +305,29 @@ try {
     throw new Error(
       `Legacy Email rows were not merged into Core: ${JSON.stringify(merged.rows[0])}`,
     );
+  const [coreFixture, activityFixture, geoFixture] = await Promise.all([
+    query(
+      endpoints['core-target'],
+      `SELECT id,email::text AS email FROM public.account
+        WHERE id='00000000-0000-4000-8000-000000000002'`,
+    ),
+    query(
+      endpoints['activity-target'],
+      `SELECT id FROM public.activity_job
+        WHERE id='00000000-0000-4000-8000-000000000003'`,
+    ),
+    query(
+      endpoints['geo-target'],
+      `SELECT id,name FROM public.geodata_entity
+        WHERE id='00000000-0000-4000-8000-000000000004'`,
+    ),
+  ]);
+  if (
+    coreFixture.rows[0]?.email !== 'transfer.fixture@example.test' ||
+    activityFixture.rowCount !== 1 ||
+    geoFixture.rows[0]?.name !== 'Transfer Fixture'
+  )
+    throw new Error('Owner database fixture data did not survive the transfer');
   process.stdout.write(
     'Full disposable four-source to three-target transfer workflow verified.\n',
   );
