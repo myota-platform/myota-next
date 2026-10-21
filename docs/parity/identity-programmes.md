@@ -22,9 +22,10 @@ the TLS handshake, and sends no AUTH command when that handshake fails. A
 successful SMTP delivery against deployment trust roots remains an operational
 qualification gate. Identity recipient token expiry uses a monotonic clock
 measured from before token acquisition, matching the reference cache timing.
-The cached lifetime subtracts a 30-second margin and clamps the result to
-30–270 seconds, matching the Python worker even when Identity returns a short
-token lifetime. Token issuance and recipient resolution require HTTP 200;
+The cached lifetime applies Python integer conversion to `expiresIn`, subtracts
+a 30-second margin, and clamps the result to 30–270 seconds, matching the
+Python worker even when Identity returns a short token lifetime. Token
+issuance and recipient resolution require HTTP 200;
 other successful recipient statuses are still treated as unavailable, as in
 the Python resolver.
 

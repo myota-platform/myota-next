@@ -336,9 +336,8 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
       if (!isRecord(tokenBody) || typeof tokenBody.accessToken !== 'string')
         throw new Error('Identity service returned an invalid token response');
       this.identityToken = tokenBody.accessToken;
-      const expiresIn = integerOrFallback(tokenBody.expiresIn, 300);
       this.identityTokenExpiresAt =
-        tokenCheckTime + Math.min(Math.max(30, expiresIn - 30), 270) * 1000;
+        tokenCheckTime + identityTokenCacheSeconds(tokenBody.expiresIn) * 1000;
     }
     const response = await fetch(
       `${this.identityUrl}/v1/identity/internal/email-recipients/${accountId}`,
@@ -611,9 +610,22 @@ function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function integerOrFallback(value: unknown, fallback: number) {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) ? parsed : fallback;
+function identityTokenCacheSeconds(value: unknown) {
+  let expiresIn: bigint;
+  if (value === undefined) expiresIn = 300n;
+  else if (typeof value === 'boolean') expiresIn = value ? 1n : 0n;
+  else if (typeof value === 'bigint') expiresIn = value;
+  else if (typeof value === 'number' && Number.isFinite(value))
+    expiresIn = BigInt(Math.trunc(value));
+  else if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (!/^[+-]?[0-9](?:_?[0-9])*$/.test(normalized))
+      throw new Error('Identity service returned an invalid token lifetime');
+    expiresIn = BigInt(normalized.replaceAll('_', ''));
+  } else throw new Error('Identity service returned an invalid token lifetime');
+  if (expiresIn <= 60n) return 30;
+  if (expiresIn >= 300n) return 270;
+  return Number(expiresIn - 30n);
 }
 
 function backoffMs(attempt: number) {
