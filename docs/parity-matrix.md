@@ -806,8 +806,11 @@ geometries.
   implementation has no equivalent pass and does not reuse that label for
   individual writes.
   Stale queued and expired work is re-enqueued through the owner outbox.
-  Scheduled import and upload-session retention is implemented; outage/recovery
-  evidence remains open.
+  Scheduled import and upload-session retention is implemented. CI restarts the
+  pinned SeaweedFS image during a Geodata multipart upload, verifies a failed
+  part leaves no database record, retries it after restart, and checks the
+  completed object and queued import. Other object-store and worker outage paths
+  remain open; see [object-store recovery](operations/object-store-recovery.md).
 
 - Gateway: routes public API requests to their owning services, protects
   Identity internal endpoints, streams request and response bodies, enforces

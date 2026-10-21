@@ -56,8 +56,11 @@ behavioral parity or production readiness.
   publication, attempt exhaustion, and audited redrive for Core, Activity, and
   Geodata events against their separate databases. It also kills and restarts
   an isolated JetStream server with its file store retained, then verifies
-  outbox retry and publication for each owner. Other worker and object-store
-  recovery paths remain to be qualified.
+  outbox retry and publication for each owner. A SeaweedFS restart check
+  verifies Geodata multipart-part retry, database rollback after a failed
+  upload, and completion from the retained data volume. Other worker and
+  object-store recovery paths remain to be qualified; see the
+  [object-store recovery notes](operations/object-store-recovery.md).
 - Complete the semantic review and rehearsal for cross-version database
   transfer, backup, restore, and rollback. CI exercises the transfer commands
   end to end on disposable databases with Identity, Programme, Activity,
@@ -94,6 +97,8 @@ behavioral parity or production readiness.
 - [Cross-version database transfer](operations/cross-version-data-transfer.md)
   and [backup and restore](operations/database-backup-restore.md): data
   transition procedures and open rehearsals.
+- [Object-store recovery](operations/object-store-recovery.md): qualified
+  Geodata multipart retry behavior and its limits.
 - [Deployment guide](../deploy/README.md): Compose and Helm deployment state.
 
 The monorepo is a development baseline. Do not use it for production cutover
