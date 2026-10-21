@@ -2,6 +2,10 @@
 
 The reference is `myota-platform/myota` at commit
 [`7f904a5130e59006765cf882956a4adbfecb17ec`](https://github.com/myota-platform/myota/tree/7f904a5130e59006765cf882956a4adbfecb17ec).
+This immutable snapshot, captured from the repository's `testing` branch, is
+the function-parity baseline for this implementation. Do not silently replace
+it with a moving branch head; changing the baseline requires a reviewed contract
+and behavior update.
 The exact reference contract files are now preserved locally in
 [`contracts/reference/`](../contracts/reference/). Its `openapi.yaml` has SHA-256
 `af9b9bd81c723f040ae3ddd407992cb53c89c18a6fbd4f5e147fa0df27025eba` and
