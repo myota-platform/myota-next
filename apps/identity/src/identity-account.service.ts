@@ -55,10 +55,10 @@ interface AccountRecord {
   biography_markdown: string | null;
   profile_image_id: string | null;
   profile_image_media_type: string | null;
-  profile_image_updated_at: Date | null;
+  profile_image_updated_at: string | null;
   primary_callsign_id: string | null;
-  created_at: Date;
-  updated_at: Date;
+  created_at: string;
+  updated_at: string;
 }
 
 @Injectable()
@@ -179,15 +179,18 @@ export class IdentityAccountService {
 
       const accountId = randomUUID();
       const accountResult = await client.query<{
-        created_at: Date;
-        updated_at: Date;
+        created_at: string;
+        updated_at: string;
       }>(
         `INSERT INTO public.account
            (id, display_name, email, identity_email_key, participation_type,
             status, created_at, updated_at)
          VALUES ($1, $2, $3, $3, $4, 'PENDING_SETUP',
                  clock_timestamp(), clock_timestamp())
-         RETURNING created_at, updated_at`,
+         RETURNING to_char(created_at AT TIME ZONE 'UTC',
+                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                   to_char(updated_at AT TIME ZONE 'UTC',
+                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
         [
           accountId,
           input.displayName,
@@ -209,15 +212,18 @@ export class IdentityAccountService {
       if (callsignValue) {
         const callsignId = randomUUID();
         const callsignResult = await client.query<{
-          created_at: Date;
-          updated_at: Date;
+          created_at: string;
+          updated_at: string;
         }>(
           `INSERT INTO public.callsign
              (id, account_id, value, lifecycle_status, source,
               verification_source, created_at, updated_at)
            VALUES ($1, $2, $3, 'UNVERIFIED', 'self-asserted', NULL,
                    clock_timestamp(), clock_timestamp())
-           RETURNING created_at, updated_at`,
+           RETURNING to_char(created_at AT TIME ZONE 'UTC',
+                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                     to_char(updated_at AT TIME ZONE 'UTC',
+                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
           [callsignId, accountId, callsignValue],
         );
         const callsign = {
@@ -248,9 +254,10 @@ export class IdentityAccountService {
           aggregateId: callsignId,
           payload: { accountId, ...callsign },
         });
-        const accountUpdate = await client.query<{ updated_at: Date }>(
+        const accountUpdate = await client.query<{ updated_at: string }>(
           `UPDATE public.account SET updated_at = clock_timestamp()
-            WHERE id = $1 RETURNING updated_at`,
+            WHERE id = $1 RETURNING to_char(updated_at AT TIME ZONE 'UTC',
+              'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
           [accountId],
         );
         accountUpdatedAt = accountUpdate.rows[0].updated_at;
@@ -387,9 +394,15 @@ export class IdentityAccountService {
     try {
       const result = await client.query<AccountRecord>(
         `SELECT a.id, a.display_name, a.email::text AS email,
-                a.participation_type, a.status, a.created_at, a.updated_at,
+                a.participation_type, a.status,
+                to_char(a.created_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                to_char(a.updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at,
                 p.website_url, p.biography_markdown, p.profile_image_id,
-                p.profile_image_media_type, p.profile_image_updated_at,
+                p.profile_image_media_type,
+                to_char(p.profile_image_updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS profile_image_updated_at,
                 primary_call.callsign_id AS primary_callsign_id
            FROM public.account a
            LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
@@ -469,9 +482,15 @@ export class IdentityAccountService {
       await client.query('BEGIN');
       const result = await client.query<AccountRecord>(
         `SELECT a.id, a.display_name, a.email::text AS email,
-                a.participation_type, a.status, a.created_at, a.updated_at,
+                a.participation_type, a.status,
+                to_char(a.created_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                to_char(a.updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at,
                 p.website_url, p.biography_markdown, p.profile_image_id,
-                p.profile_image_media_type, p.profile_image_updated_at,
+                p.profile_image_media_type,
+                to_char(p.profile_image_updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS profile_image_updated_at,
                 primary_call.callsign_id AS primary_callsign_id
            FROM public.account a
            LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
@@ -660,9 +679,15 @@ export class IdentityAccountService {
 
       const updated = await client.query<AccountRecord>(
         `SELECT a.id, a.display_name, a.email::text AS email,
-                a.participation_type, a.status, a.created_at, a.updated_at,
+                a.participation_type, a.status,
+                to_char(a.created_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                to_char(a.updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at,
                 p.website_url, p.biography_markdown, p.profile_image_id,
-                p.profile_image_media_type, p.profile_image_updated_at,
+                p.profile_image_media_type,
+                to_char(p.profile_image_updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS profile_image_updated_at,
                 primary_call.callsign_id AS primary_callsign_id
            FROM public.account a
            LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
@@ -1146,9 +1171,15 @@ export class IdentityAccountService {
   private async readAccountView(client: PoolClient, accountId: string) {
     const accountResult = await client.query<AccountRecord>(
       `SELECT a.id, a.display_name, a.email::text AS email,
-              a.participation_type, a.status, a.created_at, a.updated_at,
+              a.participation_type, a.status,
+              to_char(a.created_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+              to_char(a.updated_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at,
               p.website_url, p.biography_markdown, p.profile_image_id,
-              p.profile_image_media_type, p.profile_image_updated_at,
+              p.profile_image_media_type,
+              to_char(p.profile_image_updated_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS profile_image_updated_at,
               primary_call.callsign_id AS primary_callsign_id
          FROM public.account a
          LEFT JOIN public.identity_account_profile p ON p.account_id = a.id

@@ -99,7 +99,10 @@ are ignored when the target is not primary, matching the reference's branch
 behavior. Callsign create, evidence submission, verification, retirement,
 account reads and exports, and outbox payloads preserve PostgreSQL microseconds
 in lifecycle timestamps. Submitted `validFrom` and `validTo` text passes
-through to PostgreSQL without JavaScript `Date` truncation.
+through to PostgreSQL without JavaScript `Date` truncation. Account creation,
+login and refresh responses, current-account reads, profile updates, and
+administrator account reads also preserve microseconds in account and profile
+image timestamps.
 Callsign create, primary-selection, evidence, verification, and retirement defer
 account-ID resolution until after their respective authorization checks; a
 missing account returns the quoted-ID 404 before replaying an idempotent result

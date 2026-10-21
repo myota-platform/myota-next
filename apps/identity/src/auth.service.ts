@@ -61,8 +61,8 @@ interface AccountRow {
   email: string | null;
   participation_type: string;
   status: string;
-  created_at?: Date;
-  updated_at?: Date;
+  created_at?: string;
+  updated_at?: string;
   primary_callsign_id?: string | null;
   password_hash: string | null;
   failed_attempts: number;
@@ -71,12 +71,12 @@ interface AccountRow {
   biography_markdown?: string | null;
   profile_image_id?: string | null;
   profile_image_media_type?: string | null;
-  profile_image_updated_at?: Date | null;
+  profile_image_updated_at?: string | null;
 }
 
 interface AdminAccountRow extends AccountRow {
-  created_at: Date;
-  updated_at: Date;
+  created_at: string;
+  updated_at: string;
   primary_callsign_id: string | null;
 }
 
@@ -164,15 +164,20 @@ export class IdentityAuthService {
         trimPythonWhitespace(input.email),
       );
       const accountResult = await client.query<AccountRow>(
-        `SELECT a.id, a.display_name, a.email::text AS email, a.created_at,
-                a.updated_at,
+        `SELECT a.id, a.display_name, a.email::text AS email,
+                to_char(a.created_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                to_char(a.updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at,
                 (SELECT primary_call.callsign_id
                    FROM public.account_primary_callsign primary_call
                   WHERE primary_call.account_id = a.id) AS primary_callsign_id,
                 a.participation_type, a.status, c.password_hash,
                 coalesce(c.failed_attempts, 0) AS failed_attempts, c.locked_until,
                 p.website_url, p.biography_markdown, p.profile_image_id,
-                p.profile_image_media_type, p.profile_image_updated_at
+                p.profile_image_media_type,
+                to_char(p.profile_image_updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS profile_image_updated_at
            FROM public.account a
            LEFT JOIN public.account_credential c ON c.account_id = a.id
            LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
@@ -310,15 +315,20 @@ export class IdentityAuthService {
           'refresh session is invalid or revoked',
         );
       const accountResult = await client.query<AccountRow>(
-        `SELECT a.id, a.display_name, a.email::text AS email, a.created_at,
-                a.updated_at,
+        `SELECT a.id, a.display_name, a.email::text AS email,
+                to_char(a.created_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                to_char(a.updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at,
                 (SELECT primary_call.callsign_id
                    FROM public.account_primary_callsign primary_call
                   WHERE primary_call.account_id = a.id) AS primary_callsign_id,
                 a.participation_type, a.status, NULL::text AS password_hash,
                 0 AS failed_attempts, NULL::timestamptz AS locked_until,
                 p.website_url, p.biography_markdown, p.profile_image_id,
-                p.profile_image_media_type, p.profile_image_updated_at
+                p.profile_image_media_type,
+                to_char(p.profile_image_updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS profile_image_updated_at
            FROM public.account a
            LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
           WHERE a.id = $1
@@ -538,8 +548,11 @@ export class IdentityAuthService {
       if (revoked.rowCount)
         throw new UnauthorizedException('token has been revoked');
       const accountResult = await client.query<AccountRow>(
-        `SELECT a.id, a.display_name, a.email::text AS email, a.created_at,
-                a.updated_at,
+        `SELECT a.id, a.display_name, a.email::text AS email,
+                to_char(a.created_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                to_char(a.updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at,
                 (SELECT primary_call.callsign_id
                    FROM public.account_primary_callsign primary_call
                   WHERE primary_call.account_id = a.id) AS primary_callsign_id,
@@ -547,7 +560,8 @@ export class IdentityAuthService {
                 0 AS failed_attempts, NULL::timestamptz AS locked_until,
                 p.website_url, p.biography_markdown,
                 p.profile_image_id, p.profile_image_media_type,
-                p.profile_image_updated_at
+                to_char(p.profile_image_updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS profile_image_updated_at
            FROM public.account a
            LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
           WHERE a.id = $1 AND a.status = 'ACTIVE'`,
@@ -638,11 +652,17 @@ export class IdentityAuthService {
           accountIds.length
             ? client.query<AdminAccountRow>(
                 `SELECT a.id, a.display_name, a.email::text AS email,
-                        a.participation_type, a.status, a.created_at, a.updated_at,
+                        a.participation_type, a.status,
+                        to_char(a.created_at AT TIME ZONE 'UTC',
+                          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                        to_char(a.updated_at AT TIME ZONE 'UTC',
+                          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at,
                         NULL::text AS password_hash, 0 AS failed_attempts,
                         NULL::timestamptz AS locked_until,
                         p.website_url, p.biography_markdown, p.profile_image_id,
-                        p.profile_image_media_type, p.profile_image_updated_at,
+                        p.profile_image_media_type,
+                        to_char(p.profile_image_updated_at AT TIME ZONE 'UTC',
+                          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS profile_image_updated_at,
                         primary_call.callsign_id AS primary_callsign_id
                    FROM public.account a
                    LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
@@ -716,11 +736,15 @@ export class IdentityAuthService {
         throw new UnauthorizedException('token has been revoked');
 
       const accountResult = await client.query<AccountRow>(
-        `SELECT a.id, a.display_name, a.email::text AS email, a.updated_at,
+        `SELECT a.id, a.display_name, a.email::text AS email,
+                to_char(a.updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at,
                 a.participation_type, a.status, NULL::text AS password_hash,
                 0 AS failed_attempts, NULL::timestamptz AS locked_until,
                 p.website_url, p.biography_markdown, p.profile_image_id,
-                p.profile_image_media_type, p.profile_image_updated_at
+                p.profile_image_media_type,
+                to_char(p.profile_image_updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS profile_image_updated_at
            FROM public.account a
            LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
           WHERE a.id = $1 AND a.status = 'ACTIVE'
@@ -784,7 +808,9 @@ export class IdentityAuthService {
         [claims.sub],
       );
       const updated = await client.query(
-        `SELECT p.website_url, p.biography_markdown, a.updated_at
+        `SELECT p.website_url, p.biography_markdown,
+                to_char(a.updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at
            FROM public.account a
            LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
           WHERE a.id = $1`,

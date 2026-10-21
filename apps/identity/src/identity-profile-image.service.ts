@@ -160,29 +160,29 @@ export class IdentityProfileImageService {
         }),
       );
       uploaded = true;
-      const updatedAt = new Date();
-      await client.query(
+      const updatedAtResult = await client.query<{ updated_at: string }>(
         `INSERT INTO public.identity_account_profile
            (account_id, profile_image_id, profile_image_media_type,
             profile_image_updated_at)
-         VALUES ($1, $2, 'image/webp', $3)
+         VALUES ($1, $2, 'image/webp', clock_timestamp())
          ON CONFLICT (account_id) DO UPDATE SET
            profile_image_id = EXCLUDED.profile_image_id,
            profile_image_media_type = EXCLUDED.profile_image_media_type,
-           profile_image_updated_at = EXCLUDED.profile_image_updated_at`,
-        [actorId, imageId, updatedAt],
+           profile_image_updated_at = EXCLUDED.profile_image_updated_at
+         RETURNING to_char(profile_image_updated_at AT TIME ZONE 'UTC',
+           'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
+        [actorId, imageId],
       );
-      const accountUpdatedAt = new Date();
       await client.query(
-        'UPDATE public.account SET updated_at = $2 WHERE id = $1',
-        [actorId, accountUpdatedAt],
+        'UPDATE public.account SET updated_at = clock_timestamp() WHERE id = $1',
+        [actorId],
       );
       const profileImage = {
         id: imageId,
         contentType: 'image/webp',
         width: OUTPUT_DIMENSION,
         height: OUTPUT_DIMENSION,
-        updatedAt,
+        updatedAt: updatedAtResult.rows[0].updated_at,
       };
       await writeSecurityEvent(client, 'identity.profile-image.updated.v1', {
         accountId: actorId,
