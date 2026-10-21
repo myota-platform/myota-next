@@ -129,6 +129,9 @@
   Periodic cancellation, expired-work, and retention passes also retry
   transient database failures with capped jittered backoff. Retention repeats
   object deletion safely before retrying its database state change.
+  A live recovery check now drops PostgreSQL connectivity after an expired
+  import's source object is deleted, then verifies retention repeats the safe
+  object deletion and commits the database cleanup after connectivity returns.
   Scheduled import and upload-session retention is implemented. CI restarts the
   pinned SeaweedFS image during a Geodata multipart upload, verifies a failed
   part leaves no database record, retries it after restart, and checks the

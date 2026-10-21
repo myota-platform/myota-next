@@ -5,7 +5,12 @@ import { Readable } from 'node:stream';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  AbortMultipartUploadCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import {
   AckPolicy,
   DeliverPolicy,
@@ -20,6 +25,8 @@ import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint.js';
+import { retryTransientDatabaseOperation } from '../../../libs/platform/src/database-retry.js';
+import { GeodataRetentionRepository } from './geodata-retention.repository.js';
 import { GeodataWorkerService } from './geodata-worker.service.js';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
 
@@ -27,6 +34,8 @@ const recoveryTestName =
   'replays committed staging after a worker process is killed';
 const brokerRecoveryTestName =
   'resumes all durables after restart and retries after repository failure';
+const retentionRecoveryTestName =
+  'retries expired import retention after a database outage during source deletion';
 
 describe('Geodata worker process recovery', () => {
   it.skipIf(
@@ -48,7 +57,139 @@ describe('Geodata worker process recovery', () => {
     process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
       !process.env.GEO_DATABASE_URL,
   )(brokerRecoveryTestName, async () => verifyBrokerRecovery(), 45_000);
+
+  it.skipIf(
+    process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
+      !process.env.GEO_DATABASE_URL,
+  )(retentionRecoveryTestName, async () => verifyRetentionRecovery(), 30_000);
 });
+
+async function verifyRetentionRecovery() {
+  const databaseUrl = process.env.GEO_DATABASE_URL;
+  if (!databaseUrl) throw new Error('GEO_DATABASE_URL is required');
+  if (
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(databaseUrl).hostname)
+  )
+    throw new Error('retention recovery qualification requires local Postgres');
+
+  const databaseProxy = await startDatabaseProxy(databaseUrl);
+  const { Pool } = await import('pg');
+  const directDatabase = new Pool({ connectionString: databaseUrl, max: 1 });
+  const retryDatabase = new Pool({
+    connectionString: databaseProxy.connectionString,
+    max: 1,
+    connectionTimeoutMillis: 500,
+  });
+  retryDatabase.on('error', () => undefined);
+  retryDatabase.on('connect', (client) => {
+    client.on('error', () => undefined);
+  });
+
+  const runId = randomUUID();
+  const importBucket = `retention-${runId}`;
+  const savedEnvironment = new Map<string, string | undefined>();
+  for (const [name, value] of Object.entries({
+    GEODATA_IMPORT_RETENTION_DAYS: '1',
+    GEODATA_IMPORT_RETENTION_BATCH_SIZE: '10',
+    MYOTA_GEODATA_IMPORT_BUCKET: importBucket,
+  })) {
+    savedEnvironment.set(name, process.env[name]);
+    process.env[name] = value;
+  }
+
+  const originalSend = S3Client.prototype.send.bind(S3Client.prototype);
+  let sourceDeletions = 0;
+  S3Client.prototype.send = (async (command: unknown) => {
+    if (command instanceof DeleteObjectCommand) {
+      sourceDeletions++;
+      if (sourceDeletions === 1) databaseProxy.setAvailable(false);
+      return {};
+    }
+    if (command instanceof AbortMultipartUploadCommand) return {};
+    throw new Error('unexpected S3 command in retention recovery fixture');
+  }) as typeof S3Client.prototype.send;
+
+  try {
+    const fixture = await directDatabase.connect();
+    try {
+      await fixture.query('BEGIN');
+      await fixture.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await fixture.query(
+        `INSERT INTO import_run
+          (id,adapter_code,source_metadata,status,started_at,completed_at)
+         VALUES ($1,'MANUAL',$2::jsonb,'FAILED',now()-interval '2 days',
+           now()-interval '2 days')`,
+        [
+          runId,
+          stringifyJsonWithBigInts({
+            source: {
+              bucket: importBucket,
+              objectKey: `retention/${runId}.geojson`,
+            },
+          }),
+        ],
+      );
+      await fixture.query('COMMIT');
+    } catch (error) {
+      await fixture.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      fixture.release();
+    }
+
+    databaseProxy.setAvailable(false);
+    let retryCount = 0;
+    const result = await retryTransientDatabaseOperation(
+      () => new GeodataRetentionRepository(retryDatabase as Pool).purgeSweep(),
+      {
+        stopping: () => false,
+        onRetry: () => {
+          retryCount++;
+          databaseProxy.setAvailable(true);
+        },
+        wait: async () => undefined,
+        baseDelayMs: 1,
+        maxDelayMs: 1,
+      },
+    );
+
+    expect(retryCount).toBe(2);
+    expect(sourceDeletions).toBe(2);
+    expect(result).toMatchObject({ eligible: 1, purged: 1, failed: 0 });
+    const remaining = await directDatabase.query(
+      'SELECT 1 FROM import_run WHERE id=$1',
+      [runId],
+    );
+    expect(remaining.rowCount).toBe(0);
+  } finally {
+    databaseProxy.setAvailable(true);
+    S3Client.prototype.send = originalSend;
+    const cleanup = await directDatabase.connect().catch(() => undefined);
+    if (cleanup) {
+      try {
+        await cleanup.query('BEGIN');
+        await cleanup.query(
+          "SELECT set_config('myota.geodata_writer','row-v1',true)",
+        );
+        await cleanup.query('DELETE FROM import_run WHERE id=$1', [runId]);
+        await cleanup.query('COMMIT');
+      } catch {
+        await cleanup.query('ROLLBACK').catch(() => undefined);
+      } finally {
+        cleanup.release();
+      }
+    }
+    await retryDatabase.end();
+    await directDatabase.end();
+    await databaseProxy.close();
+    for (const [name, value] of savedEnvironment) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+}
 
 async function verifyBrokerRecovery() {
   const databaseUrl = process.env.GEO_DATABASE_URL;

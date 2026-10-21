@@ -242,7 +242,13 @@ export class GeodataRetentionRepository {
       throw new ServiceUnavailableException(
         'Geodata database is not configured',
       );
-    return this.pool.connect();
+    try {
+      return await this.pool.connect();
+    } catch (error) {
+      throw new ServiceUnavailableException('Geodata database is unavailable', {
+        cause: error,
+      });
+    }
   }
 
   private s3() {
