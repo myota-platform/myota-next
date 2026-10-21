@@ -392,6 +392,7 @@ export class GeodataWorkRepository {
     envelope: Record<string, unknown>,
     attempts: number,
     error: unknown,
+    failureMessage: string,
   ): Promise<void> {
     const client = await this.connect();
     try {
@@ -417,12 +418,21 @@ export class GeodataWorkRepository {
       );
       const aggregate = isRecord(envelope.aggregate) ? envelope.aggregate : {};
       if (aggregate.type === 'import_run' && typeof aggregate.id === 'string') {
-        await client.query(
+        const failed = await client.query(
           `UPDATE import_run SET status='FAILED',last_error='work delivery exhausted',
              completed_at=now(),heartbeat_at=NULL,lease_until=NULL
-           WHERE id=$1 AND status IN ('QUEUED','PROCESSING')`,
+           WHERE id=$1 AND status IN ('QUEUED','PROCESSING')
+           RETURNING id`,
           [aggregate.id],
         );
+        if (failed.rows[0])
+          await this.insertRecoveryEvent(
+            client,
+            'geodata.import.failed.v1',
+            'import_run',
+            aggregate.id,
+            { importRunId: aggregate.id, error: failureMessage },
+          );
       } else if (
         aggregate.type === 'import_processing_queue' &&
         typeof aggregate.id === 'string'
@@ -768,17 +778,27 @@ export class GeodataWorkRepository {
           'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1',
           [run.id],
         );
-      await client.query(
+      const errorText = errorMessage(error);
+      const updated = await client.query(
         `UPDATE import_run SET status=$2,last_error=$3,heartbeat_at=now(),
          lease_until=NULL,completed_at=CASE WHEN $2='FAILED' THEN now() ELSE NULL END
-         WHERE id=$1 AND status='PROCESSING' AND attempt_count=$4`,
+         WHERE id=$1 AND status='PROCESSING' AND attempt_count=$4
+         RETURNING id`,
         [
           run.id,
           exhausted ? 'FAILED' : 'QUEUED',
-          errorMessage(error).slice(0, 2000),
+          errorText.slice(0, 2000),
           run.attempt_count,
         ],
       );
+      if (exhausted && updated.rows[0])
+        await this.insertRecoveryEvent(
+          client,
+          'geodata.import.failed.v1',
+          'import_run',
+          run.id,
+          { importRunId: run.id, error: errorText },
+        );
       await client.query('COMMIT');
       return false;
     } catch (failure) {

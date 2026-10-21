@@ -573,6 +573,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
       error instanceof Error
         ? new Error(`${category}: ${error.message}`)
         : category,
+      error instanceof Error ? error.message : String(error),
     );
     message.term();
   }

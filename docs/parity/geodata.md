@@ -260,7 +260,10 @@ similarity uses Python Unicode casefolding and whitespace stripping, plus the
 `SequenceMatcher` popularity heuristic for reference names of 200 or more code
 points; signal values use Python's ties-to-even rounding to six decimal places.
 Bounding-box centroids are rounded to seven decimal places before distance
-scoring. Community proposals
+scoring. Terminal preprocessing failures emit `geodata.import.failed.v1`
+atomically with the failed run state, using the `importRunId` and untruncated
+error text from the failed attempt; retryable failures do not emit the fact.
+Community proposals
 join this pipeline, and community proposals and imported features preserve
 validated attachment metadata before promotion. Multipart/resumable
 uploads are implemented with owner-scoped durable sessions, bounded binary
