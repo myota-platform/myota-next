@@ -237,7 +237,9 @@ administrator review are also implemented, ignore `Idempotency-Key` as the
 reference does, and rely on the database relation for request QSO existence.
 Applied corrections update only the reference's writable QSO fields and queue
 award recalculation for the stored QSO, even when the nested route QSO ID differs;
-a focused repository fixture covers that transaction and job payload. Award definition draft,
+a focused repository fixture covers that transaction and job payload. Correction
+request fixtures verify requester ownership, administrator access, and required
+field validation order. Award definition draft,
 review, publish, and retire APIs are implemented. Award progress reads and
 evaluation/recalculation job APIs persist versioned progress and qualification
 notifications through the Activity worker. Award requests validate eligibility,
