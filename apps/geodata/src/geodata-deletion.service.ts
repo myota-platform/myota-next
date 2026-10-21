@@ -87,7 +87,6 @@ export class GeodataDeletionService {
     }
     const impact = await this.activityImpact(authorization as string, entityId);
     const id = randomUUID();
-    const timestamp = new Date().toISOString();
     const job = {
       id,
       entityId,
@@ -95,8 +94,8 @@ export class GeodataDeletionService {
       requestedBy,
       impact,
       confirmationRequired: true,
-      createdAt: timestamp,
-      updatedAt: timestamp,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       entityContext: {
         programmeSlug: entity.programme_slug,
         jurisdiction: entity.jurisdiction,

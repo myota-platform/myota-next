@@ -16,7 +16,8 @@ Geodata worker resumes all four registered work durables. Database outages,
 clustered failover, and other Geodata worker recovery paths remain open.
 Deletion-job creation reports missing fields in reference order, resolves the
 entity before checking GIS authorization, and checks global-role eligibility
-before requesting Activity's impact summary. Confirmation reports missing
+before requesting Activity's impact summary. Creation and update timestamps use
+separate clock reads, as in the reference. Confirmation reports missing
 fields in reference order, converts the confirmation value with Python
 `str().upper()`, and checks job-scoped GIS access after resolving the job; the
 confirmation actor does not need `activity.admin` because the queued worker
