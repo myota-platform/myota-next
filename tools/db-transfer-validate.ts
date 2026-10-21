@@ -494,10 +494,10 @@ async function sequenceState(client: Client, sequence: string) {
 }
 
 async function serverMajor(client: Client) {
-  const result = await client.query<{ version: string }>(
+  const result = await client.query<{ server_version_num: string }>(
     'SHOW server_version_num',
   );
-  return Math.floor(Number(result.rows[0]?.version) / 10_000);
+  return Math.floor(Number(result.rows[0]?.server_version_num) / 10_000);
 }
 
 async function applicationTables(client: Client) {
