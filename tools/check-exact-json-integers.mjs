@@ -191,6 +191,11 @@ requirePattern(
   'Geodata preprocessing and promotion must share the configured import concurrency cap',
 );
 requirePattern(
+  'apps/geodata/src/geodata-upload.service.ts',
+  /MYOTA_UPLOAD_WORKERS[\s\S]*?new AsyncSemaphore\(UPLOAD_WORKERS\)[\s\S]*?async complete\(owner: string, id: string\)[\s\S]*?this\.uploadSemaphore\.acquire\(\)/,
+  'Geodata upload finalization must respect its legacy per-process concurrency limit',
+);
+requirePattern(
   'libs/platform/src/import-limits.ts',
   /MAX_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_GEOJSON_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_OSM_PBF_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_SHAPEFILE_UPLOAD_BYTES = integerSetting\([\s\S]*?MAX_IMPORT_FEATURES = integerSetting\(\s*process\.env\.GEODATA_MAX_IMPORT_FEATURES,\s*5000,[\s\S]*?IMPORT_RUN_LEASE_SECONDS = Math\.max\([\s\S]*?MYOTA_IMPORT_LEASE_SECONDS,[\s\S]*?IMPORT_RUN_HEARTBEAT_SECONDS = Math\.max\([\s\S]*?MYOTA_IMPORT_HEARTBEAT_SECONDS,[\s\S]*?MAX_IMPORT_FEATURE_VERTICES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_FEATURE_VERTICES[\s\S]*?MAX_SHAPEFILE_EXPANDED_BYTES = integerSetting\([\s\S]*?MYOTA_IMPORT_MAX_SHAPEFILE_EXPANDED_BYTES[\s\S]*?MAX_IMPORT_BATCH_BYTES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_BYTES[\s\S]*?MAX_IMPORT_BATCH_FEATURES = Math\.max\([\s\S]*?MYOTA_IMPORT_BATCH_SIZE/,
   'Geodata upload, decoder, and batch limits must use Python-compatible integer settings',

@@ -87,6 +87,8 @@ durable.
 The legacy aggregate import limit can be set with
 `geodataWorker.legacyConcurrency.import`; it applies across preprocessing and
 promotion when native import concurrency settings are absent.
+`geodata.legacyConcurrency.upload` sets the per-process limit for multipart
+upload finalization in the Geodata API.
 
 Workers expose internal health listeners only where their process supports
 them. The chart creates ClusterIP services for the four domain APIs and the

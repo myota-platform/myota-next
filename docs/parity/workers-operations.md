@@ -63,19 +63,20 @@
   NestJS runtime uses durable consumer concurrency for persisted work, so these
   settings do not all translate to the same execution boundary:
 
-  | Python setting           | Python work                                                    | NestJS counterpart                                                                                  | Compatibility status                                             |
-  | ------------------------ | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-  | `MYOTA_UPLOAD_WORKERS`   | API-local completion and recovery of uploaded source objects   | Upload admission and object handoff stay in Geodata API; preprocessing starts on the worker durable | No direct worker-concurrency alias                               |
-  | `MYOTA_IMPORT_WORKERS`   | In-process import preprocessing, promotion, and recovery tasks | Both import durables use it as a fallback and share this aggregate per-process concurrency cap      | Retained when no native import concurrency setting is configured |
-  | `MYOTA_LOCATION_WORKERS` | In-process location-enrichment tasks                           | `geodata-location-enrichment-v1` with `GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING`                   | Accepted as a fallback alias; queue and lease model differ       |
-  | `MYOTA_DELETION_WORKERS` | In-process entity-deletion tasks                               | `geodata-entity-deletion-v1` with `GEODATA_WORKER_DELETION_MAX_ACK_PENDING`                         | Accepted as a fallback alias; queue and lease model differ       |
+  | Python setting           | Python work                                                    | NestJS counterpart                                                                             | Compatibility status                                                             |
+  | ------------------------ | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+  | `MYOTA_UPLOAD_WORKERS`   | API-local completion and recovery of uploaded source objects   | Shared per-process cap on multipart upload finalization in Geodata API                         | Retained for API finalization; restart recovery is not scheduled by this setting |
+  | `MYOTA_IMPORT_WORKERS`   | In-process import preprocessing, promotion, and recovery tasks | Both import durables use it as a fallback and share this aggregate per-process concurrency cap | Retained when no native import concurrency setting is configured                 |
+  | `MYOTA_LOCATION_WORKERS` | In-process location-enrichment tasks                           | `geodata-location-enrichment-v1` with `GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING`              | Accepted as a fallback alias; queue and lease model differ                       |
+  | `MYOTA_DELETION_WORKERS` | In-process entity-deletion tasks                               | `geodata-entity-deletion-v1` with `GEODATA_WORKER_DELETION_MAX_ACK_PENDING`                    | Accepted as a fallback alias; queue and lease model differ                       |
 
   The Nest runtime accepts the matching location and deletion aliases. When no
   native preprocessing, promotion, or shared pending limit is configured,
   `MYOTA_IMPORT_WORKERS` sets both import durables' fallback pending values and
   a shared per-process cap across them. Explicit Nest settings determine the
-  effective per-durable cap. `MYOTA_UPLOAD_WORKERS` remains API-local and has
-  no worker alias. Each Nest durable can run in multiple worker replicas, so
+  effective per-durable cap. `MYOTA_UPLOAD_WORKERS` remains API-local and does
+  not control preprocessing workers. Each Nest durable can run in multiple
+  worker replicas, so
   compare per-work throughput and resource limits under representative loads
   before production tuning.
   The Geodata API exposes `/metrics` with PostGIS tile-query duration and

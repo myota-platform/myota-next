@@ -21,6 +21,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { Pool } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { AsyncSemaphore } from '@app/platform/async-timers.js';
 import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import {
   MAX_GEOJSON_UPLOAD_BYTES,
@@ -36,10 +37,20 @@ export const MAX_UPLOAD_PART_BYTES = integerEnv(
   'MYOTA_UPLOAD_PART_MAX_BYTES',
   16 * 1024 * 1024,
 );
+const UPLOAD_WORKERS = Math.max(
+  1,
+  integerSetting(
+    process.env.MYOTA_UPLOAD_WORKERS === ''
+      ? undefined
+      : process.env.MYOTA_UPLOAD_WORKERS,
+    2,
+  ),
+);
 
 @Injectable()
 export class GeodataUploadService {
   private storage: S3Client | undefined;
+  private readonly uploadSemaphore = new AsyncSemaphore(UPLOAD_WORKERS);
 
   constructor(
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
@@ -234,6 +245,15 @@ export class GeodataUploadService {
   }
 
   async complete(owner: string, id: string) {
+    const release = await this.uploadSemaphore.acquire();
+    try {
+      return await this.completeWithUploadSlot(owner, id);
+    } finally {
+      release();
+    }
+  }
+
+  private async completeWithUploadSlot(owner: string, id: string) {
     const client = await this.connect();
     await client.query('SELECT pg_advisory_lock(hashtextextended($1,0))', [id]);
     try {

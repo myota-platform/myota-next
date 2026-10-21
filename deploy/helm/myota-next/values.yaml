@@ -211,6 +211,8 @@ components:
     replicas: 2
     port: 8003
     service: true
+    legacyConcurrency:
+      upload: ''
     env:
       PORT: '8003'
       GEO_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }
@@ -224,6 +226,7 @@ components:
       MYOTA_OBJECT_STORAGE_SECRET_KEY:
         { secret: objectStorage, key: secret-key }
       MYOTA_GEODATA_IMPORT_BUCKET: '{{ .Values.dependencies.geodataImportBucket }}'
+      MYOTA_UPLOAD_WORKERS: '{{ .Values.geodata.legacyConcurrency.upload }}'
       MYOTA_CLAMAV_URL: '{{ .Values.dependencies.clamavUrl }}'
       MYOTA_MAX_BODY_BYTES: '1073741824'
   geodata-worker:
