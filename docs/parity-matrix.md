@@ -494,7 +494,9 @@ geometries, geometry wrappers, and empty collections, while multipart GeoJSON
 streams source features.
 The PyShp 2.3.1 MultiPointZ fixture verifies GeoJSON dimensionality: PyShp's
 `__geo_interface__` emits XY coordinates for this shape type, and the Nest
-streaming reader matches it.
+streaming reader matches it. A nested Polygon fixture verifies that the reader
+preserves PyShp's MultiPolygon grouping, including an interior ring and an
+island inside that ring.
 Shapefile multipart uploads stream to
 temporary disk and decode records one at a time, with the same shared API/worker
 1 GiB upload cap or optional format-specific override, a 1 GiB expanded-size cap, 16 MiB
