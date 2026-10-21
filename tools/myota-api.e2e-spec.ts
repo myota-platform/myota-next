@@ -166,6 +166,51 @@ describeWithDatabases(
           .expect(200);
         expect(recoveredLogin.body.account.id).toBe(createdAccount.body.id);
 
+        const oidcKey = randomUUID();
+        const oidcBody = {
+          programmeSlug: 'gateway-oidc-e2e',
+          issuer: 'https://issuer.example.test',
+          clientId: 'gateway-e2e-client',
+        };
+        const oidcMapping = await request(gatewayUrl)
+          .post('/v1/identity/oidc/providers')
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .set('Idempotency-Key', oidcKey)
+          .send(oidcBody)
+          .expect(201);
+        expect(oidcMapping.body).toMatchObject({
+          ...oidcBody,
+          scopes: ['openid', 'profile', 'email'],
+          enabled: true,
+        });
+        const repeatedOidcMapping = await request(gatewayUrl)
+          .post('/v1/identity/oidc/providers')
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .set('Idempotency-Key', oidcKey)
+          .send(oidcBody)
+          .expect(201);
+        expect(repeatedOidcMapping.body.id).not.toBe(oidcMapping.body.id);
+
+        const nullableOidcMapping = await request(gatewayUrl)
+          .post('/v1/identity/oidc/providers')
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({
+            programmeSlug: '  gateway-oidc-null-e2e  ',
+            issuer: '  https://issuer.example.test/null  ',
+            clientId: '  nullable-client  ',
+            scopes: null,
+            enabled: null,
+          })
+          .expect(201);
+        expect(nullableOidcMapping.body).toMatchObject({
+          programmeSlug: '  gateway-oidc-null-e2e  ',
+          issuer: '  https://issuer.example.test/null  ',
+          clientId: '  nullable-client  ',
+          scopes: null,
+          enabled: null,
+        });
+
         const programmeSlug = `gateway-e2e-${randomUUID()}`;
         const programme = await request(gatewayUrl)
           .post('/v1/programmes')

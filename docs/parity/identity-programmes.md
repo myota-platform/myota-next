@@ -267,7 +267,9 @@ non-empty whitespace-only strings and explicit `null` values for optional
 `scopes` and `enabled` fields are preserved as by the reference. Its runtime
 response is `201` even though the preserved upstream OpenAPI contract declares
 `200`. Creation and update timestamps are separate reads, and the audit event
-retains the reference payload without adding an actor field.
+retains the reference payload without adding an actor field. The Gateway API
+integration check now verifies default scopes and enabled state, repeated-key
+create-only behavior, and verbatim whitespace and explicit-null persistence.
 
 Programme RULES policy publication uses `schema.rules` when the key is present,
 including explicit `null`; it falls back to the full schema only when the key
