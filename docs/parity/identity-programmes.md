@@ -242,7 +242,8 @@ Entity-type `active` inputs and stored values are coerced using Python
 truthiness rather than requiring a JSON boolean, including falsey legacy JSON
 values, before the normalized catalogue record is persisted.
 Entity-type string fields and geometry values use Python-style conversion of
-JSON booleans, nulls, arrays, and objects; whitespace-only labels retain the
+JSON booleans, nulls, arrays, and objects while preserving float tokens such as
+`1.0` separately from integer `1`; whitespace-only labels retain the
 `category label must not be empty` response.
 Programme PATCH requests with `status: "ARCHIVED"` follow the reference's
 archive action: other supplied update fields are ignored, the policy version

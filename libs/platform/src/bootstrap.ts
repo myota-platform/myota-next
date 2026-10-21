@@ -149,6 +149,7 @@ export async function bootstrapHttpService(
               '/v1/geodata/imports',
               '/v1/geodata/refresh-schedules',
               '/v1/programmes',
+              '/v1/entity-types',
               '/v1/activations',
               '/v1/awards/evaluation-jobs',
             ].includes(path) ||
@@ -166,7 +167,8 @@ export async function bootstrapHttpService(
             /^\/v1\/geodata\/entity-deletion-jobs(?:\/[^/]+\/confirm)?$/.test(
               path,
             ) ||
-            /^\/v1\/qsos\/[^/]+\/corrections$/.test(path)
+            /^\/v1\/qsos\/[^/]+\/corrections$/.test(path) ||
+            /^\/v1\/programmes\/[^/]+\/entity-types$/.test(path)
           )
             Object.assign(request, { rawBody: buffer });
         },
@@ -183,7 +185,12 @@ export async function bootstrapHttpService(
         ].includes(path);
       const floatMetadataRequest =
         (request.method === 'POST' &&
-          ['/v1/activations', '/v1/awards/evaluation-jobs'].includes(path)) ||
+          ([
+            '/v1/activations',
+            '/v1/awards/evaluation-jobs',
+            '/v1/entity-types',
+          ].includes(path) ||
+            /^\/v1\/programmes\/[^/]+\/entity-types$/.test(path))) ||
         (request.method === 'PATCH' &&
           /^\/v1\/geodata\/entities\/[^/]+$/.test(path)) ||
         (request.method === 'POST' &&

@@ -18,6 +18,7 @@ import { normalizePythonNumericText } from '@app/platform/python-numeric.js';
 import {
   pythonKeyErrorDetail,
   pythonString,
+  pythonStringJsonField,
   trimPythonWhitespace,
 } from '@app/platform/python-strings.js';
 import { nextPolicyVersion, type ProgrammeRecord } from './programme.types.js';
@@ -243,7 +244,12 @@ export class ProgrammesService {
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programmes = await this.programmes.listAll(client);
       const catalog = await this.entityTypes.listAll(client);
-      const code = trimPythonWhitespace(body.code).toUpperCase();
+      const code = trimPythonWhitespace(
+        pythonStringJsonField(
+          body as unknown as Record<string, unknown>,
+          'code',
+        ),
+      ).toUpperCase();
       const previous = catalog[code];
       const entityType = normalizeEntityType(body, previous);
       catalog[code] = entityType;
@@ -283,7 +289,12 @@ export class ProgrammesService {
       if (!programme)
         throw new NotFoundException(pythonKeyErrorDetail(slug));
       const catalog = await this.entityTypes.listAll(client);
-      const code = trimPythonWhitespace(body.code).toUpperCase();
+      const code = trimPythonWhitespace(
+        pythonStringJsonField(
+          body as unknown as Record<string, unknown>,
+          'code',
+        ),
+      ).toUpperCase();
       const previous = catalog[code];
       const entityType = normalizeEntityType(body, previous);
       catalog[code] = entityType;
@@ -478,13 +489,14 @@ function normalizeEntityType(
       `missing required fields: ${missing.join(', ')}`,
     );
   }
-  const code = trimPythonWhitespace(pythonString(body.code)).toUpperCase();
-  const originalCodeValue = pythonTruthy(body.originalCode)
-    ? body.originalCode
-    : code;
-  const originalCode = trimPythonWhitespace(
-    pythonString(originalCodeValue),
+  const source = body as Record<string, unknown>;
+  const code = trimPythonWhitespace(
+    pythonStringJsonField(source, 'code'),
   ).toUpperCase();
+  const originalCodeValue = pythonTruthy(body.originalCode)
+    ? pythonStringJsonField(source, 'originalCode')
+    : code;
+  const originalCode = trimPythonWhitespace(originalCodeValue).toUpperCase();
   if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(code)) {
     throw new BadRequestException(
       'category code must start with a letter and contain only A-Z, 0-9, and underscores',
@@ -522,7 +534,7 @@ function normalizeEntityType(
       'geometryTypes must contain only POINT, LINESTRING, MULTILINESTRING, POLYGON, or MULTIPOLYGON',
     );
   }
-  const label = trimPythonWhitespace(pythonString(body.label));
+  const label = trimPythonWhitespace(pythonStringJsonField(source, 'label'));
   if (!label) throw new BadRequestException('category label must not be empty');
   const activeValue =
     body.active !== undefined
@@ -537,7 +549,7 @@ function normalizeEntityType(
     geometry: geometryTypes[0],
     geometryTypes,
     description: pythonTruthy(body.description)
-      ? trimPythonWhitespace(pythonString(body.description))
+      ? trimPythonWhitespace(pythonStringJsonField(source, 'description'))
       : '',
     active: pythonTruthy(activeValue),
     updatedAt: new Date().toISOString(),
