@@ -52,6 +52,7 @@ function clearParticipantSession() {
   if ($('qso-activation')) $('qso-activation').replaceChildren();
   if ($('activation-callsign')) $('activation-callsign').replaceChildren();
   if ($('profile-form')) $('profile-form').hidden = true;
+  if ($('profile-callsigns')) $('profile-callsigns').hidden = true;
   if ($('profile-image-editor')) $('profile-image-editor').hidden = true;
   if ($('profile-status'))
     $('profile-status').textContent = 'Sign in below to manage your profile.';
@@ -965,6 +966,7 @@ function clearProfileImage() {
 async function loadProfile() {
   if (!awardAccessToken) {
     $('profile-form').hidden = true;
+    $('profile-callsigns').hidden = true;
     $('profile-image-editor').hidden = true;
     revokeProfileSource();
     clearProfileImage();
@@ -978,6 +980,8 @@ async function loadProfile() {
     renderEntities();
     await loadActivations();
     $('profile-form').hidden = false;
+    $('profile-callsigns').hidden = false;
+    renderProfileCallsigns(account);
     $('profile-image-editor').hidden = false;
     $('profile-website').value = account.websiteUrl || '';
     $('profile-biography').value = account.biographyMarkdown || '';
@@ -1002,6 +1006,261 @@ async function loadProfile() {
     }
   }
 }
+
+function fillCallsignSelect(select, callsigns, prompt) {
+  select.replaceChildren();
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = prompt;
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  select.append(placeholder);
+  for (const callsign of callsigns) {
+    const option = document.createElement('option');
+    option.value = callsign.id;
+    option.textContent = `${callsign.value} · ${callsign.status}`;
+    select.append(option);
+  }
+}
+
+function renderProfileCallsigns(account) {
+  const callsigns = account.callsigns || [];
+  const activeCallsigns = callsigns.filter(
+    (callsign) => callsign.status !== 'RETIRED',
+  );
+  const list = $('profile-callsign-list');
+  list.replaceChildren();
+  if (!callsigns.length) {
+    const empty = document.createElement('p');
+    empty.className = 'small';
+    empty.textContent = 'No callsigns are registered yet.';
+    list.append(empty);
+  }
+  for (const callsign of callsigns) {
+    const row = document.createElement('div');
+    row.className = 'profile-callsign-row';
+    const detail = document.createElement('div');
+    const name = document.createElement('strong');
+    name.textContent = callsign.value;
+    const status = document.createElement('span');
+    status.className = 'small';
+    status.textContent = `${callsign.status}${callsign.id === account.primaryCallsignId ? ' · Primary' : ''}${callsign.verificationSource ? ` · Verified by ${callsign.verificationSource}` : ''}`;
+    const validity = document.createElement('span');
+    validity.className = 'small';
+    validity.textContent = [
+      callsign.validFrom ? `Valid from ${callsign.validFrom}` : '',
+      callsign.validTo ? `Valid to ${callsign.validTo}` : '',
+      `${callsign.evidenceIds?.length || 0} evidence record(s)`,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    detail.append(name, status, validity);
+    row.append(detail);
+    if (callsign.status !== 'RETIRED') {
+      const actions = document.createElement('div');
+      actions.className = 'profile-callsign-actions';
+      if (callsign.id !== account.primaryCallsignId) {
+        const primary = document.createElement('button');
+        primary.type = 'button';
+        primary.className = 'secondary';
+        primary.textContent = 'Make primary';
+        primary.addEventListener('click', () =>
+          setProfilePrimaryCallsign(callsign),
+        );
+        actions.append(primary);
+      }
+      const retire = document.createElement('button');
+      retire.type = 'button';
+      retire.className = 'secondary';
+      retire.textContent = 'Retire';
+      retire.addEventListener('click', () =>
+        beginProfileCallsignRetirement(callsign),
+      );
+      actions.append(retire);
+      row.append(actions);
+    }
+    list.append(row);
+  }
+  $('profile-callsign-evidence').hidden = activeCallsigns.length === 0;
+  fillCallsignSelect(
+    $('profile-evidence-callsign'),
+    activeCallsigns,
+    'Choose a callsign',
+  );
+  fillCallsignSelect(
+    $('profile-retire-callsign'),
+    activeCallsigns,
+    'Choose a callsign',
+  );
+  updateProfileRetirementReplacement();
+}
+
+function updateProfileRetirementReplacement() {
+  const account = awardAccount;
+  const target = $('profile-retire-callsign').value;
+  const isPrimary = Boolean(account && target === account.primaryCallsignId);
+  const label = $('profile-retire-replacement-label');
+  const help = $('profile-retire-help');
+  const replacement = $('profile-retire-replacement');
+  label.hidden = !isPrimary;
+  replacement.required = isPrimary;
+  const options = (account?.callsigns || []).filter(
+    (callsign) => callsign.id !== target && callsign.status !== 'RETIRED',
+  );
+  fillCallsignSelect(replacement, options, 'Choose an active callsign');
+  help.hidden = !isPrimary || options.length > 0;
+  help.textContent =
+    'The primary callsign cannot be retired until another active callsign is available.';
+}
+
+function beginProfileCallsignRetirement(callsign) {
+  $('profile-callsign-retire').hidden = false;
+  $('profile-retire-callsign').value = callsign.id;
+  updateProfileRetirementReplacement();
+  $('profile-callsign-retire').scrollIntoView({
+    behavior: 'smooth',
+    block: 'nearest',
+  });
+}
+
+async function refreshProfileCallsigns(status) {
+  const account = await profileApi('/v1/identity/me');
+  awardAccount = account;
+  renderProfileCallsigns(account);
+  renderOperatorCallsigns();
+  await loadActivations();
+  $('profile-status').textContent = status;
+}
+
+async function setProfilePrimaryCallsign(callsign) {
+  $('profile-status').textContent = 'Updating primary callsign…';
+  try {
+    await profileApi(
+      `/v1/identity/accounts/${encodeURIComponent(awardAccount.id)}/primary-callsign`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+        body: JSON.stringify({ callsignId: callsign.id }),
+      },
+    );
+    await refreshProfileCallsigns('Primary callsign updated.');
+  } catch (error) {
+    $('profile-status').textContent = error.message;
+  }
+}
+
+$('profile-callsign-add').onsubmit = async (event) => {
+  event.preventDefault();
+  const body = { callsign: $('profile-callsign-value').value };
+  const validFrom = $('profile-callsign-valid-from').value.trim();
+  const validTo = $('profile-callsign-valid-to').value.trim();
+  if (validFrom) body.validFrom = validFrom;
+  if (validTo) body.validTo = validTo;
+  $('profile-status').textContent = 'Adding callsign…';
+  try {
+    await profileApi(
+      `/v1/identity/accounts/${encodeURIComponent(awardAccount.id)}/callsigns`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+        body: JSON.stringify(body),
+      },
+    );
+    $('profile-callsign-add').reset();
+    await refreshProfileCallsigns('Callsign added.');
+  } catch (error) {
+    $('profile-status').textContent = error.message;
+  }
+};
+
+$('profile-callsign-evidence').onsubmit = async (event) => {
+  event.preventDefault();
+  let metadata;
+  const metadataText = $('profile-evidence-metadata').value.trim();
+  if (metadataText) {
+    try {
+      metadata = JSON.parse(metadataText);
+      if (
+        metadata !== null &&
+        (typeof metadata !== 'object' || Array.isArray(metadata))
+      )
+        throw new Error('Evidence metadata must be a JSON object or null.');
+    } catch (error) {
+      $('profile-status').textContent =
+        error instanceof SyntaxError
+          ? 'Evidence metadata must contain valid JSON.'
+          : error.message;
+      return;
+    }
+  }
+  const body = {
+    evidenceType: $('profile-evidence-type').value,
+    source: $('profile-evidence-source').value,
+    checksum: $('profile-evidence-checksum').value || undefined,
+    ...(metadata === undefined ? {} : { metadata }),
+  };
+  const callsignId = $('profile-evidence-callsign').value;
+  $('profile-status').textContent = 'Submitting callsign evidence…';
+  try {
+    await profileApi(
+      `/v1/identity/accounts/${encodeURIComponent(awardAccount.id)}/callsigns/${encodeURIComponent(callsignId)}/evidence`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    );
+    $('profile-callsign-evidence').reset();
+    await refreshProfileCallsigns('Callsign evidence submitted.');
+  } catch (error) {
+    $('profile-status').textContent = error.message;
+  }
+};
+
+$('profile-retire-callsign').addEventListener(
+  'change',
+  updateProfileRetirementReplacement,
+);
+$('profile-retire-cancel').onclick = () => {
+  $('profile-callsign-retire').hidden = true;
+  $('profile-callsign-retire').reset();
+  updateProfileRetirementReplacement();
+};
+$('profile-callsign-retire').onsubmit = async (event) => {
+  event.preventDefault();
+  const callsignId = $('profile-retire-callsign').value;
+  const callsign = (awardAccount?.callsigns || []).find(
+    (item) => item.id === callsignId,
+  );
+  if (!callsign) return;
+  if (!window.confirm(`Retire callsign ${callsign.value}?`)) return;
+  const body = {};
+  if (callsignId === awardAccount.primaryCallsignId) {
+    body.newPrimaryCallsignId = $('profile-retire-replacement').value;
+  }
+  $('profile-status').textContent = 'Retiring callsign…';
+  try {
+    await profileApi(
+      `/v1/identity/accounts/${encodeURIComponent(awardAccount.id)}/callsigns/${encodeURIComponent(callsignId)}/retire`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    );
+    $('profile-callsign-retire').hidden = true;
+    $('profile-callsign-retire').reset();
+    await refreshProfileCallsigns('Callsign retired.');
+  } catch (error) {
+    $('profile-status').textContent = error.message;
+  }
+};
 
 $('profile-biography').addEventListener('input', (event) => {
   $('profile-biography-preview').innerHTML = profileUtils.renderSafeMarkdown(

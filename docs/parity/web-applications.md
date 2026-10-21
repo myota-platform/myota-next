@@ -3,7 +3,7 @@
 | Application     | Required parity                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Admin web       | Login and role-aware navigation; account and role management; programme/category/content/policy administration; Geodata catalogue, import, preprocessing, review, entity editing, maps and deletion; Activity/QSO and award administration; observability access. Preserve accessible keyboard workflows, confirmation of destructive actions, conflict handling, bounded paging, resumable upload behavior, and accurate loading/error states. |
-| Participant web | Programme selection, public programme content and rules, approved/candidate entity table and map, candidate proposal, authenticated profile editing and cropped profile-image upload, published award/level display and request, activation creation and own activation history, QSO entry, and activation close. Keep programme policy, callsign authorization, and eligibility decisions on owning services.                                  |
+| Participant web | Programme selection, public programme content and rules, approved/candidate entity table and map, candidate proposal, authenticated profile editing, callsign self-service, and cropped profile-image upload, published award/level display and request, activation creation and own activation history, QSO entry, and activation close. Keep programme policy, callsign authorization, and eligibility decisions on owning services.          |
 
 The baseline Admin and Participant applications are carried forward under
 `web/` with separate deployment artifacts. The Admin build is checked in CI;
@@ -17,7 +17,8 @@ independent bounded paging for award
 definitions, requests, and issuances; the asset catalogue follows its API pages
 for design selection. The Participant client includes localized published programme content,
 paged approved/candidate entity catalogue and map, map-picked point proposals and existing-candidate proposals, published award and level catalogue with eligible-level requests using the current Identity account and callsign data, rotating Identity refresh-session recovery for authenticated requests, activation creation and complete paged own-activation history for QSO selection,
-single-QSO entry, profile editing and image management. Chromium browser checks
+single-QSO entry, profile editing and image management, and owner callsign
+creation, evidence submission, primary selection, and retirement. Chromium browser checks
 exercise Admin sign-in, identity session bootstrap, scope denial, Participant
 programme selection and public content, and its activation, QSO, and close
 workflow, profile details editing, image crop/upload, an eligible award
@@ -47,7 +48,8 @@ validity fields; evidence submission with checksum and metadata; verification
 for callers with `callsign.verify` and a configurable verification source;
 primary selection; and retirement. Owner and global-scope checks follow the
 API authorization rules.
-These callsign controls do not yet have browser-level compatibility coverage.
+The Participant profile exposes the owner-authorized callsign actions. These
+callsign controls do not yet have browser-level compatibility coverage.
 The Admin import form also supports resumable KML and GPX file uploads up to
 1 GiB, alongside GeoJSON, OSM PBF, and Shapefile ZIP uploads. The API can
 enforce lower format-specific limits. The award catalogue follows all API

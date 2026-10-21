@@ -512,24 +512,68 @@ a {
   gap: 1rem;
 }
 .profile-form,
-.profile-image-editor {
+.profile-image-editor,
+.profile-callsigns {
   display: grid;
   gap: 1rem;
   max-width: 44rem;
 }
 .profile-form label,
-.profile-image-editor label {
+.profile-image-editor label,
+.profile-callsigns label {
   display: grid;
   gap: 0.4rem;
 }
 .profile-form input,
 .profile-form textarea,
-.profile-image-editor input {
+.profile-image-editor input,
+.profile-callsigns input,
+.profile-callsigns select,
+.profile-callsigns textarea {
   width: 100%;
   box-sizing: border-box;
 }
-.profile-form textarea {
+.profile-form textarea,
+.profile-callsigns textarea {
   resize: vertical;
+}
+.profile-callsigns {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+}
+.profile-callsigns h4,
+.profile-callsigns h5,
+.profile-callsigns p {
+  margin: 0;
+}
+.profile-callsign-list {
+  border-top: 1px solid var(--line);
+}
+.profile-callsign-row {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.8rem 0;
+}
+.profile-callsign-row > div:first-child {
+  display: grid;
+  gap: 0.25rem;
+}
+.profile-callsign-actions,
+.profile-callsign-actions button {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.profile-callsign-actions button {
+  align-items: center;
+  justify-content: center;
+}
+.profile-callsigns .small {
+  color: var(--muted);
 }
 .proposal-form {
   border-top: 1px solid var(--line);

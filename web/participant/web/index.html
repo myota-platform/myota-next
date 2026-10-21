@@ -195,6 +195,82 @@
           </div>
           <button type="submit">Save profile details</button>
         </form>
+        <section id="profile-callsigns" class="profile-callsigns" hidden>
+          <h4>Your callsigns</h4>
+          <p class="small">
+            Add callsigns, choose the primary callsign used for new activity,
+            submit verification evidence, or retire callsigns you no longer use.
+          </p>
+          <div id="profile-callsign-list" class="profile-callsign-list"></div>
+          <form id="profile-callsign-add" class="profile-form">
+            <h5>Add a callsign</h5>
+            <label>
+              Callsign
+              <input id="profile-callsign-value" maxlength="32" required />
+            </label>
+            <label>
+              Valid from (ISO 8601, optional)
+              <input
+                id="profile-callsign-valid-from"
+                placeholder="2026-10-21T12:00:00Z"
+              />
+            </label>
+            <label>
+              Valid to (ISO 8601, optional)
+              <input
+                id="profile-callsign-valid-to"
+                placeholder="2026-10-21T12:00:00Z"
+              />
+            </label>
+            <button type="submit">Add callsign</button>
+          </form>
+          <form id="profile-callsign-evidence" class="profile-form">
+            <h5>Submit verification evidence</h5>
+            <label>
+              Callsign
+              <select id="profile-evidence-callsign" required></select>
+            </label>
+            <label>
+              Evidence type
+              <input id="profile-evidence-type" required />
+            </label>
+            <label>
+              Source
+              <input id="profile-evidence-source" required />
+            </label>
+            <label>
+              Checksum (optional)
+              <input id="profile-evidence-checksum" />
+            </label>
+            <label>
+              Metadata JSON (optional)
+              <textarea id="profile-evidence-metadata" rows="3"></textarea>
+            </label>
+            <button type="submit">Submit evidence</button>
+          </form>
+          <form id="profile-callsign-retire" class="profile-form" hidden>
+            <h5>Retire a callsign</h5>
+            <label>
+              Callsign
+              <select id="profile-retire-callsign" required></select>
+            </label>
+            <label id="profile-retire-replacement-label" hidden>
+              Replacement primary callsign
+              <select id="profile-retire-replacement"></select>
+            </label>
+            <p id="profile-retire-help" class="small" hidden></p>
+            <div class="profile-callsign-actions">
+              <button type="submit">Retire callsign</button>
+              <button
+                id="profile-retire-cancel"
+                type="button"
+                class="secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </section>
         <div id="profile-image-editor" class="profile-image-editor" hidden>
           <h4>Profile picture</h4>
           <img
