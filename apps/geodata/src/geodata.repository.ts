@@ -498,7 +498,7 @@ const candidateProjection = `jsonb_build_object(
     'county',COALESCE(entity_payload->'county',entity_payload->'location'->'county'),
     'city',COALESCE(entity_payload->'city',entity_payload->'location'->'city'),
     'municipality',COALESCE(entity_payload->'municipality',entity_payload->'location'->'municipality'),
-    'locality',COALESCE(entity_payload->'locality',entity_payload->'location'->'locality'))`;
+    'locality',COALESCE(entity_payload->'locality',entity_payload->'location'->'locality')))`;
 
 function listValues(value: unknown) {
   return Array.isArray(value)
