@@ -334,6 +334,11 @@ seconds with independent UTC clock reads. Entity review, metadata, geometry,
 location-enrichment, and refresh-schedule timestamps use the same formatter.
 `GEODATA_IMPORTER_ENABLED` keeps it opt-in. Deployment, live-source
 qualification, and outage/recovery evidence are outstanding.
+Live browser CI now creates a manual refresh schedule through Gateway, runs an
+empty complete snapshot, waits for Geodata preprocessing and its queued
+processing step, and verifies the persisted manifest, completion states,
+schedule run timestamps, and outbox events. This covers the manual snapshot
+path; external source fetching and importer deployment remain separate gates.
 Refresh intervals preserve arbitrary-precision integer values and follow
 Python `int()` whitespace, Unicode decimal, underscore, boolean, and
 float-truncation behavior through API parsing, persistence, and importer due-time
