@@ -62,6 +62,14 @@ jobs:
           cat "$RUNNER_TEMP/nats-server.log"
           exit 1
       - run: npm ci
+      - name: Export PostgreSQL service container ID for process recovery checks
+        run: |
+          container_id="$(docker ps --filter 'ancestor=postgis/postgis:16-3.4' --format '{{.ID}}' | head -n 1)"
+          if [ -z "$container_id" ]; then
+            echo "Could not find the PostgreSQL service container" >&2
+            exit 1
+          fi
+          echo "MYOTA_POSTGRES_SERVICE_CONTAINER_ID=$container_id" >> "$GITHUB_ENV"
       - name: Provision bounded JetStream topology for CI
         run: npm run provision:jetstream
         env:

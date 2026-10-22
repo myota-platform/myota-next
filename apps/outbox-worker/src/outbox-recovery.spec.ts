@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { spawn, spawnSync } from 'node:child_process';
+import { execFile, spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+import { promisify } from 'node:util';
 import { connect } from '@nats-io/transport-node';
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import type { Pool } from 'pg';
@@ -20,6 +22,7 @@ const enabled = Boolean(
   process.env.OUTBOX_DATABASE_URL &&
   process.env.NATS_TEST_URL,
 );
+const execFileAsync = promisify(execFile);
 
 describe.skipIf(!enabled)('outbox broker recovery', () => {
   it('retries a broker failure and publishes the retained event once available', async () => {
@@ -419,6 +422,174 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
       await databaseProxy.close();
     }
   }, 30_000);
+
+  it.skipIf(!process.env.MYOTA_POSTGRES_SERVICE_CONTAINER_ID)(
+    'reconnects and records a published event after the PostgreSQL process restarts',
+    async () => {
+      const databaseUrl = process.env.OUTBOX_DATABASE_URL;
+      const natsUrl = process.env.NATS_TEST_URL;
+      const containerId = process.env.MYOTA_POSTGRES_SERVICE_CONTAINER_ID;
+      if (!databaseUrl || !natsUrl || !containerId)
+        throw new Error('PostgreSQL process recovery settings are required');
+
+      const owner = process.env.OUTBOX_OWNER;
+      const eventOwners: Record<string, string[]> = {
+        core: ['identity-service', 'programme-service'],
+        activity: ['activity-service'],
+        geodata: ['geodata-service'],
+      };
+      const registeredOwners = owner ? eventOwners[owner] : undefined;
+      if (!owner || !registeredOwners)
+        throw new Error('OUTBOX_OWNER must be core, activity, or geodata');
+
+      const [{ Pool }, { OutboxWorkerService }, registry] = await Promise.all([
+        import('pg'),
+        import('./outbox-worker.service.js'),
+        loadOutboxRegistry(),
+      ]);
+      const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+      const poolHealth = new DatabaseHealthService(pool as Pool);
+      const connection = await connect({
+        servers: natsUrl,
+        name: `outbox-${owner}-postgres-process-recovery`,
+      });
+      const manager = await jetstreamManager(connection);
+      const service = new OutboxWorkerService(pool as Pool);
+      const internals = service as unknown as {
+        relay: Pick<ReturnType<typeof jetstream>, 'publish'>;
+        run: (
+          registry: Awaited<ReturnType<typeof loadOutboxRegistry>>,
+        ) => Promise<void>;
+        databaseUp: number;
+      };
+      const eventId = randomUUID();
+      const eventType = registry.events.find((event) =>
+        registeredOwners.includes(event.owner),
+      );
+      const producer = eventType
+        ? registry.producerNamesByOwner[eventType.owner]?.[0]
+        : undefined;
+      if (!eventType || !producer)
+        throw new Error(
+          `${owner} fact route is missing from the event registry`,
+        );
+
+      const publishedEventIds: string[] = [];
+      let stopped = false;
+      let restartPromise: Promise<void> | undefined;
+      let runPromise: Promise<void> | undefined;
+
+      try {
+        try {
+          await manager.streams.info('MYOTA_EVENTS');
+        } catch {
+          await manager.streams.add({
+            name: 'MYOTA_EVENTS',
+            subjects: ['myota.events.>'],
+            retention: 'limits',
+            storage: 'file',
+            num_replicas: 1,
+            max_age: 3_600_000_000_000,
+            max_bytes: 16 * 1024 * 1024,
+            max_msgs: 1000,
+            max_msg_size: 1024 * 1024,
+          });
+        }
+        await pool.query(
+          `INSERT INTO public.outbox_event
+            (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at)
+           VALUES ($1,$2,$3,'recovery_test',$4,$5::jsonb,now()-interval '100 years')`,
+          [
+            eventId,
+            eventType.eventType,
+            producer,
+            randomUUID(),
+            '{"probe":"postgres-process-restart"}',
+          ],
+        );
+
+        const relay = jetstream(connection);
+        internals.relay = {
+          publish: async (subject, payload, options) => {
+            const envelope = JSON.parse(new TextDecoder().decode(payload)) as {
+              eventId?: string;
+            };
+            const acknowledgement = await relay.publish(
+              subject,
+              payload,
+              options,
+            );
+            if (envelope.eventId === eventId) {
+              publishedEventIds.push(eventId);
+              await execFileAsync('docker', [
+                'stop',
+                '--time',
+                '1',
+                containerId,
+              ]);
+              stopped = true;
+              restartPromise = (async () => {
+                await delay(1500);
+                await execFileAsync('docker', ['start', containerId]);
+                stopped = false;
+                await waitFor(async () => {
+                  try {
+                    await pool.query('SELECT 1');
+                    return true;
+                  } catch {
+                    return false;
+                  }
+                }, 'PostgreSQL did not accept connections after its restart');
+              })();
+            }
+            return acknowledgement;
+          },
+        };
+
+        runPromise = internals.run(registry);
+        await waitFor(
+          () => Boolean(restartPromise) && internals.databaseUp === 0,
+          'Outbox relay did not observe the PostgreSQL process outage',
+        );
+        await restartPromise;
+        await waitFor(async () => {
+          const result = await pool.query(
+            'SELECT published_at FROM public.outbox_event WHERE event_id=$1',
+            [eventId],
+          );
+          return result.rows[0]?.published_at instanceof Date;
+        }, 'Outbox relay did not persist its publish after PostgreSQL restarted');
+
+        expect(publishedEventIds).toEqual([eventId]);
+        const persisted = await pool.query(
+          `SELECT attempts,published_at,last_error
+             FROM public.outbox_event WHERE event_id=$1`,
+          [eventId],
+        );
+        expect(persisted.rows[0]).toMatchObject({
+          attempts: 1,
+          last_error: null,
+        });
+        expect(persisted.rows[0]?.published_at).toBeInstanceOf(Date);
+      } finally {
+        await restartPromise?.catch(() => undefined);
+        if (stopped) {
+          await execFileAsync('docker', ['start', containerId]).catch(
+            () => undefined,
+          );
+          stopped = false;
+        }
+        await service.onModuleDestroy().catch(() => undefined);
+        await runPromise?.catch(() => undefined);
+        await connection.drain().catch(() => undefined);
+        await pool
+          .query('DELETE FROM public.outbox_event WHERE event_id=$1', [eventId])
+          .catch(() => undefined);
+        await poolHealth.onModuleDestroy();
+      }
+    },
+    60_000,
+  );
 
   it('reconnects and publishes after a real JetStream server restart', async () => {
     const databaseUrl = process.env.OUTBOX_DATABASE_URL;

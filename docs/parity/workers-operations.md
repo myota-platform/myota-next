@@ -195,8 +195,12 @@
   waits. A live PostgreSQL fault-proxy check runs for each owner database,
   drops connectivity after JetStream acknowledges an event but before the
   published state is recorded, then verifies persistence retries after recovery
-  without publishing the event twice. Database process outages and clustered
-  failover remain unqualified.
+  without publishing the event twice. CI also stops and restarts its PostgreSQL
+  service after JetStream acknowledges an event but before publication state is
+  recorded. It repeats the process restart for Core, Activity, and Geodata,
+  verifying each outbox relay reconnects, persists the acknowledgement, and
+  publishes the event only once. PostgreSQL cluster failover remains
+  unqualified.
 - Runtime: preserve migrations, health/readiness, metrics, logs, traces,
   backups, restore paths, NATS topology, object storage buckets, and separate
   service/worker deployment units. Activity database pools honor the
