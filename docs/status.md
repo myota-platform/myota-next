@@ -43,6 +43,7 @@ production readiness.
 - **Web applications:** CI exercises Admin sign-in/dashboard, Identity account
   creation and callsign management through export and anonymization, custom
   Identity role creation and updates with persisted permission and audit checks,
+  scoped-role-preserving account edits with duplicate-email conflict handling,
   Activity correction review, and policy publication against running NestJS
   services through the Gateway. Participant profile editing and owner callsign
   creation,
