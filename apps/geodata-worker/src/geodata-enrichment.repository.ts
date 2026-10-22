@@ -82,7 +82,7 @@ export class GeodataEnrichmentRepository {
          FROM geodata_entity
          WHERE public_properties->>'locationEnrichmentStatus' IN ('QUEUED','PROCESSING')
            AND ($1::uuid IS NULL OR id=$1)
-           AND ($2::uuid IS NULL OR public_properties->>'locationEnrichmentRequestId'=$2)
+           AND ($2::uuid IS NULL OR public_properties->>'locationEnrichmentRequestId'=$2::text)
            AND location_work_dispatched_at <= now()
          ORDER BY location_work_dispatched_at,id
         FOR UPDATE SKIP LOCKED LIMIT 1`,

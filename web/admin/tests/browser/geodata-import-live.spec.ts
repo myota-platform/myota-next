@@ -122,7 +122,9 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
     const persisted = await fixture.query(
       `SELECT r.status AS import_status,
               r.stats->>'preprocessed' AS preprocessed_count,
+              rejected.name AS rejected_name,
               rejected.validation_status AS rejected_status,
+              promoted.name AS promoted_name,
               promoted.validation_status AS promoted_status,
               promoted.target_status,
               promoted.processed_entity_id::text AS processed_entity_id,
@@ -131,9 +133,9 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
               e.name AS entity_name,
               e.entity_type_code AS entity_type_code
          FROM import_run r
-         JOIN geodata_import_candidate rejected
+         LEFT JOIN geodata_import_candidate rejected
            ON rejected.import_run_id=r.id AND rejected.name=$2
-         JOIN geodata_import_candidate promoted
+         LEFT JOIN geodata_import_candidate promoted
            ON promoted.import_run_id=r.id AND promoted.name=$3
          LEFT JOIN geodata_import_processing_queue q
            ON q.id=promoted.processing_queue_id
@@ -141,10 +143,15 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
         WHERE r.id=$1::uuid`,
       [importRunId, rejectedName, promotedName],
     );
-    expect(persisted.rows[0]).toMatchObject({
+    expect(
+      persisted.rows[0],
+      JSON.stringify(persisted.rows[0] ?? null),
+    ).toMatchObject({
       import_status: 'PREPROCESSED',
       preprocessed_count: '2',
+      rejected_name: rejectedName,
       rejected_status: 'REJECTED',
+      promoted_name: promotedName,
       promoted_status: 'PROCESSED',
       target_status: 'CANDIDATE',
       promotion_status: 'COMPLETED',
