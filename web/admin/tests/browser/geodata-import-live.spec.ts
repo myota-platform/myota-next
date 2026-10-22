@@ -106,6 +106,13 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
     await expect(
       page.getByRole('button', { name: promotedName }),
     ).toBeVisible();
+    const rejectedCandidate = await fixture.query<{ id: string }>(
+      `SELECT id::text AS id FROM geodata_import_candidate
+        WHERE import_run_id=$1::uuid AND name=$2`,
+      [importRunId, rejectedName],
+    );
+    expect(rejectedCandidate.rows).toHaveLength(1);
+    const rejectedCandidateId = rejectedCandidate.rows[0]!.id;
 
     await page.getByRole('button', { name: rejectedName }).click();
     const dialog = page.getByRole('dialog');
@@ -122,8 +129,16 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
     const persisted = await fixture.query(
       `SELECT r.status AS import_status,
               r.stats->>'preprocessed' AS preprocessed_count,
-              rejected.name AS rejected_name,
-              rejected.validation_status AS rejected_status,
+              (SELECT count(*) FROM geodata_import_candidate rejected
+                WHERE rejected.import_run_id=r.id AND rejected.id=$3::uuid)
+                AS rejected_candidate_count,
+              EXISTS (SELECT 1 FROM outbox_event rejected_event
+                WHERE rejected_event.aggregate_type='import_run'
+                  AND rejected_event.aggregate_id=r.id::text
+                  AND rejected_event.event_type='geodata.import.candidates.rejected.v1'
+                  AND rejected_event.payload->>'reviewerId' IS NOT NULL
+                  AND rejected_event.payload->'candidateIds' ? $3::text)
+                AS rejection_event_persisted,
               promoted.name AS promoted_name,
               promoted.validation_status AS promoted_status,
               promoted.target_status,
@@ -133,24 +148,22 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
               e.name AS entity_name,
               e.entity_type_code AS entity_type_code
          FROM import_run r
-         LEFT JOIN geodata_import_candidate rejected
-           ON rejected.import_run_id=r.id AND rejected.name=$2
          LEFT JOIN geodata_import_candidate promoted
-           ON promoted.import_run_id=r.id AND promoted.name=$3
+           ON promoted.import_run_id=r.id AND promoted.name=$2
          LEFT JOIN geodata_import_processing_queue q
            ON q.id=promoted.processing_queue_id
          LEFT JOIN geodata_entity e ON e.id=promoted.processed_entity_id
         WHERE r.id=$1::uuid`,
-      [importRunId, rejectedName, promotedName],
+      [importRunId, promotedName, rejectedCandidateId],
     );
     expect(
       persisted.rows[0],
       JSON.stringify(persisted.rows[0] ?? null),
     ).toMatchObject({
-      import_status: 'PREPROCESSED',
+      import_status: 'COMPLETED',
       preprocessed_count: '2',
-      rejected_name: rejectedName,
-      rejected_status: 'REJECTED',
+      rejected_candidate_count: '0',
+      rejection_event_persisted: true,
       promoted_name: promotedName,
       promoted_status: 'PROCESSED',
       target_status: 'CANDIDATE',

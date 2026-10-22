@@ -347,7 +347,10 @@ processing instead of being normalized or rejected at request creation.
 Finalization removes staged candidates and queues transactionally
 while preserving the import summary and materialized entities. Pending
 candidates can be paged; administrators can confirm or
-reject selected rows transactionally. Candidate validation checks required
+reject selected rows transactionally. Rejection removes candidates from the
+review table and retains their IDs and reviewer in the outbox event; once all
+remaining candidates are processed or rejected, the import run becomes
+`COMPLETED`. Candidate validation checks required
 fields first and preserves duplicate IDs in submitted order; validation status
 uses Python truthiness and string conversion before checking supported values.
 Repository fixtures verify that confirmation deduplicates database selection
