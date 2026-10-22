@@ -1,6 +1,6 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { BadRequestException } from '@nestjs/common';
-import { SAXParser, type SAXOptions } from 'sax';
+import sax, { type SAXOptions } from 'sax';
 import {
   MAX_IMPORT_FEATURE_BYTES,
   MAX_IMPORT_FEATURE_VERTICES,
@@ -24,7 +24,7 @@ export function parseXmlImport(
   if (Buffer.byteLength(source, 'utf8') > maximumXmlBytes)
     throw new BadRequestException('XML import exceeds the 20 MiB limit');
 
-  const parser = new SAXParser(true, {
+  const parser = new sax.SAXParser(true, {
     xmlns: true,
     position: false,
     strictEntities: true,

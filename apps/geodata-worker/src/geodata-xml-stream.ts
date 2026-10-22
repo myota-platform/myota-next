@@ -3,7 +3,7 @@ import { createReadStream } from 'node:fs';
 import { open, rm } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
-import { SAXParser, type SAXOptions } from 'sax';
+import sax, { type SAXOptions } from 'sax';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   MAX_IMPORT_FEATURE_BYTES,
@@ -37,7 +37,7 @@ export async function* streamXmlFeatures(
   featureLimit: number,
   heartbeat: () => Promise<void>,
 ): AsyncGenerator<Feature> {
-  const parser = new SAXParser(true, {
+  const parser = new sax.SAXParser(true, {
     xmlns: true,
     position: false,
     strictEntities: true,
