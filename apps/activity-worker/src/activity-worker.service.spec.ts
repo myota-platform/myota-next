@@ -106,6 +106,91 @@ describe('ActivityWorkerService work command metadata', () => {
   });
 });
 
+describe('ActivityWorkerService terminal settlement recovery', () => {
+  it('acknowledges a redelivery after terminal persistence outlives an unconfirmed ACK', async () => {
+    const workId = 'd4cb7610-6077-4b33-93d7-fefdd3c4a2a1';
+    const subject = 'myota.work.activity.statistics-rebuild.v1';
+    const repository = {
+      claimWorkJob: vi
+        .fn()
+        .mockResolvedValueOnce({
+          id: workId,
+          kind: 'STATISTICS_REBUILD',
+          payload: { programmeSlug: 'recovery' },
+          attempts: 8,
+          leaseToken: 'lease-8',
+        })
+        .mockResolvedValueOnce(null),
+      getWorkJobState: vi.fn().mockResolvedValue({
+        id: workId,
+        kind: 'STATISTICS_REBUILD',
+        status: 'FAILED',
+        retryAfterSeconds: 0,
+        leaseRemainingSeconds: 0,
+      }),
+      process: vi
+        .fn()
+        .mockRejectedValue(new Error('terminal processing error')),
+      failWorkJob: vi.fn().mockResolvedValue(undefined),
+    };
+    const service = new ActivityWorkerService(
+      repository as never,
+      {} as never,
+      null,
+    );
+    const encodedEnvelope = new TextEncoder().encode(
+      JSON.stringify({
+        envelopeVersion: 1,
+        workId,
+        workType: 'activity.statistics-rebuild.v1',
+        createdAt: '2026-10-21T00:00:00Z',
+        producer: 'activity-service',
+        aggregate: { type: 'activity_job', id: workId },
+        payload: { jobId: workId },
+      }),
+    );
+    const firstDelivery = {
+      subject,
+      data: encodedEnvelope,
+      info: { deliveryCount: 8 },
+      working: vi.fn(),
+      ackAck: vi.fn().mockResolvedValue(false),
+      nak: vi.fn(),
+    };
+    const redelivery = {
+      subject,
+      data: encodedEnvelope,
+      info: { deliveryCount: 9 },
+      working: vi.fn(),
+      ackAck: vi.fn().mockResolvedValue(true),
+      nak: vi.fn(),
+    };
+    const definition = {
+      kind: 'STATISTICS_REBUILD',
+      workType: 'activity.statistics-rebuild.v1',
+      subject,
+      durable: 'activity-statistics-rebuild-v1',
+      consumer: {},
+      maxPending: 4,
+    };
+    const handle = (message: unknown) =>
+      (
+        service as unknown as {
+          handle: (definition: unknown, message: unknown) => Promise<void>;
+        }
+      ).handle(definition, message);
+
+    await handle(firstDelivery);
+    await handle(redelivery);
+
+    expect(repository.failWorkJob).toHaveBeenCalledOnce();
+    expect(repository.getWorkJobState).toHaveBeenCalledOnce();
+    expect(firstDelivery.ackAck).toHaveBeenCalledOnce();
+    expect(redelivery.ackAck).toHaveBeenCalledOnce();
+    expect(repository.process).toHaveBeenCalledOnce();
+  });
+});
+
 describe('ActivityWorkerService timer cleanup', () => {
   afterEach(() => vi.useRealTimers());
 

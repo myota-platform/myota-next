@@ -900,6 +900,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           message: JsMsg,
         ): Promise<void>;
       };
+      // Exercise the exhausted-delivery branch while keeping broker settlement real.
       const terminalMessage = {
         subject: brokerMessage.subject,
         data: brokerMessage.data,
@@ -926,14 +927,22 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         [jobId],
       );
       expect(failedJob.rows[0]?.status).toBe('FAILED');
-      const savedDeadLetter = await pool.query<{ id: string }>(
-        `SELECT id FROM activity_work_dead_letter
+      const savedDeadLetter = await pool.query<{
+        id: string;
+        delivery_count: number;
+        error_category: string;
+      }>(
+        `SELECT id,delivery_count,error_category FROM activity_work_dead_letter
          WHERE work_id=$1 AND work_type=$2 ORDER BY dead_lettered_at DESC LIMIT 1`,
         [jobId, statisticsWork.workType],
       );
       deadLetterId = savedDeadLetter.rows[0]?.id;
       if (!deadLetterId)
         throw new Error('terminal Activity dead letter was not persisted');
+      expect(savedDeadLetter.rows[0]).toMatchObject({
+        delivery_count: 8,
+        error_category: 'Error',
+      });
       await waitForConsumerAckPending(
         manager,
         registry.activityWorkStream,

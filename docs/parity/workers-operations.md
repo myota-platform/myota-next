@@ -35,9 +35,14 @@
   while a statistics rebuild delivery is pending, verifies completion after
   leader election, then publishes another job and confirms the Activity
   durables settle through the surviving cluster. Process outages during other
-  Activity work kinds remain open. Transient PostgreSQL failures while claiming
-  work or persisting retry/dead-letter state extend the current ACK and retry
-  in place with capped jittered backoff. Fault-proxy checks cover retry-state
+  Activity work kinds after processing begins remain open; all six kinds are
+  covered for process death after lease acquisition and before processing starts.
+  A service-level check also verifies that an unconfirmed ACK after terminal
+  dead-letter persistence is settled on redelivery without processing the job
+  again. Process death after terminal persistence but before broker settlement
+  remains open. Transient PostgreSQL failures while claiming work or persisting
+  retry/dead-letter state extend the current ACK and retry in place with capped
+  jittered backoff. Fault-proxy checks cover retry-state
   writes and terminal failure settlement at delivery count eight: while
   PostgreSQL is unavailable, the job stays running, no dead-letter row exists,
   and the delivery remains unacknowledged; after recovery, the failed job and
