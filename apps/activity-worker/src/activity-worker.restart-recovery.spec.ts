@@ -715,12 +715,21 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       await publishWork(publisher, registry, ids[1]!);
       await waitForJob(pool, ids[1]!);
       for (const item of activityWork) {
-        const info = await manager.consumers.info(
-          registry.activityWorkStream,
-          item.durable,
+        await waitFor(
+          async () => {
+            try {
+              const info = await manager.consumers.info(
+                registry.activityWorkStream,
+                item.durable,
+              );
+              return info.num_pending === 0 && info.num_ack_pending === 0;
+            } catch {
+              return false;
+            }
+          },
+          `Activity durable ${item.durable} did not settle after failover`,
+          30_000,
         );
-        expect(info.num_pending).toBe(0);
-        expect(info.num_ack_pending).toBe(0);
       }
       const stream = await manager.streams.info(registry.activityWorkStream);
       expect(stream.cluster?.leader).not.toBe(failedLeader);
