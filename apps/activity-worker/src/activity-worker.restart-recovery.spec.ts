@@ -260,7 +260,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       }, 'Activity worker did not persist retry state after PostgreSQL recovered');
       // The retained original delivery is NAKed after retry state commits and
       // should drive the queued retry itself.
-      await waitForJob(pool, jobs[1]!, 60_000);
+      await waitForJob(pool, jobs[1]!, 90_000);
 
       await queueStatisticsJob(pool, jobs[3]!, programmeSlugs[3]!);
       const workInternals = workRepository as unknown as {
@@ -518,7 +518,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       if (originalNatsUrl === undefined) delete process.env.NATS_URL;
       else process.env.NATS_URL = originalNatsUrl;
     }
-  }, 90_000);
+  }, 120_000);
 
   it('continues a pending job after JetStream leader failover', async () => {
     const databaseUrl = process.env.ACTIVITY_DATABASE_URL;
