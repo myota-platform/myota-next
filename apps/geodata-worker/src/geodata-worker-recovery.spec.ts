@@ -31,6 +31,9 @@ import { GeodataRetentionRepository } from './geodata-retention.repository.js';
 import { GeodataEnrichmentRepository } from './geodata-enrichment.repository.js';
 import { GeodataWorkerService } from './geodata-worker.service.js';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
+import { GeodataEntityEnrichmentRequestRepository } from '../../geodata/src/geodata-entity-enrichment.repository.js';
+import { GeodataEntityMutationSupport } from '../../geodata/src/geodata-entity-mutation-support.js';
+import type { AccessTokenClaims } from '../../../libs/platform/src/access-token.js';
 
 const recoveryTestName =
   'replays committed staging after a worker process is killed';
@@ -243,6 +246,7 @@ async function verifyBrokerRecovery() {
   const staleEnrichmentRequestId = randomUUID();
   const changedGeometryEntityId = randomUUID();
   const changedGeometryRequestId = randomUUID();
+  const apiEnrichmentEntityId = randomUUID();
   let outageClaimAttempts = 0;
   let outageStateAttempts = 0;
   let enrichmentClaimAttempts = 0;
@@ -450,6 +454,14 @@ async function verifyBrokerRecovery() {
           }),
         ],
       );
+      await fixture.query(
+        `INSERT INTO geodata_entity
+          (id,name,lifecycle_status,geom,centroid)
+         VALUES ($1,'api-enrichment-request','APPROVED',
+           ST_SetSRID(ST_MakePoint(6.1234,45.6789),4326),
+           ST_SetSRID(ST_MakePoint(6.1234,45.6789),4326)::geography)`,
+        [apiEnrichmentEntityId],
+      );
       await fixture.query('COMMIT');
     } catch (error) {
       await fixture.query('ROLLBACK').catch(() => undefined);
@@ -457,6 +469,37 @@ async function verifyBrokerRecovery() {
     } finally {
       fixture.release();
     }
+
+    const apiEnrichmentRepository =
+      new GeodataEntityEnrichmentRequestRepository(
+        new GeodataEntityMutationSupport(directDatabase as Pool),
+      );
+    const apiClaims: AccessTokenClaims = {
+      sub: 'geodata-recovery-test',
+      sid: randomUUID(),
+      jti: randomUUID(),
+      scp: [],
+      exp: Math.floor(Date.now() / 1000) + 300,
+      tokenType: 'access',
+      roles: [{ role: 'GLOBAL_OPERATOR' }],
+    };
+    const apiEnrichmentResult =
+      await apiEnrichmentRepository.requestLocationEnrichment(
+        apiEnrichmentEntityId,
+        undefined,
+        undefined,
+        { editorId: 'geodata-recovery-test' },
+        apiClaims,
+      );
+    expect(apiEnrichmentResult).toMatchObject({
+      status: 'QUEUED',
+      queued: true,
+    });
+    const apiEnrichmentState = await directDatabase.query<{ status: string }>(
+      "SELECT public_properties->>'locationEnrichmentStatus' AS status FROM geodata_entity WHERE id=$1",
+      [apiEnrichmentEntityId],
+    );
+    expect(apiEnrichmentState.rows[0]?.status).toBe('QUEUED');
 
     await liveEnrichmentRepository.process({
       id: staleEnrichmentEntityId,
@@ -887,6 +930,17 @@ async function verifyBrokerRecovery() {
         ]);
         await cleanup.query('DELETE FROM geodata_entity WHERE id=$1', [
           settlementEnrichmentEntityId,
+        ]);
+        await cleanup.query(
+          "DELETE FROM outbox_event WHERE aggregate_type='entity' AND aggregate_id=$1",
+          [apiEnrichmentEntityId],
+        );
+        await cleanup.query(
+          "DELETE FROM geodata_audit_event WHERE aggregate_type='entity' AND aggregate_id=$1",
+          [apiEnrichmentEntityId],
+        );
+        await cleanup.query('DELETE FROM geodata_entity WHERE id=$1', [
+          apiEnrichmentEntityId,
         ]);
         await cleanup.query(
           "DELETE FROM outbox_event WHERE aggregate_type='entity' AND aggregate_id=ANY($1::text[])",

@@ -145,6 +145,9 @@ export class GeodataEntityEnrichmentRequestRepository {
       };
       delete nextProperties.locationEnrichmentError;
       await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await client.query(
         `UPDATE geodata_entity SET public_properties=$2::jsonb,
           location_work_dispatched_at=now(),updated_at=$3 WHERE id=$1`,
         [id, stringifyJsonWithBigInts(nextProperties), requestedAt],
