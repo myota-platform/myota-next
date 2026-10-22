@@ -95,6 +95,12 @@ production readiness.
   multiply these process-local limits; compare throughput and resource use
   before production tuning.
 
+Normal Node CI keeps API and worker behavior, browser workflows, build, and
+static checks on every push. Database backup/restore, outage and restart
+recovery, and large-input RSS qualification run in the manually triggered
+Operational and performance qualification workflow so these longer deployment
+and performance checks do not delay functional parity work.
+
 ## References
 
 - [Function parity matrix](parity-matrix.md) and its [detailed behavior pages](parity/): requirements, coverage, and known differences.

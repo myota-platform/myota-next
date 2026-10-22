@@ -42,6 +42,7 @@
     "test:browser": "playwright test",
     "test:geodata-maidenhead": "node tools/check-geodata-maidenhead.mjs",
     "test:geodata-rss": "node tools/run-geodata-rss-qualification.mjs",
+    "test:geodata-pbf-rss": "node tools/run-geodata-pbf-rss-qualification.mjs",
     "test:geodata-worker-recovery": "node tools/run-geodata-worker-recovery.mjs",
     "test:geodata-storage-recovery": "node tools/run-geodata-storage-recovery.mjs",
     "test:activity-worker-recovery": "node tools/run-activity-worker-recovery.mjs",

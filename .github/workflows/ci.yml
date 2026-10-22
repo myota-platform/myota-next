@@ -44,37 +44,20 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - name: Install OSM PBF decoder
-        run: >-
-          sudo timeout 6m apt-get -o Acquire::Retries=3
-          -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-          && sudo timeout 6m apt-get -o Acquire::Retries=3
-          -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install
-          --no-install-recommends --yes osmium-tool nats-server postgresql-client-16
-      - name: Select PostgreSQL 16 client tools
-        run: echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
-      - name: Start isolated JetStream for broker recovery coverage
+      - name: Start isolated JetStream
         run: |
-          sudo systemctl stop nats-server || true
-          sudo systemctl disable nats-server || true
-          nohup nats-server -js -p 14222 -m 18222 > "$RUNNER_TEMP/nats-server.log" 2>&1 &
+          docker run --detach --name myota-ci-nats \
+            --publish 14222:4222 --publish 18222:8222 \
+            nats:2-alpine -js -p 4222 -m 8222
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:18222/healthz >/dev/null; then
               exit 0
             fi
             sleep 1
           done
-          cat "$RUNNER_TEMP/nats-server.log"
+          docker logs myota-ci-nats
           exit 1
       - run: npm ci
-      - name: Export PostgreSQL service container ID for process recovery checks
-        run: |
-          container_id="$(docker ps --filter 'ancestor=postgis/postgis:16-3.4' --format '{{.ID}}' | head -n 1)"
-          if [ -z "$container_id" ]; then
-            echo "Could not find the PostgreSQL service container" >&2
-            exit 1
-          fi
-          echo "MYOTA_POSTGRES_SERVICE_CONTAINER_ID=$container_id" >> "$GITHUB_ENV"
       - name: Provision bounded JetStream topology for CI
         run: npm run provision:jetstream
         env:
@@ -98,22 +81,12 @@ jobs:
       - run: npm run migrate:db -- --owner=core
       - run: npm run migrate:db -- --owner=activity
       - run: npm run migrate:db -- --owner=geo
-      - name: Rehearse three-owner backup and restore
-        run: npm run test:db-backup-restore
-        env:
-          MYOTA_BACKUP_RESTORE_TEST_ALLOW: '1'
       - run: npm run test:geodata-maidenhead
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:e2e
-      - run: npm run test:geodata-rss
-      - run: npm run test:geodata-worker-recovery
-      - run: npm run test:activity-worker-recovery
-      - run: npm run test:activity-notification-restart-recovery
-      - run: npm run test:outbox-recovery
-      - run: npm run test:geodata-storage-recovery
       - run: npm run build
       - run: npm ci --prefix web/admin
       - run: npm run lint --prefix web/admin

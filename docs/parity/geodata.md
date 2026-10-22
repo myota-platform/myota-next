@@ -132,7 +132,8 @@ worker parses emitted integer tokens exactly, so large OSM IDs retain their
 Python-compatible `sourceRef`, feature ID, and source hash.
 The checked-in OSM XML/PBF fixture covers tagged nodes, linear and closed ways,
 a multipolygon relation with an inner ring, filtering, output order, and source
-hashes against the Python importer. CI decodes generated 50,000-feature and
+hashes against the Python importer. The manually triggered Operational and
+performance qualification workflow decodes generated 50,000-feature and
 250,000-feature PBFs and checks that Linux Node plus `osmium` subprocess-tree
 RSS growth stays within 96 MiB and 192 MiB, respectively, above the test-worker
 baseline. The 50,000-feature case matches the Python stress fixture's count and
@@ -141,7 +142,8 @@ comparable. Inputs above 250,000 features and less common OSM geometries still
 need qualification. Area and way vertex limits use the reference errors;
 the CLI decoder checks after osmium emits a record, bounded by the decoded
 feature-size cap, while PyOsmium checks areas before GeoJSON materialization.
-CI also streams a generated 300,000-feature GeoJSON FeatureCollection through
+The same manually triggered workflow streams a generated 300,000-feature
+GeoJSON FeatureCollection through
 the metadata scan and feature pass, with Node RSS growth under 160 MiB; a
 top-level feature array has a separate correctness fixture. The Python stress
 fixture uses the same GeoJSON feature count and a 96 MiB absolute process-RSS

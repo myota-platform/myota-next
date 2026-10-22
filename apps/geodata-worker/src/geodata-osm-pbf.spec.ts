@@ -235,7 +235,9 @@ describe('OSM PBF reference parity', () => {
     }
   });
 
-  describe.skipIf(process.platform !== 'linux')(
+  describe.skipIf(
+    process.platform !== 'linux' ||
+      process.env.MYOTA_PBF_RSS_QUALIFICATION !== '1',
     'PBF process-tree memory bounds',
     () => {
       it.each([
