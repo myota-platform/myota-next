@@ -142,4 +142,47 @@ describe('Identity service token compatibility', () => {
     expect(account.scopes).toEqual(['identity.me', 'observability.view']);
     expect(account.scopes).not.toContain('operations.read');
   });
+
+  it('rejects an access token after its account is deactivated', async () => {
+    const accountId = '566b8475-bda2-4a2d-8ab8-d7a9a93c0041';
+    const statements: string[] = [];
+    const client = {
+      query: async (sql: string) => {
+        statements.push(sql);
+        if (sql.includes('auth_revocation')) return { rows: [], rowCount: 0 };
+        if (sql.includes('FROM public.account a'))
+          return { rows: [], rowCount: 0 };
+        throw new Error(`unexpected query: ${sql}`);
+      },
+      release: () => undefined,
+    };
+    const auth = new IdentityAuthService({
+      connect: async () => client,
+    } as never);
+    const header = Buffer.from(
+      JSON.stringify({ alg: 'HS256', typ: 'JWT', tokenType: 'access' }),
+    ).toString('base64url');
+    const claims = Buffer.from(
+      JSON.stringify({
+        sub: accountId,
+        sid: 'session-1',
+        jti: 'access-token-1',
+        iat: 1_800_000_000,
+        exp: 4_000_000_000,
+        tokenType: 'access',
+        scp: ['identity.accounts.create'],
+      }),
+    ).toString('base64url');
+    const signingInput = `${header}.${claims}`;
+    const signature = createHmac('sha256', 'test-auth-key')
+      .update(signingInput)
+      .digest('base64url');
+
+    await expect(
+      auth.currentAccount(`Bearer ${signingInput}.${signature}`),
+    ).rejects.toThrow('account is inactive or unavailable');
+    expect(
+      statements.find((sql) => sql.includes('FROM public.account a')),
+    ).toContain("a.status = 'ACTIVE'");
+  });
 });

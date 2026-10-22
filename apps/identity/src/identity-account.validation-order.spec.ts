@@ -26,6 +26,71 @@ describe('IdentityAccountService update validation order', () => {
     expect(connect).not.toHaveBeenCalled();
   });
 
+  it('prevents an administrator from changing their own role assignments', async () => {
+    const accountId = '11111111-1111-4111-8111-111111111111';
+    const queries: string[] = [];
+    const client = {
+      query: async (sql: string) => {
+        queries.push(sql);
+        if (sql.includes('FROM public.account a'))
+          return {
+            rows: [
+              {
+                id: accountId,
+                display_name: 'Administrator',
+                email: 'admin@example.test',
+                participation_type: 'OPERATOR',
+                status: 'ACTIVE',
+                website_url: null,
+                biography_markdown: null,
+                profile_image_id: null,
+                profile_image_media_type: null,
+                profile_image_updated_at: null,
+                primary_callsign_id: null,
+                created_at: '2026-01-01T00:00:00.000000Z',
+                updated_at: '2026-01-01T00:00:00.000000Z',
+              },
+            ],
+            rowCount: 1,
+          };
+        if (sql.includes('INSERT INTO public.security_event'))
+          return {
+            rows: [{ occurred_at: '2026-01-01T00:00:00.000000Z' }],
+            rowCount: 1,
+          };
+        return { rows: [], rowCount: 0 };
+      },
+      release: () => undefined,
+    } as unknown as PoolClient;
+    const auth = {
+      currentAccount: async () => ({
+        id: accountId,
+        scopes: ['identity.admin', 'identity.roles.assign'],
+      }),
+    } as unknown as IdentityAuthService;
+    const service = new IdentityAccountService(
+      { connect: async () => client } as unknown as Pool,
+      auth,
+      {} as IdentityRoleService,
+      {} as IdentityProfileImageService,
+    );
+
+    await expect(
+      service.updateAccount(
+        'Bearer admin',
+        accountId,
+        {
+          roles: [{ code: 'PARTICIPANT' }],
+        },
+        true,
+      ),
+    ).rejects.toThrow('actors cannot change their own role assignments');
+    expect(queries).toContain('ROLLBACK');
+    expect(
+      queries.some((sql) => sql.includes('UPDATE public.account_role')),
+    ).toBe(false);
+  });
+
   it('resolves the account before validating the body', async () => {
     const queries: string[] = [];
     const client = {

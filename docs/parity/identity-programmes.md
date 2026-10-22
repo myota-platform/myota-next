@@ -151,9 +151,12 @@ global-operator bypass. An account-export fixture now verifies owner scoping
 before database access, a repeatable-read snapshot, and stable order across
 account callsigns, roles, callsign evidence, and security events. It also checks
 that evidence metadata and event payload integers beyond JavaScript's safe
-range remain exact after export. Broader account, callsign, recovery, and
-authorization sequence behavior still require automated compatibility
-coverage. Callsign create and primary-selection idempotency fixtures also pin
+range remain exact after export. Compatibility checks also verify account
+creators can read role choices without account-admin access, participants
+cannot read them, administrators cannot change their own role assignments,
+and access tokens stop working after account deactivation.
+Broader account, callsign, recovery, and authorization sequence behavior still
+require automated compatibility coverage. Callsign create and primary-selection idempotency fixtures also pin
 the Python order: required callsign fields precede authorization; authorization
 and account resolution precede cached replay; and replay skips
 mutation-specific validation and leaves the database and outbox unchanged.

@@ -1,4 +1,5 @@
-import type { PoolClient } from 'pg';
+import { ForbiddenException } from '@nestjs/common';
+import type { Pool, PoolClient } from 'pg';
 import type { IdentityAuthService } from './auth.service.js';
 import { IdentityRoleService } from './identity-role.service.js';
 import { ADMIN_PERMISSION_CATALOG } from './role-catalog.js';
@@ -61,5 +62,53 @@ describe('IdentityRoleService Python compatibility', () => {
         (permission) => permission.code === 'operations.read',
       ),
     ).toBe(false);
+  });
+
+  it('lets account creators read role choices without account-admin access', async () => {
+    const timestamp = '2026-01-01T00:00:00.000000Z';
+    const client = {
+      query: async (sql: string) =>
+        sql.includes('clock_timestamp')
+          ? { rows: [{ timestamp }], rowCount: 1 }
+          : { rows: [], rowCount: 0 },
+      release: () => undefined,
+    } as unknown as PoolClient;
+    const connect = vi.fn(async () => client);
+    const currentAccount = vi.fn(async () => ({
+      id: 'account-creator',
+      scopes: ['identity.accounts.create'],
+    }));
+    const service = new IdentityRoleService(
+      { connect } as unknown as Pool,
+      { currentAccount } as unknown as IdentityAuthService,
+    );
+
+    const catalogue = await service.listAdminRoles('Bearer creator');
+    expect(currentAccount).toHaveBeenCalledWith('Bearer creator');
+    expect(connect).toHaveBeenCalledOnce();
+    expect(catalogue.items).toContainEqual(
+      expect.objectContaining({ code: 'PARTICIPANT' }),
+    );
+    expect(
+      ADMIN_PERMISSION_CATALOG.map((permission) => permission.code),
+    ).toContain('identity.accounts.create');
+  });
+
+  it('denies role-catalogue reads to callers without an accepted scope', async () => {
+    const connect = vi.fn();
+    const currentAccount = vi.fn(async () => ({
+      id: 'participant',
+      scopes: ['identity.me'],
+    }));
+    const service = new IdentityRoleService(
+      { connect } as unknown as Pool,
+      { currentAccount } as unknown as IdentityAuthService,
+    );
+
+    await expect(
+      service.listAdminRoles('Bearer participant'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(currentAccount).toHaveBeenCalledWith('Bearer participant');
+    expect(connect).not.toHaveBeenCalled();
   });
 });
