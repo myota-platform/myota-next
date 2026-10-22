@@ -117,9 +117,9 @@ test('deletes an entity and reconciles linked Activity data through live service
 
     const geodataState = await geodata.query(
       `SELECT
-         (SELECT count(*)::text FROM geodata_entity WHERE id=$1) AS entities,
+         (SELECT count(*)::text FROM geodata_entity WHERE id=$1::uuid) AS entities,
          (SELECT payload->>'status' FROM geodata_control_record
-            WHERE kind='entityDeletionJobs' AND payload->>'entityId'=$1
+            WHERE kind='entityDeletionJobs' AND payload->>'entityId'=$1::text
             ORDER BY updated_at DESC LIMIT 1) AS job_status`,
       [entityId],
     );
