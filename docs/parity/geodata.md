@@ -336,9 +336,10 @@ location-enrichment, and refresh-schedule timestamps use the same formatter.
 and HTTPS source-host allowlist; production deployment, live-source
 qualification, and outage/recovery evidence remain outstanding. See the
 [importer deployment guide](../operations/geodata-importer.md).
-The one-shot importer check fetches an allowlisted GeoJSON fixture and verifies
-the complete-snapshot request, authorization, and idempotency sent to Geodata.
-Live source domains and deployment behavior still require qualification.
+Importer checks fetch allowlisted GeoJSON fixtures through both the one-shot
+and scheduled paths. They verify the due schedule selection, complete-snapshot
+request, authorization, and idempotency sent to Geodata. Live source domains
+and deployment behavior still require qualification.
 Live browser CI creates a manual refresh schedule in Admin, runs an empty
 complete snapshot through Gateway and Geodata workers, and verifies completion
 and persisted snapshot metadata. A separate Gateway request check verifies

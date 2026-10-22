@@ -168,3 +168,84 @@ describe('GeodataImporterService one-shot imports', () => {
     });
   });
 });
+
+describe('GeodataImporterService scheduled imports', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it('fetches a due allowlisted source and queues its complete schedule run', async () => {
+    const scheduleId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const nextRunAt = '2020-01-01T00:00:00.000Z';
+    const sourceUrl = 'https://data.example.test/scheduled.geojson';
+    vi.stubEnv('GEODATA_SOURCE_ALLOWLIST', 'example.test');
+    vi.stubEnv('MYOTA_AUTH_SIGNING_KEY', 'scheduled-import-test-key');
+    vi.stubEnv('MYOTA_GEODATA_URL', 'http://geodata.example.test///');
+    const schedule = {
+      id: scheduleId,
+      programmeSlug: 'fixture-programme',
+      adapter: 'OSM',
+      source: { url: sourceUrl, format: 'GEOJSON', sourceKey: 'scheduled' },
+      entityTypes: ['SOTA'],
+      intervalSeconds: 86_400,
+      lastRunAt: null,
+      disappearancePolicy: 'REVIEW_REQUIRED',
+      enabled: true,
+      nextRunAt,
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          stringifyJsonWithBigInts({
+            items: [schedule],
+            page: 1,
+            pageSize: 100,
+            total: 1,
+            nextPage: null,
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          stringifyJsonWithBigInts({
+            type: 'FeatureCollection',
+            features: [],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 202 }));
+
+    const importer = new GeodataImporterService();
+    const poll = (importer as unknown as { poll: () => Promise<void> }).poll;
+    await poll.call(importer);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'http://geodata.example.test/v1/geodata/refresh-schedules?page=1&pageSize=100',
+    );
+    const [sourceRequestUrl, sourceRequest] = fetchMock.mock.calls[1]!;
+    expect(sourceRequestUrl).toBeInstanceOf(URL);
+    if (!(sourceRequestUrl instanceof URL))
+      throw new Error('scheduled source fetch must use a parsed URL');
+    expect(sourceRequestUrl.href).toBe(sourceUrl);
+    expect(sourceRequest).toMatchObject({ redirect: 'manual' });
+
+    const [runRequestUrl, runRequest] = fetchMock.mock.calls[2]!;
+    expect(runRequestUrl).toBe(
+      `http://geodata.example.test/v1/geodata/refresh-schedules/${scheduleId}/run`,
+    );
+    expect(runRequest?.method).toBe('POST');
+    const runHeaders = new Headers(runRequest?.headers);
+    expect(runHeaders.get('authorization')).toMatch(/^Bearer .+/);
+    expect(runHeaders.get('idempotency-key')).toBe(
+      `geodata-schedule:${scheduleId}:${nextRunAt}`,
+    );
+    expect(parseJsonWithExactIntegers(runRequest?.body as string)).toEqual({
+      features: [],
+    });
+  });
+});
