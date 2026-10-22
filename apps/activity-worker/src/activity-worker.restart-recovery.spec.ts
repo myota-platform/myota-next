@@ -249,15 +249,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       });
 
       databaseProxy.setAvailable(true);
-      await waitFor(async () => {
-        const result = await pool.query<{
-          status: string;
-          attempts: number;
-        }>('SELECT status,attempts FROM activity_job WHERE id=$1', [jobs[1]]);
-        return (
-          result.rows[0]?.status === 'QUEUED' && result.rows[0]?.attempts === 1
-        );
-      }, 'Activity worker did not persist retry state after PostgreSQL recovered');
+      await waitForQueuedJob(pool, jobs[1]!, 1);
       // The persisted queued retry is dispatched through the same command path
       // as the outbox worker after the database recovers.
       await publishWork(publisher, registry, jobs[1]!);
@@ -409,21 +401,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         // PostgreSQL comes back after a full process restart. Verify retry state
         // first, then publish the queued command as the separate outbox worker
         // would after recovery.
-        await waitFor(async () => {
-          const retried = await pool.query<{
-            status: string;
-            attempts: number;
-            available: boolean;
-          }>(
-            'SELECT status,attempts,available_at<=now() AS available FROM activity_job WHERE id=$1',
-            [jobs[4]],
-          );
-          return (
-            retried.rows[0]?.status === 'QUEUED' &&
-            retried.rows[0]?.attempts === 1 &&
-            retried.rows[0]?.available === true
-          );
-        }, 'Activity worker did not persist its retry after PostgreSQL restarted');
+        await waitForQueuedJob(pool, jobs[4]!, 1);
         await publishWork(publisher, registry, jobs[4]!);
         await waitForJob(pool, jobs[4]!, 30_000);
         const restartedJob = await pool.query<{ attempts: number }>(
@@ -822,6 +800,24 @@ async function waitForJob(pool: Pool, id: string, timeoutMs = 15_000) {
     `Activity worker did not complete ${id}`,
     timeoutMs,
   );
+}
+
+async function waitForQueuedJob(pool: Pool, id: string, attempts: number) {
+  await waitFor(async () => {
+    const result = await pool.query<{
+      status: string;
+      attempts: number;
+      available: boolean;
+    }>(
+      'SELECT status,attempts,available_at<=now() AS available FROM activity_job WHERE id=$1',
+      [id],
+    );
+    return (
+      result.rows[0]?.status === 'QUEUED' &&
+      result.rows[0]?.attempts === attempts &&
+      result.rows[0]?.available === true
+    );
+  }, `Activity worker did not persist an available retry for ${id}`);
 }
 
 async function waitForPublisher(
