@@ -832,7 +832,7 @@ export class ActivityWorkRepository {
     if (!updated.rowCount) throw new Error('award issuance disappeared');
     await client.query(
       `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
-       VALUES ($1,'awards.rendered.v1','awards-service','award_issuance',$2,$3::jsonb,now(),$4)`,
+       VALUES ($1,'awards.rendered.v1','awards','award_issuance',$2,$3::jsonb,now(),$4)`,
       [
         randomUUID(),
         issuance.id,

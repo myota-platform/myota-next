@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import sharp from 'sharp';
 import { expect, test } from '@playwright/test';
 
 const hasApiDatabases = Boolean(
@@ -424,6 +425,57 @@ test('manages participant-owned callsigns through the live Identity API', async 
   await page.getByRole('button', { name: 'Save profile details' }).click();
   await expect(page.locator('#profile-status')).toHaveText('Profile saved.');
 
+  const profilePicture = await sharp({
+    create: {
+      width: 640,
+      height: 480,
+      channels: 3,
+      background: { r: 40, g: 100, b: 180 },
+    },
+  })
+    .png()
+    .toBuffer();
+  await page.locator('#profile-image-file').setInputFiles({
+    name: 'live-profile-picture.png',
+    mimeType: 'image/png',
+    buffer: profilePicture,
+  });
+  await expect(page.locator('#profile-crop-tools')).toBeVisible();
+  await page.getByRole('button', { name: 'Save cropped picture' }).click();
+  await expect(page.locator('#profile-status')).toHaveText(
+    'Profile picture saved.',
+  );
+  await expect(page.locator('#profile-image-current')).toBeVisible();
+  const imageMetadataResponse = await request.get(
+    'http://127.0.0.1:8080/v1/identity/me',
+    { headers },
+  );
+  const imageMetadata = await imageMetadataResponse.json();
+  expect(imageMetadata.profileImage).toMatchObject({
+    contentType: 'image/webp',
+    width: 512,
+    height: 512,
+  });
+  const storedImage = await request.get(
+    'http://127.0.0.1:8080/v1/identity/me/profile-image',
+    { headers },
+  );
+  expect(storedImage.status()).toBe(200);
+  expect(storedImage.headers()['content-type']?.split(';', 1)[0]).toBe(
+    'image/webp',
+  );
+  expect((await storedImage.body()).length).toBeGreaterThan(0);
+  await page.getByRole('button', { name: 'Remove profile picture' }).click();
+  await expect(page.locator('#profile-status')).toHaveText(
+    'Profile picture removed.',
+  );
+  await expect(page.locator('#profile-image-current')).toBeHidden();
+  const removedImage = await request.get(
+    'http://127.0.0.1:8080/v1/identity/me/profile-image',
+    { headers },
+  );
+  expect(removedImage.status()).toBe(404);
+
   await page.locator('#profile-callsign-value').fill(newValue);
   await page.locator('#profile-callsign-add button[type="submit"]').click();
   await expect(page.locator('#profile-status')).toHaveText('Callsign added.');
@@ -484,6 +536,7 @@ test('manages participant-owned callsigns through the live Identity API', async 
     primaryCallsignId: newCallsignId,
     websiteUrl,
     biographyMarkdown,
+    profileImage: null,
   });
   expect(finalAccountView.callsigns).toEqual(
     expect.arrayContaining([

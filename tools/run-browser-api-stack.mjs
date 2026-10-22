@@ -101,6 +101,11 @@ const baseEnvironment = {
   MYOTA_OBJECT_STORAGE_SECRET_KEY:
     process.env.MYOTA_OBJECT_STORAGE_SECRET_KEY ?? 'browser-s3-secret',
   MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: 'path',
+  MYOTA_PROFILE_IMAGE_ACCESS_KEY:
+    process.env.MYOTA_PROFILE_IMAGE_ACCESS_KEY ?? 'browser-profile-access',
+  MYOTA_PROFILE_IMAGE_SECRET_KEY:
+    process.env.MYOTA_PROFILE_IMAGE_SECRET_KEY ?? 'browser-profile-secret',
+  MYOTA_PROFILE_IMAGE_BUCKET: 'browser-profile-images',
   MYOTA_AWARD_ASSET_BUCKET: 'browser-award-assets',
   MYOTA_AWARD_SIGNATURE_BUCKET: 'browser-award-signatures',
   MYOTA_AUTH_SIGNING_KEY:

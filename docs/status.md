@@ -41,8 +41,9 @@ production readiness.
   creation and callsign management through export and anonymization, Activity
   correction review, and policy publication against running NestJS services
   through the Gateway. Participant profile editing and owner callsign creation,
-  evidence submission, primary selection, and retirement also run against live
-  Identity APIs. Participant activation creation, QSO recording, and closing
+  cropped profile-image upload and deletion, evidence submission, primary
+  selection, and retirement also run against live Identity APIs. Participant
+  activation creation, QSO recording, and closing
   run through live Activity APIs. Admin award publication and issuance, plus
   Participant eligible-level requests, now cross live Identity and Activity
   APIs and verify persisted request facts and issuance records. Public catalogue

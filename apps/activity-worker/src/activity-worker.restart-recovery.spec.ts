@@ -199,10 +199,9 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           result.rows[0]?.status === 'QUEUED' && result.rows[0]?.attempts === 1
         );
       }, 'Activity worker did not persist retry state after PostgreSQL recovered');
-      // Mirror the outbox dispatch that republishes a queued retry after its
-      // database state is committed, so this check does not depend on NAK timing.
-      await publishWork(publisher, registry, jobs[1]!);
-      await waitForJob(pool, jobs[1]!);
+      // The retained original delivery is NAKed after retry state commits and
+      // should drive the queued retry itself.
+      await waitForJob(pool, jobs[1]!, 30_000);
 
       await stopJetStream(server);
       server = undefined;
@@ -294,14 +293,18 @@ async function publishWork(
   );
 }
 
-async function waitForJob(pool: Pool, id: string) {
-  await waitFor(async () => {
-    const result = await pool.query<{ status: string }>(
-      'SELECT status FROM activity_job WHERE id=$1',
-      [id],
-    );
-    return result.rows[0]?.status === 'SUCCEEDED';
-  }, `Activity worker did not complete ${id}`);
+async function waitForJob(pool: Pool, id: string, timeoutMs = 15_000) {
+  await waitFor(
+    async () => {
+      const result = await pool.query<{ status: string }>(
+        'SELECT status FROM activity_job WHERE id=$1',
+        [id],
+      );
+      return result.rows[0]?.status === 'SUCCEEDED';
+    },
+    `Activity worker did not complete ${id}`,
+    timeoutMs,
+  );
 }
 
 async function waitForPublisher(
@@ -321,8 +324,9 @@ async function waitForPublisher(
 async function waitFor(
   condition: () => boolean | Promise<boolean>,
   message: string,
+  timeoutMs = 15_000,
 ) {
-  const deadline = Date.now() + 15_000;
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await condition()) return;
     await new Promise((resolve) => setTimeout(resolve, 50));

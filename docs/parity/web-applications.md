@@ -103,6 +103,11 @@ database. This complements the intercepted location-form checks with evidence
 across the live browser, API, authorization, transaction, and database
 boundaries.
 
+The live Participant Identity workflow also uploads a cropped profile picture,
+checks its stored WebP metadata and bytes through Gateway, removes it, and
+confirms the image is no longer available. The same workflow verifies profile
+details and owner callsign management.
+
 The Participant certificate control also has an intercepted browser check:
 issued requests show processing without a download action until the API marks
 the PDF ready, after which the signed download URL opens with the participant's

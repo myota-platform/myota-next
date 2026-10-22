@@ -64,7 +64,7 @@ export class ActivityAwardsRepository {
           'award',
           String(record.id),
           record,
-          'awards-service',
+          'awards',
         );
       return record;
     });
@@ -274,7 +274,7 @@ export class ActivityAwardsRepository {
           'award_request',
           request.id,
           request,
-          'awards-service',
+          'awards',
         );
       return { request, created: result.rows.length > 0 };
     });
@@ -379,7 +379,7 @@ export class ActivityAwardsRepository {
         'award_issuance',
         issuance.id,
         issuance,
-        'awards-service',
+        'awards',
       );
       return issuance;
     });

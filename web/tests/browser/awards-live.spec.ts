@@ -512,6 +512,17 @@ test('publishes, requests, and issues an award across both web apps', async ({
     );
     expect(issuanceEvents.rows).toEqual([{ event_type: 'awards.issued.v1' }]);
   } finally {
+    const workerDeadline = Date.now() + 30_000;
+    while (Date.now() < workerDeadline) {
+      const pendingAwardJobs = await activityPool.query<{ count: number }>(
+        `SELECT count(*)::int AS count FROM activity_job
+         WHERE kind='AWARD_RECALCULATE' AND payload->>'programmeSlug'=$1
+           AND status IN ('QUEUED','RUNNING')`,
+        [programmeSlug],
+      );
+      if (pendingAwardJobs.rows[0]?.count === 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
     await activityPool.query('BEGIN');
     try {
       const fixtureAwards = await activityPool.query<{ id: string }>(
