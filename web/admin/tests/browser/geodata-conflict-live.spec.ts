@@ -91,9 +91,9 @@ test('reloads a live entity after a stale metadata edit and saves the new versio
     if (metadataRequests[0]?.key) idempotencyKeys.push(metadataRequests[0].key);
     expect(staleResponse.status()).toBe(409);
     expect(metadataRequests[0]?.ifMatch).toBe('"1"');
-    await expect(page.getByRole('alert')).toContainText(
-      'entity version is stale',
-    );
+    await expect(
+      page.locator('#workspace-content').getByRole('alert').first(),
+    ).toContainText('entity version is stale');
 
     const confirmations: string[] = [];
     page.on('dialog', async (dialog) => {
