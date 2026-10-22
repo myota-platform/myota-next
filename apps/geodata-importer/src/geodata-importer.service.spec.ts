@@ -1,3 +1,5 @@
+import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { GeodataImporterService } from './geodata-importer.service.js';
 
 describe('GeodataImporterService timer cleanup', () => {
@@ -93,7 +95,7 @@ describe('GeodataImporterService one-shot imports', () => {
     vi.stubEnv('GEODATA_SOURCE_ALLOWLIST', 'example.test');
     vi.stubEnv(
       'GEODATA_IMPORT_SPEC',
-      JSON.stringify({
+      stringifyJsonWithBigInts({
         programmeSlug: 'fixture-programme',
         adapter: 'OSM',
         source,
@@ -107,13 +109,16 @@ describe('GeodataImporterService one-shot imports', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify({ type: 'FeatureCollection', features: [feature] }),
+          stringifyJsonWithBigInts({
+            type: 'FeatureCollection',
+            features: [feature],
+          }),
           { status: 200 },
         ),
       )
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify({ id: 'fixture-import-run', queued: true }),
+          stringifyJsonWithBigInts({ id: 'fixture-import-run', queued: true }),
           { status: 202 },
         ),
       );
@@ -123,7 +128,10 @@ describe('GeodataImporterService one-shot imports', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [sourceRequestUrl, sourceRequest] = fetchMock.mock.calls[0]!;
-    expect(String(sourceRequestUrl)).toBe(sourceUrl);
+    expect(sourceRequestUrl).toBeInstanceOf(URL);
+    if (!(sourceRequestUrl instanceof URL))
+      throw new Error('source fetch must use a parsed URL');
+    expect(sourceRequestUrl.href).toBe(sourceUrl);
     expect(sourceRequest).toMatchObject({
       headers: {
         accept: 'application/geo+json, application/json',
@@ -133,7 +141,7 @@ describe('GeodataImporterService one-shot imports', () => {
     });
 
     const [apiRequestUrl, apiRequest] = fetchMock.mock.calls[1]!;
-    expect(String(apiRequestUrl)).toBe(
+    expect(apiRequestUrl).toBe(
       'http://geodata.example.test/v1/geodata/imports',
     );
     expect(apiRequest?.method).toBe('POST');
@@ -142,7 +150,10 @@ describe('GeodataImporterService one-shot imports', () => {
       'Bearer fixture-service-token',
     );
     expect(apiHeaders.get('idempotency-key')).toBe('fixture-import-key');
-    expect(JSON.parse(String(apiRequest?.body))).toMatchObject({
+    expect(typeof apiRequest?.body).toBe('string');
+    expect(
+      parseJsonWithExactIntegers(apiRequest?.body as string),
+    ).toMatchObject({
       programmeSlug: 'fixture-programme',
       adapter: 'OSM',
       source,
