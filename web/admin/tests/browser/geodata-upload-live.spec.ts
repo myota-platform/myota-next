@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
 
-test('uploads and preprocesses a GeoJSON file through the resumable live workflow', async ({
+test('uploads and preprocesses GeoJSON, KML, and GPX through the resumable live workflow', async ({
   page,
 }) => {
   test.skip(
@@ -22,22 +22,39 @@ test('uploads and preprocesses a GeoJSON file through the resumable live workflo
   const fixture = await pool.connect();
   const suffix = randomUUID();
   const entityTypeCode = `LIVE_FILE_${suffix.replaceAll('-', '').slice(0, 14).toUpperCase()}`;
-  const featureName = `Uploaded GeoJSON ${suffix}`;
-  const sourceFilename = `browser-${suffix}.geojson`;
-  const content = Buffer.from(
-    JSON.stringify({
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: { name: featureName },
-          geometry: { type: 'Point', coordinates: [7.123456, 46.234567] },
-        },
-      ],
-    }),
-  );
-  let importRunId: string | undefined;
-  let uploadSessionId: string | undefined;
+  const sources = [
+    {
+      format: 'GeoJSON',
+      filename: `browser-${suffix}.geojson`,
+      mimeType: 'application/geo+json',
+      featureName: `Uploaded GeoJSON ${suffix}`,
+      content: JSON.stringify({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: { name: `Uploaded GeoJSON ${suffix}` },
+            geometry: { type: 'Point', coordinates: [7.123456, 46.234567] },
+          },
+        ],
+      }),
+    },
+    {
+      format: 'KML',
+      filename: `browser-${suffix}.kml`,
+      mimeType: 'application/vnd.google-earth.kml+xml',
+      featureName: `Uploaded KML ${suffix}`,
+      content: `<?xml version="1.0"?><kml><Document><Placemark><name>Uploaded KML ${suffix}</name><Point><coordinates>7.123456,46.234567</coordinates></Point></Placemark></Document></kml>`,
+    },
+    {
+      format: 'GPX',
+      filename: `browser-${suffix}.gpx`,
+      mimeType: 'application/gpx+xml',
+      featureName: `Uploaded GPX ${suffix}`,
+      content: `<?xml version="1.0"?><gpx version="1.1" creator="MyOTA"><wpt lat="46.234567" lon="7.123456"><name>Uploaded GPX ${suffix}</name></wpt></gpx>`,
+    },
+  ].map((source) => ({ ...source, bytes: Buffer.from(source.content) }));
+  const uploadSessionIds: string[] = [];
 
   try {
     await page.goto('/master-data');
@@ -68,67 +85,71 @@ test('uploads and preprocesses a GeoJSON file through the resumable live workflo
     await page.getByRole('button', { name: 'Save category' }).click();
     await expect(page.getByText('Category saved.')).toBeVisible();
 
-    await page.goto('/geodata-imports');
-    await expect(page).toHaveURL(/\/geodata-imports$/);
-    await page.getByLabel('Feature category').selectOption(entityTypeCode);
-    await page.getByLabel('Source label').fill(`Browser file source ${suffix}`);
-    await page.getByLabel('Licence').fill('CC BY 4.0');
-    await page
-      .getByLabel('Attribution')
-      .fill('Browser multipart upload fixture');
-    await page.getByLabel('Upload file').setInputFiles({
-      name: sourceFilename,
-      mimeType: 'application/geo+json',
-      buffer: content,
-    });
+    for (const source of sources) {
+      await page.goto('/geodata-imports');
+      await expect(page).toHaveURL(/\/geodata-imports$/);
+      await page.getByLabel('Feature category').selectOption(entityTypeCode);
+      await page
+        .getByLabel('Source label')
+        .fill(`Browser ${source.format} source ${suffix}`);
+      await page.getByLabel('Licence').fill('CC BY 4.0');
+      await page
+        .getByLabel('Attribution')
+        .fill(`Browser ${source.format} multipart upload fixture`);
+      await page.getByLabel('Upload file').setInputFiles({
+        name: source.filename,
+        mimeType: source.mimeType,
+        buffer: source.bytes,
+      });
 
-    const uploadSessionResponse = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return (
-        response.request().method() === 'POST' &&
-        url.pathname === '/v1/geodata/import-uploads'
-      );
-    });
-    const completionResponse = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return (
-        response.request().method() === 'POST' &&
-        /^\/v1\/geodata\/import-uploads\/[^/]+\/complete$/.test(url.pathname)
-      );
-    });
-    await page.getByRole('button', { name: 'Queue preprocessing' }).click();
-    const uploadSession = await uploadSessionResponse;
-    uploadSessionId =
-      ((await uploadSession.json()).uploadId as string) ?? undefined;
-    expect(uploadSession.status()).toBe(201);
-    expect(uploadSessionId).toMatch(/^[0-9a-f-]{36}$/i);
+      const uploadSessionResponse = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          response.request().method() === 'POST' &&
+          url.pathname === '/v1/geodata/import-uploads'
+        );
+      });
+      const completionResponse = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          response.request().method() === 'POST' &&
+          /^\/v1\/geodata\/import-uploads\/[^/]+\/complete$/.test(url.pathname)
+        );
+      });
+      await page.getByRole('button', { name: 'Queue preprocessing' }).click();
+      const uploadSession = await uploadSessionResponse;
+      const uploadSessionId = (await uploadSession.json()).uploadId as string;
+      if (uploadSessionId) uploadSessionIds.push(uploadSessionId);
+      expect(uploadSession.status()).toBe(201);
+      expect(uploadSessionId).toMatch(/^[0-9a-f-]{36}$/i);
 
-    const completion = await completionResponse;
-    expect(completion.status()).toBe(202);
-    importRunId =
-      ((await completion.json()).importRun.id as string) ?? undefined;
-    expect(importRunId).toMatch(/^[0-9a-f-]{36}$/i);
+      const completion = await completionResponse;
+      expect(completion.status()).toBe(202);
+      const importRunId = (await completion.json()).importRun.id as string;
+      expect(importRunId).toMatch(/^[0-9a-f-]{36}$/i);
 
-    await expect(
-      page.getByText('Dataset queued for preprocessing.'),
-    ).toBeVisible();
-    await expect(page.getByText('Review pre-processed records')).toBeVisible({
-      timeout: 60_000,
-    });
-    await expect(page.getByRole('button', { name: featureName })).toBeVisible();
+      await expect(
+        page.getByText('Dataset queued for preprocessing.'),
+      ).toBeVisible();
+      await expect(page.getByText('Review pre-processed records')).toBeVisible({
+        timeout: 60_000,
+      });
+      await expect(
+        page.getByRole('button', { name: source.featureName }),
+      ).toBeVisible();
 
-    const persisted = await fixture.query<{
-      upload_status: string;
-      filename: string;
-      expected_size: string;
-      import_status: string;
-      object_key: string;
-      source_hash: string;
-      parts: number;
-      part_size: string;
-      candidate_name: string;
-    }>(
-      `SELECT u.status AS upload_status,u.filename,u.expected_size::text,
+      const persisted = await fixture.query<{
+        upload_status: string;
+        filename: string;
+        expected_size: string;
+        import_status: string;
+        object_key: string;
+        source_hash: string;
+        parts: number;
+        part_size: string;
+        candidate_name: string;
+      }>(
+        `SELECT u.status AS upload_status,u.filename,u.expected_size::text,
               r.status AS import_status,
               r.source_metadata->'source'->>'objectKey' AS object_key,
               r.source_hash,
@@ -140,69 +161,71 @@ test('uploads and preprocesses a GeoJSON file through the resumable live workflo
          FROM geodata_upload_session u
          JOIN import_run r ON r.id=u.import_run_id
          JOIN geodata_import_candidate c ON c.import_run_id=r.id
-        WHERE u.id=$1::uuid`,
-      [uploadSessionId],
-    );
-    expect(persisted.rows).toEqual([
-      {
-        upload_status: 'COMPLETED',
-        filename: sourceFilename,
-        expected_size: String(content.length),
-        import_status: 'PREPROCESSED',
-        object_key: expect.stringContaining(`geodata-imports/${importRunId}-`),
-        source_hash: expect.any(String),
-        parts: 1,
-        part_size: String(content.length),
-        candidate_name: featureName,
-      },
-    ]);
+          WHERE u.id=$1::uuid`,
+        [uploadSessionId],
+      );
+      expect(persisted.rows).toEqual([
+        {
+          upload_status: 'COMPLETED',
+          filename: source.filename,
+          expected_size: String(source.bytes.length),
+          import_status: 'PREPROCESSED',
+          object_key: expect.stringContaining(
+            `geodata-imports/${importRunId}-`,
+          ),
+          source_hash: expect.any(String),
+          parts: 1,
+          part_size: String(source.bytes.length),
+          candidate_name: source.featureName,
+        },
+      ]);
+    }
   } finally {
     try {
-      if (uploadSessionId) {
+      if (uploadSessionIds.length) {
         await fixture.query('BEGIN');
         await fixture.query(
           "SELECT set_config('myota.geodata_writer','row-v1',true)",
         );
-        const linkedImport = await fixture.query<{
-          import_run_id: string | null;
-        }>(
-          'SELECT import_run_id::text FROM geodata_upload_session WHERE id=$1::uuid',
-          [uploadSessionId],
-        );
-        importRunId ??= linkedImport.rows[0]?.import_run_id ?? undefined;
-      }
-      if (uploadSessionId) {
-        await fixture.query(
-          `DELETE FROM outbox_event
-           WHERE aggregate_id=$1 OR aggregate_id IN (
-             SELECT id::text FROM geodata_import_processing_queue
-             WHERE import_run_id=$1::uuid
-           )`,
-          [importRunId ?? uploadSessionId],
-        );
-        if (importRunId) {
-          await fixture.query(
-            'DELETE FROM source_snapshot_manifest WHERE import_run_id=$1::uuid',
-            [importRunId],
+        for (const uploadSessionId of uploadSessionIds) {
+          const linkedImport = await fixture.query<{
+            import_run_id: string | null;
+          }>(
+            'SELECT import_run_id::text FROM geodata_upload_session WHERE id=$1::uuid',
+            [uploadSessionId],
           );
+          const importRunId = linkedImport.rows[0]?.import_run_id;
           await fixture.query(
-            'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1::uuid',
-            [importRunId],
+            `DELETE FROM outbox_event
+             WHERE aggregate_id=$1 OR aggregate_id IN (
+               SELECT id::text FROM geodata_import_processing_queue
+               WHERE import_run_id=$1::uuid
+             )`,
+            [importRunId ?? uploadSessionId],
           );
-          await fixture.query('DELETE FROM import_run WHERE id=$1::uuid', [
-            importRunId,
-          ]);
-        }
-        await fixture.query(
-          'DELETE FROM geodata_upload_session WHERE id=$1::uuid',
-          [uploadSessionId],
-        );
-        if (uploadSessionId)
+          if (importRunId) {
+            await fixture.query(
+              'DELETE FROM source_snapshot_manifest WHERE import_run_id=$1::uuid',
+              [importRunId],
+            );
+            await fixture.query(
+              'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1::uuid',
+              [importRunId],
+            );
+            await fixture.query('DELETE FROM import_run WHERE id=$1::uuid', [
+              importRunId,
+            ]);
+          }
           await fixture.query(
             `DELETE FROM idempotency_record
              WHERE service='geodata-service' AND response->>'uploadId'=$1`,
             [uploadSessionId],
           );
+          await fixture.query(
+            'DELETE FROM geodata_upload_session WHERE id=$1::uuid',
+            [uploadSessionId],
+          );
+        }
         await fixture.query('COMMIT');
       }
     } finally {
