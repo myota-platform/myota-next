@@ -8,6 +8,7 @@ import { connect } from '@nats-io/transport-node';
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
+import { DatabaseHealthService } from '../../../libs/platform/src/database.module.js';
 import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
 import {
   loadOutboxRegistry,
@@ -309,7 +310,7 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
       max: 2,
       connectionTimeoutMillis: 1000,
     });
-    workerPool.on('error', () => undefined);
+    const workerPoolHealth = new DatabaseHealthService(workerPool as Pool);
     const connection = await connect({
       servers: natsUrl,
       name: `outbox-${owner}-database-recovery`,
@@ -413,7 +414,7 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
       await pool
         .query('DELETE FROM public.outbox_event WHERE event_id=$1', [eventId])
         .catch(() => undefined);
-      await workerPool.end();
+      await workerPoolHealth.onModuleDestroy();
       await pool.end();
       await databaseProxy.close();
     }
