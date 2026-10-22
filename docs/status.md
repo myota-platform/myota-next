@@ -28,15 +28,17 @@ production readiness.
 - **Behavioral parity:** qualify request, authorization, persistence, failure,
   and workflow behavior for the required operations and events. The parity
   pages record current coverage and gaps; route presence alone is not proof.
-- **Recovery:** single-server JetStream restart, selected worker lease recovery,
-  redrive, Geodata multipart object-store recovery, and a three-owner backup and
-  restore rehearsal have evidence. A PostgreSQL TCP fault proxy now qualifies
+- **Recovery:** single-server JetStream restart, three-node JetStream leader
+  failover for Activity notifications and each of the three owner outboxes,
+  selected worker lease recovery, redrive, Geodata multipart object-store
+  recovery, and a three-owner backup and restore rehearsal have evidence. A
+  PostgreSQL TCP fault proxy now qualifies
   Geodata import claim, state lookup, retry-state persistence, and retention
   cleanup after source-object deletion. Activity retry settlement, terminal
   work dead-letter persistence, ADIF retention, and notification dead-letter
-  persistence also have fault-proxy evidence. Other database outage paths,
-  cluster failover, and additional worker and object-store recovery paths remain
-  open. See
+  persistence also have fault-proxy evidence. Failover for other consumers,
+  PostgreSQL clusters, and additional worker and object-store recovery paths
+  remain open. See
   [worker and operations coverage](parity/workers-operations.md), the
   [database backup and restore notes](operations/database-backup-restore.md),
   and the [object-store recovery notes](operations/object-store-recovery.md).

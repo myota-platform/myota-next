@@ -67,12 +67,15 @@
   capped jittered backoff. The same CI recovery check drops Activity PostgreSQL
   connectivity while an event is processing, confirms its JetStream delivery
   stays pending without a partial notification, then restores connectivity and
-  verifies processing, deduplication, and ACK completion. Cluster failover and
-  recovery after a PostgreSQL interruption during terminal dead-letter
-  persistence is now checked at delivery count eight: CI confirms the delivery
+  verifies processing, deduplication, and ACK completion. Recovery after a
+  PostgreSQL interruption during terminal dead-letter persistence is checked
+  at delivery count eight: CI confirms the delivery
   remains unterminated with no dead-letter row during the outage, then persists
-  the eight-attempt record before terminating it after recovery. Broker-side
-  retry exhaustion under deployment conditions remains open. The unresolved-dead-letter
+  the eight-attempt record before terminating it after recovery. A three-node
+  JetStream CI case holds a notification delivery pending while its stream
+  leader stops, then verifies replica election, duplicate-safe processing,
+  acknowledgement, and one persisted notification. Broker-side retry
+  exhaustion under deployment conditions remains open. The unresolved-dead-letter
   gauge refreshes in the background every 15 seconds, so it does not block
   consumer startup or issue a count query for every delivery.
 - Geodata workers: registered JetStream consumers for import preprocessing and
@@ -190,8 +193,11 @@
   successful republishing resolves the dead letter. A second check starts an
   isolated JetStream server for each owner, kills it after an outbox claim,
   verifies the event stays retryable, restarts the server with its file store,
-  and confirms publication after client reconnection. Cluster failover and
-  deployment-level NATS recovery remain unqualified. Transient PostgreSQL
+  and confirms publication after client reconnection. A third check runs each
+  owner against a three-node JetStream cluster, kills the stream leader after a
+  confirmed publish but before the outbox row is marked, then verifies that
+  the acknowledged event settles and a second event publishes through the
+  elected replacement. Deployment-level NATS recovery remains unqualified. Transient PostgreSQL
   errors while refreshing relay metrics, claiming events, and persisting
   publish, retry, or dead-letter state use capped jittered backoff. After
   JetStream confirms publication, the relay retries the owner-database state

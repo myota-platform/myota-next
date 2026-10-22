@@ -16,6 +16,10 @@ import {
   stopPostgresServiceContainer,
 } from '../../../libs/platform/src/testing/postgres-service-container.js';
 import {
+  startTestJetStreamCluster,
+  type TestJetStreamCluster,
+} from '../../../libs/platform/src/testing/jetstream-cluster.js';
+import {
   loadOutboxRegistry,
   type ClaimedOutboxEvent,
 } from '../../../libs/platform/src/outbox-routing.js';
@@ -716,6 +720,181 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
       await rm(directory, { recursive: true, force: true });
     }
   }, 30_000);
+
+  it('publishes through JetStream leader failover for its database owner', async () => {
+    const databaseUrl = process.env.OUTBOX_DATABASE_URL;
+    if (!databaseUrl) throw new Error('OUTBOX_DATABASE_URL is required');
+    const owner = process.env.OUTBOX_OWNER;
+    const eventOwners: Record<string, string[]> = {
+      core: ['identity-service', 'programme-service'],
+      activity: ['activity-service'],
+      geodata: ['geodata-service'],
+    };
+    const registeredOwners = owner ? eventOwners[owner] : undefined;
+    if (!owner || !registeredOwners)
+      throw new Error('OUTBOX_OWNER must be core, activity, or geodata');
+
+    const [{ Pool }, { OutboxWorkerService }, registry] = await Promise.all([
+      import('pg'),
+      import('./outbox-worker.service.js'),
+      loadOutboxRegistry(),
+    ]);
+    const eventType = registry.events.find((event) =>
+      registeredOwners.includes(event.owner),
+    );
+    const producer = eventType
+      ? registry.producerNamesByOwner[eventType.owner]?.[0]
+      : undefined;
+    if (!eventType || !producer)
+      throw new Error(`${owner} fact route is missing from the event registry`);
+    const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+    const directory = await mkdtemp(join(tmpdir(), 'myota-outbox-cluster-'));
+    const eventIds = [randomUUID(), randomUUID()];
+    let cluster: TestJetStreamCluster | undefined;
+    let connection: Awaited<ReturnType<typeof connect>> | undefined;
+    let releaseAck: (() => void) | undefined;
+
+    try {
+      cluster = await startTestJetStreamCluster(
+        directory,
+        `myota-outbox-${owner}-recovery`,
+        `outbox-${owner}-cluster`,
+      );
+      connection = await connect({
+        servers: cluster.natsUrl,
+        name: `outbox-${owner}-cluster-failover`,
+        maxReconnectAttempts: -1,
+        reconnectTimeWait: 100,
+      });
+      const manager = await jetstreamManager(connection);
+      await manager.streams.add({
+        name: 'MYOTA_EVENTS',
+        subjects: ['myota.events.>'],
+        retention: 'limits',
+        storage: 'file',
+        num_replicas: 3,
+        max_age: 3_600_000_000_000,
+        max_bytes: 16 * 1024 * 1024,
+        max_msgs: 1000,
+        max_msg_size: 1024 * 1024,
+      });
+      await waitFor(async () => {
+        try {
+          const info = await manager.streams.info('MYOTA_EVENTS');
+          return (info.cluster?.replicas?.length ?? 0) >= 2;
+        } catch {
+          return false;
+        }
+      }, 'JetStream outbox stream did not replicate across all cluster nodes');
+
+      for (const [index, eventId] of eventIds.entries()) {
+        await pool.query(
+          `INSERT INTO public.outbox_event
+            (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at)
+           VALUES ($1,$2,$3,'recovery_test',$4,$5::jsonb,
+                   now()-interval '100 years'+$6*interval '1 second')`,
+          [
+            eventId,
+            eventType.eventType,
+            producer,
+            randomUUID(),
+            '{"probe":"jetstream-cluster-failover"}',
+            index,
+          ],
+        );
+      }
+
+      const service = new OutboxWorkerService(pool as Pool);
+      const internals = service as unknown as {
+        relay: Pick<ReturnType<typeof jetstream>, 'publish'>;
+        claim: () => Promise<ClaimedOutboxEvent | null>;
+        publish: (
+          event: ClaimedOutboxEvent,
+          registry: Awaited<ReturnType<typeof loadOutboxRegistry>>,
+        ) => Promise<void>;
+      };
+      const firstClaim = await internals.claim();
+      expect(firstClaim?.eventId).toBe(eventIds[0]);
+      if (!firstClaim)
+        throw new Error('outbox relay did not claim the fixture');
+
+      const realRelay = jetstream(connection);
+      let resolveConfirmed!: () => void;
+      const confirmed = new Promise<void>((resolve) => {
+        resolveConfirmed = resolve;
+      });
+      let releaseAck!: () => void;
+      const ackGate = new Promise<void>((resolve) => {
+        releaseAck = resolve;
+      });
+      internals.relay = {
+        publish: async (subject, payload, options) => {
+          const ack = await realRelay.publish(subject, payload, options);
+          resolveConfirmed();
+          await ackGate;
+          return ack;
+        },
+      };
+      const firstPublish = internals.publish(firstClaim, registry);
+      await confirmed;
+      const initialInfo = await manager.streams.info('MYOTA_EVENTS');
+      const failedLeader = initialInfo.cluster?.leader;
+      if (!failedLeader)
+        throw new Error('JetStream outbox stream has no elected leader');
+      if (!cluster.serverNames.includes(failedLeader))
+        throw new Error(`JetStream elected an unknown leader: ${failedLeader}`);
+      await cluster.stopNode(failedLeader);
+
+      await waitFor(async () => {
+        try {
+          const info = await manager.streams.info('MYOTA_EVENTS');
+          return Boolean(
+            info.cluster?.leader && info.cluster.leader !== failedLeader,
+          );
+        } catch {
+          return false;
+        }
+      }, 'JetStream outbox cluster did not elect a replacement leader');
+      releaseAck?.();
+      releaseAck = undefined;
+      await firstPublish;
+
+      const secondClaim = await internals.claim();
+      expect(secondClaim?.eventId).toBe(eventIds[1]);
+      if (!secondClaim)
+        throw new Error('outbox relay did not claim the next fixture');
+      internals.relay = realRelay;
+      await internals.publish(secondClaim, registry);
+
+      const recovered = await pool.query(
+        `SELECT count(*)::int AS count,
+                count(*) FILTER (WHERE published_at IS NOT NULL)::int AS published,
+                max(attempts)::int AS attempts
+         FROM public.outbox_event WHERE event_id=ANY($1::uuid[])`,
+        [eventIds],
+      );
+      expect(recovered.rows[0]).toEqual({
+        count: 2,
+        published: 2,
+        attempts: 1,
+      });
+      const stream = await manager.streams.info('MYOTA_EVENTS');
+      expect(stream.state.messages).toBe(2);
+      expect(stream.cluster?.leader).not.toBe(failedLeader);
+    } finally {
+      releaseAck?.();
+      await connection?.drain().catch(() => undefined);
+      await cluster?.stopAll();
+      await pool
+        .query(
+          'DELETE FROM public.outbox_event WHERE event_id=ANY($1::uuid[])',
+          [eventIds],
+        )
+        .catch(() => undefined);
+      await pool.end();
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 45_000);
 });
 
 async function reserveLocalPort(): Promise<number> {

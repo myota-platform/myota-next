@@ -20,6 +20,10 @@ import { describe, expect, it } from 'vitest';
 import { DatabaseHealthService } from '../../../libs/platform/src/database.module.js';
 import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
 import {
+  startTestJetStreamCluster,
+  type TestJetStreamCluster,
+} from '../../../libs/platform/src/testing/jetstream-cluster.js';
+import {
   ACTIVITY_NOTIFICATION_SUBJECTS,
   ActivityNotificationsService,
 } from './activity-notifications.service.js';
@@ -59,6 +63,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
     const recipient = randomUUID();
     const dedupeKeys = ids.map((id) => `event:${id}`);
     const deadLetterStreamSequence = Number(BigInt(Date.now()) * 1000n);
+    const originalNatsUrl = process.env.NATS_URL;
     let server: ReturnType<typeof spawn> | undefined;
     let publisher: Awaited<ReturnType<typeof connect>> | undefined;
     let service: ActivityNotificationsService | undefined;
@@ -270,8 +275,191 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
       await pool.end();
       await databaseProxy.close();
       await rm(directory, { recursive: true, force: true });
+      if (originalNatsUrl === undefined) delete process.env.NATS_URL;
+      else process.env.NATS_URL = originalNatsUrl;
     }
   }, 45_000);
+
+  it('continues a pending delivery after JetStream leader failover', async () => {
+    const databaseUrl = process.env.ACTIVITY_DATABASE_URL;
+    if (!databaseUrl) throw new Error('ACTIVITY_DATABASE_URL is required');
+    if (
+      !['localhost', '127.0.0.1', '[::1]'].includes(
+        new URL(databaseUrl).hostname,
+      )
+    )
+      throw new Error('cluster failover recovery requires local Postgres');
+
+    const { Pool } = await import('pg');
+    const pool = new Pool({ connectionString: databaseUrl, max: 3 });
+    const databaseProxy = await startPostgresFaultProxy(databaseUrl);
+    const workerPool = new Pool({
+      connectionString: databaseProxy.connectionString,
+      max: 3,
+      connectionTimeoutMillis: 1000,
+    });
+    const workerPoolHealth = new DatabaseHealthService(workerPool as Pool);
+    const directory = await mkdtemp(
+      join(tmpdir(), 'myota-notifications-cluster-'),
+    );
+    const ids = [randomUUID(), randomUUID()];
+    const recipient = randomUUID();
+    const dedupeKeys = ids.map((id) => `event:${id}`);
+    const originalNatsUrl = process.env.NATS_URL;
+    const deadLetterStreamSequence = Number(BigInt(Date.now()) * 1000n);
+    let cluster: TestJetStreamCluster | undefined;
+    let publisher: Awaited<ReturnType<typeof connect>> | undefined;
+    let service: ActivityNotificationsService | undefined;
+    let releaseProcessing: (() => void) | undefined;
+    const priorCheckpoint = await pool.query<{
+      last_event_id: string;
+      updated_at: Date;
+    }>(
+      `SELECT last_event_id::text,updated_at FROM public.consumer_checkpoint
+       WHERE consumer=$1`,
+      [consumerName],
+    );
+
+    try {
+      cluster = await startTestJetStreamCluster(
+        directory,
+        'myota-notification-recovery',
+        'notification-cluster',
+      );
+      process.env.NATS_URL = cluster.natsUrl;
+      publisher = await connect({
+        servers: cluster.natsUrl,
+        name: 'activity-notification-cluster-publisher',
+        maxReconnectAttempts: -1,
+        reconnectTimeWait: 100,
+      });
+      const manager = await jetstreamManager(publisher);
+      await manager.streams.add({
+        name: streamName,
+        subjects: ['myota.events.>'],
+        retention: RetentionPolicy.Limits,
+        storage: StorageType.File,
+        num_replicas: 3,
+        max_age: 3_600_000_000_000,
+        max_bytes: 16 * 1024 * 1024,
+        max_msgs: 1000,
+        max_msg_size: 1024 * 1024,
+      } as StreamConfig);
+      await manager.consumers.add(streamName, {
+        durable_name: durableName,
+        filter_subjects: ACTIVITY_NOTIFICATION_SUBJECTS,
+        deliver_policy: DeliverPolicy.All,
+        ack_policy: AckPolicy.Explicit,
+        replay_policy: ReplayPolicy.Instant,
+        ack_wait: 60_000_000_000,
+        max_deliver: 8,
+        max_ack_pending: 64,
+        max_waiting: 32,
+        backoff: [60, 120, 300, 300, 300, 300, 300].map(
+          (seconds) => seconds * 1_000_000_000,
+        ),
+        num_replicas: 3,
+      } as ConsumerConfig);
+      await waitFor(async () => {
+        try {
+          const info = await manager.streams.info(streamName);
+          return (info.cluster?.replicas?.length ?? 0) >= 2;
+        } catch {
+          return false;
+        }
+      }, 'JetStream stream did not replicate across all cluster nodes');
+
+      service = new ActivityNotificationsService(workerPool as Pool);
+      await service.onModuleInit();
+      const serviceState = service as unknown as {
+        natsUp: boolean;
+        processEvent: (
+          event: { eventId?: unknown },
+          eventType: string,
+        ) => Promise<boolean>;
+      };
+      await waitFor(() => serviceState.natsUp, 'consumer did not connect');
+      let signalStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        signalStarted = resolve;
+      });
+      let release!: () => void;
+      const processingGate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      releaseProcessing = release;
+      const processEvent = serviceState.processEvent.bind(service);
+      serviceState.processEvent = async (event, eventType) => {
+        if (event.eventId === ids[0]) {
+          signalStarted();
+          await processingGate;
+        }
+        return processEvent(event, eventType);
+      };
+
+      await publish(publisher, ids[0]!, recipient);
+      await started;
+      await publish(publisher, ids[0]!, recipient);
+      const consumerBeforeFailover = await manager.consumers.info(
+        streamName,
+        durableName,
+      );
+      expect(consumerBeforeFailover.num_ack_pending).toBeGreaterThan(0);
+      const initialInfo = await manager.streams.info(streamName);
+      const failedLeader = initialInfo.cluster?.leader;
+      if (!failedLeader)
+        throw new Error('JetStream stream has no elected leader');
+      if (!cluster.serverNames.includes(failedLeader))
+        throw new Error(`JetStream elected an unknown leader: ${failedLeader}`);
+      await cluster.stopNode(failedLeader);
+
+      await waitFor(async () => {
+        try {
+          const info = await manager.streams.info(streamName);
+          return Boolean(
+            info.cluster?.leader && info.cluster.leader !== failedLeader,
+          );
+        } catch {
+          return false;
+        }
+      }, 'JetStream cluster did not elect a replacement stream leader');
+      release();
+      releaseProcessing = undefined;
+      await waitForNotifications(pool, dedupeKeys, 1);
+      await waitForDurableIdle(manager);
+
+      const processed = await pool.query(
+        `SELECT count(*)::int AS count FROM public.consumer_processed_event
+         WHERE consumer=$1 AND event_id=$2`,
+        [consumerName, ids[0]],
+      );
+      expect(processed.rows[0]?.count).toBe(1);
+      const notificationCount = await pool.query(
+        `SELECT count(*)::int AS count FROM public.activity_notification
+         WHERE deduplication_key=$1`,
+        [dedupeKeys[0]],
+      );
+      expect(notificationCount.rows[0]?.count).toBe(1);
+    } finally {
+      releaseProcessing?.();
+      if (service) await service.onModuleDestroy().catch(() => undefined);
+      await workerPoolHealth.onModuleDestroy().catch(() => undefined);
+      if (publisher) await publisher.drain().catch(() => undefined);
+      await cluster?.stopAll();
+      await cleanupFixture(
+        pool,
+        ids,
+        dedupeKeys,
+        priorCheckpoint.rows[0],
+        deadLetterStreamSequence,
+      );
+      await pool.end();
+      await databaseProxy.close();
+      await rm(directory, { recursive: true, force: true });
+      if (originalNatsUrl === undefined) delete process.env.NATS_URL;
+      else process.env.NATS_URL = originalNatsUrl;
+    }
+  }, 60_000);
 });
 
 async function publish(
