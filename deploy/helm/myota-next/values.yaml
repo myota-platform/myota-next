@@ -33,6 +33,9 @@ geodataWorker:
     import: ''
     deletion: ''
     location: ''
+geodataImporter:
+  pollSeconds: 60
+  sourceAllowlist: []
 images:
   gateway: { repository: '', tag: '', digest: '' }
   identity: { repository: '', tag: '', digest: '' }
@@ -256,6 +259,8 @@ components:
     replicas: 1
     env:
       GEODATA_IMPORTER_ENABLED: 'false'
+      GEODATA_IMPORTER_POLL_SECONDS: '{{ .Values.geodataImporter.pollSeconds }}'
+      GEODATA_SOURCE_ALLOWLIST: '{{ join "," .Values.geodataImporter.sourceAllowlist }}'
       MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
       MYOTA_GEODATA_URL: '{{ default (printf "http://%s-geodata:8003" .Release.Name) .Values.dependencies.geodataUrl }}'
   email-worker:

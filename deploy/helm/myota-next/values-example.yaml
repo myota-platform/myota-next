@@ -53,3 +53,8 @@ migrations:
   image: { repository: ghcr.io/myota-platform/myota-next-tools, tag: example }
 jetstreamProvisioner:
   image: { repository: ghcr.io/myota-platform/myota-next-tools, tag: example }
+# Configure and explicitly enable components.geodata-importer before deployment.
+geodataImporter:
+  pollSeconds: 60
+  sourceAllowlist:
+    - data.example.org
