@@ -77,9 +77,11 @@ the role to confirm its permissions persisted, and verifies both role lifecycle
 events in the Core security and outbox records. Another live Identity Admin
 workflow starts with a scoped Geodata grant, confirms duplicate-email conflict
 handling, updates account fields without resubmitting role grants, and checks the
-scoped assignment remains persisted. It also changes the account status to
-deactivated and verifies its existing owner refresh session rotates without
-revocation. Geodata management browser coverage also
+scoped assignment remains persisted. It then resets the account password in
+the Admin UI, verifies the previous password and refresh session are rejected,
+and signs in with the new password. Changing the account status to deactivated
+then verifies that the new owner refresh session remains rotatable. Geodata
+management browser coverage also
 saves manual location overrides with provider
 codes and queues enrichment against the updated entity version. Activity
 browser checks cover
@@ -219,9 +221,9 @@ uncertain edit and archive responses can be retried after reload with the same
 request body and idempotency key, after confirming the archive action. The
 programme editor reports archive failures and confirms success after the
 programme catalogue refreshes.
-The Admin import form also supports resumable KML and GPX file uploads up to
-1 GiB, alongside GeoJSON, OSM PBF, and Shapefile ZIP uploads. The API can
-enforce lower format-specific limits. The award catalogue follows all API
+The Admin import form supports resumable GeoJSON, OSM GeoJSON, WFS GeoJSON,
+ArcGIS FeatureServer JSON, KML, GPX, OSM PBF, Shapefile ZIP, and ParkServe US
+ZIP uploads, subject to the configured source limits. The award catalogue follows all API
 pages. Remaining work includes accessibility/visual review and deployment
 integration. Its public map renders point, line, polygon, and multipart entity
 geometries.

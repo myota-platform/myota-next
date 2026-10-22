@@ -119,9 +119,11 @@ compact JSON bytes. A Linux RSS
 qualification checks 50,000
 features in each format against a 96 MiB Node RSS-growth limit. The Python
 reference uses the same feature counts and a 96 MiB absolute process-RSS limit,
-so the measurements are not directly comparable. Multipart uploads accept GeoJSON and
-bounded Shapefile ZIP archives with matching sidecars (`SHAPEFILE`, `SHP`, and
-the legacy `PARKSERVE_US` format alias); Shapefile member extensions and matching
+so the measurements are not directly comparable. Resumable uploads stream
+GeoJSON and WFS GeoJSON features through the worker parser and normalize
+ArcGIS FeatureServer JSON records before adapter processing. Bounded Shapefile
+ZIP uploads require matching sidecars (`SHAPEFILE`, `SHP`, and the legacy
+`PARKSERVE_US` format alias); Shapefile member extensions and matching
 sidecars are case-insensitive as in PyShp. Shapefile coordinates are reprojected from
 the supplied `.prj` to WGS84, and NULL shape records fail preprocessing as in
 PyShp's GeoJSON conversion. OSM PBF uploads are decoded by
@@ -166,9 +168,10 @@ time, bounded by the per-feature and total-feature limits, into staged batches b
 with the configured per-feature byte limit (16 MiB by default), 250,000 vertex
 limit, and configured feature cap. KML and GPX uploads use the shared upload
 cap, validate their source hash as the worker streams, and yield placemarks,
-waypoints, or track segments incrementally. GeoJSON multipart uploads stream
-their source and yield one parsed
-feature at a time, with the same shared API/worker 1 GiB upload cap or optional
+waypoints, or track segments incrementally. GeoJSON and WFS multipart uploads
+stream their source and yield one parsed feature at a time; ArcGIS FeatureServer
+uploads use the same streamed JSON parser and normalize each record before
+staging. These formats use the shared API/worker 1 GiB upload cap or optional
 format-specific override, 16 MiB
 per-feature size by default, 250,000 vertices, and the configured feature
 count. Resumable raw upload parts use `MYOTA_UPLOAD_PART_MAX_BYTES` as the

@@ -21,6 +21,7 @@ test('preserves scoped roles and refresh sessions across live account edits', as
   const updatedName = `Updated scoped account ${fixtureId.slice(0, 8)}`;
   const updatedEmail = `updated-${fixtureId}@example.test`;
   const participantPassword = `Scoped-account-${fixtureId}-password!`;
+  const resetPassword = `Reset-${fixtureId}-password!`;
   const programmeSlug = `scope-${fixtureId.slice(0, 8)}`;
   const pool = new Pool({ connectionString: databaseUrl, max: 1 });
   const gateway = 'http://127.0.0.1:8080';
@@ -186,6 +187,52 @@ test('preserves scoped roles and refresh sessions across live account edits', as
       200,
     );
 
+    await page.getByLabel('Reset password').fill(resetPassword);
+    const passwordUpdateResponse = page.waitForResponse((response) => {
+      return (
+        new URL(response.url()).pathname ===
+          `/v1/identity/accounts/${targetAccountId}` &&
+        response.request().method() === 'PATCH'
+      );
+    });
+    await page.getByRole('button', { name: 'Save user' }).click();
+    const passwordUpdate = await passwordUpdateResponse;
+    expect(passwordUpdate.status(), await passwordUpdate.text()).toBe(200);
+    await expect(
+      page.getByText(
+        'User saved. Existing scoped role assignments have been preserved.',
+      ),
+    ).toBeVisible();
+    expect(updates).toHaveLength(3);
+    expect(updates[2]).toMatchObject({
+      status: 200,
+      body: { password: resetPassword, status: 'ACTIVE' },
+    });
+    expect(updates[2]?.idempotencyKey).not.toBe('');
+
+    const oldPasswordLogin = await request.post(
+      `${gateway}/v1/identity/auth/login`,
+      { data: { email: updatedEmail, password: participantPassword } },
+    );
+    expect(oldPasswordLogin.status()).toBe(401);
+    const resetPasswordLogin = await request.post(
+      `${gateway}/v1/identity/auth/login`,
+      { data: { email: updatedEmail, password: resetPassword } },
+    );
+    const resetPasswordSession = (await resetPasswordLogin.json()) as {
+      refreshToken: string;
+    };
+    expect(
+      resetPasswordLogin.status(),
+      JSON.stringify(resetPasswordSession),
+    ).toBe(200);
+
+    const revokedSession = await request.post(
+      `${gateway}/v1/identity/auth/refresh`,
+      { data: { refreshToken: participantSession.refreshToken } },
+    );
+    expect(revokedSession.status()).toBe(401);
+
     const deactivate = await request.patch(
       `${gateway}/v1/identity/accounts/${targetAccountId}`,
       {
@@ -197,7 +244,7 @@ test('preserves scoped roles and refresh sessions across live account edits', as
 
     const rotatedSession = await request.post(
       `${gateway}/v1/identity/auth/refresh`,
-      { data: { refreshToken: participantSession.refreshToken } },
+      { data: { refreshToken: resetPasswordSession.refreshToken } },
     );
     const rotatedSessionBody = (await rotatedSession.json()) as {
       account: { status: string };
@@ -208,7 +255,7 @@ test('preserves scoped roles and refresh sessions across live account edits', as
     );
     expect(rotatedSessionBody.account.status).toBe('DEACTIVATED');
     expect(rotatedSessionBody.refreshToken).not.toBe(
-      participantSession.refreshToken,
+      resetPasswordSession.refreshToken,
     );
 
     const persisted = await pool.query<{

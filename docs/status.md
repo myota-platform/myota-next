@@ -48,8 +48,8 @@ production readiness.
   creation and callsign management through export and anonymization, custom
   Identity role creation and updates with persisted permission and audit checks,
   scoped-role-preserving account edits with duplicate-email conflict handling,
-  and status-only account deactivation while an existing owner refresh session
-  remains rotatable,
+  Admin password resets that revoke existing sessions, and status-only account
+  deactivation while an existing owner refresh session remains rotatable,
   Activity correction review, and policy publication against running NestJS
   services through the Gateway. Admin content creation, review, and publication
   now also run through the live Admin, Gateway, and Core services, with the
