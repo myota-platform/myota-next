@@ -301,8 +301,9 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         working: () => {
           ackExtensions += 1;
         },
-        ack: () => {
+        ackAck: async () => {
           terminalMessageAcknowledged = true;
+          return true;
         },
         nak: () => {
           throw new Error('exhausted work delivery must not be retried');
