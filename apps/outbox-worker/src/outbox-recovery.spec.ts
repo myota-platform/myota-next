@@ -309,6 +309,7 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
       max: 2,
       connectionTimeoutMillis: 1000,
     });
+    workerPool.on('error', () => undefined);
     const connection = await connect({
       servers: natsUrl,
       name: `outbox-${owner}-database-recovery`,
@@ -332,7 +333,7 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
       throw new Error(`${owner} fact route is missing from the event registry`);
 
     let runPromise: Promise<void> | undefined;
-    let relayPublishCount = 0;
+    const publishedEventIds: string[] = [];
     try {
       try {
         await manager.streams.info('MYOTA_EVENTS');
@@ -365,7 +366,11 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
       const relay = jetstream(connection);
       serviceInternals.relay = {
         publish: async (subject, payload, options) => {
-          relayPublishCount++;
+          const envelope = JSON.parse(new TextDecoder().decode(payload)) as {
+            eventId?: string;
+          };
+          if (envelope.eventId === eventId)
+            publishedEventIds.push(envelope.eventId);
           const acknowledgement = await relay.publish(
             subject,
             payload,
@@ -399,7 +404,7 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
         last_error: null,
       });
       expect(published.rows[0]?.published_at).toBeInstanceOf(Date);
-      expect(relayPublishCount).toBe(1);
+      expect(publishedEventIds).toEqual([eventId]);
     } finally {
       await service.onModuleDestroy().catch(() => undefined);
       await runPromise?.catch(() => undefined);
