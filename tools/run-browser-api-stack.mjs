@@ -11,6 +11,7 @@ for (const name of requiredDatabaseVariables) {
 }
 
 const objects = new Map();
+const buckets = new Set(['browser-award-assets', 'browser-award-signatures']);
 const objectStorageServer = createServer((request, response) => {
   void (async () => {
     const segments = new URL(request.url ?? '/', 'http://localhost').pathname
@@ -19,8 +20,28 @@ const objectStorageServer = createServer((request, response) => {
       .map(decodeURIComponent);
     const bucket = segments.shift();
     const key = segments.join('/');
-    if (!bucket || !key) {
+    if (!bucket) {
       response.writeHead(400).end();
+      return;
+    }
+    if (!key) {
+      if (request.method === 'HEAD') {
+        response.writeHead(buckets.has(bucket) ? 200 : 404).end();
+        return;
+      }
+      if (request.method === 'PUT') {
+        buckets.add(bucket);
+        response.writeHead(200).end();
+        return;
+      }
+      if (request.method === 'DELETE') {
+        buckets.delete(bucket);
+        for (const objectId of objects.keys())
+          if (objectId.startsWith(`${bucket}/`)) objects.delete(objectId);
+        response.writeHead(204).end();
+        return;
+      }
+      response.writeHead(405).end();
       return;
     }
     const objectId = `${bucket}/${key}`;
@@ -190,6 +211,40 @@ if (process.env.MYOTA_BROWSER_GEODATA_WORKERS === '1') {
         MYOTA_ACTIVITY_URL: 'http://127.0.0.1:8004',
         GEODATA_WORKER_HEALTH_PORT: '9114',
       },
+    },
+  ];
+  for (const worker of workers) {
+    const child = spawn(process.execPath, [worker.entrypoint], {
+      env: { ...baseEnvironment, ...worker.environment },
+      stdio: 'inherit',
+    });
+    children.push(child);
+    child.on('exit', (code) => {
+      if (!stopping) {
+        console.error(`${worker.name} exited unexpectedly with code ${code}`);
+        stop();
+        process.exitCode = 1;
+      }
+    });
+  }
+}
+
+if (process.env.MYOTA_BROWSER_ACTIVITY_WORKERS === '1') {
+  const workers = [
+    {
+      name: 'activity-outbox-worker',
+      entrypoint: 'dist/apps/outbox-worker/main.js',
+      environment: {
+        OUTBOX_OWNER: 'activity',
+        OUTBOX_WORKER: 'browser-activity-outbox',
+        OUTBOX_DATABASE_URL: process.env.ACTIVITY_DATABASE_URL,
+        OUTBOX_METRICS_PORT: '0',
+      },
+    },
+    {
+      name: 'activity-worker',
+      entrypoint: 'dist/apps/activity-worker/main.js',
+      environment: { ACTIVITY_WORKER_HEALTH_PORT: '9112' },
     },
   ];
   for (const worker of workers) {
