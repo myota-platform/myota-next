@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import sharp from 'sharp';
 import { expect, test } from '@playwright/test';
 
@@ -21,8 +21,9 @@ test('publishes, requests, and issues an award across both web apps', async ({
     process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD ?? 'browser-e2e-password-7!Q';
   const activityPool = new Pool({
     connectionString: process.env.ACTIVITY_DATABASE_URL,
-    max: 1,
+    max: 2,
   });
+  let renderLockClient: PoolClient | undefined;
   const fixtureId = randomUUID();
   const programmeSlug = `browser-award-${fixtureId}`;
   const categoryCode = `E2E_${fixtureId.replaceAll('-', '').slice(0, 12).toUpperCase()}`;
@@ -319,6 +320,12 @@ test('publishes, requests, and issues an award across both web apps', async ({
     );
     expect(issuanceRecord.rows).toHaveLength(1);
     const issuanceId = issuanceRecord.rows[0]?.id;
+    renderLockClient = await activityPool.connect();
+    await renderLockClient.query('BEGIN');
+    await renderLockClient.query(
+      'SELECT id FROM activity_award_issuance WHERE id=$1 FOR UPDATE',
+      [issuanceId],
+    );
     const renderQueueResponse = page.waitForResponse(
       (response) =>
         response
@@ -331,6 +338,19 @@ test('publishes, requests, and issues an award across both web apps', async ({
       .click();
     const queuedResponse = await renderQueueResponse;
     expect(queuedResponse.status()).toBe(202);
+    const renderJobId = (await queuedResponse.json()).renderJobId as string;
+    const renderStartDeadline = Date.now() + 10_000;
+    let renderJobStatus = 'QUEUED';
+    while (Date.now() < renderStartDeadline && renderJobStatus !== 'RUNNING') {
+      const renderJob = await activityPool.query<{ status: string }>(
+        'SELECT status FROM activity_job WHERE id=$1',
+        [renderJobId],
+      );
+      renderJobStatus = renderJob.rows[0]?.status ?? 'MISSING';
+      if (renderJobStatus !== 'RUNNING')
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    expect(renderJobStatus).toBe('RUNNING');
     const issuanceRow = page
       .getByRole('button', { name: `Queue PDF render for ${callsign.value}` })
       .locator('xpath=..');
@@ -345,7 +365,7 @@ test('publishes, requests, and issues an award across both web apps', async ({
       [issuanceId],
     );
     expect(renderJobs.rows).toMatchObject([
-      { status: 'QUEUED', issuance_id: issuanceId },
+      { id: renderJobId, status: 'RUNNING', issuance_id: issuanceId },
     ]);
     const adminIssuances = await request.get(
       'http://127.0.0.1:8080/v1/awards/issuances?page=1&pageSize=50',
@@ -355,7 +375,7 @@ test('publishes, requests, and issues an award across both web apps', async ({
     expect((await adminIssuances.json()).items).toContainEqual(
       expect.objectContaining({
         id: issuanceId,
-        renderJobStatus: 'QUEUED',
+        renderJobStatus: 'RUNNING',
       }),
     );
     await page.reload();
@@ -363,7 +383,7 @@ test('publishes, requests, and issues an award across both web apps', async ({
       .getByRole('button', { name: `Queue PDF render for ${callsign.value}` })
       .locator('xpath=..');
     await expect(issuanceRowAfterReload.locator('small').nth(1)).toHaveText(
-      'QUEUED',
+      'RUNNING',
     );
 
     const participantRequests = await request.get(
@@ -403,6 +423,9 @@ test('publishes, requests, and issues an award across both web apps', async ({
     await expect(participantAwardRequests).toContainText(
       'CERTIFICATE PROCESSING',
     );
+    await renderLockClient.query('COMMIT');
+    renderLockClient.release();
+    renderLockClient = undefined;
     expect(failedResponses).toEqual([]);
 
     const award = await activityPool.query<{
@@ -512,17 +535,30 @@ test('publishes, requests, and issues an award across both web apps', async ({
     );
     expect(issuanceEvents.rows).toEqual([{ event_type: 'awards.issued.v1' }]);
   } finally {
+    if (renderLockClient) {
+      await renderLockClient.query('ROLLBACK').catch(() => undefined);
+      renderLockClient.release();
+    }
     const workerDeadline = Date.now() + 30_000;
+    let pendingWorkerJobs = 0;
     while (Date.now() < workerDeadline) {
       const pendingAwardJobs = await activityPool.query<{ count: number }>(
         `SELECT count(*)::int AS count FROM activity_job
-         WHERE kind='AWARD_RECALCULATE' AND payload->>'programmeSlug'=$1
+         WHERE (
+             (kind='AWARD_RECALCULATE' AND payload->>'programmeSlug'=$1)
+             OR (kind='PDF_RENDER' AND payload->>'issuanceId' IN (
+               SELECT id::text FROM activity_award_issuance
+               WHERE programme_slug=$1
+             ))
+           )
            AND status IN ('QUEUED','RUNNING')`,
         [programmeSlug],
       );
-      if (pendingAwardJobs.rows[0]?.count === 0) break;
+      pendingWorkerJobs = pendingAwardJobs.rows[0]?.count ?? 0;
+      if (pendingWorkerJobs === 0) break;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
+    expect(pendingWorkerJobs).toBe(0);
     await activityPool.query('BEGIN');
     try {
       const fixtureAwards = await activityPool.query<{ id: string }>(
