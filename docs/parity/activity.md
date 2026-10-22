@@ -68,7 +68,8 @@ schema's 200-character limit. Invalid work envelopes are dead-lettered without
 a work ID or work type, matching the Python consumer. Activity notification events use a
 separate durable consumer. It parses broker envelopes with exact JSON integers
 so Python-style string conversion and dead-letter persistence retain their
-submitted values. CI verifies replica sharing, durable resume across a
+submitted values. The manually triggered Operational and performance
+qualification workflow verifies replica sharing, durable resume across a
 single-server JetStream restart with retained file storage, confirmed ACKs, and
 duplicate-event idempotency. The same recovery check drops Activity PostgreSQL
 connectivity while processing an event, verifies the delivery remains pending
@@ -240,7 +241,8 @@ ADIF source object is deleted, verifies `source_deleted_at` remains unset, then
 confirms deletion safely repeats and the marker is persisted after recovery. A
 full PostgreSQL process restart during a claimed statistics rebuild also
 verifies the worker persists a retry and completes the job after reconnection.
-CI also runs the Activity worker against a three-node JetStream cluster, stops
+The manually triggered Operational and performance qualification workflow runs
+the Activity worker against a three-node JetStream cluster, stops
 the leader while a statistics rebuild delivery is pending, and verifies the
 job completes after failover and a later job succeeds through the replacement.
 For all six Activity job kinds, a child worker is killed after acquiring its

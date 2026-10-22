@@ -204,7 +204,8 @@
   `npm run outbox:admin` lists bounded dead-letter metadata and transactionally
   redrives one retained event against its owning database, recording the prior
   attempts and error. See [outbox recovery](../operations/outbox-recovery.md).
-  CI runs the same fault-injection check against Core, Activity, and Geodata
+  The manually triggered Operational and performance qualification workflow
+  runs the same fault-injection check against Core, Activity, and Geodata
   separately: a transient publish failure leaves the owner-scoped outbox row
   retryable, then JetStream accepts the retry and the row is marked published.
   It also exhausts retries for an owner-scoped event, invokes the audited

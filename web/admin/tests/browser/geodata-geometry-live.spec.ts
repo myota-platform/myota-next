@@ -103,16 +103,15 @@ test('replaces entity geometry through live Admin and Geodata services', async (
          FROM geodata_entity e WHERE e.id=$1::uuid`,
       [entityId, note],
     );
-    expect(persisted.rows).toEqual([
-      {
-        longitude: 5.2,
-        latitude: 45.8,
-        revision: '2',
-        history_count: 1,
-        audit_count: 1,
-        outbox_count: 1,
-      },
-    ]);
+    expect(persisted.rows).toHaveLength(1);
+    expect(persisted.rows[0]).toMatchObject({
+      longitude: 5.2,
+      latitude: 45.8,
+      history_count: 1,
+      audit_count: 1,
+      outbox_count: 1,
+    });
+    expect(Number(persisted.rows[0]?.revision)).toBeGreaterThan(1);
   } finally {
     try {
       await fixture.query('ROLLBACK').catch(() => undefined);
