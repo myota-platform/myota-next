@@ -8,7 +8,7 @@ const hasApiDatabases = Boolean(
   process.env.GEO_DATABASE_URL,
 );
 
-test('submits participant location proposals through live Gateway and Geodata APIs', async ({
+test('submits and reviews participant location proposals through live services', async ({
   page,
   request,
 }) => {
@@ -17,6 +17,7 @@ test('submits participant location proposals through live Gateway and Geodata AP
     process.env.MYOTA_BROWSER_GEODATA_WORKERS !== '1',
     'requires the CI Geodata workers and JetStream topology',
   );
+  test.setTimeout(120_000);
 
   const core = new Pool({
     connectionString: process.env.CORE_DATABASE_URL,
@@ -31,6 +32,7 @@ test('submits participant location proposals through live Gateway and Geodata AP
   const entityTypeCode = `BP_${fixtureId.replaceAll('-', '').slice(0, 12).toUpperCase()}`;
   const candidateId = randomUUID();
   const candidateName = `Existing community site ${fixtureId.slice(0, 8)}`;
+  const pointProposalName = `Map-picked site ${fixtureId}`;
   const programmeKey = randomUUID();
   const proposalRequests: Array<{
     body: Record<string, unknown>;
@@ -207,7 +209,7 @@ test('submits participant location proposals through live Gateway and Geodata AP
       entityTypes: [entityTypeCode],
       feature: {
         type: 'Feature',
-        properties: { name: `Map-picked site ${fixtureId}` },
+        properties: { name: pointProposalName },
         geometry: { type: 'Point', coordinates: [longitude, latitude] },
       },
     });
@@ -229,17 +231,18 @@ test('submits participant location proposals through live Gateway and Geodata AP
     const runs = await geo.query<{
       id: string;
       status: string;
+      adapter_code: string;
       source_metadata: Record<string, unknown>;
     }>(
-      `SELECT id::text,status,source_metadata FROM import_run
+      `SELECT id::text,status,adapter_code,source_metadata FROM import_run
        WHERE id=ANY($1::uuid[]) ORDER BY array_position($1::uuid[],id)`,
       [proposalRunIds],
     );
     expect(runs.rows).toHaveLength(2);
     for (const run of runs.rows) {
       expect(run.status).toBe('PREPROCESSED');
+      expect(run.adapter_code).toBe('MANUAL');
       expect(run.source_metadata).toMatchObject({
-        adapter: 'MANUAL',
         programmeSlug,
         entityTypes: [entityTypeCode],
         featureCount: 1,
@@ -268,7 +271,7 @@ test('submits participant location proposals through live Gateway and Geodata AP
     expect(candidates.rows).toHaveLength(2);
     expect(candidates.rows.map((candidate) => candidate.name)).toEqual([
       candidateName,
-      `Map-picked site ${fixtureId}`,
+      pointProposalName,
     ]);
     for (const [index, candidate] of candidates.rows.entries()) {
       const run = runs.rows[index];
@@ -279,7 +282,7 @@ test('submits participant location proposals through live Gateway and Geodata AP
       };
       expect(candidate).toMatchObject({
         import_run_id: run?.id,
-        name: index === 0 ? candidateName : `Map-picked site ${fixtureId}`,
+        name: index === 0 ? candidateName : pointProposalName,
         programme_slug: programmeSlug,
         entity_type_codes: [entityTypeCode],
         candidate_source: {
@@ -289,6 +292,66 @@ test('submits participant location proposals through live Gateway and Geodata AP
         },
       });
     }
+
+    const adminPage = await page.context().newPage();
+    await adminPage.goto('http://127.0.0.1:8090/geodata-imports');
+    await expect(adminPage).toHaveURL(/\/login\?redirect=\/geodata-imports$/);
+    await adminPage.getByLabel('Email').fill(email);
+    await adminPage.getByLabel('Password').fill(password);
+    await adminPage.getByRole('button', { name: 'Sign in' }).click();
+    await expect(adminPage).toHaveURL(/\/geodata-imports$/);
+
+    const proposalRun = adminPage
+      .locator('.import-run-select')
+      .filter({ hasText: proposalRunIds[1]! });
+    await expect(proposalRun).toBeVisible({ timeout: 30_000 });
+    await proposalRun.click();
+    await expect(
+      adminPage.getByText('Review pre-processed records'),
+    ).toBeVisible();
+    await adminPage
+      .getByRole('button', { name: pointProposalName, exact: true })
+      .click();
+    const reviewDialog = adminPage.getByRole('dialog');
+    await expect(reviewDialog).toContainText('PENDING');
+    await reviewDialog
+      .getByRole('button', { name: 'Promote to candidate' })
+      .click();
+    await expect(reviewDialog.getByRole('status')).toContainText(
+      'The last pending item in this import has been processed.',
+      { timeout: 30_000 },
+    );
+
+    let promotedEntity:
+      | {
+          id: string;
+          lifecycle_status: string;
+          programme_slug: string;
+          entity_type_code: string;
+        }
+      | undefined;
+    await expect
+      .poll(
+        async () => {
+          const result = await geo.query<NonNullable<typeof promotedEntity>>(
+            `SELECT id::text,lifecycle_status,programme_slug,entity_type_code
+             FROM geodata_entity WHERE name=$1`,
+            [pointProposalName],
+          );
+          promotedEntity = result.rows[0];
+          return promotedEntity ?? null;
+        },
+        { timeout: 30_000, intervals: [250] },
+      )
+      .toMatchObject({
+        lifecycle_status: 'CANDIDATE',
+        programme_slug: programmeSlug,
+        entity_type_code: entityTypeCode,
+      });
+    expect(promotedEntity?.id).toMatch(/^[0-9a-f-]{36}$/i);
+
+    await page.reload();
+    await expect(page.locator('#entities')).toContainText(pointProposalName);
   } finally {
     if (proposalRunIds.length || candidateSeeded) {
       const geoClient = await geo.connect().catch(() => undefined);
@@ -299,6 +362,54 @@ test('submits participant location proposals through live Gateway and Geodata AP
             "SELECT set_config('myota.geodata_writer','row-v1',true)",
           );
           if (proposalRunIds.length) {
+            const processedEntities = await geoClient.query<{ id: string }>(
+              `SELECT processed_entity_id::text AS id
+               FROM geodata_import_candidate
+               WHERE import_run_id=ANY($1::uuid[])
+                 AND processed_entity_id IS NOT NULL`,
+              [proposalRunIds],
+            );
+            const processedEntityIds = processedEntities.rows.map(
+              (row) => row.id,
+            );
+            if (processedEntityIds.length) {
+              await geoClient.query(
+                'DELETE FROM source_reference WHERE entity_id=ANY($1::uuid[])',
+                [processedEntityIds],
+              );
+              await geoClient.query(
+                `DELETE FROM geodata_audit_event
+                 WHERE aggregate_type='entity' AND aggregate_id=ANY($1::text[])`,
+                [processedEntityIds],
+              );
+              await geoClient.query(
+                `DELETE FROM outbox_event
+                 WHERE aggregate_type='entity' AND aggregate_id=ANY($1::text[])`,
+                [processedEntityIds],
+              );
+              await geoClient.query(
+                'DELETE FROM geodata_entity WHERE id=ANY($1::uuid[])',
+                [processedEntityIds],
+              );
+            }
+            const promotedRunId = proposalRunIds[1];
+            if (promotedRunId) {
+              await geoClient.query(
+                `DELETE FROM idempotency_record
+                 WHERE service='geodata-service' AND key LIKE $1`,
+                [`http:%:/v1/geodata/imports/${promotedRunId}/process:%`],
+              );
+              await geoClient.query(
+                `DELETE FROM outbox_event
+                 WHERE producer='geodata-service'
+                   AND aggregate_type='import_processing_queue'
+                   AND aggregate_id IN (
+                     SELECT id::text FROM geodata_import_processing_queue
+                     WHERE import_run_id=$1::uuid
+                   )`,
+                [promotedRunId],
+              );
+            }
             await geoClient.query(
               `DELETE FROM outbox_event WHERE producer='geodata-service'
                AND aggregate_id=ANY($1::text[])`,
