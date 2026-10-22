@@ -74,7 +74,7 @@
   PostgreSQL interruption during terminal dead-letter persistence is checked
   at delivery count eight: CI confirms the delivery
   remains unterminated with no dead-letter row during the outage, then persists
-  the eight-attempt record before terminating it after recovery. A three-node
+  the eight-attempt record before terminating it after recovery. A five-node
   JetStream CI case holds a notification delivery pending while its stream
   leader stops, then verifies replica election, duplicate-safe processing,
   acknowledgement, and one persisted notification. It also verifies terminal

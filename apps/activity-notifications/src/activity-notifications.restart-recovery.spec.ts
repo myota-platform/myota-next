@@ -347,7 +347,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
         subjects: ['myota.events.>'],
         retention: RetentionPolicy.Limits,
         storage: StorageType.File,
-        num_replicas: 3,
+        num_replicas: 5,
         max_age: 3_600_000_000_000,
         max_bytes: 16 * 1024 * 1024,
         max_msgs: 1000,
@@ -366,12 +366,12 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
         backoff: [60, 120, 300, 300, 300, 300, 300].map(
           (seconds) => seconds * 1_000_000_000,
         ),
-        num_replicas: 3,
+        num_replicas: 5,
       } as ConsumerConfig);
       await waitFor(async () => {
         try {
           const info = await manager.streams.info(streamName);
-          return (info.cluster?.replicas?.length ?? 0) >= 2;
+          return (info.cluster?.replicas?.length ?? 0) >= 4;
         } catch {
           return false;
         }
