@@ -254,6 +254,12 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       databaseProxy.setAvailable(true);
       await waitForQueuedJob(pool, jobs[1]!, 1);
       await makeQueuedJobAvailable(pool, jobs[1]!);
+      await waitForConsumerAckPending(
+        manager,
+        registry.activityWorkStream,
+        statisticsDurable,
+        0,
+      );
       // The persisted queued retry is dispatched through the same command path
       // as the outbox worker after the database recovers.
       await publishWork(publisher, registry, jobs[1]!);
