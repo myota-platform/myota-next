@@ -199,7 +199,7 @@ reads the pasted source from the CI S3-compatible fixture. A second live Admin
 workflow uploads a GeoJSON file through the resumable multipart UI, completes
 the S3-compatible object upload, and waits for Geodata preprocessing. It checks
 the completed upload session and import, stored part size and source hash, and
-the resulting review candidate for GeoJSON, KML, GPX, and Shapefile ZIP.
+the resulting review candidates for GeoJSON, KML, GPX, OSM PBF, and Shapefile ZIP.
 The Identity account editor exposes callsign creation with status, source, and
 validity fields; evidence submission with checksum and metadata; verification
 for callers with `callsign.verify` and a configurable verification source;

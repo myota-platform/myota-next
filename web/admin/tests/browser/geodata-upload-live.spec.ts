@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
 
-test('uploads and preprocesses GeoJSON, KML, GPX, and Shapefile through the resumable live workflow', async ({
+test('uploads and preprocesses GeoJSON, KML, GPX, OSM PBF, and Shapefile through the resumable live workflow', async ({
   page,
 }) => {
   test.skip(
@@ -26,6 +26,12 @@ test('uploads and preprocesses GeoJSON, KML, GPX, and Shapefile through the resu
   const shapefile = await readFile(
     new URL(
       '../../../../apps/geodata-worker/src/fixtures/python-point-shapefile.zip',
+      import.meta.url,
+    ),
+  );
+  const osmPbf = await readFile(
+    new URL(
+      '../../../../apps/geodata-worker/src/fixtures/python-osm-parity.osm.pbf',
       import.meta.url,
     ),
   );
@@ -61,6 +67,14 @@ test('uploads and preprocesses GeoJSON, KML, GPX, and Shapefile through the resu
       content: `<?xml version="1.0"?><gpx version="1.1" creator="MyOTA"><wpt lat="46.234567" lon="7.123456"><name>Uploaded GPX ${suffix}</name></wpt></gpx>`,
     },
     {
+      format: 'OSM_PBF',
+      filename: `browser-${suffix}.osm.pbf`,
+      mimeType: 'application/octet-stream',
+      featureName: 'Node Park',
+      content: osmPbf,
+      minimumCandidates: 2,
+    },
+    {
       format: 'SHAPEFILE',
       filename: `browser-${suffix}.zip`,
       mimeType: 'application/zip',
@@ -70,6 +84,8 @@ test('uploads and preprocesses GeoJSON, KML, GPX, and Shapefile through the resu
   ].map((source) => ({
     ...source,
     bytes: Buffer.from(source.content),
+    minimumCandidates:
+      'minimumCandidates' in source ? source.minimumCandidates : 1,
   }));
   const uploadSessionIds: string[] = [];
 
@@ -95,7 +111,15 @@ test('uploads and preprocesses GeoJSON, KML, GPX, and Shapefile through the resu
     await page
       .getByLabel('Display name')
       .fill(`Live file category ${suffix.slice(0, 8)}`);
-    await page.getByRole('checkbox', { name: 'Point', exact: true }).check();
+    for (const geometry of [
+      'Point',
+      'LineString',
+      'MultiLineString',
+      'Polygon',
+      'MultiPolygon',
+    ]) {
+      await page.getByRole('checkbox', { name: geometry, exact: true }).check();
+    }
     await page
       .getByLabel('Description')
       .fill('Temporary category for the resumable file upload workflow.');
@@ -169,7 +193,8 @@ test('uploads and preprocesses GeoJSON, KML, GPX, and Shapefile through the resu
         source_hash: string;
         parts: number;
         part_size: string;
-        candidate_name: string;
+        candidate_names: string[];
+        candidate_count: number;
       }>(
         `SELECT u.status AS upload_status,u.filename,u.expected_size::text,
               r.status AS import_status,
@@ -179,10 +204,13 @@ test('uploads and preprocesses GeoJSON, KML, GPX, and Shapefile through the resu
                 WHERE p.upload_session_id=u.id) AS parts,
               (SELECT size_bytes::text FROM geodata_upload_part p
                 WHERE p.upload_session_id=u.id AND p.part_number=1) AS part_size,
-              c.name AS candidate_name
+              (SELECT array_agg(c.name ORDER BY c.ordinal)
+                 FROM geodata_import_candidate c WHERE c.import_run_id=r.id)
+                AS candidate_names,
+              (SELECT count(*)::int FROM geodata_import_candidate c
+                WHERE c.import_run_id=r.id) AS candidate_count
          FROM geodata_upload_session u
          JOIN import_run r ON r.id=u.import_run_id
-         JOIN geodata_import_candidate c ON c.import_run_id=r.id
           WHERE u.id=$1::uuid`,
         [uploadSessionId],
       );
@@ -198,9 +226,13 @@ test('uploads and preprocesses GeoJSON, KML, GPX, and Shapefile through the resu
           source_hash: expect.any(String),
           parts: 1,
           part_size: String(source.bytes.length),
-          candidate_name: source.featureName,
+          candidate_names: expect.arrayContaining([source.featureName]),
+          candidate_count: expect.any(Number),
         },
       ]);
+      expect(persisted.rows[0]?.candidate_count).toBeGreaterThanOrEqual(
+        source.minimumCandidates ?? 1,
+      );
     }
   } finally {
     try {
