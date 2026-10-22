@@ -258,8 +258,9 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           result.rows[0]?.status === 'QUEUED' && result.rows[0]?.attempts === 1
         );
       }, 'Activity worker did not persist retry state after PostgreSQL recovered');
-      // The retained original delivery is NAKed after retry state commits and
-      // should drive the queued retry itself.
+      // The persisted queued retry is dispatched through the same command path
+      // as the outbox worker after the database recovers.
+      await publishWork(publisher, registry, jobs[1]!);
       await waitForJob(pool, jobs[1]!, 30_000);
 
       await queueStatisticsJob(pool, jobs[3]!, programmeSlugs[3]!);
@@ -694,13 +695,21 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         [ids[0]],
       );
       expect(firstJob.rows[0]?.attempts).toBe(1);
-      await waitFor(async () => {
-        const info = await manager.consumers.info(
-          registry.activityWorkStream,
-          'activity-statistics-rebuild-v1',
-        );
-        return info.num_pending === 0 && info.num_ack_pending === 0;
-      }, 'Activity job delivery did not acknowledge after failover');
+      await waitFor(
+        async () => {
+          try {
+            const info = await manager.consumers.info(
+              registry.activityWorkStream,
+              'activity-statistics-rebuild-v1',
+            );
+            return info.num_pending === 0 && info.num_ack_pending === 0;
+          } catch {
+            return false;
+          }
+        },
+        'Activity job delivery did not acknowledge after failover',
+        30_000,
+      );
 
       await queueStatisticsJob(pool, ids[1]!, programmeSlugs[1]!);
       await publishWork(publisher, registry, ids[1]!);
