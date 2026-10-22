@@ -439,8 +439,21 @@ export class ActivityNotificationsService
               permanent,
             ),
         );
-        message.term();
-        this.countOutcome('dead_lettered');
+        try {
+          if (await message.ackAck()) {
+            this.countOutcome('dead_lettered');
+          } else {
+            this.countOutcome('ack_unconfirmed');
+            this.logger.warn(
+              `Notification event ${eventType} dead-letter ACK was not confirmed by JetStream`,
+            );
+          }
+        } catch (ackError) {
+          this.countOutcome('ack_unconfirmed');
+          this.logger.warn(
+            `Notification event ${eventType} dead-letter ACK confirmation failed: ${this.safeError(ackError)}`,
+          );
+        }
       } else {
         const delay = Math.min(
           300_000,
