@@ -17,6 +17,8 @@ import type { ConsumerConfig, StreamConfig } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
+import { DatabaseHealthService } from '../../../libs/platform/src/database.module.js';
+import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
 import {
   ACTIVITY_NOTIFICATION_SUBJECTS,
   ActivityNotificationsService,
@@ -43,6 +45,13 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
 
     const { Pool } = await import('pg');
     const pool = new Pool({ connectionString: databaseUrl, max: 3 });
+    const databaseProxy = await startPostgresFaultProxy(databaseUrl);
+    const workerPool = new Pool({
+      connectionString: databaseProxy.connectionString,
+      max: 3,
+      connectionTimeoutMillis: 1000,
+    });
+    const workerPoolHealth = new DatabaseHealthService(workerPool as Pool);
     const directory = await mkdtemp(join(tmpdir(), 'myota-notifications-'));
     const port = await reserveLocalPort();
     const natsUrl = `nats://127.0.0.1:${port}`;
@@ -98,7 +107,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
         num_replicas: 0,
       } as ConsumerConfig);
 
-      service = new ActivityNotificationsService(pool as Pool);
+      service = new ActivityNotificationsService(workerPool as Pool);
       await service.onModuleInit();
       const serviceState = service as unknown as {
         natsUp: boolean;
@@ -120,8 +129,41 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
       await waitFor(() => serviceState.natsUp, 'consumer did not reconnect');
       const restartedManager = await jetstreamManager(publisher);
       await restartedManager.streams.info(streamName);
+      const internals = service as unknown as {
+        processEvent: (
+          event: { eventId?: unknown },
+          eventType: string,
+        ) => Promise<boolean>;
+      };
+      const processEvent = internals.processEvent.bind(service);
+      let databaseOutageInjected = false;
+      internals.processEvent = async (event, eventType) => {
+        if (event.eventId === ids[1] && !databaseOutageInjected) {
+          databaseOutageInjected = true;
+          databaseProxy.setAvailable(false);
+        }
+        return await processEvent(event, eventType);
+      };
+      const rejectedBeforeOutage = databaseProxy.rejectedConnections();
       await publish(publisher, ids[1]!, recipient);
       await publish(publisher, ids[1]!, recipient);
+      await waitFor(async () => {
+        const state = await restartedManager.consumers.info(
+          streamName,
+          durableName,
+        );
+        return (
+          databaseOutageInjected &&
+          databaseProxy.rejectedConnections() > rejectedBeforeOutage &&
+          state.num_ack_pending > 0
+        );
+      }, 'notification consumer did not retain the delivery during a PostgreSQL outage');
+      const notificationsDuringOutage = await pool.query(
+        'SELECT count(*)::int AS count FROM public.activity_notification WHERE deduplication_key=$1',
+        [dedupeKeys[1]],
+      );
+      expect(notificationsDuringOutage.rows[0]?.count).toBe(0);
+      databaseProxy.setAvailable(true);
       await waitForNotifications(pool, dedupeKeys, 2);
       await waitFor(
         () => serviceState.completedMessages === 3,
@@ -135,11 +177,14 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
       );
       expect(processed.rows[0]?.count).toBe(2);
     } finally {
+      databaseProxy.setAvailable(true);
       if (service) await service.onModuleDestroy().catch(() => undefined);
+      await workerPoolHealth.onModuleDestroy().catch(() => undefined);
       if (publisher) await publisher.drain().catch(() => undefined);
       if (server) await stopJetStream(server).catch(() => undefined);
       await cleanupFixture(pool, ids, dedupeKeys, priorCheckpoint.rows[0]);
       await pool.end();
+      await databaseProxy.close();
       await rm(directory, { recursive: true, force: true });
     }
   }, 45_000);

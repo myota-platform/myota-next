@@ -66,8 +66,11 @@ separate durable consumer. It parses broker envelopes with exact JSON integers
 so Python-style string conversion and dead-letter persistence retain their
 submitted values. CI verifies replica sharing, durable resume across a
 single-server JetStream restart with retained file storage, confirmed ACKs, and
-duplicate-event idempotency. Cluster failover and database-outage recovery
-remain open. QSO correction requests and administrator review are also
+duplicate-event idempotency. The same recovery check drops Activity PostgreSQL
+connectivity while processing an event, verifies the delivery remains pending
+and no notification is written during the outage, then restores connectivity
+and confirms processing and ACK completion. Cluster failover remains open. QSO
+correction requests and administrator review are also
 implemented, ignore `Idempotency-Key` as the reference does, and rely on the
 database relation for request QSO existence.
 Correction request and review required fields use the reference's ordered

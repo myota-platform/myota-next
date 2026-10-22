@@ -55,8 +55,11 @@
   file storage retained and verifies delivery resumes with confirmed ACKs and
   duplicate-event idempotency. Transient PostgreSQL errors during event
   processing or dead-letter persistence extend the current ACK and retry with
-  capped jittered backoff. Cluster failover, database-outage, and retry
-  exhaustion recovery qualification remain open. The unresolved-dead-letter
+  capped jittered backoff. The same CI recovery check drops Activity PostgreSQL
+  connectivity while an event is processing, confirms its JetStream delivery
+  stays pending without a partial notification, then restores connectivity and
+  verifies processing, deduplication, and ACK completion. Cluster failover and
+  retry exhaustion recovery qualification remain open. The unresolved-dead-letter
   gauge refreshes in the background every 15 seconds, so it does not block
   consumer startup or issue a count query for every delivery.
 - Geodata workers: registered JetStream consumers for import preprocessing and
