@@ -396,9 +396,15 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
         return processEvent(event, eventType);
       };
       const persistDeadLetter = serviceState.persistDeadLetter.bind(service);
+      let terminalPersistenceOutageInjected = false;
       serviceState.persistDeadLetter = async (...args) => {
-        if (args[1].eventId === terminalEventId)
+        if (
+          args[1].eventId === terminalEventId &&
+          !terminalPersistenceOutageInjected
+        ) {
+          terminalPersistenceOutageInjected = true;
           databaseProxy.setAvailable(false);
+        }
         return persistDeadLetter(...args);
       };
       const handle = serviceState.handle.bind(service);
