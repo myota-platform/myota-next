@@ -5,6 +5,8 @@ import {
   observeRoot,
 } from '@app/platform';
 import { GeodataController } from './geodata.controller.js';
+import { GeodataImportsController } from './geodata-imports.controller.js';
+import { GeodataOperationsController } from './geodata-operations.controller.js';
 import { GeodataRepository } from './geodata.repository.js';
 import { GeodataImportService } from './geodata-import.service.js';
 import { GeodataImportMutationRepository } from './geodata-import-mutation.repository.js';
@@ -32,7 +34,13 @@ import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
       parseJsonWithExactIntegers,
     ),
   ],
-  controllers: [HealthController, GeodataController, GeodataMetricsController],
+  controllers: [
+    HealthController,
+    GeodataController,
+    GeodataImportsController,
+    GeodataOperationsController,
+    GeodataMetricsController,
+  ],
   providers: [
     GeodataRepository,
     GeodataImportService,

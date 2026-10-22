@@ -116,8 +116,13 @@ if (
     'Scheduled importer must not impose a smaller source response cap',
   );
 requirePattern(
-  'apps/geodata/src/geodata.controller.ts',
-  /parseImportPartNumber\(partNumber\)[\s\S]*?function parseImportPartNumber\(value: string\): number[\s\S]*?normalizePythonNumericText\(value\)[\s\S]*?BigInt\(normalized\.replaceAll\('_', ''\)\)[\s\S]*?parsed > 10000n/,
+  'apps/geodata/src/geodata-imports.controller.ts',
+  /parseImportPartNumber\(partNumber\)/,
+  'Geodata multipart uploads must parse part numbers before accepting parts',
+);
+requirePattern(
+  'apps/geodata/src/geodata-controller-support.ts',
+  /function parseImportPartNumber\(value: string\): number[\s\S]*?normalizePythonNumericText\(value\)[\s\S]*?BigInt\(normalized\.replaceAll\('_', ''\)\)[\s\S]*?parsed > 10000n/,
   'Geodata multipart upload part numbers must follow Python integer parsing and bounds',
 );
 requirePattern(
