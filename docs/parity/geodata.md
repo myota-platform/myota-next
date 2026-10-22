@@ -350,6 +350,10 @@ candidates can be paged; administrators can confirm or
 reject selected rows transactionally. Candidate validation checks required
 fields first and preserves duplicate IDs in submitted order; validation status
 uses Python truthiness and string conversion before checking supported values.
+Repository fixtures verify that confirmation deduplicates database selection
+while retaining the submitted duplicate order in its response and outbox
+event, and that queued records cannot be rejected before any deletion or event
+write.
 Promotion selection
 applies required-field checks before type and status validation, then sorts and
 deduplicates IDs without a separate 500-ID cap. Selected candidates can be queued

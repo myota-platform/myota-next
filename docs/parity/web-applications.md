@@ -123,7 +123,9 @@ decision, survivor selection, reviewer attribution, and note. Other Admin
 workflows still lack browser-level compatibility coverage. Refresh schedule
 checks cover programme-scoped schedule creation and queuing a complete manual
 GeoJSON snapshot. Import checks cover pasted GeoJSON queueing, source metadata,
-candidate listing and review, plus idempotent durable candidate promotion.
+candidate listing, rejection through the validation endpoint, and promotion of
+the next candidate through its durable queue. The browser check verifies the
+reviewer, candidate IDs, and idempotency keys for both decisions.
 Single-item decisions and bulk candidate promotion or rejection retain their
 idempotency keys across same-tab retries and reloads. Pasted imports retain
 their exact request body and idempotency key for same-tab retries after reload.

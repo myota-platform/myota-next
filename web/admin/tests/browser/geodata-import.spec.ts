@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('queues pasted GeoJSON and promotes its preprocessed candidate', async ({
+test('reviews pasted GeoJSON candidates by rejecting one and promoting another', async ({
   page,
 }) => {
   const importRequests: Array<{ body: Record<string, any>; key: string }> = [];
@@ -11,17 +11,25 @@ test('queues pasted GeoJSON and promotes its preprocessed candidate', async ({
     adapter: 'MANUAL',
     format: 'GEOJSON',
     entityTypes: ['SOTA'],
-    candidateCount: 1,
-    pendingCount: 1,
+    candidateCount: 2,
+    pendingCount: 2,
   };
-  const feature = {
+  const firstFeature = {
     id: 'candidate-1',
     ordinal: 1,
-    name: 'Example summit',
+    name: 'Example summit to reject',
     validationStatus: 'PENDING',
     geometry: { type: 'Point', coordinates: [7.2, 46.1] },
   };
-  let candidatePending = true;
+  const secondFeature = {
+    id: 'candidate-2',
+    ordinal: 2,
+    name: 'Example summit to keep',
+    validationStatus: 'PENDING',
+    geometry: { type: 'Point', coordinates: [7.3, 46.2] },
+  };
+  let pendingCandidates = [firstFeature, secondFeature];
+  const rejectionRequests: Array<{ body: unknown; key: string }> = [];
   const promotionRequests: Array<{ body: unknown; key: string }> = [];
 
   await page.route('**/v1/**', async (route) => {
@@ -98,9 +106,31 @@ test('queues pasted GeoJSON and promotes its preprocessed candidate', async ({
     if (url.pathname === '/v1/geodata/imports/import-1/candidates') {
       await route.fulfill({
         json: {
-          items: candidatePending ? [feature] : [],
-          total: candidatePending ? 1 : 0,
+          items: pendingCandidates,
+          total: pendingCandidates.length,
           nextPage: null,
+        },
+      });
+      return;
+    }
+
+    if (
+      url.pathname === '/v1/geodata/imports/import-1/candidates/validate' &&
+      method === 'POST'
+    ) {
+      const body = request.postDataJSON() as { candidateIds: string[] };
+      rejectionRequests.push({
+        body,
+        key: request.headers()['idempotency-key'] || '',
+      });
+      pendingCandidates = pendingCandidates.filter(
+        (candidate) => !body.candidateIds.includes(candidate.id),
+      );
+      await route.fulfill({
+        json: {
+          importRunId: 'import-1',
+          candidateIds: body.candidateIds,
+          validationStatus: 'REJECTED',
         },
       });
       return;
@@ -114,7 +144,6 @@ test('queues pasted GeoJSON and promotes its preprocessed candidate', async ({
         body: request.postDataJSON(),
         key: request.headers()['idempotency-key'] || '',
       });
-      candidatePending = false;
       await route.fulfill({ status: 202, json: { id: 'promotion-queue-1' } });
       return;
     }
@@ -123,6 +152,9 @@ test('queues pasted GeoJSON and promotes its preprocessed candidate', async ({
       url.pathname ===
       '/v1/geodata/imports/import-1/processing-queues/promotion-queue-1'
     ) {
+      pendingCandidates = pendingCandidates.filter(
+        (candidate) => candidate.id !== 'candidate-2',
+      );
       await route.fulfill({
         json: { id: 'promotion-queue-1', status: 'COMPLETED', result: {} },
       });
@@ -131,7 +163,7 @@ test('queues pasted GeoJSON and promotes its preprocessed candidate', async ({
 
     if (url.pathname === '/v1/geodata/imports/import-1') {
       await route.fulfill({
-        json: { ...run, pendingCount: candidatePending ? 1 : 0 },
+        json: { ...run, pendingCount: pendingCandidates.length },
       });
       return;
     }
@@ -159,8 +191,13 @@ test('queues pasted GeoJSON and promotes its preprocessed candidate', async ({
       features: [
         {
           type: 'Feature',
-          properties: { name: 'Example summit' },
+          properties: { name: 'Example summit to reject' },
           geometry: { type: 'Point', coordinates: [7.2, 46.1] },
+        },
+        {
+          type: 'Feature',
+          properties: { name: 'Example summit to keep' },
+          geometry: { type: 'Point', coordinates: [7.3, 46.2] },
         },
       ],
     }),
@@ -172,11 +209,16 @@ test('queues pasted GeoJSON and promotes its preprocessed candidate', async ({
   ).toBeVisible();
   await expect(page.getByText('Review pre-processed records')).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Example summit' }),
+    page.getByRole('button', { name: firstFeature.name }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Example summit' }).click();
+  await expect(
+    page.getByRole('button', { name: secondFeature.name }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: firstFeature.name }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('PENDING');
+  await dialog.getByRole('button', { name: 'Reject entity' }).click();
+  await expect(dialog).toContainText(`Next item: ${secondFeature.name}.`);
   await dialog.getByRole('button', { name: 'Promote to candidate' }).click();
   await expect(dialog.getByRole('status')).toContainText(
     'The last pending item in this import has been processed.',
@@ -189,17 +231,24 @@ test('queues pasted GeoJSON and promotes its preprocessed candidate', async ({
     format: 'GEOJSON',
     entityTypes: ['SOTA'],
     filename: 'summits.geojson',
-    content: expect.stringContaining('Example summit'),
+    content: expect.stringContaining('Example summit to reject'),
     source: {
       name: 'Alpine manual source',
       license: 'CC BY 4.0',
       attribution: 'Local mapping group',
     },
   });
+  expect(rejectionRequests).toHaveLength(1);
+  expect(rejectionRequests[0].key).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(rejectionRequests[0].body).toEqual({
+    candidateIds: ['candidate-1'],
+    validationStatus: 'REJECTED',
+    reviewerId: 'geodata-importer-1',
+  });
   expect(promotionRequests).toHaveLength(1);
   expect(promotionRequests[0].key).toMatch(/^[0-9a-f-]{36}$/i);
   expect(promotionRequests[0].body).toEqual({
-    candidateIds: ['candidate-1'],
+    candidateIds: ['candidate-2'],
     targetStatus: 'CANDIDATE',
     processorId: 'geodata-importer-1',
   });
