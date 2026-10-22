@@ -98,7 +98,9 @@ Callsign retirement authenticates and resolves the account and callsign before
 validating optional fields. It checks a primary replacement before reading
 evidence only when retiring the primary callsign; malformed replacement values
 are ignored when the target is not primary, matching the reference's branch
-behavior. Callsign create, evidence submission, verification, retirement,
+behavior. Service fixtures pin that branch order, the verification-scope check
+before database access, and the missing-evidence error before optional review
+field validation. Callsign create, evidence submission, verification, retirement,
 account reads and exports, and outbox payloads preserve PostgreSQL microseconds
 in lifecycle timestamps. Submitted `validFrom` and `validTo` text passes
 through to PostgreSQL without JavaScript `Date` truncation. Account creation,
