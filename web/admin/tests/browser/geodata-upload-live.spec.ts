@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
 
-test('uploads and preprocesses GeoJSON, KML, GPX, OSM PBF, and Shapefile through the resumable live workflow', async ({
+test('uploads and preprocesses GeoJSON, OSM GeoJSON, KML, GPX, OSM PBF, and Shapefile through the resumable live workflow', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -54,6 +54,26 @@ test('uploads and preprocesses GeoJSON, KML, GPX, OSM PBF, and Shapefile through
       }),
     },
     {
+      format: 'OSM_GEOJSON',
+      filename: `browser-${suffix}-osm.geojson`,
+      mimeType: 'application/geo+json',
+      adapter: 'OSM',
+      featureName: `Uploaded OSM GeoJSON ${suffix}`,
+      content: JSON.stringify({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: {
+              name: `Uploaded OSM GeoJSON ${suffix}`,
+              leisure: 'park',
+            },
+            geometry: { type: 'Point', coordinates: [7.123456, 46.234567] },
+          },
+        ],
+      }),
+    },
+    {
       format: 'KML',
       filename: `browser-${suffix}.kml`,
       mimeType: 'application/vnd.google-earth.kml+xml',
@@ -71,6 +91,7 @@ test('uploads and preprocesses GeoJSON, KML, GPX, OSM PBF, and Shapefile through
       format: 'OSM_PBF',
       filename: `browser-${suffix}.osm.pbf`,
       mimeType: 'application/octet-stream',
+      adapter: 'OSM',
       featureName: 'Node Park',
       content: osmPbf,
       minimumCandidates: 2,
@@ -85,6 +106,8 @@ test('uploads and preprocesses GeoJSON, KML, GPX, OSM PBF, and Shapefile through
   ].map((source) => ({
     ...source,
     bytes: Buffer.from(source.content),
+    adapter: 'adapter' in source ? source.adapter : 'MANUAL',
+    storedFormat: source.format === 'OSM_GEOJSON' ? 'GEOJSON' : source.format,
     minimumCandidates:
       'minimumCandidates' in source ? source.minimumCandidates : 1,
   }));
@@ -190,6 +213,8 @@ test('uploads and preprocesses GeoJSON, KML, GPX, OSM PBF, and Shapefile through
         filename: string;
         expected_size: string;
         import_status: string;
+        adapter_code: string;
+        format: string;
         object_key: string;
         source_hash: string;
         parts: number;
@@ -199,6 +224,8 @@ test('uploads and preprocesses GeoJSON, KML, GPX, OSM PBF, and Shapefile through
       }>(
         `SELECT u.status AS upload_status,u.filename,u.expected_size::text,
               r.status AS import_status,
+              r.adapter_code,
+              r.source_metadata->>'format' AS format,
               r.source_metadata->'source'->>'objectKey' AS object_key,
               r.source_hash,
               (SELECT count(*)::int FROM geodata_upload_part p
@@ -221,6 +248,8 @@ test('uploads and preprocesses GeoJSON, KML, GPX, OSM PBF, and Shapefile through
           filename: source.filename,
           expected_size: String(source.bytes.length),
           import_status: 'PREPROCESSED',
+          adapter_code: source.adapter,
+          format: source.storedFormat,
           object_key: expect.stringContaining(
             `geodata-imports/${importRunId}-`,
           ),

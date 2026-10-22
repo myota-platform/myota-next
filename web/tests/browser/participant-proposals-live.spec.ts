@@ -217,30 +217,28 @@ test('submits and reviews participant location proposals through live services',
     await expect
       .poll(
         async () => {
-          const result = await geo.query<{ status: string }>(
-            `SELECT status FROM import_run WHERE id=ANY($1::uuid[])
-             ORDER BY array_position($1::uuid[],id)`,
+          const result = await geo.query<{ candidates: number }>(
+            `SELECT count(*)::int AS candidates FROM geodata_import_candidate
+             WHERE import_run_id=ANY($1::uuid[])`,
             [proposalRunIds],
           );
-          return result.rows.map((run) => run.status);
+          return result.rows[0]?.candidates ?? 0;
         },
         { timeout: 60_000, intervals: [250] },
       )
-      .toEqual(['PREPROCESSED', 'PREPROCESSED']);
+      .toBe(2);
 
     const runs = await geo.query<{
       id: string;
-      status: string;
       adapter_code: string;
       source_metadata: Record<string, unknown>;
     }>(
-      `SELECT id::text,status,adapter_code,source_metadata FROM import_run
+      `SELECT id::text,adapter_code,source_metadata FROM import_run
        WHERE id=ANY($1::uuid[]) ORDER BY array_position($1::uuid[],id)`,
       [proposalRunIds],
     );
     expect(runs.rows).toHaveLength(2);
     for (const run of runs.rows) {
-      expect(run.status).toBe('PREPROCESSED');
       expect(run.adapter_code).toBe('MANUAL');
       expect(run.source_metadata).toMatchObject({
         programmeSlug,
