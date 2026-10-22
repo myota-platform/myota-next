@@ -231,7 +231,7 @@ test('preserves scoped roles and refresh sessions across live account edits', as
       `${gateway}/v1/identity/auth/refresh`,
       { data: { refreshToken: participantSession.refreshToken } },
     );
-    expect(revokedSession.status()).toBe(401);
+    expect(revokedSession.status()).toBe(403);
 
     const deactivate = await request.patch(
       `${gateway}/v1/identity/accounts/${targetAccountId}`,
