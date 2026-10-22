@@ -94,7 +94,7 @@ export function normalizeAdapterFeature(
         : (() => {
             throw new Error('OSM tags must be an object');
           })()
-      : properties;
+      : { ...properties };
     properties.tags = tags;
     if (!Object.hasOwn(properties, 'sourceRef'))
       properties.sourceRef = properties.osm_id || properties.id;

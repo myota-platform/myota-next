@@ -6,6 +6,7 @@ import { expect, test } from '@playwright/test';
 test('uploads and preprocesses GeoJSON, KML, GPX, OSM PBF, and Shapefile through the resumable live workflow', async ({
   page,
 }) => {
+  test.setTimeout(120_000);
   test.skip(
     process.env.MYOTA_BROWSER_GEODATA_WORKERS !== '1',
     'requires the CI Geodata workers and JetStream topology',

@@ -1,3 +1,4 @@
+import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint.js';
 import { normalizeAdapterFeature } from './geodata-adapter.js';
 
 describe('normalizeAdapterFeature projection compatibility', () => {
@@ -50,6 +51,8 @@ describe('normalizeAdapterFeature projection compatibility', () => {
       matchesRequiredTag: false,
       skipReason: 'FILTERED_TAG',
     });
+    expect(normalized.properties.tags).not.toBe(normalized.properties);
+    expect(() => stringifyJsonWithBigInts(normalized.properties)).not.toThrow();
   });
 
   it('converts an ArcGIS feature service point and resolves a title alias', () => {
