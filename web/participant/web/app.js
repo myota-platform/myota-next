@@ -22,6 +22,10 @@ const pendingProfileCallsignMutations =
 let profileCallsignAddRequest = pendingProfileCallsignMutations.add;
 const profilePrimaryCallsignRequestKeys =
   pendingProfileCallsignMutations.primary;
+let activeAdifImportId =
+  sessionStorage.getItem('myota_active_adif_import') || '';
+let adifStatusTimer = null;
+let adifStatusRequestInFlight = false;
 const escapeHtml = (value) =>
   String(value ?? '').replace(
     /[&<>"']/g,
@@ -868,6 +872,7 @@ async function loadActivations() {
   const signedIn = Boolean(awardAccessToken && awardAccount);
   $('activation-start-form').hidden = !signedIn;
   $('qso-form').hidden = !signedIn;
+  $('adif-import-form').hidden = !signedIn;
   if (!signedIn) {
     $('activations-list').innerHTML = '';
     return false;
@@ -900,6 +905,7 @@ async function loadActivations() {
       )
       .join('');
     $('qso-form').hidden = !open.length;
+    $('adif-import-form').hidden = !open.length;
     $('activations-list').innerHTML = activations.length
       ? `<ul>${activations
           .slice(0, 20)
@@ -909,6 +915,7 @@ async function loadActivations() {
           )
           .join('')}</ul>`
       : '<p class="small">No activations recorded for this programme yet.</p>';
+    if (activeAdifImportId) void refreshAdifImportStatus();
     return true;
   } catch (error) {
     $('activation-status').textContent = error.message;
@@ -1043,9 +1050,94 @@ async function closeActivation() {
     }
   }
 }
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      const separator = dataUrl.indexOf(',');
+      if (separator < 0) reject(new Error('Could not read the selected file.'));
+      else resolve(dataUrl.slice(separator + 1));
+    };
+    reader.onerror = () =>
+      reject(new Error('Could not read the selected file.'));
+    reader.readAsDataURL(file);
+  });
+}
+function renderAdifImportStatus(imported) {
+  $('adif-import-status').textContent =
+    `${imported.filename}: ${imported.status} · ` +
+    `${Number(imported.recordsAccepted || 0)} accepted, ` +
+    `${Number(imported.recordsRejected || 0)} rejected`;
+  const terminal = ['COMPLETED', 'FAILED'].includes(imported.status);
+  $('adif-refresh').hidden = terminal;
+  if (terminal) {
+    activeAdifImportId = '';
+    sessionStorage.removeItem('myota_active_adif_import');
+  }
+}
+async function refreshAdifImportStatus() {
+  if (!activeAdifImportId || adifStatusRequestInFlight) return;
+  adifStatusRequestInFlight = true;
+  clearTimeout(adifStatusTimer);
+  try {
+    const imported = await awardApi(
+      `/v1/adif/imports/${encodeURIComponent(activeAdifImportId)}`,
+    );
+    renderAdifImportStatus(imported);
+    if (activeAdifImportId)
+      adifStatusTimer = setTimeout(refreshAdifImportStatus, 2000);
+  } catch (error) {
+    $('adif-import-status').textContent = error.message;
+    $('adif-refresh').hidden = false;
+  } finally {
+    adifStatusRequestInFlight = false;
+  }
+}
+async function uploadAdif(event) {
+  event.preventDefault();
+  const activationId = $('qso-activation').value;
+  const file = $('adif-file').files?.[0];
+  if (!activationId || !file) {
+    $('adif-import-status').textContent =
+      'Choose an open activation and an ADIF file.';
+    return;
+  }
+  if (file.size > 25 * 1024 * 1024) {
+    $('adif-import-status').textContent =
+      'The ADIF file exceeds the 25 MiB upload limit.';
+    return;
+  }
+  const submit = $('adif-import-form').querySelector('button[type="submit"]');
+  submit.disabled = true;
+  $('adif-import-status').textContent = 'Uploading ADIF log…';
+  try {
+    const contentBase64 = await readFileAsBase64(file);
+    const imported = await awardApi('/v1/adif/imports', {
+      method: 'POST',
+      body: JSON.stringify({
+        activationId,
+        filename: file.name,
+        contentBase64,
+      }),
+    });
+    activeAdifImportId = imported.id;
+    sessionStorage.setItem('myota_active_adif_import', activeAdifImportId);
+    $('adif-import-status').textContent = `${file.name}: import queued.`;
+    $('adif-refresh').hidden = false;
+    await refreshAdifImportStatus();
+    $('adif-file').value = '';
+  } catch (error) {
+    $('adif-import-status').textContent = error.message;
+  } finally {
+    submit.disabled = false;
+  }
+}
 $('activation-start-form').onsubmit = startActivation;
 $('qso-form').onsubmit = recordQso;
 $('activation-close').onclick = closeActivation;
+$('adif-import-form').onsubmit = uploadAdif;
+$('adif-refresh').onclick = refreshAdifImportStatus;
 async function signInForAward() {
   if (awardAccount && awardAccessToken) return awardAccount;
   const data = await api('/v1/identity/auth/login', {

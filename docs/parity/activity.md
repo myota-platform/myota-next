@@ -206,9 +206,12 @@ normalized records can complete with its rejected-row errors. The persisted
 `recordsSeen - recordsAccepted + normalizationErrorCount`, including its
 additional count for normalization errors. ADIF-triggered award recalculation
 uses the Python batch key `batch:<activationId>:<firstQsoDeduplicationKey>`.
-Live browser CI also uploads an ADIF file through Gateway, publishes its
-Activity outbox event, processes it with the Activity worker and object store,
-and checks the persisted import, QSO, and completion notification.
+Live Participant browser CI uploads an ADIF file through the app and Gateway,
+publishes its Activity outbox event, processes it with the Activity worker and
+object store, and checks the displayed terminal status plus the persisted
+import, QSO, and completion notification. The Activity API accepts the
+base64-encoded 25 MiB source cap with a 40 MiB JSON body limit to account for
+encoding overhead.
 CI kills Activity statistics-rebuild, award-evaluation, award-recalculation,
 QSO-ingestion, ADIF-import, and PDF-render workers after they claim jobs,
 expires each lease, and verifies that the reclaimed jobs complete. The

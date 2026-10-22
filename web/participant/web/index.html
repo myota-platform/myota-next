@@ -435,6 +435,25 @@
             Close activation
           </button>
         </form>
+        <form id="adif-import-form" class="profile-form" hidden>
+          <label
+            >ADIF log file<input
+              id="adif-file"
+              type="file"
+              accept=".adi,.adif,text/plain"
+              required
+          /></label>
+          <button type="submit">Import ADIF log</button>
+          <button id="adif-refresh" class="secondary" type="button" hidden>
+            Refresh import status
+          </button>
+          <span
+            id="adif-import-status"
+            class="small"
+            role="status"
+            aria-live="polite"
+          ></span>
+        </form>
       </section>
     </main>
     <script src="/profile-utils.js"></script>

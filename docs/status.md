@@ -44,7 +44,10 @@ production readiness.
   cropped profile-image upload and deletion, evidence submission, primary
   selection, and retirement also run against live Identity APIs. Participant
   activation creation, QSO recording, and closing
-  run through live Activity APIs. Admin award publication and issuance, plus
+  run through live Activity APIs. Participants can also upload ADIF logs to
+  open activations and follow import status; CI checks the displayed result,
+  imported QSO, and completion notification across Participant, Gateway, and
+  Activity workers. Admin award publication and issuance, plus
   Participant eligible-level requests, now cross live Identity and Activity
   APIs and verify persisted request facts and issuance records. Public catalogue
   loading uses live services as well. Participants can read their own request

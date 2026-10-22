@@ -8,7 +8,8 @@ const hasApiDatabases = Boolean(
   process.env.GEO_DATABASE_URL,
 );
 
-test('uploads and processes an ADIF import through Gateway and Activity workers', async ({
+test('uploads and processes an ADIF import from Participant through Activity workers', async ({
+  page,
   request,
 }) => {
   test.skip(!hasApiDatabases, 'requires the CI PostgreSQL databases');
@@ -63,32 +64,66 @@ test('uploads and processes an ADIF import through Gateway and Activity workers'
     const qsoTime = new Date(Date.now() - 5 * 60_000);
     const qsoDate = qsoTime.toISOString().slice(0, 10).replaceAll('-', '');
     const timeOn = qsoTime.toISOString().slice(11, 19).replaceAll(':', '');
+    const programme = {
+      slug: programmeSlug,
+      name: 'ADIF upload test programme',
+      description: 'Participant ADIF upload browser fixture.',
+      theme: { primary: '#2367a8', accent: '#e38a32' },
+      rules: {
+        activationValidityDays: 7,
+        minimumQsos: { activation: 1, hunter: 1 },
+        publicAccessRequired: false,
+      },
+      entityTypes: [],
+    };
+    await page.route('**/v1/programmes**', async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('/content')) {
+        await route.fulfill({ json: { items: [] } });
+        return;
+      }
+      await route.fulfill({
+        json: { items: [programme], page: 1, total: 1, nextPage: null },
+      });
+    });
+    await page.route('**/v1/geodata/entities**', (route) =>
+      route.fulfill({
+        json: { items: [], page: 1, total: 0, nextPage: null },
+      }),
+    );
+    await page.goto(`http://127.0.0.1:8091/#${programmeSlug}`);
+    await expect(page.locator('#programme-select')).toHaveValue(programmeSlug);
+    await page.locator('#award-email').fill(email);
+    await page.locator('#award-password').fill(password);
+    await page.locator('#award-login button[type="submit"]').click();
+    await expect(page.locator('#qso-form')).toBeVisible();
+    await expect(page.locator('#adif-import-form')).toBeVisible();
+
+    const filename = `live-${fixtureId}.adi`;
     const adif =
       `<ADIF_VER:5>3.1.4<EOH><CALL:5>F4ABC<QSO_DATE:8>${qsoDate}` +
       `<TIME_ON:6>${timeOn}<BAND:3>20m<MODE:3>SSB<EOR>`;
-    const upload = await request.post('http://127.0.0.1:8080/v1/adif/imports', {
-      headers,
-      data: {
-        activationId,
-        filename: `live-${fixtureId}.adi`,
-        contentBase64: Buffer.from(adif).toString('base64'),
-      },
+    await page.locator('#adif-file').setInputFiles({
+      name: filename,
+      mimeType: 'text/plain',
+      buffer: Buffer.from(adif),
     });
-    expect(upload.status()).toBe(202);
-    importId = (await upload.json()).id as string;
+    await page.getByRole('button', { name: 'Import ADIF log' }).click();
+    await expect(page.locator('#adif-import-status')).toContainText(
+      `${filename}: COMPLETED · 1 accepted, 0 rejected`,
+      { timeout: 60_000 },
+    );
 
-    await expect
-      .poll(
-        async () => {
-          const status = await request.get(
-            `http://127.0.0.1:8080/v1/adif/imports/${importId}`,
-          );
-          expect(status.ok()).toBeTruthy();
-          return (await status.json()).status;
-        },
-        { timeout: 60_000 },
-      )
-      .toBe('COMPLETED');
+    const importIdInSession = await page.evaluate(() =>
+      sessionStorage.getItem('myota_active_adif_import'),
+    );
+    expect(importIdInSession).toBeNull();
+    const imports = await pool.query<{ id: string }>(
+      `SELECT id::text FROM activity_import WHERE activation_id=$1`,
+      [activationId],
+    );
+    expect(imports.rows).toHaveLength(1);
+    importId = imports.rows[0].id;
 
     const imported = await pool.query<{
       status: string;

@@ -5,7 +5,7 @@ import { ActivityModule } from './activity.module.js';
 await bootstrapHttpService(
   ActivityModule,
   8004,
-  integerSetting(process.env.MYOTA_MAX_BODY_BYTES, 1024 ** 2),
+  integerSetting(process.env.MYOTA_MAX_BODY_BYTES, 40 * 1024 ** 2),
   [],
   [],
   true,
