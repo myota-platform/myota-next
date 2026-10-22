@@ -60,7 +60,7 @@ export async function readGeoJsonDocumentMetadata(
   heartbeat: () => Promise<void>,
 ) {
   const parser = new JSONParser({
-    paths: ['$.crs', '$.spatialReference', '$.type'],
+    paths: ['$.crs', '$.spatialReference', '$.type', '$.error'],
     keepStack: false,
     stringBufferSize: 64 * 1024,
   });
@@ -71,6 +71,7 @@ export async function readGeoJsonDocumentMetadata(
   let hasSpatialReference = false;
   let rootType: unknown;
   let hasRootType = false;
+  let rootHasError = false;
   let sourceBytes = 0;
   let lastHeartbeatBytes = 0;
   const sourceLimit = MAX_GEOJSON_UPLOAD_BYTES;
@@ -86,6 +87,8 @@ export async function readGeoJsonDocumentMetadata(
     } else if (key === 'spatialReference' && !hasSpatialReference) {
       spatialReference = value;
       hasSpatialReference = true;
+    } else if (key === 'error' && value !== null && value !== undefined) {
+      rootHasError = true;
     }
   };
 
@@ -131,6 +134,7 @@ export async function readGeoJsonDocumentMetadata(
     crsJsonTooLarge: rootValueGuard.rootValueWasTooLarge(crsSourceKey),
     rootType,
     rootHasFeaturesArray: rootValueGuard.hasFeaturesArray(),
+    rootHasError,
   };
 }
 

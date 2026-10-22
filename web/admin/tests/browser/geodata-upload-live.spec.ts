@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
 
-test('uploads and preprocesses GeoJSON, OSM GeoJSON, KML, GPX, OSM PBF, Shapefile, and ParkServe through the resumable live workflow', async ({
+test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, and ParkServe through the resumable live workflow', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -69,6 +69,45 @@ test('uploads and preprocesses GeoJSON, OSM GeoJSON, KML, GPX, OSM PBF, Shapefil
               leisure: 'park',
             },
             geometry: { type: 'Point', coordinates: [7.123456, 46.234567] },
+          },
+        ],
+      }),
+    },
+    {
+      format: 'WFS',
+      filename: `browser-${suffix}-wfs.json`,
+      mimeType: 'application/geo+json',
+      adapter: 'GOVERNMENT_GIS',
+      featureName: `Uploaded WFS ${suffix}`,
+      content: JSON.stringify({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: {
+              name: `Uploaded WFS ${suffix}`,
+              sourceFormat: 'WFS',
+            },
+            geometry: { type: 'Point', coordinates: [7.123456, 46.234567] },
+          },
+        ],
+      }),
+    },
+    {
+      format: 'ARCGIS_FEATURESERVER',
+      filename: `browser-${suffix}-arcgis.json`,
+      mimeType: 'application/json',
+      adapter: 'GOVERNMENT_GIS',
+      featureName: `Uploaded ArcGIS ${suffix}`,
+      content: JSON.stringify({
+        spatialReference: { wkid: 4326 },
+        features: [
+          {
+            attributes: {
+              OBJECTID: 738291,
+              name: `Uploaded ArcGIS ${suffix}`,
+            },
+            geometry: { x: 7.123456, y: 46.234567 },
           },
         ],
       }),
@@ -171,12 +210,12 @@ test('uploads and preprocesses GeoJSON, OSM GeoJSON, KML, GPX, OSM PBF, Shapefil
         .getByRole('combobox')
         .first()
         .selectOption(source.format);
-      if (source.format === 'PARKSERVE_US')
+      if (['PARKSERVE_US', 'GOVERNMENT_GIS'].includes(source.adapter))
         await page
           .locator('form')
           .getByRole('combobox')
           .nth(1)
-          .selectOption('PARKSERVE_US');
+          .selectOption(source.adapter);
       await page.getByLabel('Feature category').selectOption(entityTypeCode);
       await page
         .getByLabel('Source label')

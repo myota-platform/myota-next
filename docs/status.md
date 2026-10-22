@@ -71,7 +71,7 @@ production readiness.
   status, while cross-account reads are denied. Admin can queue certificate PDF
   rendering, and Participant exposes the download only after the artifact is
   ready. The latest render-job status persists in Admin across page reloads.
-  Admin GeoJSON, OSM GeoJSON, KML, GPX, OSM PBF, Shapefile, and ParkServe US file uploads now run through the resumable
+  Admin GeoJSON, OSM GeoJSON, WFS GeoJSON, ArcGIS FeatureServer JSON, KML, GPX, OSM PBF, Shapefile, and ParkServe US file uploads now run through the resumable
   multipart API, the CI S3-compatible fixture, and the Geodata preprocessing
   worker; CI verifies each completed upload, preprocessed import, source
   object, and review candidate.

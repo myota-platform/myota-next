@@ -107,17 +107,17 @@ const selectedCounts = computed(() =>
 const showReview = computed(() =>
   Boolean(
     selectedRun.value &&
-      selectedRun.value.status !== 'PROCESSED' &&
-      !isPreprocessing(selectedRun.value) &&
-      (isReviewable(selectedRun.value) || totalCandidates.value),
+    selectedRun.value.status !== 'PROCESSED' &&
+    !isPreprocessing(selectedRun.value) &&
+    (isReviewable(selectedRun.value) || totalCandidates.value),
   ),
 );
 const canFinalize = computed(() =>
   Boolean(
     selectedRun.value &&
-      selectedRun.value.status !== 'PROCESSED' &&
-      !isPreprocessing(selectedRun.value) &&
-      !actionBusy.value,
+    selectedRun.value.status !== 'PROCESSED' &&
+    !isPreprocessing(selectedRun.value) &&
+    !actionBusy.value,
   ),
 );
 const uploadPercent = computed(() =>
@@ -593,6 +593,8 @@ async function queueImport(): Promise<void> {
       'GPX',
       'SHAPEFILE',
       'PARKSERVE_US',
+      'WFS',
+      'ARCGIS_FEATURESERVER',
     ].includes(format.value)
   ) {
     error.value = `${format.value} file uploads are not available yet. Paste its supported source data or choose a supported upload format.`;
@@ -1006,6 +1008,9 @@ onBeforeUnmount(() => {
           >
           <small class="field-help"
             >ParkServe US uploads require the ParkServe US adapter.</small
+          >
+          <small class="field-help"
+            >WFS and ArcGIS uploads require the Government GIS adapter.</small
           >
         </label>
         <label

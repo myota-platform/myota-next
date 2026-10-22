@@ -43,6 +43,7 @@ import {
   streamGeoJsonFeatures,
 } from './geodata-geojson-stream.js';
 import { decodeOsmPbfStream } from './geodata-osm-pbf.js';
+import { setSourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 import { streamXmlFeatures } from './geodata-xml-stream.js';
 import { normalizeAdapterFeature } from './geodata-adapter.js';
 
@@ -493,17 +494,23 @@ export class GeodataWorkRepository {
         featureLimit,
         run.source_hash,
       );
-    } else if (format === 'GEOJSON') {
+    } else if (['GEOJSON', 'WFS', 'ARCGIS_FEATURESERVER'].includes(format)) {
       const documentMetadata = await readGeoJsonDocumentMetadata(
         object.Body as AsyncIterable<Uint8Array>,
         () => this.heartbeat(run),
       );
+      if (format === 'ARCGIS_FEATURESERVER') {
+        if (documentMetadata.rootHasError)
+          throw new Error('ArcGIS source returned an error document');
+        if (!documentMetadata.rootHasFeaturesArray)
+          throw new Error('ArcGIS response has no features array');
+      }
       const replay = await this.storageClient().send(
         new GetObjectCommand({ Bucket: bucket, Key: run.source_key }),
       );
       if (!replay.Body)
         throw new Error('geodata import source object has no content');
-      features = streamGeoJsonFeatures(
+      const decoded = streamGeoJsonFeatures(
         replay.Body as AsyncIterable<Uint8Array>,
         run.source_hash,
         featureLimit,
@@ -517,6 +524,10 @@ export class GeodataWorkRepository {
         },
         () => this.heartbeat(run),
       );
+      features =
+        format === 'ARCGIS_FEATURESERVER'
+          ? normalizeArcGisFeatures(decoded)
+          : decoded;
     } else if (format === 'SHAPEFILE' || format === 'SHP') {
       features = streamShapefileFeatures(
         object.Body as AsyncIterable<Uint8Array>,
@@ -1529,4 +1540,40 @@ function hashCanonicalJson(
     return 'null';
   };
   return createHash('sha256').update(canonical(value), 'utf8').digest('hex');
+}
+
+async function* normalizeArcGisFeatures(
+  source: AsyncIterable<unknown>,
+): AsyncGenerator<Record<string, unknown>> {
+  for await (const rawFeature of source) {
+    if (!isRecord(rawFeature)) throw new Error('ArcGIS feature is invalid');
+    const geometry = isRecord(rawFeature.geometry) ? rawFeature.geometry : {};
+    const properties = isRecord(rawFeature.attributes)
+      ? { ...rawFeature.attributes }
+      : {};
+    properties.sourceFormat = 'ARCGIS_FEATURESERVER';
+
+    const documentReference = rawFeature.crs;
+    const geometryReference = geometry.spatialReference;
+    const hasWkid = (value: unknown) =>
+      isRecord(value) &&
+      (value.latestWkid !== undefined || value.wkid !== undefined);
+    const crs = hasWkid(documentReference)
+      ? documentReference
+      : hasWkid(geometryReference)
+        ? geometryReference
+        : (documentReference ?? geometryReference);
+    const normalized: Record<string, unknown> = {
+      type: 'Feature',
+      properties,
+      geometry,
+      ...(crs !== undefined ? { crs } : {}),
+    };
+    const sourceJson = sourceJsonForGeoJsonFeature(rawFeature);
+    setSourceFeatureHashOverride(
+      normalized,
+      hashCanonicalJson(rawFeature, sourceJson),
+    );
+    yield normalized;
+  }
 }

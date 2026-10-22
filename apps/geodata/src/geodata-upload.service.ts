@@ -719,6 +719,8 @@ export function validateCreate(
       'GEOJSON',
       'KML',
       'GPX',
+      'WFS',
+      'ARCGIS_FEATURESERVER',
       'SHAPEFILE',
       'SHP',
       'PARKSERVE_US',
@@ -726,7 +728,7 @@ export function validateCreate(
     ].includes(format)
   )
     throw new BadRequestException(
-      'this import path accepts GeoJSON, KML, GPX, Shapefile ZIP archives, or OSM PBF files',
+      'this import path accepts GeoJSON, WFS GeoJSON, ArcGIS FeatureServer JSON, KML, GPX, Shapefile ZIP archives, or OSM PBF files',
     );
   const normalizedFormat =
     format === 'SHP' || format === 'PARKSERVE_US' ? 'SHAPEFILE' : format;

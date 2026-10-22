@@ -133,6 +133,11 @@ function normalizeGovernmentFeature(
         type: 'Polygon',
         coordinates: rawGeometry.rings,
       };
+    } else if (Object.hasOwn(rawGeometry, 'paths')) {
+      rawGeometry = {
+        type: 'MultiLineString',
+        coordinates: rawGeometry.paths,
+      };
     } else if (
       Object.hasOwn(rawGeometry, 'x') &&
       Object.hasOwn(rawGeometry, 'y')
