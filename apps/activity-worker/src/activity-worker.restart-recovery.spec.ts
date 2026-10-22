@@ -413,10 +413,15 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           const retried = await pool.query<{
             status: string;
             attempts: number;
-          }>('SELECT status,attempts FROM activity_job WHERE id=$1', [jobs[4]]);
+            available: boolean;
+          }>(
+            'SELECT status,attempts,available_at<=now() AS available FROM activity_job WHERE id=$1',
+            [jobs[4]],
+          );
           return (
             retried.rows[0]?.status === 'QUEUED' &&
-            retried.rows[0]?.attempts === 1
+            retried.rows[0]?.attempts === 1 &&
+            retried.rows[0]?.available === true
           );
         }, 'Activity worker did not persist its retry after PostgreSQL restarted');
         await publishWork(publisher, registry, jobs[4]!);
