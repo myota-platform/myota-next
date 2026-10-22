@@ -163,7 +163,64 @@ test('creates shared categories and assigns them to a live programme', async ({
     expect(eventTypes).toContain('programme.created.v1');
     expect(eventTypes).toContain('programme.entity-type.assigned.v1');
     expect(eventTypes).toContain('programme.entity-type.unassigned.v1');
-    expect(idempotencyKeys).toHaveLength(5);
+
+    await page.goto('/programmes');
+    await page
+      .locator('button.table-row')
+      .filter({ hasText: programmeSlug })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: /Edit Live parity/ }),
+    ).toBeVisible();
+    const updatedProgrammeName = `Updated live parity ${fixtureId.slice(0, 8)}`;
+    await page.getByLabel('Programme name').fill(updatedProgrammeName);
+    await page
+      .getByLabel('Description')
+      .fill('Updated through the live Admin programme editor.');
+    await page.getByRole('button', { name: 'Save programme' }).click();
+    await expect(page.getByText('Programme saved.')).toBeVisible();
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Archive programme' }).click();
+    await expect(page.getByText('Programme archived.')).toBeVisible();
+
+    const archivedProgramme = await pool.query<{
+      payload: {
+        name: string;
+        description: string;
+        status: string;
+      };
+    }>('SELECT payload FROM programme_record WHERE slug=$1', [programmeSlug]);
+    expect(archivedProgramme.rows[0]?.payload).toMatchObject({
+      name: updatedProgrammeName,
+      description: 'Updated through the live Admin programme editor.',
+      status: 'ARCHIVED',
+    });
+    const lifecycleEvents = await pool.query<{
+      event_type: string;
+      payload: Record<string, unknown>;
+    }>(
+      `SELECT event_type,payload FROM outbox_event
+        WHERE producer='programmes' AND aggregate_id=$1`,
+      [programmeId],
+    );
+    expect(lifecycleEvents.rows.map((row) => row.event_type)).toContain(
+      'programme.updated.v1',
+    );
+    expect(lifecycleEvents.rows.map((row) => row.event_type)).toContain(
+      'programme.archived.v1',
+    );
+    expect(
+      lifecycleEvents.rows.find(
+        (row) => row.event_type === 'programme.updated.v1',
+      )?.payload,
+    ).toMatchObject({ name: updatedProgrammeName });
+    expect(
+      lifecycleEvents.rows.find(
+        (row) => row.event_type === 'programme.archived.v1',
+      )?.payload,
+    ).toEqual({ slug: programmeSlug });
+    expect(idempotencyKeys).toHaveLength(7);
     expect(idempotencyKeys.every((key) => /^[0-9a-f-]{36}$/i.test(key))).toBe(
       true,
     );

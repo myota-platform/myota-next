@@ -77,7 +77,8 @@ A live Admin browser workflow creates two shared categories, creates a
 programme with one category, then assigns and removes the other through the
 programme editor and Gateway. It verifies the resulting Core catalogue and
 programme records, idempotency keys, and catalogue, assignment, and removal
-outbox events.
+outbox events. It then edits the programme and archives it through the live
+editor, confirming the final Core record and both lifecycle outbox events.
 
 Another live Admin and Participant workflow creates a printable background
 asset, saves an activator award draft, submits and approves it, and publishes
