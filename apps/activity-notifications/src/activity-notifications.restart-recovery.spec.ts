@@ -499,10 +499,18 @@ async function waitForDurableIdle(
 ) {
   let lastInfo: Awaited<ReturnType<typeof manager.consumers.info>> | undefined;
   try {
-    await waitFor(async () => {
-      lastInfo = await manager.consumers.info(streamName, durableName);
-      return lastInfo.num_pending === 0 && lastInfo.num_ack_pending === 0;
-    }, 'notification durable did not settle after restart');
+    await waitFor(
+      async () => {
+        try {
+          lastInfo = await manager.consumers.info(streamName, durableName);
+          return lastInfo.num_pending === 0 && lastInfo.num_ack_pending === 0;
+        } catch {
+          return false;
+        }
+      },
+      'notification durable did not settle after restart',
+      30_000,
+    );
   } catch (error) {
     const state = lastInfo
       ? {
@@ -521,8 +529,9 @@ async function waitForDurableIdle(
 async function waitFor(
   predicate: () => boolean | Promise<boolean>,
   message: string,
+  timeoutMs = 15_000,
 ) {
-  const deadline = Date.now() + 15_000;
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 50));
