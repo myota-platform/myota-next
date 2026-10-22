@@ -536,7 +536,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
     }
   }, 120_000);
 
-  it('continues a pending job after JetStream leader failover', async () => {
+  it('settles pending work and dead letters after JetStream leader failover', async () => {
     const databaseUrl = process.env.ACTIVITY_DATABASE_URL;
     if (!databaseUrl) throw new Error('ACTIVITY_DATABASE_URL is required');
     if (
@@ -567,7 +567,6 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
     let publisher: Awaited<ReturnType<typeof connect>> | undefined;
     let worker: ActivityWorkerService | undefined;
     let releaseInvalidDeadLetter: (() => void) | undefined;
-    let invalidSettlementPromise: Promise<void> | undefined;
     let invalidDeadLetterId: string | undefined;
 
     let startProcessing!: () => void;
@@ -638,6 +637,22 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
 
       const workRepository = new ActivityWorkRepository(pool);
       const processWork = workRepository.process.bind(workRepository);
+      const recordDeadLetter =
+        workRepository.recordWorkDeadLetter.bind(workRepository);
+      let releaseDeadLetter!: () => void;
+      const deadLetterGate = new Promise<void>((resolve) => {
+        releaseDeadLetter = resolve;
+      });
+      releaseInvalidDeadLetter = releaseDeadLetter;
+      let deadLetterPersisted!: () => void;
+      const deadLetterWritten = new Promise<void>((resolve) => {
+        deadLetterPersisted = resolve;
+      });
+      workRepository.recordWorkDeadLetter = async (...args) => {
+        await recordDeadLetter(...args);
+        deadLetterPersisted();
+        await deadLetterGate;
+      };
       let holdFirstJob = true;
       workRepository.process = async (job) => {
         if (job.id === ids[0] && holdFirstJob) {
@@ -670,6 +685,39 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         return consumer.num_ack_pending > 0;
       }, 'Activity job delivery was not pending before failover');
 
+      const qsoWork = activityWork.find(
+        (item) => item.workType === 'activity.qso-ingestion.v1',
+      );
+      if (!qsoWork) throw new Error('QSO ingestion work is not registered');
+      const deadLetterStarted = await pool.query<{ started_at: Date }>(
+        'SELECT clock_timestamp() AS started_at',
+      );
+      await jetstream(publisher).publish(
+        qsoWork.subject,
+        new TextEncoder().encode('{"workId":"invalid"}'),
+      );
+      await deadLetterWritten;
+      const savedInvalidDeadLetter = await pool.query<{ id: string }>(
+        `SELECT id FROM activity_work_dead_letter
+         WHERE subject=$1 AND error_category='invalid_envelope'
+           AND work_id IS NULL AND dead_lettered_at >= $2
+         ORDER BY dead_lettered_at DESC LIMIT 1`,
+        [qsoWork.subject, deadLetterStarted.rows[0]!.started_at],
+      );
+      invalidDeadLetterId = savedInvalidDeadLetter.rows[0]?.id;
+      if (!invalidDeadLetterId)
+        throw new Error('Activity invalid work dead letter was not persisted');
+      await waitFor(
+        async () =>
+          (
+            await manager.consumers.info(
+              registry.activityWorkStream,
+              qsoWork.durable,
+            )
+          ).num_ack_pending === 1,
+        'Activity invalid work was not pending settlement',
+      );
+
       const initialInfo = await manager.streams.info(
         registry.activityWorkStream,
       );
@@ -690,6 +738,8 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         }
       }, 'Activity work stream did not elect a replacement leader');
 
+      releaseDeadLetter();
+      releaseInvalidDeadLetter = undefined;
       release();
       releaseProcessing = undefined;
       await waitForJob(pool, ids[0]!);
@@ -713,6 +763,21 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         'Activity job delivery did not acknowledge after failover',
         30_000,
       );
+      await waitForConsumerAckPending(
+        manager,
+        registry.activityWorkStream,
+        qsoWork.durable,
+        0,
+      );
+      const invalidDeadLetter = await pool.query<{ count: number }>(
+        `SELECT count(*)::int AS count FROM activity_work_dead_letter
+         WHERE id=$1 AND error_category='invalid_envelope'`,
+        [invalidDeadLetterId],
+      );
+      expect(invalidDeadLetter.rows[0]?.count).toBe(1);
+      await pool.query('DELETE FROM activity_work_dead_letter WHERE id=$1', [
+        invalidDeadLetterId,
+      ]);
 
       await queueStatisticsJob(pool, ids[1]!, programmeSlugs[1]!);
       await publishWork(publisher, registry, ids[1]!);
@@ -735,139 +800,12 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         );
       }
 
-      await worker.onModuleDestroy();
-      worker = undefined;
-      const statisticsWork = activityWork.find(
-        (item) => item.workType === 'activity.statistics-rebuild.v1',
-      );
-      if (!statisticsWork)
-        throw new Error('statistics rebuild work is not registered');
-      const invalidEnvelopeRepository = new ActivityWorkRepository(pool);
-      const recordDeadLetter =
-        invalidEnvelopeRepository.recordWorkDeadLetter.bind(
-          invalidEnvelopeRepository,
-        );
-      let releaseDeadLetter!: () => void;
-      const deadLetterGate = new Promise<void>((resolve) => {
-        releaseDeadLetter = resolve;
-      });
-      releaseInvalidDeadLetter = releaseDeadLetter;
-      let deadLetterPersisted!: () => void;
-      const deadLetterWritten = new Promise<void>((resolve) => {
-        deadLetterPersisted = resolve;
-      });
-      invalidEnvelopeRepository.recordWorkDeadLetter = async (...args) => {
-        await recordDeadLetter(...args);
-        deadLetterPersisted();
-        await deadLetterGate;
-      };
-      const settlementWorker = new ActivityWorkerService(
-        invalidEnvelopeRepository,
-        {} as ActivityRetentionRepository,
-        pool,
-      );
-      const terminalStarted = await pool.query<{ started_at: Date }>(
-        'SELECT clock_timestamp() AS started_at',
-      );
-      await jetstream(publisher).publish(
-        statisticsWork.subject,
-        new TextEncoder().encode('{"workId":"invalid"}'),
-      );
-      const statisticsConsumer = await jetstream(publisher).consumers.get(
-        registry.activityWorkStream,
-        statisticsWork.durable,
-      );
-      const invalidMessage = await statisticsConsumer.next({ expires: 5000 });
-      if (!invalidMessage)
-        throw new Error('Activity invalid work was not delivered');
-      const invalidHandler = settlementWorker as unknown as {
-        handle(
-          definition: {
-            kind: string;
-            workType: string;
-            subject: string;
-            durable: string;
-            consumer: never;
-            maxPending: number;
-          },
-          message: JsMsg,
-        ): Promise<void>;
-      };
-      invalidSettlementPromise = invalidHandler.handle(
-        {
-          kind: 'STATISTICS_REBUILD',
-          workType: statisticsWork.workType,
-          subject: statisticsWork.subject,
-          durable: statisticsWork.durable,
-          consumer: statisticsConsumer as never,
-          maxPending: 1,
-        },
-        invalidMessage,
-      );
-      await deadLetterWritten;
-      const savedInvalidDeadLetter = await pool.query<{ id: string }>(
-        `SELECT id FROM activity_work_dead_letter
-         WHERE subject=$1 AND error_category='invalid_envelope'
-           AND work_id IS NULL AND dead_lettered_at >= $2
-         ORDER BY dead_lettered_at DESC LIMIT 1`,
-        [statisticsWork.subject, terminalStarted.rows[0]!.started_at],
-      );
-      invalidDeadLetterId = savedInvalidDeadLetter.rows[0]?.id;
-      if (!invalidDeadLetterId)
-        throw new Error('Activity invalid work dead letter was not persisted');
-      await waitFor(
-        async () =>
-          (
-            await manager.consumers.info(
-              registry.activityWorkStream,
-              statisticsWork.durable,
-            )
-          ).num_ack_pending === 1,
-        'Activity invalid work was not pending settlement',
-      );
-      const invalidLeaderInfo = await manager.streams.info(
-        registry.activityWorkStream,
-      );
-      const invalidLeader = invalidLeaderInfo.cluster?.leader;
-      if (!invalidLeader || !cluster.serverNames.includes(invalidLeader))
-        throw new Error('Activity work stream has no known leader');
-      await cluster.stopNode(invalidLeader);
-      await waitFor(async () => {
-        try {
-          const info = await manager.streams.info(registry.activityWorkStream);
-          return Boolean(
-            info.cluster?.leader && info.cluster.leader !== invalidLeader,
-          );
-        } catch {
-          return false;
-        }
-      }, 'Activity work stream did not elect a leader for dead-letter settlement');
-      releaseDeadLetter();
-      releaseInvalidDeadLetter = undefined;
-      await invalidSettlementPromise;
-      await waitForConsumerAckPending(
-        manager,
-        registry.activityWorkStream,
-        statisticsWork.durable,
-        0,
-      );
-      const invalidDeadLetter = await pool.query<{ count: number }>(
-        `SELECT count(*)::int AS count FROM activity_work_dead_letter
-         WHERE id=$1 AND error_category='invalid_envelope'`,
-        [invalidDeadLetterId],
-      );
-      expect(invalidDeadLetter.rows[0]?.count).toBe(1);
-      await pool.query('DELETE FROM activity_work_dead_letter WHERE id=$1', [
-        invalidDeadLetterId,
-      ]);
-
       const stream = await manager.streams.info(registry.activityWorkStream);
       expect(stream.cluster?.leader).not.toBe(failedLeader);
       expect(stream.state.messages).toBe(0);
     } finally {
       releaseProcessing?.();
       releaseInvalidDeadLetter?.();
-      await invalidSettlementPromise?.catch(() => undefined);
       if (worker) await worker.onModuleDestroy().catch(() => undefined);
       await publisher?.drain().catch(() => undefined);
       await cluster?.stopAll();
