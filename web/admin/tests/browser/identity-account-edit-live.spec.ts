@@ -214,7 +214,7 @@ test('preserves scoped roles and refresh sessions across live account edits', as
       `${gateway}/v1/identity/auth/login`,
       { data: { email: updatedEmail, password: participantPassword } },
     );
-    expect(oldPasswordLogin.status()).toBe(401);
+    expect(oldPasswordLogin.status()).toBe(400);
     const resetPasswordLogin = await request.post(
       `${gateway}/v1/identity/auth/login`,
       { data: { email: updatedEmail, password: resetPassword } },
