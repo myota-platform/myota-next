@@ -141,6 +141,11 @@ reloads; a live CI browser workflow creates a programme and submits, approves,
 and publishes a RULES policy in Admin through Gateway. Intercepted award and
 policy draft browser checks also retry an uncertain save after reload and
 verify reuse of the exact request body and key.
+The Admin Activity page's statistics maintenance workflow also runs live
+through Gateway and the Activity worker: CI verifies the queued job reaches
+`SUCCEEDED`, the status appears in the page, and the completed job is persisted
+in Activity. The worker's entity and jurisdiction snapshots are checked against
+the seeded activation totals.
 Master data browser checks cover shared
 category creation, geometry type selection, inactive lifecycle, and the
 idempotency key. Programme category assignment and removal retain their
