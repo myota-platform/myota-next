@@ -61,9 +61,12 @@ scope denial, Identity account creation with a permitted role grant and custom
 role creation from the permission catalogue, account search and edits that
 preserve unchanged scoped assignments, account export and confirmed
 deactivation/anonymization, programme creation with policy/category settings,
-policy draft save, review, and publication, and
-version-checked candidate review, and entity metadata conflict recovery
-followed by a successful edit against the reloaded server version. Geodata
+policy draft save, review, and publication, version-checked candidate
+review, and entity metadata conflict recovery
+followed by a successful edit against the reloaded server version. A live Admin
+workflow also creates and edits a custom Identity role through Gateway, reloads
+the role to confirm its permissions persisted, and verifies both role lifecycle
+events in the Core security and outbox records. Geodata
 management browser coverage also saves manual location overrides with provider
 codes and queues enrichment against the updated entity version. Activity
 browser checks cover

@@ -41,9 +41,11 @@ production readiness.
   [database backup and restore notes](operations/database-backup-restore.md),
   and the [object-store recovery notes](operations/object-store-recovery.md).
 - **Web applications:** CI exercises Admin sign-in/dashboard, Identity account
-  creation and callsign management through export and anonymization, Activity
-  correction review, and policy publication against running NestJS services
-  through the Gateway. Participant profile editing and owner callsign creation,
+  creation and callsign management through export and anonymization, custom
+  Identity role creation and updates with persisted permission and audit checks,
+  Activity correction review, and policy publication against running NestJS
+  services through the Gateway. Participant profile editing and owner callsign
+  creation,
   cropped profile-image upload and deletion, evidence submission, primary
   selection, and retirement also run against live Identity APIs. Participant
   activation creation, QSO recording, and closing
