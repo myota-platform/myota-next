@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: node-ci-${{ github.workflow }}-${{ github.ref }}
+  group: node-ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && 'manual' || 'ref' }}
   cancel-in-progress: true
 
 jobs:
@@ -45,7 +45,12 @@ jobs:
           node-version: '24'
           cache: npm
       - name: Install OSM PBF decoder
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends --yes osmium-tool nats-server postgresql-client-16
+        run: >-
+          sudo timeout 6m apt-get -o Acquire::Retries=3
+          -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          && sudo timeout 6m apt-get -o Acquire::Retries=3
+          -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install
+          --no-install-recommends --yes osmium-tool nats-server postgresql-client-16
       - name: Select PostgreSQL 16 client tools
         run: echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
       - name: Start isolated JetStream for broker recovery coverage
