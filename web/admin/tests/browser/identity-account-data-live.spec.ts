@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
 
-test('exports and anonymizes an account through the live Admin workflow', async ({
+test('manages callsigns, exports, and anonymizes an account through live Admin', async ({
   page,
   request,
 }) => {
@@ -160,8 +160,8 @@ test('exports and anonymizes an account through the live Admin workflow', async 
     const callsignEvents = await pool.query<{ event_type: string }>(
       `SELECT event_type FROM public.outbox_event
         WHERE producer='identity' AND (
-          aggregate_id=$1 OR aggregate_id IN (
-            SELECT id::text FROM public.callsign WHERE account_id=$1
+          aggregate_id=$1::uuid OR aggregate_id IN (
+            SELECT id FROM public.callsign WHERE account_id=$1::uuid
           )
         )`,
       [accountId],
