@@ -27,15 +27,19 @@
   delivery after a single-server JetStream restart with its file store
   retained. A retention recovery fixture deletes an expired ADIF source object,
   drops PostgreSQL before persisting `source_deleted_at`, then confirms the
-  safe deletion repeats and commits the marker after recovery. PostgreSQL
-  process outages and cluster failover remain open. Transient PostgreSQL failures while claiming
+  safe deletion repeats and commits the marker after recovery. A full
+  PostgreSQL service restart during a claimed statistics rebuild also verifies
+  that the worker retains delivery, persists a retry, and completes the job
+  after reconnection. Process outages during other Activity work kinds and
+  cluster failover remain open. Transient PostgreSQL failures while claiming
   work or persisting retry/dead-letter state extend the current ACK and retry
   in place with capped jittered backoff. Fault-proxy checks cover retry-state
   writes and terminal failure settlement at delivery count eight: while
   PostgreSQL is unavailable, the job stays running, no dead-letter row exists,
   and the delivery remains unacknowledged; after recovery, the failed job and
-  dead-letter row commit before ACK. Invalid-envelope settlement, PostgreSQL
-  process outages, and cluster failover remain open.
+  dead-letter row commit before ACK. Invalid-envelope settlement, process
+  outages during terminal dead-letter settlement, and cluster failover remain
+  open.
 - Identity maintenance: expired recovery tokens, revoked sessions, expired
   revocations, rate-limit windows, old security events, and aged orphan profile
   images are cleaned by a separate Core-owned worker. Transient PostgreSQL
@@ -131,8 +135,10 @@
   import fails after claim while the proxy is down; after reconnecting, the
   worker persists the retry state, redelivers the command, and claims the retry.
   This qualifies import claim, state lookup, and retry-state persistence across
-  a PostgreSQL connection outage. Full PostgreSQL process outages and
-  clustered failover remain open.
+  a PostgreSQL connection outage. A full PostgreSQL service restart while a
+  preprocessing delivery is pending also verifies claim retry, successful
+  processing, and acknowledgement after reconnection. Process outages during
+  other Geodata operations and clustered failover remain open.
   If PostgreSQL fails while the worker is recording a failed delivery, it
   extends the current message ACK and retries settlement for transient
   connection, shutdown, serialization, and deadlock errors with capped jittered
@@ -144,9 +150,8 @@
   and error, deletion verifies its error and lease, and enrichment verifies
   that its current request returns to `QUEUED` before redelivery. Successful
   reprocessing is stubbed for promotion, deletion, and enrichment to isolate
-  settlement behavior. Claim and processing outages in other worker
-  operations, full PostgreSQL process outages, and clustered failover remain
-  open.
+  settlement behavior. Process outages during claim or processing for other
+  work kinds and clustered failover remain open.
   Periodic cancellation, expired-work, and retention passes also retry
   transient database failures with capped jittered backoff. Retention repeats
   object deletion safely before retrying its database state change.

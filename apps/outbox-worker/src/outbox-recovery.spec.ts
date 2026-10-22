@@ -1,17 +1,20 @@
 import { randomUUID } from 'node:crypto';
-import { execFile, spawn, spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { promisify } from 'node:util';
 import { connect } from '@nats-io/transport-node';
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { DatabaseHealthService } from '../../../libs/platform/src/database.module.js';
 import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
+import {
+  startPostgresServiceContainer,
+  stopPostgresServiceContainer,
+} from '../../../libs/platform/src/testing/postgres-service-container.js';
 import {
   loadOutboxRegistry,
   type ClaimedOutboxEvent,
@@ -22,7 +25,6 @@ const enabled = Boolean(
   process.env.OUTBOX_DATABASE_URL &&
   process.env.NATS_TEST_URL,
 );
-const execFileAsync = promisify(execFile);
 
 describe.skipIf(!enabled)('outbox broker recovery', () => {
   it('retries a broker failure and publishes the retained event once available', async () => {
@@ -521,16 +523,11 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
             );
             if (envelope.eventId === eventId) {
               publishedEventIds.push(eventId);
-              await execFileAsync('docker', [
-                'stop',
-                '--time',
-                '1',
-                containerId,
-              ]);
+              await stopPostgresServiceContainer(containerId);
               stopped = true;
               restartPromise = (async () => {
                 await delay(1500);
-                await execFileAsync('docker', ['start', containerId]);
+                await startPostgresServiceContainer(containerId);
                 stopped = false;
                 await waitFor(async () => {
                   try {
@@ -574,7 +571,7 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
       } finally {
         await restartPromise?.catch(() => undefined);
         if (stopped) {
-          await execFileAsync('docker', ['start', containerId]).catch(
+          await startPostgresServiceContainer(containerId).catch(
             () => undefined,
           );
           stopped = false;

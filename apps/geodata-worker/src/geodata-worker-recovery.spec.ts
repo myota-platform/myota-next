@@ -24,9 +24,14 @@ import type { ConsumerConfig, StreamConfig } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
+import { DatabaseHealthService } from '../../../libs/platform/src/database.module.js';
 import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint.js';
 import { retryTransientDatabaseOperation } from '../../../libs/platform/src/database-retry.js';
 import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
+import {
+  startPostgresServiceContainer,
+  stopPostgresServiceContainer,
+} from '../../../libs/platform/src/testing/postgres-service-container.js';
 import { GeodataRetentionRepository } from './geodata-retention.repository.js';
 import { GeodataEnrichmentRepository } from './geodata-enrichment.repository.js';
 import { GeodataPromotionRepository } from './geodata-promotion.repository.js';
@@ -214,6 +219,9 @@ async function verifyBrokerRecovery() {
   const databaseProxy = await startPostgresFaultProxy(databaseUrl);
   const { Pool } = await import('pg');
   const directDatabase = new Pool({ connectionString: databaseUrl, max: 1 });
+  const directDatabaseHealth = new DatabaseHealthService(
+    directDatabase as Pool,
+  );
   const databaseProbe = new Pool({
     connectionString: databaseProxy.connectionString,
     max: 1,
@@ -243,6 +251,7 @@ async function verifyBrokerRecovery() {
   const processedEnrichments: string[] = [];
   const outageImportRunId = randomUUID();
   const settlementImportRunId = randomUUID();
+  const processRestartImportRunId = randomUUID();
   const settlementPromotionQueueId = randomUUID();
   const settlementDeletionJobId = randomUUID();
   const settlementEnrichmentEntityId = randomUUID();
@@ -254,6 +263,7 @@ async function verifyBrokerRecovery() {
   const apiEnrichmentEntityId = randomUUID();
   let outageClaimAttempts = 0;
   let outageStateAttempts = 0;
+  let processRestartClaimAttempts = 0;
   let enrichmentClaimAttempts = 0;
   let failSettlementOnce = true;
   let failPromotionSettlementOnce = true;
@@ -270,11 +280,20 @@ async function verifyBrokerRecovery() {
   const liveDeletionRepository = new GeodataDeletionRepository(
     databaseProbe as Pool,
   );
-  const liveImportRunIds = new Set([outageImportRunId, settlementImportRunId]);
+  const liveImportRunIds = new Set([
+    outageImportRunId,
+    settlementImportRunId,
+    processRestartImportRunId,
+  ]);
+  const postgresContainerId = process.env.MYOTA_POSTGRES_SERVICE_CONTAINER_ID;
+  let postgresContainerStopped = false;
+  let postgresRestartPromise: Promise<void> | undefined;
   const workRepository = {
     claim: vi.fn(async (importRunId: string) => {
       if (liveImportRunIds.has(importRunId)) {
         if (importRunId === outageImportRunId) outageClaimAttempts++;
+        if (importRunId === processRestartImportRunId)
+          processRestartClaimAttempts++;
         return liveWorkRepository.claim(importRunId);
       }
       return { importRunId };
@@ -501,6 +520,7 @@ async function verifyBrokerRecovery() {
       for (const [runId, name] of [
         [outageImportRunId, 'database-claim-outage'],
         [settlementImportRunId, 'database-settlement-outage'],
+        [processRestartImportRunId, 'database-process-restart'],
       ]) {
         await fixture.query(
           `INSERT INTO import_run
@@ -1156,11 +1176,60 @@ async function verifyBrokerRecovery() {
       settlementEnrichmentRequestId,
     ]);
 
+    if (postgresContainerId) {
+      await stopPostgresServiceContainer(postgresContainerId);
+      postgresContainerStopped = true;
+      postgresRestartPromise = (async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await startPostgresServiceContainer(postgresContainerId);
+        postgresContainerStopped = false;
+        await waitForRecovery(async () => {
+          try {
+            await directDatabase.query('SELECT 1');
+            return true;
+          } catch {
+            return false;
+          }
+        }, 'PostgreSQL did not accept connections after its restart');
+      })();
+      await publishGeodataWork(
+        publisher,
+        'geodata.import-preprocess.v1',
+        processRestartImportRunId,
+        { type: 'import_run', id: processRestartImportRunId },
+        { importRunId: processRestartImportRunId },
+      );
+      await waitForRecovery(async () => {
+        const consumer = await manager.consumers.info(
+          'MYOTA_GEODATA_WORK',
+          'geodata-preprocessing-v1',
+        );
+        return processRestartClaimAttempts > 0 && consumer.num_ack_pending > 0;
+      }, 'Geodata worker did not retain preprocessing work during PostgreSQL process shutdown');
+      await postgresRestartPromise;
+      await waitForRecovery(
+        () => processedPreprocessing.includes(processRestartImportRunId),
+        'Geodata preprocessing did not resume after PostgreSQL process restart',
+      );
+      const restartedRun = await directDatabase.query<{
+        status: string;
+        attempt_count: number;
+      }>('SELECT status,attempt_count FROM import_run WHERE id=$1', [
+        processRestartImportRunId,
+      ]);
+      expect(restartedRun.rows[0]).toMatchObject({
+        status: 'PROCESSING',
+        attempt_count: 1,
+      });
+      expect(processRestartClaimAttempts).toBeGreaterThanOrEqual(2);
+    }
+
     expect(executionOrder).toEqual(jobIds);
     expect(processedPreprocessing).toEqual([
       importRunId,
       outageImportRunId,
       settlementImportRunId,
+      ...(postgresContainerId ? [processRestartImportRunId] : []),
     ]);
     expect(new Set(processedPromotions)).toEqual(
       new Set([queueId, settlementPromotionQueueId]),
@@ -1172,6 +1241,13 @@ async function verifyBrokerRecovery() {
     expect(outageClaimAttempts).toBeGreaterThanOrEqual(2);
     expect(deletions.execute).toHaveBeenCalledTimes(4);
   } finally {
+    await postgresRestartPromise?.catch(() => undefined);
+    if (postgresContainerStopped && postgresContainerId) {
+      await startPostgresServiceContainer(postgresContainerId).catch(
+        () => undefined,
+      );
+      postgresContainerStopped = false;
+    }
     if (worker) await worker.onModuleDestroy().catch(() => undefined);
     if (publisher) await publisher.drain().catch(() => undefined);
     if (server) await stopRecoveryJetStream(server).catch(() => undefined);
@@ -1188,7 +1264,13 @@ async function verifyBrokerRecovery() {
         await cleanup.query(
           `DELETE FROM outbox_event
             WHERE aggregate_type='import_run' AND aggregate_id=ANY($1::text[])`,
-          [[outageImportRunId, settlementImportRunId]],
+          [
+            [
+              outageImportRunId,
+              settlementImportRunId,
+              processRestartImportRunId,
+            ],
+          ],
         );
         await cleanup.query(
           'DELETE FROM geodata_import_processing_queue WHERE id=$1',
@@ -1200,10 +1282,16 @@ async function verifyBrokerRecovery() {
         );
         await cleanup.query(
           'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=ANY($1::uuid[])',
-          [[outageImportRunId, settlementImportRunId]],
+          [
+            [
+              outageImportRunId,
+              settlementImportRunId,
+              processRestartImportRunId,
+            ],
+          ],
         );
         await cleanup.query('DELETE FROM import_run WHERE id=ANY($1::uuid[])', [
-          [outageImportRunId, settlementImportRunId],
+          [outageImportRunId, settlementImportRunId, processRestartImportRunId],
         ]);
         await cleanup.query('DELETE FROM geodata_entity WHERE id=$1', [
           settlementEnrichmentEntityId,
@@ -1236,7 +1324,7 @@ async function verifyBrokerRecovery() {
         cleanup.release();
       }
     }
-    await directDatabase.end();
+    await directDatabaseHealth.onModuleDestroy();
     for (const [name, value] of savedEnvironment) {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;

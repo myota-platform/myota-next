@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -20,6 +21,10 @@ import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { DatabaseHealthService } from '../../../libs/platform/src/database.module.js';
 import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
+import {
+  startPostgresServiceContainer,
+  stopPostgresServiceContainer,
+} from '../../../libs/platform/src/testing/postgres-service-container.js';
 import { ActivityWorkRepository } from './activity-work.repository.js';
 import { ActivityRetentionRepository } from './activity-retention.repository.js';
 import { ActivityWorkerService } from './activity-worker.service.js';
@@ -44,6 +49,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       throw new Error('broker restart recovery requires local Postgres');
 
     const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+    const poolHealth = new DatabaseHealthService(pool);
     const databaseProxy = await startPostgresFaultProxy(databaseUrl);
     const workerPool = new Pool({
       connectionString: databaseProxy.connectionString,
@@ -63,8 +69,9 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
     const previousRetentionEnvironment = Object.fromEntries(
       retentionEnvironmentNames.map((name) => [name, process.env[name]]),
     );
-    const jobs = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    const jobs = Array.from({ length: 5 }, () => randomUUID());
     const programmeSlugs = jobs.map((id) => `worker-restart-${id}`);
+    const postgresContainerId = process.env.MYOTA_POSTGRES_SERVICE_CONTAINER_ID;
     const retentionImportId = randomUUID();
     const retentionActivationId = randomUUID();
     const retentionObjectKey = `retention/${retentionImportId}.adi`;
@@ -73,6 +80,8 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       Awaited<ReturnType<typeof startRetentionObjectStore>> | undefined;
     let publisher: Awaited<ReturnType<typeof connect>> | undefined;
     let worker: ActivityWorkerService | undefined;
+    let postgresContainerStopped = false;
+    let postgresRestartPromise: Promise<void> | undefined;
 
     try {
       const registry = await loadOutboxRegistry();
@@ -133,6 +142,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       const workRepository = new ActivityWorkRepository(workerPool);
       const processWork = workRepository.process.bind(workRepository);
       let injectSettlementFailure = true;
+      let injectPostgresRestartFailure = true;
       workRepository.process = async (job) => {
         if (job.id === jobs[3])
           throw new Error('injected failure for terminal settlement');
@@ -140,6 +150,32 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           injectSettlementFailure = false;
           databaseProxy.setAvailable(false);
           throw new Error('injected failure before retry-state persistence');
+        }
+        if (
+          job.id === jobs[4] &&
+          postgresContainerId &&
+          !postgresRestartPromise
+        ) {
+          await stopPostgresServiceContainer(postgresContainerId);
+          postgresContainerStopped = true;
+          postgresRestartPromise = (async () => {
+            await delay(1500);
+            await startPostgresServiceContainer(postgresContainerId);
+            postgresContainerStopped = false;
+            await waitFor(async () => {
+              try {
+                await pool.query('SELECT 1');
+                return true;
+              } catch {
+                return false;
+              }
+            }, 'PostgreSQL did not accept connections after its restart');
+          })();
+          await postgresRestartPromise;
+          if (injectPostgresRestartFailure) {
+            injectPostgresRestartFailure = false;
+            throw new Error('injected failure after PostgreSQL restart');
+          }
         }
         return processWork(job);
       };
@@ -359,6 +395,22 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       );
       expect(snapshots.rows[0]?.count).toBeGreaterThanOrEqual(3);
 
+      if (postgresContainerId) {
+        await queueStatisticsJob(pool, jobs[4]!, programmeSlugs[4]!);
+        await publishWork(publisher, registry, jobs[4]!);
+        await waitFor(
+          () => Boolean(postgresRestartPromise),
+          'Activity statistics rebuild did not stop PostgreSQL',
+        );
+        await postgresRestartPromise;
+        await waitForJob(pool, jobs[4]!);
+        const restartedJob = await pool.query<{ attempts: number }>(
+          'SELECT attempts FROM activity_job WHERE id=$1',
+          [jobs[4]],
+        );
+        expect(restartedJob.rows[0]?.attempts).toBeGreaterThanOrEqual(2);
+      }
+
       await pool.query(
         `INSERT INTO activity_activation
            (id,programme_slug,entity_id,entity_type,operator_id,operator_callsign,started_at)
@@ -413,6 +465,13 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       worker = undefined;
       await retentionLoop;
     } finally {
+      await postgresRestartPromise?.catch(() => undefined);
+      if (postgresContainerStopped && postgresContainerId) {
+        await startPostgresServiceContainer(postgresContainerId).catch(
+          () => undefined,
+        );
+        postgresContainerStopped = false;
+      }
       if (worker) await worker.onModuleDestroy().catch(() => undefined);
       await workerPoolHealth.onModuleDestroy().catch(() => undefined);
       if (publisher) await publisher.drain().catch(() => undefined);
@@ -446,7 +505,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           retentionActivationId,
         ])
         .catch(() => undefined);
-      await pool.end();
+      await poolHealth.onModuleDestroy();
       await databaseProxy.close();
       await rm(directory, { recursive: true, force: true });
       await retentionObjectStore?.close();
