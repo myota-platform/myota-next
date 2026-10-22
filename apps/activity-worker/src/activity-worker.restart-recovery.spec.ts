@@ -704,7 +704,6 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
     } finally {
       releaseProcessing?.();
       if (worker) await worker.onModuleDestroy().catch(() => undefined);
-      await poolHealth.onModuleDestroy().catch(() => undefined);
       await publisher?.drain().catch(() => undefined);
       await cluster?.stopAll();
       await pool
@@ -724,7 +723,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           [ids],
         )
         .catch(() => undefined);
-      await pool.end();
+      await poolHealth.onModuleDestroy().catch(() => undefined);
       await rm(directory, { recursive: true, force: true });
       for (const [name, value] of savedEnvironment) {
         if (value === undefined) delete process.env[name];
