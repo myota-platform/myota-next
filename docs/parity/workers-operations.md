@@ -30,9 +30,12 @@
   safe deletion repeats and commits the marker after recovery. PostgreSQL
   process outages and cluster failover remain open. Transient PostgreSQL failures while claiming
   work or persisting retry/dead-letter state extend the current ACK and retry
-  in place with capped jittered backoff. The fault-proxy check covers retry
-  state writes after a transient connection loss; PostgreSQL process
-  outages, cluster failover, and dead-letter persistence recovery remain open.
+  in place with capped jittered backoff. Fault-proxy checks cover retry-state
+  writes and terminal failure settlement at delivery count eight: while
+  PostgreSQL is unavailable, the job stays running, no dead-letter row exists,
+  and the delivery remains unacknowledged; after recovery, the failed job and
+  dead-letter row commit before ACK. Invalid-envelope settlement, PostgreSQL
+  process outages, and cluster failover remain open.
 - Identity maintenance: expired recovery tokens, revoked sessions, expired
   revocations, rate-limit windows, old security events, and aged orphan profile
   images are cleaned by a separate Core-owned worker. Transient PostgreSQL

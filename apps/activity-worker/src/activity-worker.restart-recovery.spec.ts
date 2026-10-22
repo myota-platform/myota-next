@@ -14,7 +14,7 @@ import {
   RetentionPolicy,
   StorageType,
 } from '@nats-io/jetstream';
-import type { ConsumerConfig, StreamConfig } from '@nats-io/jetstream';
+import type { ConsumerConfig, JsMsg, StreamConfig } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
@@ -63,7 +63,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
     const previousRetentionEnvironment = Object.fromEntries(
       retentionEnvironmentNames.map((name) => [name, process.env[name]]),
     );
-    const jobs = [randomUUID(), randomUUID(), randomUUID()];
+    const jobs = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
     const programmeSlugs = jobs.map((id) => `worker-restart-${id}`);
     const retentionImportId = randomUUID();
     const retentionActivationId = randomUUID();
@@ -134,6 +134,8 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       const processWork = workRepository.process.bind(workRepository);
       let injectSettlementFailure = true;
       workRepository.process = async (job) => {
+        if (job.id === jobs[3])
+          throw new Error('injected failure for terminal settlement');
         if (job.id === jobs[1] && injectSettlementFailure) {
           injectSettlementFailure = false;
           databaseProxy.setAvailable(false);
@@ -222,6 +224,117 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       // The retained original delivery is NAKed after retry state commits and
       // should drive the queued retry itself.
       await waitForJob(pool, jobs[1]!, 30_000);
+
+      await queueStatisticsJob(pool, jobs[3]!, programmeSlugs[3]!);
+      const workInternals = workRepository as unknown as {
+        failWorkJob: ActivityWorkRepository['failWorkJob'];
+      };
+      const failWorkJob = workInternals.failWorkJob.bind(workRepository);
+      let terminalPersistenceOutageInjected = false;
+      workInternals.failWorkJob = async (...args) => {
+        if (!terminalPersistenceOutageInjected) {
+          terminalPersistenceOutageInjected = true;
+          databaseProxy.setAvailable(false);
+        }
+        return failWorkJob(...args);
+      };
+      let terminalMessageAcknowledged = false;
+      let ackExtensions = 0;
+      const statsWork = activityWork.find(
+        (item) => item.durable === statisticsDurable,
+      );
+      if (!statsWork) throw new Error('statistics work is not registered');
+      const terminalMessage = {
+        info: { deliveryCount: 8 },
+        subject: statsWork.subject,
+        data: new TextEncoder().encode(
+          JSON.stringify({
+            envelopeVersion: 1,
+            workId: jobs[3],
+            workType: 'activity.statistics-rebuild.v1',
+            createdAt: new Date().toISOString(),
+            producer: 'activity-service',
+            aggregate: { type: 'activity_job', id: jobs[3] },
+            payload: { jobId: jobs[3] },
+          }),
+        ),
+        working: () => {
+          ackExtensions += 1;
+        },
+        ack: () => {
+          terminalMessageAcknowledged = true;
+        },
+        nak: () => {
+          throw new Error('exhausted work delivery must not be retried');
+        },
+        term: () => {
+          throw new Error('valid work failures must not be terminated');
+        },
+      } as unknown as JsMsg;
+      const workerInternals = worker as unknown as {
+        handle(
+          definition: {
+            kind: string;
+            workType: string;
+            subject: string;
+            durable: string;
+          },
+          message: JsMsg,
+        ): Promise<void>;
+      };
+      const terminalSettlement = workerInternals.handle(
+        {
+          kind: 'STATISTICS_REBUILD',
+          workType: statsWork.workType,
+          subject: statsWork.subject,
+          durable: statsWork.durable,
+        },
+        terminalMessage,
+      );
+      const rejectedBeforeTerminalPersistence =
+        databaseProxy.rejectedConnections();
+      await waitFor(
+        () =>
+          terminalPersistenceOutageInjected &&
+          databaseProxy.rejectedConnections() >
+            rejectedBeforeTerminalPersistence &&
+          !terminalMessageAcknowledged,
+        'Activity worker acknowledged exhausted work before terminal state recovered',
+      );
+      const jobDuringDeadLetterOutage = await pool.query<{
+        status: string;
+      }>('SELECT status FROM activity_job WHERE id=$1', [jobs[3]]);
+      const deadLetterDuringOutage = await pool.query(
+        'SELECT 1 FROM activity_work_dead_letter WHERE work_id=$1',
+        [jobs[3]],
+      );
+      expect(jobDuringDeadLetterOutage.rows[0]?.status).toBe('RUNNING');
+      expect(deadLetterDuringOutage.rowCount).toBe(0);
+      expect(ackExtensions).toBeGreaterThan(0);
+      databaseProxy.setAvailable(true);
+      await terminalSettlement;
+      workInternals.failWorkJob = failWorkJob;
+      expect(terminalMessageAcknowledged).toBe(true);
+      const settledTerminalJob = await pool.query<{
+        status: string;
+        last_error: string | null;
+      }>('SELECT status,last_error FROM activity_job WHERE id=$1', [jobs[3]]);
+      expect(settledTerminalJob.rows[0]).toMatchObject({
+        status: 'FAILED',
+        last_error: 'Error',
+      });
+      const savedWorkDeadLetter = await pool.query<{
+        delivery_count: number;
+        error_category: string;
+      }>(
+        `SELECT delivery_count,error_category FROM activity_work_dead_letter
+         WHERE work_id=$1`,
+        [jobs[3]],
+      );
+      expect(savedWorkDeadLetter.rows[0]).toEqual({
+        delivery_count: 8,
+        error_category: 'Error',
+      });
 
       await stopJetStream(server);
       server = undefined;
@@ -314,6 +427,12 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           `DELETE FROM activity_statistic_snapshot
          WHERE programme_slug=ANY($1::text[]) AND algorithm_version='activity-v2'`,
           [programmeSlugs],
+        )
+        .catch(() => undefined);
+      await pool
+        .query(
+          'DELETE FROM activity_work_dead_letter WHERE work_id=ANY($1::uuid[])',
+          [jobs],
         )
         .catch(() => undefined);
       await pool
