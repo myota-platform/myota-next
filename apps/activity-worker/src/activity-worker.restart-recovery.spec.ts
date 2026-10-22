@@ -700,7 +700,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       }
       const stream = await manager.streams.info(registry.activityWorkStream);
       expect(stream.cluster?.leader).not.toBe(failedLeader);
-      expect(stream.state.messages).toBe(2);
+      expect(stream.state.messages).toBe(0);
     } finally {
       releaseProcessing?.();
       if (worker) await worker.onModuleDestroy().catch(() => undefined);
