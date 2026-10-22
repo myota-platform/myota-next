@@ -370,11 +370,15 @@ async function verifyClusterFailover() {
     );
     for (const [durable] of consumers) {
       await waitForRecovery(async () => {
-        const info = await manager.consumers.info(
-          'MYOTA_GEODATA_WORK',
-          durable,
-        );
-        return info.num_pending === 0 && info.num_ack_pending === 0;
+        try {
+          const info = await manager.consumers.info(
+            'MYOTA_GEODATA_WORK',
+            durable,
+          );
+          return info.num_pending === 0 && info.num_ack_pending === 0;
+        } catch {
+          return false;
+        }
       }, `Geodata durable ${durable} did not settle after leader failover`);
     }
   } finally {
