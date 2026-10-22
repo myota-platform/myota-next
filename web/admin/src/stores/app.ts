@@ -6,6 +6,7 @@ import type { Account, Programme } from '../types';
 export const useAppStore = defineStore('app', () => {
   const account = ref<Account | null>(null);
   const programmes = ref<Programme[]>([]);
+  const programmesLoaded = ref(false);
   const currentProgramme = ref('');
   const apiStatus = ref<'pending' | 'connected' | 'unavailable'>('pending');
   const initialized = ref(false);
@@ -73,6 +74,7 @@ export const useAppStore = defineStore('app', () => {
     }
     if (revision !== sessionRevision) return;
     programmes.value = items;
+    programmesLoaded.value = true;
     bootstrapWarning.value = '';
     apiStatus.value = 'connected';
   }
@@ -103,6 +105,7 @@ export const useAppStore = defineStore('app', () => {
     account.value = null;
     initialized.value = false;
     programmes.value = [];
+    programmesLoaded.value = false;
     currentProgramme.value = '';
     clearSession();
   }
@@ -152,6 +155,7 @@ export const useAppStore = defineStore('app', () => {
   return {
     account,
     programmes,
+    programmesLoaded,
     currentProgramme,
     apiStatus,
     initialized,

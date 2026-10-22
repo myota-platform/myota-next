@@ -67,12 +67,13 @@ const metrics = computed(() =>
     },
   ].filter((item) => item.show),
 );
-async function load(): Promise<void> {
+async function load(refreshProgrammes = true): Promise<void> {
   await run(async () => {
     const failures: string[] = [];
     if (canProgramme.value) {
       try {
-        await store.loadProgrammes();
+        if (refreshProgrammes || !store.programmesLoaded)
+          await store.loadProgrammes();
         counts.value.programmes = store.programmes.length;
       } catch {
         counts.value.programmes = null;
@@ -128,7 +129,7 @@ async function load(): Promise<void> {
       : '';
   });
 }
-onMounted(load);
+onMounted(() => load(false));
 </script>
 <template>
   <PageHeader :refresh="load" :busy="loading" />

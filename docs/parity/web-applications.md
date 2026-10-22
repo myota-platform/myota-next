@@ -9,8 +9,12 @@ The baseline Admin and Participant applications are carried forward under
 `web/` with separate deployment artifacts. The Admin build is checked in CI;
 a static source scan resolves 62 concrete Admin HTTP method/path pairs, all
 present in the OpenAPI contract. This does not establish payload or workflow
-parity. The Admin programme editor and Participant selector follow the
-programme API's page metadata so both receive the complete catalogue. The Admin
+parity. Dashboard browser coverage verifies scope-limited data requests,
+role-specific metrics and panels, and that available workspaces remain usable
+when a permitted data source fails. The dashboard reuses the programme
+catalogue loaded during session bootstrap and refreshes it only when requested.
+The Admin programme editor and Participant selector follow the programme API's
+page metadata so both receive the complete catalogue. The Admin
 Content and Policy views page versions independently while keeping coverage,
 review, and editing scoped to the selected programme. Programme creation and
 Content draft browser coverage retry uncertain saves after reload and verify
