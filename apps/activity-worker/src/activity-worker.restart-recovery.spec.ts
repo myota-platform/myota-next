@@ -598,42 +598,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         reconnectTimeWait: 100,
       });
       const manager = await jetstreamManager(publisher);
-      await addTestStreamWithPlacementRetry(manager, {
-        name: registry.activityWorkStream,
-        subjects: [`${registry.activityWorkSubjectPrefix}>`],
-        retention: RetentionPolicy.Workqueue,
-        storage: StorageType.File,
-        num_replicas: 3,
-        max_age: 3_600_000_000_000,
-        max_bytes: 16 * 1024 * 1024,
-        max_msgs: 1000,
-        max_msg_size: 1024 * 1024,
-      } as StreamConfig);
-      for (const item of activityWork) {
-        const [maxAckPending, maxWaiting] = activityConsumerLimits(
-          item.durable,
-        );
-        await manager.consumers.add(registry.activityWorkStream, {
-          durable_name: item.durable,
-          filter_subject: item.subject,
-          deliver_policy: DeliverPolicy.All,
-          ack_policy: AckPolicy.Explicit,
-          replay_policy: ReplayPolicy.Instant,
-          ack_wait: activityAckWait(item.durable) * 1_000_000_000,
-          max_deliver: 8,
-          max_ack_pending: maxAckPending,
-          max_waiting: maxWaiting,
-          num_replicas: 3,
-        } as ConsumerConfig);
-      }
-      await waitFor(async () => {
-        try {
-          const info = await manager.streams.info(registry.activityWorkStream);
-          return (info.cluster?.replicas?.length ?? 0) >= 2;
-        } catch {
-          return false;
-        }
-      }, 'Activity work stream did not replicate across all cluster nodes');
+      await provisionActivityWorkStream(manager, registry, activityWork);
 
       const workRepository = new ActivityWorkRepository(pool);
       const processWork = workRepository.process.bind(workRepository);
@@ -839,6 +804,192 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       }
     }
   }, 90_000);
+
+  it('confirms terminal failed-job ACK after JetStream leader failover', async () => {
+    const databaseUrl = process.env.ACTIVITY_DATABASE_URL;
+    if (!databaseUrl) throw new Error('ACTIVITY_DATABASE_URL is required');
+    if (
+      !['localhost', '127.0.0.1', '[::1]'].includes(
+        new URL(databaseUrl).hostname,
+      )
+    )
+      throw new Error('cluster failover recovery requires local Postgres');
+
+    const pool = new Pool({ connectionString: databaseUrl, max: 3 });
+    const directory = await mkdtemp(
+      join(tmpdir(), 'myota-activity-terminal-cluster-'),
+    );
+    const jobId = randomUUID();
+    const programmeSlug = `terminal-cluster-${jobId}`;
+    let cluster:
+      Awaited<ReturnType<typeof startTestJetStreamCluster>> | undefined;
+    let publisher: Awaited<ReturnType<typeof connect>> | undefined;
+    let releaseSettlement: (() => void) | undefined;
+    let terminalSettlement: Promise<void> | undefined;
+    let deadLetterId: string | undefined;
+
+    try {
+      const registry = await loadOutboxRegistry();
+      const activityWork = registry.work.filter(
+        (item) => item.owner === 'activity-service',
+      );
+      const statisticsWork = activityWork.find(
+        (item) => item.workType === 'activity.statistics-rebuild.v1',
+      );
+      if (!statisticsWork)
+        throw new Error('statistics rebuild work is not registered');
+      cluster = await startTestJetStreamCluster(
+        directory,
+        'myota-activity-terminal-recovery',
+        'activity-terminal-cluster',
+      );
+      publisher = await connect({
+        servers: cluster.natsUrl,
+        name: 'activity-terminal-cluster-publisher',
+        maxReconnectAttempts: -1,
+        reconnectTimeWait: 100,
+      });
+      const manager = await jetstreamManager(publisher);
+      await provisionActivityWorkStream(manager, registry, activityWork);
+
+      await queueStatisticsJob(pool, jobId, programmeSlug);
+      await publishWork(publisher, registry, jobId);
+      const consumer = await jetstream(publisher).consumers.get(
+        registry.activityWorkStream,
+        statisticsWork.durable,
+      );
+      const brokerMessage = await consumer.next({ expires: 5000 });
+      if (!brokerMessage)
+        throw new Error('terminal Activity work was not delivered');
+
+      const repository = new ActivityWorkRepository(pool);
+      repository.process = async () => {
+        throw new Error('injected terminal processing failure');
+      };
+      const persistFailure = repository.failWorkJob.bind(repository);
+      let failureCommitted!: () => void;
+      const failureCommittedPromise = new Promise<void>((resolve) => {
+        failureCommitted = resolve;
+      });
+      let releaseCommittedFailure!: () => void;
+      const committedFailureGate = new Promise<void>((resolve) => {
+        releaseCommittedFailure = resolve;
+      });
+      releaseSettlement = releaseCommittedFailure;
+      repository.failWorkJob = async (...args) => {
+        await persistFailure(...args);
+        failureCommitted();
+        await committedFailureGate;
+      };
+
+      const service = new ActivityWorkerService(
+        repository,
+        {} as ActivityRetentionRepository,
+        pool,
+      );
+      const handler = service as unknown as {
+        handle(
+          definition: {
+            kind: string;
+            workType: string;
+            subject: string;
+            durable: string;
+            consumer: never;
+            maxPending: number;
+          },
+          message: JsMsg,
+        ): Promise<void>;
+      };
+      const terminalMessage = {
+        subject: brokerMessage.subject,
+        data: brokerMessage.data,
+        info: { ...brokerMessage.info, deliveryCount: 8 },
+        working: () => brokerMessage.working(),
+        ackAck: () => brokerMessage.ackAck(),
+        nak: (milliseconds?: number) => brokerMessage.nak(milliseconds),
+      } as unknown as JsMsg;
+      terminalSettlement = handler.handle(
+        {
+          kind: 'STATISTICS_REBUILD',
+          workType: statisticsWork.workType,
+          subject: statisticsWork.subject,
+          durable: statisticsWork.durable,
+          consumer: consumer as never,
+          maxPending: 1,
+        },
+        terminalMessage,
+      );
+
+      await failureCommittedPromise;
+      const failedJob = await pool.query<{ status: string }>(
+        'SELECT status FROM activity_job WHERE id=$1',
+        [jobId],
+      );
+      expect(failedJob.rows[0]?.status).toBe('FAILED');
+      const savedDeadLetter = await pool.query<{ id: string }>(
+        `SELECT id FROM activity_work_dead_letter
+         WHERE work_id=$1 AND work_type=$2 ORDER BY dead_lettered_at DESC LIMIT 1`,
+        [jobId, statisticsWork.workType],
+      );
+      deadLetterId = savedDeadLetter.rows[0]?.id;
+      if (!deadLetterId)
+        throw new Error('terminal Activity dead letter was not persisted');
+      await waitForConsumerAckPending(
+        manager,
+        registry.activityWorkStream,
+        statisticsWork.durable,
+        1,
+      );
+
+      const leaderInfo = await manager.streams.info(
+        registry.activityWorkStream,
+      );
+      const failedLeader = leaderInfo.cluster?.leader;
+      if (!failedLeader || !cluster.serverNames.includes(failedLeader))
+        throw new Error('Activity work stream has no known leader');
+      await cluster.stopNode(failedLeader);
+      await waitFor(async () => {
+        try {
+          const info = await manager.streams.info(registry.activityWorkStream);
+          return Boolean(
+            info.cluster?.leader && info.cluster.leader !== failedLeader,
+          );
+        } catch {
+          return false;
+        }
+      }, 'Activity work stream did not elect a leader for terminal settlement');
+
+      releaseCommittedFailure();
+      releaseSettlement = undefined;
+      await terminalSettlement;
+      await waitForConsumerAckPending(
+        manager,
+        registry.activityWorkStream,
+        statisticsWork.durable,
+        0,
+      );
+      const retainedDeadLetter = await pool.query<{ count: number }>(
+        'SELECT count(*)::int AS count FROM activity_work_dead_letter WHERE id=$1',
+        [deadLetterId],
+      );
+      expect(retainedDeadLetter.rows[0]?.count).toBe(1);
+    } finally {
+      releaseSettlement?.();
+      await terminalSettlement?.catch(() => undefined);
+      await publisher?.drain().catch(() => undefined);
+      await cluster?.stopAll();
+      await pool
+        .query('DELETE FROM activity_work_dead_letter WHERE work_id=$1', [
+          jobId,
+        ])
+        .catch(() => undefined);
+      await pool
+        .query('DELETE FROM activity_job WHERE id=$1', [jobId])
+        .catch(() => undefined);
+      await pool.end().catch(() => undefined);
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 60_000);
 });
 
 async function queueStatisticsJob(
@@ -917,6 +1068,47 @@ async function waitForConsumerAckPending(
     const consumer = await manager.consumers.info(stream, durable);
     return consumer.num_ack_pending === expected;
   }, `Activity durable ${durable} did not release pending deliveries`);
+}
+
+async function provisionActivityWorkStream(
+  manager: Awaited<ReturnType<typeof jetstreamManager>>,
+  registry: Awaited<ReturnType<typeof loadOutboxRegistry>>,
+  activityWork: Awaited<ReturnType<typeof loadOutboxRegistry>>['work'],
+) {
+  await addTestStreamWithPlacementRetry(manager, {
+    name: registry.activityWorkStream,
+    subjects: [`${registry.activityWorkSubjectPrefix}>`],
+    retention: RetentionPolicy.Workqueue,
+    storage: StorageType.File,
+    num_replicas: 3,
+    max_age: 3_600_000_000_000,
+    max_bytes: 16 * 1024 * 1024,
+    max_msgs: 1000,
+    max_msg_size: 1024 * 1024,
+  } as StreamConfig);
+  for (const item of activityWork) {
+    const [maxAckPending, maxWaiting] = activityConsumerLimits(item.durable);
+    await manager.consumers.add(registry.activityWorkStream, {
+      durable_name: item.durable,
+      filter_subject: item.subject,
+      deliver_policy: DeliverPolicy.All,
+      ack_policy: AckPolicy.Explicit,
+      replay_policy: ReplayPolicy.Instant,
+      ack_wait: activityAckWait(item.durable) * 1_000_000_000,
+      max_deliver: 8,
+      max_ack_pending: maxAckPending,
+      max_waiting: maxWaiting,
+      num_replicas: 3,
+    } as ConsumerConfig);
+  }
+  await waitFor(async () => {
+    try {
+      const info = await manager.streams.info(registry.activityWorkStream);
+      return (info.cluster?.replicas?.length ?? 0) >= 2;
+    } catch {
+      return false;
+    }
+  }, 'Activity work stream did not replicate across all cluster nodes');
 }
 
 async function makeQueuedJobAvailable(pool: Pool, id: string) {
