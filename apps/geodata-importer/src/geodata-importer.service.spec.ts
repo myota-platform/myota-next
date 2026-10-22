@@ -224,8 +224,15 @@ describe('GeodataImporterService scheduled imports', () => {
     await poll.call(importer);
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+    const [listRequestUrl, listRequest] = fetchMock.mock.calls[0]!;
+    expect(listRequestUrl).toBeInstanceOf(URL);
+    if (!(listRequestUrl instanceof URL))
+      throw new Error('schedule listing must use a parsed URL');
+    expect(listRequestUrl.href).toBe(
       'http://geodata.example.test/v1/geodata/refresh-schedules?page=1&pageSize=100',
+    );
+    expect(new Headers(listRequest?.headers).get('authorization')).toMatch(
+      /^Bearer .+/,
     );
     const [sourceRequestUrl, sourceRequest] = fetchMock.mock.calls[1]!;
     expect(sourceRequestUrl).toBeInstanceOf(URL);
@@ -246,6 +253,7 @@ describe('GeodataImporterService scheduled imports', () => {
     );
     expect(parseJsonWithExactIntegers(runRequest?.body as string)).toEqual({
       features: [],
+      sourceFeatureHashOverrides: [],
     });
   });
 });
