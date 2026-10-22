@@ -28,6 +28,7 @@ const result = spawnSync(
     env: {
       ...process.env,
       MYOTA_ACTIVITY_WORKER_RECOVERY_TEST: '1',
+      ACTIVITY_WORK_RECONCILE_SECONDS: '5',
     },
   },
 );

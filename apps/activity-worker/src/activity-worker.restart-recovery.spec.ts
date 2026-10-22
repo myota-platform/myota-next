@@ -260,7 +260,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       }, 'Activity worker did not persist retry state after PostgreSQL recovered');
       // The retained original delivery is NAKed after retry state commits and
       // should drive the queued retry itself.
-      await waitForJob(pool, jobs[1]!, 90_000);
+      await waitForJob(pool, jobs[1]!, 30_000);
 
       await queueStatisticsJob(pool, jobs[3]!, programmeSlugs[3]!);
       const workInternals = workRepository as unknown as {
@@ -404,7 +404,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           'Activity statistics rebuild did not stop PostgreSQL',
         );
         await postgresRestartPromise;
-        await waitForJob(pool, jobs[4]!);
+        await waitForJob(pool, jobs[4]!, 30_000);
         const restartedJob = await pool.query<{ attempts: number }>(
           'SELECT attempts FROM activity_job WHERE id=$1',
           [jobs[4]],
