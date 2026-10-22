@@ -132,8 +132,11 @@ idempotency keys across same-tab retries and reloads. Shared category saves
 and programme creation also retain their keys across same-tab retries and
 reloads. Programme edits and archive, content draft saves and lifecycle
 actions, and policy draft saves and lifecycle actions retain their keys for
-same-tab retries across reloads. Conflation review browser checks cover a keep-separate
-decision, survivor selection, reviewer attribution, and note. Other Admin
+same-tab retries across reloads. Intercepted Conflation review checks cover a
+keep-separate decision, survivor selection, reviewer attribution, and note. A
+live Admin workflow also records that decision through Gateway and verifies
+the persisted survivor, reviewer, history, idempotency record, and outbox event.
+Other Admin
 workflows still lack browser-level compatibility coverage. Refresh schedule
 checks cover programme-scoped schedule creation and queuing a complete manual
 GeoJSON snapshot. Import checks cover pasted GeoJSON queueing, source metadata,

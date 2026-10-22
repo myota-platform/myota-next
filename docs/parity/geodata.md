@@ -309,7 +309,9 @@ PostGIS bounding boxes using the baseline 0.55 scoring threshold. Failed
 promotion queues can be redriven with a required reason recorded in queue
 metadata and the outbox. The Admin now lists filtered, paged conflation
 candidates and records decisions, optional survivor selection, reviewer, and
-note through the audited API. Admin users with import scope can also create and
+note through the audited API. A live Admin browser workflow checks the saved
+decision, selected survivor, reviewer attribution, resolution history,
+idempotency record, and transactional outbox event. Admin users with import scope can also create and
 page refresh schedules, then queue a complete GeoJSON snapshot manually.
 Schedule pages follow the reference mapping's lexicographic ID order. A
 separate Node importer polls due schedules and also accepts the reference
