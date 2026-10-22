@@ -112,15 +112,22 @@ test('records a live conflation decision through Admin and Geodata', async ({
               c.resolution_history->-1->>'reviewerId' AS reviewer_id,
               c.resolution_history->-1->>'note' AS note,
               (SELECT count(*)::int FROM outbox_event o
-                WHERE o.aggregate_type='conflation_candidate'
-                  AND o.aggregate_id=$2
-                  AND o.event_type='geodata.conflation.resolved.v1'
-                  AND o.payload->>'reviewerId'=$3
-                  AND o.payload->>'note'=$4) AS outbox_count,
+                WHERE o.event_type='geodata.conflation.resolved.v1'
+                  AND o.payload->>'leftEntityId'=$2
+                  AND o.payload->>'rightEntityId'=$3
+                  AND o.payload->>'reviewerId'=$4
+                  AND o.payload->>'note'=$5) AS outbox_count,
               (SELECT count(*)::int FROM idempotency_record i
-                WHERE i.service='geodata-conflation' AND i.key=$5) AS idempotency_count
+                WHERE i.service='geodata-conflation' AND i.key LIKE '%' || $6) AS idempotency_count
          FROM conflation_candidate c WHERE c.id=$1::uuid`,
-      [candidateId, candidatePathId, body.reviewerId, note, idempotencyKey],
+      [
+        candidateId,
+        entityLeftId,
+        entityRightId,
+        body.reviewerId,
+        note,
+        idempotencyKey,
+      ],
     );
     expect(persisted.rows).toEqual([
       {
