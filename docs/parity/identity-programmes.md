@@ -153,7 +153,10 @@ account callsigns, roles, callsign evidence, and security events. It also checks
 that evidence metadata and event payload integers beyond JavaScript's safe
 range remain exact after export. Broader account, callsign, recovery, and
 authorization sequence behavior still require automated compatibility
-coverage.
+coverage. Callsign create and primary-selection idempotency fixtures also pin
+the Python order: required callsign fields precede authorization; authorization
+and account resolution precede cached replay; and replay skips
+mutation-specific validation and leaves the database and outbox unchanged.
 The PostgreSQL-backed Identity HTTP fixture also exercises bootstrap account
 provisioning, password login, the authenticated current-account route, and
 single-use refresh rotation through the real Nest controller and service.

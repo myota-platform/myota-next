@@ -14,7 +14,9 @@ describe('IdentityCallsignService Python compatibility', () => {
       value: string;
       lifecycle_status: string;
     }> = [],
+    idempotentResponse?: string,
   ) {
+    const sequence: string[] = [];
     const accountRecord = {
       id: accountId,
       display_name: 'Test Operator',
@@ -37,6 +39,15 @@ describe('IdentityCallsignService Python compatibility', () => {
       query: async (sql: string, values: unknown[] = []) => {
         queries.push({ sql, values });
         if (
+          (sql.includes('FROM public.account a') &&
+            sql.includes('FOR UPDATE')) ||
+          sql.includes('FROM public.account WHERE id = $1 FOR UPDATE')
+        ) {
+          sequence.push('account');
+        }
+        if (sql.includes('response::text AS response_text'))
+          sequence.push('replay');
+        if (
           sql.includes('FROM public.account a') &&
           sql.includes('FOR UPDATE')
         ) {
@@ -50,6 +61,15 @@ describe('IdentityCallsignService Python compatibility', () => {
             rowCount: 1,
           };
         }
+        if (sql.includes('FROM public.account WHERE id = $1 FOR UPDATE'))
+          return { rows: [{ id: accountId }], rowCount: 1 };
+        if (sql.includes('response::text AS response_text'))
+          return {
+            rows: idempotentResponse
+              ? [{ response_text: idempotentResponse }]
+              : [],
+            rowCount: idempotentResponse ? 1 : 0,
+          };
         if (
           sql.includes('FROM public.callsign') &&
           sql.includes('value = $2')
@@ -125,15 +145,25 @@ describe('IdentityCallsignService Python compatibility', () => {
       },
       release: () => undefined,
     } as unknown as PoolClient;
-    const pool = { connect: async () => client } as unknown as Pool;
+    const connect = vi.fn(async () => {
+      sequence.push('connect');
+      return client;
+    });
+    const pool = { connect } as unknown as Pool;
     const auth = {
-      currentAccount: async () => ({ id: accountId, scopes: [] }),
+      currentAccount: vi.fn(async () => {
+        sequence.push('authorize');
+        return { id: accountId, scopes: [] };
+      }),
     } as unknown as IdentityAuthService;
     return {
       service: new IdentityCallsignService(pool, auth),
       queries,
       callsigns,
       events,
+      sequence,
+      auth,
+      connect,
     };
   }
 
@@ -202,5 +232,83 @@ describe('IdentityCallsignService Python compatibility', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(fixture.queries.some((item) => item.sql === 'ROLLBACK')).toBe(true);
     expect(fixture.events).toHaveLength(0);
+  });
+
+  it('replays callsign creation before mutation-specific value validation', async () => {
+    const previousResponse = {
+      account: { id: accountId },
+      callsign: { id: '88888888-8888-4888-8888-888888888888' },
+    };
+    const fixture = harness('OPERATOR', [], JSON.stringify(previousResponse));
+
+    const result = await fixture.service.addCallsign(
+      'Bearer test',
+      accountId,
+      { callsign: { invalid: true } as never },
+      'callsign-create-replay',
+    );
+
+    expect(result).toEqual(previousResponse);
+    expect(
+      fixture.queries.some((item) =>
+        item.sql.includes('INSERT INTO public.callsign'),
+      ),
+    ).toBe(false);
+    expect(fixture.events).toHaveLength(0);
+    expect(fixture.queries.at(-1)?.sql).toBe('COMMIT');
+    expect(fixture.sequence).toEqual([
+      'authorize',
+      'connect',
+      'account',
+      'replay',
+    ]);
+  });
+
+  it('replays primary selection before validating the callsign ID', async () => {
+    const previousResponse = { account: { id: accountId } };
+    const fixture = harness('OPERATOR', [], JSON.stringify(previousResponse));
+
+    const result = await fixture.service.setPrimaryCallsign(
+      'Bearer test',
+      accountId,
+      { callsignId: 'not-a-uuid' } as never,
+      'primary-callsign-replay',
+    );
+
+    expect(result).toEqual(previousResponse);
+    expect(
+      fixture.queries.some((item) =>
+        item.sql.includes('INSERT INTO public.account_primary_callsign'),
+      ),
+    ).toBe(false);
+    expect(fixture.events).toHaveLength(0);
+    expect(fixture.queries.at(-1)?.sql).toBe('COMMIT');
+    expect(fixture.sequence).toEqual([
+      'authorize',
+      'connect',
+      'account',
+      'replay',
+    ]);
+  });
+
+  it('checks required callsign fields before authorization and replay lookup', async () => {
+    const fixture = harness(
+      'OPERATOR',
+      [],
+      JSON.stringify({ account: { id: accountId } }),
+    );
+
+    await expect(
+      fixture.service.addCallsign(
+        'Bearer test',
+        accountId,
+        { callsign: '' },
+        'callsign-create-replay',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(fixture.auth.currentAccount).not.toHaveBeenCalled();
+    expect(fixture.connect).not.toHaveBeenCalled();
+    expect(fixture.sequence).toEqual([]);
   });
 });
