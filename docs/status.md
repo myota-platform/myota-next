@@ -32,7 +32,9 @@ production readiness.
   redrive, Geodata multipart object-store recovery, and a three-owner backup and
   restore rehearsal have evidence. A PostgreSQL TCP fault proxy now qualifies
   Geodata import claim, state lookup, retry-state persistence, and retention
-  cleanup after source-object deletion; other database outage paths, cluster failover, and additional worker and
+  cleanup after source-object deletion. Activity retry settlement and ADIF
+  retention after source-object deletion also have fault-proxy evidence; other
+  database outage paths, cluster failover, and additional worker and
   object-store recovery paths remain open. See
   [worker and operations coverage](parity/workers-operations.md), the
   [database backup and restore notes](operations/database-backup-restore.md),

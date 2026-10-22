@@ -25,8 +25,10 @@
   JetStream delivery, persists the queued retry after recovery, and completes
   the retry after its queued command is dispatched. The Activity worker also reconnects and resumes durable work
   delivery after a single-server JetStream restart with its file store
-  retained. PostgreSQL process outages, cluster failover, and retention
-  recovery evidence remain open. Transient PostgreSQL failures while claiming
+  retained. A retention recovery fixture deletes an expired ADIF source object,
+  drops PostgreSQL before persisting `source_deleted_at`, then confirms the
+  safe deletion repeats and commits the marker after recovery. PostgreSQL
+  process outages and cluster failover remain open. Transient PostgreSQL failures while claiming
   work or persisting retry/dead-letter state extend the current ACK and retry
   in place with capped jittered backoff. The fault-proxy check covers retry
   state writes after a transient connection loss; PostgreSQL process

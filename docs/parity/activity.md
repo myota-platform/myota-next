@@ -227,8 +227,10 @@ persistence after a claimed job fails, verifies the delivery remains pending
 and the job remains leased, then confirms the retry is persisted and completes
 after connectivity returns when the queued retry is dispatched. The same check restarts JetStream
 with its file store retained and verifies the worker reconnects and completes
-another queued job. PostgreSQL process outages, cluster failover, and retention
-recovery remain open.
+another queued job. Retention recovery also drops PostgreSQL after an expired
+ADIF source object is deleted, verifies `source_deleted_at` remains unset, then
+confirms deletion safely repeats and the marker is persisted after recovery.
+PostgreSQL process outages and cluster failover remain open.
 Failed or queued Activity jobs can be redriven by administrators with
 an audited reason. Failed-job redrive preserves the delivery-attempt counter,
 matching the pinned Python repository. Long-running Activity jobs now extend their 120-second leases

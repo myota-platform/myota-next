@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -54,9 +55,22 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
     const port = await reserveLocalPort();
     const natsUrl = `nats://127.0.0.1:${port}`;
     const originalNatsUrl = process.env.NATS_URL;
+    const retentionEnvironmentNames = [
+      'MYOTA_OBJECT_STORAGE_ENDPOINT',
+      'MYOTA_ADIF_BUCKET',
+      'MYOTA_ADIF_RETENTION_DAYS',
+    ] as const;
+    const previousRetentionEnvironment = Object.fromEntries(
+      retentionEnvironmentNames.map((name) => [name, process.env[name]]),
+    );
     const jobs = [randomUUID(), randomUUID(), randomUUID()];
     const programmeSlugs = jobs.map((id) => `worker-restart-${id}`);
+    const retentionImportId = randomUUID();
+    const retentionActivationId = randomUUID();
+    const retentionObjectKey = `retention/${retentionImportId}.adi`;
     let server: ReturnType<typeof spawn> | undefined;
+    let retentionObjectStore:
+      Awaited<ReturnType<typeof startRetentionObjectStore>> | undefined;
     let publisher: Awaited<ReturnType<typeof connect>> | undefined;
     let worker: ActivityWorkerService | undefined;
 
@@ -70,6 +84,12 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       )?.durable;
       if (!statisticsDurable)
         throw new Error('statistics rebuild durable is not registered');
+      retentionObjectStore = await startRetentionObjectStore(() =>
+        databaseProxy.setAvailable(false),
+      );
+      process.env.MYOTA_OBJECT_STORAGE_ENDPOINT = retentionObjectStore.endpoint;
+      process.env.MYOTA_ADIF_BUCKET = 'myota-adif';
+      process.env.MYOTA_ADIF_RETENTION_DAYS = '1';
       process.env.NATS_URL = natsUrl;
       server = await startJetStream(port, directory);
       publisher = await connect({
@@ -225,6 +245,60 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         [programmeSlugs],
       );
       expect(snapshots.rows[0]?.count).toBeGreaterThanOrEqual(3);
+
+      await pool.query(
+        `INSERT INTO activity_activation
+           (id,programme_slug,entity_id,entity_type,operator_id,operator_callsign,started_at)
+         VALUES ($1,$2,'retention-entity','SOTA','retention-operator','N0CALL','2026-01-01T00:00:00Z')`,
+        [retentionActivationId, `retention-${retentionImportId}`],
+      );
+      await pool.query(
+        `INSERT INTO activity_import
+           (id,activation_id,filename,object_key,bucket,sha256,content_size,status,completed_at)
+         VALUES ($1,$2,'retention.adi',$3,'myota-adif',$4,1,'COMPLETED',now()-interval '3 days')`,
+        [
+          retentionImportId,
+          retentionActivationId,
+          retentionObjectKey,
+          'a'.repeat(64),
+        ],
+      );
+      const runRetention = (
+        worker as unknown as { runRetention: () => Promise<void> }
+      ).runRetention;
+      const rejectedBeforeRetentionOutage = databaseProxy.rejectedConnections();
+      const retentionLoop = runRetention.call(worker);
+      await waitFor(
+        () =>
+          retentionObjectStore!.deletedKeys.length === 1 &&
+          databaseProxy.rejectedConnections() > rejectedBeforeRetentionOutage,
+        'Activity retention did not lose PostgreSQL after deleting its source object',
+      );
+      const markerDuringOutage = await pool.query<{
+        source_deleted_at: Date | null;
+      }>('SELECT source_deleted_at FROM activity_import WHERE id=$1', [
+        retentionImportId,
+      ]);
+      expect(markerDuringOutage.rows[0]?.source_deleted_at).toBeNull();
+      databaseProxy.setAvailable(true);
+      await waitFor(async () => {
+        const marker = await pool.query<{
+          source_deleted_at: Date | null;
+        }>('SELECT source_deleted_at FROM activity_import WHERE id=$1', [
+          retentionImportId,
+        ]);
+        return (
+          retentionObjectStore!.deletedKeys.length >= 2 &&
+          marker.rows[0]?.source_deleted_at !== null
+        );
+      }, 'Activity retention did not repeat safe object deletion and persist its marker');
+      expect(retentionObjectStore.deletedKeys).toEqual([
+        `/${'myota-adif'}/${retentionObjectKey}`,
+        `/${'myota-adif'}/${retentionObjectKey}`,
+      ]);
+      await worker.onModuleDestroy();
+      worker = undefined;
+      await retentionLoop;
     } finally {
       if (worker) await worker.onModuleDestroy().catch(() => undefined);
       await workerPoolHealth.onModuleDestroy().catch(() => undefined);
@@ -245,9 +319,23 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       await pool
         .query('DELETE FROM activity_job WHERE id=ANY($1::uuid[])', [jobs])
         .catch(() => undefined);
+      await pool
+        .query('DELETE FROM activity_import WHERE id=$1', [retentionImportId])
+        .catch(() => undefined);
+      await pool
+        .query('DELETE FROM activity_activation WHERE id=$1', [
+          retentionActivationId,
+        ])
+        .catch(() => undefined);
       await pool.end();
       await databaseProxy.close();
       await rm(directory, { recursive: true, force: true });
+      await retentionObjectStore?.close();
+      for (const name of retentionEnvironmentNames) {
+        const value = previousRetentionEnvironment[name];
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
       if (originalNatsUrl === undefined) delete process.env.NATS_URL;
       else process.env.NATS_URL = originalNatsUrl;
     }
@@ -332,6 +420,36 @@ async function waitFor(
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error(message);
+}
+
+async function startRetentionObjectStore(onFirstDelete: () => void) {
+  const deletedKeys: string[] = [];
+  const server = createHttpServer((request, response) => {
+    request.resume();
+    request.on('end', () => {
+      if (request.method !== 'DELETE') {
+        response.writeHead(405).end();
+        return;
+      }
+      const key = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
+      deletedKeys.push(key);
+      if (deletedKeys.length === 1) onFirstDelete();
+      response.writeHead(204).end();
+    });
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address() as import('node:net').AddressInfo;
+  return {
+    endpoint: `http://127.0.0.1:${address.port}`,
+    deletedKeys,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  };
 }
 
 async function reserveLocalPort() {
