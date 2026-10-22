@@ -168,6 +168,9 @@ same-tab retries and reloads. Entity reviews, metadata/category/geometry/locatio
 updates, enrichment requests, manual proposals, and import finalization use the
 same persistence. Refresh schedule creation and runs plus conflation decisions
 also retain their keys across same-tab retries and reloads.
+An additional live Admin workflow replaces an approved entity's geometry
+through Gateway and Geodata, checking its version and idempotency headers, saved
+geometry history, audit event, and outbox event.
 The live browser suite also runs a confirmed entity deletion through the
 Geodata API, Geodata worker, Activity cascade API, and both owner databases. It
 checks the displayed impact, completion state, removal of linked QSOs and
