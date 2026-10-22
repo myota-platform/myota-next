@@ -30,16 +30,19 @@
   safe deletion repeats and commits the marker after recovery. A full
   PostgreSQL service restart during a claimed statistics rebuild also verifies
   that the worker retains delivery, persists a retry, and completes the job
-  after reconnection. Process outages during other Activity work kinds and
-  cluster failover remain open. Transient PostgreSQL failures while claiming
+  after reconnection. A three-node JetStream check stops the stream leader
+  while a statistics rebuild delivery is pending, verifies completion after
+  leader election, then publishes another job and confirms the Activity
+  durables settle through the surviving cluster. Process outages during other
+  Activity work kinds remain open. Transient PostgreSQL failures while claiming
   work or persisting retry/dead-letter state extend the current ACK and retry
   in place with capped jittered backoff. Fault-proxy checks cover retry-state
   writes and terminal failure settlement at delivery count eight: while
   PostgreSQL is unavailable, the job stays running, no dead-letter row exists,
   and the delivery remains unacknowledged; after recovery, the failed job and
   dead-letter row commit before ACK. Invalid-envelope settlement, process
-  outages during terminal dead-letter settlement, and cluster failover remain
-  open.
+  outages during terminal dead-letter settlement, and JetStream failover during
+  terminal settlement remain open.
 - Identity maintenance: expired recovery tokens, revoked sessions, expired
   revocations, rate-limit windows, old security events, and aged orphan profile
   images are cleaned by a separate Core-owned worker. Transient PostgreSQL
@@ -140,8 +143,11 @@
   This qualifies import claim, state lookup, and retry-state persistence across
   a PostgreSQL connection outage. A full PostgreSQL service restart while a
   preprocessing delivery is pending also verifies claim retry, successful
-  processing, and acknowledgement after reconnection. Process outages during
-  other Geodata operations and clustered failover remain open.
+  processing, and acknowledgement after reconnection. A separate three-node
+  JetStream check stops the leader while a preprocessing delivery is pending,
+  then verifies the delivery completes and all four Geodata durables process
+  work after failover. Process outages during other Geodata operations and
+  cluster failover for other consumers remain open.
   If PostgreSQL fails while the worker is recording a failed delivery, it
   extends the current message ACK and retries settlement for transient
   connection, shutdown, serialization, and deadlock errors with capped jittered
@@ -154,7 +160,7 @@
   that its current request returns to `QUEUED` before redelivery. Successful
   reprocessing is stubbed for promotion, deletion, and enrichment to isolate
   settlement behavior. Process outages during claim or processing for other
-  work kinds and clustered failover remain open.
+  work kinds and cluster failover for other consumers remain open.
   Periodic cancellation, expired-work, and retention passes also retry
   transient database failures with capped jittered backoff. Retention repeats
   object deletion safely before retrying its database state change.

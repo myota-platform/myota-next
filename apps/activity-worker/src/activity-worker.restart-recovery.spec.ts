@@ -21,6 +21,7 @@ import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { DatabaseHealthService } from '../../../libs/platform/src/database.module.js';
 import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
+import { startTestJetStreamCluster } from '../../../libs/platform/src/testing/jetstream-cluster.js';
 import {
   startPostgresServiceContainer,
   stopPostgresServiceContainer,
@@ -516,6 +517,219 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       }
       if (originalNatsUrl === undefined) delete process.env.NATS_URL;
       else process.env.NATS_URL = originalNatsUrl;
+    }
+  }, 60_000);
+
+  it('continues a pending job after JetStream leader failover', async () => {
+    const databaseUrl = process.env.ACTIVITY_DATABASE_URL;
+    if (!databaseUrl) throw new Error('ACTIVITY_DATABASE_URL is required');
+    if (
+      !['localhost', '127.0.0.1', '[::1]'].includes(
+        new URL(databaseUrl).hostname,
+      )
+    )
+      throw new Error('cluster failover recovery requires local Postgres');
+
+    const { Pool } = await import('pg');
+    const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+    const poolHealth = new DatabaseHealthService(pool);
+    const directory = await mkdtemp(
+      join(tmpdir(), 'myota-activity-worker-cluster-'),
+    );
+    const healthPort = await reserveLocalPort();
+    const originalNatsUrl = process.env.NATS_URL;
+    const originalHealthPort = process.env.ACTIVITY_WORKER_HEALTH_PORT;
+    const ids = [randomUUID(), randomUUID()];
+    const programmeSlugs = ids.map((id) => `worker-cluster-${id}`);
+    const savedEnvironment = new Map([
+      ['NATS_URL', originalNatsUrl],
+      ['ACTIVITY_WORKER_HEALTH_PORT', originalHealthPort],
+    ]);
+    let releaseProcessing: (() => void) | undefined;
+    let cluster:
+      Awaited<ReturnType<typeof startTestJetStreamCluster>> | undefined;
+    let publisher: Awaited<ReturnType<typeof connect>> | undefined;
+    let worker: ActivityWorkerService | undefined;
+
+    let startProcessing!: () => void;
+    const processingStarted = new Promise<void>((resolve) => {
+      startProcessing = resolve;
+    });
+    let release!: () => void;
+    const processingGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    releaseProcessing = release;
+
+    try {
+      const registry = await loadOutboxRegistry();
+      const activityWork = registry.work.filter(
+        (item) => item.owner === 'activity-service',
+      );
+      cluster = await startTestJetStreamCluster(
+        directory,
+        'myota-activity-worker-recovery',
+        'activity-worker-cluster',
+      );
+      process.env.NATS_URL = cluster.natsUrl;
+      process.env.ACTIVITY_WORKER_HEALTH_PORT = String(healthPort);
+      publisher = await connect({
+        servers: cluster.natsUrl,
+        name: 'activity-worker-cluster-publisher',
+        maxReconnectAttempts: -1,
+        reconnectTimeWait: 100,
+      });
+      const manager = await jetstreamManager(publisher);
+      await manager.streams.add({
+        name: registry.activityWorkStream,
+        subjects: [`${registry.activityWorkSubjectPrefix}>`],
+        retention: RetentionPolicy.Workqueue,
+        storage: StorageType.File,
+        num_replicas: 3,
+        max_age: 3_600_000_000_000,
+        max_bytes: 16 * 1024 * 1024,
+        max_msgs: 1000,
+        max_msg_size: 1024 * 1024,
+      } as StreamConfig);
+      for (const item of activityWork) {
+        const [maxAckPending, maxWaiting] = activityConsumerLimits(
+          item.durable,
+        );
+        await manager.consumers.add(registry.activityWorkStream, {
+          durable_name: item.durable,
+          filter_subject: item.subject,
+          deliver_policy: DeliverPolicy.All,
+          ack_policy: AckPolicy.Explicit,
+          replay_policy: ReplayPolicy.Instant,
+          ack_wait: activityAckWait(item.durable) * 1_000_000_000,
+          max_deliver: 8,
+          max_ack_pending: maxAckPending,
+          max_waiting: maxWaiting,
+          num_replicas: 3,
+        } as ConsumerConfig);
+      }
+      await waitFor(async () => {
+        try {
+          const info = await manager.streams.info(registry.activityWorkStream);
+          return (info.cluster?.replicas?.length ?? 0) >= 2;
+        } catch {
+          return false;
+        }
+      }, 'Activity work stream did not replicate across all cluster nodes');
+
+      const workRepository = new ActivityWorkRepository(pool);
+      const processWork = workRepository.process.bind(workRepository);
+      let holdFirstJob = true;
+      workRepository.process = async (job) => {
+        if (job.id === ids[0] && holdFirstJob) {
+          holdFirstJob = false;
+          startProcessing();
+          await processingGate;
+        }
+        return processWork(job);
+      };
+      worker = new ActivityWorkerService(
+        workRepository,
+        { runSweep: async () => 0 } as unknown as ActivityRetentionRepository,
+        pool,
+      );
+      await worker.onModuleInit();
+      const workerState = worker as unknown as { natsUp: boolean };
+      await waitFor(
+        () => workerState.natsUp,
+        'Activity worker did not connect to JetStream',
+      );
+
+      await queueStatisticsJob(pool, ids[0]!, programmeSlugs[0]!);
+      await publishWork(publisher, registry, ids[0]!);
+      await processingStarted;
+      await waitFor(async () => {
+        const consumer = await manager.consumers.info(
+          registry.activityWorkStream,
+          'activity-statistics-rebuild-v1',
+        );
+        return consumer.num_ack_pending > 0;
+      }, 'Activity job delivery was not pending before failover');
+
+      const initialInfo = await manager.streams.info(
+        registry.activityWorkStream,
+      );
+      const failedLeader = initialInfo.cluster?.leader;
+      if (!failedLeader)
+        throw new Error('Activity work stream has no elected leader');
+      if (!cluster.serverNames.includes(failedLeader))
+        throw new Error(`JetStream elected an unknown leader: ${failedLeader}`);
+      await cluster.stopNode(failedLeader);
+      await waitFor(async () => {
+        try {
+          const info = await manager.streams.info(registry.activityWorkStream);
+          return Boolean(
+            info.cluster?.leader && info.cluster.leader !== failedLeader,
+          );
+        } catch {
+          return false;
+        }
+      }, 'Activity work stream did not elect a replacement leader');
+
+      release();
+      releaseProcessing = undefined;
+      await waitForJob(pool, ids[0]!);
+      const firstJob = await pool.query<{ attempts: number }>(
+        'SELECT attempts FROM activity_job WHERE id=$1',
+        [ids[0]],
+      );
+      expect(firstJob.rows[0]?.attempts).toBe(1);
+      await waitFor(async () => {
+        const info = await manager.consumers.info(
+          registry.activityWorkStream,
+          'activity-statistics-rebuild-v1',
+        );
+        return info.num_pending === 0 && info.num_ack_pending === 0;
+      }, 'Activity job delivery did not acknowledge after failover');
+
+      await queueStatisticsJob(pool, ids[1]!, programmeSlugs[1]!);
+      await publishWork(publisher, registry, ids[1]!);
+      await waitForJob(pool, ids[1]!);
+      for (const item of activityWork) {
+        const info = await manager.consumers.info(
+          registry.activityWorkStream,
+          item.durable,
+        );
+        expect(info.num_pending).toBe(0);
+        expect(info.num_ack_pending).toBe(0);
+      }
+      const stream = await manager.streams.info(registry.activityWorkStream);
+      expect(stream.cluster?.leader).not.toBe(failedLeader);
+      expect(stream.state.messages).toBe(2);
+    } finally {
+      releaseProcessing?.();
+      if (worker) await worker.onModuleDestroy().catch(() => undefined);
+      await poolHealth.onModuleDestroy().catch(() => undefined);
+      await publisher?.drain().catch(() => undefined);
+      await cluster?.stopAll();
+      await pool
+        .query(
+          `DELETE FROM activity_statistic_snapshot
+           WHERE programme_slug=ANY($1::text[]) AND algorithm_version='activity-v2'`,
+          [programmeSlugs],
+        )
+        .catch(() => undefined);
+      await pool
+        .query('DELETE FROM activity_job WHERE id=ANY($1::uuid[])', [ids])
+        .catch(() => undefined);
+      await pool
+        .query(
+          `DELETE FROM outbox_event
+           WHERE aggregate_type='activity_job' AND aggregate_id=ANY($1::text[])`,
+          [ids],
+        )
+        .catch(() => undefined);
+      await pool.end();
+      await rm(directory, { recursive: true, force: true });
+      for (const [name, value] of savedEnvironment) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
     }
   }, 60_000);
 });

@@ -29,9 +29,10 @@ production readiness.
   and workflow behavior for the required operations and events. The parity
   pages record current coverage and gaps; route presence alone is not proof.
 - **Recovery:** single-server JetStream restart, three-node JetStream leader
-  failover for Activity notifications and each of the three owner outboxes,
-  selected worker lease recovery, redrive, Geodata multipart object-store
-  recovery, and a three-owner backup and restore rehearsal have evidence. A
+  failover for Activity workers and notifications, each of the three owner
+  outboxes, and all four Geodata worker durables; selected worker lease
+  recovery, redrive, Geodata multipart object-store recovery, and a three-owner
+  backup and restore rehearsal have evidence. A
   PostgreSQL TCP fault proxy now qualifies
   Geodata import claim, state lookup, retry-state persistence, and retention
   cleanup after source-object deletion. Activity retry settlement, terminal

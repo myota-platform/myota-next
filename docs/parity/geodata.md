@@ -12,11 +12,13 @@ owned source objects, expires stale multipart uploads, and preserves materialize
 entities. Activity deletion-impact counts preserve exact PostgreSQL integers
 through the Activity response and Geodata's stored confirmation job. CI restarts
 a single-server JetStream with its file store retained and verifies the live
-Geodata worker resumes all four registered work durables. Other database
-outage cases, clustered failover, and remaining Geodata worker recovery paths
-remain open. A live PostgreSQL service restart while preprocessing work is
-pending now verifies claim retry and acknowledgement after reconnection.
-Process outages during other Geodata operations and clustered failover remain
+Geodata worker resumes all four registered work durables. A separate
+three-node JetStream case stops the leader while preprocessing is pending,
+then verifies successful acknowledgement and processing by all four durables
+through the replacement leader. Other database outage cases and Geodata
+processing outages remain open. A live PostgreSQL service restart while
+preprocessing work is pending also verifies claim retry and acknowledgement
+after reconnection. Process outages during other Geodata operations remain
 open.
 Deletion-job creation reports missing fields in reference order, resolves the
 entity before checking GIS authorization, and checks global-role eligibility

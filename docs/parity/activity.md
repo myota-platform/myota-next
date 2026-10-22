@@ -232,8 +232,11 @@ ADIF source object is deleted, verifies `source_deleted_at` remains unset, then
 confirms deletion safely repeats and the marker is persisted after recovery. A
 full PostgreSQL process restart during a claimed statistics rebuild also
 verifies the worker persists a retry and completes the job after reconnection.
-Process outages during other Activity work kinds and cluster failover remain
-open.
+CI also runs the Activity worker against a three-node JetStream cluster, stops
+the leader while a statistics rebuild delivery is pending, and verifies the
+job completes after failover and a later job succeeds through the replacement.
+Process outages during other Activity work kinds and terminal-settlement
+failover remain open.
 Failed or queued Activity jobs can be redriven by administrators with
 an audited reason. Failed-job redrive preserves the delivery-attempt counter,
 matching the pinned Python repository. Long-running Activity jobs now extend their 120-second leases

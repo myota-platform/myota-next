@@ -752,7 +752,7 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
     const eventIds = [randomUUID(), randomUUID()];
     let cluster: TestJetStreamCluster | undefined;
     let connection: Awaited<ReturnType<typeof connect>> | undefined;
-    let releaseAck: (() => void) | undefined;
+    let releaseAck = () => undefined;
 
     try {
       cluster = await startTestJetStreamCluster(
@@ -855,8 +855,8 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
           return false;
         }
       }, 'JetStream outbox cluster did not elect a replacement leader');
-      releaseAck?.();
-      releaseAck = undefined;
+      releaseAck();
+      releaseAck = () => undefined;
       await firstPublish;
 
       const secondClaim = await internals.claim();
@@ -882,7 +882,7 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
       expect(stream.state.messages).toBe(2);
       expect(stream.cluster?.leader).not.toBe(failedLeader);
     } finally {
-      releaseAck?.();
+      releaseAck();
       await connection?.drain().catch(() => undefined);
       await cluster?.stopAll();
       await pool

@@ -32,6 +32,7 @@ import {
   startPostgresServiceContainer,
   stopPostgresServiceContainer,
 } from '../../../libs/platform/src/testing/postgres-service-container.js';
+import { startTestJetStreamCluster } from '../../../libs/platform/src/testing/jetstream-cluster.js';
 import { GeodataRetentionRepository } from './geodata-retention.repository.js';
 import { GeodataEnrichmentRepository } from './geodata-enrichment.repository.js';
 import { GeodataPromotionRepository } from './geodata-promotion.repository.js';
@@ -49,6 +50,8 @@ const brokerRecoveryTestName =
   'resumes all durables after restart and retries after repository failure';
 const retentionRecoveryTestName =
   'retries expired import retention after a database outage during source deletion';
+const clusterFailoverTestName =
+  'resumes every durable after JetStream leader failover';
 
 describe('Geodata worker process recovery', () => {
   it.skipIf(
@@ -75,7 +78,307 @@ describe('Geodata worker process recovery', () => {
     process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
       !process.env.GEO_DATABASE_URL,
   )(retentionRecoveryTestName, async () => verifyRetentionRecovery(), 30_000);
+
+  it.skipIf(
+    process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
+      !process.env.GEO_DATABASE_URL,
+  )(clusterFailoverTestName, async () => verifyClusterFailover(), 60_000);
 });
+
+async function verifyClusterFailover() {
+  const databaseUrl = process.env.GEO_DATABASE_URL;
+  if (!databaseUrl) throw new Error('GEO_DATABASE_URL is required');
+  if (
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(databaseUrl).hostname)
+  )
+    throw new Error('cluster failover recovery requires local Postgres');
+
+  const directory = await mkdtemp(join(tmpdir(), 'myota-geodata-cluster-'));
+  const healthPort = await reserveLocalPort();
+  const { Pool } = await import('pg');
+  const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+  const environmentNames = [
+    'NATS_URL',
+    'GEO_DATABASE_URL',
+    'GEODATA_WORKER_HEALTH_PORT',
+    'GEODATA_WORKER_MAX_ACK_PENDING',
+    'GEODATA_WORKER_ACK_WAIT_SECONDS',
+  ] as const;
+  const savedEnvironment = new Map(
+    environmentNames.map((name) => [name, process.env[name]]),
+  );
+  const pendingImportId = randomUUID();
+  const promotionId = randomUUID();
+  const deletionId = randomUUID();
+  const enrichmentEntityId = randomUUID();
+  const enrichmentRequestId = randomUUID();
+  const processed = {
+    preprocessing: [] as string[],
+    promotion: [] as string[],
+    deletion: [] as string[],
+    enrichment: [] as string[],
+  };
+  let releaseProcessing: (() => void) | undefined;
+  let signalProcessingStarted: (() => void) | undefined;
+  let worker: GeodataWorkerService | undefined;
+  let cluster:
+    Awaited<ReturnType<typeof startTestJetStreamCluster>> | undefined;
+  let publisher: Awaited<ReturnType<typeof connect>> | undefined;
+
+  const processingStarted = new Promise<void>((resolve) => {
+    signalProcessingStarted = resolve;
+  });
+  let release!: () => void;
+  const processingGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  releaseProcessing = release;
+
+  const repository = {
+    claim: async (importRunId: string) => ({ importRunId }),
+    getRunState: async () => ({
+      status: 'PROCESSING',
+      leaseRemainingSeconds: 0,
+    }),
+    preprocess: async (run: { importRunId: string }) => {
+      if (run.importRunId === pendingImportId) {
+        signalProcessingStarted?.();
+        await processingGate;
+      }
+      processed.preprocessing.push(run.importRunId);
+    },
+    fail: async () => undefined,
+    renewHeartbeat: async () => true,
+    staleCancellationIds: async () => [],
+    recoverExpiredWorkDispatches: async () => ({
+      preprocessing: 0,
+      promotion: 0,
+      deletion: 0,
+      enrichment: 0,
+    }),
+  };
+  const promotion = {
+    claimPromotion: async (queueId: string) => ({ queueId }),
+    getPromotionState: async () => ({
+      status: 'PROCESSING',
+      leaseRemainingSeconds: 0,
+    }),
+    processPromotion: async (job: { queueId: string }) => {
+      processed.promotion.push(job.queueId);
+    },
+    retryPromotion: async () => undefined,
+  };
+  const deletions = {
+    claim: async (jobId: string) => ({ jobId }),
+    getDeletionState: async () => ({
+      status: 'PROCESSING',
+      leaseRemainingSeconds: 0,
+    }),
+    execute: async (job: { jobId: string }) => {
+      processed.deletion.push(job.jobId);
+      return true;
+    },
+    heartbeat: async () => true,
+    persistRetry: async () => undefined,
+  };
+  const enrichment = {
+    claim: async (entityId: string, requestId: string) => ({
+      entityId,
+      requestId,
+    }),
+    getRequestState: async (_entityId: string) => ({
+      status: 'PROCESSING',
+      requestId: enrichmentRequestId,
+      leaseRemainingSeconds: 0,
+    }),
+    process: async (job: { requestId: string }) => {
+      processed.enrichment.push(job.requestId);
+    },
+    persistRetry: async () => undefined,
+  };
+  const retention = {
+    purgeSweep: async () => ({ eligible: 0, uploadsExpired: 0 }),
+  };
+
+  try {
+    cluster = await startTestJetStreamCluster(
+      directory,
+      'myota-geodata-worker-recovery',
+      'geodata-worker-cluster',
+    );
+    process.env.NATS_URL = cluster.natsUrl;
+    process.env.GEO_DATABASE_URL = databaseUrl;
+    process.env.GEODATA_WORKER_HEALTH_PORT = String(healthPort);
+    process.env.GEODATA_WORKER_MAX_ACK_PENDING = '1';
+    process.env.GEODATA_WORKER_ACK_WAIT_SECONDS = '2';
+
+    publisher = await connect({
+      servers: cluster.natsUrl,
+      name: 'geodata-worker-cluster-publisher',
+      maxReconnectAttempts: -1,
+      reconnectTimeWait: 100,
+    });
+    const manager = await jetstreamManager(publisher);
+    await manager.streams.add({
+      name: 'MYOTA_GEODATA_WORK',
+      subjects: ['myota.work.geodata.>'],
+      retention: RetentionPolicy.Workqueue,
+      storage: StorageType.File,
+      num_replicas: 3,
+      max_age: 1_209_600_000_000_000,
+      max_bytes: 16 * 1024 * 1024,
+      max_msgs: 100,
+      max_msg_size: 900_000,
+    } as StreamConfig);
+    const consumers = [
+      [
+        'geodata-preprocessing-v1',
+        'myota.work.geodata.import-preprocess.v1',
+        2,
+        100,
+      ],
+      [
+        'geodata-import-promotion-v1',
+        'myota.work.geodata.import-promotion.v1',
+        2,
+        100,
+      ],
+      [
+        'geodata-entity-deletion-v1',
+        'myota.work.geodata.entity-delete.v1',
+        2,
+        100,
+      ],
+      [
+        'geodata-location-enrichment-v1',
+        'myota.work.geodata.location-enrichment.v1',
+        2,
+        8,
+      ],
+    ] as const;
+    for (const [
+      durable,
+      filterSubject,
+      ackWaitSeconds,
+      maxDeliveries,
+    ] of consumers) {
+      await manager.consumers.add('MYOTA_GEODATA_WORK', {
+        durable_name: durable,
+        filter_subject: filterSubject,
+        deliver_policy: DeliverPolicy.All,
+        ack_policy: AckPolicy.Explicit,
+        replay_policy: ReplayPolicy.Instant,
+        ack_wait: ackWaitSeconds * 1_000_000_000,
+        max_deliver: maxDeliveries,
+        max_ack_pending: 1,
+        max_waiting: 1,
+        num_replicas: 3,
+      } as ConsumerConfig);
+    }
+
+    worker = new GeodataWorkerService(
+      repository as never,
+      promotion as never,
+      enrichment as never,
+      deletions as never,
+      retention as never,
+      pool as Pool,
+    );
+    await worker.onModuleInit();
+    const workerState = worker as unknown as { natsUp: boolean };
+    await waitForRecovery(
+      () => workerState.natsUp,
+      'Geodata worker did not connect to JetStream',
+    );
+
+    await publishGeodataWork(
+      publisher,
+      'geodata.import-preprocess.v1',
+      pendingImportId,
+      { type: 'import_run', id: pendingImportId },
+      { importRunId: pendingImportId },
+    );
+    await processingStarted;
+    await waitForRecovery(async () => {
+      const consumer = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        'geodata-preprocessing-v1',
+      );
+      return consumer.num_ack_pending > 0;
+    }, 'Geodata preprocessing delivery was not pending before failover');
+
+    const initialInfo = await manager.streams.info('MYOTA_GEODATA_WORK');
+    const failedLeader = initialInfo.cluster?.leader;
+    if (!failedLeader)
+      throw new Error('Geodata work stream has no elected leader');
+    await cluster.stopNode(failedLeader);
+    await waitForRecovery(async () => {
+      try {
+        const info = await manager.streams.info('MYOTA_GEODATA_WORK');
+        return Boolean(
+          info.cluster?.leader && info.cluster.leader !== failedLeader,
+        );
+      } catch {
+        return false;
+      }
+    }, 'Geodata work stream did not elect a replacement leader');
+
+    release();
+    releaseProcessing = undefined;
+    await waitForRecovery(
+      () => processed.preprocessing.includes(pendingImportId),
+      'Geodata preprocessing did not finish after leader failover',
+    );
+    await publishGeodataWork(
+      publisher,
+      'geodata.import-promotion.v1',
+      promotionId,
+      { type: 'import_processing_queue', id: promotionId },
+      { queueId: promotionId },
+    );
+    await publishDeletion(publisher, deletionId);
+    await publishGeodataWork(
+      publisher,
+      'geodata.location-enrichment.v1',
+      enrichmentRequestId,
+      { type: 'entity', id: enrichmentEntityId },
+      {
+        entityId: enrichmentEntityId,
+        requestId: enrichmentRequestId,
+        geometryHash: 'a'.repeat(64),
+        onlyMissing: true,
+        reason: 'cluster-failover',
+      },
+    );
+    await waitForRecovery(
+      () =>
+        processed.promotion.includes(promotionId) &&
+        processed.deletion.includes(deletionId) &&
+        processed.enrichment.includes(enrichmentRequestId),
+      'Geodata work durables did not resume after leader failover',
+    );
+    for (const [durable] of consumers) {
+      await waitForRecovery(async () => {
+        const info = await manager.consumers.info(
+          'MYOTA_GEODATA_WORK',
+          durable,
+        );
+        return info.num_pending === 0 && info.num_ack_pending === 0;
+      }, `Geodata durable ${durable} did not settle after leader failover`);
+    }
+  } finally {
+    releaseProcessing?.();
+    if (worker) await worker.onModuleDestroy().catch(() => undefined);
+    await publisher?.drain().catch(() => undefined);
+    await cluster?.stopAll();
+    await pool.end();
+    await rm(directory, { recursive: true, force: true });
+    for (const [name, value] of savedEnvironment) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+}
 
 async function verifyRetentionRecovery() {
   const databaseUrl = process.env.GEO_DATABASE_URL;
