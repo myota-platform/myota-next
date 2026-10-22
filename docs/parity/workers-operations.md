@@ -61,7 +61,11 @@
   connectivity while an event is processing, confirms its JetStream delivery
   stays pending without a partial notification, then restores connectivity and
   verifies processing, deduplication, and ACK completion. Cluster failover and
-  retry exhaustion recovery qualification remain open. The unresolved-dead-letter
+  recovery after a PostgreSQL interruption during terminal dead-letter
+  persistence is now checked at delivery count eight: CI confirms the delivery
+  remains unterminated with no dead-letter row during the outage, then persists
+  the eight-attempt record before terminating it after recovery. Broker-side
+  retry exhaustion under deployment conditions remains open. The unresolved-dead-letter
   gauge refreshes in the background every 15 seconds, so it does not block
   consumer startup or issue a count query for every delivery.
 - Geodata workers: registered JetStream consumers for import preprocessing and

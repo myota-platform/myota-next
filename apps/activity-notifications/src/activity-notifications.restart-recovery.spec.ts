@@ -13,7 +13,7 @@ import {
   RetentionPolicy,
   StorageType,
 } from '@nats-io/jetstream';
-import type { ConsumerConfig, StreamConfig } from '@nats-io/jetstream';
+import type { ConsumerConfig, JsMsg, StreamConfig } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
@@ -58,6 +58,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
     const ids = [randomUUID(), randomUUID()];
     const recipient = randomUUID();
     const dedupeKeys = ids.map((id) => `event:${id}`);
+    const deadLetterStreamSequence = Number(BigInt(Date.now()) * 1000n);
     let server: ReturnType<typeof spawn> | undefined;
     let publisher: Awaited<ReturnType<typeof connect>> | undefined;
     let service: ActivityNotificationsService | undefined;
@@ -176,13 +177,96 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
         [consumerName, ids],
       );
       expect(processed.rows[0]?.count).toBe(2);
+
+      let injectedDeadLetterOutage = false;
+      let deliveryTerminated = false;
+      const terminalInternals = service as unknown as {
+        handle(message: JsMsg): Promise<void>;
+        persistDeadLetter(
+          message: JsMsg,
+          event: Record<string, unknown>,
+          eventType: string,
+          attempts: number,
+          permanent: boolean,
+        ): Promise<void>;
+      };
+      const persistDeadLetter =
+        terminalInternals.persistDeadLetter.bind(service);
+      terminalInternals.persistDeadLetter = async (...args) => {
+        if (!injectedDeadLetterOutage) {
+          injectedDeadLetterOutage = true;
+          databaseProxy.setAvailable(false);
+        }
+        return persistDeadLetter(...args);
+      };
+      const rejectedBeforeDeadLetter = databaseProxy.rejectedConnections();
+      const terminalDelivery = {
+        info: {
+          deliveryCount: 8,
+          streamSequence: deadLetterStreamSequence,
+        },
+        subject,
+        data: new TextEncoder().encode(
+          JSON.stringify({
+            eventId: 'malformed-event-id',
+            eventType: 'identity.account.created.v1',
+            payload: { accountId: recipient },
+          }),
+        ),
+        working: () => undefined,
+        term: () => {
+          deliveryTerminated = true;
+        },
+        nak: () => {
+          throw new Error('exhausted delivery must be terminated');
+        },
+      } as unknown as JsMsg;
+      const persistTerminalDelivery = internals.handle.bind(service);
+      const terminalResult = persistTerminalDelivery(terminalDelivery);
+      await waitFor(
+        () =>
+          injectedDeadLetterOutage &&
+          databaseProxy.rejectedConnections() > rejectedBeforeDeadLetter &&
+          !deliveryTerminated,
+        'notification delivery was terminated before dead-letter persistence recovered',
+      );
+      const missingDeadLetter = await pool.query(
+        `SELECT 1 FROM public.dead_letter_event
+         WHERE stream_name=$1 AND stream_sequence=$2`,
+        [streamName, deadLetterStreamSequence],
+      );
+      expect(missingDeadLetter.rowCount).toBe(0);
+      databaseProxy.setAvailable(true);
+      await terminalResult;
+      expect(deliveryTerminated).toBe(true);
+      terminalInternals.persistDeadLetter = persistDeadLetter;
+      const savedDeadLetter = await pool.query<{
+        attempts: number;
+        error: string;
+        event_type: string;
+      }>(
+        `SELECT attempts,error,event_type FROM public.dead_letter_event
+         WHERE stream_name=$1 AND stream_sequence=$2`,
+        [streamName, deadLetterStreamSequence],
+      );
+      expect(savedDeadLetter.rows[0]).toEqual({
+        attempts: 8,
+        error: 'invalid_or_unsupported_envelope',
+        event_type: 'identity.account.created.v1',
+      });
     } finally {
       databaseProxy.setAvailable(true);
       if (service) await service.onModuleDestroy().catch(() => undefined);
       await workerPoolHealth.onModuleDestroy().catch(() => undefined);
       if (publisher) await publisher.drain().catch(() => undefined);
       if (server) await stopJetStream(server).catch(() => undefined);
-      await cleanupFixture(pool, ids, dedupeKeys, priorCheckpoint.rows[0]);
+      await cleanupFixture(
+        pool,
+        ids,
+        dedupeKeys,
+        priorCheckpoint.rows[0],
+        deadLetterStreamSequence,
+      );
       await pool.end();
       await databaseProxy.close();
       await rm(directory, { recursive: true, force: true });
@@ -317,8 +401,13 @@ async function cleanupFixture(
   eventIds: string[],
   dedupeKeys: string[],
   priorCheckpoint: { last_event_id: string; updated_at: Date } | undefined,
+  deadLetterStreamSequence: number,
 ) {
   try {
+    await pool.query(
+      'DELETE FROM public.dead_letter_event WHERE stream_name=$1 AND stream_sequence=$2',
+      [streamName, deadLetterStreamSequence],
+    );
     await pool.query(
       'DELETE FROM public.activity_notification WHERE deduplication_key=ANY($1::text[])',
       [dedupeKeys],
