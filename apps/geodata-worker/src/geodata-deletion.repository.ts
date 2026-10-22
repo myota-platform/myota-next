@@ -35,7 +35,7 @@ export class GeodataDeletionRepository {
       await client.query('BEGIN');
       const result = await client.query(
         `SELECT id,payload FROM geodata_control_record
-         WHERE kind='entityDeletionJobs' AND ($1::uuid IS NULL OR id=$1) AND
+         WHERE kind='entityDeletionJobs' AND ($1::text IS NULL OR id=$1) AND
            (payload->>'status'='QUEUED' OR
             (payload->>'status'='PROCESSING' AND
              (payload->>'leaseUntil')::timestamptz<=now()))
