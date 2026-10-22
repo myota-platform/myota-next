@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { RequestMethod, type INestApplication } from '@nestjs/common';
+import { Pool } from 'pg';
 import request from 'supertest';
 import { bootstrapHttpService } from '../libs/platform/src/bootstrap.js';
 import { integerSetting } from '../libs/platform/src/integer-setting.js';
@@ -9,6 +11,8 @@ import { GeodataModule } from '../apps/geodata/src/geodata.module.js';
 import { GatewayModule } from '../apps/gateway/src/gateway.module.js';
 import { IdentityModule } from '../apps/identity/src/identity.module.js';
 import { ProgrammesModule } from '../apps/programmes/src/programmes.module.js';
+import { GeodataImporterService } from '../apps/geodata-importer/src/geodata-importer.service.js';
+import { stringifyJsonWithBigInts } from '../libs/platform/src/json-bigint.js';
 
 const describeWithDatabases = describe.skipIf(
   !process.env.CORE_DATABASE_URL ||
@@ -31,15 +35,23 @@ describeWithDatabases(
         'MYOTA_GEODATA_URL',
         'MYOTA_ENV',
         'MYOTA_EMAIL_SERVICE_CLIENT_SECRET',
+        'MYOTA_AUTH_SIGNING_KEY',
+        'GEODATA_SOURCE_ALLOWLIST',
+        'MYOTA_OBJECT_STORAGE_ENDPOINT',
         'PORT',
       ] as const;
       const previous = Object.fromEntries(
         envNames.map((name) => [name, process.env[name]]),
       );
+      const geodataCleanupPool = new Pool({
+        connectionString: process.env.GEO_DATABASE_URL,
+      });
       process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL = email;
       process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD = password;
       const emailServiceSecret = `gateway-e2e-${randomUUID()}-email-service-client-secret`;
       process.env.MYOTA_EMAIL_SERVICE_CLIENT_SECRET = emailServiceSecret;
+      process.env.MYOTA_AUTH_SIGNING_KEY = `gateway-e2e-${randomUUID()}-signing-key`;
+      process.env.GEODATA_SOURCE_ALLOWLIST = 'example.test';
       process.env.MYOTA_ENV = 'test';
       process.env.PORT = '0';
 
@@ -48,6 +60,10 @@ describeWithDatabases(
       let activityApp: INestApplication | undefined;
       let geodataApp: INestApplication | undefined;
       let gatewayApp: INestApplication | undefined;
+      let objectStoreFixture:
+        Awaited<ReturnType<typeof startObjectStoreFixture>> | undefined;
+      let importerScheduleId: string | undefined;
+      let importerRunId: string | undefined;
       let identityUrl = '';
       try {
         identityApp = await startIdentity();
@@ -74,6 +90,83 @@ describeWithDatabases(
           .expect(200);
         expect(current.body.id).toBe(login.body.account.id);
         expect(current.body.scopes).toContain('*');
+
+        const scheduleSourceUrl = `https://data.example.test/${randomUUID()}.geojson`;
+        const schedule = await request(gatewayUrl)
+          .post('/v1/geodata/refresh-schedules')
+          .set('Authorization', `Bearer ${login.body.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({
+            adapter: 'OSM',
+            entityTypes: ['SOTA'],
+            intervalSeconds: 86_400,
+            source: {
+              name: 'Live importer fixture',
+              sourceKey: randomUUID(),
+              url: scheduleSourceUrl,
+              format: 'GEOJSON',
+            },
+          })
+          .expect(201);
+        importerScheduleId = schedule.body.id;
+        const scheduledFeature = {
+          type: 'Feature',
+          properties: {
+            name: 'Scheduled importer fixture',
+            entityType: 'SOTA',
+            sourceRef: randomUUID(),
+          },
+          geometry: { type: 'Point', coordinates: [7.2, 46.1] },
+        };
+        const sourceFetch = globalThis.fetch.bind(globalThis);
+        objectStoreFixture = await startObjectStoreFixture();
+        process.env.MYOTA_OBJECT_STORAGE_ENDPOINT = objectStoreFixture.endpoint;
+        const fetchSpy = vi
+          .spyOn(globalThis, 'fetch')
+          .mockImplementation(async (input, init) => {
+            const url =
+              input instanceof URL
+                ? input
+                : input instanceof Request
+                  ? new URL(input.url)
+                  : new URL(String(input));
+            if (url.href === scheduleSourceUrl)
+              return new Response(
+                stringifyJsonWithBigInts({
+                  type: 'FeatureCollection',
+                  features: [scheduledFeature],
+                }),
+                { status: 200 },
+              );
+            return sourceFetch(input, init);
+          });
+        try {
+          const importer = new GeodataImporterService();
+          const runSchedule = (
+            importer as unknown as {
+              runSchedule: (value: typeof schedule.body) => Promise<void>;
+            }
+          ).runSchedule;
+          await runSchedule.call(importer, schedule.body);
+        } finally {
+          fetchSpy.mockRestore();
+        }
+        const scheduledImports = await request(gatewayUrl)
+          .get('/v1/geodata/imports?page=1&pageSize=100')
+          .set('Authorization', `Bearer ${login.body.accessToken}`)
+          .expect(200);
+        const scheduledImport = scheduledImports.body.items.find(
+          (item: { source?: { sourceKey?: string } }) =>
+            item.source?.sourceKey === schedule.body.source.sourceKey,
+        );
+        importerRunId = scheduledImport?.id;
+        expect(scheduledImport).toMatchObject({
+          adapter: 'OSM',
+          source: schedule.body.source,
+          completeSnapshot: true,
+          featureCount: 1,
+          status: 'QUEUED',
+        });
 
         const refreshed = await request(gatewayUrl)
           .post('/v1/identity/auth/refresh')
@@ -400,6 +493,49 @@ describeWithDatabases(
           .expect(200);
         expect(closed.body.status).toBe('CLOSED');
       } finally {
+        vi.restoreAllMocks();
+        await objectStoreFixture?.close();
+        if (importerScheduleId) {
+          const cleanupClient = await geodataCleanupPool.connect();
+          const ownedIds = [
+            importerScheduleId,
+            ...(importerRunId ? [importerRunId] : []),
+          ];
+          try {
+            await cleanupClient.query('BEGIN');
+            await cleanupClient.query(
+              "SELECT set_config('myota.geodata_writer','row-v1',true)",
+            );
+            await cleanupClient.query(
+              'DELETE FROM outbox_event WHERE aggregate_id=ANY($1::text[])',
+              [ownedIds],
+            );
+            if (importerRunId) {
+              await cleanupClient.query(
+                "DELETE FROM idempotency_record WHERE response->>'id'=$1",
+                [importerRunId],
+              );
+              await cleanupClient.query('DELETE FROM import_run WHERE id=$1', [
+                importerRunId,
+              ]);
+            }
+            await cleanupClient.query(
+              "DELETE FROM idempotency_record WHERE response->>'id'=$1",
+              [importerScheduleId],
+            );
+            await cleanupClient.query(
+              "DELETE FROM geodata_control_record WHERE kind='schedules' AND id=$1",
+              [importerScheduleId],
+            );
+            await cleanupClient.query('COMMIT');
+          } catch (error) {
+            await cleanupClient.query('ROLLBACK').catch(() => undefined);
+            throw error;
+          } finally {
+            cleanupClient.release();
+          }
+        }
+        await geodataCleanupPool.end();
         await Promise.all(
           [gatewayApp, geodataApp, activityApp, programmesApp, identityApp]
             .filter((app): app is INestApplication => app !== undefined)
@@ -411,7 +547,7 @@ describeWithDatabases(
           else process.env[name] = value;
         }
       }
-    });
+    }, 30_000);
   },
 );
 
@@ -488,4 +624,25 @@ async function startGateway() {
 async function listen(app: INestApplication) {
   const address = app.getHttpServer().address() as AddressInfo;
   return `http://127.0.0.1:${address.port}`;
+}
+
+async function startObjectStoreFixture() {
+  const server = createServer((request, response) => {
+    request.resume();
+    request.on('end', () => {
+      response.writeHead(200, { etag: '"fixture-object"' }).end();
+    });
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address() as AddressInfo;
+  return {
+    endpoint: `http://127.0.0.1:${address.port}`,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  };
 }

@@ -347,9 +347,12 @@ request, authorization, and idempotency sent to Geodata. Live source domains
 and deployment behavior still require qualification.
 Live browser CI creates a manual refresh schedule in Admin, runs an empty
 complete snapshot through Gateway and Geodata workers, and verifies completion
-and persisted snapshot metadata. A separate Gateway request check verifies
-schedule timestamps and outbox events. These checks cover the manual snapshot
-path; external source fetching remains a separate gate.
+and persisted snapshot metadata. The API integration fixture also creates a
+source-backed schedule through Gateway, has the importer fetch a bounded
+GeoJSON fixture, and sends its complete snapshot to the live Geodata API; it
+verifies the queued import metadata and feature count. A separate Gateway
+request check verifies schedule timestamps and outbox events. Live source
+domains and deployment behavior still require qualification.
 Refresh intervals preserve arbitrary-precision integer values and follow
 Python `int()` whitespace, Unicode decimal, underscore, boolean, and
 float-truncation behavior through API parsing, persistence, and importer due-time
