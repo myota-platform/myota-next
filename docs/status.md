@@ -20,17 +20,19 @@ summarizes implementation coverage and remaining gates.
 - Workspace build, static checks, container images, local Compose, and Helm
   deployment definitions.
 
-These items describe implementation coverage, not complete function parity or
-production readiness.
+The primary user workflows across all five product areas are implemented and
+checked against the accelerated criteria in
+[`parity/completion-criteria.md`](parity/completion-criteria.md). The remaining
+items below are additional edge-case and production qualification, not missing
+primary product areas.
 
 ## Remaining gates
 
-- **Functional parity:** close any remaining gaps in the primary workflows
-  listed in the parity matrix, including authorization and persisted outcomes
-  across their owning services and workers. Compatibility checks should cover
-  each workflow's main success path and shared authorization, validation, and
-  conflict behavior. Route presence alone is not proof. Exact low-impact error
-  details and obscure validation ordering are not completion gates.
+- **Additional compatibility qualification:** broader payload combinations,
+  obscure validation ordering, and rare failure outcomes remain available for
+  follow-up. The accelerated completion criteria require the primary workflow,
+  authorization, persistence, and shared validation/conflict checks; route
+  presence alone is not proof.
 - **Recovery:** single-server JetStream restart, three-node JetStream leader
   failover for Activity workers and notifications, each of the three owner
   outboxes, and all four Geodata worker durables; selected worker lease
