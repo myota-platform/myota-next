@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
 
-test('uploads and preprocesses GeoJSON, OSM GeoJSON, KML, GPX, OSM PBF, and Shapefile through the resumable live workflow', async ({
+test('uploads and preprocesses GeoJSON, OSM GeoJSON, KML, GPX, OSM PBF, Shapefile, and ParkServe through the resumable live workflow', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -103,11 +103,24 @@ test('uploads and preprocesses GeoJSON, OSM GeoJSON, KML, GPX, OSM PBF, and Shap
       featureName: 'Unnamed candidate',
       content: shapefile,
     },
+    {
+      format: 'PARKSERVE_US',
+      filename: `browser-${suffix}-parkserve.zip`,
+      mimeType: 'application/zip',
+      adapter: 'PARKSERVE_US',
+      featureName: 'Unnamed candidate',
+      content: shapefile,
+    },
   ].map((source) => ({
     ...source,
     bytes: Buffer.from(source.content),
     adapter: 'adapter' in source ? source.adapter : 'MANUAL',
-    storedFormat: source.format === 'OSM_GEOJSON' ? 'GEOJSON' : source.format,
+    storedFormat:
+      source.format === 'OSM_GEOJSON'
+        ? 'GEOJSON'
+        : source.format === 'PARKSERVE_US'
+          ? 'SHAPEFILE'
+          : source.format,
     minimumCandidates:
       'minimumCandidates' in source ? source.minimumCandidates : 1,
   }));
@@ -158,6 +171,12 @@ test('uploads and preprocesses GeoJSON, OSM GeoJSON, KML, GPX, OSM PBF, and Shap
         .getByRole('combobox')
         .first()
         .selectOption(source.format);
+      if (source.format === 'PARKSERVE_US')
+        await page
+          .locator('form')
+          .getByRole('combobox')
+          .nth(1)
+          .selectOption('PARKSERVE_US');
       await page.getByLabel('Feature category').selectOption(entityTypeCode);
       await page
         .getByLabel('Source label')

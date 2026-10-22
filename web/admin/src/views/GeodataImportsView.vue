@@ -94,6 +94,7 @@ const formats = [
   'WFS',
   'ARCGIS_FEATURESERVER',
   'SHAPEFILE',
+  'PARKSERVE_US',
 ];
 const allSelected = computed(
   () =>
@@ -574,7 +575,7 @@ async function queueImport(): Promise<void> {
     error.value = 'Choose a file or paste source data.';
     return;
   }
-  if (format.value === 'SHAPEFILE' && !file.value) {
+  if (['SHAPEFILE', 'PARKSERVE_US'].includes(format.value) && !file.value) {
     error.value = 'Choose a ZIP containing the Shapefile and its sidecars.';
     return;
   }
@@ -584,9 +585,15 @@ async function queueImport(): Promise<void> {
   }
   if (
     file.value &&
-    !['GEOJSON', 'OSM_GEOJSON', 'OSM_PBF', 'KML', 'GPX', 'SHAPEFILE'].includes(
-      format.value,
-    )
+    ![
+      'GEOJSON',
+      'OSM_GEOJSON',
+      'OSM_PBF',
+      'KML',
+      'GPX',
+      'SHAPEFILE',
+      'PARKSERVE_US',
+    ].includes(format.value)
   ) {
     error.value = `${format.value} file uploads are not available yet. Paste its supported source data or choose a supported upload format.`;
     return;
@@ -996,6 +1003,9 @@ onBeforeUnmount(() => {
           <small class="field-help"
             >OSM GeoJSON and OSM PBF use the OpenStreetMap adapter
             automatically.</small
+          >
+          <small class="field-help"
+            >ParkServe US uploads require the ParkServe US adapter.</small
           >
         </label>
         <label
