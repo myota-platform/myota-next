@@ -239,6 +239,10 @@ async function verifyBrokerRecovery() {
   const settlementImportRunId = randomUUID();
   const settlementEnrichmentEntityId = randomUUID();
   const settlementEnrichmentRequestId = randomUUID();
+  const staleEnrichmentEntityId = randomUUID();
+  const staleEnrichmentRequestId = randomUUID();
+  const changedGeometryEntityId = randomUUID();
+  const changedGeometryRequestId = randomUUID();
   let outageClaimAttempts = 0;
   let outageStateAttempts = 0;
   let enrichmentClaimAttempts = 0;
@@ -348,6 +352,8 @@ async function verifyBrokerRecovery() {
   const enrichmentGeometryHash = createHash('sha256')
     .update(stringifyJsonWithBigInts(enrichmentGeometry))
     .digest('hex');
+  const changedGeometry = { type: 'Point', coordinates: [8.1234, 47.5678] };
+  let changedGeometryHash = '';
   try {
     const fixture = await directDatabase.connect();
     try {
@@ -398,6 +404,52 @@ async function verifyBrokerRecovery() {
           }),
         ],
       );
+      await fixture.query(
+        `INSERT INTO geodata_entity
+          (id,name,lifecycle_status,geom,centroid,public_properties)
+         VALUES ($1,'stale-enrichment-geometry','APPROVED',
+           ST_SetSRID(ST_MakePoint(7,46),4326),
+           ST_SetSRID(ST_MakePoint(7,46),4326)::geography,$2::jsonb)`,
+        [
+          staleEnrichmentEntityId,
+          stringifyJsonWithBigInts({
+            locationEnrichmentRequestId: staleEnrichmentRequestId,
+            locationEnrichmentGeometryHash: enrichmentGeometryHash,
+            locationEnrichmentStatus: 'PROCESSING',
+            locationEnrichmentOnlyMissing: true,
+            locationEnrichmentReason: 'recovery-test',
+          }),
+        ],
+      );
+      const changedGeometryResult = await fixture.query<{
+        geometry: Record<string, unknown>;
+      }>(
+        `SELECT ST_AsGeoJSON(
+           ST_SetSRID(ST_MakePoint(8.1234,47.5678),4326)
+         )::jsonb AS geometry`,
+      );
+      changedGeometryHash = createHash('sha256')
+        .update(
+          stringifyJsonWithBigInts(changedGeometryResult.rows[0]!.geometry),
+        )
+        .digest('hex');
+      await fixture.query(
+        `INSERT INTO geodata_entity
+          (id,name,lifecycle_status,geom,centroid,public_properties)
+         VALUES ($1,'changed-enrichment-geometry','APPROVED',
+           ST_SetSRID(ST_MakePoint(8.1234,47.5678),4326),
+           ST_SetSRID(ST_MakePoint(8.1234,47.5678),4326)::geography,$2::jsonb)`,
+        [
+          changedGeometryEntityId,
+          stringifyJsonWithBigInts({
+            locationEnrichmentRequestId: changedGeometryRequestId,
+            locationEnrichmentGeometryHash: changedGeometryHash,
+            locationEnrichmentStatus: 'PROCESSING',
+            locationEnrichmentOnlyMissing: true,
+            locationEnrichmentReason: 'recovery-test',
+          }),
+        ],
+      );
       await fixture.query('COMMIT');
     } catch (error) {
       await fixture.query('ROLLBACK').catch(() => undefined);
@@ -405,6 +457,95 @@ async function verifyBrokerRecovery() {
     } finally {
       fixture.release();
     }
+
+    await liveEnrichmentRepository.process({
+      id: staleEnrichmentEntityId,
+      requestId: staleEnrichmentRequestId,
+      geometryHash: '0'.repeat(64),
+      onlyMissing: true,
+      reason: 'recovery-test',
+      requestedBy: 'recovery-test',
+      geometry: enrichmentGeometry,
+      point: [7, 46],
+    });
+    const staleState = await directDatabase.query<{ status: string }>(
+      "SELECT public_properties->>'locationEnrichmentStatus' AS status FROM geodata_entity WHERE id=$1",
+      [staleEnrichmentEntityId],
+    );
+    expect(staleState.rows[0]?.status).toBe('SUPERSEDED');
+    const staleEvent = await directDatabase.query<{ status: string }>(
+      `SELECT payload->>'status' AS status FROM outbox_event
+       WHERE aggregate_type='entity' AND aggregate_id=$1
+         AND event_type='geodata.entity.location-enriched.v1'`,
+      [staleEnrichmentEntityId],
+    );
+    expect(staleEvent.rows).toEqual([{ status: 'SUPERSEDED' }]);
+
+    const previousGeocoderKey = process.env.BIGDATACLOUD_API_KEY;
+    const previousGeocoderUrl = process.env.BIGDATACLOUD_REVERSE_GEOCODE_URL;
+    process.env.BIGDATACLOUD_API_KEY = 'recovery-test-key';
+    process.env.BIGDATACLOUD_REVERSE_GEOCODE_URL =
+      'https://geocoder.fixture.test/reverse';
+    const providerFetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => {
+        const update = await directDatabase.connect();
+        try {
+          await update.query('BEGIN');
+          await update.query(
+            "SELECT set_config('myota.geodata_writer','row-v1',true)",
+          );
+          await update.query(
+            `UPDATE geodata_entity SET geom=
+               ST_SetSRID(ST_MakePoint(8.1235,47.5679),4326)
+             WHERE id=$1`,
+            [changedGeometryEntityId],
+          );
+          await update.query('COMMIT');
+        } catch (error) {
+          await update.query('ROLLBACK').catch(() => undefined);
+          throw error;
+        } finally {
+          update.release();
+        }
+        return new Response('{}', { status: 200 });
+      });
+    try {
+      await liveEnrichmentRepository.process({
+        id: changedGeometryEntityId,
+        requestId: changedGeometryRequestId,
+        geometryHash: changedGeometryHash,
+        onlyMissing: true,
+        reason: 'recovery-test',
+        requestedBy: 'recovery-test',
+        geometry: changedGeometry,
+        point: [8.1234, 47.5678],
+      });
+    } finally {
+      providerFetch.mockRestore();
+      if (previousGeocoderKey === undefined)
+        delete process.env.BIGDATACLOUD_API_KEY;
+      else process.env.BIGDATACLOUD_API_KEY = previousGeocoderKey;
+      if (previousGeocoderUrl === undefined)
+        delete process.env.BIGDATACLOUD_REVERSE_GEOCODE_URL;
+      else process.env.BIGDATACLOUD_REVERSE_GEOCODE_URL = previousGeocoderUrl;
+    }
+    const changedGeometryState = await directDatabase.query<{
+      status: string;
+    }>(
+      "SELECT public_properties->>'locationEnrichmentStatus' AS status FROM geodata_entity WHERE id=$1",
+      [changedGeometryEntityId],
+    );
+    expect(changedGeometryState.rows[0]?.status).toBe('SUPERSEDED');
+    const changedGeometryEvent = await directDatabase.query<{
+      status: string;
+    }>(
+      `SELECT payload->>'status' AS status FROM outbox_event
+       WHERE aggregate_type='entity' AND aggregate_id=$1
+         AND event_type='geodata.entity.location-enriched.v1'`,
+      [changedGeometryEntityId],
+    );
+    expect(changedGeometryEvent.rows).toEqual([{ status: 'SUPERSEDED' }]);
 
     server = await startRecoveryJetStream(natsPort, directory);
     publisher = await connect({
@@ -746,6 +887,16 @@ async function verifyBrokerRecovery() {
         ]);
         await cleanup.query('DELETE FROM geodata_entity WHERE id=$1', [
           settlementEnrichmentEntityId,
+        ]);
+        await cleanup.query(
+          "DELETE FROM outbox_event WHERE aggregate_type='entity' AND aggregate_id=ANY($1::text[])",
+          [[staleEnrichmentEntityId, changedGeometryEntityId]],
+        );
+        await cleanup.query('DELETE FROM geodata_entity WHERE id=$1', [
+          staleEnrichmentEntityId,
+        ]);
+        await cleanup.query('DELETE FROM geodata_entity WHERE id=$1', [
+          changedGeometryEntityId,
         ]);
         await cleanup.query('COMMIT');
       } catch {

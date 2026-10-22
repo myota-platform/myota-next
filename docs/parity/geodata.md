@@ -37,7 +37,11 @@ float conversion without first truncating the database values to JavaScript
 safe integers.
 Location-enrichment workers check the request ID, geometry hash, and terminal
 status before calling the provider, so stale requests and redelivered completed
-or failed work do not repeat reverse-geocoding lookups.
+or failed work do not repeat reverse-geocoding lookups. The repository sets
+the Geodata writer fence for claims and both stale-geometry supersession paths.
+The recovery fixture exercises both the pre-provider stale check and geometry
+changes during provider lookup against the writer-fenced entity table, then
+verifies the terminal state and outbox event.
 Tagged load-test cleanup now requires explicit environment opt-in, global
 operator authorization, exact confirmation, terminal work, safe object scope,
 and a no-Activity-impact check before deletion.

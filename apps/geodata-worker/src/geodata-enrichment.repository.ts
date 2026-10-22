@@ -183,6 +183,9 @@ export class GeodataEnrichmentRepository {
           locationEnrichmentCompletedAt: completedAt,
         };
         await preflight.query(
+          "SELECT set_config('myota.geodata_writer','row-v1',true)",
+        );
+        await preflight.query(
           'UPDATE geodata_entity SET public_properties=$2::jsonb,updated_at=$3 WHERE id=$1',
           [job.id, stringifyJsonWithBigInts(stale), completedAt],
         );
@@ -247,6 +250,9 @@ export class GeodataEnrichmentRepository {
           locationEnrichmentStatus: 'SUPERSEDED',
           locationEnrichmentCompletedAt: completedAt,
         };
+        await client.query(
+          "SELECT set_config('myota.geodata_writer','row-v1',true)",
+        );
         await client.query(
           'UPDATE geodata_entity SET public_properties=$2::jsonb,updated_at=$3 WHERE id=$1',
           [job.id, stringifyJsonWithBigInts(stale), completedAt],
