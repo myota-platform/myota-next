@@ -126,7 +126,9 @@ test('reloads a live entity after a stale metadata edit and saves the new versio
     });
     if (metadataRequests[1]?.key) idempotencyKeys.push(metadataRequests[1].key);
     expect(savedResponse.status(), await savedResponse.text()).toBe(200);
-    await expect(page.getByText('Entity details saved.')).toBeVisible();
+    await expect(
+      refreshedEditor.getByRole('status').getByText('Entity details saved.'),
+    ).toBeVisible();
 
     expect(
       metadataRequests.map(({ status, ifMatch }) => ({ status, ifMatch })),

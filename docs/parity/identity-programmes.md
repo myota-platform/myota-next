@@ -182,7 +182,10 @@ security events retain role-replacement and account-update order. Callsign
 evidence remains in the separate evidence list; callsign lifecycle facts are
 outbox events, not account security events. This complements the service
 fixture's snapshot, access-control, and exact-integer export checks with
-persisted database behavior.
+persisted database behavior. The live browser path also exercises the full
+callsign lifecycle: adding and verifying a callsign with evidence, selecting
+and replacing the primary, and retiring the old primary; the test checks the
+persisted account and callsign state and lifecycle outbox events.
 Login, refresh, recovery request/reset, and OIDC mapping use the reference's
 Python-truthy required-field checks before authentication or persistence, with
 the same `missing required fields` response precedence.
