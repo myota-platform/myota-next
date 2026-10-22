@@ -45,8 +45,10 @@ production readiness.
   [database backup and restore notes](operations/database-backup-restore.md),
   and the [object-store recovery notes](operations/object-store-recovery.md).
 - **Web applications:** CI exercises Admin sign-in/dashboard, Identity account
-  creation and callsign management through export and anonymization, custom
-  Identity role creation and updates with persisted permission and audit checks,
+  creation and callsign management, plus live Admin UI export and
+  deactivation/anonymization with persisted-state and lifecycle-event checks,
+  custom Identity role creation and updates with persisted permission and audit
+  checks,
   scoped-role-preserving account edits with duplicate-email conflict handling,
   Admin password resets that revoke existing sessions, and status-only account
   deactivation while an existing owner refresh session remains rotatable,

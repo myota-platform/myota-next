@@ -33,8 +33,10 @@ programme selection and public content, and its activation, QSO, and close
 workflow. In CI, live browser checks sign into Admin and load its dashboard,
 create a participant account with an authorized Activity role through Gateway,
 add and verify its callsign, activate the account, export its data, and
-deactivate and anonymize it through Gateway. Another workflow signs in as a
-participant and exercises owner callsign creation, evidence submission,
+deactivate and anonymize it through Gateway. A live Admin UI workflow also
+exports an account and confirms deactivation/anonymization, then checks the
+stored account/profile values and lifecycle event. Another workflow signs in as
+a participant and exercises owner callsign creation, evidence submission,
 primary selection, and retirement plus profile detail editing against the live
 Identity API. A separate workflow creates a
 programme through Gateway before Participant loads its catalogue,
