@@ -25,9 +25,12 @@ production readiness.
 
 ## Remaining gates
 
-- **Behavioral parity:** qualify request, authorization, persistence, failure,
-  and workflow behavior for the required operations and events. The parity
-  pages record current coverage and gaps; route presence alone is not proof.
+- **Functional parity:** close any remaining gaps in the primary workflows
+  listed in the parity matrix, including authorization and persisted outcomes
+  across their owning services and workers. Compatibility checks should cover
+  each workflow's main success path and shared authorization, validation, and
+  conflict behavior. Route presence alone is not proof. Exact low-impact error
+  details and obscure validation ordering are not completion gates.
 - **Recovery:** single-server JetStream restart, three-node JetStream leader
   failover for Activity workers and notifications, each of the three owner
   outboxes, and all four Geodata worker durables; selected worker lease
@@ -85,9 +88,10 @@ production readiness.
   category-scoped schedule, uploads a complete snapshot, and verifies worker
   completion through live services. A separate Gateway check verifies the
   manifest, queued processing state, schedule timestamps, and outbox events.
-  Most other browser workflows still use intercepted API responses;
-  broader payload coverage, accessibility, responsive behavior, and failure
-  states remain to be qualified.
+  Secondary browser presentation states may continue to use intercepted API
+  responses; primary user journeys remain covered through the running services.
+  Accessibility, responsive behavior, and additional failure-state review are
+  separate quality work.
 - **Production operations:** qualify persistent database operations, NATS,
   object storage, secrets, observability, deployment, and release automation.
 - **Geodata performance:** larger datasets and full worker throughput remain
