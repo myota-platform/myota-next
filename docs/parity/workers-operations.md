@@ -75,9 +75,10 @@
   at delivery count eight: CI confirms the delivery
   remains unterminated with no dead-letter row during the outage, then persists
   the eight-attempt record before terminating it after recovery. A three-node
-  JetStream CI case holds a notification delivery pending while its stream
-  leader stops, then verifies replica election, duplicate-safe processing,
-  acknowledgement, and one persisted notification. Broker-side retry
+  JetStream CI case holds terminal notification settlement pending during a
+  PostgreSQL outage, stops the stream leader, then verifies replica election,
+  dead-letter persistence through the replacement leader, and duplicate-safe
+  processing of a subsequent event. Broker-side retry
   exhaustion under deployment conditions remains open. The unresolved-dead-letter
   gauge refreshes in the background every 15 seconds, so it does not block
   consumer startup or issue a count query for every delivery.

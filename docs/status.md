@@ -37,9 +37,10 @@ production readiness.
   Geodata import claim, state lookup, retry-state persistence, and retention
   cleanup after source-object deletion. Activity retry settlement, terminal
   work dead-letter persistence, ADIF retention, and notification dead-letter
-  persistence also have fault-proxy evidence. Failover for other consumers,
-  PostgreSQL clusters, and additional worker and object-store recovery paths
-  remain open. See
+  persistence also have fault-proxy evidence. Notification terminal settlement
+  now also has three-node JetStream leader-failover coverage. Failover for
+  other consumers, PostgreSQL clusters, and additional worker and object-store
+  recovery paths remain open. See
   [worker and operations coverage](parity/workers-operations.md), the
   [database backup and restore notes](operations/database-backup-restore.md),
   and the [object-store recovery notes](operations/object-store-recovery.md).
