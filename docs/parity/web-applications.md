@@ -155,6 +155,9 @@ Geodata API, Geodata worker, Activity cascade API, and both owner databases. It
 checks the displayed impact, completion state, removal of linked QSOs and
 corrections, activation invalidation, and queued award recalculation. CI
 provisions its bounded JetStream topology before starting the workers.
+Candidate status review also runs live through Admin, Gateway, and Geodata; the
+browser check verifies the version and idempotency headers, reviewer and note,
+status history, audit event, and outbox event persisted by Geodata.
 Another live Admin workflow pastes a GeoJSON dataset, waits for worker
 preprocessing, rejects one record, promotes another to a candidate, and checks
 the persisted import, review, promotion queue, and entity states. The worker

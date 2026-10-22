@@ -55,6 +55,8 @@ production readiness.
   multipart API, the CI S3-compatible fixture, and the Geodata preprocessing
   worker; CI verifies each completed upload, preprocessed import, source
   object, and review candidate.
+  Candidate status review now runs live through Admin, Gateway, and Geodata,
+  with persisted version, reviewer, status history, audit, and outbox checks.
   Most other browser workflows still use intercepted API responses;
   broader payload coverage, accessibility, responsive behavior, and failure
   states remain to be qualified.
