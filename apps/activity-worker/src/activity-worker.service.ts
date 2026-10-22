@@ -249,8 +249,10 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
       );
       if (!job) return;
       await this.processWithHeartbeats(job, message);
-      message.ack();
-      this.logger.log(`Completed Activity work ${workId} (${definition.kind})`);
+      if (await this.acknowledge(message, `completed Activity work ${workId}`))
+        this.logger.log(
+          `Completed Activity work ${workId} (${definition.kind})`,
+        );
     } catch (error) {
       const delaySeconds = Math.min(300, 2 ** Math.min(delivery, 8));
       try {
@@ -337,7 +339,10 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
         return null;
       }
       if (state.status === 'SUCCEEDED' || state.status === 'FAILED') {
-        message.ack();
+        await this.acknowledge(
+          message,
+          `settling terminal Activity work ${workId}`,
+        );
         return null;
       }
       const remaining =
@@ -353,6 +358,19 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
     }
     message.nak(1000);
     return null;
+  }
+
+  private async acknowledge(message: JsMsg, context: string): Promise<boolean> {
+    try {
+      if (await message.ackAck()) return true;
+    } catch (error) {
+      this.logger.warn(
+        `Activity worker could not confirm ACK while ${context}: ${safeError(error)}`,
+      );
+      return false;
+    }
+    this.logger.warn(`Activity worker ACK was not confirmed while ${context}`);
+    return false;
   }
 
   private async processWithHeartbeats(

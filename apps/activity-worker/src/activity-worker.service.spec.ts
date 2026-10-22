@@ -77,7 +77,7 @@ describe('ActivityWorkerService work command metadata', () => {
         }),
       ),
       info: { deliveryCount: 1 },
-      ack: vi.fn(),
+      ackAck: vi.fn(async () => true),
     };
     const definition = {
       kind: 'QSO_INGESTION',
@@ -95,7 +95,7 @@ describe('ActivityWorkerService work command metadata', () => {
     ).handle(definition, message);
 
     expect(repository.recordWorkDeadLetter).not.toHaveBeenCalled();
-    expect(message.ack).toHaveBeenCalledOnce();
+    expect(message.ackAck).toHaveBeenCalledOnce();
   });
 });
 
