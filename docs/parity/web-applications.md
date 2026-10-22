@@ -158,7 +158,11 @@ provisions its bounded JetStream topology before starting the workers.
 Another live Admin workflow pastes a GeoJSON dataset, waits for worker
 preprocessing, rejects one record, promotes another to a candidate, and checks
 the persisted import, review, promotion queue, and entity states. The worker
-reads the uploaded source from the CI S3-compatible fixture.
+reads the pasted source from the CI S3-compatible fixture. A second live Admin
+workflow uploads a GeoJSON file through the resumable multipart UI, completes
+the S3-compatible object upload, and waits for Geodata preprocessing. It checks
+the completed upload session and import, stored part size and source hash, and
+the resulting review candidate.
 The Identity account editor exposes callsign creation with status, source, and
 validity fields; evidence submission with checksum and metadata; verification
 for callers with `callsign.verify` and a configurable verification source;

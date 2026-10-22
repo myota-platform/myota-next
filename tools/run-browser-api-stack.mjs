@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 
 const requiredDatabaseVariables = [
   'CORE_DATABASE_URL',
@@ -11,17 +12,75 @@ for (const name of requiredDatabaseVariables) {
 }
 
 const objects = new Map();
+const multipartUploads = new Map();
 const buckets = new Set(['browser-award-assets', 'browser-award-signatures']);
 const objectStorageServer = createServer((request, response) => {
   void (async () => {
-    const segments = new URL(request.url ?? '/', 'http://localhost').pathname
-      .split('/')
-      .slice(1)
-      .map(decodeURIComponent);
+    const url = new URL(request.url ?? '/', 'http://localhost');
+    const segments = url.pathname.split('/').slice(1).map(decodeURIComponent);
     const bucket = segments.shift();
     const key = segments.join('/');
     if (!bucket) {
       response.writeHead(400).end();
+      return;
+    }
+    const objectId = `${bucket}/${key}`;
+    const uploadId = url.searchParams.get('uploadId');
+    if (request.method === 'POST' && url.searchParams.has('uploads')) {
+      const id = randomUUID();
+      multipartUploads.set(`${objectId}/${id}`, new Map());
+      response
+        .writeHead(200, { 'content-type': 'application/xml' })
+        .end(
+          `<InitiateMultipartUploadResult><Bucket>${bucket}</Bucket><Key>${key}</Key><UploadId>${id}</UploadId></InitiateMultipartUploadResult>`,
+        );
+      return;
+    }
+    if (uploadId && request.method === 'PUT') {
+      const partNumber = Number(url.searchParams.get('partNumber'));
+      const parts = multipartUploads.get(`${objectId}/${uploadId}`);
+      if (!parts || !Number.isInteger(partNumber) || partNumber < 1) {
+        response.writeHead(404).end();
+        return;
+      }
+      const chunks = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      const body = Buffer.concat(chunks);
+      parts.set(partNumber, body);
+      const etag = '"browser-multipart-part"';
+      response.writeHead(200, { etag }).end();
+      return;
+    }
+    if (uploadId && request.method === 'POST') {
+      for await (const _chunk of request) {
+        // Drain the completion manifest before returning the assembled object.
+      }
+      const multipartId = `${objectId}/${uploadId}`;
+      const parts = multipartUploads.get(multipartId);
+      if (!parts?.size) {
+        response.writeHead(404).end();
+        return;
+      }
+      const body = Buffer.concat(
+        [...parts.entries()]
+          .sort(([left], [right]) => left - right)
+          .map(([, part]) => part),
+      );
+      objects.set(objectId, {
+        body,
+        contentType: 'application/octet-stream',
+      });
+      multipartUploads.delete(multipartId);
+      response
+        .writeHead(200, { 'content-type': 'application/xml' })
+        .end(
+          `<CompleteMultipartUploadResult><Location>http://localhost/${bucket}/${encodeURIComponent(key)}</Location><Bucket>${bucket}</Bucket><Key>${key}</Key><ETag>"browser-multipart-complete"</ETag></CompleteMultipartUploadResult>`,
+        );
+      return;
+    }
+    if (uploadId && request.method === 'DELETE') {
+      multipartUploads.delete(`${objectId}/${uploadId}`);
+      response.writeHead(204).end();
       return;
     }
     if (!key) {
@@ -44,7 +103,6 @@ const objectStorageServer = createServer((request, response) => {
       response.writeHead(405).end();
       return;
     }
-    const objectId = `${bucket}/${key}`;
     if (request.method === 'PUT') {
       const chunks = [];
       for await (const chunk of request) chunks.push(Buffer.from(chunk));
