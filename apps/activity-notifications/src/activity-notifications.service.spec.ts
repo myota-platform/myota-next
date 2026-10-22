@@ -87,7 +87,7 @@ describe('ActivityNotificationsService redelivery', () => {
       ),
       subject: 'myota.events.identity.account.created.v1',
       info: { deliveryCount: 1, streamSequence: 12 },
-      term: vi.fn(),
+      ackAck: vi.fn(async () => true),
     };
 
     await (
@@ -95,6 +95,6 @@ describe('ActivityNotificationsService redelivery', () => {
     ).handle(message);
 
     expect(values[1]?.[1]).toBe('unknown');
-    expect(message.term).toHaveBeenCalledOnce();
+    expect(message.ackAck).toHaveBeenCalledOnce();
   });
 });
