@@ -117,7 +117,7 @@ test('creates and runs a manual snapshot schedule in Admin through live services
     expect(runResponse.status()).toBe(202);
     const queued = await runResponse.json();
     importRunId = queued.id as string;
-    await expect(page.getByRole('status')).toContainText(
+    await expect(page.locator('.success-text[role="status"]')).toContainText(
       `Import ${importRunId}.`,
     );
 
