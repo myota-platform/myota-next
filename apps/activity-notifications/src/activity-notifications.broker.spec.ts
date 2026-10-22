@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import {
   AckPolicy,
+  DiscardPolicy,
   DeliverPolicy,
   jetstream,
   jetstreamManager,
@@ -52,6 +53,7 @@ describe.skipIf(!enabled)('Activity notification JetStream recovery', () => {
         max_bytes: 16 * 1024 * 1024,
         max_msgs: 10_000,
         max_msg_size: 1024 * 1024,
+        discard: DiscardPolicy.New,
       } as StreamConfig);
       const { ACTIVITY_NOTIFICATION_SUBJECTS } =
         await import('./activity-notifications.service.js');
