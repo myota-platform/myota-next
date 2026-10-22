@@ -48,9 +48,9 @@ describe.skipIf(!enabled)('Activity notification JetStream recovery', () => {
         retention: RetentionPolicy.Limits,
         storage: StorageType.File,
         num_replicas: 1,
-        max_age: 3_600_000_000_000,
+        max_age: 30 * 24 * 60 * 60 * 1_000_000_000,
         max_bytes: 16 * 1024 * 1024,
-        max_msgs: 1000,
+        max_msgs: 10_000,
         max_msg_size: 1024 * 1024,
       } as StreamConfig);
       const { ACTIVITY_NOTIFICATION_SUBJECTS } =
