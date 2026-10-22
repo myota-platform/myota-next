@@ -1,9 +1,12 @@
 import { ActivityWorkerService } from './activity-worker.service.js';
 
 describe('ActivityWorkerService invalid envelopes', () => {
-  it('records no work type for an invalid envelope, matching the Python worker', async () => {
+  it('confirms invalid-envelope settlement after recording its dead letter', async () => {
+    const steps: string[] = [];
     const repository = {
-      recordWorkDeadLetter: vi.fn().mockResolvedValue(undefined),
+      recordWorkDeadLetter: vi.fn(async () => {
+        steps.push('dead-letter');
+      }),
     };
     const service = new ActivityWorkerService(
       repository as never,
@@ -14,7 +17,10 @@ describe('ActivityWorkerService invalid envelopes', () => {
       subject: 'myota.work.activity.qso-ingestion.v1',
       data: new TextEncoder().encode('{"workId":"invalid"}'),
       info: { deliveryCount: 2 },
-      term: vi.fn(),
+      ackAck: vi.fn(async () => {
+        steps.push('ack');
+        return true;
+      }),
     };
     const definition = {
       kind: 'QSO_INGESTION',
@@ -38,7 +44,8 @@ describe('ActivityWorkerService invalid envelopes', () => {
       2,
       'invalid_envelope',
     );
-    expect(message.term).toHaveBeenCalledOnce();
+    expect(message.ackAck).toHaveBeenCalledOnce();
+    expect(steps).toEqual(['dead-letter', 'ack']);
   });
 });
 

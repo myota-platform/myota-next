@@ -41,9 +41,11 @@
   writes and terminal failure settlement at delivery count eight: while
   PostgreSQL is unavailable, the job stays running, no dead-letter row exists,
   and the delivery remains unacknowledged; after recovery, the failed job and
-  dead-letter row commit before ACK. Invalid-envelope settlement, process
-  outages during terminal dead-letter settlement, and JetStream failover during
-  terminal settlement remain open.
+  dead-letter row commit before ACK. Invalid envelopes, missing job rows, and
+  job-kind mismatches are recorded in the Activity dead-letter ledger before
+  the worker requests a confirmed broker ACK. Process outages during terminal
+  dead-letter settlement and JetStream failover during terminal settlement
+  remain open.
 - Identity maintenance: expired recovery tokens, revoked sessions, expired
   revocations, rate-limit windows, old security events, and aged orphan profile
   images are cleaned by a separate Core-owned worker. Transient PostgreSQL

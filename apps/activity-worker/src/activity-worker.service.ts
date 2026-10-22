@@ -229,7 +229,10 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
             'invalid_envelope',
           ),
         );
-        message.term();
+        await this.acknowledge(
+          message,
+          'settling invalid Activity work envelope',
+        );
       } catch (persistError) {
         this.logger.error(
           `Could not persist invalid Activity work delivery: ${safeError(persistError)}`,
@@ -334,7 +337,10 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
           delivery,
           'job_row_missing',
         );
-        message.term();
+        await this.acknowledge(
+          message,
+          `settling Activity work with missing job ${workId}`,
+        );
         return null;
       }
       if (state.kind !== definition.kind) {
@@ -345,7 +351,10 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
           delivery,
           'job_kind_mismatch',
         );
-        message.term();
+        await this.acknowledge(
+          message,
+          `settling Activity work kind mismatch ${workId}`,
+        );
         return null;
       }
       if (state.status === 'SUCCEEDED' || state.status === 'FAILED') {
