@@ -210,7 +210,10 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
         .getByRole('combobox')
         .first()
         .selectOption(source.format);
-      if (['PARKSERVE_US', 'GOVERNMENT_GIS'].includes(source.adapter))
+      if (
+        source.adapter === 'PARKSERVE_US' ||
+        source.adapter === 'GOVERNMENT_GIS'
+      )
         await page
           .locator('form')
           .getByRole('combobox')
