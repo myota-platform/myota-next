@@ -129,8 +129,11 @@ reviewer, candidate IDs, and idempotency keys for both decisions.
 Single-item decisions and bulk candidate promotion or rejection retain their
 idempotency keys across same-tab retries and reloads. Pasted imports retain
 their exact request body and idempotency key for same-tab retries after reload.
-Geodata deletion browser coverage now verifies impact preparation, explicit
-confirmation, cascade completion, removal from the entity list, and reuse of
+The Map explorer browser check pages through the 100-entity catalogue and
+verifies map selection shows the selected entity's status, categories,
+programme memberships, and location. Geodata deletion browser coverage now
+verifies impact preparation, explicit confirmation, cascade completion,
+removal from the entity list, and reuse of
 the same preparation and confirmation keys after uncertain responses and page
 reloads. Deletion job creation and confirmation retain their keys across
 same-tab retries and reloads. Entity reviews, metadata/category/geometry/location
