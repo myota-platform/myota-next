@@ -185,7 +185,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
       expect(processed.rows[0]?.count).toBe(2);
 
       let injectedDeadLetterOutage = false;
-      let deliveryTerminated = false;
+      let deliverySettled = false;
       const terminalInternals = service as unknown as {
         handle(message: JsMsg): Promise<void>;
         persistDeadLetter(
@@ -220,8 +220,9 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
           }),
         ),
         working: () => undefined,
-        term: () => {
-          deliveryTerminated = true;
+        ackAck: async () => {
+          deliverySettled = true;
+          return true;
         },
         nak: () => {
           throw new Error('exhausted delivery must be terminated');
@@ -233,8 +234,8 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
         () =>
           injectedDeadLetterOutage &&
           databaseProxy.rejectedConnections() > rejectedBeforeDeadLetter &&
-          !deliveryTerminated,
-        'notification delivery was terminated before dead-letter persistence recovered',
+          !deliverySettled,
+        'notification delivery was settled before dead-letter persistence recovered',
       );
       const missingDeadLetter = await pool.query(
         `SELECT 1 FROM public.dead_letter_event
@@ -244,7 +245,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
       expect(missingDeadLetter.rowCount).toBe(0);
       databaseProxy.setAvailable(true);
       await terminalResult;
-      expect(deliveryTerminated).toBe(true);
+      expect(deliverySettled).toBe(true);
       terminalInternals.persistDeadLetter = persistDeadLetter;
       const savedDeadLetter = await pool.query<{
         attempts: number;
