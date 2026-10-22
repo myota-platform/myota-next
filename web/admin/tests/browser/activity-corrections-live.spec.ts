@@ -32,7 +32,8 @@ test('reviews live QSO corrections without changing rejected QSOs', async ({
            (id,activation_id,programme_slug,operator_id,operator_callsign,
             worked_callsign,worked_station_key,occurred_at,band,mode,
             deduplication_key)
-         VALUES ($1,$2,$3,'correction-operator','DL1CORR',$4,$4,now(),$5,$6,$7)`,
+         VALUES ($1,$2,$3,'correction-operator','DL1CORR',
+                 $4::citext,$4::text,now(),$5,$6,$7)`,
         [
           qsoId,
           activationId,
