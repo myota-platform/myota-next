@@ -239,8 +239,9 @@ verifies the worker persists a retry and completes the job after reconnection.
 CI also runs the Activity worker against a three-node JetStream cluster, stops
 the leader while a statistics rebuild delivery is pending, and verifies the
 job completes after failover and a later job succeeds through the replacement.
-Process outages during other Activity work kinds and terminal-settlement
-failover remain open.
+Process outages during other Activity work kinds and leader failover during
+terminal failed-job settlement remain open. Invalid-work dead-letter settlement
+is also checked across a three-node JetStream leader change.
 Failed or queued Activity jobs can be redriven by administrators with
 an audited reason. Failed-job redrive preserves the delivery-attempt counter,
 matching the pinned Python repository. Long-running Activity jobs now extend their 120-second leases

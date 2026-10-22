@@ -43,9 +43,10 @@
   and the delivery remains unacknowledged; after recovery, the failed job and
   dead-letter row commit before ACK. Invalid envelopes, missing job rows, and
   job-kind mismatches are recorded in the Activity dead-letter ledger before
-  the worker requests a confirmed broker ACK. Process outages during terminal
-  dead-letter settlement and JetStream failover during terminal settlement
-  remain open.
+  the worker requests a confirmed broker ACK. A three-node cluster check stops
+  the leader after this ledger write and confirms settlement through the
+  elected replacement. Process outages during terminal dead-letter settlement
+  and leader failover during terminal failed-job settlement remain open.
 - Identity maintenance: expired recovery tokens, revoked sessions, expired
   revocations, rate-limit windows, old security events, and aged orphan profile
   images are cleaned by a separate Core-owned worker. Transient PostgreSQL
