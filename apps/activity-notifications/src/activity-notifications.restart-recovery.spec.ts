@@ -313,7 +313,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
     const recipient = randomUUID();
     const dedupeKeys = ids.map((id) => `event:${id}`);
     const originalNatsUrl = process.env.NATS_URL;
-    const deadLetterStreamSequence = Number(BigInt(Date.now()) * 1000n);
+    let deadLetterStreamSequence = Number(BigInt(Date.now()) * 1000n);
     let cluster: TestJetStreamCluster | undefined;
     let publisher: Awaited<ReturnType<typeof connect>> | undefined;
     let service: ActivityNotificationsService | undefined;

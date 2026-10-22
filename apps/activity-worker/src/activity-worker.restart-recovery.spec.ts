@@ -404,7 +404,9 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           'Activity statistics rebuild did not stop PostgreSQL',
         );
         await postgresRestartPromise;
-        await waitForJob(pool, jobs[4]!, 30_000);
+        // The outbox repair loop may still be in its capped retry backoff when
+        // PostgreSQL comes back after a full process restart.
+        await waitForJob(pool, jobs[4]!, 60_000);
         const restartedJob = await pool.query<{ attempts: number }>(
           'SELECT attempts FROM activity_job WHERE id=$1',
           [jobs[4]],
