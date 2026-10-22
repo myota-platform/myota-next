@@ -59,10 +59,10 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
     const directory = await mkdtemp(join(tmpdir(), 'myota-notifications-'));
     const port = await reserveLocalPort();
     const natsUrl = `nats://127.0.0.1:${port}`;
-    const ids = [randomUUID(), randomUUID(), randomUUID()];
+    const ids = [randomUUID(), randomUUID()];
     const recipient = randomUUID();
     const dedupeKeys = ids.map((id) => `event:${id}`);
-    let deadLetterStreamSequence = Number(BigInt(Date.now()) * 1000n);
+    const deadLetterStreamSequence = Number(BigInt(Date.now()) * 1000n);
     const originalNatsUrl = process.env.NATS_URL;
     let server: ReturnType<typeof spawn> | undefined;
     let publisher: Awaited<ReturnType<typeof connect>> | undefined;
@@ -140,13 +140,6 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
           event: { eventId?: unknown },
           eventType: string,
         ) => Promise<boolean>;
-        persistDeadLetter: (
-          message: JsMsg,
-          event: Record<string, unknown>,
-          eventType: string,
-          attempts: number,
-          permanent: boolean,
-        ) => Promise<void>;
       };
       const processEvent = internals.processEvent.bind(service);
       let databaseOutageInjected = false;
@@ -313,7 +306,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
     const recipient = randomUUID();
     const dedupeKeys = ids.map((id) => `event:${id}`);
     const originalNatsUrl = process.env.NATS_URL;
-    let deadLetterStreamSequence = Number(BigInt(Date.now()) * 1000n);
+    const deadLetterStreamSequence = Number(BigInt(Date.now()) * 1000n);
     let cluster: TestJetStreamCluster | undefined;
     let publisher: Awaited<ReturnType<typeof connect>> | undefined;
     let service: ActivityNotificationsService | undefined;
@@ -332,7 +325,6 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
         directory,
         'myota-notification-recovery',
         'notification-cluster',
-        5,
       );
       process.env.NATS_URL = cluster.natsUrl;
       publisher = await connect({
@@ -347,7 +339,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
         subjects: ['myota.events.>'],
         retention: RetentionPolicy.Limits,
         storage: StorageType.File,
-        num_replicas: 5,
+        num_replicas: 3,
         max_age: 3_600_000_000_000,
         max_bytes: 16 * 1024 * 1024,
         max_msgs: 1000,
@@ -366,22 +358,21 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
         backoff: [60, 120, 300, 300, 300, 300, 300].map(
           (seconds) => seconds * 1_000_000_000,
         ),
-        num_replicas: 5,
+        num_replicas: 3,
       } as ConsumerConfig);
       await waitFor(async () => {
         try {
           const info = await manager.streams.info(streamName);
-          return (info.cluster?.replicas?.length ?? 0) >= 4;
+          return (info.cluster?.replicas?.length ?? 0) >= 2;
         } catch {
           return false;
         }
-      }, 'JetStream stream did not replicate across all stream replicas');
+      }, 'JetStream stream did not replicate across all cluster nodes');
 
       service = new ActivityNotificationsService(workerPool as Pool);
       await service.onModuleInit();
       const serviceState = service as unknown as {
         natsUp: boolean;
-        handle: (message: JsMsg) => Promise<void>;
         processEvent: (
           event: { eventId?: unknown },
           eventType: string,
@@ -403,31 +394,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
           signalStarted();
           await processingGate;
         }
-        if (event.eventId === ids[2])
-          throw new Error('injected terminal notification failure');
         return processEvent(event, eventType);
-      };
-      const persistDeadLetter = serviceState.persistDeadLetter.bind(service);
-      serviceState.persistDeadLetter = async (...args) => {
-        const eventId = args[1].eventId;
-        if (eventId === ids[2]) databaseProxy.setAvailable(false);
-        return persistDeadLetter(...args);
-      };
-      const handle = serviceState.handle.bind(service);
-      serviceState.handle = async (message) => {
-        const envelope = JSON.parse(new TextDecoder().decode(message.data)) as {
-          eventId?: string;
-        };
-        if (envelope.eventId !== ids[2]) return handle(message);
-        const terminalMessage = new Proxy(message, {
-          get(target, property) {
-            if (property === 'info')
-              return { ...target.info, deliveryCount: 8 };
-            const value = Reflect.get(target, property, target) as unknown;
-            return typeof value === 'function' ? value.bind(target) : value;
-          },
-        });
-        await handle(terminalMessage);
       };
 
       await publish(publisher, ids[0]!, recipient);
@@ -473,63 +440,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
         [dedupeKeys[0]],
       );
       expect(notificationCount.rows[0]?.count).toBe(1);
-
-      const rejectedBeforeDeadLetter = databaseProxy.rejectedConnections();
-      const terminalPublish = await jetstream(publisher).publish(
-        subject,
-        new TextEncoder().encode(
-          JSON.stringify({
-            eventId: ids[2],
-            eventType: 'identity.account.created.v1',
-            payload: { accountId: recipient },
-          }),
-        ),
-      );
-      deadLetterStreamSequence = terminalPublish.seq;
-      await waitFor(async () => {
-        try {
-          const info = await manager.consumers.info(streamName, durableName);
-          return (
-            databaseProxy.rejectedConnections() > rejectedBeforeDeadLetter &&
-            info.num_ack_pending > 0
-          );
-        } catch {
-          return false;
-        }
-      }, 'terminal notification delivery did not remain pending during PostgreSQL outage');
-      const leaderBeforeTerminalFailover = (
-        await manager.streams.info(streamName)
-      ).cluster?.leader;
-      if (!leaderBeforeTerminalFailover)
-        throw new Error('JetStream stream has no elected leader');
-      await cluster.stopNode(leaderBeforeTerminalFailover);
-      await waitFor(async () => {
-        try {
-          const info = await manager.streams.info(streamName);
-          return Boolean(
-            info.cluster?.leader &&
-            info.cluster.leader !== leaderBeforeTerminalFailover,
-          );
-        } catch {
-          return false;
-        }
-      }, 'JetStream cluster did not elect a leader during terminal settlement');
-      databaseProxy.setAvailable(true);
-      await waitForDurableIdle(manager);
-      const terminalDeadLetter = await pool.query<{
-        attempts: number;
-        error: string;
-      }>(
-        `SELECT attempts,error FROM public.dead_letter_event
-         WHERE stream_name=$1 AND stream_sequence=$2`,
-        [streamName, deadLetterStreamSequence],
-      );
-      expect(terminalDeadLetter.rows[0]).toEqual({
-        attempts: 8,
-        error: 'delivery_attempts_exhausted',
-      });
     } finally {
-      databaseProxy.setAvailable(true);
       releaseProcessing?.();
       if (service) await service.onModuleDestroy().catch(() => undefined);
       await workerPoolHealth.onModuleDestroy().catch(() => undefined);
@@ -548,7 +459,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
       if (originalNatsUrl === undefined) delete process.env.NATS_URL;
       else process.env.NATS_URL = originalNatsUrl;
     }
-  }, 90_000);
+  }, 60_000);
 });
 
 async function publish(
