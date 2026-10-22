@@ -122,15 +122,17 @@ async function verifyClusterFailover() {
     enrichment: [] as string[],
   };
   let releaseProcessing: (() => void) | undefined;
-  let signalProcessingStarted: (() => void) | undefined;
   let worker: GeodataWorkerService | undefined;
   let cluster:
     Awaited<ReturnType<typeof startTestJetStreamCluster>> | undefined;
   let publisher: Awaited<ReturnType<typeof connect>> | undefined;
 
-  const processingStarted = new Promise<void>((resolve) => {
-    signalProcessingStarted = resolve;
-  });
+  const processingStarted = {
+    preprocessing: createDeferred(),
+    promotion: createDeferred(),
+    deletion: createDeferred(),
+    enrichment: createDeferred(),
+  };
   let release!: () => void;
   const processingGate = new Promise<void>((resolve) => {
     release = resolve;
@@ -145,7 +147,7 @@ async function verifyClusterFailover() {
     }),
     preprocess: async (run: { importRunId: string }) => {
       if (run.importRunId === pendingImportId) {
-        signalProcessingStarted?.();
+        processingStarted.preprocessing.resolve();
         await processingGate;
       }
       processed.preprocessing.push(run.importRunId);
@@ -167,6 +169,8 @@ async function verifyClusterFailover() {
       leaseRemainingSeconds: 0,
     }),
     processPromotion: async (job: { queueId: string }) => {
+      processingStarted.promotion.resolve();
+      await processingGate;
       processed.promotion.push(job.queueId);
     },
     retryPromotion: async () => undefined,
@@ -178,6 +182,8 @@ async function verifyClusterFailover() {
       leaseRemainingSeconds: 0,
     }),
     execute: async (job: { jobId: string }) => {
+      processingStarted.deletion.resolve();
+      await processingGate;
       processed.deletion.push(job.jobId);
       return true;
     },
@@ -195,6 +201,8 @@ async function verifyClusterFailover() {
       leaseRemainingSeconds: 0,
     }),
     process: async (job: { requestId: string }) => {
+      processingStarted.enrichment.resolve();
+      await processingGate;
       processed.enrichment.push(job.requestId);
     },
     persistRetry: async () => undefined,
@@ -309,37 +317,6 @@ async function verifyClusterFailover() {
       { type: 'import_run', id: pendingImportId },
       { importRunId: pendingImportId },
     );
-    await processingStarted;
-    await waitForRecovery(async () => {
-      const consumer = await manager.consumers.info(
-        'MYOTA_GEODATA_WORK',
-        'geodata-preprocessing-v1',
-      );
-      return consumer.num_ack_pending > 0;
-    }, 'Geodata preprocessing delivery was not pending before failover');
-
-    const initialInfo = await manager.streams.info('MYOTA_GEODATA_WORK');
-    const failedLeader = initialInfo.cluster?.leader;
-    if (!failedLeader)
-      throw new Error('Geodata work stream has no elected leader');
-    await cluster.stopNode(failedLeader);
-    await waitForRecovery(async () => {
-      try {
-        const info = await manager.streams.info('MYOTA_GEODATA_WORK');
-        return Boolean(
-          info.cluster?.leader && info.cluster.leader !== failedLeader,
-        );
-      } catch {
-        return false;
-      }
-    }, 'Geodata work stream did not elect a replacement leader');
-
-    release();
-    releaseProcessing = undefined;
-    await waitForRecovery(
-      () => processed.preprocessing.includes(pendingImportId),
-      'Geodata preprocessing did not finish after leader failover',
-    );
     await publishGeodataWork(
       publisher,
       'geodata.import-promotion.v1',
@@ -361,12 +338,46 @@ async function verifyClusterFailover() {
         reason: 'cluster-failover',
       },
     );
+    await Promise.all(
+      Object.values(processingStarted).map(({ promise }) => promise),
+    );
+    await Promise.all(
+      consumers.map(([durable]) =>
+        waitForRecovery(async () => {
+          const consumer = await manager.consumers.info(
+            'MYOTA_GEODATA_WORK',
+            durable,
+          );
+          return consumer.num_ack_pending > 0;
+        }, `Geodata ${durable} delivery was not pending before failover`),
+      ),
+    );
+
+    const initialInfo = await manager.streams.info('MYOTA_GEODATA_WORK');
+    const failedLeader = initialInfo.cluster?.leader;
+    if (!failedLeader)
+      throw new Error('Geodata work stream has no elected leader');
+    await cluster.stopNode(failedLeader);
+    await waitForRecovery(async () => {
+      try {
+        const info = await manager.streams.info('MYOTA_GEODATA_WORK');
+        return Boolean(
+          info.cluster?.leader && info.cluster.leader !== failedLeader,
+        );
+      } catch {
+        return false;
+      }
+    }, 'Geodata work stream did not elect a replacement leader');
+
+    release();
+    releaseProcessing = undefined;
     await waitForRecovery(
       () =>
+        processed.preprocessing.includes(pendingImportId) &&
         processed.promotion.includes(promotionId) &&
         processed.deletion.includes(deletionId) &&
         processed.enrichment.includes(enrichmentRequestId),
-      'Geodata work durables did not resume after leader failover',
+      'Geodata work did not finish after leader failover',
     );
     for (const [durable] of consumers) {
       await waitForRecovery(async () => {
@@ -1697,6 +1708,14 @@ async function waitForRecovery(
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error(message);
+}
+
+function createDeferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
 }
 
 async function reserveLocalPort(): Promise<number> {

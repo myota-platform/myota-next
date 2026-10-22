@@ -156,10 +156,11 @@
   a PostgreSQL connection outage. A full PostgreSQL service restart while a
   preprocessing delivery is pending also verifies claim retry, successful
   processing, and acknowledgement after reconnection. A separate three-node
-  JetStream check stops the leader while a preprocessing delivery is pending,
-  then verifies the delivery completes and all four Geodata durables process
-  work after failover. Process outages during other Geodata operations and
-  cluster failover for other consumers remain open.
+  JetStream check holds a delivery on each of the four Geodata durables while
+  the leader stops, then verifies all four handlers complete and settle through
+  the replacement leader. Repository processing is stubbed in this broker
+  settlement check. Process outages during other Geodata operations remain
+  open.
   If PostgreSQL fails while the worker is recording a failed delivery, it
   extends the current message ACK and retries settlement for transient
   connection, shutdown, serialization, and deadlock errors with capped jittered
@@ -172,7 +173,7 @@
   that its current request returns to `QUEUED` before redelivery. Successful
   reprocessing is stubbed for promotion, deletion, and enrichment to isolate
   settlement behavior. Process outages during claim or processing for other
-  work kinds and cluster failover for other consumers remain open.
+  work kinds remain open.
   Periodic cancellation, expired-work, and retention passes also retry
   transient database failures with capped jittered backoff. Retention repeats
   object deletion safely before retrying its database state change.
