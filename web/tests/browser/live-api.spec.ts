@@ -294,18 +294,14 @@ test('creates a participant account in Admin through the live Identity API', asy
   const exportedEventTypes = exported.securityEvents.map(
     (event: { eventType: string }) => event.eventType,
   );
-  const accountCreatedIndex = exportedEventTypes.indexOf(
-    'identity.account.created.v1',
+  const rolesReplacedIndex = exportedEventTypes.indexOf(
+    'identity.roles.replaced.v1',
   );
-  const evidenceSubmittedIndex = exportedEventTypes.indexOf(
-    'identity.callsign.evidence-submitted.v1',
+  const accountUpdatedIndex = exportedEventTypes.indexOf(
+    'identity.account.admin-updated.v1',
   );
-  const callsignVerifiedIndex = exportedEventTypes.indexOf(
-    'identity.callsign.verified.v1',
-  );
-  expect(accountCreatedIndex).toBeGreaterThanOrEqual(0);
-  expect(evidenceSubmittedIndex).toBeGreaterThan(accountCreatedIndex);
-  expect(callsignVerifiedIndex).toBeGreaterThan(evidenceSubmittedIndex);
+  expect(rolesReplacedIndex).toBeGreaterThanOrEqual(0);
+  expect(accountUpdatedIndex).toBeGreaterThan(rolesReplacedIndex);
 
   const confirmations: string[] = [];
   page.once('dialog', async (dialog) => {

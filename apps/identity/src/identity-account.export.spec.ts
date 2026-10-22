@@ -93,7 +93,7 @@ describe('IdentityAccountService account export compatibility', () => {
             rows: [
               {
                 id: 'event-1',
-                eventType: 'identity.account.created.v1',
+                eventType: 'identity.roles.replaced.v1',
                 payloadText:
                   '{"accountId":"' +
                   accountId +
@@ -102,7 +102,7 @@ describe('IdentityAccountService account export compatibility', () => {
               },
               {
                 id: 'event-2',
-                eventType: 'identity.callsign.verified.v1',
+                eventType: 'identity.account.admin-updated.v1',
                 payloadText:
                   '{"accountId":"' +
                   accountId +
@@ -153,10 +153,12 @@ describe('IdentityAccountService account export compatibility', () => {
     expect(exported.securityEvents).toMatchObject([
       {
         id: 'event-1',
+        eventType: 'identity.roles.replaced.v1',
         payload: { accountId, sequence: 9007199254740997n },
       },
       {
         id: 'event-2',
+        eventType: 'identity.account.admin-updated.v1',
         payload: { accountId, sequence: 9007199254740999n },
       },
     ]);

@@ -164,9 +164,11 @@ message, grants an additional permitted Activity role, and confirms the account
 appears in the refreshed list. It then adds a callsign, submits verification
 evidence, and verifies the callsign through the live Identity API.
 The same browser workflow exports the resulting account and checks that its
-security events retain account-creation, evidence-submission, and verification
-order. This complements the service fixture's snapshot, access-control, and
-exact-integer export checks with persisted database behavior.
+security events retain role-replacement and account-update order. Callsign
+evidence remains in the separate evidence list; callsign lifecycle facts are
+outbox events, not account security events. This complements the service
+fixture's snapshot, access-control, and exact-integer export checks with
+persisted database behavior.
 Login, refresh, recovery request/reset, and OIDC mapping use the reference's
 Python-truthy required-field checks before authentication or persistence, with
 the same `missing required fields` response precedence.
