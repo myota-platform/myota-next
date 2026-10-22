@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
 
-test('uploads and preprocesses GeoJSON, KML, and GPX through the resumable live workflow', async ({
+test('uploads and preprocesses GeoJSON, KML, GPX, and Shapefile through the resumable live workflow', async ({
   page,
 }) => {
   test.skip(
@@ -22,6 +23,12 @@ test('uploads and preprocesses GeoJSON, KML, and GPX through the resumable live 
   const fixture = await pool.connect();
   const suffix = randomUUID();
   const entityTypeCode = `LIVE_FILE_${suffix.replaceAll('-', '').slice(0, 14).toUpperCase()}`;
+  const shapefile = await readFile(
+    new URL(
+      '../../../../apps/geodata-worker/src/fixtures/python-point-shapefile.zip',
+      import.meta.url,
+    ),
+  );
   const sources = [
     {
       format: 'GEOJSON',
@@ -53,7 +60,17 @@ test('uploads and preprocesses GeoJSON, KML, and GPX through the resumable live 
       featureName: `Uploaded GPX ${suffix}`,
       content: `<?xml version="1.0"?><gpx version="1.1" creator="MyOTA"><wpt lat="46.234567" lon="7.123456"><name>Uploaded GPX ${suffix}</name></wpt></gpx>`,
     },
-  ].map((source) => ({ ...source, bytes: Buffer.from(source.content) }));
+    {
+      format: 'SHAPEFILE',
+      filename: `browser-${suffix}.zip`,
+      mimeType: 'application/zip',
+      featureName: 'Unnamed candidate',
+      content: shapefile,
+    },
+  ].map((source) => ({
+    ...source,
+    bytes: Buffer.from(source.content),
+  }));
   const uploadSessionIds: string[] = [];
 
   try {

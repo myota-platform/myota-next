@@ -282,7 +282,7 @@ uploads are implemented with owner-scoped durable sessions, bounded binary
 parts, checksum and malware scanning, and transactional completion up to the
 worker's configured source limits. Repeated completion returns the Python
 handler's full persisted `importRun` object. CI's live Admin browser workflow
-uploads GeoJSON, KML, and GPX files through this multipart path and verifies
+uploads GeoJSON, KML, GPX, and Shapefile ZIP files through this multipart path and verifies
 the completed sessions, source object metadata, worker results, and review
 candidates.
 Upload creation checks required fields using Python truthiness and order,
