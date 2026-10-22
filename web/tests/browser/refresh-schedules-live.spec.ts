@@ -124,7 +124,7 @@ test('creates and runs a complete refresh snapshot through live services', async
       complete_snapshot: boolean;
       disappearance_policy: string;
       programme_slug: string;
-      record_count: number;
+      record_count: string;
       queue_status: string;
     }>(
       `SELECT r.status,r.complete_snapshot,r.disappearance_policy,
@@ -143,7 +143,7 @@ test('creates and runs a complete refresh snapshot through live services', async
         complete_snapshot: true,
         disappearance_policy: 'REVIEW_REQUIRED',
         programme_slug: programmeSlug,
-        record_count: 0,
+        record_count: '0',
         queue_status: 'COMPLETED',
       },
     ]);
