@@ -50,7 +50,9 @@ production readiness.
   Activity workers. Admin award publication and issuance, plus
   Participant eligible-level requests, now cross live Identity and Activity
   APIs and verify persisted request facts and issuance records. Public catalogue
-  loading uses live services as well. Participants can read their own request
+  loading uses live services as well. Public Activity activation history,
+  leaderboard, and JSON/CSV result exports are also checked through the live
+  Gateway. Participants can read their own request
   status, while cross-account reads are denied. Admin can queue certificate PDF
   rendering, and Participant exposes the download only after the artifact is
   ready. The latest render-job status persists in Admin across page reloads.

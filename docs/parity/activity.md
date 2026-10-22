@@ -258,6 +258,9 @@ Public leaderboard category values are uppercased and passed through to the
 aggregate query, matching the reference: unrecognized categories return an
 empty `items` array instead of a validation error; an absent or blank category
 defaults to `HUNTER`.
+Live Gateway browser coverage checks public history pagination and callsign
+masking, category normalization and leaderboard counts, and programme-scoped
+JSON and CSV result exports against a seeded activation.
 The notifications endpoint preserves the reference's unpaged `{ items }`
 response, falls back to the caller's subject when `recipientId` is absent or
 blank, and ignores `page` and `pageSize` query parameters. The Admin Activity
