@@ -53,8 +53,11 @@ operator's activation history, since the close API rejects requests for an
 activation that is no longer open. Browser checks also cover profile details editing,
 image crop/upload, an eligible award
 request, safe biography Markdown preview, and existing-candidate and map-picked
-point proposals with intercepted API responses. Proposal submissions retain
-their exact request body and idempotency key for same-tab retries across reloads.
+point proposals with intercepted API responses. A live browser workflow now
+submits both proposal forms through Participant, Gateway, and Geodata, then
+checks the queued import metadata and proposer attribution in the Geodata
+database. Proposal submissions retain their exact request body and idempotency
+key for same-tab retries across reloads.
 Admin browser checks also cover
 sign-in, session bootstrap,
 scope denial, Identity account creation with a permitted role grant and custom
