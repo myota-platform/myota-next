@@ -64,9 +64,10 @@ production readiness.
   with persisted version, reviewer, status history, audit, and outbox checks.
   Conflation review also runs live through Admin and Gateway, verifying the
   selected survivor, reviewer, resolution history, idempotency record, and
-  outbox event in Geodata. The manual refresh-schedule flow now runs a complete
-  snapshot through Gateway and Geodata workers, checking the manifest, queued
-  processing state, schedule timestamps, and outbox events.
+  outbox event in Geodata. The Admin refresh-schedule page now creates a
+  category-scoped schedule, uploads a complete snapshot, and verifies worker
+  completion through live services. A separate Gateway check verifies the
+  manifest, queued processing state, schedule timestamps, and outbox events.
   Most other browser workflows still use intercepted API responses;
   broader payload coverage, accessibility, responsive behavior, and failure
   states remain to be qualified.

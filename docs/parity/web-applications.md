@@ -138,8 +138,11 @@ live Admin workflow also records that decision through Gateway and verifies
 the persisted survivor, reviewer, history, idempotency record, and outbox event.
 Other Admin
 workflows still lack browser-level compatibility coverage. Refresh schedule
-checks cover programme-scoped schedule creation and queuing a complete manual
-GeoJSON snapshot. Import checks cover pasted GeoJSON queueing, source metadata,
+checks create a temporary category and an all-programmes schedule in Admin,
+then upload an empty complete GeoJSON snapshot and verify worker completion
+through live services. A separate Gateway check verifies the schedule record,
+manifest, processing queue, timestamps, and outbox events. Import checks cover
+pasted GeoJSON queueing, source metadata,
 candidate listing, rejection through the validation endpoint, and promotion of
 the next candidate through its durable queue. The browser check verifies the
 reviewer, candidate IDs, and idempotency keys for both decisions.
