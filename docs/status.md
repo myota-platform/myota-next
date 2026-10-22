@@ -53,7 +53,7 @@ production readiness.
   ready. The latest render-job status persists in Admin across page reloads.
   Admin GeoJSON file upload now runs through the resumable multipart API, the
   CI S3-compatible fixture, and the Geodata preprocessing worker; CI verifies
-  the completed upload, import, source object, and review candidate.
+  the completed upload, preprocessed import, source object, and review candidate.
   Most other browser workflows still use intercepted API responses;
   broader payload coverage, accessibility, responsive behavior, and failure
   states remain to be qualified.

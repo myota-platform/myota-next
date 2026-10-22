@@ -148,7 +148,7 @@ test('uploads and preprocesses a GeoJSON file through the resumable live workflo
         upload_status: 'COMPLETED',
         filename: sourceFilename,
         expected_size: String(content.length),
-        import_status: 'COMPLETED',
+        import_status: 'PREPROCESSED',
         object_key: expect.stringContaining(`geodata-imports/${importRunId}-`),
         source_hash: expect.any(String),
         parts: 1,
