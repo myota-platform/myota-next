@@ -476,7 +476,13 @@ export class ActivityNotificationsService
     return retryTransientDatabaseOperation(operation, {
       stopping: () => this.stopping,
       onRetry: (error, attempt) => {
-        message.working();
+        try {
+          message.working();
+        } catch (ackError) {
+          this.logger.warn(
+            `Could not extend notification ACK while ${context}: ${this.safeError(ackError)}`,
+          );
+        }
         if (attempt === 1 || attempt % 12 === 0)
           this.logger.warn(
             `Activity notifications are waiting for PostgreSQL while ${context}: ${this.safeError(error)}`,
