@@ -100,7 +100,10 @@ test('reloads a live entity after a stale metadata edit and saves the new versio
       confirmations.push(dialog.message());
       await dialog.accept();
     });
-    await page.getByRole('button', { name: 'Reload selected entity' }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Reload selected entity' })
+      .click();
     const refreshedEditor = page.getByRole('dialog', { name: concurrentName });
     const refreshedDisplayName = refreshedEditor.getByLabel('Display name');
     await expect(refreshedDisplayName).toHaveValue(concurrentName);
