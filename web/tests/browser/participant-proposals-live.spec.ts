@@ -13,6 +13,10 @@ test('submits participant location proposals through live Gateway and Geodata AP
   request,
 }) => {
   test.skip(!hasApiDatabases, 'requires the CI PostgreSQL databases');
+  test.skip(
+    process.env.MYOTA_BROWSER_GEODATA_WORKERS !== '1',
+    'requires the CI Geodata workers and JetStream topology',
+  );
 
   const core = new Pool({
     connectionString: process.env.CORE_DATABASE_URL,
@@ -208,18 +212,32 @@ test('submits participant location proposals through live Gateway and Geodata AP
       },
     });
 
+    await expect
+      .poll(
+        async () => {
+          const result = await geo.query<{ status: string }>(
+            `SELECT status FROM import_run WHERE id=ANY($1::uuid[])
+             ORDER BY array_position($1::uuid[],id)`,
+            [proposalRunIds],
+          );
+          return result.rows.map((run) => run.status);
+        },
+        { timeout: 60_000, intervals: [250] },
+      )
+      .toEqual(['PREPROCESSED', 'PREPROCESSED']);
+
     const runs = await geo.query<{
       id: string;
       status: string;
       source_metadata: Record<string, unknown>;
     }>(
       `SELECT id::text,status,source_metadata FROM import_run
-       WHERE id=ANY($1::uuid[]) ORDER BY id`,
+       WHERE id=ANY($1::uuid[]) ORDER BY array_position($1::uuid[],id)`,
       [proposalRunIds],
     );
     expect(runs.rows).toHaveLength(2);
     for (const run of runs.rows) {
-      expect(run.status).toBe('QUEUED');
+      expect(run.status).toBe('PREPROCESSED');
       expect(run.source_metadata).toMatchObject({
         adapter: 'MANUAL',
         programmeSlug,
@@ -229,6 +247,45 @@ test('submits participant location proposals through live Gateway and Geodata AP
         source: {
           name: 'Participant community proposal',
           license: 'programme-supplied',
+        },
+      });
+    }
+
+    const candidates = await geo.query<{
+      import_run_id: string;
+      name: string;
+      programme_slug: string;
+      entity_type_codes: string[];
+      candidate_source: Record<string, unknown>;
+    }>(
+      `SELECT import_run_id::text,name,programme_slug,entity_type_codes,
+              entity_payload->'candidateSource' AS candidate_source
+       FROM geodata_import_candidate
+       WHERE import_run_id=ANY($1::uuid[])
+       ORDER BY array_position($1::uuid[],import_run_id),ordinal`,
+      [proposalRunIds],
+    );
+    expect(candidates.rows).toHaveLength(2);
+    expect(candidates.rows.map((candidate) => candidate.name)).toEqual([
+      candidateName,
+      `Map-picked site ${fixtureId}`,
+    ]);
+    for (const [index, candidate] of candidates.rows.entries()) {
+      const run = runs.rows[index];
+      expect(run).toBeDefined();
+      const proposal = run?.source_metadata.communityProposal as {
+        proposalId: string;
+        proposerId: string;
+      };
+      expect(candidate).toMatchObject({
+        import_run_id: run?.id,
+        name: index === 0 ? candidateName : `Map-picked site ${fixtureId}`,
+        programme_slug: programmeSlug,
+        entity_type_codes: [entityTypeCode],
+        candidate_source: {
+          type: 'COMMUNITY_PROPOSAL',
+          proposalId: proposal.proposalId,
+          proposerId: proposal.proposerId,
         },
       });
     }
