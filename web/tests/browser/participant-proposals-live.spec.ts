@@ -402,6 +402,10 @@ test('submits and reviews participant location proposals through live services',
               );
             }
             await geoClient.query(
+              'DELETE FROM source_snapshot_manifest WHERE import_run_id=ANY($1::uuid[])',
+              [proposalRunIds],
+            );
+            await geoClient.query(
               `DELETE FROM outbox_event WHERE producer='geodata-service'
                AND aggregate_id=ANY($1::text[])`,
               [proposalRunIds],
