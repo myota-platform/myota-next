@@ -70,3 +70,90 @@ describe('GeodataImporterService source decoding', () => {
     },
   );
 });
+
+describe('GeodataImporterService one-shot imports', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it('fetches an allowlisted source and submits a complete snapshot', async () => {
+    const sourceUrl = 'https://data.example.test/geojson';
+    const feature = {
+      type: 'Feature',
+      properties: { name: 'Fixture summit', sourceRef: 'summit-1' },
+      geometry: { type: 'Point', coordinates: [7.2, 46.1] },
+    };
+    const source = {
+      name: 'Importer fixture',
+      sourceKey: 'fixture-source',
+      url: sourceUrl,
+      format: 'GEOJSON',
+    };
+    vi.stubEnv('GEODATA_SOURCE_ALLOWLIST', 'example.test');
+    vi.stubEnv(
+      'GEODATA_IMPORT_SPEC',
+      JSON.stringify({
+        programmeSlug: 'fixture-programme',
+        adapter: 'OSM',
+        source,
+        geodataUrl: 'http://geodata.example.test///',
+        accessToken: 'fixture-service-token',
+        idempotencyKey: 'fixture-import-key',
+        disappearancePolicy: 'STALE',
+      }),
+    );
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ type: 'FeatureCollection', features: [feature] }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: 'fixture-import-run', queued: true }),
+          { status: 202 },
+        ),
+      );
+
+    const importer = new GeodataImporterService();
+    await importer.onModuleInit();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [sourceRequestUrl, sourceRequest] = fetchMock.mock.calls[0]!;
+    expect(String(sourceRequestUrl)).toBe(sourceUrl);
+    expect(sourceRequest).toMatchObject({
+      headers: {
+        accept: 'application/geo+json, application/json',
+        'user-agent': 'MyOTA-geodata-importer/1.0',
+      },
+      redirect: 'manual',
+    });
+
+    const [apiRequestUrl, apiRequest] = fetchMock.mock.calls[1]!;
+    expect(String(apiRequestUrl)).toBe(
+      'http://geodata.example.test/v1/geodata/imports',
+    );
+    expect(apiRequest?.method).toBe('POST');
+    const apiHeaders = new Headers(apiRequest?.headers);
+    expect(apiHeaders.get('authorization')).toBe(
+      'Bearer fixture-service-token',
+    );
+    expect(apiHeaders.get('idempotency-key')).toBe('fixture-import-key');
+    expect(JSON.parse(String(apiRequest?.body))).toMatchObject({
+      programmeSlug: 'fixture-programme',
+      adapter: 'OSM',
+      source,
+      features: [feature],
+      completeSnapshot: true,
+      disappearancePolicy: 'STALE',
+      sourceFeatureHashOverrides: [expect.any(String)],
+    });
+    expect(importer.getOneShotResult()).toEqual({
+      id: 'fixture-import-run',
+      queued: true,
+    });
+  });
+});
