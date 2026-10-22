@@ -62,6 +62,25 @@ jobs:
           cat "$RUNNER_TEMP/nats-server.log"
           exit 1
       - run: npm ci
+      - name: Provision bounded JetStream topology for CI
+        run: npm run provision:jetstream
+        env:
+          NATS_TOPOLOGY_APPLY: '1'
+          NATS_EVENTS_MAX_BYTES: '16777216'
+          NATS_EVENTS_MAX_MESSAGES: '10000'
+          NATS_EVENTS_MAX_MESSAGE_BYTES: '1048576'
+          NATS_ACTIVITY_WORK_MAX_AGE_SECONDS: '86400'
+          NATS_ACTIVITY_WORK_MAX_BYTES: '16777216'
+          NATS_ACTIVITY_WORK_MAX_MESSAGES: '10000'
+          NATS_ACTIVITY_WORK_MAX_MESSAGE_BYTES: '1048576'
+          NATS_GEODATA_WORK_MAX_AGE_SECONDS: '86400'
+          NATS_GEODATA_WORK_MAX_BYTES: '16777216'
+          NATS_GEODATA_WORK_MAX_MESSAGES: '10000'
+          NATS_GEODATA_WORK_MAX_MESSAGE_BYTES: '1048576'
+          NATS_EMAIL_WORK_MAX_AGE_SECONDS: '86400'
+          NATS_EMAIL_WORK_MAX_BYTES: '16777216'
+          NATS_EMAIL_WORK_MAX_MESSAGES: '10000'
+          NATS_EMAIL_WORK_MAX_MESSAGE_BYTES: '1048576'
       - run: npm run prepare:parity-databases
       - run: npm run migrate:db -- --owner=core
       - run: npm run migrate:db -- --owner=activity
@@ -89,3 +108,5 @@ jobs:
       - run: npm run build --prefix web/admin
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
+        env:
+          MYOTA_BROWSER_GEODATA_WORKERS: '1'

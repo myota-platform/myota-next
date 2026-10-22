@@ -145,6 +145,11 @@ same-tab retries and reloads. Entity reviews, metadata/category/geometry/locatio
 updates, enrichment requests, manual proposals, and import finalization use the
 same persistence. Refresh schedule creation and runs plus conflation decisions
 also retain their keys across same-tab retries and reloads.
+The live browser suite also runs a confirmed entity deletion through the
+Geodata API, Geodata worker, Activity cascade API, and both owner databases. It
+checks the displayed impact, completion state, removal of linked QSOs and
+corrections, activation invalidation, and queued award recalculation. CI
+provisions its bounded JetStream topology before starting the workers.
 The Identity account editor exposes callsign creation with status, source, and
 validity fields; evidence submission with checksum and metadata; verification
 for callers with `callsign.verify` and a configurable verification source;

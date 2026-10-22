@@ -124,7 +124,9 @@ for (const [name, port] of services) {
             MYOTA_GEODATA_URL: 'http://127.0.0.1:8003',
             MYOTA_ACTIVITY_URL: 'http://127.0.0.1:8004',
           }
-        : {}),
+        : name === 'geodata'
+          ? { MYOTA_ACTIVITY_URL: 'http://127.0.0.1:8004' }
+          : {}),
     },
     stdio: 'inherit',
   });
@@ -168,6 +170,43 @@ await new Promise((resolve, reject) => {
   };
   void check();
 });
+
+if (process.env.MYOTA_BROWSER_GEODATA_WORKERS === '1') {
+  const workers = [
+    {
+      name: 'geodata-outbox-worker',
+      entrypoint: 'dist/apps/outbox-worker/main.js',
+      environment: {
+        OUTBOX_OWNER: 'geodata',
+        OUTBOX_WORKER: 'browser-geodata-outbox',
+        OUTBOX_DATABASE_URL: process.env.GEO_DATABASE_URL,
+        OUTBOX_METRICS_PORT: '0',
+      },
+    },
+    {
+      name: 'geodata-worker',
+      entrypoint: 'dist/apps/geodata-worker/main.js',
+      environment: {
+        MYOTA_ACTIVITY_URL: 'http://127.0.0.1:8004',
+        GEODATA_WORKER_HEALTH_PORT: '9114',
+      },
+    },
+  ];
+  for (const worker of workers) {
+    const child = spawn(process.execPath, [worker.entrypoint], {
+      env: { ...baseEnvironment, ...worker.environment },
+      stdio: 'inherit',
+    });
+    children.push(child);
+    child.on('exit', (code) => {
+      if (!stopping) {
+        console.error(`${worker.name} exited unexpectedly with code ${code}`);
+        stop();
+        process.exitCode = 1;
+      }
+    });
+  }
+}
 
 readinessServer = createServer((request, response) => {
   if (request.url === '/readyz') {
