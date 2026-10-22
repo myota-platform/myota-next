@@ -156,6 +156,32 @@ export class GeodataEnrichmentRepository {
     }
   }
 
+  async persistRetry(job: Pick<EnrichmentJob, 'id' | 'requestId'>) {
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await client.query(
+        `UPDATE geodata_entity
+         SET public_properties=public_properties ||
+           jsonb_build_object('locationEnrichmentStatus','QUEUED'),
+           location_work_dispatched_at=now(),updated_at=now()
+         WHERE id=$1
+           AND public_properties->>'locationEnrichmentRequestId'=$2
+           AND public_properties->>'locationEnrichmentStatus'='PROCESSING'`,
+        [job.id, job.requestId],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async process(job: EnrichmentJob) {
     const preflight = await this.connect();
     try {

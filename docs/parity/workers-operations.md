@@ -122,18 +122,22 @@
   import fails after claim while the proxy is down; after reconnecting, the
   worker persists the retry state, redelivers the command, and claims the retry.
   This qualifies import claim, state lookup, and retry-state persistence across
-  a PostgreSQL connection outage. Other worker repositories, full PostgreSQL
-  process outages, and clustered failover remain open.
+  a PostgreSQL connection outage. Full PostgreSQL process outages and
+  clustered failover remain open.
   If PostgreSQL fails while the worker is recording a failed delivery, it
   extends the current message ACK and retries settlement for transient
   connection, shutdown, serialization, and deadlock errors with capped jittered
-  backoff. Retry-state recovery is qualified above for import preprocessing;
-  a live location-enrichment check also injects a processing failure during a
-  PostgreSQL outage, moves its owner row to a terminal state through the direct
-  fixture connection, and verifies the worker retains the JetStream delivery
-  until it can read that state and acknowledge it. This qualifies enrichment
-  terminal-state settlement after reconnect; retry-state persistence for
-  promotion, deletion, and enrichment remains open.
+  backoff. Live fault-proxy checks now cover failure settlement for all four
+  Geodata work kinds. Preprocessing, promotion, deletion, and enrichment keep
+  their JetStream deliveries pending during a PostgreSQL outage; after
+  reconnect, their actual repositories persist retry state and the fixture
+  confirms redelivery is acknowledged. Promotion verifies its attempt count
+  and error, deletion verifies its error and lease, and enrichment verifies
+  that its current request returns to `QUEUED` before redelivery. Successful
+  reprocessing is stubbed for promotion, deletion, and enrichment to isolate
+  settlement behavior. Claim and processing outages in other worker
+  operations, full PostgreSQL process outages, and clustered failover remain
+  open.
   Periodic cancellation, expired-work, and retention passes also retry
   transient database failures with capped jittered backoff. Retention repeats
   object deletion safely before retrying its database state change.

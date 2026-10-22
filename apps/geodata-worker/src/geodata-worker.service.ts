@@ -463,8 +463,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
       await this.enrichment.process(job);
       return;
     }
-    if (!(await this.deletions.execute(job)))
-      throw new Error('entity deletion cascade will be retried');
+    await this.deletions.execute(job);
     void message;
   }
 
@@ -477,6 +476,10 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
       await this.repository.fail(job, error);
     } else if (workType === 'geodata.import-promotion.v1') {
       await this.promotion.retryPromotion(job, error);
+    } else if (workType === 'geodata.entity-delete.v1') {
+      await this.deletions.persistRetry(job, error);
+    } else if (workType === 'geodata.location-enrichment.v1') {
+      await this.enrichment.persistRetry(job);
     }
   }
 

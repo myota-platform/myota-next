@@ -29,6 +29,9 @@ import { retryTransientDatabaseOperation } from '../../../libs/platform/src/data
 import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
 import { GeodataRetentionRepository } from './geodata-retention.repository.js';
 import { GeodataEnrichmentRepository } from './geodata-enrichment.repository.js';
+import { GeodataPromotionRepository } from './geodata-promotion.repository.js';
+import { GeodataPromotionScoring } from './geodata-promotion-scoring.js';
+import { GeodataDeletionRepository } from './geodata-deletion.repository.js';
 import { GeodataWorkerService } from './geodata-worker.service.js';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
 import { GeodataEntityEnrichmentRequestRepository } from '../../geodata/src/geodata-entity-enrichment.repository.js';
@@ -61,7 +64,7 @@ describe('Geodata worker process recovery', () => {
   it.skipIf(
     process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
       !process.env.GEO_DATABASE_URL,
-  )(brokerRecoveryTestName, async () => verifyBrokerRecovery(), 45_000);
+  )(brokerRecoveryTestName, async () => verifyBrokerRecovery(), 90_000);
 
   it.skipIf(
     process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
@@ -240,6 +243,8 @@ async function verifyBrokerRecovery() {
   const processedEnrichments: string[] = [];
   const outageImportRunId = randomUUID();
   const settlementImportRunId = randomUUID();
+  const settlementPromotionQueueId = randomUUID();
+  const settlementDeletionJobId = randomUUID();
   const settlementEnrichmentEntityId = randomUUID();
   const settlementEnrichmentRequestId = randomUUID();
   const staleEnrichmentEntityId = randomUUID();
@@ -251,9 +256,18 @@ async function verifyBrokerRecovery() {
   let outageStateAttempts = 0;
   let enrichmentClaimAttempts = 0;
   let failSettlementOnce = true;
+  let failPromotionSettlementOnce = true;
+  let failDeletionSettlementOnce = true;
   let failEnrichmentSettlementOnce = true;
   const liveWorkRepository = new GeodataWorkRepository(databaseProbe as Pool);
   const liveEnrichmentRepository = new GeodataEnrichmentRepository(
+    databaseProbe as Pool,
+  );
+  const livePromotionRepository = new GeodataPromotionRepository(
+    databaseProbe as Pool,
+    new GeodataPromotionScoring(),
+  );
+  const liveDeletionRepository = new GeodataDeletionRepository(
     databaseProbe as Pool,
   );
   const liveImportRunIds = new Set([outageImportRunId, settlementImportRunId]);
@@ -296,9 +310,57 @@ async function verifyBrokerRecovery() {
     })),
   };
   const promotion = {
-    claimPromotion: vi.fn(async (queueId: string) => ({ queueId })),
-    processPromotion: vi.fn(async ({ queueId }: { queueId: string }) => {
-      processedPromotions.push(queueId);
+    claimPromotion: vi.fn(async (queueId: string) => {
+      if (queueId === settlementPromotionQueueId)
+        return livePromotionRepository.claimPromotion(queueId);
+      return { queueId };
+    }),
+    getPromotionState: vi.fn(async (queueId: string) => {
+      if (queueId === settlementPromotionQueueId)
+        return livePromotionRepository.getPromotionState(queueId);
+      return { status: 'QUEUED', leaseRemainingSeconds: 0 };
+    }),
+    processPromotion: vi.fn(
+      async (queue: { queueId?: string; id?: string }) => {
+        const queueId = queue.queueId ?? queue.id ?? '';
+        if (
+          queueId === settlementPromotionQueueId &&
+          failPromotionSettlementOnce
+        ) {
+          failPromotionSettlementOnce = false;
+          databaseProxy.setAvailable(false);
+          throw new Error(
+            'injected promotion failure before retry-state persistence',
+          );
+        }
+        if (queueId === settlementPromotionQueueId) {
+          const completion = await directDatabase.connect();
+          try {
+            await completion.query('BEGIN');
+            await completion.query(
+              "SELECT set_config('myota.geodata_writer','row-v1',true)",
+            );
+            await completion.query(
+              `UPDATE geodata_import_processing_queue
+             SET status='COMPLETED',completed_at=now(),lease_until=NULL
+             WHERE id=$1 AND status='PROCESSING'`,
+              [queueId],
+            );
+            await completion.query('COMMIT');
+          } catch (error) {
+            await completion.query('ROLLBACK').catch(() => undefined);
+            throw error;
+          } finally {
+            completion.release();
+          }
+        }
+        processedPromotions.push(queueId);
+      },
+    ),
+    retryPromotion: vi.fn(async (queue: { id: string }, error: unknown) => {
+      if (queue.id === settlementPromotionQueueId)
+        return livePromotionRepository.retryPromotion(queue as never, error);
+      throw new Error('unexpected promotion failure in recovery fixture');
     }),
   };
   const enrichment = {
@@ -323,21 +385,92 @@ async function verifyBrokerRecovery() {
         databaseProxy.setAvailable(false);
         throw new Error('injected enrichment failure before settlement');
       }
+      if (job.id === settlementEnrichmentEntityId) {
+        const completion = await directDatabase.connect();
+        try {
+          await completion.query('BEGIN');
+          await completion.query(
+            "SELECT set_config('myota.geodata_writer','row-v1',true)",
+          );
+          await completion.query(
+            `UPDATE geodata_entity
+             SET public_properties=public_properties ||
+               '{"locationEnrichmentStatus":"FAILED"}'::jsonb,
+                 updated_at=now()
+             WHERE id=$1 AND public_properties->>'locationEnrichmentRequestId'=$2`,
+            [job.id, job.requestId],
+          );
+          await completion.query('COMMIT');
+        } catch (error) {
+          await completion.query('ROLLBACK').catch(() => undefined);
+          throw error;
+        } finally {
+          completion.release();
+        }
+      }
       processedEnrichments.push(job.requestId);
+    }),
+    persistRetry: vi.fn(async (job: { id: string; requestId: string }) => {
+      if (job.id === settlementEnrichmentEntityId)
+        return liveEnrichmentRepository.persistRetry(job);
+      throw new Error('unexpected enrichment failure in recovery fixture');
     }),
   };
   const deletions = {
-    claim: vi.fn(async (jobId: string) =>
-      completedJobs.has(jobId) ? null : { jobId },
-    ),
-    getDeletionState: vi.fn(async (jobId: string) => ({
-      status: completedJobs.has(jobId) ? 'DELETED' : 'QUEUED',
-      leaseRemainingSeconds: 0,
-    })),
-    execute: vi.fn(async ({ jobId }: { jobId: string }) => {
-      completedJobs.add(jobId);
-      executionOrder.push(jobId);
+    claim: vi.fn(async (jobId: string) => {
+      if (jobId === settlementDeletionJobId)
+        return liveDeletionRepository.claim(jobId);
+      return completedJobs.has(jobId) ? null : { jobId };
+    }),
+    getDeletionState: vi.fn(async (jobId: string) => {
+      if (jobId === settlementDeletionJobId)
+        return liveDeletionRepository.getDeletionState(jobId);
+      return {
+        status: completedJobs.has(jobId) ? 'DELETED' : 'QUEUED',
+        leaseRemainingSeconds: 0,
+      };
+    }),
+    execute: vi.fn(async (job: { id?: string; jobId?: string }) => {
+      const jobId = job.jobId ?? job.id ?? '';
+      if (jobId === settlementDeletionJobId && failDeletionSettlementOnce) {
+        failDeletionSettlementOnce = false;
+        databaseProxy.setAvailable(false);
+        throw new Error(
+          'injected deletion failure before retry-state persistence',
+        );
+      }
+      if (jobId === settlementDeletionJobId) {
+        const completion = await directDatabase.connect();
+        try {
+          await completion.query('BEGIN');
+          await completion.query(
+            "SELECT set_config('myota.geodata_writer','row-v1',true)",
+          );
+          await completion.query(
+            `UPDATE geodata_control_record
+             SET payload=payload || '{"status":"COMPLETED","leaseUntil":null}'::jsonb,
+                 updated_at=now()
+             WHERE kind='entityDeletionJobs' AND id=$1`,
+            [jobId],
+          );
+          await completion.query('COMMIT');
+        } catch (error) {
+          await completion.query('ROLLBACK').catch(() => undefined);
+          throw error;
+        } finally {
+          completion.release();
+        }
+      }
+      if (jobId !== settlementDeletionJobId) {
+        completedJobs.add(jobId);
+        executionOrder.push(jobId);
+      }
       return true;
+    }),
+    persistRetry: vi.fn(async (job: { id: string }, error: unknown) => {
+      if (job.id === settlementDeletionJobId)
+        return liveDeletionRepository.persistRetry(job as never, error);
+      throw new Error('unexpected deletion failure in recovery fixture');
     }),
   };
   const retention = {
@@ -390,6 +523,31 @@ async function verifyBrokerRecovery() {
           ],
         );
       }
+      await fixture.query(
+        `INSERT INTO geodata_import_processing_queue
+          (id,import_run_id,candidate_ids,target_status,requested_by)
+         VALUES ($1,$2,'[]'::jsonb,'CANDIDATE','recovery-test')`,
+        [settlementPromotionQueueId, settlementImportRunId],
+      );
+      await fixture.query(
+        `INSERT INTO geodata_control_record(kind,id,payload,updated_at)
+         VALUES ('entityDeletionJobs',$1,$2::jsonb,now())`,
+        [
+          settlementDeletionJobId,
+          stringifyJsonWithBigInts({
+            id: settlementDeletionJobId,
+            entityId: randomUUID(),
+            requestedBy: 'recovery-test',
+            status: 'QUEUED',
+            leaseUntil: null,
+            executionClaims: {
+              sub: 'recovery-test',
+              scp: [],
+              roles: [{ role: 'GLOBAL_OPERATOR' }],
+            },
+          }),
+        ],
+      );
       await fixture.query(
         `INSERT INTO geodata_entity
           (id,name,lifecycle_status,geom,centroid,public_properties)
@@ -834,6 +992,112 @@ async function verifyBrokerRecovery() {
       attempt_count: 2,
     });
 
+    const rejectedBeforePromotionSettlement =
+      databaseProxy.rejectedConnections();
+    await publishGeodataWork(
+      publisher,
+      'geodata.import-promotion.v1',
+      settlementPromotionQueueId,
+      { type: 'import_processing_queue', id: settlementPromotionQueueId },
+      { queueId: settlementPromotionQueueId },
+    );
+    await waitForRecovery(async () => {
+      const consumer = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        'geodata-import-promotion-v1',
+      );
+      return (
+        !failPromotionSettlementOnce &&
+        databaseProxy.rejectedConnections() >
+          rejectedBeforePromotionSettlement &&
+        consumer.num_ack_pending > 0
+      );
+    }, 'Geodata worker did not retain promotion delivery while retry state was unavailable');
+    databaseProxy.setAvailable(true);
+    await waitForRecovery(async () => {
+      const result = await directDatabase.query<{
+        status: string;
+        attempt_count: number;
+        error: string | null;
+      }>(
+        'SELECT status,attempt_count,error FROM geodata_import_processing_queue WHERE id=$1',
+        [settlementPromotionQueueId],
+      );
+      return (
+        result.rows[0]?.status === 'QUEUED' &&
+        result.rows[0]?.attempt_count === 1 &&
+        result.rows[0]?.error ===
+          'injected promotion failure before retry-state persistence'
+      );
+    }, 'Geodata worker did not persist the failed promotion retry after recovery');
+    await waitForRecovery(async () => {
+      const result = await directDatabase.query<{
+        status: string;
+        attempt_count: number;
+      }>(
+        'SELECT status,attempt_count FROM geodata_import_processing_queue WHERE id=$1',
+        [settlementPromotionQueueId],
+      );
+      return (
+        result.rows[0]?.status === 'COMPLETED' &&
+        result.rows[0]?.attempt_count === 2
+      );
+    }, 'Geodata worker did not complete the retried promotion after PostgreSQL recovered');
+    await waitForRecovery(async () => {
+      const consumer = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        'geodata-import-promotion-v1',
+      );
+      return consumer.num_pending === 0 && consumer.num_ack_pending === 0;
+    }, 'Geodata worker did not acknowledge the retried promotion delivery');
+
+    const rejectedBeforeDeletionSettlement =
+      databaseProxy.rejectedConnections();
+    await publishDeletion(publisher, settlementDeletionJobId);
+    await waitForRecovery(async () => {
+      const consumer = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        'geodata-entity-deletion-v1',
+      );
+      return (
+        !failDeletionSettlementOnce &&
+        databaseProxy.rejectedConnections() >
+          rejectedBeforeDeletionSettlement &&
+        consumer.num_ack_pending > 0
+      );
+    }, 'Geodata worker did not retain deletion delivery while retry state was unavailable');
+    databaseProxy.setAvailable(true);
+    await waitForRecovery(async () => {
+      const result = await directDatabase.query<{
+        status: string;
+        last_error: string | null;
+      }>(
+        `SELECT payload->>'status' AS status,payload->>'lastError' AS last_error
+         FROM geodata_control_record WHERE kind='entityDeletionJobs' AND id=$1`,
+        [settlementDeletionJobId],
+      );
+      return (
+        result.rows[0]?.status === 'PROCESSING' &&
+        result.rows[0]?.last_error ===
+          'injected deletion failure before retry-state persistence'
+      );
+    }, 'Geodata worker did not persist deletion retry state after recovery');
+    await waitForRecovery(async () => {
+      const result = await directDatabase.query<{ status: string }>(
+        `SELECT payload->>'status' AS status FROM geodata_control_record
+         WHERE kind='entityDeletionJobs' AND id=$1`,
+        [settlementDeletionJobId],
+      );
+      return result.rows[0]?.status === 'COMPLETED';
+    }, 'Geodata worker did not complete deletion work after PostgreSQL recovered');
+    await waitForRecovery(async () => {
+      const consumer = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        'geodata-entity-deletion-v1',
+      );
+      return consumer.num_pending === 0 && consumer.num_ack_pending === 0;
+    }, 'Geodata worker did not acknowledge the retried deletion delivery');
+
     const rejectedBeforeEnrichmentSettlement =
       databaseProxy.rejectedConnections();
     await publishGeodataWork(
@@ -861,36 +1125,36 @@ async function verifyBrokerRecovery() {
         consumer.num_ack_pending > 0
       );
     }, 'Geodata worker did not retain enrichment delivery while settlement state was unavailable');
-    const terminalUpdate = await directDatabase.connect();
-    try {
-      await terminalUpdate.query('BEGIN');
-      await terminalUpdate.query(
-        "SELECT set_config('myota.geodata_writer','row-v1',true)",
-      );
-      await terminalUpdate.query(
-        `UPDATE geodata_entity
-         SET public_properties=public_properties || '{"locationEnrichmentStatus":"FAILED"}'::jsonb,
-             updated_at=now()
-         WHERE id=$1`,
-        [settlementEnrichmentEntityId],
-      );
-      await terminalUpdate.query('COMMIT');
-    } catch (error) {
-      await terminalUpdate.query('ROLLBACK').catch(() => undefined);
-      throw error;
-    } finally {
-      terminalUpdate.release();
-    }
     databaseProxy.setAvailable(true);
     await waitForRecovery(async () => {
+      const result = await directDatabase.query<{ status: string }>(
+        `SELECT public_properties->>'locationEnrichmentStatus' AS status
+         FROM geodata_entity WHERE id=$1`,
+        [settlementEnrichmentEntityId],
+      );
+      return result.rows[0]?.status === 'QUEUED';
+    }, 'Geodata worker did not persist enrichment retry state after recovery');
+    await waitForRecovery(async () => {
+      const result = await directDatabase.query<{ status: string }>(
+        `SELECT public_properties->>'locationEnrichmentStatus' AS status
+         FROM geodata_entity WHERE id=$1`,
+        [settlementEnrichmentEntityId],
+      );
       const consumer = await manager.consumers.info(
         'MYOTA_GEODATA_WORK',
         'geodata-location-enrichment-v1',
       );
-      return consumer.num_pending === 0 && consumer.num_ack_pending === 0;
-    }, 'Geodata worker did not acknowledge terminal enrichment work after PostgreSQL recovered');
-    expect(enrichmentClaimAttempts).toBe(1);
-    expect(processedEnrichments).toEqual([requestId]);
+      return (
+        result.rows[0]?.status === 'FAILED' &&
+        consumer.num_pending === 0 &&
+        consumer.num_ack_pending === 0
+      );
+    }, 'Geodata worker did not complete enrichment retry after PostgreSQL recovered');
+    expect(enrichmentClaimAttempts).toBe(2);
+    expect(processedEnrichments).toEqual([
+      requestId,
+      settlementEnrichmentRequestId,
+    ]);
 
     expect(executionOrder).toEqual(jobIds);
     expect(processedPreprocessing).toEqual([
@@ -898,10 +1162,15 @@ async function verifyBrokerRecovery() {
       outageImportRunId,
       settlementImportRunId,
     ]);
-    expect(processedPromotions).toEqual([queueId]);
-    expect(processedEnrichments).toEqual([requestId]);
+    expect(new Set(processedPromotions)).toEqual(
+      new Set([queueId, settlementPromotionQueueId]),
+    );
+    expect(processedEnrichments).toEqual([
+      requestId,
+      settlementEnrichmentRequestId,
+    ]);
     expect(outageClaimAttempts).toBeGreaterThanOrEqual(2);
-    expect(deletions.execute).toHaveBeenCalledTimes(2);
+    expect(deletions.execute).toHaveBeenCalledTimes(4);
   } finally {
     if (worker) await worker.onModuleDestroy().catch(() => undefined);
     if (publisher) await publisher.drain().catch(() => undefined);
@@ -920,6 +1189,14 @@ async function verifyBrokerRecovery() {
           `DELETE FROM outbox_event
             WHERE aggregate_type='import_run' AND aggregate_id=ANY($1::text[])`,
           [[outageImportRunId, settlementImportRunId]],
+        );
+        await cleanup.query(
+          'DELETE FROM geodata_import_processing_queue WHERE id=$1',
+          [settlementPromotionQueueId],
+        );
+        await cleanup.query(
+          "DELETE FROM geodata_control_record WHERE kind='entityDeletionJobs' AND id=$1",
+          [settlementDeletionJobId],
         );
         await cleanup.query(
           'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=ANY($1::uuid[])',

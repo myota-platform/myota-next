@@ -128,24 +128,19 @@ export class GeodataDeletionRepository {
   }
 
   async execute(job: DeletionJob) {
-    try {
-      const entity = await this.getEntity(job.entityId);
-      const previousStatus = entity?.lifecycle_status ?? 'DELETED';
-      if (
-        !hasGlobalRole(job.executionClaims.roles) &&
-        previousStatus !== 'REJECTED' &&
-        previousStatus !== 'DELETED'
-      )
-        throw new ConflictException(
-          'only global administrators can delete non-rejected entities',
-        );
-      const cascade = await this.activityCascade(job);
-      await this.complete(job, cascade, previousStatus);
-      return true;
-    } catch (error) {
-      await this.retry(job, error);
-      return false;
-    }
+    const entity = await this.getEntity(job.entityId);
+    const previousStatus = entity?.lifecycle_status ?? 'DELETED';
+    if (
+      !hasGlobalRole(job.executionClaims.roles) &&
+      previousStatus !== 'REJECTED' &&
+      previousStatus !== 'DELETED'
+    )
+      throw new ConflictException(
+        'only global administrators can delete non-rejected entities',
+      );
+    const cascade = await this.activityCascade(job);
+    await this.complete(job, cascade, previousStatus);
+    return true;
   }
 
   private async getEntity(id: string) {
@@ -296,7 +291,7 @@ export class GeodataDeletionRepository {
     }
   }
 
-  private async retry(job: DeletionJob, error: unknown) {
+  async persistRetry(job: DeletionJob, error: unknown) {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -307,7 +302,7 @@ export class GeodataDeletionRepository {
         `UPDATE geodata_control_record
          SET payload=payload || jsonb_build_object(
            'status','PROCESSING','leaseUntil',now()+interval '5 seconds',
-           'lastError',$2,'updatedAt',now()),updated_at=now()
+           'lastError',$2::text,'updatedAt',now()),updated_at=now()
          WHERE kind='entityDeletionJobs' AND id=$1 AND payload->>'status'='PROCESSING'`,
         [
           job.id,
