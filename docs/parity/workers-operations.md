@@ -77,7 +77,9 @@
   the eight-attempt record before terminating it after recovery. A three-node
   JetStream CI case holds a notification delivery pending while its stream
   leader stops, then verifies replica election, duplicate-safe processing,
-  acknowledgement, and one persisted notification. Broker-side retry
+  acknowledgement, and one persisted notification. It also verifies terminal
+  dead-letter persistence and delivery termination across leader failover while
+  PostgreSQL recovers. Broker-side retry
   exhaustion under deployment conditions remains open. The unresolved-dead-letter
   gauge refreshes in the background every 15 seconds, so it does not block
   consumer startup or issue a count query for every delivery.

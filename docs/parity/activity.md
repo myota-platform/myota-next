@@ -71,8 +71,9 @@ connectivity while processing an event, verifies the delivery remains pending
 and no notification is written during the outage, then restores connectivity
 and confirms processing and ACK completion. A separate three-node JetStream
 check stops the leader while a notification delivery is pending and verifies
-processing and acknowledgement through the replacement leader. Failover during
-terminal notification settlement remains open. QSO correction requests and
+processing and acknowledgement through the replacement leader. Terminal
+notification settlement also persists its dead letter through leader failover
+while PostgreSQL recovers. QSO correction requests and
 administrator review are also
 implemented, ignore `Idempotency-Key` as the reference does, and rely on the
 database relation for request QSO existence.
