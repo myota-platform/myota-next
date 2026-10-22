@@ -119,7 +119,7 @@ jobs:
       - run: npm run lint --prefix web/admin
       - run: npm run typecheck --prefix web/admin
       - run: npm run build --prefix web/admin
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install chromium
       - run: npm run test:browser
         env:
           MYOTA_BROWSER_GEODATA_WORKERS: '1'
