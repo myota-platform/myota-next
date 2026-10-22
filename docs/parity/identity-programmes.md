@@ -132,9 +132,9 @@ Administrator account PATCH and role-assignment PUT authenticate and resolve
 the target account before validating the request body, matching the reference's
 response precedence. Account-update fixtures pin admin permission denial
 before account lookup and missing-account responses before body validation.
-Account PATCH validates profile fields and checks email
-conflicts before validating status and participation type, matching the
-reference's field order. When role replacement is requested, Nest checks
+Account PATCH validates profile fields before checking email conflicts, then
+checks email conflicts before validating status and participation type,
+matching the reference's field order. When role replacement is requested, Nest checks
 `identity.roles.assign` at the replacement step, after Core-backed account and
 email-conflict handling; the encompassing Core transaction rolls back earlier
 writes if role authorization fails. The PUT retains its roles-only request
