@@ -488,13 +488,57 @@ describeWithDatabases(
           .expect(200);
         expect(reviewedCorrection.body.status).toBe('APPLIED');
 
+        const rejectedQsoResponse = await request(gatewayUrl)
+          .post(`/v1/activations/${activation.body.id}/qsos`)
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({
+            workedCallsign: 'G4E2E',
+            timestamp: startedAt,
+            band: '40M',
+            mode: 'CW',
+          })
+          .expect(201);
+        const rejectedQso = rejectedQsoResponse.body.qso;
+        const rejectedCorrection = await request(gatewayUrl)
+          .post(`/v1/qsos/${rejectedQso.id}/corrections`)
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .send({
+            requestedBy: login.body.account.id,
+            reason: 'The proposed callsign is unsupported',
+            proposedValues: { workedCallsign: 'G4NOT' },
+          })
+          .expect(201);
+        const rejectedReview = await request(gatewayUrl)
+          .post(
+            `/v1/qsos/${rejectedQso.id}/corrections/${rejectedCorrection.body.id}/review`,
+          )
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .send({
+            decision: 'REJECTED',
+            reviewedBy: login.body.account.id,
+            reviewNote: 'The station log confirms G4E2E',
+          })
+          .expect(200);
+        expect(rejectedReview.body.status).toBe('REJECTED');
+
         const activationRead = await request(gatewayUrl)
           .get(`/v1/activations/${activation.body.id}`)
           .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
           .expect(200);
-        expect(activationRead.body.qsos).toMatchObject([
-          { id: qso.id, workedCallsign: 'F4E2X', status: 'CORRECTED' },
-        ]);
+        expect(activationRead.body.qsos).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: qso.id,
+              workedCallsign: 'F4E2X',
+              status: 'CORRECTED',
+            }),
+            expect.objectContaining({
+              id: rejectedQso.id,
+              workedCallsign: 'G4E2E',
+            }),
+          ]),
+        );
 
         const closed = await request(gatewayUrl)
           .patch(`/v1/activations/${activation.body.id}`)

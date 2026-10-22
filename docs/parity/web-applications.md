@@ -93,9 +93,9 @@ filters, pages, and reviews QSO correction requests. Review cards identify both
 requester and operator, and confirmations explain the effect of applying versus
 rejecting. Intercepted browser coverage verifies the affected QSO context,
 status filtering, review notes, paging, and both apply and reject outcomes. A
-live CI browser workflow creates an isolated programme, activation, QSO, and
-correction, applies the correction in Admin, and verifies the updated QSO
-through Gateway.
+live CI Gateway integration creates an isolated programme and activation,
+applies one correction, rejects another, and verifies that only the applied
+correction changes its QSO.
 
 A live Admin browser workflow creates two shared categories, creates a
 programme with one category, then assigns and removes the other through the
