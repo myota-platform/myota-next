@@ -78,6 +78,16 @@ describeWithDatabases(
         gatewayApp = await startGateway();
         const gatewayUrl = await listen(gatewayApp);
 
+        await request(gatewayUrl)
+          .post('/v1/identity/auth/register')
+          .send({ email: `disabled-${randomUUID()}@example.test` })
+          .expect(403)
+          .expect(({ body }) => {
+            expect(body.detail).toBe(
+              'public participant registration is unavailable until email verification and abuse controls are deployed',
+            );
+          });
+
         const login = await request(gatewayUrl)
           .post('/v1/identity/auth/login')
           .send({ email, password })

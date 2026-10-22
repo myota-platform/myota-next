@@ -52,7 +52,10 @@ entity (`&#x27;`) when escaping user-provided names.
 Identity currently implements disabled public registration, password login,
 refresh rotation, logout revocation, recovery request/reset, current-account
 reads, owner-only profile updates, account creation, and administrator account
-listing, owner/global account reads and account role reads in NestJS. The role catalogue endpoint returns built-in and persisted
+listing, owner/global account reads and account role reads in NestJS. A live
+Gateway-to-Identity check also confirms public registration remains disabled
+with the Python reference's response detail. The role catalogue endpoint
+returns built-in and persisted
 custom roles under the existing authorized scopes; custom role creation and
 partial updates are backed by Core transactions and security/outbox events.
 Role definitions sort by code point, matching Python's string ordering for
