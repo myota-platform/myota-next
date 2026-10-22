@@ -67,7 +67,9 @@ test('exports and anonymizes an account through the live Admin workflow', async 
     await page.getByRole('button', { name: new RegExp(displayName) }).click();
 
     const downloadPromise = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Export account' }).click();
+    await page
+      .getByRole('button', { name: 'Export account', exact: true })
+      .click();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe(
       `myota-account-${accountId}.json`,
