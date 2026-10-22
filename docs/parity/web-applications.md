@@ -69,7 +69,9 @@ the role to confirm its permissions persisted, and verifies both role lifecycle
 events in the Core security and outbox records. Another live Identity Admin
 workflow starts with a scoped Geodata grant, confirms duplicate-email conflict
 handling, updates account fields without resubmitting role grants, and checks the
-scoped assignment remains persisted. Geodata management browser coverage also
+scoped assignment remains persisted. It also changes the account status to
+deactivated and verifies its existing owner refresh session rotates without
+revocation. Geodata management browser coverage also
 saves manual location overrides with provider
 codes and queues enrichment against the updated entity version. Activity
 browser checks cover

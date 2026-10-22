@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
 
-test('keeps scoped role assignments while resolving a live account email conflict', async ({
+test('preserves scoped roles and refresh sessions across live account edits', async ({
   page,
   request,
 }) => {
@@ -20,6 +20,7 @@ test('keeps scoped role assignments while resolving a live account email conflic
   const blockerEmail = `blocker-${fixtureId}@example.test`;
   const updatedName = `Updated scoped account ${fixtureId.slice(0, 8)}`;
   const updatedEmail = `updated-${fixtureId}@example.test`;
+  const participantPassword = `Scoped-account-${fixtureId}-password!`;
   const programmeSlug = `scope-${fixtureId.slice(0, 8)}`;
   const pool = new Pool({ connectionString: databaseUrl, max: 1 });
   const gateway = 'http://127.0.0.1:8080';
@@ -87,7 +88,7 @@ test('keeps scoped role assignments while resolving a live account email conflic
       `${gateway}/v1/identity/accounts/${targetAccountId}`,
       {
         headers: authorization,
-        data: { status: 'ACTIVE' },
+        data: { status: 'ACTIVE', password: participantPassword },
       },
     );
     expect(activate.status(), await activate.text()).toBe(200);
@@ -174,15 +175,52 @@ test('keeps scoped role assignments while resolving a live account email conflic
       true,
     );
 
+    const participantLogin = await request.post(
+      `${gateway}/v1/identity/auth/login`,
+      { data: { email: updatedEmail, password: participantPassword } },
+    );
+    const participantSession = (await participantLogin.json()) as {
+      refreshToken: string;
+    };
+    expect(participantLogin.status(), JSON.stringify(participantSession)).toBe(
+      200,
+    );
+
+    const deactivate = await request.patch(
+      `${gateway}/v1/identity/accounts/${targetAccountId}`,
+      {
+        headers: { ...authorization, 'Idempotency-Key': randomUUID() },
+        data: { status: 'DEACTIVATED' },
+      },
+    );
+    expect(deactivate.status(), await deactivate.text()).toBe(200);
+
+    const rotatedSession = await request.post(
+      `${gateway}/v1/identity/auth/refresh`,
+      { data: { refreshToken: participantSession.refreshToken } },
+    );
+    const rotatedSessionBody = (await rotatedSession.json()) as {
+      account: { status: string };
+      refreshToken: string;
+    };
+    expect(rotatedSession.status(), JSON.stringify(rotatedSessionBody)).toBe(
+      200,
+    );
+    expect(rotatedSessionBody.account.status).toBe('DEACTIVATED');
+    expect(rotatedSessionBody.refreshToken).not.toBe(
+      participantSession.refreshToken,
+    );
+
     const persisted = await pool.query<{
       display_name: string;
       email: string;
+      status: string;
       role_code: string;
       programme_slug: string;
       jurisdiction_code: string;
       entity_type_code: string;
     }>(
-      `SELECT a.display_name,a.email::text AS email,
+      `SELECT a.display_name,a.email::text AS email,a.status,
               r.role_code,r.programme_slug,r.jurisdiction_code,r.entity_type_code
          FROM public.account a
          JOIN public.account_role r ON r.account_id=a.id
@@ -193,6 +231,7 @@ test('keeps scoped role assignments while resolving a live account email conflic
       {
         display_name: updatedName,
         email: updatedEmail,
+        status: 'DEACTIVATED',
         role_code: 'GEO_APPROVER',
         programme_slug: programmeSlug,
         jurisdiction_code: 'CH',

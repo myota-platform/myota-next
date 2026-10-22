@@ -44,6 +44,8 @@ production readiness.
   creation and callsign management through export and anonymization, custom
   Identity role creation and updates with persisted permission and audit checks,
   scoped-role-preserving account edits with duplicate-email conflict handling,
+  and status-only account deactivation while an existing owner refresh session
+  remains rotatable,
   Activity correction review, and policy publication against running NestJS
   services through the Gateway. Participant profile editing and owner callsign
   creation,

@@ -88,7 +88,10 @@ reference handler, changing status alone does not anonymize the account or
 revoke its sessions; existing refresh sessions also remain rotatable, and both
 session revocation and anonymization happen when `anonymize` is true. Password
 changes and anonymization refresh `revokedAt` on already-revoked sessions as
-well, matching the handler's per-session update. Callsign
+well, matching the handler's per-session update. A live Admin workflow now
+deactivates an account by changing status alone, then rotates the owner's
+existing refresh session and verifies the response retains the deactivated
+status. Callsign
 creation, evidence, verification, primary selection, and retirement also write
 to the relational Core model and outbox. Account reads and exports preserve the
 reference's callsign, evidence, and security-event insertion order through
