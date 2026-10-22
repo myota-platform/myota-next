@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createConnection, createServer, type Socket } from 'node:net';
+import { createServer } from 'node:net';
 import { Readable } from 'node:stream';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -26,6 +26,7 @@ import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint.js';
 import { retryTransientDatabaseOperation } from '../../../libs/platform/src/database-retry.js';
+import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
 import { GeodataRetentionRepository } from './geodata-retention.repository.js';
 import { GeodataWorkerService } from './geodata-worker.service.js';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
@@ -72,7 +73,7 @@ async function verifyRetentionRecovery() {
   )
     throw new Error('retention recovery qualification requires local Postgres');
 
-  const databaseProxy = await startDatabaseProxy(databaseUrl);
+  const databaseProxy = await startPostgresFaultProxy(databaseUrl);
   const { Pool } = await import('pg');
   const directDatabase = new Pool({ connectionString: databaseUrl, max: 1 });
   const retryDatabase = new Pool({
@@ -203,7 +204,7 @@ async function verifyBrokerRecovery() {
   const natsPort = await reserveLocalPort();
   const healthPort = await reserveLocalPort();
   const natsUrl = `nats://127.0.0.1:${natsPort}`;
-  const databaseProxy = await startDatabaseProxy(databaseUrl);
+  const databaseProxy = await startPostgresFaultProxy(databaseUrl);
   const { Pool } = await import('pg');
   const directDatabase = new Pool({ connectionString: databaseUrl, max: 1 });
   const databaseProbe = new Pool({
@@ -653,67 +654,6 @@ async function verifyBrokerRecovery() {
     }
     await rm(directory, { recursive: true, force: true });
   }
-}
-
-type DatabaseProxy = {
-  connectionString: string;
-  rejectedConnections: () => number;
-  setAvailable: (available: boolean) => void;
-  close: () => Promise<void>;
-};
-
-async function startDatabaseProxy(databaseUrl: string): Promise<DatabaseProxy> {
-  const target = new URL(databaseUrl);
-  const sockets = new Set<Socket>();
-  let available = true;
-  let rejected = 0;
-  const server = createServer((client) => {
-    sockets.add(client);
-    client.once('close', () => sockets.delete(client));
-    if (!available) {
-      rejected++;
-      client.destroy();
-      return;
-    }
-    const upstream = createConnection({
-      host: target.hostname.replace(/^\[|\]$/g, ''),
-      port: Number(target.port || 5432),
-    });
-    sockets.add(upstream);
-    upstream.once('close', () => sockets.delete(upstream));
-    client.once('error', () => upstream.destroy());
-    upstream.once('error', () => client.destroy());
-    client.pipe(upstream);
-    upstream.pipe(client);
-  });
-  const port = await new Promise<number>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address();
-      if (!address || typeof address === 'string') {
-        reject(new Error('could not start the Geodata PostgreSQL fault proxy'));
-        return;
-      }
-      resolve(address.port);
-    });
-  });
-  const proxiedUrl = new URL(databaseUrl);
-  proxiedUrl.hostname = '127.0.0.1';
-  proxiedUrl.port = String(port);
-  return {
-    connectionString: proxiedUrl.toString(),
-    rejectedConnections: () => rejected,
-    setAvailable(next) {
-      available = next;
-      if (!available) for (const socket of sockets) socket.destroy();
-    },
-    async close() {
-      for (const socket of sockets) socket.destroy();
-      await new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
-      );
-    },
-  };
 }
 
 async function publishDeletion(

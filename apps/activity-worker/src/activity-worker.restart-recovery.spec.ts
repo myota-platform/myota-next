@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { createConnection, createServer } from 'node:net';
-import type { Socket } from 'node:net';
+import { createServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +18,7 @@ import { connect } from '@nats-io/transport-node';
 import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { DatabaseHealthService } from '../../../libs/platform/src/database.module.js';
+import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
 import { ActivityWorkRepository } from './activity-work.repository.js';
 import { ActivityRetentionRepository } from './activity-retention.repository.js';
 import { ActivityWorkerService } from './activity-worker.service.js';
@@ -43,7 +43,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
       throw new Error('broker restart recovery requires local Postgres');
 
     const pool = new Pool({ connectionString: databaseUrl, max: 4 });
-    const databaseProxy = await startDatabaseProxy(databaseUrl);
+    const databaseProxy = await startPostgresFaultProxy(databaseUrl);
     const workerPool = new Pool({
       connectionString: databaseProxy.connectionString,
       max: 4,
@@ -328,67 +328,6 @@ async function waitFor(
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error(message);
-}
-
-type DatabaseProxy = {
-  connectionString: string;
-  rejectedConnections: () => number;
-  setAvailable: (available: boolean) => void;
-  close: () => Promise<void>;
-};
-
-async function startDatabaseProxy(databaseUrl: string): Promise<DatabaseProxy> {
-  const target = new URL(databaseUrl);
-  const sockets = new Set<Socket>();
-  let available = true;
-  let rejected = 0;
-  const server = createServer((client) => {
-    sockets.add(client);
-    client.once('close', () => sockets.delete(client));
-    if (!available) {
-      rejected++;
-      client.destroy();
-      return;
-    }
-    const upstream = createConnection({
-      host: target.hostname.replace(/^\[|\]$/g, ''),
-      port: Number(target.port || 5432),
-    });
-    sockets.add(upstream);
-    upstream.once('close', () => sockets.delete(upstream));
-    client.once('error', () => upstream.destroy());
-    upstream.once('error', () => client.destroy());
-    client.pipe(upstream);
-    upstream.pipe(client);
-  });
-  const port = await new Promise<number>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address();
-      if (!address || typeof address === 'string') {
-        reject(new Error('could not start the PostgreSQL fault proxy'));
-        return;
-      }
-      resolve(address.port);
-    });
-  });
-  const proxiedUrl = new URL(databaseUrl);
-  proxiedUrl.hostname = '127.0.0.1';
-  proxiedUrl.port = String(port);
-  return {
-    connectionString: proxiedUrl.toString(),
-    rejectedConnections: () => rejected,
-    setAvailable(next) {
-      available = next;
-      if (!available) for (const socket of sockets) socket.destroy();
-    },
-    async close() {
-      for (const socket of sockets) socket.destroy();
-      await new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
-      );
-    },
-  };
 }
 
 async function reserveLocalPort() {

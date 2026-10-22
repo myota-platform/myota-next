@@ -8,6 +8,7 @@ import { connect } from '@nats-io/transport-node';
 import { jetstream, jetstreamManager } from '@nats-io/jetstream';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
+import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
 import {
   loadOutboxRegistry,
   type ClaimedOutboxEvent,
@@ -274,6 +275,145 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
     }
   }, 30_000);
 
+  it('recovers after a live outage of its owner PostgreSQL database', async () => {
+    const databaseUrl = process.env.OUTBOX_DATABASE_URL;
+    const natsUrl = process.env.NATS_TEST_URL;
+    if (!databaseUrl || !natsUrl)
+      throw new Error('outbox recovery settings are required');
+    if (
+      !['localhost', '127.0.0.1', '[::1]'].includes(
+        new URL(databaseUrl).hostname,
+      )
+    )
+      throw new Error('outbox recovery requires local Postgres');
+
+    const owner = process.env.OUTBOX_OWNER;
+    const eventOwners: Record<string, string[]> = {
+      core: ['identity-service', 'programme-service'],
+      activity: ['activity-service'],
+      geodata: ['geodata-service'],
+    };
+    const registeredOwners = owner ? eventOwners[owner] : undefined;
+    if (!owner || !registeredOwners)
+      throw new Error('OUTBOX_OWNER must be core, activity, or geodata');
+
+    const [{ Pool }, { OutboxWorkerService }, registry] = await Promise.all([
+      import('pg'),
+      import('./outbox-worker.service.js'),
+      loadOutboxRegistry(),
+    ]);
+    const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+    const databaseProxy = await startPostgresFaultProxy(databaseUrl);
+    const workerPool = new Pool({
+      connectionString: databaseProxy.connectionString,
+      max: 2,
+      connectionTimeoutMillis: 1000,
+    });
+    const connection = await connect({
+      servers: natsUrl,
+      name: `outbox-${owner}-database-recovery`,
+    });
+    const manager = await jetstreamManager(connection);
+    const service = new OutboxWorkerService(workerPool as Pool);
+    const serviceInternals = service as unknown as {
+      relay: Pick<ReturnType<typeof jetstream>, 'publish'>;
+      run: (
+        registry: Awaited<ReturnType<typeof loadOutboxRegistry>>,
+      ) => Promise<void>;
+    };
+    const eventId = randomUUID();
+    const eventType = registry.events.find((event) =>
+      registeredOwners.includes(event.owner),
+    );
+    const producer = eventType
+      ? registry.producerNamesByOwner[eventType.owner]?.[0]
+      : undefined;
+    if (!eventType || !producer)
+      throw new Error(`${owner} fact route is missing from the event registry`);
+
+    let runPromise: Promise<void> | undefined;
+    let relayPublishCount = 0;
+    try {
+      try {
+        await manager.streams.info('MYOTA_EVENTS');
+      } catch {
+        await manager.streams.add({
+          name: 'MYOTA_EVENTS',
+          subjects: ['myota.events.>'],
+          retention: 'limits',
+          storage: 'file',
+          num_replicas: 1,
+          max_age: 3_600_000_000_000,
+          max_bytes: 16 * 1024 * 1024,
+          max_msgs: 1000,
+          max_msg_size: 1024 * 1024,
+        });
+      }
+      await pool.query(
+        `INSERT INTO public.outbox_event
+          (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at)
+         VALUES ($1,$2,$3,'recovery_test',$4,$5::jsonb,now()-interval '100 years')`,
+        [
+          eventId,
+          eventType.eventType,
+          producer,
+          randomUUID(),
+          '{"probe":"database-outage-recovery"}',
+        ],
+      );
+
+      const relay = jetstream(connection);
+      serviceInternals.relay = {
+        publish: async (subject, payload, options) => {
+          relayPublishCount++;
+          const acknowledgement = await relay.publish(
+            subject,
+            payload,
+            options,
+          );
+          databaseProxy.setAvailable(false);
+          return acknowledgement;
+        },
+      };
+      runPromise = serviceInternals.run(registry);
+      await waitFor(
+        () => databaseProxy.rejectedConnections() > 0,
+        'Outbox worker did not retry its PostgreSQL state write after publish',
+      );
+      databaseProxy.setAvailable(true);
+
+      await waitFor(async () => {
+        const result = await pool.query(
+          'SELECT published_at FROM public.outbox_event WHERE event_id=$1',
+          [eventId],
+        );
+        return result.rows[0]?.published_at instanceof Date;
+      }, 'Outbox worker did not publish after PostgreSQL connectivity returned');
+      const published = await pool.query(
+        `SELECT attempts,published_at,last_error
+         FROM public.outbox_event WHERE event_id=$1`,
+        [eventId],
+      );
+      expect(published.rows[0]).toMatchObject({
+        attempts: 1,
+        last_error: null,
+      });
+      expect(published.rows[0]?.published_at).toBeInstanceOf(Date);
+      expect(relayPublishCount).toBe(1);
+    } finally {
+      await service.onModuleDestroy().catch(() => undefined);
+      await runPromise?.catch(() => undefined);
+      databaseProxy.setAvailable(true);
+      await connection.drain().catch(() => undefined);
+      await pool
+        .query('DELETE FROM public.outbox_event WHERE event_id=$1', [eventId])
+        .catch(() => undefined);
+      await workerPool.end();
+      await pool.end();
+      await databaseProxy.close();
+    }
+  }, 30_000);
+
   it('reconnects and publishes after a real JetStream server restart', async () => {
     const databaseUrl = process.env.OUTBOX_DATABASE_URL;
     if (!databaseUrl) throw new Error('OUTBOX_DATABASE_URL is required');
@@ -417,6 +557,19 @@ async function reserveLocalPort(): Promise<number> {
     server.close((error) => (error ? reject(error) : resolve())),
   );
   return address.port;
+}
+
+async function waitFor(
+  condition: () => boolean | Promise<boolean>,
+  message: string,
+  timeoutMs = 15_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(message);
 }
 
 async function startJetStream(port: number, storeDirectory: string) {

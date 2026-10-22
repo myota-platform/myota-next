@@ -171,7 +171,11 @@
   JetStream confirms publication, the relay retries the owner-database state
   transaction before claiming another event, preventing a database outage
   from causing a tight loop of duplicate publishes. Shutdown cancels retry
-  waits. Live database-outage recovery remains unqualified.
+  waits. A live PostgreSQL fault-proxy check runs for each owner database,
+  drops connectivity after JetStream acknowledges an event but before the
+  published state is recorded, then verifies persistence retries after recovery
+  without publishing the event twice. Database process outages and clustered
+  failover remain unqualified.
 - Runtime: preserve migrations, health/readiness, metrics, logs, traces,
   backups, restore paths, NATS topology, object storage buckets, and separate
   service/worker deployment units. Activity database pools honor the
