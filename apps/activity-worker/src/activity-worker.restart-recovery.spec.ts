@@ -407,6 +407,12 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         // would after recovery.
         await waitForQueuedJob(pool, jobs[4]!, 1);
         await makeQueuedJobAvailable(pool, jobs[4]!);
+        await waitForConsumerAckPending(
+          manager,
+          registry.activityWorkStream,
+          statisticsDurable,
+          0,
+        );
         await publishWork(publisher, registry, jobs[4]!);
         await waitForJob(pool, jobs[4]!, 30_000);
         const restartedJob = await pool.query<{ attempts: number }>(
@@ -818,6 +824,18 @@ async function waitForQueuedJob(pool: Pool, id: string, attempts: number) {
       result.rows[0]?.attempts === attempts
     );
   }, `Activity worker did not persist a queued retry for ${id}`);
+}
+
+async function waitForConsumerAckPending(
+  manager: Awaited<ReturnType<typeof jetstreamManager>>,
+  stream: string,
+  durable: string,
+  expected: number,
+) {
+  await waitFor(async () => {
+    const consumer = await manager.consumers.info(stream, durable);
+    return consumer.num_ack_pending === expected;
+  }, `Activity durable ${durable} did not release pending deliveries`);
 }
 
 async function makeQueuedJobAvailable(pool: Pool, id: string) {
