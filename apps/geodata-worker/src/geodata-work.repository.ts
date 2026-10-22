@@ -1061,7 +1061,7 @@ export class GeodataWorkRepository {
              jsonb_build_object('queueId',$2::text,'importRunId',$3::text,
                'candidateIds',COALESCE((SELECT jsonb_agg(candidate_id::text ORDER BY ordinal)
                  FROM geodata_import_candidate_stage
-                 WHERE import_run_id=$3 AND attempt_count=$4 AND candidate_id IS NOT NULL),'[]'::jsonb),
+                 WHERE import_run_id=$3::uuid AND attempt_count=$4 AND candidate_id IS NOT NULL),'[]'::jsonb),
                'targetStatus','CANDIDATE','requestedBy',$5,
                'natsSubject','myota.geodata.import.process.v1'),now(),$6)`,
           [
