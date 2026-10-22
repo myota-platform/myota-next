@@ -51,7 +51,10 @@ production readiness.
   and status-only account deactivation while an existing owner refresh session
   remains rotatable,
   Activity correction review, and policy publication against running NestJS
-  services through the Gateway. Participant profile editing and owner callsign
+  services through the Gateway. Admin content creation, review, and publication
+  now also run through the live Admin, Gateway, and Core services, with the
+  public programme-content response checked afterward. Participant profile
+  editing and owner callsign
   creation,
   cropped profile-image upload and deletion, evidence submission, primary
   selection, and retirement also run against live Identity APIs. Participant

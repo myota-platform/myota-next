@@ -6,11 +6,16 @@ controls cover minimum activation QSOs, minimum hunter QSOs, activation
 validity, public-access requirements, overlap handling, shared category
 assignments, and theme colors.
 
-This is an initial configuration slice, not yet a complete programme control
-plane. The authoritative audit of missing configuration is in
-[`myota-docs/docs/programme-configuration-gap-analysis.md`](https://github.com/myota-platform/myota-docs/blob/main/docs/programme-configuration-gap-analysis.md).
+This editor implements the programme configuration exposed by the pinned
+Python reference: name, description, shared category assignments, common
+activation rules, and theme colors. Content and policy use their separate
+versioned workflows. The larger programme-control-plane proposals in the
+[programme configuration gap analysis](https://github.com/myota-platform/myota-docs/blob/main/docs/programme-configuration-gap-analysis.md)
+are future product work; they are not requirements for parity with that
+reference. Existing locale coverage and published content delivery remain part
+of parity.
 
-## Current coverage and remaining gaps
+## Current coverage
 
 Already available in the editor or adjacent administration flows:
 
@@ -25,22 +30,9 @@ Already available in the editor or adjacent administration flows:
 - activity-owned award definitions and identity-owned role/callsign/OIDC
   primitives.
 
-Still missing from Programme Management:
-
-- programme owner/contact/legal metadata and a draft → review → published →
-  suspended/retired lifecycle with immutable configuration versions;
-- a programme-owned locale catalogue, default locale, ordered fallback chain,
-  required content keys, and translation import/export;
-- jurisdiction hierarchy/boundaries and programme + jurisdiction + category
-  approver-scope management;
-- schema-driven forms for activation, QSO, evidence, callsign, geodata
-  eligibility, moderation, overlap, privacy, and public-output policies;
-- policy validation, version comparison, historical snapshots, and a dry-run
-  rule simulator;
-- editing/testing the existing per-programme OIDC mapping and its claims,
-  domains, and account-linking policy; and
-- programme notification, privacy, leaderboard/history, statistics, and
-  award-linkage defaults.
+The broader proposals remain available in the linked gap analysis for product
+planning. They should be promoted into the parity inventory only if the
+reference implementation or a separate product decision requires them.
 
 Concrete award definitions, artwork, signatures, issuance, and certificates
 remain owned by `myota-activity-service`; geodata imports remain deliberately
