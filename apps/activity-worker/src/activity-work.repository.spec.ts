@@ -186,3 +186,50 @@ describe('ActivityWorkRepository transient connection errors', () => {
     });
   });
 });
+
+describe('ActivityWorkRepository retry dispatch', () => {
+  it('commits a fresh work outbox event with the queued retry state', async () => {
+    const availableAt = new Date('2026-10-22T12:00:02.000Z');
+    const queries: { sql: string; values: unknown[] }[] = [];
+    const client = {
+      query: vi.fn(async (sql: string, values: unknown[] = []) => {
+        queries.push({ sql, values });
+        if (sql.startsWith('UPDATE activity_job'))
+          return { rowCount: 1, rows: [{ available_at: availableAt }] };
+        return { rowCount: 1, rows: [] };
+      }),
+      release: vi.fn(),
+    };
+    const pool = {
+      connect: vi.fn().mockResolvedValue(client),
+    };
+    const repository = new ActivityWorkRepository(pool as unknown as Pool);
+
+    await repository.retryWorkJob(
+      {
+        id: '0199c125-c321-7220-a123-456789abcdef',
+        kind: 'STATISTICS_REBUILD',
+        payload: { programmeSlug: 'retry-test' },
+        attempts: 1,
+        leaseToken: '0199c125-c321-7220-a123-456789abcdee',
+      },
+      new Error('temporary failure'),
+      2,
+    );
+
+    const outbox = queries.find(({ sql }) =>
+      sql.startsWith('INSERT INTO outbox_event'),
+    );
+    expect(outbox?.values[0]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+    expect(outbox?.values.slice(1)).toEqual([
+      'activity.statistics-rebuild.v1',
+      '0199c125-c321-7220-a123-456789abcdef',
+      JSON.stringify({ jobId: '0199c125-c321-7220-a123-456789abcdef' }),
+      availableAt,
+    ]);
+    expect(queries.at(-1)?.sql).toBe('COMMIT');
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+});

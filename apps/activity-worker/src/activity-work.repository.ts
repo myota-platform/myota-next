@@ -1037,12 +1037,27 @@ export class ActivityWorkRepository {
       await client.query('BEGIN');
       const message =
         error instanceof Error ? error.name.slice(0, 80) : 'worker error';
-      const retried = await client.query(
-        `UPDATE activity_job SET status='QUEUED',available_at=now()+make_interval(secs=>$3),lease_expires_at=NULL,lease_token=NULL,last_error=$4 WHERE id=$1 AND status='RUNNING' AND lease_token=$2 RETURNING id`,
+      const retried = await client.query<{ available_at: Date }>(
+        `UPDATE activity_job SET status='QUEUED',available_at=now()+make_interval(secs=>$3),lease_expires_at=NULL,lease_token=NULL,last_error=$4 WHERE id=$1 AND status='RUNNING' AND lease_token=$2 RETURNING available_at`,
         [job.id, job.leaseToken, delaySeconds, message],
       );
       if (!retried.rowCount)
         throw new Error('worker lease was lost before retry');
+      const availableAt = retried.rows[0]?.available_at;
+      if (!availableAt)
+        throw new Error('queued Activity work retry has no availability time');
+      await client.query(
+        `INSERT INTO outbox_event
+         (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at)
+         VALUES ($1,$2,'activity-service','activity_job',$3,$4::jsonb,now(),$5)`,
+        [
+          randomUUID(),
+          WORK_TYPE_BY_KIND[job.kind],
+          job.id,
+          stringifyJsonWithBigInts({ jobId: job.id }),
+          availableAt,
+        ],
+      );
       await client.query('COMMIT');
     } catch (failure) {
       await client.query('ROLLBACK').catch(() => undefined);

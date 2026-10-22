@@ -267,10 +267,20 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
               definition.workType,
               delivery,
             );
-            message.ack();
+            await this.acknowledge(
+              message,
+              `persisting terminal Activity failure ${job.id}`,
+            );
           } else {
             await this.repository.retryWorkJob(job, error, delaySeconds);
-            message.nak(delaySeconds * 1000);
+            if (
+              !(await this.acknowledge(
+                message,
+                `persisting queued Activity retry ${job.id}`,
+              ))
+            ) {
+              message.nak(delaySeconds * 1000);
+            }
           }
         });
       } catch (persistError) {

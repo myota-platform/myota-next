@@ -407,14 +407,18 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           'Activity statistics rebuild did not stop PostgreSQL',
         );
         await postgresRestartPromise;
-        // The outbox repair loop may still be in its capped retry backoff when
-        // PostgreSQL comes back after a full process restart. Verify retry state
-        // first, then allow JetStream to redeliver the pending command.
+        // The queued retry and fresh outbox command commit together. Simulate
+        // outbox dispatch after PostgreSQL returns, after confirming the old
+        // delivery was settled.
         await waitForQueuedJob(pool, jobs[4]!, 1);
         await makeQueuedJobAvailable(pool, jobs[4]!);
-        // This path keeps the original JetStream delivery pending through the
-        // PostgreSQL outage, so let its persisted NAK drive the retry instead
-        // of publishing a duplicate behind the durable's pending limit.
+        await waitForConsumerAckPending(
+          manager,
+          registry.activityWorkStream,
+          statisticsDurable,
+          0,
+        );
+        await publishWork(publisher, registry, jobs[4]!);
         await waitForJob(pool, jobs[4]!, 30_000);
         const restartedJob = await pool.query<{ attempts: number }>(
           'SELECT attempts FROM activity_job WHERE id=$1',

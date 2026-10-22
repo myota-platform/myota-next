@@ -22,15 +22,16 @@
   through a local fault proxy while claiming a queued job, then verifies it
   completes after connectivity returns. A second fault drops connectivity
   after claim and before retry-state persistence; the worker retains the
-  JetStream delivery, persists the queued retry after recovery, and completes
-  the retry after its queued command is dispatched. The Activity worker also reconnects and resumes durable work
+  JetStream delivery while PostgreSQL is unavailable, then atomically commits
+  the queued retry and a fresh outbox command before confirming the original
+  delivery. The retry completes after outbox dispatch. The Activity worker also reconnects and resumes durable work
   delivery after a single-server JetStream restart with its file store
   retained. A retention recovery fixture deletes an expired ADIF source object,
   drops PostgreSQL before persisting `source_deleted_at`, then confirms the
   safe deletion repeats and commits the marker after recovery. A full
   PostgreSQL service restart during a claimed statistics rebuild also verifies
-  that the worker retains delivery, persists a retry, and completes the job
-  after reconnection. A three-node JetStream check stops the stream leader
+  that the worker persists the retry and its outbox command after reconnection,
+  then completes the job after dispatch. A three-node JetStream check stops the stream leader
   while a statistics rebuild delivery is pending, verifies completion after
   leader election, then publishes another job and confirms the Activity
   durables settle through the surviving cluster. Process outages during other
