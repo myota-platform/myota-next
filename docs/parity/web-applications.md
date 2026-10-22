@@ -74,6 +74,10 @@ deactivation/anonymization, programme creation with policy/category settings,
 policy draft save, review, and publication, version-checked candidate
 review, and entity metadata conflict recovery
 followed by a successful edit against the reloaded server version. A live Admin
+workflow now forces a concurrent Geodata revision while an entity edit is open,
+checks the Gateway's stale-version response and reload prompt, then saves the
+edit against the current revision and verifies the stored name and audit event.
+A live Admin
 workflow also creates and edits a custom Identity role through Gateway, reloads
 the role to confirm its permissions persisted, and verifies both role lifecycle
 events in the Core security and outbox records. Another live Identity Admin
