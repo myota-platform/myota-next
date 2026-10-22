@@ -150,6 +150,10 @@ Geodata API, Geodata worker, Activity cascade API, and both owner databases. It
 checks the displayed impact, completion state, removal of linked QSOs and
 corrections, activation invalidation, and queued award recalculation. CI
 provisions its bounded JetStream topology before starting the workers.
+Another live Admin workflow pastes a GeoJSON dataset, waits for worker
+preprocessing, rejects one record, promotes another to a candidate, and checks
+the persisted import, review, promotion queue, and entity states. The worker
+reads the uploaded source from the CI S3-compatible fixture.
 The Identity account editor exposes callsign creation with status, source, and
 validity fields; evidence submission with checksum and metadata; verification
 for callers with `callsign.verify` and a configurable verification source;
