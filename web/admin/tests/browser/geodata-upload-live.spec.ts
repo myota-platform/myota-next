@@ -24,7 +24,7 @@ test('uploads and preprocesses GeoJSON, KML, and GPX through the resumable live 
   const entityTypeCode = `LIVE_FILE_${suffix.replaceAll('-', '').slice(0, 14).toUpperCase()}`;
   const sources = [
     {
-      format: 'GeoJSON',
+      format: 'GEOJSON',
       filename: `browser-${suffix}.geojson`,
       mimeType: 'application/geo+json',
       featureName: `Uploaded GeoJSON ${suffix}`,
@@ -88,6 +88,7 @@ test('uploads and preprocesses GeoJSON, KML, and GPX through the resumable live 
     for (const source of sources) {
       await page.goto('/geodata-imports');
       await expect(page).toHaveURL(/\/geodata-imports$/);
+      await page.getByLabel('Format').selectOption(source.format);
       await page.getByLabel('Feature category').selectOption(entityTypeCode);
       await page
         .getByLabel('Source label')
