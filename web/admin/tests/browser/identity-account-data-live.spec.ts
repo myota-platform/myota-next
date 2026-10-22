@@ -160,8 +160,8 @@ test('manages callsigns, exports, and anonymizes an account through live Admin',
     const callsignEvents = await pool.query<{ event_type: string }>(
       `SELECT event_type FROM public.outbox_event
         WHERE producer='identity' AND (
-          aggregate_id=$1::uuid OR aggregate_id IN (
-            SELECT id FROM public.callsign WHERE account_id=$1::uuid
+          aggregate_id=$1::text OR aggregate_id IN (
+            SELECT id::text FROM public.callsign WHERE account_id=$1::uuid
           )
         )`,
       [accountId],
