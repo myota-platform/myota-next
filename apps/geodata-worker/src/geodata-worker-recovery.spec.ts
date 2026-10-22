@@ -28,6 +28,7 @@ import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint
 import { retryTransientDatabaseOperation } from '../../../libs/platform/src/database-retry.js';
 import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
 import { GeodataRetentionRepository } from './geodata-retention.repository.js';
+import { GeodataEnrichmentRepository } from './geodata-enrichment.repository.js';
 import { GeodataWorkerService } from './geodata-worker.service.js';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
 
@@ -236,10 +237,17 @@ async function verifyBrokerRecovery() {
   const processedEnrichments: string[] = [];
   const outageImportRunId = randomUUID();
   const settlementImportRunId = randomUUID();
+  const settlementEnrichmentEntityId = randomUUID();
+  const settlementEnrichmentRequestId = randomUUID();
   let outageClaimAttempts = 0;
   let outageStateAttempts = 0;
+  let enrichmentClaimAttempts = 0;
   let failSettlementOnce = true;
+  let failEnrichmentSettlementOnce = true;
   const liveWorkRepository = new GeodataWorkRepository(databaseProbe as Pool);
+  const liveEnrichmentRepository = new GeodataEnrichmentRepository(
+    databaseProbe as Pool,
+  );
   const liveImportRunIds = new Set([outageImportRunId, settlementImportRunId]);
   const workRepository = {
     claim: vi.fn(async (importRunId: string) => {
@@ -286,12 +294,28 @@ async function verifyBrokerRecovery() {
     }),
   };
   const enrichment = {
-    claim: vi.fn(async (entityId: string, requestId: string) => ({
-      entityId,
-      requestId,
-    })),
-    process: vi.fn(async ({ requestId }: { requestId: string }) => {
-      processedEnrichments.push(requestId);
+    claim: vi.fn(async (entityId: string, requestId: string) => {
+      if (entityId === settlementEnrichmentEntityId) {
+        enrichmentClaimAttempts++;
+        return liveEnrichmentRepository.claim(entityId, requestId);
+      }
+      return { entityId, requestId };
+    }),
+    getRequestState: vi.fn(async (entityId: string) => {
+      if (entityId === settlementEnrichmentEntityId)
+        return liveEnrichmentRepository.getRequestState(entityId);
+      return { status: 'QUEUED', requestId: null, leaseRemainingSeconds: 0 };
+    }),
+    process: vi.fn(async (job: { id: string; requestId: string }) => {
+      if (
+        job.id === settlementEnrichmentEntityId &&
+        failEnrichmentSettlementOnce
+      ) {
+        failEnrichmentSettlementOnce = false;
+        databaseProxy.setAvailable(false);
+        throw new Error('injected enrichment failure before settlement');
+      }
+      processedEnrichments.push(job.requestId);
     }),
   };
   const deletions = {
@@ -320,6 +344,10 @@ async function verifyBrokerRecovery() {
   const queueId = randomUUID();
   const entityId = randomUUID();
   const requestId = randomUUID();
+  const enrichmentGeometry = { type: 'Point', coordinates: [7, 46] };
+  const enrichmentGeometryHash = createHash('sha256')
+    .update(stringifyJsonWithBigInts(enrichmentGeometry))
+    .digest('hex');
   try {
     const fixture = await directDatabase.connect();
     try {
@@ -352,6 +380,24 @@ async function verifyBrokerRecovery() {
           ],
         );
       }
+      await fixture.query(
+        `INSERT INTO geodata_entity
+          (id,name,lifecycle_status,geom,centroid,public_properties)
+         VALUES ($1,'enrichment-settlement-outage','APPROVED',
+           ST_SetSRID(ST_MakePoint(7,46),4326),
+           ST_SetSRID(ST_MakePoint(7,46),4326)::geography,$2::jsonb)`,
+        [
+          settlementEnrichmentEntityId,
+          stringifyJsonWithBigInts({
+            locationEnrichmentRequestId: settlementEnrichmentRequestId,
+            locationEnrichmentGeometryHash: enrichmentGeometryHash,
+            locationEnrichmentStatus: 'QUEUED',
+            locationEnrichmentOnlyMissing: true,
+            locationEnrichmentReason: 'recovery-test',
+            locationEnrichmentRequestedBy: 'recovery-test',
+          }),
+        ],
+      );
       await fixture.query('COMMIT');
     } catch (error) {
       await fixture.query('ROLLBACK').catch(() => undefined);
@@ -604,6 +650,64 @@ async function verifyBrokerRecovery() {
       attempt_count: 2,
     });
 
+    const rejectedBeforeEnrichmentSettlement =
+      databaseProxy.rejectedConnections();
+    await publishGeodataWork(
+      publisher,
+      'geodata.location-enrichment.v1',
+      settlementEnrichmentRequestId,
+      { type: 'entity', id: settlementEnrichmentEntityId },
+      {
+        entityId: settlementEnrichmentEntityId,
+        requestId: settlementEnrichmentRequestId,
+        geometryHash: enrichmentGeometryHash,
+        onlyMissing: true,
+        reason: 'recovery-test',
+      },
+    );
+    await waitForRecovery(async () => {
+      const consumer = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        'geodata-location-enrichment-v1',
+      );
+      return (
+        !failEnrichmentSettlementOnce &&
+        databaseProxy.rejectedConnections() >
+          rejectedBeforeEnrichmentSettlement &&
+        consumer.num_ack_pending > 0
+      );
+    }, 'Geodata worker did not retain enrichment delivery while settlement state was unavailable');
+    const terminalUpdate = await directDatabase.connect();
+    try {
+      await terminalUpdate.query('BEGIN');
+      await terminalUpdate.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await terminalUpdate.query(
+        `UPDATE geodata_entity
+         SET public_properties=public_properties || '{"locationEnrichmentStatus":"FAILED"}'::jsonb,
+             updated_at=now()
+         WHERE id=$1`,
+        [settlementEnrichmentEntityId],
+      );
+      await terminalUpdate.query('COMMIT');
+    } catch (error) {
+      await terminalUpdate.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      terminalUpdate.release();
+    }
+    databaseProxy.setAvailable(true);
+    await waitForRecovery(async () => {
+      const consumer = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        'geodata-location-enrichment-v1',
+      );
+      return consumer.num_pending === 0 && consumer.num_ack_pending === 0;
+    }, 'Geodata worker did not acknowledge terminal enrichment work after PostgreSQL recovered');
+    expect(enrichmentClaimAttempts).toBe(1);
+    expect(processedEnrichments).toEqual([requestId]);
+
     expect(executionOrder).toEqual(jobIds);
     expect(processedPreprocessing).toEqual([
       importRunId,
@@ -639,6 +743,9 @@ async function verifyBrokerRecovery() {
         );
         await cleanup.query('DELETE FROM import_run WHERE id=ANY($1::uuid[])', [
           [outageImportRunId, settlementImportRunId],
+        ]);
+        await cleanup.query('DELETE FROM geodata_entity WHERE id=$1', [
+          settlementEnrichmentEntityId,
         ]);
         await cleanup.query('COMMIT');
       } catch {

@@ -128,7 +128,12 @@
   extends the current message ACK and retries settlement for transient
   connection, shutdown, serialization, and deadlock errors with capped jittered
   backoff. Retry-state recovery is qualified above for import preprocessing;
-  settlement recovery for the other Geodata durables remains open.
+  a live location-enrichment check also injects a processing failure during a
+  PostgreSQL outage, moves its owner row to a terminal state through the direct
+  fixture connection, and verifies the worker retains the JetStream delivery
+  until it can read that state and acknowledge it. This qualifies enrichment
+  terminal-state settlement after reconnect; retry-state persistence for
+  promotion, deletion, and enrichment remains open.
   Periodic cancellation, expired-work, and retention passes also retry
   transient database failures with capped jittered backoff. Retention repeats
   object deletion safely before retrying its database state change.

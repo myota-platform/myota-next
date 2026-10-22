@@ -108,6 +108,9 @@ export class GeodataEnrichmentRepository {
             : null,
       };
       await client.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await client.query(
         `UPDATE geodata_entity SET public_properties=public_properties || $2::jsonb,
           location_work_dispatched_at=now()+interval '5 minutes'
          WHERE id=$1`,
