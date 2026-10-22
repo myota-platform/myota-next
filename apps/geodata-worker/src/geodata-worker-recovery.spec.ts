@@ -32,7 +32,10 @@ import {
   startPostgresServiceContainer,
   stopPostgresServiceContainer,
 } from '../../../libs/platform/src/testing/postgres-service-container.js';
-import { startTestJetStreamCluster } from '../../../libs/platform/src/testing/jetstream-cluster.js';
+import {
+  addTestStreamWithPlacementRetry,
+  startTestJetStreamCluster,
+} from '../../../libs/platform/src/testing/jetstream-cluster.js';
 import { GeodataRetentionRepository } from './geodata-retention.repository.js';
 import { GeodataEnrichmentRepository } from './geodata-enrichment.repository.js';
 import { GeodataPromotionRepository } from './geodata-promotion.repository.js';
@@ -219,7 +222,7 @@ async function verifyClusterFailover() {
       reconnectTimeWait: 100,
     });
     const manager = await jetstreamManager(publisher);
-    await manager.streams.add({
+    await addTestStreamWithPlacementRetry(manager, {
       name: 'MYOTA_GEODATA_WORK',
       subjects: ['myota.work.geodata.>'],
       retention: RetentionPolicy.Workqueue,
@@ -230,6 +233,14 @@ async function verifyClusterFailover() {
       max_msgs: 100,
       max_msg_size: 900_000,
     } as StreamConfig);
+    await waitForRecovery(async () => {
+      try {
+        const info = await manager.streams.info('MYOTA_GEODATA_WORK');
+        return (info.cluster?.replicas?.length ?? 0) >= 2;
+      } catch {
+        return false;
+      }
+    }, 'Geodata work stream did not replicate across all cluster nodes');
     const consumers = [
       [
         'geodata-preprocessing-v1',

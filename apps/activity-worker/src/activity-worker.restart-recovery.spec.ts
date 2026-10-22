@@ -21,7 +21,10 @@ import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { DatabaseHealthService } from '../../../libs/platform/src/database.module.js';
 import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
-import { startTestJetStreamCluster } from '../../../libs/platform/src/testing/jetstream-cluster.js';
+import {
+  addTestStreamWithPlacementRetry,
+  startTestJetStreamCluster,
+} from '../../../libs/platform/src/testing/jetstream-cluster.js';
 import {
   startPostgresServiceContainer,
   stopPostgresServiceContainer,
@@ -581,7 +584,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         reconnectTimeWait: 100,
       });
       const manager = await jetstreamManager(publisher);
-      await manager.streams.add({
+      await addTestStreamWithPlacementRetry(manager, {
         name: registry.activityWorkStream,
         subjects: [`${registry.activityWorkSubjectPrefix}>`],
         retention: RetentionPolicy.Workqueue,

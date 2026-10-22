@@ -16,6 +16,7 @@ import {
   stopPostgresServiceContainer,
 } from '../../../libs/platform/src/testing/postgres-service-container.js';
 import {
+  addTestStreamWithPlacementRetry,
   startTestJetStreamCluster,
   type TestJetStreamCluster,
 } from '../../../libs/platform/src/testing/jetstream-cluster.js';
@@ -767,7 +768,7 @@ describe.skipIf(!enabled)('outbox broker recovery', () => {
         reconnectTimeWait: 100,
       });
       const manager = await jetstreamManager(connection);
-      await manager.streams.add({
+      await addTestStreamWithPlacementRetry(manager, {
         name: 'MYOTA_EVENTS',
         subjects: ['myota.events.>'],
         retention: 'limits',

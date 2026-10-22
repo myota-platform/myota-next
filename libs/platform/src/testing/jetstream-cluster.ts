@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import type { ChildProcess } from 'node:child_process';
+import type { JetStreamManager, StreamConfig } from '@nats-io/jetstream';
 import { jetstreamManager } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 
@@ -11,6 +12,32 @@ export type TestJetStreamCluster = {
   stopNode: (serverName: string) => Promise<void>;
   stopAll: () => Promise<void>;
 };
+
+export async function addTestStreamWithPlacementRetry(
+  manager: JetStreamManager,
+  config: StreamConfig,
+): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  let lastPlacementError: unknown;
+  while (Date.now() < deadline) {
+    try {
+      await manager.streams.add(config);
+      return;
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !error.message.includes('no suitable peers for placement')
+      )
+        throw error;
+      lastPlacementError = error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  throw new Error(
+    'JetStream cluster did not become ready for replicated stream placement',
+    { cause: lastPlacementError },
+  );
+}
 
 export async function startTestJetStreamCluster(
   directory: string,

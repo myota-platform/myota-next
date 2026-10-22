@@ -20,6 +20,7 @@ import { describe, expect, it } from 'vitest';
 import { DatabaseHealthService } from '../../../libs/platform/src/database.module.js';
 import { startPostgresFaultProxy } from '../../../libs/platform/src/testing/postgres-fault-proxy.js';
 import {
+  addTestStreamWithPlacementRetry,
   startTestJetStreamCluster,
   type TestJetStreamCluster,
 } from '../../../libs/platform/src/testing/jetstream-cluster.js';
@@ -334,7 +335,7 @@ describe.skipIf(!enabled)('Activity notification broker restart', () => {
         reconnectTimeWait: 100,
       });
       const manager = await jetstreamManager(publisher);
-      await manager.streams.add({
+      await addTestStreamWithPlacementRetry(manager, {
         name: streamName,
         subjects: ['myota.events.>'],
         retention: RetentionPolicy.Limits,
