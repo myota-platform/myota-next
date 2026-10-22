@@ -293,64 +293,55 @@ test('submits and reviews participant location proposals through live services',
       });
     }
 
-    const adminPage = await page.context().newPage();
-    await adminPage.goto('http://127.0.0.1:8090/geodata-imports');
-    await expect(adminPage).toHaveURL(/\/login\?redirect=\/geodata-imports$/);
-    await adminPage.getByLabel('Email').fill(email);
-    await adminPage.getByLabel('Password').fill(password);
-    await adminPage.getByRole('button', { name: 'Sign in' }).click();
-    await expect(adminPage).toHaveURL(/\/geodata-imports$/);
-
-    const proposalRun = adminPage
-      .locator('.import-run-select')
-      .filter({ hasText: proposalRunIds[1]! });
-    await expect(proposalRun).toBeVisible({ timeout: 30_000 });
-    await proposalRun.click();
-    await expect(
-      adminPage.getByText('Review pre-processed records'),
-    ).toBeVisible();
-    await adminPage
-      .getByRole('button', { name: pointProposalName, exact: true })
-      .click();
-    const reviewDialog = adminPage.getByRole('dialog');
-    await expect(reviewDialog).toContainText('PENDING');
-    await reviewDialog
-      .getByRole('button', { name: 'Promote to candidate' })
-      .click();
-    await expect(reviewDialog.getByRole('status')).toContainText(
-      'The last pending item in this import has been processed.',
-      { timeout: 30_000 },
-    );
-
-    let promotedEntity:
-      | {
-          id: string;
-          lifecycle_status: string;
-          programme_slug: string;
-          entity_type_code: string;
-        }
-      | undefined;
     await expect
       .poll(
         async () => {
-          const result = await geo.query<NonNullable<typeof promotedEntity>>(
-            `SELECT id::text,lifecycle_status,programme_slug,entity_type_code
-             FROM geodata_entity WHERE name=$1`,
-            [pointProposalName],
+          const result = await geo.query<{ status: string }>(
+            'SELECT status FROM import_run WHERE id=ANY($1::uuid[]) ORDER BY array_position($1::uuid[],id)',
+            [proposalRunIds],
           );
-          promotedEntity = result.rows[0];
-          return promotedEntity ?? null;
+          return result.rows.map((run) => run.status);
         },
         { timeout: 30_000, intervals: [250] },
       )
-      .toMatchObject({
+      .toEqual(['COMPLETED', 'COMPLETED']);
+
+    const promotedEntities = await geo.query<{
+      name: string;
+      validation_status: string;
+      target_status: string;
+      processed_entity_id: string;
+      lifecycle_status: string;
+      programme_slug: string;
+      entity_type_code: string;
+    }>(
+      `SELECT c.name,c.validation_status,c.target_status,
+              c.processed_entity_id::text,e.lifecycle_status,
+              e.programme_slug,e.entity_type_code
+       FROM geodata_import_candidate c
+       JOIN geodata_entity e ON e.id=c.processed_entity_id
+       WHERE c.import_run_id=ANY($1::uuid[])
+       ORDER BY array_position($1::uuid[],c.import_run_id),c.ordinal`,
+      [proposalRunIds],
+    );
+    expect(promotedEntities.rows).toHaveLength(2);
+    expect(promotedEntities.rows.map((entity) => entity.name)).toEqual([
+      candidateName,
+      pointProposalName,
+    ]);
+    for (const entity of promotedEntities.rows) {
+      expect(entity).toMatchObject({
+        validation_status: 'PROCESSED',
+        target_status: 'CANDIDATE',
         lifecycle_status: 'CANDIDATE',
         programme_slug: programmeSlug,
         entity_type_code: entityTypeCode,
       });
-    expect(promotedEntity?.id).toMatch(/^[0-9a-f-]{36}$/i);
+      expect(entity.processed_entity_id).toMatch(/^[0-9a-f-]{36}$/i);
+    }
 
     await page.reload();
+    await expect(page.locator('#entities')).toContainText(candidateName);
     await expect(page.locator('#entities')).toContainText(pointProposalName);
   } finally {
     if (proposalRunIds.length || candidateSeeded) {

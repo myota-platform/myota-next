@@ -11,6 +11,10 @@ retain their broader listing access. Explicit falsey `endedAt` values are
 treated as null. Activation owner authorization compares Python `str()` forms
 of the authenticated subject and submitted operator ID, retaining JSON float
 tokens such as `1.0` as distinct from integer `1`.
+The Python source also defines an `add_qso_batch` helper, but does not register
+it in the Activity route table. A direct batch-write endpoint is therefore not
+part of the reference API; bulk records enter through queued QSO ingestion or
+ADIF imports.
 Activation operator and authorized callsign normalization also preserves
 Python float-token spelling, so JSON `1.0` is rejected as a callsign instead
 of becoming `1` through JavaScript string conversion.

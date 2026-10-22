@@ -57,10 +57,11 @@ image crop/upload, an eligible award
 request, safe biography Markdown preview, and existing-candidate and map-picked
 point proposals with intercepted API responses. A live browser workflow now
 submits both proposal forms through Participant, Gateway, and Geodata, then
-waits for Geodata worker preprocessing and checks the import metadata, review
-candidate, and proposer attribution in the Geodata database. Admin then reviews
-and promotes the map-picked proposal, and Participant sees the resulting
-candidate in its catalogue. Proposal submissions retain their exact request
+waits for Geodata worker processing and checks the import metadata, proposal
+identity, and resulting CANDIDATE entities in the Geodata database. The
+reference turns Participant proposals directly into CANDIDATE entities, so
+they do not require a separate Admin review step. Participant sees the resulting
+candidates in its catalogue. Proposal submissions retain their exact request
 body and idempotency key for same-tab retries across reloads.
 Admin browser checks also cover
 sign-in, session bootstrap,
