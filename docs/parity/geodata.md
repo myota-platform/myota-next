@@ -285,21 +285,25 @@ A PyShp 2.3.1 multipart `PolyLine` fixture confirms that both parsers retain the
 parts as a `MultiLineString` with the same coordinate grouping; it is checked in at
 `apps/geodata-worker/src/fixtures/python-multiline-shapefile.zip`.
 
+A simple PyShp 2.3.1 `Polygon` fixture also confirms that a single exterior ring stays a
+GeoJSON `Polygon`; it is checked in at
+`apps/geodata-worker/src/fixtures/python-polygon-shapefile.zip`.
+
 Shapefile multipart uploads stream to temporary disk and decode records one at a time,
 with the same shared API/worker 1 GiB upload cap or optional format-specific override, a
 1 GiB expanded-size cap, 16 MiB per-feature size by default, 250,000 vertices, and the
 configured feature count. Less common geometry types and CRS transformations that depend
 on datum grids still need compatibility qualification against the reference parser.
 
-Twelve EPSG coordinate fixtures compare with PyProj 3.8.0 within `1e-7`
+Thirteen EPSG coordinate fixtures compare with PyProj 3.8.0 within `1e-7`
 degrees, including the Python import path's EPSG:25830 point at `(-5.99, 37.39)`.
 EPSG:4230 and projected ED50 EPSG:23028 through EPSG:23038 use the IGN Spain
 ED50-to-ETRS89 grid when the fallback coordinate is within its geographic
-coverage. PyProj 3.8.0 grid fixtures for EPSG:4230, EPSG:23030, and EPSG:23031
-match within `1e-7` degrees. Coordinates outside the grid coverage retain the
-bundled global definition. The grid's source and CC BY 4.0 attribution are
-recorded in `libs/geodata-domain/data/README.md`; other datum-grid operations
-remain unqualified.
+coverage. PyProj 3.8.0 grid fixtures for EPSG:4230 and EPSG:23029 through
+EPSG:23031 match within `1e-7` degrees. Coordinates outside the grid coverage
+retain the bundled global definition. The grid's source and CC BY 4.0
+attribution are recorded in `libs/geodata-domain/data/README.md`; other
+datum-grid operations remain unqualified.
 Geometry type aliases use Python-compatible Unicode case folding, and CRS
 metadata selects the first Python-truthy identifier field. Integer-valued floating CRS
 identifiers use Python's decimal integer formatting, including values whose default

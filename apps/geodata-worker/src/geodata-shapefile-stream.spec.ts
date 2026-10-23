@@ -209,6 +209,43 @@ describe('streamShapefileFeatures', () => {
     });
   });
 
+  it('preserves a simple PyShp Polygon as a Polygon', async () => {
+    const source = await readFile(
+      new URL('./fixtures/python-polygon-shapefile.zip', import.meta.url),
+    );
+    async function* chunks() {
+      yield source;
+    }
+    const features: unknown[] = [];
+    for await (const feature of streamShapefileFeatures(
+      chunks(),
+      'python-polygon-shapefile.zip',
+      '',
+      10,
+      async () => undefined,
+    )) {
+      features.push(feature);
+    }
+
+    expect(features).toHaveLength(1);
+    expect(features[0]).toMatchObject({
+      type: 'Feature',
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [-1.25, 2.5],
+            [-1.25, 4.5],
+            [3.75, 4.5],
+            [3.75, 2.5],
+            [-1.25, 2.5],
+          ],
+        ],
+      },
+      properties: { name: 'single polygon' },
+    });
+  });
+
   it.each([
     'python-point-shapefile.zip',
     'python-point-shapefile-uppercase.zip',

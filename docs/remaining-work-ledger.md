@@ -261,12 +261,12 @@ an accepted scope decision is recorded in the dispositions section.
   2.3.1 and PyProj 3.8.0 for selected WGS84, Web Mercator, dimensionality, and
   polygon cases, including EPSG:25830 with PyProj-generated input coordinates.
   EPSG:4230 and EPSG:23028 through EPSG:23038 now use the IGN Spain ED50
-  horizontal grid inside its coverage; fixtures for EPSG:4230, EPSG:23030,
-  and EPSG:23031 compare transformed coordinates against PyProj 3.8.0.
-  A PyShp 2.3.1 PolylineZ fixture also verifies that both the
-  reference and Nest parser drop Z ordinates for the GeoJSON LineString. The
-  separate-outer-parts PBF relation is also compared with
-  the PyOsmium 4.3.2 reference in L-07; see the linked Geodata parity evidence.
+  horizontal grid inside its coverage; fixtures for EPSG:4230 and EPSG:23029
+  through EPSG:23031 compare transformed coordinates against PyProj 3.8.0.
+  PyShp 2.3.1 fixtures verify Z ordinates are dropped from PolylineZ, multipart
+  PolyLine parts retain MultiLineString grouping, and a simple Polygon remains
+  a Polygon. The separate-outer-parts PBF relation is also compared with the
+  PyOsmium 4.3.2 reference in L-07; see the linked Geodata parity evidence.
 - **Missing evidence:** Other material OSM types and geometry/CRS definitions
   still need fixtures, as do datum-grid transformations for other CRSs. The
   Spanish grid fallback outside the checked-in grid's coverage also remains
