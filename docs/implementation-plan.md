@@ -18,6 +18,29 @@ The new platform starts from empty databases. Migration of data from the former 
 out of scope. Preserve the three database owners and keep target-only API extensions
 separate from upstream parity claims.
 
+## Execution model: synchronous commands and asynchronous bulk work
+
+Apply this rule to every product area and UI:
+
+- Keep explicit, bounded user commands synchronous when they must validate and commit
+  one atomic outcome. This includes commands that act on a selected set of records, such
+  as status changes, edits, reviews, approvals, promotions, and other multi-item
+  administration actions. Validate the full selection and either commit it or reject it
+  in the owning service's database transaction. Return the final outcome in the request;
+  do not turn these commands into jobs because they affect multiple records.
+- Run large ingestion, imports, bulk data processing, and broad or historical
+  recomputation asynchronously. Return a durable job identifier and expose progress,
+  terminal status, and safe retry behavior. A UI may start and monitor this work, but
+  must not present acceptance as completion.
+- Keep bounded calculations required to finish one synchronous atomic command within
+  that command. Run full, historical, rebuild, or otherwise long-running calculations
+  as jobs. In Activity this means individual QSO writes/corrections and bounded award
+  decisions stay synchronous, while log uploads and their QSO ingestion, plus broad
+  award recalculation, are asynchronous.
+- Publish transactional outbox events after the owning database commits. Request
+  completion for a synchronous command must not depend on NATS delivery. Preserve
+  service database ownership; this rule does not imply a cross-service transaction.
+
 ## Step 1: Establish the remaining-work ledger
 
 - Review every outstanding or qualified-later item in the [parity pages](parity/) and
@@ -39,21 +62,38 @@ Work service by service, adding a focused reference comparison only where existi
 fixtures do not cover an important outcome.
 
 - **Identity and Programmes:** cover remaining authorization, idempotency, validation,
-  conflict, and lifecycle outcomes that could change access or persisted state. Verify a
-  successful SMTP delivery using the deployment trust roots before declaring email
-  delivery qualified.
+  conflict, and lifecycle outcomes that could change access or persisted state. Keep
+  explicit bounded UI commands synchronous, including commands applied to a selected
+  set; run large imports or bulk processing asynchronously with visible job status.
+  Verify a successful SMTP delivery using the deployment trust roots before declaring
+  email delivery qualified.
 - **Activity:** complete broader compatibility checks for activation and QSO behavior,
-  imports, corrections, public results, awards, notifications, and job status. Prioritize
-  ordering or failure behavior that could produce an incorrect write, duplicate side
-  effect, leaked record, or misleading user outcome. Keep the Nest-only CSV ingestion
-  endpoint documented as an extension; it is not evidence of reference parity.
-- **Geodata:** complete fixtures for outstanding PBF inputs above the qualified size,
-  less common OSM geometries, remaining geometry/CRS cases, and datum-grid-dependent
-  transformations. Verify any confirmed differences against the pinned importer before
-  changing behavior.
-- **Email:** verify the SMTP delivery, TLS, failure, retry, deduplication, and notification
-  outcomes in the deployment environment, using the existing allowlisted templates and
-  privacy constraints.
+  imports, corrections, public results, awards, notifications, and job status. Keep
+  individual QSO writes and corrections synchronous. Process uploaded logs and their
+  potentially large QSO ingestion asynchronously, with durable job status and safe retry;
+  do not report upload acceptance as completed import. Keep bounded award decisions
+  needed by one atomic command synchronous, and run broad, historical, rebuild, or
+  otherwise long-running award calculations asynchronously. If Admin or Participant
+  issues a bounded atomic command over several selected records, validate and commit or
+  reject the set synchronously in the owning transaction. Prioritize ordering or failure
+  behavior that could produce an incorrect write, duplicate side effect, leaked record,
+  or misleading user outcome. Keep the Nest-only CSV ingestion endpoint documented as
+  an extension; it is not evidence of reference parity.
+- **Geodata:** keep bulk source intake, upload processing, parsing, validation, and
+  preprocessing asynchronous. Make user-requested entity mutations synchronous, including
+  status changes, edits, review decisions, and promotion or approval of selected
+  candidates. A multi-entity Admin action must apply its requested set in one Geodata
+  database transaction and return the completed result in the same request; it must not
+  enqueue a promotion job or silently fall back to background processing. Validate the
+  full selection before writing so the operation has all-or-nothing behavior. Preserve
+  idempotency and concurrency checks. Transactional outbox events may publish after the
+  mutation commits; the API result must not depend on broker delivery. Also complete
+  fixtures for outstanding PBF inputs above the qualified size, less common OSM
+  geometries, remaining geometry/CRS cases, and datum-grid-dependent transformations.
+  Verify any confirmed differences against the pinned importer before changing behavior.
+- **Email:** keep bulk delivery asynchronous and verify SMTP delivery, TLS, failure,
+  retry, deduplication, and notification outcomes in the deployment environment, using
+  the existing allowlisted templates and privacy constraints.
 
 For each confirmed gap, implement the smallest compatible change, update its contract or
 traceability only when the contract changes, and link the passing evidence from the owning
@@ -69,6 +109,10 @@ differences are documented with their user or data impact and an explicit dispos
 - Check responsive layouts at supported narrow and wide viewport sizes.
 - Exercise permission denial, validation and conflict responses, unavailable services,
   failed uploads, interrupted uploads, and delayed or failed asynchronous work.
+- Verify across Admin and Participant workflows that explicit bounded commands return
+  their final outcome synchronously, including multi-item selections. Verify that large
+  imports, log/QSO ingestion, and broad award calculations expose asynchronous job
+  progress and terminal status; distinguish job acceptance from completion in the UI.
 - Use live services for primary journeys. Use intercepted responses only for secondary
   presentation states that are not an end-to-end product workflow.
 - Record findings by application and workflow; fix blockers before marking the browser
@@ -84,14 +128,20 @@ Run controlled fault injection first, then repeat the relevant scenarios against
 isolated deployment. Keep state in the owning database and acknowledge broker messages
 only after durable state changes.
 
-- **Activity workers:** kill each work kind during side-effecting processing; verify lease
-  recovery, idempotency, and final records. Cover process loss after terminal dead-letter
-  persistence but before broker settlement.
+- **Activity workers:** qualify asynchronous log upload and QSO ingestion, broad award
+  calculation, and other worker work kinds. Kill each during side-effecting processing;
+  verify lease recovery, idempotency, and final records. Cover process loss after
+  terminal dead-letter persistence but before broker settlement. Keep bounded QSO
+  commands and award decisions that are part of synchronous atomic commands out of the
+  worker-job path.
 - **Activity notifications and Email:** qualify broker retry exhaustion and recovery under
   the configured deployment topology, including terminal dead-letter settlement.
-- **Geodata workers:** cover process loss during claim and after side effects for each of
-  the four work kinds. Extend object-store outage/recovery checks beyond multipart upload
-  to the other consumers and persistent-volume failure cases.
+- **Geodata workers:** cover process loss during claim and after side effects for the
+  remaining asynchronous work kinds, including bulk import preprocessing. Remove the
+  Admin-requested promotion/approval queue path as part of Step 2; those operations must
+  finish transactionally in the API request and are qualified as synchronous mutations,
+  not worker jobs. Extend object-store outage/recovery checks beyond multipart upload to
+  the other consumers and persistent-volume failure cases.
 - **NATS and PostgreSQL:** qualify deployment-level NATS recovery and PostgreSQL cluster
   failover, including relay, API, and worker reconnection and transaction outcomes.
 - **Object storage:** verify the deployed persistence and recovery procedures separately
@@ -101,7 +151,7 @@ only after durable state changes.
 no duplicate side effect, eventual completion or safe dead-lettering, and observable
 recovery. Open failures are documented rather than inferred from process restart tests.
 
-## Step 5: Set and verify Geodata capacity and source limits
+## Step 5: Set and verify workload capacity and source limits
 
 - Build representative import fixtures and workloads for GeoJSON, WFS, ArcGIS, KML, GPX,
   Shapefile, and OSM PBF, including configured maximum sizes and feature counts.
@@ -109,6 +159,17 @@ recovery. Open failures are documented rather than inferred from process restart
   before setting a production cap.
 - Measure throughput, peak memory, database load, broker backlog, and recovery time under
   explicit CPU, memory, replica, and database-pool limits.
+- Include representative log-upload/QSO-ingestion and broad award-calculation workloads;
+  measure job latency, throughput, peak memory, database load, backlog, and recovery.
+- Measure bounded synchronous commands in each owning area, including Activity QSO
+  writes/corrections and award decisions where applicable, alongside Geodata
+  single-entity and multi-entity mutations. Set documented request/selection limits from
+  those measurements; reject an over-limit atomic selection clearly rather than
+  converting it to asynchronous work or partially applying it.
+- Measure synchronous single-entity and multi-entity status, edit, review, promotion, and
+  approval transactions under representative selection sizes. Set a documented request
+  limit from those measurements; reject an over-limit selection clearly rather than
+  converting it to asynchronous work or partially applying it.
 - Compare results with the pinned Python implementation where a like-for-like measure is
   possible; document differences in process-RSS scope and workload where it is not.
 - Qualify the importer’s live-source host allowlist, source licenses, source outages,
