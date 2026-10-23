@@ -9,7 +9,7 @@ test('queues broad award progress recalculation and shows terminal job state', a
     body?: Record<string, unknown>;
     key?: string;
   }> = [];
-  let statusReads = 0;
+  const statusReads: Record<string, number> = {};
   const award = {
     id: 'award-live-1',
     programmeSlug: 'alpine',
@@ -87,11 +87,12 @@ test('queues broad award progress recalculation and shows terminal job state', a
         body: request.postDataJSON() as Record<string, unknown>,
         key: request.headers()['idempotency-key'],
       });
+      const jobId = `award-job-${requests.length}`;
       await route.fulfill({
         status: 202,
         json: {
           awardId: award.id,
-          jobId: 'award-job-1',
+          jobId,
           status: 'QUEUED',
           attempts: 0,
         },
@@ -99,16 +100,25 @@ test('queues broad award progress recalculation and shows terminal job state', a
       return;
     }
     if (
-      url.pathname === '/v1/awards/award-live-1/recalculation-jobs/award-job-1'
+      url.pathname.startsWith('/v1/awards/award-live-1/recalculation-jobs/')
     ) {
-      statusReads += 1;
+      const jobId = url.pathname.split('/').at(-1)!;
+      statusReads[jobId] = (statusReads[jobId] || 0) + 1;
+      const failed = jobId === 'award-job-2';
       await route.fulfill({
         json: {
-          id: 'award-job-1',
-          status: statusReads === 1 ? 'RUNNING' : 'SUCCEEDED',
-          attempts: 1,
-          lastError: null,
-          completedAt: statusReads > 1 ? '2026-10-23T10:00:00.000Z' : null,
+          id: jobId,
+          status: failed
+            ? 'FAILED'
+            : statusReads[jobId] === 1
+              ? 'RUNNING'
+              : 'SUCCEEDED',
+          attempts: failed ? 2 : 1,
+          lastError: failed ? 'award worker rejected the queued job' : null,
+          completedAt:
+            failed || statusReads[jobId] > 1
+              ? '2026-10-23T10:00:00.000Z'
+              : null,
         },
       });
       return;
@@ -129,9 +139,13 @@ test('queues broad award progress recalculation and shows terminal job state', a
   ).toBeVisible();
   await page.getByRole('button', { name: 'Recalculate all progress' }).click();
   await expect(page.getByText('QUEUED', { exact: true })).toBeVisible();
-  await expect(
-    page.getByText('Request accepted; recalculation is queued.'),
-  ).toBeVisible();
+  const announcement = page.locator('.award-recalculation-message');
+  await expect(announcement).toHaveAttribute('role', 'status');
+  await expect(announcement).toHaveAttribute('aria-live', 'polite');
+  await expect(announcement).toHaveAttribute('aria-atomic', 'true');
+  await expect(announcement).toHaveText(
+    'Request accepted; recalculation is queued.',
+  );
   await expect.poll(() => requests).toHaveLength(1);
   expect(requests[0]).toMatchObject({
     method: 'POST',
@@ -140,10 +154,31 @@ test('queues broad award progress recalculation and shows terminal job state', a
   expect(requests[0].key).toMatch(/^[0-9a-f-]{36}$/i);
   await page.getByRole('button', { name: 'Refresh status' }).click();
   await expect(page.getByText('RUNNING', { exact: true })).toBeVisible();
+  await expect(announcement).toHaveText('Recalculation is in progress.');
   await page.getByRole('button', { name: 'Refresh status' }).click();
   await expect(page.getByText('SUCCEEDED', { exact: true })).toBeVisible();
-  await expect(page.getByText('Recalculation completed.')).toBeVisible();
-  await expectResponsiveAccessible(page, 'Admin broad award recalculation');
+  await expect(announcement).toHaveText('Recalculation completed.');
+
+  await page.getByRole('button', { name: 'Recalculate all progress' }).click();
+  await expect(announcement).toHaveText(
+    'Request accepted; recalculation is queued.',
+  );
+  await expect.poll(() => requests).toHaveLength(2);
+  expect(requests[1].key).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(requests[1].key).not.toBe(requests[0].key);
+  await page.getByRole('button', { name: 'Refresh status' }).click();
+  await expect(page.getByText('FAILED', { exact: true })).toBeVisible();
+  await expect(announcement).toHaveText('Recalculation failed.');
+  await expect(page.getByRole('alert')).toContainText(
+    'award worker rejected the queued job',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Recalculate all progress' }),
+  ).toBeEnabled();
+  await expectResponsiveAccessible(
+    page,
+    'Admin broad award recalculation failure and retry',
+  );
 });
 
 test('saves an award draft and submits it for review', async ({ page }) => {

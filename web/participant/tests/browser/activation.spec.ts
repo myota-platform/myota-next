@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expectAccessible, expectResponsiveAccessible } from '../../../a11y';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('signs in, records an activation contact, and closes the activation', async ({
   page,
@@ -214,12 +214,19 @@ test('signs in, records an activation contact, and closes the activation', async
     'Contact recorded.',
   );
 
+  const importStatus = page.locator('#adif-import-status');
+  await expect(importStatus).toHaveAttribute('role', 'status');
+  await expect(importStatus).toHaveAttribute('aria-live', 'polite');
   await page.locator('#adif-file').setInputFiles({
     name: 'first.adi',
     mimeType: 'text/plain',
     buffer: Buffer.from('<ADIF_VER:5>3.1.4<EOH><EOR>'),
   });
-  await page.getByRole('button', { name: 'Import ADIF log' }).click();
+  await page.locator('#adif-file').focus();
+  await page.keyboard.press('Tab');
+  const importButton = page.getByRole('button', { name: 'Import ADIF log' });
+  await expect(importButton).toBeFocused();
+  await page.keyboard.press('Enter');
   await expect(page.locator('#adif-import-status')).toHaveText(
     'first.adi: PROCESSING · 0 accepted, 1 rejected',
   );
@@ -233,7 +240,10 @@ test('signs in, records an activation contact, and closes the activation', async
   await expect(
     page.getByRole('button', { name: 'Refresh import status' }),
   ).toBeHidden();
-  await expectAccessible(page, 'Participant failed ADIF import feedback');
+  await expectResponsiveAccessible(
+    page,
+    'Participant failed ADIF import announcement and recovery',
+  );
 
   await page.locator('#adif-file').setInputFiles({
     name: 'retry.adi',

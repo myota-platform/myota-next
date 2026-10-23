@@ -991,9 +991,13 @@ onMounted(() => {
         <div
           v-if="awardRecalculation?.awardId === selected.id"
           class="activity-job"
-          aria-live="polite"
         >
-          <p class="award-recalculation-message" role="status">
+          <p
+            class="award-recalculation-message"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
             <template
               v-if="(awardRecalculation.status || 'QUEUED') === 'QUEUED'"
             >
@@ -1016,7 +1020,7 @@ onMounted(() => {
           <span
             class="status-pill"
             :class="(awardRecalculation.status || '').toLowerCase()"
-            role="status"
+            aria-hidden="true"
           >
             {{ awardRecalculation.status || 'QUEUED' }}
           </span>

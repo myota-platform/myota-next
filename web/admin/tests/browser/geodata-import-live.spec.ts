@@ -132,7 +132,10 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
       `Next item: ${promotedName}.`,
     );
     await dialog.getByRole('button', { name: 'Close', exact: true }).click();
-    await page.getByLabel('Select all pending records').check();
+    const selectAll = page.getByLabel('Select all pending records');
+    await selectAll.focus();
+    await page.keyboard.press('Space');
+    await expect(selectAll).toBeChecked();
     await expect(
       page.getByText('2 pending records selected across all pages.'),
     ).toBeVisible();
@@ -144,9 +147,13 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
           response.request().method() === 'POST'
         );
       }),
-      page
-        .getByRole('button', { name: 'Promote selected to candidate' })
-        .click(),
+      (async () => {
+        const promote = page.getByRole('button', {
+          name: 'Promote selected to candidate',
+        });
+        await promote.focus();
+        await page.keyboard.press('Enter');
+      })(),
     ]);
     expect(promotionResponse.status()).toBe(200);
     const promotionResult = await promotionResponse.json();

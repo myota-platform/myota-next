@@ -96,11 +96,25 @@ test('Admin workspaces have accessible names and fit supported viewports', async
   for (const route of adminRoutes) {
     await page.goto(route);
     await expect(page.locator('#workspace-content')).toBeVisible();
-    await expectAccessible(page, `Admin ${route}`);
 
-    for (const width of [390, 1440]) {
-      await page.setViewportSize({ width, height: 900 });
-      await expectNoHorizontalOverflow(page, `Admin ${route} at ${width}px`);
+    for (const viewport of [
+      { width: 390, height: 844 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expectNoHorizontalOverflow(
+        page,
+        `Admin ${route} at ${viewport.width}px`,
+      );
+      await expectAccessible(page, `Admin ${route} at ${viewport.width}px`);
     }
+
+    await page.evaluate(() => {
+      (document.activeElement as HTMLElement | null)?.blur();
+    });
+    await page.keyboard.press('Tab');
+    await expect(page.locator('.skip-link')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#workspace-content')).toBeFocused();
   }
 });
