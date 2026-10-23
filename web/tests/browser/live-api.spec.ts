@@ -853,7 +853,10 @@ test('records and closes an activation in Participant through live Activity APIs
       response.request().method() === 'POST' &&
       new URL(response.url()).pathname === '/v1/activations',
   );
-  await page.getByRole('button', { name: 'Start activation' }).click();
+  const startButton = page.getByRole('button', { name: 'Start activation' });
+  await startButton.focus();
+  await expect(startButton).toBeFocused();
+  await page.keyboard.press('Enter');
   const started = await startResponse;
   expect(started.status()).toBe(201);
   const activation = await started.json();
@@ -861,6 +864,10 @@ test('records and closes an activation in Participant through live Activity APIs
     'Activation started.',
   );
   await expect(page.locator('#qso-form')).toBeVisible();
+  await expectResponsiveAccessible(
+    page,
+    'Live Participant active activation and QSO entry form',
+  );
 
   await page.getByLabel('Worked callsign').fill('F4LIVE');
   await page.getByLabel('Band').fill('20M');
@@ -871,7 +878,12 @@ test('records and closes an activation in Participant through live Activity APIs
       new URL(response.url()).pathname ===
         `/v1/activations/${activation.id}/qsos`,
   );
-  await page.getByRole('button', { name: 'Record contact' }).click();
+  const recordContactButton = page.getByRole('button', {
+    name: 'Record contact',
+  });
+  await recordContactButton.focus();
+  await expect(recordContactButton).toBeFocused();
+  await page.keyboard.press('Enter');
   expect((await qsoResponse).status()).toBe(201);
   await expect(page.locator('#activation-status')).toHaveText(
     'Contact recorded.',
@@ -882,7 +894,12 @@ test('records and closes an activation in Participant through live Activity APIs
       response.request().method() === 'PATCH' &&
       new URL(response.url()).pathname === `/v1/activations/${activation.id}`,
   );
-  await page.getByRole('button', { name: 'Close activation' }).click();
+  const closeActivationButton = page.getByRole('button', {
+    name: 'Close activation',
+  });
+  await closeActivationButton.focus();
+  await expect(closeActivationButton).toBeFocused();
+  await page.keyboard.press('Enter');
   expect((await closeResponse).status()).toBe(200);
   await expect(page.locator('#activation-status')).toHaveText(
     'Activation closed.',
@@ -904,6 +921,10 @@ test('records and closes an activation in Participant through live Activity APIs
     qsos: [{ workedCallsign: 'F4LIVE', band: '20M', mode: 'SSB' }],
   });
   expect(failedResponses).toEqual([]);
+  await expectResponsiveAccessible(
+    page,
+    'Live Participant activation, QSO, and close workflow',
+  );
 });
 
 test('reviews a live QSO correction in Admin and verifies the updated QSO', async ({
