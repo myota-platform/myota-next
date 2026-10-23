@@ -51,19 +51,17 @@ an accepted scope decision is recorded in the dispositions section.
   lifecycle-state checks, matching the Python save handler.
 - **Missing evidence:** The source page explicitly says broader account,
   callsign, recovery, and authorization sequences still need automated
-  compatibility coverage. The live concurrent normalized-email creation check
-  ran in CI against isolated PostgreSQL, but the fixture sent the unsupported
-  `INDIVIDUAL` participation type, so both requests were rejected before the
-  duplicate-email path was reached. This run does not qualify concurrent
-  normalized-email creation. The ledger does not infer coverage from adjacent
-  examples.
+  compatibility coverage. The corrected live concurrent normalized-email
+  creation check passed against isolated PostgreSQL: one request created the
+  account, one received the reference duplicate-email response, and one row was
+  persisted. The earlier run used an unsupported participation type and is not
+  counted as evidence.
 - **Risk:** A sequence or precedence difference could grant access, retain an
   invalid session, or persist the wrong callsign/account state.
 - **Next check:** Compare remaining material Identity and Programme handler
   sequences with the pinned reference; add a focused fixture or workflow for
-  each uncovered material outcome. Correct the concurrency fixture to use a
-  supported participation type, rerun it against isolated PostgreSQL, and link
-  the result in the parity page.
+  each uncovered material outcome. The concurrent-email result is linked from
+  the parity page and [CI run 39968418850](https://github.com/myota-platform/myota-next/actions/runs/39968418850).
 - **Tracked by:** [Issue #11](https://github.com/myota-platform/myota-next/issues/11).
 - **Sources:** [Identity and Programmes, line 167](parity/identity-programmes.md#L167);
   [completion criteria, lines 9–17](parity/completion-criteria.md#L9).

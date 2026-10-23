@@ -105,6 +105,44 @@ describe('streamShapefileFeatures', () => {
     });
   });
 
+  it('preserves multipart PolyLine part grouping from PyShp 2.3.1', async () => {
+    const source = await readFile(
+      new URL('./fixtures/python-multiline-shapefile.zip', import.meta.url),
+    );
+    async function* chunks() {
+      yield source;
+    }
+    const features: unknown[] = [];
+    for await (const feature of streamShapefileFeatures(
+      chunks(),
+      'python-multiline-shapefile.zip',
+      '',
+      10,
+      async () => undefined,
+    )) {
+      features.push(feature);
+    }
+
+    expect(features).toHaveLength(1);
+    expect(features[0]).toMatchObject({
+      type: 'Feature',
+      geometry: {
+        type: 'MultiLineString',
+        coordinates: [
+          [
+            [1.25, 2.5],
+            [3.75, 4.5],
+          ],
+          [
+            [5.25, 6.5],
+            [7.75, 8.5],
+          ],
+        ],
+      },
+      properties: { name: 'multipart line' },
+    });
+  });
+
   it('organizes nested PyShp polygon rings like the reference importer', async () => {
     const source = await readFile(
       new URL(

@@ -281,6 +281,10 @@ A PyShp 2.3.1 `PolylineZ` fixture also confirms that both the reference
 `LineString`; the fixture is checked in at
 `apps/geodata-worker/src/fixtures/python-polylinez-shapefile.zip`.
 
+A PyShp 2.3.1 multipart `PolyLine` fixture confirms that both parsers retain the two
+parts as a `MultiLineString` with the same coordinate grouping; it is checked in at
+`apps/geodata-worker/src/fixtures/python-multiline-shapefile.zip`.
+
 Shapefile multipart uploads stream to temporary disk and decode records one at a time,
 with the same shared API/worker 1 GiB upload cap or optional format-specific override, a
 1 GiB expanded-size cap, 16 MiB per-feature size by default, 250,000 vertices, and the
