@@ -181,6 +181,69 @@ describe('OSM PBF reference parity', () => {
     });
   });
 
+  it('matches a Python multipolygon with separate outer parts and an inner ring', async () => {
+    const source = await readFile(
+      new URL(
+        './fixtures/python-osm-multipolygon-parts.osm.pbf',
+        import.meta.url,
+      ),
+    );
+    async function* chunks() {
+      yield source;
+    }
+    const features = [];
+    for await (const feature of decodeOsmPbfStream(
+      chunks(),
+      'python-osm-multipolygon-parts.osm.pbf',
+      1,
+      '',
+    )) {
+      features.push(feature);
+    }
+
+    expect(features).toHaveLength(1);
+    expect(features[0]).toMatchObject({
+      id: 'relation/301',
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: [
+          [
+            [
+              [-5.99, 37.39],
+              [-5.98, 37.39],
+              [-5.98, 37.4],
+              [-5.99, 37.4],
+              [-5.99, 37.39],
+            ],
+            [
+              [-5.988, 37.392],
+              [-5.988, 37.398],
+              [-5.982, 37.398],
+              [-5.982, 37.392],
+              [-5.988, 37.392],
+            ],
+          ],
+          [
+            [
+              [-5.96, 37.39],
+              [-5.95, 37.39],
+              [-5.95, 37.4],
+              [-5.96, 37.4],
+              [-5.96, 37.39],
+            ],
+          ],
+        ],
+      },
+      properties: {
+        boundary: 'protected_area',
+        name: 'Separated Protected Areas',
+      },
+    });
+    expect(sourceFeatureHashOverride(features[0]!)).toBe(
+      '667e7748be2bab9cb530e1a05342c819bb7a9239858daaddbb593c6eef9db968',
+    );
+  });
+
   it('reports the Python-compatible OSM area vertex-limit error', async () => {
     vi.resetModules();
     vi.stubEnv('MYOTA_IMPORT_MAX_FEATURE_VERTICES', '4');
@@ -238,21 +301,20 @@ describe('OSM PBF reference parity', () => {
   describe.skipIf(
     process.platform !== 'linux' ||
       process.env.MYOTA_PBF_RSS_QUALIFICATION !== '1',
-    'PBF process-tree memory bounds',
-    () => {
-      it.each([
-        { featureCount: 50_000, rssLimitBytes: 96 * 1024 * 1024 },
-        { featureCount: 250_000, rssLimitBytes: 192 * 1024 * 1024 },
-      ])(
-        'decodes $featureCount features within its RSS growth limit',
-        async ({ featureCount, rssLimitBytes }) => {
-          const { decoded, rssGrowthBytes } =
-            await measureOsmPbfRssGrowth(featureCount);
-          expect(decoded).toBe(featureCount);
-          expect(rssGrowthBytes).toBeLessThanOrEqual(rssLimitBytes);
-        },
-        120_000,
-      );
-    },
-  );
+  )('PBF process-tree memory bounds', () => {
+    it.each([
+      { featureCount: 50_000, rssLimitBytes: 96 * 1024 * 1024 },
+      { featureCount: 250_000, rssLimitBytes: 192 * 1024 * 1024 },
+      { featureCount: 300_000, rssLimitBytes: 192 * 1024 * 1024 },
+    ])(
+      'decodes $featureCount features within its RSS growth limit',
+      async ({ featureCount, rssLimitBytes }) => {
+        const { decoded, rssGrowthBytes } =
+          await measureOsmPbfRssGrowth(featureCount);
+        expect(decoded).toBe(featureCount);
+        expect(rssGrowthBytes).toBeLessThanOrEqual(rssLimitBytes);
+      },
+      180_000,
+    );
+  });
 });

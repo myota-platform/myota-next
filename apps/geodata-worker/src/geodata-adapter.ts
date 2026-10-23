@@ -1,5 +1,5 @@
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
-import proj4 from '@app/geodata-domain/proj4.js';
+import { projectToWgs84 } from '@app/geodata-domain/proj4.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import {
   normalizeAttachmentMetadata,
@@ -253,7 +253,7 @@ function normalizeCoordinates(value: unknown, source: string): unknown {
     let longitude: number;
     let latitude: number;
     try {
-      [longitude, latitude] = proj4(source, 'EPSG:4326', [x, y]);
+      [longitude, latitude] = projectToWgs84(source, [x, y]);
     } catch (error) {
       throw new Error(`unsupported CRS ${source}`, { cause: error });
     }

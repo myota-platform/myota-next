@@ -45,11 +45,7 @@ interface CandidatePage {
   total?: number;
   nextPage?: number | null;
 }
-interface ImportProcessingQueue {
-  id: string;
-  status: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
-  result?: { errors?: Array<{ candidateId?: string; message?: string }> };
-}
+const maxSynchronousCandidateSelection = 100;
 
 const store = useAppStore();
 const categories = ref<EntityCategory[]>([]);
@@ -107,17 +103,17 @@ const selectedCounts = computed(() =>
 const showReview = computed(() =>
   Boolean(
     selectedRun.value &&
-      selectedRun.value.status !== 'PROCESSED' &&
-      !isPreprocessing(selectedRun.value) &&
-      (isReviewable(selectedRun.value) || totalCandidates.value),
+    selectedRun.value.status !== 'PROCESSED' &&
+    !isPreprocessing(selectedRun.value) &&
+    (isReviewable(selectedRun.value) || totalCandidates.value),
   ),
 );
 const canFinalize = computed(() =>
   Boolean(
     selectedRun.value &&
-      selectedRun.value.status !== 'PROCESSED' &&
-      !isPreprocessing(selectedRun.value) &&
-      !actionBusy.value,
+    selectedRun.value.status !== 'PROCESSED' &&
+    !isPreprocessing(selectedRun.value) &&
+    !actionBusy.value,
   ),
 );
 const uploadPercent = computed(() =>
@@ -155,7 +151,6 @@ const pendingPastedImportKeys = createPendingIdempotencyKeys(
 const pendingImportFinalizationKeys = createPendingIdempotencyKeys(
   'myota_admin_pending_import_finalizations',
 );
-const candidateActionQueueId = ref<string | null>(null);
 const candidatePendingAction = ref<
   'CANDIDATE' | 'APPROVED' | 'REJECTED' | null
 >(null);
@@ -300,60 +295,6 @@ async function fetchAllPendingCandidates(
     requestedPage = data.nextPage;
   }
 }
-async function waitForPromotionQueue(
-  runId: string,
-  queueId: string,
-  candidateId: string,
-  actionFingerprint: string,
-): Promise<void> {
-  const deadline = Date.now() + 120_000;
-  while (Date.now() < deadline) {
-    const queue = await readApi<ImportProcessingQueue>(
-      `/v1/geodata/imports/${encodeURIComponent(runId)}/processing-queues/${encodeURIComponent(queueId)}`,
-    );
-    if (queue.status === 'COMPLETED') {
-      const error = queue.result?.errors?.find(
-        (item) => item.candidateId === candidateId,
-      );
-      if (error) {
-        await pendingCandidateActionKeys.complete(actionFingerprint);
-        candidateActionQueueId.value = null;
-        candidatePendingAction.value = null;
-        throw new Error(
-          error.message || 'Entity promotion failed. Retry this item.',
-        );
-      }
-      return;
-    }
-    if (queue.status === 'FAILED') {
-      const error = queue.result?.errors?.find(
-        (item) => item.candidateId === candidateId,
-      );
-      await pendingCandidateActionKeys.complete(actionFingerprint);
-      candidateActionQueueId.value = null;
-      candidatePendingAction.value = null;
-      throw new Error(
-        error?.message || 'Entity promotion failed. Retry this item.',
-      );
-    }
-    await new Promise<void>((resolve, reject) => {
-      const finish = (): void => {
-        pageController.signal.removeEventListener('abort', abort);
-        resolve();
-      };
-      const timer = window.setTimeout(finish, 750);
-      const abort = (): void => {
-        window.clearTimeout(timer);
-        pageController.signal.removeEventListener('abort', abort);
-        reject(new DOMException('The page was closed.', 'AbortError'));
-      };
-      pageController.signal.addEventListener('abort', abort, { once: true });
-    });
-  }
-  throw new Error(
-    'Promotion is still running. Retry to check its status again.',
-  );
-}
 async function advanceImportReview(
   runId: string,
   processed: ImportCandidate,
@@ -437,27 +378,14 @@ async function decideCandidate(
         headers: { 'Idempotency-Key': actionKey },
       });
     } else {
-      if (!candidateActionQueueId.value) {
-        const queue = await apiRequest<ImportProcessingQueue>(requestPath, {
-          method: 'POST',
-          body: JSON.stringify(requestBody),
-          headers: { 'Idempotency-Key': actionKey },
-        });
-        candidateActionQueueId.value = queue.id;
-      }
-      candidateActionStatus.value = 'Promotion queued. Waiting for the result…';
-      const queueId = candidateActionQueueId.value;
-      if (!queueId)
-        throw new Error('Promotion queue was not returned by the service.');
-      await waitForPromotionQueue(
-        runId,
-        queueId,
-        candidate.id,
-        actionFingerprint,
-      );
+      await apiRequest(requestPath, {
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+        headers: { 'Idempotency-Key': actionKey },
+      });
+      candidateActionStatus.value = `Entity promoted to ${action.toLowerCase()}.`;
     }
     await pendingCandidateActionKeys.complete(actionFingerprint);
-    candidateActionQueueId.value = null;
     candidatePendingAction.value = null;
     actionSucceeded = true;
     candidateAdvancePending.value = true;
@@ -721,8 +649,13 @@ async function toggleAll(): Promise<void> {
       ids.push(...data.items.map((item) => item.id));
       nextPage = data.nextPage;
     }
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length > maxSynchronousCandidateSelection)
+      throw new Error(
+        `This import has ${uniqueIds.length} pending candidates. Select at most ${maxSynchronousCandidateSelection} at a time for synchronous actions.`,
+      );
     if (selectedRun.value?.id === id && selectionVersion === version)
-      selectedCandidateIds.value = [...new Set(ids)];
+      selectedCandidateIds.value = uniqueIds;
   } catch (cause) {
     if (!disposed) setError(cause);
   } finally {
@@ -740,6 +673,12 @@ async function processCandidates(
   const id = selectedRun.value?.id;
   const ids = [...selectedCandidateIds.value];
   if (!id || !ids.length || actionBusy.value) return;
+  if (ids.length > maxSynchronousCandidateSelection) {
+    setError(
+      `Select no more than ${maxSynchronousCandidateSelection} candidates for one synchronous action.`,
+    );
+    return;
+  }
   actionBusy.value = true;
   error.value = '';
   const requestPath = `/v1/geodata/imports/${encodeURIComponent(id)}/process`;
@@ -754,7 +693,10 @@ async function processCandidates(
     requestBody,
   ]);
   try {
-    await apiRequest(requestPath, {
+    const result = await apiRequest<{
+      created: string[];
+      updated: string[];
+    }>(requestPath, {
       method: 'POST',
       body: JSON.stringify(requestBody),
       headers: {
@@ -764,7 +706,8 @@ async function processCandidates(
     });
     await pendingCandidateActionKeys.complete(fingerprint);
     if (selectedRun.value?.id === id) selectedCandidateIds.value = [];
-    message.value = `${ids.length} records queued for promotion to ${targetStatus.toLowerCase()}. The counts update as processing finishes.`;
+    const processed = result.created.length + result.updated.length;
+    message.value = `${processed} records were promoted to ${targetStatus.toLowerCase()} successfully.`;
     await refreshImports(true);
   } catch (cause) {
     setError(cause);
@@ -907,7 +850,6 @@ function openCandidate(item: ImportCandidate, event?: MouseEvent): void {
   candidateAdvancePending.value = false;
   candidateActionStatus.value = '';
   candidateActionError.value = '';
-  candidateActionQueueId.value = null;
   candidatePendingAction.value = null;
   void nextTick(() =>
     candidateDialog.value
@@ -923,7 +865,6 @@ function closeCandidate(): void {
   candidateAdvancePending.value = false;
   candidateActionStatus.value = '';
   candidateActionError.value = '';
-  candidateActionQueueId.value = null;
   candidatePendingAction.value = null;
   void nextTick(() => candidateInvoker.value?.focus());
 }

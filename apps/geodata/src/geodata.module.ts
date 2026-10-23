@@ -24,6 +24,8 @@ import { GeodataProposalService } from './geodata-proposal.service.js';
 import { GeodataLoadTestCleanupService } from './geodata-load-test-cleanup.service.js';
 import { GeodataMetricsController } from './geodata-metrics.controller.js';
 import { GeodataQueryMetrics } from './geodata-query-metrics.service.js';
+import { GeodataPromotionRepository } from '../../geodata-worker/src/geodata-promotion.repository.js';
+import { GeodataPromotionScoring } from '../../geodata-worker/src/geodata-promotion-scoring.js';
 import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 
 @Module({
@@ -58,6 +60,8 @@ import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
     GeodataProposalService,
     GeodataLoadTestCleanupService,
     GeodataQueryMetrics,
+    GeodataPromotionRepository,
+    GeodataPromotionScoring,
   ],
 })
 export class GeodataModule {}

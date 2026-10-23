@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="myota-parity-fixture">
+  <node id="101" lat="37.39" lon="-5.99" />
+  <node id="102" lat="37.39" lon="-5.98" />
+  <node id="103" lat="37.40" lon="-5.98" />
+  <node id="104" lat="37.40" lon="-5.99" />
+  <node id="111" lat="37.39" lon="-5.96" />
+  <node id="112" lat="37.39" lon="-5.95" />
+  <node id="113" lat="37.40" lon="-5.95" />
+  <node id="114" lat="37.40" lon="-5.96" />
+  <node id="121" lat="37.392" lon="-5.988" />
+  <node id="122" lat="37.392" lon="-5.982" />
+  <node id="123" lat="37.398" lon="-5.982" />
+  <node id="124" lat="37.398" lon="-5.988" />
+  <way id="201">
+    <nd ref="101" />
+    <nd ref="102" />
+    <nd ref="103" />
+    <nd ref="104" />
+    <nd ref="101" />
+  </way>
+  <way id="202">
+    <nd ref="121" />
+    <nd ref="122" />
+    <nd ref="123" />
+    <nd ref="124" />
+    <nd ref="121" />
+  </way>
+  <way id="203">
+    <nd ref="111" />
+    <nd ref="112" />
+    <nd ref="113" />
+    <nd ref="114" />
+    <nd ref="111" />
+  </way>
+  <relation id="301">
+    <member type="way" ref="201" role="outer" />
+    <member type="way" ref="202" role="inner" />
+    <member type="way" ref="203" role="outer" />
+    <tag k="type" v="multipolygon" />
+    <tag k="boundary" v="protected_area" />
+    <tag k="name" v="Separated Protected Areas" />
+  </relation>
+</osm>

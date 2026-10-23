@@ -16,7 +16,7 @@ describe('IdentityAuthService recovery compatibility', () => {
     else process.env.MYOTA_ENV = originalEnvironment;
   });
 
-  function harness(accountExists = true) {
+  function harness(accountExists = true, tokenExpired = false) {
     const queries: Array<{ sql: string; values: unknown[] }> = [];
     let recoveryTokenHash: string | undefined;
     let tokenUsed = false;
@@ -38,7 +38,8 @@ describe('IdentityAuthService recovery compatibility', () => {
         if (
           sql.includes('SELECT account_id FROM public.account_recovery_token')
         ) {
-          const isValid = values[0] === recoveryTokenHash && !tokenUsed;
+          const isValid =
+            values[0] === recoveryTokenHash && !tokenUsed && !tokenExpired;
           return {
             rows: isValid ? [{ account_id: accountId }] : [],
             rowCount: isValid ? 1 : 0,
@@ -138,5 +139,29 @@ describe('IdentityAuthService recovery compatibility', () => {
         'Another Recovery Password 2026!',
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects an expired token without changing credentials or session state', async () => {
+    const fixture = harness(true, true);
+    const { devResetToken } =
+      await fixture.service.requestRecovery('user@example.test');
+    if (typeof devResetToken !== 'string')
+      throw new Error('missing test token');
+
+    await expect(
+      fixture.service.resetRecovery(
+        devResetToken,
+        'Updated Recovery Password 2026!',
+      ),
+    ).rejects.toThrow('recovery token is invalid or expired');
+
+    const tokenLookup = fixture.queries.find((item) =>
+      item.sql.includes('SELECT account_id FROM public.account_recovery_token'),
+    );
+    expect(tokenLookup?.sql).toContain('expires_at > now()');
+    expect(fixture.tokenUsed).toBe(false);
+    expect(fixture.credentialHash).toBeUndefined();
+    expect(fixture.sessionRevocationAccount).toBeUndefined();
+    expect(fixture.queries.at(-1)?.sql).toBe('ROLLBACK');
   });
 });

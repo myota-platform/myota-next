@@ -37,6 +37,41 @@ describe('normalizeAdapterFeature projection compatibility', () => {
     });
   });
 
+  it('reprojects the Python EPSG:25830 import fixture to WGS84', () => {
+    const normalized = normalizeAdapterFeature('MANUAL', {
+      properties: { name: 'Projected Sevilla point' },
+      crs: 'EPSG:25830',
+      geometry: {
+        type: 'Point',
+        coordinates: [235294.6497475471, 4142334.0458576377],
+      },
+    });
+
+    const coordinates = (normalized.geometry as { coordinates: number[] })
+      .coordinates;
+    expect(coordinates[0]).toBeCloseTo(-5.99, 7);
+    expect(coordinates[1]).toBeCloseTo(37.39, 7);
+  });
+
+  it.each([
+    [23030, [235000, 4140000], [-5.993670519717036, 37.367037324028914]],
+    [23031, [430000, 4580000], [2.161899860653055, 41.36662235399315]],
+  ] as const)(
+    'matches PyProj Spanish IGN grid transforms for EPSG:%i imports',
+    (epsg, coordinates, expected) => {
+      const normalized = normalizeAdapterFeature('MANUAL', {
+        properties: { name: `ED50 fixture ${epsg}` },
+        crs: `EPSG:${epsg}`,
+        geometry: { type: 'Point', coordinates: [...coordinates] },
+      });
+
+      const actual = (normalized.geometry as { coordinates: number[] })
+        .coordinates;
+      expect(actual[0]).toBeCloseTo(expected[0], 7);
+      expect(actual[1]).toBeCloseTo(expected[1], 7);
+    },
+  );
+
   it('marks OpenStreetMap records outside the required tag set for skipping', () => {
     const normalized = normalizeAdapterFeature('OSM', {
       id: 42,

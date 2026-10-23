@@ -139,16 +139,22 @@ parses emitted integer tokens exactly, so large OSM IDs retain their Python-comp
 The checked-in OSM XML/PBF fixture covers tagged nodes, linear and closed ways, a
 multipolygon relation with an inner ring, filtering, output order, and source hashes
 against the Python importer. The manually triggered Operational and performance
-qualification workflow decodes generated 50,000-feature and 250,000-feature PBFs and
-checks that Linux Node plus `osmium` subprocess-tree RSS growth stays within 96 MiB and
-192 MiB, respectively, above the test-worker baseline.
+qualification workflow decodes generated 50,000-feature, 250,000-feature, and
+300,000-feature PBFs and checks that Linux Node plus `osmium` subprocess-tree RSS growth
+stays within 96 MiB, 192 MiB, and 192 MiB, respectively, above the test-worker baseline.
+The manual runner now executes all three memory cases instead of returning success
+with the qualification skipped.
 
 The 50,000-feature case matches the Python stress fixture's count and limit, but
-measures a different RSS scope; the values are not directly comparable. Inputs above
-250,000 features and less common OSM geometries still need qualification. Area and way
-vertex limits use the reference errors; the CLI decoder checks after osmium emits a
-record, bounded by the decoded feature-size cap, while PyOsmium checks areas before
-GeoJSON materialization.
+measures a different RSS scope; the values are not directly comparable. The 300,000
+PBF's resource workload contains tagged nodes. Checked-in geometry fixtures cover ways,
+a protected-area multipolygon with an inner ring, and a Python-generated multipart
+multipolygon with two disjoint outer components and one inner ring. Its PyOsmium 4.3.2
+feature hash is `667e7748be2bab9cb530e1a05342c819bb7a9239858daaddbb593c6eef9db968`.
+Inputs above 300,000 features and other less common OSM geometries still need
+qualification. Area and way vertex limits use the
+reference errors; the CLI decoder checks after osmium emits a record, bounded by the
+decoded feature-size cap, while PyOsmium checks areas before GeoJSON materialization.
 
 The same manually triggered workflow streams a generated 300,000-feature GeoJSON
 FeatureCollection through the metadata scan and feature pass, with Node RSS growth under
@@ -248,7 +254,9 @@ the original-coordinate source hash and one adapter reprojection against PyShp 2
 PyProj 3.8.0.
 
 The baseline fixture also covers a large-integer DBF field, `.prj` text, and canonical
-source hash. PBF and less common geometry or CRS definitions still need fixtures. The
+source hash. The PBF suite also compares a disjoint multipart relation and its inner
+ring against the PyOsmium 4.3.2 reference output and hash. Other less-common PBF
+geometries and CRS definitions still need fixtures. The
 direct JSON import path materializes the normalized collection and accepts the
 reference's feature arrays, single geometries, geometry wrappers, and empty collections,
 while multipart GeoJSON streams source features. The streaming worker selects a root
@@ -268,14 +276,27 @@ code](https://github.com/GeospatialPython/pyshp/blob/2.3.1/shapefile.py#L3174-L3
 the [NestJS parser's supported shape
 types](https://github.com/mbostock/shapefile/blob/master/shp/index.js#L11-L24).
 
+A PyShp 2.3.1 `PolylineZ` fixture also confirms that both the reference
+`__geo_interface__` and the Nest streaming parser drop Z ordinates and expose a 2D
+`LineString`; the fixture is checked in at
+`apps/geodata-worker/src/fixtures/python-polylinez-shapefile.zip`.
+
 Shapefile multipart uploads stream to temporary disk and decode records one at a time,
 with the same shared API/worker 1 GiB upload cap or optional format-specific override, a
 1 GiB expanded-size cap, 16 MiB per-feature size by default, 250,000 vertices, and the
 configured feature count. Less common geometry types and CRS transformations that depend
 on datum grids still need compatibility qualification against the reference parser.
 
-Eight EPSG coordinate fixtures currently compare with PyProj 3.8.0 within `1e-7`
-degrees. Geometry type aliases use Python-compatible Unicode case folding, and CRS
+Twelve EPSG coordinate fixtures compare with PyProj 3.8.0 within `1e-7`
+degrees, including the Python import path's EPSG:25830 point at `(-5.99, 37.39)`.
+EPSG:4230 and projected ED50 EPSG:23028 through EPSG:23038 use the IGN Spain
+ED50-to-ETRS89 grid when the fallback coordinate is within its geographic
+coverage. PyProj 3.8.0 grid fixtures for EPSG:4230, EPSG:23030, and EPSG:23031
+match within `1e-7` degrees. Coordinates outside the grid coverage retain the
+bundled global definition. The grid's source and CC BY 4.0 attribution are
+recorded in `libs/geodata-domain/data/README.md`; other datum-grid operations
+remain unqualified.
+Geometry type aliases use Python-compatible Unicode case folding, and CRS
 metadata selects the first Python-truthy identifier field. Integer-valued floating CRS
 identifiers use Python's decimal integer formatting, including values whose default
 JavaScript string form uses exponent notation. Geodata coordinate validation also
@@ -417,13 +438,27 @@ database selection while retaining the submitted duplicate order in its response
 outbox event, and that queued records cannot be rejected before any deletion or event
 write.
 
-Promotion selection applies required-field checks before type and status validation,
-then sorts and deduplicates IDs without a separate 500-ID cap. Selected candidates can
-be queued for CANDIDATE or scope-gated APPROVED promotion; the worker persists entities,
-category and source links, audit/outbox events, and queue outcomes. Entity review,
-metadata, category, and geometry changes, conflation decisions, and import candidate
-validation and promotion preserve submitted notes without coercion or truncation,
-matching the Python handlers.
+Promotion selection applies required-field checks, validates that the candidate list
+is nonempty, then validates `targetStatus`, matching the Python handler's error
+precedence. IDs are then sorted and deduplicated before the synchronous 100-candidate
+limit is applied, so repeated IDs do not count as additional entity mutations. Admin
+promotion of up to 100 candidates is synchronous:
+the service walks sorted, distinct IDs and checks existence, review coverage, then
+promotion eligibility in the Python handler's order, while deferring writes until every
+candidate passes. It applies entity, category, source-link, audit, and outbox writes in
+one Geodata transaction and returns the final created and updated IDs. Any invalid,
+ineligible, or over-limit selection is rejected without partial promotion. The 100-record
+request bound is an initial safety cap; production
+capacity qualification must confirm or revise it. Large import intake and preprocessing
+remain asynchronous. Automated community-proposal imports may still use the internal
+worker promotion queue. A candidate linked to a prior promotion queue can be retried
+synchronously only when that queue is failed and records that candidate as failed; the
+API locks the prior queue before candidate rows, clears the stale association in the same
+transaction, and then promotes it. Active or unrelated queues remain conflicts. Focused
+repository tests cover eligible retry, active-queue rejection, per-candidate authorization
+order, all-or-nothing selection, and the absence of a new queue. Entity review, metadata, category, and geometry changes,
+conflation decisions, and import candidate validation and promotion preserve submitted
+notes without coercion or truncation, matching the Python handlers.
 
 Entity review status falls back from `status` to legacy `decision` using Python
 truthiness; candidate proposal identity remains in `candidateSource`, and `sourceRef`

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('reviews pasted GeoJSON candidates by rejecting one and promoting another', async ({
+test('reviews pasted GeoJSON candidates and promotes a selected set synchronously', async ({
   page,
 }) => {
   const importRequests: Array<{ body: Record<string, any>; key: string }> = [];
@@ -28,7 +28,14 @@ test('reviews pasted GeoJSON candidates by rejecting one and promoting another',
     validationStatus: 'PENDING',
     geometry: { type: 'Point', coordinates: [7.3, 46.2] },
   };
-  let pendingCandidates = [firstFeature, secondFeature];
+  const thirdFeature = {
+    id: 'candidate-3',
+    ordinal: 3,
+    name: 'Example second summit to keep',
+    validationStatus: 'PENDING',
+    geometry: { type: 'Point', coordinates: [7.4, 46.3] },
+  };
+  let pendingCandidates = [firstFeature, secondFeature, thirdFeature];
   const rejectionRequests: Array<{ body: unknown; key: string }> = [];
   const promotionRequests: Array<{ body: unknown; key: string }> = [];
 
@@ -140,23 +147,25 @@ test('reviews pasted GeoJSON candidates by rejecting one and promoting another',
       url.pathname === '/v1/geodata/imports/import-1/process' &&
       method === 'POST'
     ) {
+      const body = request.postDataJSON() as { candidateIds: string[] };
       promotionRequests.push({
-        body: request.postDataJSON(),
+        body,
         key: request.headers()['idempotency-key'] || '',
       });
-      await route.fulfill({ status: 202, json: { id: 'promotion-queue-1' } });
-      return;
-    }
-
-    if (
-      url.pathname ===
-      '/v1/geodata/imports/import-1/processing-queues/promotion-queue-1'
-    ) {
       pendingCandidates = pendingCandidates.filter(
-        (candidate) => candidate.id !== 'candidate-2',
+        (candidate) => !body.candidateIds.includes(candidate.id),
       );
       await route.fulfill({
-        json: { id: 'promotion-queue-1', status: 'COMPLETED', result: {} },
+        json: {
+          importRunId: 'import-1',
+          candidateIds: body.candidateIds,
+          targetStatus: 'CANDIDATE',
+          requestedBy: 'geodata-importer-1',
+          status: 'COMPLETED',
+          created: ['entity-2', 'entity-3'],
+          updated: [],
+          completedAt: '2026-10-23T12:00:00.000000Z',
+        },
       });
       return;
     }
@@ -199,6 +208,11 @@ test('reviews pasted GeoJSON candidates by rejecting one and promoting another',
           properties: { name: 'Example summit to keep' },
           geometry: { type: 'Point', coordinates: [7.3, 46.2] },
         },
+        {
+          type: 'Feature',
+          properties: { name: 'Example second summit to keep' },
+          geometry: { type: 'Point', coordinates: [7.4, 46.3] },
+        },
       ],
     }),
   );
@@ -214,15 +228,27 @@ test('reviews pasted GeoJSON candidates by rejecting one and promoting another',
   await expect(
     page.getByRole('button', { name: secondFeature.name }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: thirdFeature.name }),
+  ).toBeVisible();
   await page.getByRole('button', { name: firstFeature.name }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('PENDING');
   await dialog.getByRole('button', { name: 'Reject entity' }).click();
-  await expect(dialog).toContainText(`Next item: ${secondFeature.name}.`);
-  await dialog.getByRole('button', { name: 'Promote to candidate' }).click();
   await expect(dialog.getByRole('status')).toContainText(
-    'The last pending item in this import has been processed.',
+    `Next item: ${secondFeature.name}.`,
   );
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByLabel('Select all pending records').check();
+  await expect(
+    page.getByText('2 pending records selected across all pages.'),
+  ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Promote selected to candidate' })
+    .click();
+  await expect(
+    page.getByText('2 records were promoted to candidate successfully.'),
+  ).toBeVisible();
 
   expect(importRequests).toHaveLength(1);
   expect(importRequests[0].key).toMatch(/^[0-9a-f-]{36}$/i);
@@ -248,7 +274,7 @@ test('reviews pasted GeoJSON candidates by rejecting one and promoting another',
   expect(promotionRequests).toHaveLength(1);
   expect(promotionRequests[0].key).toMatch(/^[0-9a-f-]{36}$/i);
   expect(promotionRequests[0].body).toEqual({
-    candidateIds: ['candidate-2'],
+    candidateIds: ['candidate-2', 'candidate-3'],
     targetStatus: 'CANDIDATE',
     processorId: 'geodata-importer-1',
   });

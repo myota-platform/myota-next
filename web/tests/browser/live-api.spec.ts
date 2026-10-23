@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { Pool } from 'pg';
 import sharp from 'sharp';
 import { expect, test } from '@playwright/test';
 
@@ -8,6 +9,90 @@ const hasApiDatabases = Boolean(
   process.env.ACTIVITY_DATABASE_URL &&
   process.env.GEO_DATABASE_URL,
 );
+
+test('serializes concurrent account creation for normalized duplicate emails', async ({
+  request,
+}) => {
+  test.skip(!process.env.CORE_DATABASE_URL, 'requires the CI Core database');
+  if (!process.env.CORE_DATABASE_URL) return;
+
+  const adminEmail =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL ?? 'browser-e2e-admin@example.test';
+  const adminPassword =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD ?? 'browser-e2e-password-7!Q';
+  const login = await request.post(
+    'http://127.0.0.1:8080/v1/identity/auth/login',
+    { data: { email: adminEmail, password: adminPassword } },
+  );
+  expect(login.status()).toBe(200);
+  const { accessToken } = await login.json();
+  const suffix = randomUUID();
+  const normalizedEmail = `browser-email-race-${suffix}@example.test`;
+  const pool = new Pool({
+    connectionString: process.env.CORE_DATABASE_URL,
+    max: 1,
+  });
+  let accountId: string | undefined;
+
+  try {
+    const responses = await Promise.all([
+      request.post('http://127.0.0.1:8080/v1/identity/accounts', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Idempotency-Key': randomUUID(),
+        },
+        data: {
+          displayName: `Race winner A ${suffix}`,
+          email: ` ${normalizedEmail.toUpperCase()} `,
+          participationType: 'INDIVIDUAL',
+        },
+      }),
+      request.post('http://127.0.0.1:8080/v1/identity/accounts', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Idempotency-Key': randomUUID(),
+        },
+        data: {
+          displayName: `Race winner B ${suffix}`,
+          email: normalizedEmail,
+          participationType: 'INDIVIDUAL',
+        },
+      }),
+    ]);
+
+    expect(
+      responses
+        .map((response) => response.status())
+        .sort((left, right) => left - right),
+    ).toEqual([201, 400]);
+    const conflictResponse = responses.find(
+      (response) => response.status() === 400,
+    )!;
+    expect((await conflictResponse.json()).detail).toBe('email already exists');
+    const createdResponse = responses.find(
+      (response) => response.status() === 201,
+    )!;
+    const createdAccount = await createdResponse.json();
+    accountId = createdAccount.id as string;
+    expect(createdAccount.email).toBe(normalizedEmail);
+
+    const persisted = await pool.query<{ total: string }>(
+      `SELECT count(*)::text AS total FROM public.account
+        WHERE identity_email_key=$1`,
+      [normalizedEmail],
+    );
+    expect(persisted.rows[0]?.total).toBe('1');
+  } finally {
+    if (accountId)
+      await request
+        .patch(`http://127.0.0.1:8080/v1/identity/accounts/${accountId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          data: { status: 'DEACTIVATED', anonymize: true },
+        })
+        .catch(() => undefined);
+    await pool.end();
+  }
+});
 
 test('loads a real programme catalogue through Gateway and Geodata', async ({
   page,

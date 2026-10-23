@@ -96,7 +96,6 @@ export class ProgrammeContentService {
     idempotencyKey?: string,
   ) {
     this.authorizeAdmin(authorization, slug);
-    this.requireContent(body.key, body.locale, body.value);
     return this.contents.mutate(idempotencyKey, async (client) => {
       const contentId = body.contentId || randomUUID();
       await this.contents.lockRecord(client, contentId);
@@ -104,6 +103,7 @@ export class ProgrammeContentService {
       if (previous && previous.programmeSlug !== slug) {
         throw new BadRequestException('content does not belong to programme');
       }
+      this.requireContent(body.key, body.locale, body.value);
       if (
         previous &&
         !['DRAFT', 'CHANGES_REQUESTED'].includes(previous.status)

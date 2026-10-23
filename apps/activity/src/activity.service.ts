@@ -274,11 +274,11 @@ export class ActivityService {
     const activationId =
       typeof body.activationId === 'string' ? body.activationId : '';
     const filename = typeof body.filename === 'string' ? body.filename : '';
-    if (typeof body.contentBase64 !== 'string')
-      throw new BadRequestException('contentBase64 must be valid base64');
     const activation = await this.repository.get(activationId);
     const claims = verifyAccessToken(authorization);
     this.authorizeOperator(claims.sub, claims.scp, activation.operatorId);
+    if (typeof body.contentBase64 !== 'string')
+      throw new BadRequestException('contentBase64 must be valid base64');
     const content = decodeBase64(body.contentBase64);
     const maxBytes = integerSetting(
       process.env.MYOTA_UPLOAD_MAX_BYTES,
@@ -554,7 +554,9 @@ export class ActivityService {
       subject !== operatorId &&
       !scopes.some((scope) => ['*', 'activity.admin'].includes(scope))
     )
-      throw new ForbiddenException('activation belongs to another operator');
+      throw new ForbiddenException(
+        'the activity owner or activity.admin scope is required',
+      );
   }
 }
 

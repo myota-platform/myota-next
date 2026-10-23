@@ -12,6 +12,11 @@ own operator ID; Activity readers and administrators retain their broader listin
 access. Explicit falsey `endedAt` values are treated as null. Activation owner
 authorization compares Python `str()` forms of the authenticated subject and submitted
 operator ID, retaining JSON float tokens such as `1.0` as distinct from integer `1`.
+`activity.service.compatibility.spec.ts` mirrors the Python activation authorization
+case: missing bearer credentials and a mismatched participant are rejected before the
+repository is called, while the owner can create the activation. It also verifies QSO
+writes check required fields before lookup or authentication, reject non-owners before
+mutation, and permit an Activity administrator to write for another operator.
 
 The Python source also defines an `add_qso_batch` helper, but does not register it in
 the Activity route table. A direct batch-write endpoint is therefore not part of the
@@ -20,13 +25,23 @@ Activation operator and authorized callsign normalization also preserves Python
 float-token spelling, so JSON `1.0` is rejected as a callsign instead of becoming `1`
 through JavaScript string conversion.
 
+The Admin and Participant clients expose single-QSO writes/corrections and individual
+award request decisions; these complete synchronously. They do not expose a selected-set
+QSO or award-decision command. Bulk QSO records enter through asynchronous ingestion or
+ADIF jobs with durable status, while broad award evaluation and recalculation use
+asynchronous jobs. Thus no current Activity UI batch command can partially apply a
+bounded selected set; if one is added, it must validate and commit the complete set in
+one Activity transaction.
+
 Single-QSO writes check `workedCallsign` and `timestamp` with Python truthiness before
 activation lookup and return the same ordered `missing required fields` detail as the
 reference. Direct QSO writes and queued QSO ingestion preserve Python string coercion
 for JSON float tokens in `workedCallsign`, `workedLocator`, `hunterId`, and
 `workedEntityId`; ingestion retains float-token metadata through the Activity JSONB job
 payload and worker read, with exact integer and float-token parsing from PostgreSQL
-JSONB text.
+JSONB text. A repository fixture also pins duplicate single-QSO insertion: it returns
+the existing QSO and current count without repeating subject aggregates, the QSO event,
+or award recalculation work.
 
 Activity job creation and status responses preserve those numeric tokens as well.
 Single-QSO award-recalculation jobs retain a null `hunterId` entry in `subjectIds`, as
@@ -62,9 +77,20 @@ QSO ingestion requests also persist bounded, owner-scoped jobs with a status rea
 `sourceFormat` defaults only when omitted and otherwise reaches the worker unchanged,
 matching the Python handler. The worker normalizes every submitted record before it
 locks and checks the activation status and validity window, preserving the Python
-worker's error precedence for mixed-invalid batches. The separate Activity worker
+worker's error precedence for mixed-invalid batches. A worker repository fixture pins
+an invalid later record ahead of a closed-activation error, even when an earlier record
+is valid, and confirms no QSO write or lock query occurs. The separate Activity worker
 consumes its six registered JetStream durables with database leases, progress
 acknowledgements, retries, and dead-letter state.
+
+Ingestion also checks every normalized QSO against the activation validity window
+before inserting the batch. A worker repository regression fixture puts an in-window
+record before an out-of-window record and verifies the error leaves the batch without
+QSO writes or a commit, matching the Python repository's pre-insert validation.
+
+ADIF upload validation rejects the EICAR test signature before storage and fails closed
+when the configured ClamAV scanner is unavailable; both paths avoid creating an object
+or durable import job. Focused service fixtures pin these failure outcomes.
 
 Optional work correlation IDs follow the work-command schema's 200-character limit.
 Invalid work envelopes are dead-lettered without a work ID or work type, matching the
@@ -126,7 +152,17 @@ eligibility; issuance is transactional and permanent, and PDF render jobs store
 artifacts in S3-compatible storage with authorized presigned download URLs. Request
 lists are available to Activity readers and administrators, and to participants when
 `subjectId` matches their account and their token carries `identity.me` or
-`awards.request`.
+`awards.request`. A service fixture pins the boundary: one-subject progress is evaluated
+and saved in the request, while broad award recalculation returns a durable queued job
+without doing participant-fact reads or progress writes inline.
+The worker compatibility fixture in `apps/activity-worker/src/activity-work.repository.spec.ts`
+also mirrors the Python requested-award case: it filters to the requested definition
+and version, evaluates every subject in the category, and persists the requested rule
+version in each progress record.
+
+The live Admin and Participant award workflow covers publication, eligible request,
+issuance, and render-job visibility through Gateway; the browser and persisted-record
+checks are detailed in [Web applications parity](web-applications.md#L135).
 
 The owner request response includes certificate readiness; artifact reads allow the
 participant's `identity.me` scope and still enforce issuance ownership. Admin issuance
@@ -147,6 +183,11 @@ Award definition saves and eligible award requests return HTTP 201 when created 
 when they return an existing record, matching the reference handlers. Optional preview
 artwork and signature inputs use the reference's truthiness defaults, so falsey values
 behave as absent. Registered award assets and bounded content storage are implemented.
+
+`award-domain.compatibility.spec.ts` mirrors the Python nested-condition fixture: an
+AND condition containing an OR over QSO and unique-entity thresholds is combined with an
+entity-type requirement, and both the matching and non-matching outcomes are pinned.
+
 Award image uploads authorize the caller and validate the declared media type and 20 MiB
 body limit before reading the body, matching the reference's request processing order.
 
@@ -184,10 +225,11 @@ worker filters it using Python truthiness and Python `str()` before sorting the 
 it recalculates. The deterministic idempotency key uses the same Python conversion and
 sorting. Worker award-ID filters use Python truthiness and `str()`, and rule-version
 filters use Python `int()` conversion. ADIF uploads use the reference's shared
-`MYOTA_UPLOAD_MAX_BYTES` cap (25 MiB by default), then pass authorization, malware
-checks, and object storage before durable queueing; the Activity worker enforces the
-same cap, parses records, records successes and rejects, updates aggregates, and reports
-import status.
+`MYOTA_UPLOAD_MAX_BYTES` cap (25 MiB by default), resolve the activation, and authorize
+its operator before base64 type/decoding checks, malware scans, and object storage.
+Owner-scope denials preserve the reference detail, `the activity owner or activity.admin
+scope is required`. The Activity worker enforces the same cap, parses records, records
+successes and rejects, updates aggregates, and reports import status.
 
 ClamAV failures remain fail-closed. ADIF and award-asset uploads map scanner failures to
 HTTP 400, matching the Python handler's scanner `ValueError`; no upload is stored or
@@ -209,11 +251,17 @@ exports public results as CSV but has no CSV QSO ingestion route. Track it as an
 extension, not as parity evidence. Remaining Activity notification producers cover ADIF
 completion and award qualification; the durable consumer handles cross-service Identity
 and Geodata decisions. ADIF validity-window handling aborts the full import before
-writing QSOs when one is outside the activation window.
+writing QSOs when one is outside the activation window. An ADIF worker regression
+fixture uses an in-window record followed by an out-of-window record and confirms the
+worker creates no QSO insert or import-completion update, matching the Python
+repository's whole-batch validation.
 
 The Nest worker commits the import's `PROCESSING` state before batch work, then retries
 the work job and dead-letters it at the delivery limit, leaving the import `PROCESSING`
-as the Python reference does. A closed activation follows the same reference boundary:
+as the Python reference does. A failed bulk QSO insert or later aggregate/outbox side
+effect now aborts and retries the entire batch instead of salvaging or deleting rows
+individually, matching the Python repository's atomic batch transaction. A closed
+activation follows the same reference boundary:
 normalized records fail the insert and retry the job, while an import with no normalized
 records can complete with its rejected-row errors. The persisted `recordsRejected` value
 uses the Python worker's formula `recordsSeen - recordsAccepted +

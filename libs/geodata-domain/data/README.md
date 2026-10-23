@@ -1,17 +1,15 @@
-# EPSG Proj4 definitions
+# Geodata projection data
 
-`epsg-proj4-definitions.json` is the 4,758-entry dataset from
-[`proj4js-definitions@0.1.0`](https://github.com/DanielJDufour/proj4js-definitions),
-licensed under CC0 1.0 (see the accompanying license). Its upstream project
-says the source CRS CSV was made by scraping epsg.io. It is bundled locally so
-coordinate imports do not depend on an external service at runtime.
+`es_ign_SPED2ETV2.tif` is the Spanish ED50 to ETRS89 horizontal datum grid
+distributed by [OSGeo PROJ-data](https://github.com/OSGeo/PROJ-data). Its
+underlying data is from Spain's Instituto Geográfico Nacional (IGN), derived
+from original IGN data under CC BY 4.0. Attribution: Instituto Geográfico
+Nacional (IGN), Spain. See the [IGN data policy](https://www.ign.es/web/ign/portal/politica-datos)
+and the [PROJ-data source note](https://github.com/OSGeo/PROJ-data/blob/master/es_ign/es_ign_README.txt).
 
-This expands Proj4js beyond its built-in definitions. It is not a replacement
-for PROJ's full operation database: some CRS transformations require datum-grid
-files, and their accuracy must be checked against the pinned PyProj reference.
-The compatibility fixtures cover representative Polar Stereographic, British,
-New Zealand, U.S. Albers, Swiss, Dutch, and ETRS89 UTM coordinates.
+The grid covers mainland Spain and the Balearic Islands. It is used for
+horizontal ED50 coordinates when their WGS84 fallback position is inside the
+grid extent; other locations keep the bundled EPSG fallback transformation.
 
-To refresh the dataset, review the upstream source, license, code count, and
-coordinate fixtures together. Do not refresh the file without regenerating the
-reference comparisons.
+The checked-in file is 180,404 bytes with SHA-256
+`61896f5d74bdc7c1d5850839ae743b08e19f9a627e8febb4ac93353ded835961`.

@@ -466,8 +466,8 @@ paths:
     post:
       tags: [Geodata]
       security: [{ bearerAuth: [] }]
-      summary: Queue selected records for entity promotion
-      description: Pending or previously confirmed candidates may be selected. A candidate tied to an earlier queue is eligible only when its ID appears in that FAILED queue's candidate-level errors. The target is explicitly CANDIDATE or APPROVED.
+      summary: Promote selected import candidates atomically
+      description: Promote up to 100 pending or confirmed candidates synchronously. The complete selection is validated and committed in one Geodata transaction, or the entire request is rejected. The target is explicitly CANDIDATE or APPROVED.
       parameters:
         - { in: path, name: runId, required: true, schema: { type: string, format: uuid } }
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -475,9 +475,10 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportProcessingRequest' } } }
       responses:
-        '202':
-          description: Promotion queue accepted
-          content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportProcessingQueue' } } }
+        '200':
+          description: All selected candidates were promoted and durable entity/outbox state was committed
+          content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportProcessingResult' } } }
+        '400': { description: Invalid, over-limit, or ineligible selection; no candidate is promoted }
   /v1/geodata/imports/{runId}/processing-queues/{queueId}:
     get:
       tags: [Geodata]
@@ -2159,7 +2160,7 @@ components:
       type: object
       required: [candidateIds, reviewerId]
       properties:
-        candidateIds: { type: array, minItems: 1, items: { type: string, format: uuid } }
+        candidateIds: { type: array, minItems: 1, maxItems: 100, items: { type: string, format: uuid } }
         reviewerId: { type: string }
         validationStatus: { type: string, enum: [VALID, REJECTED], default: VALID, description: VALID confirms records for later promotion; REJECTED removes them from the import staging queue. }
         note: { type: string }
@@ -2167,7 +2168,7 @@ components:
       type: object
       required: [candidateIds, targetStatus, processorId]
       properties:
-        candidateIds: { type: array, minItems: 1, items: { type: string, format: uuid } }
+        candidateIds: { type: array, minItems: 1, maxItems: 100, items: { type: string, format: uuid } }
         targetStatus: { type: string, enum: [CANDIDATE, APPROVED] }
         processorId: { type: string }
         note: { type: string }
@@ -2218,6 +2219,18 @@ components:
                   candidateId: { type: string, format: uuid }
                   message: { type: string }
           additionalProperties: true
+    GeoImportProcessingResult:
+      type: object
+      required: [importRunId, candidateIds, targetStatus, requestedBy, status, created, updated, completedAt]
+      properties:
+        importRunId: { type: string, format: uuid }
+        candidateIds: { type: array, minItems: 1, maxItems: 100, items: { type: string, format: uuid } }
+        targetStatus: { type: string, enum: [CANDIDATE, APPROVED] }
+        requestedBy: { type: string }
+        status: { type: string, enum: [COMPLETED] }
+        created: { type: array, items: { type: string, format: uuid } }
+        updated: { type: array, items: { type: string, format: uuid } }
+        completedAt: { type: string, format: date-time }
     GeoImportProcessingRedrive:
       type: object
       required: [reason]

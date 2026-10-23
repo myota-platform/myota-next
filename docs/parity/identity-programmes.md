@@ -31,11 +31,18 @@ returns a short token lifetime.
 Token issuance and recipient resolution require HTTP 200; other successful recipient
 statuses are still treated as unavailable, as in the Python resolver.
 
-Programme policy service coverage now exercises a rules draft through save, submit,
+`programme-policy.service.spec.ts` exercises a rules draft through save, submit,
 approval, and publication, including offset timestamp normalization, review history,
 rules replacement, policy version increment, and the publication fact. Policy body
 validation follows the reference's authorization order, while an unknown-status PATCH
 resolves the draft before checking authorization; HTTP fixtures pin both sequences.
+
+`programme-entity-type.compatibility.spec.ts` pins the Python catalog behavior: one
+shared category can be assigned to multiple programmes, removing it from one programme
+leaves the other assignment intact, all supported geometry types retain their
+normalized order, and an existing category code cannot be renamed. The focused
+`programmes.service.compatibility.spec.ts` also pins invalid-status precedence and the
+archive action's ignored fields, unchanged policy version, and event payload.
 
 The Python reference separately pins the UTC conversion behavior. Content publication
 converts `effectiveFrom` with Python `str()` semantics before timestamp parsing,
@@ -61,6 +68,9 @@ existing authorized scopes; custom role creation and partial updates are backed 
 transactions and security/outbox events. Logout compatibility is covered through the
 full token lifecycle: the refresh session and presented access token are revoked, and
 the refresh token is then rejected. Invalid refresh tokens remain an idempotent logout.
+When a valid refresh token is supplied together with an invalid access token, both the
+Python relational operation and Nest transaction roll back the refresh revocation; a
+focused Nest fixture pins this failure ordering.
 
 Role definitions sort by code point, matching Python's string ordering for custom codes
 containing underscores. Role-definition POST and PATCH authenticate before DTO
@@ -89,7 +99,11 @@ creating their replacements, matching the Python handler. Administrative account
 and role-assignment PUT authorize before resolving the target ID; malformed or absent
 targets return the quoted-ID 404 from the Python dictionary lookup before request-body
 validation. These routes preserve profile, password, status, anonymization, and role
-replacement behavior in Core transactions.
+replacement behavior in Core transactions. Administrators cannot grant a new role at
+equal or higher authority; a global operator also cannot grant the equal
+`GLOBAL_OPERATOR` role. The last active `GLOBAL_OPERATOR` assignment cannot be removed.
+An Identity administrator can retain or revoke an equal-authority role already assigned
+to another account; focused transaction fixtures pin these cases.
 
 As in the reference handler, changing status alone does not anonymize the account or
 revoke its sessions; existing refresh sessions also remain rotatable, and both session
@@ -144,7 +158,9 @@ before checking email conflicts, then checks email conflicts before validating s
 and participation type, matching the reference's field order. When role replacement is
 requested, Nest checks `identity.roles.assign` at the replacement step, after
 Core-backed account and email-conflict handling; the encompassing Core transaction rolls
-back earlier writes if role authorization fails.
+back earlier writes if role authorization fails. A focused regression fixture combines a
+profile change with an unauthorized role replacement and verifies that the preceding
+account write is rolled back and no role write or commit occurs.
 
 The PUT retains its roles-only request shape while deferring DTO validation to that
 authorized sequence. Focused Identity fixtures verify profile-image normalization
@@ -154,9 +170,15 @@ duplicate rejection, and first-primary selection, and pin account-creation permi
 and validation precedence plus Identity-administrator role escalation denial to the
 Python handler.
 
-Recovery fixtures cover account enumeration behavior, one-time token use, password
-length, and session revocation. Login tests verify the eight-attempt general limit and
-the global-operator bypass. An account-export fixture now verifies owner scoping before
+`auth.profile.compatibility.spec.ts` compares own-profile updates with the Python
+normalization contract: website scheme and surrounding whitespace are normalized,
+empty or null values clear fields, and unsafe URLs, unsupported fields, oversized
+biographies, and empty updates fail before profile writes and roll back.
+
+Recovery fixtures cover account enumeration behavior, expired and one-time token use,
+password length, and session revocation; expired-token rejection leaves credential and
+session state unchanged. Login tests verify the eight-attempt general limit and the
+global-operator bypass. An account-export fixture now verifies owner scoping before
 database access, a repeatable-read snapshot, and stable order across account callsigns,
 roles, callsign evidence, and security events. It also checks that evidence metadata and
 event payload integers beyond JavaScript's safe range remain exact after export.
@@ -165,10 +187,12 @@ Compatibility checks also verify account creators can read role choices without
 account-admin access, participants cannot read them, administrators cannot change their
 own role assignments, and access tokens stop working after account deactivation. Broader
 account, callsign, recovery, and authorization sequence behavior still require automated
-compatibility coverage. Callsign create and primary-selection idempotency fixtures also
-pin the Python order: required callsign fields precede authorization; authorization and
-account resolution precede cached replay; and replay skips mutation-specific validation
-and leaves the database and outbox unchanged.
+compatibility coverage. Focused fixtures now pin role-retention authority, logout
+rollback, and expired recovery-token side effects; remaining broad sequence coverage is
+still open. Callsign create and primary-selection idempotency fixtures also pin the Python
+order: required callsign fields precede authorization; authorization and account
+resolution precede cached replay; and replay skips mutation-specific validation and
+leaves the database and outbox unchanged.
 
 The PostgreSQL-backed Identity HTTP fixture also exercises bootstrap account
 provisioning, password login, the authenticated current-account route, and single-use
@@ -176,6 +200,11 @@ refresh rotation through the real Nest controller and service. The Gateway-to-Id
 integration creates an account using an email with surrounding whitespace and mixed
 case, then verifies normalized email, `PENDING_SETUP`, the default `PARTICIPANT` role,
 and exact idempotent replay.
+
+The live API suite now also includes two concurrent account creations using differently
+cased and spaced forms of the same email, checking that exactly one account is persisted
+and the losing request receives the reference duplicate-email detail. This database-backed
+race check still needs its isolated CI execution.
 
 It also confirms that account creation rejects a permanent password with the reference's
 invitation-setup detail. The same live integration activates the account, requests and
@@ -290,6 +319,15 @@ Identity startup now idempotently provisions the configured bootstrap account, s
 password only when no credential exists, ensures its global operator role, and writes
 the corresponding Core outbox and security events.
 
+The Admin Identity UI creates or edits one account at a time. One account update can
+replace several role assignments in a single synchronous Core transaction, and account
+creation can include its initial callsign and role set in that transaction. Programme
+management likewise works on one selected programme, content item, or policy draft at a
+time; category assignment, content review/publication, and policy transitions complete
+synchronously. These areas expose no long-running import or multi-account batch command.
+Identity email requests are durably handed to the separate Email worker, whose delivery
+and retry qualification is tracked in [issue #13](https://github.com/myota-platform/myota-next/issues/13).
+
 Administrator account search now uses full default Unicode 15.0 case folding, matching
 the Python 3.12 reference. A read-only repeatable-read Core query filters names and
 email addresses and returns only the requested account IDs in reference insertion order,
@@ -355,9 +393,18 @@ other supplied fields, matching the Python handler's response order. Programme-c
 PATCH with an unrecognized truthy status falls back to a content edit after loading the
 record, matching the Python handler's action dispatch and error order. Truthy status
 values dispatch before general field validation; recognized workflow actions ignore
-unrelated supplied fields, as the corresponding Python handlers do.
+unrelated supplied fields, as the corresponding Python handlers do. Focused service
+fixtures pin invalid programme-status precedence and verify that archive ignores extra
+update fields while preserving the policy version and emitting only the slug in its
+archive event.
 
 Required review and publication fields use Python JSON truthiness, including for array
 and object values. Direct content review and publication also authorize before
 required-field and action validation, then resolve the content record, matching the
 Python handlers.
+
+`programme-content.compatibility.spec.ts` also pins save-content validation order:
+after authorization, a cross-programme content ID is rejected before missing fields,
+while an existing same-programme record checks required fields before its lifecycle
+status. This matches the Python `save_content` sequence and avoids changing which error
+an Admin sees for a conflicting record.

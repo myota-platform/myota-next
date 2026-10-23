@@ -6,6 +6,73 @@ import type { IdentityProfileImageService } from './identity-profile-image.servi
 import { IdentityAccountService } from './identity-account.service.js';
 
 describe('IdentityAccountService update validation order', () => {
+  it('rolls back an account update when the later role-grant check fails', async () => {
+    const accountId = '11111111-1111-4111-8111-111111111111';
+    const queries: string[] = [];
+    const client = {
+      query: async (sql: string) => {
+        queries.push(sql);
+        if (sql.includes('FROM public.account a')) {
+          return {
+            rows: [
+              {
+                id: accountId,
+                display_name: 'Participant',
+                email: 'participant@example.test',
+                participation_type: 'OPERATOR',
+                status: 'ACTIVE',
+                website_url: null,
+                biography_markdown: null,
+                profile_image_id: null,
+                profile_image_media_type: null,
+                profile_image_updated_at: null,
+                primary_callsign_id: null,
+                created_at: '2026-01-01T00:00:00.000000Z',
+                updated_at: '2026-01-01T00:00:00.000000Z',
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('INSERT INTO public.security_event')) {
+          return {
+            rows: [{ occurred_at: '2026-01-01T00:00:00.000000Z' }],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+      release: () => undefined,
+    } as unknown as PoolClient;
+    const service = new IdentityAccountService(
+      { connect: async () => client } as unknown as Pool,
+      {
+        currentAccount: async () => ({
+          id: 'admin-1',
+          scopes: ['identity.admin'],
+        }),
+      } as unknown as IdentityAuthService,
+      {} as IdentityRoleService,
+      {} as IdentityProfileImageService,
+    );
+
+    await expect(
+      service.updateAccount('Bearer admin', accountId, {
+        displayName: 'Changed before role authorization',
+        roles: [{ code: 'PARTICIPANT' }],
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(
+      queries.some((sql) => sql.includes('UPDATE public.account SET')),
+    ).toBe(true);
+    expect(queries).toContain('ROLLBACK');
+    expect(
+      queries.some((sql) => sql.includes('UPDATE public.account_role')),
+    ).toBe(false);
+    expect(queries).not.toContain('COMMIT');
+  });
+
   it('checks admin permission before looking up the account or validating the body', async () => {
     const connect = vi.fn();
     const auth = {

@@ -27,8 +27,9 @@ review and publish); configuration coverage; and theme and content delivery.
 ### Geodata
 
 Preserve catalog search, paging, bounding box and tiles; source adapters; pasted
-imports and resumable multipart uploads; validation and preprocessing queues,
-duplicate warnings and promotion; provenance, audit, review and lifecycle;
+imports and resumable multipart uploads; asynchronous preprocessing, bounded
+synchronous validation and atomic selected-candidate promotion; duplicate
+warnings; provenance, audit, review and lifecycle;
 metadata, category, geometry and location edits; asynchronous location
 enrichment; refresh schedules; conflation; authorized deletion with Activity
 impact calculation; and retention.

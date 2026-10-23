@@ -73,12 +73,9 @@ describe('streamShapefileFeatures', () => {
     });
   });
 
-  it('organizes nested PyShp polygon rings like the reference importer', async () => {
+  it('matches PyShp 2.3.1 by dropping Z ordinates from PolylineZ', async () => {
     const source = await readFile(
-      new URL(
-        './fixtures/python-polygon-nested-rings-shapefile.zip',
-        import.meta.url,
-      ),
+      new URL('./fixtures/python-polylinez-shapefile.zip', import.meta.url),
     );
     async function* chunks() {
       yield source;
@@ -86,7 +83,7 @@ describe('streamShapefileFeatures', () => {
     const features: unknown[] = [];
     for await (const feature of streamShapefileFeatures(
       chunks(),
-      'python-polygon-nested-rings-shapefile.zip',
+      'python-polylinez-shapefile.zip',
       '',
       10,
       async () => undefined,
@@ -96,46 +93,15 @@ describe('streamShapefileFeatures', () => {
 
     expect(features).toHaveLength(1);
     expect(features[0]).toMatchObject({
+      type: 'Feature',
       geometry: {
-        type: 'MultiPolygon',
+        type: 'LineString',
         coordinates: [
-          [
-            [
-              [0, 0],
-              [0, 10],
-              [10, 10],
-              [10, 0],
-              [0, 0],
-            ],
-            [
-              [2, 2],
-              [8, 2],
-              [8, 8],
-              [2, 8],
-              [2, 2],
-            ],
-          ],
-          [
-            [
-              [3, 3],
-              [3, 4],
-              [4, 4],
-              [4, 3],
-              [3, 3],
-            ],
-          ],
-          [
-            [
-              [20, 0],
-              [20, 10],
-              [30, 10],
-              [30, 0],
-              [20, 0],
-            ],
-          ],
+          [7.2, 46.1],
+          [7.3, 46.2],
         ],
       },
-      properties: { name: 'nested rings' },
+      properties: { name: '3D route' },
     });
   });
 

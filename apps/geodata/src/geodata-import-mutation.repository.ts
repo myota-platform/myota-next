@@ -14,6 +14,11 @@ import { parsePageTotal, type PageInteger } from '@app/platform/pagination.js';
 import { pythonKeyErrorDetail } from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { utcTimestamp } from '@app/platform/utc-timestamp.js';
+import {
+  GeodataPromotionRepository,
+  isCandidateConflict,
+  type PromotionQueue,
+} from '../../geodata-worker/src/geodata-promotion.repository.js';
 import { assertReviewCoverage } from './geodata-entity-mutation.repository.js';
 import {
   lockRequest,
@@ -26,6 +31,7 @@ import {
 export class GeodataImportMutationRepository {
   constructor(
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
+    private readonly promotion: GeodataPromotionRepository,
   ) {}
 
   async resolveConflation(
@@ -401,6 +407,10 @@ export class GeodataImportMutationRepository {
     const rawIds = body.candidateIds;
     if (!Array.isArray(rawIds) || !rawIds.length)
       throw new BadRequestException('candidateIds must be a non-empty list');
+    if (rawIds.length > 100)
+      throw new BadRequestException(
+        'at most 100 candidates can be validated in one synchronous request',
+      );
     const candidateIds = rawIds.map(pythonString);
     const uniqueCandidateIds = [...new Set(candidateIds)];
     const reviewerId = body.reviewerId;
@@ -516,7 +526,7 @@ export class GeodataImportMutationRepository {
     }
   }
 
-  async queueImportProcessing(
+  async processImportCandidates(
     runId: string,
     key: string | undefined,
     body: Record<string, unknown>,
@@ -543,12 +553,16 @@ export class GeodataImportMutationRepository {
     const rawIds = body.candidateIds;
     if (!Array.isArray(rawIds) || !rawIds.length)
       throw new BadRequestException('candidateIds must be a non-empty list');
-    const candidateIds = [...new Set(rawIds.map(pythonString))].sort(
-      (left, right) => (left < right ? -1 : left > right ? 1 : 0),
-    );
     if (!['CANDIDATE', 'APPROVED'].includes(targetStatus))
       throw new BadRequestException(
         'targetStatus must be CANDIDATE or APPROVED',
+      );
+    const candidateIds = [...new Set(rawIds.map(pythonString))].sort(
+      (left, right) => (left < right ? -1 : left > right ? 1 : 0),
+    );
+    if (candidateIds.length > 100)
+      throw new BadRequestException(
+        'at most 100 candidates can be promoted in one synchronous request',
       );
     const invalidId = candidateIds.find(
       (id) => !isUuid(id) || id !== id.toLowerCase(),
@@ -559,41 +573,44 @@ export class GeodataImportMutationRepository {
       );
     const requestedBy = body.processorId;
     const note = body.note === undefined ? null : body.note;
-    const queueId = randomUUID();
     const client = await this.connect();
     try {
       await client.query('BEGIN');
       if (key) {
         await lockRequest(client, key);
       }
+      // Worker promotion locks its queue row before candidate rows. Match that
+      // lock order so retrying a failed candidate cannot deadlock the worker.
+      const priorQueueRows = await client.query(
+        `SELECT q.id,q.status,q.result
+         FROM geodata_import_processing_queue q
+         JOIN geodata_import_candidate c ON c.processing_queue_id=q.id
+         WHERE c.import_run_id=$1 AND c.id=ANY($2::uuid[])
+         ORDER BY q.id FOR UPDATE OF q`,
+        [runId, candidateIds],
+      );
+      const priorQueues = new Map(
+        priorQueueRows.rows.map((row) => [String(row.id), row]),
+      );
       const selected = await client.query(
         `SELECT c.id,c.programme_slug,c.entity_type_codes,c.entity_payload,
-          c.validation_status,c.processing_queue_id,
-          previous_queue.status AS previous_queue_status,
-          EXISTS (
-            SELECT 1 FROM jsonb_array_elements(
-              CASE WHEN jsonb_typeof(previous_queue.result->'errors')='array'
-                THEN previous_queue.result->'errors' ELSE '[]'::jsonb END
-            ) AS failed(error)
-            WHERE failed.error->>'candidateId'=c.id::text
-          ) AS failed_in_previous_queue
+          c.validation_status,c.processing_queue_id
          FROM geodata_import_candidate c
-         LEFT JOIN geodata_import_processing_queue previous_queue
-           ON previous_queue.id=c.processing_queue_id
          WHERE c.import_run_id=$1 AND c.id=ANY($2::uuid[])
          ORDER BY c.id
          FOR UPDATE OF c`,
         [runId, candidateIds],
       );
-      if (selected.rows.length !== candidateIds.length) {
-        const selectedIds = new Set(selected.rows.map((row) => String(row.id)));
-        const missing = candidateIds.find((id) => !selectedIds.has(id));
-        throw new BadRequestException(
-          `candidate ${missing} does not belong to import run`,
-        );
-      }
-      if (targetStatus === 'APPROVED')
-        for (const row of selected.rows) {
+      const selectedById = new Map(
+        selected.rows.map((row) => [String(row.id), row]),
+      );
+      for (const candidateId of candidateIds) {
+        const row = selectedById.get(candidateId);
+        if (!row)
+          throw new BadRequestException(
+            `candidate ${candidateId} does not belong to import run`,
+          );
+        if (targetStatus === 'APPROVED') {
           const properties = isRecord(row.entity_payload)
             ? row.entity_payload
             : {};
@@ -604,6 +621,7 @@ export class GeodataImportMutationRepository {
             public_properties: properties,
           });
         }
+      }
       if (key) {
         const previous = await readRequestResponse(
           client,
@@ -616,71 +634,110 @@ export class GeodataImportMutationRepository {
           return previous.response;
         }
       }
-      if (
-        selected.rows.some(
-          (row) =>
-            row.validation_status === 'PROCESSED' ||
-            (row.processing_queue_id &&
-              !(
-                row.validation_status === 'CONFIRMED' &&
-                row.previous_queue_status === 'FAILED' &&
-                row.failed_in_previous_queue === true
-              )),
+      for (const candidateId of candidateIds) {
+        const row = selectedById.get(candidateId)!;
+        if (row.validation_status === 'PROCESSED')
+          throw new BadRequestException('record is already promoted or queued');
+        if (!row.processing_queue_id) continue;
+        const prior = priorQueues.get(String(row.processing_queue_id));
+        let priorResult: unknown = prior?.result;
+        if (typeof priorResult === 'string') {
+          try {
+            priorResult = JSON.parse(priorResult);
+          } catch {
+            priorResult = undefined;
+          }
+        }
+        const priorErrors = isRecord(priorResult) ? priorResult.errors : null;
+        const failedThisCandidate =
+          Array.isArray(priorErrors) &&
+          priorErrors.some(
+            (error) =>
+              isRecord(error) && String(error.candidateId) === String(row.id),
+          );
+        if (
+          row.validation_status !== 'CONFIRMED' ||
+          prior?.status !== 'FAILED' ||
+          !failedThisCandidate
         )
-      )
-        throw new BadRequestException(
-          'candidates must be unqueued or listed as failed in a prior failed queue',
-        );
+          throw new BadRequestException('record is already promoted or queued');
+      }
 
       await client.query(
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
       );
       await client.query(
-        `INSERT INTO geodata_import_processing_queue
-          (id,import_run_id,candidate_ids,target_status,requested_by,status,job_metadata)
-         VALUES ($1,$2,$3::jsonb,$4,$5,'QUEUED',$6::jsonb)`,
-        [
-          queueId,
-          runId,
-          stringifyJsonWithBigInts(candidateIds),
-          targetStatus,
-          requestedBy,
-          stringifyJsonWithBigInts({ note }),
-        ],
-      );
-      await client.query(
         `UPDATE geodata_import_candidate SET validation_status='CONFIRMED',
-         validated_by=$3,validated_at=now(),target_status=$4,processing_queue_id=$5,updated_at=now()
+         processing_queue_id=NULL,
+         validated_by=$3,validated_at=now(),target_status=$4,updated_at=now()
          WHERE import_run_id=$1 AND id=ANY($2::uuid[])`,
-        [runId, candidateIds, requestedBy, targetStatus, queueId],
+        [runId, candidateIds, requestedBy, targetStatus],
       );
+      const promotionQueue: PromotionQueue = {
+        id: '',
+        import_run_id: runId,
+        candidate_ids: candidateIds,
+        target_status: targetStatus as 'CANDIDATE' | 'APPROVED',
+        requested_by: String(requestedBy),
+        job_metadata: { note },
+        attempt_count: 0,
+      };
+      const created: string[] = [];
+      const updated: string[] = [];
+      for (const candidateId of candidateIds) {
+        let result: { entityId: string; updated: boolean };
+        try {
+          result = await this.promotion.promoteCandidateInTransaction(
+            client,
+            promotionQueue,
+            candidateId,
+          );
+        } catch (error) {
+          if (isCandidateConflict(error))
+            throw new BadRequestException(
+              error instanceof Error ? error.message : String(error),
+            );
+          throw error;
+        }
+        (result.updated ? updated : created).push(result.entityId);
+      }
+      const totals = await client.query(
+        `SELECT count(*) FILTER (WHERE validation_status='PROCESSED' AND existing_entity_id IS NULL) AS created,
+          count(*) FILTER (WHERE validation_status='PROCESSED' AND existing_entity_id IS NOT NULL) AS updated,
+          count(*) FILTER (WHERE validation_status<>'PROCESSED') AS remaining
+         FROM geodata_import_candidate WHERE import_run_id=$1`,
+        [runId],
+      );
+      const createdCount = parsePageTotal(totals.rows[0].created);
+      const updatedCount = parsePageTotal(totals.rows[0].updated);
+      const remainingCount = parsePageTotal(totals.rows[0].remaining);
       await client.query(
-        `INSERT INTO outbox_event
-         (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
-         VALUES ($1,'geodata.import.processing.queued.v1','geodata-service','import_processing_queue',$2,$3::jsonb,now(),$4)`,
+        `UPDATE import_run SET stats=stats || $2::jsonb,
+         status=CASE WHEN $3::bigint=0 THEN 'COMPLETED' ELSE status END,
+         completed_at=CASE WHEN $3::bigint=0 THEN COALESCE(completed_at,now()) ELSE completed_at END
+         WHERE id=$1`,
         [
-          randomUUID(),
-          queueId,
+          runId,
           stringifyJsonWithBigInts({
-            queueId,
-            importRunId: runId,
-            candidateIds,
-            targetStatus,
-            requestedBy,
-            natsSubject: 'myota.geodata.import.process.v1',
+            created: createdCount,
+            updated: updatedCount,
+            processed: parsePageTotal(
+              BigInt(createdCount) + BigInt(updatedCount),
+            ),
+            processingErrors: 0,
           }),
-          randomUUID(),
+          remainingCount,
         ],
       );
       const response = {
-        id: queueId,
         importRunId: runId,
         candidateIds,
         targetStatus,
         requestedBy,
-        status: 'QUEUED',
-        requestedAt: await utcTimestamp(client),
-        queued: true,
+        status: 'COMPLETED',
+        created,
+        updated,
+        completedAt: await utcTimestamp(client),
       };
       if (key)
         await client.query(

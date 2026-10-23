@@ -26,6 +26,7 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
   try {
     const rejectedName = `Live import reject ${suffix}`;
     const promotedName = `Live import promote ${suffix}`;
+    const secondPromotedName = `Live import promote second ${suffix}`;
 
     await page.goto('/master-data');
     await expect(page).toHaveURL(/\/login\?redirect=\/master-data$/);
@@ -77,6 +78,11 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
             properties: { name: promotedName },
             geometry: { type: 'Point', coordinates: [6.567891, 45.7891] },
           },
+          {
+            type: 'Feature',
+            properties: { name: secondPromotedName },
+            geometry: { type: 'Point', coordinates: [6.678912, 45.8912] },
+          },
         ],
       }),
     );
@@ -106,6 +112,9 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
     await expect(
       page.getByRole('button', { name: promotedName }),
     ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: secondPromotedName }),
+    ).toBeVisible();
     const rejectedCandidate = await fixture.query<{ id: string }>(
       `SELECT id::text AS id FROM geodata_import_candidate
         WHERE import_run_id=$1::uuid AND name=$2`,
@@ -121,10 +130,36 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
     await expect(dialog.getByRole('status')).toContainText(
       `Next item: ${promotedName}.`,
     );
-    await dialog.getByRole('button', { name: 'Promote to candidate' }).click();
-    await expect(dialog.getByRole('status')).toContainText(
-      'The last pending item in this import has been processed.',
-    );
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.getByLabel('Select all pending records').check();
+    await expect(
+      page.getByText('2 pending records selected across all pages.'),
+    ).toBeVisible();
+    const [promotionResponse] = await Promise.all([
+      page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          url.pathname === `/v1/geodata/imports/${importRunId}/process` &&
+          response.request().method() === 'POST'
+        );
+      }),
+      page
+        .getByRole('button', { name: 'Promote selected to candidate' })
+        .click(),
+    ]);
+    expect(promotionResponse.status()).toBe(200);
+    const promotionResult = await promotionResponse.json();
+    expect(promotionResult).toMatchObject({
+      importRunId,
+      targetStatus: 'CANDIDATE',
+      status: 'COMPLETED',
+    });
+    expect(promotionResult.candidateIds).toHaveLength(2);
+    expect(promotionResult.created).toHaveLength(2);
+    expect(promotionResult.updated).toEqual([]);
+    await expect(
+      page.getByText('2 records were promoted to candidate successfully.'),
+    ).toBeVisible();
 
     const persisted = await fixture.query(
       `SELECT r.status AS import_status,
@@ -143,36 +178,59 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
               promoted.validation_status AS promoted_status,
               promoted.target_status,
               promoted.processed_entity_id::text AS processed_entity_id,
-              q.status AS promotion_status,
+              promoted.processing_queue_id IS NOT NULL AS promotion_queue_assigned,
               e.lifecycle_status AS entity_status,
               e.name AS entity_name,
-              e.entity_type_code AS entity_type_code
+              e.entity_type_code AS entity_type_code,
+              EXISTS (SELECT 1 FROM outbox_event promoted_event
+                WHERE promoted_event.aggregate_type='entity'
+                  AND promoted_event.aggregate_id=e.id::text
+                  AND promoted_event.producer='geodata-service'
+                  AND promoted_event.event_type='geodata.entity.candidate.created.v1')
+                AS promotion_event_persisted
          FROM import_run r
          LEFT JOIN geodata_import_candidate promoted
-           ON promoted.import_run_id=r.id AND promoted.name=$2
-         LEFT JOIN geodata_import_processing_queue q
-           ON q.id=promoted.processing_queue_id
+           ON promoted.import_run_id=r.id AND promoted.name=ANY($2::text[])
          LEFT JOIN geodata_entity e ON e.id=promoted.processed_entity_id
-        WHERE r.id=$1::uuid`,
-      [importRunId, promotedName, rejectedCandidateId],
+         WHERE r.id=$1::uuid
+         ORDER BY promoted.ordinal`,
+      [importRunId, [promotedName, secondPromotedName], rejectedCandidateId],
     );
-    expect(
-      persisted.rows[0],
-      JSON.stringify(persisted.rows[0] ?? null),
-    ).toMatchObject({
-      import_status: 'COMPLETED',
-      preprocessed_count: '2',
-      rejected_candidate_count: '0',
-      rejection_event_persisted: true,
-      promoted_name: promotedName,
-      promoted_status: 'PROCESSED',
-      target_status: 'CANDIDATE',
-      promotion_status: 'COMPLETED',
-      entity_status: 'CANDIDATE',
-      entity_name: promotedName,
-      entity_type_code: entityTypeCode,
-    });
-    expect(persisted.rows[0]?.processed_entity_id).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(persisted.rows).toHaveLength(2);
+    expect(persisted.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          import_status: 'COMPLETED',
+          preprocessed_count: '3',
+          rejected_candidate_count: '0',
+          rejection_event_persisted: true,
+          promoted_name: promotedName,
+          promoted_status: 'PROCESSED',
+          target_status: 'CANDIDATE',
+          promotion_queue_assigned: false,
+          entity_status: 'CANDIDATE',
+          entity_name: promotedName,
+          entity_type_code: entityTypeCode,
+          promotion_event_persisted: true,
+        }),
+        expect.objectContaining({
+          import_status: 'COMPLETED',
+          preprocessed_count: '3',
+          rejected_candidate_count: '0',
+          rejection_event_persisted: true,
+          promoted_name: secondPromotedName,
+          promoted_status: 'PROCESSED',
+          target_status: 'CANDIDATE',
+          promotion_queue_assigned: false,
+          entity_status: 'CANDIDATE',
+          entity_name: secondPromotedName,
+          entity_type_code: entityTypeCode,
+          promotion_event_persisted: true,
+        }),
+      ]),
+    );
+    for (const row of persisted.rows)
+      expect(row.processed_entity_id).toMatch(/^[0-9a-f-]{36}$/i);
   } finally {
     await fixture.query('ROLLBACK').catch(() => undefined);
     try {
@@ -188,6 +246,11 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
         );
         const entityIds = processedEntities.rows.map((row) => row.id);
         if (entityIds.length) {
+          await fixture.query(
+            `DELETE FROM outbox_event WHERE aggregate_type='entity'
+              AND aggregate_id=ANY($1::text[])`,
+            [entityIds],
+          );
           await fixture.query(
             'DELETE FROM source_reference WHERE entity_id=ANY($1::uuid[])',
             [entityIds],

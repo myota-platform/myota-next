@@ -26,6 +26,7 @@ RUN if [ "$APP_NAME" = "geodata-worker" ]; then \
     fi
 COPY --from=build /workspace/dist/apps/${APP_NAME}/ ./dist/apps/${APP_NAME}/
 COPY --from=build /workspace/contracts ./contracts
+COPY --from=build /workspace/libs/geodata-domain/data/es_ign_SPED2ETV2.tif ./libs/geodata-domain/data/es_ign_SPED2ETV2.tif
 
 USER node
 CMD ["sh", "-c", "exec node dist/apps/${APP_NAME}/main.js"]

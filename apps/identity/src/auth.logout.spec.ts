@@ -119,6 +119,43 @@ describe('IdentityAuthService logout compatibility', () => {
     });
     expect(statements).toEqual(['BEGIN', 'COMMIT']);
   });
+
+  it('rolls back refresh revocation when access-token validation fails', async () => {
+    const statements: string[] = [];
+    const client = {
+      query: async (sql: string) => {
+        statements.push(sql);
+        return { rows: [], rowCount: 0 };
+      },
+      release: () => undefined,
+    } as unknown as PoolClient;
+    const service = new IdentityAuthService({
+      connect: async () => client,
+    } as unknown as Pool);
+    const refreshToken = signedToken(
+      'refresh',
+      {
+        sub: accountId,
+        sid: 'refresh-session-id',
+        jti: 'refresh-token-id',
+        iat: 1_800_000_000,
+        exp: 1_900_000_000,
+      },
+      signingKey,
+    );
+
+    await expect(
+      service.logout(refreshToken, 'Bearer invalid.token.value'),
+    ).rejects.toThrow('invalid or expired token');
+
+    expect(
+      statements.findIndex((sql) =>
+        sql.includes('UPDATE public.auth_session SET revoked_at'),
+      ),
+    ).toBeGreaterThan(-1);
+    expect(statements.at(-1)).toBe('ROLLBACK');
+    expect(statements).not.toContain('COMMIT');
+  });
 });
 
 function signedToken(

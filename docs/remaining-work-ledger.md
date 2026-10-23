@@ -2,9 +2,11 @@
 
 This ledger is the consolidated inventory of parity and operational items that
 the current documentation marks open, outstanding, unqualified, or required
-before production use. It was reviewed against `main` at `8c80da7`. Recheck the
-source pages when this ledger is updated; their line anchors are convenient
-starting points, not substitutes for reading the surrounding evidence.
+before production use. The initial inventory was reviewed against `main` at
+`8c80da7`; implementation evidence and next checks are updated as the tracked
+work proceeds. Recheck the source pages when this ledger is updated; their line
+anchors are convenient starting points, not substitutes for reading the
+surrounding evidence.
 
 Each item names the owning area, work class, current implementation and
 evidence, the missing evidence, user or operational risk, and the next check.
@@ -24,18 +26,40 @@ an accepted scope decision is recorded in the dispositions section.
 - **Current implementation and evidence:** Identity behavior is implemented in
   the owning services and has focused fixtures such as
   `apps/identity/src/identity-account.creation.spec.ts`,
-  `identity-callsign.lifecycle.spec.ts`, `auth.recovery.spec.ts`, and
-  `identity-account.validation-order.spec.ts`. Existing reference comparisons
-  are summarized in [Identity and Programmes parity](parity/identity-programmes.md).
+  `identity-account.roles.spec.ts`, `identity-callsign.lifecycle.spec.ts`,
+  `auth.recovery.spec.ts`, `auth.logout.spec.ts`,
+  `auth.profile.compatibility.spec.ts`, and
+  `identity-account.validation-order.spec.ts`. A logout fixture now also pins
+  rollback when access-token validation fails after refresh-session revocation
+  is attempted, and recovery coverage now verifies expired-token rejection has
+  no credential or session side effects. Role-grant coverage also verifies an
+  Identity administrator may retain or revoke an equal-authority role already
+  on another account while being unable to grant a new one; a global operator
+  cannot grant the equal global role or remove the last active global-operator
+  assignment. Existing reference comparisons are
+  summarized in
+  [Identity and Programmes parity](parity/identity-programmes.md).
+  The own-profile fixture now also compares URL normalization, field clearing,
+  unsafe-value rejection, and transaction rollback with the Python contract.
+  Programme service fixtures also pin invalid-status precedence and the archive
+  action's ignored fields, unchanged policy version, and event payload in
+  `apps/programmes/src/programmes.service.compatibility.spec.ts`. The new
+  `apps/programmes/src/programme-entity-type.compatibility.spec.ts` covers shared
+  catalogue assignments, assignment isolation, geometry-type normalization, and
+  stable category codes. A new content-save fixture also pins cross-programme
+  ownership validation before required-field checks and required fields before
+  lifecycle-state checks, matching the Python save handler.
 - **Missing evidence:** The source page explicitly says broader account,
   callsign, recovery, and authorization sequences still need automated
-  compatibility coverage. The ledger does not infer coverage from adjacent
-  examples.
+  compatibility coverage. The live concurrent normalized-email creation check
+  has been added but still needs its isolated PostgreSQL execution. The ledger
+  does not infer coverage from adjacent examples.
 - **Risk:** A sequence or precedence difference could grant access, retain an
   invalid session, or persist the wrong callsign/account state.
 - **Next check:** Compare remaining material Identity and Programme handler
   sequences with the pinned reference; add a focused fixture or workflow for
-  each uncovered material outcome, then link the evidence in the parity page.
+  each uncovered material outcome, run the concurrent-email live check, then
+  link the evidence in the parity page.
 - **Tracked by:** [Issue #11](https://github.com/myota-platform/myota-next/issues/11).
 - **Sources:** [Identity and Programmes, line 167](parity/identity-programmes.md#L167);
   [completion criteria, lines 9–17](parity/completion-criteria.md#L9).
@@ -77,6 +101,27 @@ an accepted scope decision is recorded in the dispositions section.
   notifications, public results, and job processing. Relevant code includes
   `apps/activity/src/activity.service.ts`, `qso-ingestion.controller.ts`,
   `awards.service.ts`, and `apps/activity-worker/src/activity-worker.service.ts`.
+  ADIF upload fixtures now also verify malware detection and scanner failure stop
+  before object storage and durable job creation, and operator authorization precedes
+  base64 type validation with the reference's denial detail. A QSO repository fixture pins
+  duplicate insertion to return the existing QSO without repeating aggregate,
+  outbox, or award-recalculation side effects. Awards service coverage also pins
+  synchronous single-subject progress against asynchronous broad recalculation;
+  a worker fixture pins per-record normalization errors ahead of closed-activation
+  errors before any QSO write and verifies an out-of-window later record prevents
+  insertion of the entire QSO batch. The ADIF worker fixture also confirms an
+  out-of-window later record prevents all QSO inserts and leaves import completion
+  untouched. ADIF batch insert and subsequent aggregate/outbox failures now abort and
+  retry the whole transaction instead of partially salvaging or deleting individual
+  rows outside the Python transaction boundary.
+  A focused award-domain fixture now also pins nested AND/OR condition results
+  against the Python award-condition case; a worker fixture pins requested
+  award/version filtering and recalculation for every subject in that category.
+  A new Activity service fixture also mirrors the Python activation authorization
+  case, rejecting missing credentials and non-owner creation before repository
+  writes while permitting the activation owner; it also covers non-owner QSO
+  write denial and Activity-admin access before QSO mutation, plus the Python
+  required-QSO-fields response before activation lookup and authentication.
 - **Missing evidence:** The parity page still marks broader Activity payload
   and workflow compatibility outstanding. Existing focused cases do not prove
   all consequential combinations and failure ordering.
@@ -146,10 +191,22 @@ an accepted scope decision is recorded in the dispositions section.
   source-specific, geometry, idempotency, review, and live workflow evidence.
   Representative implementation includes `apps/geodata/src/geodata-import.service.ts`,
   `geodata-entity-review.repository.ts`, `geodata-entity-mutation.repository.ts`,
-  and `geodata-schedule.service.ts`.
+  and `geodata-schedule.service.ts`. Admin candidate selection now applies
+  synchronous, all-or-nothing promotion in the Geodata transaction through
+  `GeodataPromotionRepository.promoteCandidateInTransaction`; the route contract,
+  Admin feedback, and live browser qualification assert final-state responses.
+  Retry is synchronous only when the locked prior queue is failed and records
+  the selected candidate as failed; active and unrelated queue assignments
+  remain conflicts. Promotion validation checks required fields and a nonempty
+  candidate list before `targetStatus`; the synchronous limit follows target
+  validation and applies after ID deduplication. Focused regression coverage pins
+  the validation order, per-candidate authorization, retry eligibility, exact conflict
+  response, distinct-ID cap, and duplicate-side-effect boundaries. Large import intake
+  and preprocessing remain asynchronous.
 - **Missing evidence:** The page explicitly leaves broader payload and workflow
   compatibility qualification outstanding; known fixture and importer gaps are
-  tracked separately in L-07 and L-08.
+  tracked separately in L-07 and L-08. The database-backed browser qualification
+  for selected promotion still needs its isolated CI run.
 - **Risk:** Incorrect imported or reviewed data can affect entity geometry,
   provenance, approval, and downstream Activity records.
 - **Next check:** Reconcile each remaining Geodata parity statement with the
@@ -167,17 +224,23 @@ an accepted scope decision is recorded in the dispositions section.
 - **Reference behavior:** The configured PBF decoder and pinned importer retain
   expected feature counts, source identifiers, hashes, geometry, memory bounds,
   and failure messages at supported scale.
-- **Current implementation and evidence:** PyShp/PBF fixtures and manually
-  triggered RSS qualifications cover generated 50,000- and 250,000-feature PBFs;
-  current smaller fixture behavior is summarized in the Geodata parity page.
-- **Missing evidence:** PBF inputs above 250,000 features and less common OSM
-  geometries still need qualification; existing RSS scopes are not directly
-  comparable with Python's absolute process-RSS measurements.
+- **Current implementation and evidence:** The Python-generated PBF parity fixture
+  covers tagged nodes, linear and closed ways, and a multipolygon relation with an
+  inner ring. A second fixture compares a disjoint multipart protected-area relation
+  with two outer components and one inner ring against PyOsmium 4.3.2, including its
+  feature hash. The manually triggered RSS suite now executes generated 50,000-,
+  250,000-, and 300,000-feature workloads; the 300,000 case stays within the existing
+  192 MiB Node-plus-osmium process-tree growth bound. The runner previously selected a
+  suite name rather than its test names, so those checks had been skipped; the runner
+  fix now executes all three cases.
+- **Missing evidence:** Inputs above 300,000 features and less common OSM geometries
+  beyond the checked-in relation fixture still need qualification; RSS scopes are not
+  directly comparable with Python's absolute process-RSS measurements.
 - **Risk:** Large or unusual source files may exhaust memory, exceed supported
   bounds, or produce different entities than the reference importer.
-- **Next check:** Extend correctness and resource workloads beyond the current
-  threshold, include less common OSM types, and document comparable versus
-  non-comparable RSS scopes before setting production caps.
+- **Next check:** Extend correctness and resource workloads beyond 300,000 features,
+  add other less common OSM types, and document comparable versus non-comparable RSS
+  scopes before setting production caps.
 - **Tracked by:** [Issue #18](https://github.com/myota-platform/myota-next/issues/18).
 - **Sources:** [Geodata parity, lines 140–151](parity/geodata.md#L140);
   [completion criteria, lines 15–17](parity/completion-criteria.md#L15).
@@ -192,9 +255,18 @@ an accepted scope decision is recorded in the dispositions section.
   PyShp/PyProj reference behavior.
 - **Current implementation and evidence:** Existing fixtures compare PyShp
   2.3.1 and PyProj 3.8.0 for selected WGS84, Web Mercator, dimensionality, and
-  polygon cases; see the linked Geodata parity evidence.
-- **Missing evidence:** Additional PBF and less common geometry/CRS definitions
-  still need fixtures, as do CRS transformations dependent on datum grids.
+  polygon cases, including EPSG:25830 with PyProj-generated input coordinates.
+  EPSG:4230 and EPSG:23028 through EPSG:23038 now use the IGN Spain ED50
+  horizontal grid inside its coverage; fixtures for EPSG:4230, EPSG:23030,
+  and EPSG:23031 compare transformed coordinates against PyProj 3.8.0.
+  A PyShp 2.3.1 PolylineZ fixture also verifies that both the
+  reference and Nest parser drop Z ordinates for the GeoJSON LineString. The
+  separate-outer-parts PBF relation is also compared with
+  the PyOsmium 4.3.2 reference in L-07; see the linked Geodata parity evidence.
+- **Missing evidence:** Other material OSM types and geometry/CRS definitions
+  still need fixtures, as do datum-grid transformations for other CRSs. The
+  Spanish grid fallback outside the checked-in grid's coverage also remains
+  compared only with the bundled Proj4 definition.
 - **Risk:** A valid source can be rejected, transformed incorrectly, or hashed
   differently, changing entity location or identity.
 - **Next check:** Enumerate uncovered source geometry/CRS types, build pinned

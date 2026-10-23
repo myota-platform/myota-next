@@ -490,10 +490,6 @@ export class ActivityWorkRepository {
     ) {
       throw new Error('a QSO is outside the activation validity window');
     }
-    const recordNumbers = new Map<string, number>();
-    for (const item of normalized)
-      if (!recordNumbers.has(item.qso.deduplicationKey))
-        recordNumbers.set(item.qso.deduplicationKey, item.index + 1);
     const insertedRows: JsonRecord[] = [];
     if (normalized.length) {
       await client.query('SAVEPOINT adif_batch_insert');
@@ -542,72 +538,44 @@ export class ActivityWorkRepository {
         );
         await client.query('RELEASE SAVEPOINT adif_batch_insert');
         insertedRows.push(...inserted.rows);
-      } catch {
+      } catch (error) {
         await client.query('ROLLBACK TO SAVEPOINT adif_batch_insert');
         await client.query('RELEASE SAVEPOINT adif_batch_insert');
-        for (const { index, qso } of normalized) {
-          const savepoint = `adif_insert_${index}`;
-          await client.query(`SAVEPOINT ${savepoint}`);
-          try {
-            const row = await this.insertAdifQso(client, record, importId, qso);
-            if (row) insertedRows.push(row);
-            await client.query(`RELEASE SAVEPOINT ${savepoint}`);
-          } catch (error) {
-            await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
-            await client.query(`RELEASE SAVEPOINT ${savepoint}`);
-            errors.push(
-              `record ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
-            );
-          }
-        }
+        throw error;
       }
     }
     for (const row of insertedRows) {
-      const recordNumber =
-        recordNumbers.get(String(row.deduplication_key)) ?? 1;
-      const savepoint = `adif_effect_${recordNumber}`;
-      await client.query(`SAVEPOINT ${savepoint}`);
-      try {
-        const qso = qsoRecord(row);
+      const qso = qsoRecord(row);
+      await upsertSubject(
+        client,
+        record.programme_slug,
+        record.operator_id,
+        'ACTIVATOR',
+        qso.workedCallsign,
+        record.entity_id,
+        record.entity_type,
+      );
+      if (qso.hunterId)
         await upsertSubject(
           client,
           record.programme_slug,
-          record.operator_id,
-          'ACTIVATOR',
+          qso.hunterId,
+          'HUNTER',
           qso.workedCallsign,
-          record.entity_id,
+          qso.workedEntityId ?? null,
           record.entity_type,
         );
-        if (qso.hunterId)
-          await upsertSubject(
-            client,
-            record.programme_slug,
-            qso.hunterId,
-            'HUNTER',
-            qso.workedCallsign,
-            qso.workedEntityId ?? null,
-            record.entity_type,
-          );
-        await client.query(
-          `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
+      await client.query(
+        `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
            VALUES ($1,'activity.qso.recorded.v1','activity-service','qso',$2,$3::jsonb,now(),$4)`,
-          [
-            randomUUID(),
-            String(row.id),
-            stringifyJsonWithBigInts(qso),
-            randomUUID(),
-          ],
-        );
-        await client.query(`RELEASE SAVEPOINT ${savepoint}`);
-        accepted++;
-      } catch (error) {
-        await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
-        await client.query(`RELEASE SAVEPOINT ${savepoint}`);
-        await client.query('DELETE FROM activity_qso WHERE id=$1', [row.id]);
-        errors.push(
-          `record ${recordNumber}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
+        [
+          randomUUID(),
+          String(row.id),
+          stringifyJsonWithBigInts(qso),
+          randomUUID(),
+        ],
+      );
+      accepted++;
     }
     if (accepted) {
       const awardRecalculationKey = adifAwardRecalculationKey(
@@ -670,43 +638,6 @@ export class ActivityWorkRepository {
         `adif:${importId}:completed`,
       ],
     );
-  }
-
-  private async insertAdifQso(
-    client: PoolClient,
-    record: JsonRecord,
-    importId: string,
-    qso: JsonRecord,
-  ): Promise<JsonRecord | null> {
-    const inserted = await client.query(
-      `INSERT INTO activity_qso
-       (id,activation_id,programme_slug,operator_id,operator_callsign,hunter_id,hunter_callsign,
-        worked_callsign,worked_station_key,worked_entity_id,occurred_at,band,mode,rst,source,
-        source_import_id,deduplication_key,raw_payload)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::timestamptz,$12,$13,$14,$15,$16,$17,$18::jsonb)
-       ON CONFLICT (deduplication_key) DO NOTHING RETURNING *, ${qsoTimestampProjection}`,
-      [
-        qso.id,
-        record.activation_id,
-        record.programme_slug,
-        record.operator_id,
-        record.operator_callsign,
-        qso.hunterId ?? null,
-        qso.hunterCallsign ?? null,
-        qso.workedCallsign,
-        qso.workedStationKey,
-        qso.workedEntityId ?? null,
-        qso.timestamp,
-        qso.band,
-        qso.mode,
-        qso.rst ?? null,
-        'adif',
-        importId,
-        qso.deduplicationKey,
-        stringifyJsonWithBigInts(qso),
-      ],
-    );
-    return inserted.rows[0] ?? null;
   }
 
   private async finishAdifImport(

@@ -167,8 +167,8 @@ export class GeodataImportsController {
   }
 
   @Post('imports/:runId/process')
-  @HttpCode(202)
-  queueImportProcessing(
+  @HttpCode(200)
+  processImportCandidates(
     @Headers('authorization') authorization: string | undefined,
     @Headers('idempotency-key') key: string | undefined,
     @Param('runId') runId: string,
@@ -182,7 +182,7 @@ export class GeodataImportsController {
     const scopedKey = key
       ? `http:${claims.sub}:${request.originalUrl}:${key}`
       : undefined;
-    return this.importMutations.queueImportProcessing(
+    return this.importMutations.processImportCandidates(
       runId,
       scopedKey,
       body,

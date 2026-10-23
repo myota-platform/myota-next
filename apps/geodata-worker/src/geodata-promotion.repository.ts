@@ -15,7 +15,7 @@ import {
   queueLocationEnrichment,
 } from '../../geodata/src/geodata-location-enrichment.js';
 
-interface PromotionQueue {
+export interface PromotionQueue {
   id: string;
   import_run_id: string;
   candidate_ids: string[];
@@ -484,6 +484,32 @@ export class GeodataPromotionRepository {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
+      const outcome = await this.promoteCandidateInTransaction(
+        client,
+        queue,
+        candidateId,
+      );
+      await client.query('COMMIT');
+      return outcome;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Apply one selected candidate inside a caller-owned transaction. The API uses
+   * this entry point for bounded all-or-nothing Admin selections; worker jobs use
+   * the same mutation logic with their leased queue row.
+   */
+  async promoteCandidateInTransaction(
+    client: PoolClient,
+    queue: PromotionQueue,
+    candidateId: string,
+  ) {
+    if (queue.id) {
       const queueResult = await client.query(
         'SELECT status,attempt_count FROM geodata_import_processing_queue WHERE id=$1 FOR UPDATE',
         [queue.id],
@@ -493,179 +519,182 @@ export class GeodataPromotionRepository {
         Number(queueResult.rows[0]?.attempt_count) !== queue.attempt_count
       )
         throw new Error('geodata promotion lease was superseded');
-      const selected = await client.query(
-        `SELECT * FROM geodata_import_candidate
-         WHERE id=$1 AND import_run_id=$2 FOR UPDATE`,
-        [candidateId, queue.import_run_id],
-      );
-      const candidate = selected.rows[0];
-      if (!candidate)
-        throw new CandidateConflict('pre-processed candidate no longer exists');
-      if (candidate.validation_status === 'PROCESSED') {
-        await client.query('COMMIT');
+    }
+    const selected = await client.query(
+      `SELECT * FROM geodata_import_candidate
+       WHERE id=$1 AND import_run_id=$2 FOR UPDATE`,
+      [candidateId, queue.import_run_id],
+    );
+    const candidate = selected.rows[0];
+    if (!candidate)
+      throw new CandidateConflict('pre-processed candidate no longer exists');
+    if (candidate.validation_status === 'PROCESSED') {
+      if (queue.id)
         return {
           entityId: String(candidate.processed_entity_id),
           updated: Boolean(candidate.existing_entity_id),
         };
-      }
-      if (candidate.validation_status !== 'CONFIRMED')
-        throw new CandidateConflict('only confirmed records can be promoted');
-      if (candidate.processing_queue_id !== queue.id)
-        throw new CandidateConflict('record belongs to another promotion job');
+      throw new CandidateConflict('candidate has already been processed');
+    }
+    if (candidate.validation_status !== 'CONFIRMED')
+      throw new CandidateConflict('only confirmed records can be promoted');
+    if (
+      queue.id
+        ? candidate.processing_queue_id !== queue.id
+        : candidate.processing_queue_id !== null
+    )
+      throw new CandidateConflict('record belongs to another promotion job');
 
-      const entityTypes = Array.isArray(candidate.entity_type_codes)
-        ? candidate.entity_type_codes
-        : JSON.parse(String(candidate.entity_type_codes));
-      if (!entityTypes.length)
-        throw new CandidateConflict('candidate has no entity type codes');
-      const properties = isRecord(candidate.entity_payload)
-        ? candidate.entity_payload
-        : {};
-      const source = isRecord(candidate.candidate_source)
-        ? candidate.candidate_source
-        : {};
-      const candidateSource = isRecord(properties.candidateSource)
-        ? properties.candidateSource
-        : source;
-      const sourceRef =
-        (typeof candidate.source_ref === 'string' && candidate.source_ref) ||
-        `${String(source.sourceKey ?? source.url ?? source.name ?? 'unknown-source')}:import-${queue.import_run_id}:record-${candidate.ordinal}`;
-      const importRun = await client.query(
-        'SELECT adapter_code,source_metadata FROM import_run WHERE id=$1',
-        [queue.import_run_id],
+    const entityTypes = Array.isArray(candidate.entity_type_codes)
+      ? candidate.entity_type_codes
+      : JSON.parse(String(candidate.entity_type_codes));
+    if (!entityTypes.length)
+      throw new CandidateConflict('candidate has no entity type codes');
+    const properties = isRecord(candidate.entity_payload)
+      ? candidate.entity_payload
+      : {};
+    const source = isRecord(candidate.candidate_source)
+      ? candidate.candidate_source
+      : {};
+    const candidateSource = isRecord(properties.candidateSource)
+      ? properties.candidateSource
+      : source;
+    const sourceRef =
+      (typeof candidate.source_ref === 'string' && candidate.source_ref) ||
+      `${String(source.sourceKey ?? source.url ?? source.name ?? 'unknown-source')}:import-${queue.import_run_id}:record-${candidate.ordinal}`;
+    const importRun = await client.query(
+      'SELECT adapter_code,source_metadata FROM import_run WHERE id=$1',
+      [queue.import_run_id],
+    );
+    const adapter = String(importRun.rows[0]?.adapter_code ?? 'MANUAL');
+    const runMeta = importRun.rows[0]?.source_metadata as
+      Record<string, unknown> | undefined;
+    const runSource = isRecord(runMeta?.source) ? runMeta.source : {};
+    const sourceKey =
+      textValue(runSource.sourceKey ?? runSource.url ?? runSource.name) ??
+      'unknown-source';
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended('geodata:source:' || $1 || ':' || $2,0))",
+      [adapter, sourceRef],
+    );
+    const sourceMapping = await client.query(
+      'SELECT entity_id FROM source_reference WHERE adapter_code=$1 AND source_record_id=$2 FOR UPDATE',
+      [adapter, sourceRef],
+    );
+    const existingEntityId =
+      candidate.existing_entity_id ?? sourceMapping.rows[0]?.entity_id ?? null;
+    const entityId =
+      existingEntityId ?? candidate.planned_entity_id ?? randomUUID();
+    const existing = existingEntityId
+      ? await client.query(
+          'SELECT lifecycle_status,website,description,public_properties FROM geodata_entity WHERE id=$1 FOR UPDATE',
+          [entityId],
+        )
+      : { rows: [] };
+    if (existing.rows[0]?.lifecycle_status === 'APPROVED')
+      throw new CandidateConflict(
+        'an approved entity cannot be changed by import processing',
       );
-      const adapter = String(importRun.rows[0]?.adapter_code ?? 'MANUAL');
-      const runMeta = importRun.rows[0]?.source_metadata as
-        Record<string, unknown> | undefined;
-      const runSource = isRecord(runMeta?.source) ? runMeta.source : {};
-      const sourceKey =
-        textValue(runSource.sourceKey ?? runSource.url ?? runSource.name) ??
-        'unknown-source';
-      await client.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended('geodata:source:' || $1 || ':' || $2,0))",
-        [adapter, sourceRef],
-      );
-      const sourceMapping = await client.query(
-        'SELECT entity_id FROM source_reference WHERE adapter_code=$1 AND source_record_id=$2 FOR UPDATE',
-        [adapter, sourceRef],
-      );
-      const existingEntityId =
-        candidate.existing_entity_id ??
-        sourceMapping.rows[0]?.entity_id ??
-        null;
-      const entityId =
-        existingEntityId ?? candidate.planned_entity_id ?? randomUUID();
-      const existing = existingEntityId
-        ? await client.query(
-            'SELECT lifecycle_status,website,description,public_properties FROM geodata_entity WHERE id=$1 FOR UPDATE',
-            [entityId],
-          )
-        : { rows: [] };
-      if (existing.rows[0]?.lifecycle_status === 'APPROVED')
-        throw new CandidateConflict(
-          'an approved entity cannot be changed by import processing',
-        );
 
+    await client.query(
+      "SELECT set_config('myota.geodata_writer','row-v1',true)",
+    );
+    const geometryType =
+      isRecord(properties.geometry) &&
+      typeof properties.geometry.type === 'string'
+        ? properties.geometry.type.toUpperCase()
+        : 'GEOMETRY';
+    const titleCode = (code: string) =>
+      code
+        .replaceAll('_', ' ')
+        .toLowerCase()
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    const categories: string[] = [];
+    for (const rawCode of entityTypes) {
+      const code = String(rawCode).toUpperCase();
       await client.query(
-        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+        "SELECT pg_advisory_xact_lock(hashtextextended('geodata:category:' || $1,0))",
+        [code],
       );
-      const geometryType =
-        isRecord(properties.geometry) &&
-        typeof properties.geometry.type === 'string'
-          ? properties.geometry.type.toUpperCase()
-          : 'GEOMETRY';
-      const titleCode = (code: string) =>
-        code
-          .replaceAll('_', ' ')
-          .toLowerCase()
-          .replace(/\b\w/g, (letter) => letter.toUpperCase());
-      const categories: string[] = [];
-      for (const rawCode of entityTypes) {
-        const code = String(rawCode).toUpperCase();
+      const category = await client.query(
+        'SELECT id FROM entity_type WHERE programme_id IS NULL AND code=$1 LIMIT 1',
+        [code],
+      );
+      let categoryId = category.rows[0]?.id as string | undefined;
+      if (!categoryId) {
+        categoryId = randomUUID();
         await client.query(
-          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:category:' || $1,0))",
-          [code],
-        );
-        const category = await client.query(
-          'SELECT id FROM entity_type WHERE programme_id IS NULL AND code=$1 LIMIT 1',
-          [code],
-        );
-        let categoryId = category.rows[0]?.id as string | undefined;
-        if (!categoryId) {
-          categoryId = randomUUID();
-          await client.query(
-            `INSERT INTO entity_type(id,programme_id,code,label,geometry_kind,config)
+          `INSERT INTO entity_type(id,programme_id,code,label,geometry_kind,config)
              VALUES ($1,NULL,$2,$3,$4,'{}'::jsonb)`,
-            [categoryId, code, titleCode(code), geometryType],
-          );
-        }
-        categories.push(categoryId);
+          [categoryId, code, titleCode(code), geometryType],
+        );
       }
-      const publicProperties = { ...properties };
-      for (const field of [
-        'geometry',
-        'website',
-        'description',
-        'possibleDuplicates',
-      ])
-        delete publicProperties[field];
-      const previousProperties = isRecord(existing.rows[0]?.public_properties)
-        ? existing.rows[0].public_properties
-        : {};
-      const now = await utcTimestamp(client);
-      const review =
-        queue.target_status === 'APPROVED'
-          ? {
-              reviewerId: queue.requested_by,
-              reviewedAt: now,
-              note:
-                textValue(queue.job_metadata.note) ??
-                'Approved from validated import',
-            }
-          : (previousProperties.review ?? null);
-      const reviewHistory = Array.isArray(previousProperties.reviewHistory)
-        ? [...previousProperties.reviewHistory]
-        : [];
-      if (queue.target_status === 'APPROVED')
-        reviewHistory.push({
-          action: 'APPROVED',
-          ...review,
-          previousStatus: existing.rows[0]?.lifecycle_status ?? 'CANDIDATE',
-        });
-      Object.assign(publicProperties, {
-        id: entityId,
-        programmeSlug: candidate.programme_slug,
-        entityType: entityTypes[0],
-        entityTypes,
-        entityTypeCodes: entityTypes,
-        sourceRef,
-        sourceState: 'CURRENT',
-        candidateSource,
-        provenance: {
-          adapter,
-          source: runSource,
-          sourceKey,
-          sourceHash: candidate.source_hash,
-          importRunId: queue.import_run_id,
-        },
-        review,
-        reviewHistory,
-        updatedAt: now,
+      categories.push(categoryId);
+    }
+    const publicProperties = { ...properties };
+    for (const field of [
+      'geometry',
+      'website',
+      'description',
+      'possibleDuplicates',
+    ])
+      delete publicProperties[field];
+    const previousProperties = isRecord(existing.rows[0]?.public_properties)
+      ? existing.rows[0].public_properties
+      : {};
+    const now = await utcTimestamp(client);
+    const review =
+      queue.target_status === 'APPROVED'
+        ? {
+            reviewerId: queue.requested_by,
+            reviewedAt: now,
+            note:
+              textValue(queue.job_metadata.note) ??
+              'Approved from validated import',
+          }
+        : (previousProperties.review ?? null);
+    const reviewHistory = Array.isArray(previousProperties.reviewHistory)
+      ? [...previousProperties.reviewHistory]
+      : [];
+    if (queue.target_status === 'APPROVED')
+      reviewHistory.push({
+        action: 'APPROVED',
+        ...review,
+        previousStatus: existing.rows[0]?.lifecycle_status ?? 'CANDIDATE',
       });
-      const website =
-        existing.rows[0]?.website ?? textValue(properties.website);
-      const description =
-        existing.rows[0]?.description ?? textValue(properties.description);
-      const attachments = Array.isArray(properties.attachments)
-        ? properties.attachments
-        : [];
-      const nestedLocation = isRecord(properties.location)
-        ? properties.location
-        : {};
-      const locationValue = (name: string) =>
-        textValue(properties[name] ?? nestedLocation[name]);
-      await client.query(
-        `INSERT INTO geodata_entity
+    Object.assign(publicProperties, {
+      id: entityId,
+      programmeSlug: candidate.programme_slug,
+      entityType: entityTypes[0],
+      entityTypes,
+      entityTypeCodes: entityTypes,
+      sourceRef,
+      sourceState: 'CURRENT',
+      candidateSource,
+      provenance: {
+        adapter,
+        source: runSource,
+        sourceKey,
+        sourceHash: candidate.source_hash,
+        importRunId: queue.import_run_id,
+      },
+      review,
+      reviewHistory,
+      updatedAt: now,
+    });
+    const website = existing.rows[0]?.website ?? textValue(properties.website);
+    const description =
+      existing.rows[0]?.description ?? textValue(properties.description);
+    const attachments = Array.isArray(properties.attachments)
+      ? properties.attachments
+      : [];
+    const nestedLocation = isRecord(properties.location)
+      ? properties.location
+      : {};
+    const locationValue = (name: string) =>
+      textValue(properties[name] ?? nestedLocation[name]);
+    await client.query(
+      `INSERT INTO geodata_entity
           (id,programme_id,entity_type_id,name,lifecycle_status,geom,centroid,public_properties,
            source_state,source_key,source_hash,jurisdiction,attachments,programme_slug,
            entity_type_code,website,description,continent,continent_code,country,country_code,
@@ -689,170 +718,165 @@ export class GeodataPromotionRepository {
            county=EXCLUDED.county,county_code=EXCLUDED.county_code,
            city=EXCLUDED.city,municipality=EXCLUDED.municipality,
            locality=EXCLUDED.locality,updated_at=now()`,
+      [
+        entityId,
+        categories[0],
+        candidate.name,
+        queue.target_status,
+        stringifyJsonWithBigInts(publicProperties),
+        sourceKey,
+        candidate.source_hash,
+        textValue(properties.jurisdiction),
+        stringifyJsonWithBigInts(attachments),
+        candidate.programme_slug,
+        String(entityTypes[0]),
+        website,
+        description,
+        locationValue('continent'),
+        locationValue('continentCode'),
+        locationValue('country'),
+        locationValue('countryCode'),
+        locationValue('region'),
+        locationValue('regionCode'),
+        locationValue('subdivision'),
+        locationValue('subdivisionCode'),
+        locationValue('province'),
+        locationValue('provinceCode'),
+        locationValue('county'),
+        locationValue('countyCode'),
+        locationValue('city'),
+        locationValue('municipality'),
+        locationValue('locality'),
+        stringifyJsonWithBigInts(properties.geometry),
+      ],
+    );
+    await client.query(
+      'DELETE FROM geodata_entity_category WHERE entity_id=$1',
+      [entityId],
+    );
+    for (let index = 0; index < entityTypes.length; index++)
+      await client.query(
+        `INSERT INTO geodata_entity_category(entity_id,category_id,category_code,is_primary,ordinal)
+           VALUES ($1,$2,$3,$4,$5)`,
         [
           entityId,
-          categories[0],
-          candidate.name,
-          queue.target_status,
-          stringifyJsonWithBigInts(publicProperties),
-          sourceKey,
-          candidate.source_hash,
-          textValue(properties.jurisdiction),
-          stringifyJsonWithBigInts(attachments),
-          candidate.programme_slug,
-          String(entityTypes[0]),
-          website,
-          description,
-          locationValue('continent'),
-          locationValue('continentCode'),
-          locationValue('country'),
-          locationValue('countryCode'),
-          locationValue('region'),
-          locationValue('regionCode'),
-          locationValue('subdivision'),
-          locationValue('subdivisionCode'),
-          locationValue('province'),
-          locationValue('provinceCode'),
-          locationValue('county'),
-          locationValue('countyCode'),
-          locationValue('city'),
-          locationValue('municipality'),
-          locationValue('locality'),
-          stringifyJsonWithBigInts(properties.geometry),
+          categories[index],
+          String(entityTypes[index]),
+          index === 0,
+          index,
         ],
       );
-      await client.query(
-        'DELETE FROM geodata_entity_category WHERE entity_id=$1',
-        [entityId],
-      );
-      for (let index = 0; index < entityTypes.length; index++)
-        await client.query(
-          `INSERT INTO geodata_entity_category(entity_id,category_id,category_code,is_primary,ordinal)
-           VALUES ($1,$2,$3,$4,$5)`,
-          [
-            entityId,
-            categories[index],
-            String(entityTypes[index]),
-            index === 0,
-            index,
-          ],
-        );
-      await client.query('DELETE FROM source_reference WHERE entity_id=$1', [
-        entityId,
-      ]);
-      await client.query(
-        `INSERT INTO source_reference
+    await client.query('DELETE FROM source_reference WHERE entity_id=$1', [
+      entityId,
+    ]);
+    await client.query(
+      `INSERT INTO source_reference
          (id,entity_id,adapter_code,source_uri,source_record_id,license,attribution,retrieved_at,source_payload)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
          ON CONFLICT (adapter_code,source_record_id) DO UPDATE SET entity_id=EXCLUDED.entity_id,
            source_uri=EXCLUDED.source_uri,license=EXCLUDED.license,attribution=EXCLUDED.attribution,
            retrieved_at=EXCLUDED.retrieved_at,source_payload=EXCLUDED.source_payload`,
-        [
-          randomUUID(),
-          entityId,
-          adapter,
-          textValue(runSource.url ?? runSource.uri),
-          sourceRef,
-          textValue(runSource.license),
-          textValue(runSource.attribution),
-          runSource.retrievedAt ?? null,
-          stringifyJsonWithBigInts({
-            ...properties,
-            geometry: properties.geometry,
-          }),
-        ],
-      );
-      await this.createConflationCandidates(client, entityId);
-      if (['APPROVED', 'CANDIDATE'].includes(queue.target_status)) {
-        const state = await client.query(
-          `SELECT ST_AsGeoJSON(geom)::jsonb AS geometry,public_properties,
+      [
+        randomUUID(),
+        entityId,
+        adapter,
+        textValue(runSource.url ?? runSource.uri),
+        sourceRef,
+        textValue(runSource.license),
+        textValue(runSource.attribution),
+        runSource.retrievedAt ?? null,
+        stringifyJsonWithBigInts({
+          ...properties,
+          geometry: properties.geometry,
+        }),
+      ],
+    );
+    await this.createConflationCandidates(client, entityId);
+    if (['APPROVED', 'CANDIDATE'].includes(queue.target_status)) {
+      const state = await client.query(
+        `SELECT ST_AsGeoJSON(geom)::jsonb AS geometry,public_properties,
             continent,continent_code,country,country_code,region,region_code,
             subdivision,subdivision_code,province,province_code,county,county_code,
             city,municipality,locality,manual_location_fields
            FROM geodata_entity WHERE id=$1 FOR UPDATE`,
-          [entityId],
+        [entityId],
+      );
+      const entity = state.rows[0];
+      if (entity) {
+        const enrichment = queueLocationEnrichment(
+          entityId,
+          isRecord(entity.public_properties) ? entity.public_properties : {},
+          entity.geometry,
+          locationSnapshot(entity),
+          entity.manual_location_fields,
+          'LIFECYCLE_PROMOTED',
+          queue.requested_by,
+          true,
+          await utcTimestamp(client),
         );
-        const entity = state.rows[0];
-        if (entity) {
-          const enrichment = queueLocationEnrichment(
-            entityId,
-            isRecord(entity.public_properties) ? entity.public_properties : {},
-            entity.geometry,
-            locationSnapshot(entity),
-            entity.manual_location_fields,
-            'LIFECYCLE_PROMOTED',
-            queue.requested_by,
-            true,
-            await utcTimestamp(client),
-          );
-          if (enrichment) {
-            await client.query(
-              `UPDATE geodata_entity SET public_properties=$2::jsonb,
+        if (enrichment) {
+          await client.query(
+            `UPDATE geodata_entity SET public_properties=$2::jsonb,
                 location_work_dispatched_at=now() WHERE id=$1`,
-              [entityId, stringifyJsonWithBigInts(enrichment.properties)],
-            );
-            await this.writeFact(
-              client,
-              'geodata.entity.location-enrichment-requested.v1',
-              'entity',
-              entityId,
-              enrichment.event,
-              enrichment.requestedAt,
-            );
-          }
+            [entityId, stringifyJsonWithBigInts(enrichment.properties)],
+          );
+          await this.writeFact(
+            client,
+            'geodata.entity.location-enrichment-requested.v1',
+            'entity',
+            entityId,
+            enrichment.event,
+            enrichment.requestedAt,
+            queue.id ? 'geodata-worker' : 'geodata-service',
+          );
         }
       }
-      const eventType = existingEntityId
-        ? 'geodata.entity.import-updated.v1'
-        : queue.target_status === 'APPROVED'
-          ? 'geodata.entity.import-approved.v1'
-          : 'geodata.entity.candidate.created.v1';
-      const eventPayload = {
-        entityId,
-        status: queue.target_status,
-        importRunId: queue.import_run_id,
-        actor: queue.requested_by,
-      };
-      await client.query(
-        `INSERT INTO geodata_audit_event(event_id,aggregate_type,aggregate_id,event,occurred_at)
+    }
+    const eventType = existingEntityId
+      ? 'geodata.entity.import-updated.v1'
+      : queue.target_status === 'APPROVED'
+        ? 'geodata.entity.import-approved.v1'
+        : 'geodata.entity.candidate.created.v1';
+    const eventPayload = {
+      entityId,
+      status: queue.target_status,
+      importRunId: queue.import_run_id,
+      actor: queue.requested_by,
+    };
+    await client.query(
+      `INSERT INTO geodata_audit_event(event_id,aggregate_type,aggregate_id,event,occurred_at)
          VALUES ($1,'entity',$2,$3::jsonb,$4)`,
-        [
-          randomUUID(),
-          entityId,
-          stringifyJsonWithBigInts({ eventType, ...eventPayload }),
-          now,
-        ],
-      );
-      await this.writeFact(
-        client,
-        eventType,
-        'entity',
+      [
+        randomUUID(),
         entityId,
-        eventPayload,
+        stringifyJsonWithBigInts({ eventType, ...eventPayload }),
         now,
-      );
-      await client.query(
-        `UPDATE geodata_import_candidate SET
+      ],
+    );
+    await this.writeFact(
+      client,
+      eventType,
+      'entity',
+      entityId,
+      eventPayload,
+      now,
+      queue.id ? 'geodata-worker' : 'geodata-service',
+    );
+    await client.query(
+      `UPDATE geodata_import_candidate SET
          existing_entity_id=CASE WHEN $6 THEN $3 ELSE existing_entity_id END,planned_entity_id=$3,
          validation_status='PROCESSED',target_status=$4,processed_entity_id=$3,
          processed_at=$5,updated_at=$5 WHERE id=$1 AND import_run_id=$2`,
-        [
-          candidateId,
-          queue.import_run_id,
-          entityId,
-          queue.target_status,
-          now,
-          Boolean(existingEntityId),
-        ],
-      );
-      await client.query('COMMIT');
-      return { entityId, updated: Boolean(existingEntityId) };
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw error;
-    } finally {
-      client.release();
-    }
+      [
+        candidateId,
+        queue.import_run_id,
+        entityId,
+        queue.target_status,
+        now,
+        Boolean(existingEntityId),
+      ],
+    );
+    return { entityId, updated: Boolean(existingEntityId) };
   }
 
   private async heartbeatPromotion(queue: PromotionQueue) {
@@ -884,12 +908,13 @@ export class GeodataPromotionRepository {
     aggregateId: string,
     payload: Record<string, unknown>,
     occurredAt?: Date | string,
+    producer = 'geodata-worker',
   ) {
     const eventTimestamp = occurredAt ?? (await utcTimestamp(client));
     await client.query(
       `INSERT INTO outbox_event
        (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
-       VALUES ($1,$2,'geodata-worker',$3,$4,$5::jsonb,$6,$7)`,
+       VALUES ($1,$2,$8,$3,$4,$5::jsonb,$6,$7)`,
       [
         randomUUID(),
         type,
@@ -898,6 +923,7 @@ export class GeodataPromotionRepository {
         stringifyJsonWithBigInts(payload),
         eventTimestamp,
         randomUUID(),
+        producer,
       ],
     );
   }
@@ -930,7 +956,7 @@ function boxFromRow(row: Record<string, unknown>, prefix: string): BoundingBox {
 
 class CandidateConflict extends Error {}
 
-function isCandidateConflict(error: unknown) {
+export function isCandidateConflict(error: unknown) {
   if (error instanceof CandidateConflict) return true;
   if (typeof error !== 'object' || error === null || Array.isArray(error))
     return false;

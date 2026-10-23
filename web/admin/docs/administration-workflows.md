@@ -68,19 +68,20 @@ parsing, geometry normalization, and deduplication run asynchronously, so large
 pasted FeatureCollections do not hold the browser request open. Reverse
 geocoding occurs after an entity is materialized or its geometry changes, not
 during import preprocessing. The run first reaches `PREPROCESSED`; records are shown in a
-compact paged validation queue in the import summary modal. Select a page or
-all records, confirm the selection, choose `CANDIDATE` or `APPROVED`, and queue
-the confirmed records for promotion. The request body is bounded by the
-deployment's configured geodata import limit, and the run remains visible after
-the page is refreshed.
+compact paged validation queue in the import summary modal. Confirm up to 100
+selected records, then choose `CANDIDATE` or `APPROVED` to apply their final
+state synchronously. Bulk import intake and preprocessing stay asynchronous.
+Larger candidate sets are handled as separate bounded actions. The run remains
+visible after the page is refreshed.
 
 Click a pre-processed record's name to open a Leaflet map preview centered on
 that record. The modal offers **Promote to candidate**, **Promote to approved**,
-and **Reject entity**. Promotion runs asynchronously; the modal checks the
-promotion queue result and advances only after the selected item succeeds.
-Failures remain on the current item and can be retried. Rejection is applied
-synchronously by the import API. When no pending item remains, the modal says
-the last item was processed and offers **Close review**.
+and **Reject entity**. Each decision completes synchronously in the Geodata
+API; promotion returns only after the entity and outbox transaction commits.
+The service validates a selected set completely and commits all changes or
+rejects the request without partial promotion. Failures remain on the current
+item and can be retried with the same idempotency key. When no pending item
+remains, the modal says the last item was processed and offers **Close review**.
 
 When the review is complete, use **Mark import as processed**. After
 confirmation, the service permanently removes the run's staged candidate and
@@ -93,8 +94,9 @@ Click any run in **Recent import runs** to open its summary. The modal shows
 the lifecycle status, timestamps, selected categories, source licence and
 attribution, source hash/change information, counts of pre-processed and
 promoted records, disappeared records, and processing errors. Imports are
-programme-independent. No pre-processed record is an entity until it has been
-confirmed and promoted through the separate NATS-backed processing queue.
+programme-independent. An Admin promotion or approval validates and commits
+its selected set synchronously. Automatic community-proposal imports may use
+the internal worker promotion queue.
 The run list is ordered newest-first so newly submitted files remain visible
 on the first page of the history and pre-processing queue.
 

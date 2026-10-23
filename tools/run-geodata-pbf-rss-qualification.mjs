@@ -7,7 +7,7 @@ const result = spawnSync(
     'run',
     'apps/geodata-worker/src/geodata-osm-pbf.spec.ts',
     '-t',
-    'PBF process-tree memory bounds',
+    'decodes',
     '--maxWorkers=1',
     '--no-file-parallelism',
   ],
