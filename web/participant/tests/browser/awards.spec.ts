@@ -123,9 +123,16 @@ test('submits an eligible award level with the signed-in account callsign', asyn
   await page.goto('http://127.0.0.1:8091');
   await page.locator('#award-email').fill('operator@example.test');
   await page.locator('#award-password').fill('test-password');
-  await page.getByRole('button', { name: /Bronze/ }).click();
+  const awardRequestButton = page.getByRole('button', { name: /Bronze/ });
+  await awardRequestButton.focus();
+  await expect(awardRequestButton).toBeFocused();
+  await page.keyboard.press('Enter');
 
-  await expect(page.locator('#award-request-status')).toHaveText(
+  const awardRequestStatus = page.locator('#award-request-status');
+  await expect(awardRequestStatus).toHaveAttribute('role', 'status');
+  await expect(awardRequestStatus).toHaveAttribute('aria-live', 'polite');
+  await expect(awardRequestStatus).toHaveAttribute('aria-atomic', 'true');
+  await expect(awardRequestStatus).toHaveText(
     'Award request submitted for programme review.',
   );
   expect(loginPayloads).toEqual([

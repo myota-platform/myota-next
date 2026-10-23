@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Pool, type PoolClient } from 'pg';
 import sharp from 'sharp';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../a11y';
 
 const hasApiDatabases = Boolean(
   process.env.CORE_DATABASE_URL &&
@@ -285,9 +286,22 @@ test('publishes, requests, and issues an award across both web apps', async ({
     await page.goto(`http://127.0.0.1:8091/#${programmeSlug}`);
     await page.locator('#award-email').fill(accountEmail);
     await page.locator('#award-password').fill(participantPassword);
-    await page.getByRole('button', { name: /1 activation/ }).click();
-    await expect(page.locator('#award-request-status')).toHaveText(
+    const requestAwardButton = page.getByRole('button', {
+      name: /1 activation/,
+    });
+    await requestAwardButton.focus();
+    await expect(requestAwardButton).toBeFocused();
+    await page.keyboard.press('Enter');
+    const awardRequestStatus = page.locator('#award-request-status');
+    await expect(awardRequestStatus).toHaveAttribute('role', 'status');
+    await expect(awardRequestStatus).toHaveAttribute('aria-live', 'polite');
+    await expect(awardRequestStatus).toHaveAttribute('aria-atomic', 'true');
+    await expect(awardRequestStatus).toHaveText(
       'Award request submitted for programme review.',
+    );
+    await expectResponsiveAccessible(
+      page,
+      'Live Participant award request result',
     );
 
     const signatureAsset = await activityPool.query<{ id: string }>(
