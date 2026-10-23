@@ -194,11 +194,14 @@ outbox event.
 
 Some secondary Admin workflows still lack live browser-level compatibility coverage;
 route-wide accessibility scans and isolated component tests do not substitute for an
-end-to-end workflow through Gateway and the owning service. Refresh schedule checks
-create a temporary category and an all-programmes schedule in Admin, then upload
-an empty complete GeoJSON snapshot and verify worker completion through live services. A
-separate Gateway check verifies the schedule record, manifest, processing queue,
-timestamps, and outbox events. Import checks cover pasted GeoJSON queueing, source
+end-to-end workflow through Gateway and the owning service. The latest complete live CI
+run passed all 68 browser checks against the isolated services, including Admin and
+Participant journeys; see [run 39994965427](https://github.com/myota-platform/myota-next/actions/runs/39994965427).
+Residual secondary workflow gaps remain tracked in the browser-quality issues. Refresh
+schedule checks create a temporary category and an all-programmes schedule in Admin,
+then upload an empty complete GeoJSON snapshot and verify worker completion through live
+services. A separate Gateway check verifies the schedule record, manifest, processing
+queue, timestamps, and outbox events. Import checks cover pasted GeoJSON queueing, source
 metadata, candidate listing, rejection through the validation endpoint, and promotion of
 the next candidate through its durable queue.
 
@@ -266,12 +269,14 @@ subject to the configured source limits. The award catalogue follows all API pag
 Remaining work includes accessibility/visual review and deployment integration. Its
 public map renders point, line, polygon, and multipart entity geometries.
 
-The Admin route inventory is scanned with Axe against WCAG 2.0, 2.1, and 2.2 AA
-criteria at desktop size; the dashboard and primary Participant journeys also receive
-narrow and wide viewport scans. Browser checks exercise skip-link focus and activation,
-mobile navigation Escape/focus return, and accessible job failure/retry feedback. These
-automated checks do not replace manual screen-reader and visual review. A live Admin
-Map workflow now loads a persisted Geodata entity through Gateway. A dedicated live
-Admin Awards workflow queues broad progress recalculation, waits for its terminal status,
-and checks the persisted participant progress row. Local runs without the CI databases skip
-the live-service specs; the CI run is the qualification evidence for those journeys.
+All 14 registered Admin routes are scanned with Axe against WCAG 2.0, 2.1, and 2.2 AA
+criteria at narrow (390px) and wide (1440px) viewports, with horizontal-overflow checks
+at both sizes. The dashboard and primary Participant journeys also receive narrow and
+wide viewport scans. Browser checks exercise skip-link focus and activation, mobile
+navigation Escape/focus return, keyboard-driven Geodata multi-selection, and accessible
+job failure/retry feedback. These automated checks do not replace manual screen-reader
+and visual review. A live Admin Map workflow now loads a persisted Geodata entity through
+Gateway. A dedicated live Admin Awards workflow queues broad progress recalculation,
+waits for its terminal status, and checks the persisted participant progress row. Local
+runs without the CI databases skip the live-service specs; the full CI run above is the
+qualification evidence for those journeys.

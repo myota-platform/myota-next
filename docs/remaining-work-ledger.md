@@ -175,19 +175,21 @@ an accepted scope decision is recorded in the dispositions section.
 - **Current implementation and evidence:** Browser specs cover dashboard scope,
   identity, programmes, policies, awards, Activity, Geodata imports/review,
   conflation, deletion, schedules, and the persisted entity map under
-  `web/admin/tests/browser/` and `web/tests/browser/`. The Admin route inventory
-  also has an Axe accessibility scan. The local suite passes its mocked
-  workflows; live-service specs are skipped locally when the CI databases are
-  unavailable.
+  `web/admin/tests/browser/` and `web/tests/browser/`. All 14 registered Admin
+  routes pass Axe and horizontal-overflow checks at 390px and 1440px, plus
+  skip-link keyboard navigation. The latest full CI run passed all 68 browser
+  checks against the isolated services, including the database-backed primary
+  Admin workflows: [run 39994965427](https://github.com/myota-platform/myota-next/actions/runs/39994965427).
+  Local runs without the CI databases skip live-service specs.
 - **Missing evidence:** Some secondary Admin workflows still lack live
   browser-level compatibility coverage. The route scan is accessibility
-  evidence, not end-to-end evidence; the database-backed Admin workflows and
-  CI run remain to be qualified.
+  evidence, not end-to-end evidence; the successful CI run qualifies only the
+  workflows represented by its live specs.
 - **Risk:** Admin actions can appear successful while failing to persist,
   disclose scoped data, or recover from uncertain responses.
 - **Next check:** Compare the Admin route/workflow inventory with live browser
-  specs, run database-backed workflows through Gateway and owning services in
-  CI, and select any remaining high-consequence gaps for end-to-end coverage.
+  specs, select remaining high-consequence gaps for end-to-end coverage, and
+  record any accepted secondary omissions explicitly.
 - **Tracked by:** [Issue #20](https://github.com/myota-platform/myota-next/issues/20),
   under parent [Phase 3 issue #7](https://github.com/myota-platform/myota-next/issues/7).
 - **Sources:** [Web applications, lines 195–200](parity/web-applications.md#L195);
@@ -202,20 +204,22 @@ an accepted scope decision is recorded in the dispositions section.
   present accessible loading, error, and recovery states.
 - **Current implementation and evidence:** Live browser specs exist for both
   clients, including Participant activation, QSO, profile, callsign, awards,
-  and public catalogue flows. Local browser automation now scans the registered
-  Admin routes and primary Participant journeys at supported viewports, and
-  checks keyboard navigation and accessible failure/retry feedback. The local
-  mocked browser suite passes; database-backed specs are skipped without the
-  CI service databases.
+  and public catalogue flows. The full CI run passed all 68 browser checks,
+  including live-service journeys and intercepted presentation-state specs.
+  Automated scans check all registered Admin routes at narrow and wide
+  viewports and primary Participant journeys at
+  supported viewports; browser checks cover keyboard navigation and accessible
+  failure/retry feedback. Local runs without the CI service databases skip the
+  live-service specs.
 - **Missing evidence:** Manual screen-reader and visual review plus deployment
   integration remain open. Automated Axe, keyboard, and viewport checks do not
   establish behavior with an actual screen reader or in the deployed release.
 - **Risk:** Users may be blocked by inaccessible controls, layout failures, or
   inaccurate feedback in the actual deployed environment.
-- **Next check:** Run and record the live browser journeys in CI, then record
-  manual keyboard, focus, screen-reader, visual, and narrow/wide viewport
+- **Next check:** Record manual keyboard, focus, screen-reader, and visual
   findings by journey; resolve blockers and rerun primary workflows against the
-  isolated release.
+  isolated release. The latest CI run does not replace manual
+  assistive-technology or deployed-release review.
 - **Tracked by:** [Admin issue #20](https://github.com/myota-platform/myota-next/issues/20)
   and [Participant issue #21](https://github.com/myota-platform/myota-next/issues/21),
   under parent [Phase 3 issue #7](https://github.com/myota-platform/myota-next/issues/7).

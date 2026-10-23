@@ -184,6 +184,110 @@ test('uploads and processes an ADIF import from Participant through Activity wor
         payload: { importId },
       },
     ]);
+
+    const invalidUtf8Filename = `invalid-utf8-${fixtureId}.adi`;
+    await page.locator('#adif-file').setInputFiles({
+      name: invalidUtf8Filename,
+      mimeType: 'text/plain',
+      buffer: Buffer.from([0xff, 0xfe, 0x00]),
+    });
+    await page.getByRole('button', { name: 'Import ADIF log' }).click();
+    await expect(page.locator('#adif-import-status')).toContainText(
+      `${invalidUtf8Filename}: FAILED · 0 accepted, 1 rejected`,
+      { timeout: 60_000 },
+    );
+    await expectResponsiveAccessible(
+      page,
+      'Live Participant failed ADIF import status and recovery',
+    );
+
+    const failedImport = await pool.query<{
+      id: string;
+      status: string;
+      records_seen: number;
+      records_accepted: number;
+      records_rejected: number;
+      errors: string[];
+    }>(
+      `SELECT id::text,status,records_seen,records_accepted,records_rejected,errors
+       FROM activity_import WHERE activation_id=$1 AND filename=$2`,
+      [activationId, invalidUtf8Filename],
+    );
+    expect(failedImport.rows).toHaveLength(1);
+    const failedImportId = failedImport.rows[0].id;
+    expect(failedImport.rows[0]).toMatchObject({
+      id: failedImportId,
+      status: 'FAILED',
+      records_seen: 0,
+      records_accepted: 0,
+      records_rejected: 1,
+    });
+    expect(failedImport.rows[0].errors).toHaveLength(1);
+    expect(failedImport.rows[0].errors[0]).toMatch(/.+/);
+
+    const failedNotification = await pool.query<{
+      notification_type: string;
+      payload: { importId: string };
+    }>(
+      `SELECT notification_type,payload FROM activity_notification
+       WHERE deduplication_key=$1`,
+      [`adif:${failedImportId}:failed`],
+    );
+    expect(failedNotification.rows).toMatchObject([
+      {
+        notification_type: 'ADIF_IMPORT_FAILED',
+        payload: { importId: failedImportId },
+      },
+    ]);
+
+    const retryFilename = `retry-${fixtureId}.adi`;
+    const retryAdif =
+      `<ADIF_VER:5>3.1.4<EOH><CALL:5>F4DEF<QSO_DATE:8>${qsoDate}` +
+      `<TIME_ON:6>${timeOn}<BAND:3>20m<MODE:3>SSB<EOR>`;
+    await page.locator('#adif-file').setInputFiles({
+      name: retryFilename,
+      mimeType: 'text/plain',
+      buffer: Buffer.from(retryAdif),
+    });
+    await page.getByRole('button', { name: 'Import ADIF log' }).click();
+    await expect(page.locator('#adif-import-status')).toContainText(
+      `${retryFilename}: COMPLETED · 1 accepted, 0 rejected`,
+      { timeout: 60_000 },
+    );
+
+    const retriedImport = await pool.query<{
+      id: string;
+      status: string;
+      records_seen: number;
+      records_accepted: number;
+      records_rejected: number;
+    }>(
+      `SELECT id::text,status,records_seen,records_accepted,records_rejected
+       FROM activity_import WHERE activation_id=$1 AND filename=$2`,
+      [activationId, retryFilename],
+    );
+    expect(retriedImport.rows).toMatchObject([
+      {
+        status: 'COMPLETED',
+        records_seen: 1,
+        records_accepted: 1,
+        records_rejected: 0,
+      },
+    ]);
+    const retriedQso = await pool.query<{
+      worked_callsign: string;
+      source_import_id: string;
+    }>(
+      `SELECT worked_callsign,source_import_id::text FROM activity_qso
+       WHERE source_import_id=$1`,
+      [retriedImport.rows[0].id],
+    );
+    expect(retriedQso.rows).toEqual([
+      {
+        worked_callsign: 'F4DEF',
+        source_import_id: retriedImport.rows[0].id,
+      },
+    ]);
   } finally {
     if (activationId) {
       await pool.query(
@@ -197,29 +301,34 @@ test('uploads and processes an ADIF import from Participant through Activity wor
       await pool.query(
         `DELETE FROM outbox_event
          WHERE aggregate_id=ANY($1::text[])
+            OR aggregate_id IN (
+              SELECT id::text FROM activity_import WHERE activation_id=$2
+            )
             OR payload->>'jobId' IN (
               SELECT id::text FROM activity_job
-              WHERE payload->>'importId'=$2 OR payload->>'programmeSlug'=$3
+              WHERE payload->>'importId' IN (
+                SELECT id::text FROM activity_import WHERE activation_id=$2
+              ) OR payload->>'programmeSlug'=$3
             )`,
-        [
-          [activationId, ...(importId ? [importId] : [])],
-          importId ?? '',
-          programmeSlug,
-        ],
+        [[activationId], activationId, programmeSlug],
+      );
+      await pool.query(
+        `DELETE FROM activity_job
+         WHERE payload->>'importId' IN (
+           SELECT id::text FROM activity_import WHERE activation_id=$1
+         ) OR payload->>'programmeSlug'=$2`,
+        [activationId, programmeSlug],
+      );
+      await pool.query(
+        `DELETE FROM activity_notification
+         WHERE payload->>'importId' IN (
+           SELECT id::text FROM activity_import WHERE activation_id=$1
+         )`,
+        [activationId],
       );
       await pool.query('DELETE FROM activity_import WHERE activation_id=$1', [
         activationId,
       ]);
-      await pool.query(
-        `DELETE FROM activity_job
-         WHERE payload->>'importId'=$1 OR payload->>'programmeSlug'=$2`,
-        [importId ?? '', programmeSlug],
-      );
-      await pool.query(
-        `DELETE FROM activity_notification
-         WHERE deduplication_key=$1 OR payload->>'importId'=$2`,
-        [`adif:${importId ?? ''}:completed`, importId ?? ''],
-      );
       await pool.query(
         `DELETE FROM activity_subject_callsign
          WHERE programme_slug=$1 AND subject_id=$2`,
