@@ -134,7 +134,9 @@ an accepted scope decision is recorded in the dispositions section.
   covers tagged nodes, linear and closed ways, and a multipolygon relation with an
   inner ring. A second fixture compares a disjoint multipart protected-area relation
   with two outer components and one inner ring against PyOsmium 4.3.2, including its
-  feature hash. The manually triggered RSS suite now executes generated 50,000-,
+  feature hash. A separate PyOsmium 4.3.2 reference fixture verifies a closed way
+  carrying both line and area tags emits both expected geometries with Python-compatible
+  hashes. The manually triggered RSS suite now executes generated 50,000-,
   250,000-, and 300,000-feature workloads; the 300,000 case stays within the existing
   192 MiB Node-plus-osmium process-tree growth bound. The runner previously selected a
   suite name rather than its test names, so those checks had been skipped; the runner

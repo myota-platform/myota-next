@@ -59,12 +59,10 @@ export function projectToWgs84(source: string, coordinate: number[]) {
   return shifted.every(Number.isFinite) ? shifted : fallback;
 }
 
-/** Resolve the root CRS authority in WKT1/WKT2 before passing WKT to proj4js. */
+/** Resolve a WKT2 root CRS authority before passing WKT to proj4js. */
 function epsgFromWktAuthority(source: string): string | undefined {
   const root =
-    /^\s*(?:PROJCRS|PROJCS|GEOGCRS|GEOGCS|GEODCRS|COMPOUNDCRS|BOUNDCRS)\s*\[/i.exec(
-      source,
-    );
+    /^\s*(?:PROJCRS|GEOGCRS|GEODCRS|COMPOUNDCRS|BOUNDCRS)\s*\[/i.exec(source);
   if (!root) return undefined;
 
   let depth = 1;

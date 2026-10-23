@@ -105,6 +105,76 @@ async function measureOsmPbfRssGrowth(featureCount: number) {
 }
 
 describe('OSM PBF reference parity', () => {
+  it('retains both linear and area outputs for a dual-tag closed way', async () => {
+    const source = await readFile(
+      new URL('./fixtures/python-osm-dual-tag-way.osm.pbf', import.meta.url),
+    );
+    async function* chunks() {
+      yield source;
+    }
+    const features = [];
+    for await (const feature of decodeOsmPbfStream(
+      chunks(),
+      'python-osm-dual-tag-way.osm.pbf',
+      10,
+      '',
+    )) {
+      features.push(feature);
+    }
+
+    expect(features.map((feature) => feature.geometry.type)).toEqual([
+      'LineString',
+      'MultiPolygon',
+    ]);
+    expect(features.map((feature) => feature.id)).toEqual(['way/70', 'way/70']);
+    expect(features.map(sourceFeatureHashOverride)).toEqual([
+      '4f48466d265151367f2ace4ac6286af815e5b2bccfa74d4cbe381277e713a3e5',
+      'ddc69af65206ffd17949c1c0dc70ab83781a36579a6550e715891c277c23e398',
+    ]);
+    expect(features).toMatchObject([
+      {
+        properties: {
+          highway: 'path',
+          leisure: 'park',
+          name: 'Dual-tag path park',
+          sourceRef: 'way/70',
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [-5.99, 37.39],
+            [-5.98, 37.39],
+            [-5.98, 37.4],
+            [-5.99, 37.4],
+            [-5.99, 37.39],
+          ],
+        },
+      },
+      {
+        properties: {
+          highway: 'path',
+          leisure: 'park',
+          name: 'Dual-tag path park',
+          sourceRef: 'way/70',
+        },
+        geometry: {
+          type: 'MultiPolygon',
+          coordinates: [
+            [
+              [
+                [-5.99, 37.39],
+                [-5.98, 37.39],
+                [-5.98, 37.4],
+                [-5.99, 37.4],
+                [-5.99, 37.39],
+              ],
+            ],
+          ],
+        },
+      },
+    ]);
+  });
+
   it('matches Python node, way, and multipolygon features and hashes', async () => {
     const source = await readFile(
       new URL('./fixtures/python-osm-parity.osm.pbf', import.meta.url),

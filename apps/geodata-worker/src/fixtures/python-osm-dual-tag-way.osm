@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PyOsmium 4.3.2 parity fixture">
+  <node id="1" lat="37.39" lon="-5.99"/>
+  <node id="2" lat="37.39" lon="-5.98"/>
+  <node id="3" lat="37.40" lon="-5.98"/>
+  <node id="4" lat="37.40" lon="-5.99"/>
+  <way id="70">
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <nd ref="3"/>
+    <nd ref="4"/>
+    <nd ref="1"/>
+    <tag k="highway" v="path"/>
+    <tag k="leisure" v="park"/>
+    <tag k="name" v="Dual-tag path park"/>
+  </way>
+</osm>

@@ -139,7 +139,12 @@ parses emitted integer tokens exactly, so large OSM IDs retain their Python-comp
 
 The checked-in OSM XML/PBF fixture covers tagged nodes, linear and closed ways, a
 multipolygon relation with an inner ring, filtering, output order, and source hashes
-against the Python importer. The manually triggered Operational and performance
+against the Python importer. A separate PyOsmium 4.3.2 fixture verifies that one
+closed way tagged as both `highway=path` and `leisure=park` emits both the line and
+area features with the same source ID and Python-compatible hashes
+(`4f48466d265151367f2ace4ac6286af815e5b2bccfa74d4cbe381277e713a3e5` and
+`ddc69af65206ffd17949c1c0dc70ab83781a36579a6550e715891c277c23e398`). The manually
+triggered Operational and performance
 qualification workflow decodes generated 50,000-feature, 250,000-feature, and
 300,000-feature PBFs and checks that Linux Node plus `osmium` subprocess-tree RSS growth
 stays within 96 MiB, 192 MiB, and 192 MiB, respectively, above the test-worker baseline.
