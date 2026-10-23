@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../a11y';
 
 test('recalculates broad award progress through the live Admin workflow', async ({
   page,
@@ -77,6 +78,9 @@ test('recalculates broad award progress through the live Admin workflow', async 
     ).toBeVisible();
 
     page.once('dialog', (dialog) => dialog.accept());
+    const recalculationButton = page.getByRole('button', {
+      name: 'Recalculate all progress',
+    });
     const [response] = await Promise.all([
       page.waitForResponse(
         (candidate) =>
@@ -84,7 +88,10 @@ test('recalculates broad award progress through the live Admin workflow', async 
             `/v1/awards/${awardId}/recalculation-jobs` &&
           candidate.request().method() === 'POST',
       ),
-      page.getByRole('button', { name: 'Recalculate all progress' }).click(),
+      (async () => {
+        await recalculationButton.focus();
+        await page.keyboard.press('Enter');
+      })(),
     ]);
     expect(response.status()).toBe(202);
     expect(response.request().headers()['idempotency-key']).toMatch(
@@ -120,6 +127,10 @@ test('recalculates broad award progress through the live Admin workflow', async 
       [awardId, subjectId],
     );
     expect(persisted.rows).toHaveLength(1);
+    await expectResponsiveAccessible(
+      page,
+      'Live Admin broad award recalculation completion',
+    );
   } finally {
     if (jobId) {
       await pool.query(

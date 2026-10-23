@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { expectResponsiveAccessible } from '../../a11y';
 
 const hasApiDatabases = Boolean(
@@ -104,12 +104,11 @@ test('uploads and processes an ADIF import from Participant through Activity wor
     const adif =
       `<ADIF_VER:5>3.1.4<EOH><CALL:5>F4ABC<QSO_DATE:8>${qsoDate}` +
       `<TIME_ON:6>${timeOn}<BAND:3>20m<MODE:3>SSB<EOR>`;
-    await page.locator('#adif-file').setInputFiles({
+    await submitAdifWithKeyboard(page, {
       name: filename,
       mimeType: 'text/plain',
       buffer: Buffer.from(adif),
     });
-    await page.getByRole('button', { name: 'Import ADIF log' }).click();
     await expect(page.locator('#adif-import-status')).toContainText(
       `${filename}: COMPLETED · 1 accepted, 0 rejected`,
       { timeout: 60_000 },
@@ -186,12 +185,11 @@ test('uploads and processes an ADIF import from Participant through Activity wor
     ]);
 
     const invalidUtf8Filename = `invalid-utf8-${fixtureId}.adi`;
-    await page.locator('#adif-file').setInputFiles({
+    await submitAdifWithKeyboard(page, {
       name: invalidUtf8Filename,
       mimeType: 'text/plain',
       buffer: Buffer.from([0xff, 0xfe, 0x00]),
     });
-    await page.getByRole('button', { name: 'Import ADIF log' }).click();
     await expect(page.locator('#adif-import-status')).toContainText(
       `${invalidUtf8Filename}: FAILED · 0 accepted, 1 rejected`,
       { timeout: 60_000 },
@@ -244,12 +242,11 @@ test('uploads and processes an ADIF import from Participant through Activity wor
     const retryAdif =
       `<ADIF_VER:5>3.1.4<EOH><CALL:5>F4DEF<QSO_DATE:8>${qsoDate}` +
       `<TIME_ON:6>${timeOn}<BAND:3>20m<MODE:3>SSB<EOR>`;
-    await page.locator('#adif-file').setInputFiles({
+    await submitAdifWithKeyboard(page, {
       name: retryFilename,
       mimeType: 'text/plain',
       buffer: Buffer.from(retryAdif),
     });
-    await page.getByRole('button', { name: 'Import ADIF log' }).click();
     await expect(page.locator('#adif-import-status')).toContainText(
       `${retryFilename}: COMPLETED · 1 accepted, 0 rejected`,
       { timeout: 60_000 },
@@ -351,3 +348,16 @@ test('uploads and processes an ADIF import from Participant through Activity wor
     await pool.end();
   }
 });
+
+async function submitAdifWithKeyboard(
+  page: Page,
+  file: { name: string; mimeType: string; buffer: Buffer },
+) {
+  const input = page.locator('#adif-file');
+  await input.setInputFiles(file);
+  await input.focus();
+  await page.keyboard.press('Tab');
+  const submit = page.getByRole('button', { name: 'Import ADIF log' });
+  await expect(submit).toBeFocused();
+  await page.keyboard.press('Enter');
+}

@@ -177,9 +177,9 @@ an accepted scope decision is recorded in the dispositions section.
   conflation, deletion, schedules, and the persisted entity map under
   `web/admin/tests/browser/` and `web/tests/browser/`. All 14 registered Admin
   routes pass Axe and horizontal-overflow checks at 390px and 1440px, plus
-  skip-link keyboard navigation. The latest full CI run passed all 68 browser
+  skip-link keyboard navigation. A full CI run passed all 68 browser
   checks against the isolated services, including the database-backed primary
-  Admin workflows: [run 39994965427](https://github.com/myota-platform/myota-next/actions/runs/39994965427).
+  Admin workflows: [run 39996779864](https://github.com/myota-platform/myota-next/actions/runs/39996779864).
   Local runs without the CI databases skip live-service specs.
 - **Missing evidence:** Some secondary Admin workflows still lack live
   browser-level compatibility coverage. The route scan is accessibility
@@ -204,8 +204,9 @@ an accepted scope decision is recorded in the dispositions section.
   present accessible loading, error, and recovery states.
 - **Current implementation and evidence:** Live browser specs exist for both
   clients, including Participant activation, QSO, profile, callsign, awards,
-  and public catalogue flows. The full CI run passed all 68 browser checks,
-  including live-service journeys and intercepted presentation-state specs.
+  and public catalogue flows. A full CI run passed all 68 browser checks,
+  including live-service journeys and intercepted presentation-state specs:
+  [run 39996779864](https://github.com/myota-platform/myota-next/actions/runs/39996779864).
   Automated scans check all registered Admin routes at narrow and wide
   viewports and primary Participant journeys at
   supported viewports; browser checks cover keyboard navigation and accessible
