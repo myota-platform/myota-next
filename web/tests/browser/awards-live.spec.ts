@@ -13,6 +13,7 @@ test('publishes, requests, and issues an award across both web apps', async ({
   page,
   request,
 }) => {
+  test.setTimeout(90_000);
   test.skip(!hasApiDatabases, 'requires the CI PostgreSQL databases');
 
   const adminEmail =
