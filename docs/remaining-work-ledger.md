@@ -52,14 +52,17 @@ an accepted scope decision is recorded in the dispositions section.
 - **Missing evidence:** The source page explicitly says broader account,
   callsign, recovery, and authorization sequences still need automated
   compatibility coverage. The live concurrent normalized-email creation check
-  has been added but still needs its isolated PostgreSQL execution. The ledger
-  does not infer coverage from adjacent examples.
+  ran in CI against isolated PostgreSQL, but failed: both requests returned
+  HTTP 400 instead of the expected one success and one duplicate-email
+  rejection. The ledger does not infer coverage from adjacent examples.
 - **Risk:** A sequence or precedence difference could grant access, retain an
   invalid session, or persist the wrong callsign/account state.
 - **Next check:** Compare remaining material Identity and Programme handler
   sequences with the pinned reference; add a focused fixture or workflow for
-  each uncovered material outcome, run the concurrent-email live check, then
-  link the evidence in the parity page.
+  each uncovered material outcome. Diagnose why the concurrent-email fixture's
+  requests are both rejected, correct the fixture or implementation as evidence
+  indicates, rerun it against isolated PostgreSQL, then link the result in the
+  parity page.
 - **Tracked by:** [Issue #11](https://github.com/myota-platform/myota-next/issues/11).
 - **Sources:** [Identity and Programmes, line 167](parity/identity-programmes.md#L167);
   [completion criteria, lines 9–17](parity/completion-criteria.md#L9).
@@ -205,8 +208,10 @@ an accepted scope decision is recorded in the dispositions section.
   and preprocessing remain asynchronous.
 - **Missing evidence:** The page explicitly leaves broader payload and workflow
   compatibility qualification outstanding; known fixture and importer gaps are
-  tracked separately in L-07 and L-08. The database-backed browser qualification
-  for selected promotion still needs its isolated CI run.
+  tracked separately in L-07 and L-08. The live database-backed Admin browser
+  qualification for selected promotion passed in
+  [CI run 39967423797](https://github.com/myota-platform/myota-next/actions/runs/39967423797);
+  broader importer, payload, and workflow qualification remains open.
 - **Risk:** Incorrect imported or reviewed data can affect entity geometry,
   provenance, approval, and downstream Activity records.
 - **Next check:** Reconcile each remaining Geodata parity statement with the
