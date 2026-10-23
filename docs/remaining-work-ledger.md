@@ -136,7 +136,8 @@ an accepted scope decision is recorded in the dispositions section.
   with two outer components and one inner ring against PyOsmium 4.3.2, including its
   feature hash. A separate PyOsmium 4.3.2 reference fixture verifies a closed way
   carrying both line and area tags emits both expected geometries with Python-compatible
-  hashes. The manually triggered RSS suite now executes generated 50,000-,
+  hashes; another fixture covers a `route=hiking` way without a highway tag. The
+  manually triggered RSS suite now executes generated 50,000-,
   250,000-, and 300,000-feature workloads; the 300,000 case stays within the existing
   192 MiB Node-plus-osmium process-tree growth bound. The runner previously selected a
   suite name rather than its test names, so those checks had been skipped; the runner
@@ -172,7 +173,10 @@ an accepted scope decision is recorded in the dispositions section.
   ED50 WKT is covered by a projection fixture. An official PyProj 3.8.0 WKT2
   Shapefile fixture now verifies that the importer resolves its root EPSG:23030
   authority despite nested base-CRS and conversion-method identifiers, then
-  applies the same Spanish-grid transformation.
+  applies the same Spanish-grid transformation. A second PyProj 3.8.0 WKT2
+  Shapefile fixture removes every authority ID and confirms the ED50 datum and
+  UTM parameters still select the matching grid operation; an authority-free
+  geographic ED50 WKT2 projection fixture covers the same datum path.
   PyShp 2.3.1 fixtures verify Z/M ordinates are dropped for PointZ, PointM,
   PolylineZ, PolylineM, PolygonZ, PolygonM, MultiPointZ, and MultiPointM;
   multipart PolyLine parts retain MultiLineString grouping, and a simple Polygon

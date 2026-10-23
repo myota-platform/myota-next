@@ -143,7 +143,10 @@ against the Python importer. A separate PyOsmium 4.3.2 fixture verifies that one
 closed way tagged as both `highway=path` and `leisure=park` emits both the line and
 area features with the same source ID and Python-compatible hashes
 (`4f48466d265151367f2ace4ac6286af815e5b2bccfa74d4cbe381277e713a3e5` and
-`ddc69af65206ffd17949c1c0dc70ab83781a36579a6550e715891c277c23e398`). The manually
+`ddc69af65206ffd17949c1c0dc70ab83781a36579a6550e715891c277c23e398`). A further
+PyOsmium 4.3.2 fixture verifies a `route=hiking` way without a `highway` tag is
+imported as a `LineString` with hash
+`2d72daf72126a5e207880d327a13916f5d9b48806a02cec51bf3cc18dd8b7718`. The manually
 triggered Operational and performance
 qualification workflow decodes generated 50,000-feature, 250,000-feature, and
 300,000-feature PBFs and checks that Linux Node plus `osmium` subprocess-tree RSS growth
@@ -319,7 +322,10 @@ the grid and shifted the tested point by about 0.0013 degrees in each axis.
 EPSG-tagged WKT2 `.prj` files now resolve their root CRS authority before
 projection, including when nested base-geography and conversion-method IDs are
 also present. A PyProj 3.8.0 WKT2 Shapefile fixture for EPSG:23030 verifies the
-same Spanish-grid output through the streaming importer.
+same Spanish-grid output through the streaming importer. A custom ED50 WKT2
+Shapefile fixture with all authority IDs removed also resolves its UTM
+parameters and matches PyProj's grid transformation; a geographic ED50 WKT2
+fixture covers the authority-free geographic form.
 Coordinates outside the grid coverage retain the bundled global definition.
 The grid's source and CC BY 4.0 attribution are recorded in
 `libs/geodata-domain/data/README.md`; other datum-grid operations remain

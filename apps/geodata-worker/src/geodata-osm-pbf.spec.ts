@@ -105,6 +105,44 @@ async function measureOsmPbfRssGrowth(featureCount: number) {
 }
 
 describe('OSM PBF reference parity', () => {
+  it('imports a hiking route way without a highway tag', async () => {
+    const source = await readFile(
+      new URL('./fixtures/python-osm-route-hiking.osm.pbf', import.meta.url),
+    );
+    async function* chunks() {
+      yield source;
+    }
+    const features = [];
+    for await (const feature of decodeOsmPbfStream(
+      chunks(),
+      'python-osm-route-hiking.osm.pbf',
+      10,
+      '',
+    )) {
+      features.push(feature);
+    }
+
+    expect(features).toHaveLength(1);
+    expect(features[0]).toMatchObject({
+      id: 'way/90',
+      properties: {
+        route: 'hiking',
+        name: 'Hiking route',
+        sourceRef: 'way/90',
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [-5.99, 37.39],
+          [-5.98, 37.4],
+        ],
+      },
+    });
+    expect(sourceFeatureHashOverride(features[0]!)).toBe(
+      '2d72daf72126a5e207880d327a13916f5d9b48806a02cec51bf3cc18dd8b7718',
+    );
+  });
+
   it('retains both linear and area outputs for a dual-tag closed way', async () => {
     const source = await readFile(
       new URL('./fixtures/python-osm-dual-tag-way.osm.pbf', import.meta.url),

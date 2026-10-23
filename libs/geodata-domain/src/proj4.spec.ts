@@ -40,6 +40,11 @@ describe('shared EPSG projection definitions', () => {
 
     expect(actual[0]).toBeCloseTo(-5.993670519717036, 7);
     expect(actual[1]).toBeCloseTo(37.367037324028914, 7);
+
+    const customWkt = wkt.replaceAll(/,ID\["EPSG",\d+\]/g, '');
+    const customActual = projectToWgs84(customWkt, [235000, 4140000]);
+    expect(customActual[0]).toBeCloseTo(-5.993670519717036, 7);
+    expect(customActual[1]).toBeCloseTo(37.367037324028914, 7);
   });
 
   it('resolves the root EPSG authority when ED50 UTM arrives as WKT2', () => {
@@ -54,6 +59,15 @@ describe('shared EPSG projection definitions', () => {
   it('uses the Spanish IGN grid when geographic ED50 arrives as WKT', () => {
     const wkt =
       'GEOGCS["GCS_European_1950",DATUM["D_European_1950",SPHEROID["International_1924",6378388.0,297.0]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]';
+    const actual = projectToWgs84(wkt, [-5.99, 37.39]);
+
+    expect(actual[0]).toBeCloseTo(-5.991339397674241, 7);
+    expect(actual[1]).toBeCloseTo(37.388740840920605, 7);
+  });
+
+  it('resolves a custom geographic ED50 WKT2 without authority IDs', () => {
+    const wkt =
+      'GEOGCRS["ED50 custom",DATUM["European Datum 1950",ELLIPSOID["International 1924",6378388,297,LENGTHUNIT["metre",1]]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],CS[ellipsoidal,2],AXIS["geodetic latitude (Lat)",north,ORDER[1],ANGLEUNIT["degree",0.0174532925199433]],AXIS["geodetic longitude (Lon)",east,ORDER[2],ANGLEUNIT["degree",0.0174532925199433]],ANGLEUNIT["degree",0.0174532925199433]]';
     const actual = projectToWgs84(wkt, [-5.99, 37.39]);
 
     expect(actual[0]).toBeCloseTo(-5.991339397674241, 7);

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="PyOsmium 4.3.2 parity fixture">
+  <node id="10" lat="37.39" lon="-5.99"/>
+  <node id="11" lat="37.40" lon="-5.98"/>
+  <way id="90">
+    <nd ref="10"/>
+    <nd ref="11"/>
+    <tag k="route" v="hiking"/>
+    <tag k="name" v="Hiking route"/>
+  </way>
+</osm>
