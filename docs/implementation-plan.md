@@ -47,10 +47,18 @@ fixtures do not cover an important outcome.
   ordering or failure behavior that could produce an incorrect write, duplicate side
   effect, leaked record, or misleading user outcome. Keep the Nest-only CSV ingestion
   endpoint documented as an extension; it is not evidence of reference parity.
-- **Geodata:** complete fixtures for outstanding PBF inputs above the qualified size,
-  less common OSM geometries, remaining geometry/CRS cases, and datum-grid-dependent
-  transformations. Verify any confirmed differences against the pinned importer before
-  changing behavior.
+- **Geodata:** keep bulk source intake, upload processing, parsing, validation, and
+  preprocessing asynchronous. Make user-requested entity mutations synchronous, including
+  status changes, edits, review decisions, and promotion or approval of selected
+  candidates. A multi-entity Admin action must apply its requested set in one Geodata
+  database transaction and return the completed result in the same request; it must not
+  enqueue a promotion job or silently fall back to background processing. Validate the
+  full selection before writing so the operation has all-or-nothing behavior. Preserve
+  idempotency and concurrency checks. Transactional outbox events may publish after the
+  mutation commits; the API result must not depend on broker delivery. Also complete
+  fixtures for outstanding PBF inputs above the qualified size, less common OSM
+  geometries, remaining geometry/CRS cases, and datum-grid-dependent transformations.
+  Verify any confirmed differences against the pinned importer before changing behavior.
 - **Email:** verify the SMTP delivery, TLS, failure, retry, deduplication, and notification
   outcomes in the deployment environment, using the existing allowlisted templates and
   privacy constraints.
@@ -69,6 +77,9 @@ differences are documented with their user or data impact and an explicit dispos
 - Check responsive layouts at supported narrow and wide viewport sizes.
 - Exercise permission denial, validation and conflict responses, unavailable services,
   failed uploads, interrupted uploads, and delayed or failed asynchronous work.
+- Verify that Admin status, edit, review, promotion, and approval actions return their
+  final outcome synchronously, including multi-entity selections; verify that import
+  ingestion and preprocessing instead expose asynchronous progress and terminal status.
 - Use live services for primary journeys. Use intercepted responses only for secondary
   presentation states that are not an end-to-end product workflow.
 - Record findings by application and workflow; fix blockers before marking the browser
@@ -89,9 +100,12 @@ only after durable state changes.
   persistence but before broker settlement.
 - **Activity notifications and Email:** qualify broker retry exhaustion and recovery under
   the configured deployment topology, including terminal dead-letter settlement.
-- **Geodata workers:** cover process loss during claim and after side effects for each of
-  the four work kinds. Extend object-store outage/recovery checks beyond multipart upload
-  to the other consumers and persistent-volume failure cases.
+- **Geodata workers:** cover process loss during claim and after side effects for the
+  remaining asynchronous work kinds, including bulk import preprocessing. Remove the
+  Admin-requested promotion/approval queue path as part of Step 2; those operations must
+  finish transactionally in the API request and are qualified as synchronous mutations,
+  not worker jobs. Extend object-store outage/recovery checks beyond multipart upload to
+  the other consumers and persistent-volume failure cases.
 - **NATS and PostgreSQL:** qualify deployment-level NATS recovery and PostgreSQL cluster
   failover, including relay, API, and worker reconnection and transaction outcomes.
 - **Object storage:** verify the deployed persistence and recovery procedures separately
@@ -109,6 +123,10 @@ recovery. Open failures are documented rather than inferred from process restart
   before setting a production cap.
 - Measure throughput, peak memory, database load, broker backlog, and recovery time under
   explicit CPU, memory, replica, and database-pool limits.
+- Measure synchronous single-entity and multi-entity status, edit, review, promotion, and
+  approval transactions under representative selection sizes. Set a documented request
+  limit from those measurements; reject an over-limit selection clearly rather than
+  converting it to asynchronous work or partially applying it.
 - Compare results with the pinned Python implementation where a like-for-like measure is
   possible; document differences in process-RSS scope and workload where it is not.
 - Qualify the importer’s live-source host allowlist, source licenses, source outages,
