@@ -57,7 +57,7 @@ const traceabilityLines = fs
   .split(/\r?\n/);
 const operations = traceabilityLines.flatMap((line) => {
   const match = line.match(
-    /^\| `([A-Z]+) (\/[^`]+)`\s+\| \[apps\/([^/]+)\/src\//,
+    /^- `([A-Z]+) (\/[^`]+)` — \[[^\]]+\]\(\.\.\/apps\/([^/]+)\/src\//,
   );
   if (!match) return [];
   const service = appServices.get(match[3]);
