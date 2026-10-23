@@ -52,17 +52,18 @@ an accepted scope decision is recorded in the dispositions section.
 - **Missing evidence:** The source page explicitly says broader account,
   callsign, recovery, and authorization sequences still need automated
   compatibility coverage. The live concurrent normalized-email creation check
-  ran in CI against isolated PostgreSQL, but failed: both requests returned
-  HTTP 400 instead of the expected one success and one duplicate-email
-  rejection. The ledger does not infer coverage from adjacent examples.
+  ran in CI against isolated PostgreSQL, but the fixture sent the unsupported
+  `INDIVIDUAL` participation type, so both requests were rejected before the
+  duplicate-email path was reached. This run does not qualify concurrent
+  normalized-email creation. The ledger does not infer coverage from adjacent
+  examples.
 - **Risk:** A sequence or precedence difference could grant access, retain an
   invalid session, or persist the wrong callsign/account state.
 - **Next check:** Compare remaining material Identity and Programme handler
   sequences with the pinned reference; add a focused fixture or workflow for
-  each uncovered material outcome. Diagnose why the concurrent-email fixture's
-  requests are both rejected, correct the fixture or implementation as evidence
-  indicates, rerun it against isolated PostgreSQL, then link the result in the
-  parity page.
+  each uncovered material outcome. Correct the concurrency fixture to use a
+  supported participation type, rerun it against isolated PostgreSQL, and link
+  the result in the parity page.
 - **Tracked by:** [Issue #11](https://github.com/myota-platform/myota-next/issues/11).
 - **Sources:** [Identity and Programmes, line 167](parity/identity-programmes.md#L167);
   [completion criteria, lines 9–17](parity/completion-criteria.md#L9).

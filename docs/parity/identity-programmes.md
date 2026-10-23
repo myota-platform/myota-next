@@ -201,10 +201,13 @@ integration creates an account using an email with surrounding whitespace and mi
 case, then verifies normalized email, `PENDING_SETUP`, the default `PARTICIPANT` role,
 and exact idempotent replay.
 
-The live API suite now also includes two concurrent account creations using differently
-cased and spaced forms of the same email, checking that exactly one account is persisted
-and the losing request receives the reference duplicate-email detail. This database-backed
-race check still needs its isolated CI execution.
+The live API suite includes two concurrent account creations using differently cased and
+spaced forms of the same email, checking that exactly one account is persisted and the
+losing request receives the reference duplicate-email detail. Its first isolated CI run
+did not exercise the race: the fixture sent the unsupported `INDIVIDUAL` participation
+type, so both requests were rejected during validation. The fixture now uses the supported
+`OPERATOR` type; the corrected database-backed check needs a passing isolated CI run before
+it can count as evidence.
 
 It also confirms that account creation rejects a permanent password with the reference's
 invitation-setup detail. The same live integration activates the account, requests and

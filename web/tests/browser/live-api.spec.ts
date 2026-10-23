@@ -44,7 +44,7 @@ test('serializes concurrent account creation for normalized duplicate emails', a
         data: {
           displayName: `Race winner A ${suffix}`,
           email: ` ${normalizedEmail.toUpperCase()} `,
-          participationType: 'INDIVIDUAL',
+          participationType: 'OPERATOR',
         },
       }),
       request.post('http://127.0.0.1:8080/v1/identity/accounts', {
@@ -55,7 +55,7 @@ test('serializes concurrent account creation for normalized duplicate emails', a
         data: {
           displayName: `Race winner B ${suffix}`,
           email: normalizedEmail,
-          participationType: 'INDIVIDUAL',
+          participationType: 'OPERATOR',
         },
       }),
     ]);
