@@ -266,10 +266,7 @@ test('signs into Admin through Gateway and loads its live dashboard', async ({
   await page.goto('http://127.0.0.1:8090/login');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
-  await activateByKeyboard(
-    page,
-    page.getByRole('button', { name: 'Sign in' }),
-  );
+  await activateByKeyboard(page, page.getByRole('button', { name: 'Sign in' }));
 
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByText('API connected')).toBeVisible();
@@ -528,6 +525,12 @@ test('manages participant-owned callsigns through the live Identity API', async 
   );
   expect(adminLogin.ok()).toBeTruthy();
   const { accessToken: adminAccessToken } = await adminLogin.json();
+  const adminProfile = await request.get(
+    'http://127.0.0.1:8080/v1/identity/me',
+    { headers: { Authorization: `Bearer ${adminAccessToken}` } },
+  );
+  expect(adminProfile.status()).toBe(200);
+  const adminAccountId = (await adminProfile.json()).id as string;
   const accountEmail = `browser-callsign-${randomUUID()}@example.test`;
   const accountResponse = await request.post(
     'http://127.0.0.1:8080/v1/identity/accounts',
@@ -574,6 +577,19 @@ test('manages participant-owned callsigns through the live Identity API', async 
   expect(participantLogin.status()).toBe(200);
   const { accessToken } = await participantLogin.json();
   const headers = { Authorization: `Bearer ${accessToken}` };
+  const deniedForeignCallsign = await request.post(
+    `http://127.0.0.1:8080/v1/identity/accounts/${adminAccountId}/callsigns`,
+    {
+      headers: { ...headers, 'Idempotency-Key': randomUUID() },
+      data: {
+        callsign: `DL${randomUUID().replaceAll('-', '').slice(0, 7).toUpperCase()}`,
+      },
+    },
+  );
+  expect(deniedForeignCallsign.status()).toBe(403);
+  expect((await deniedForeignCallsign.json()).detail).toBe(
+    'account scope is missing',
+  );
   const oldValue = `DL${randomUUID().replaceAll('-', '').slice(0, 7).toUpperCase()}`;
   const seededCallsign = await request.post(
     `http://127.0.0.1:8080/v1/identity/accounts/${accountId}/callsigns`,
