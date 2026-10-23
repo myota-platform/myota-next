@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('approves a candidate with a version-checked review decision', async ({
   page,
@@ -108,6 +109,9 @@ test('approves a candidate with a version-checked review decision', async ({
     .locator('button.entity-link')
     .filter({ hasText: 'Example summit' })
     .click();
+  await expect(
+    page.getByRole('checkbox', { name: 'Select Example summit' }),
+  ).toBeVisible();
   await page.locator('select').last().selectOption('APPROVED');
   await page
     .getByPlaceholder('Review note / decision evidence')
@@ -130,4 +134,5 @@ test('approves a candidate with a version-checked review decision', async ({
     },
   ]);
   expect(reviewRequests[0].idempotencyKey).not.toBe('');
+  await expectResponsiveAccessible(page, 'Admin Geodata review decision');
 });

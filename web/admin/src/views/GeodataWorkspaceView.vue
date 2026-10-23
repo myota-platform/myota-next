@@ -1763,6 +1763,7 @@ onMounted(async () => {
       >
         <input
           type="checkbox"
+          :aria-label="`Select ${entity.name}`"
           :checked="selectedIds.includes(entity.id)"
           @change="toggleEntity(entity.id)"
         /><button class="entity-link" @click="selectEntity(entity)">

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('creates a custom Identity role from the permission catalogue', async ({
   page,
@@ -96,4 +97,5 @@ test('creates a custom Identity role from the permission catalogue', async ({
     description: 'Review and maintain programme content.',
     scopes: ['programme.content.manage'],
   });
+  await expectResponsiveAccessible(page, 'Admin custom Identity role editor');
 });

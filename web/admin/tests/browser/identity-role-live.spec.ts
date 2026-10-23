@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectResponsiveAccessible } from '../../../a11y';
 
 test('creates and edits a custom Identity role through live Admin and Gateway', async ({
@@ -40,10 +40,16 @@ test('creates and edits a custom Identity role through live Admin and Gateway', 
         process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD ??
           'browser-e2e-password-7!Q',
       );
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await activateByKeyboard(
+      page,
+      page.getByRole('button', { name: 'Sign in' }),
+    );
     await expect(page).toHaveURL(/\/identity\?tab=roles$/);
 
-    await page.getByRole('button', { name: 'New custom role' }).click();
+    await activateByKeyboard(
+      page,
+      page.getByRole('button', { name: 'New custom role' }),
+    );
     await page.getByLabel('Role code').fill(roleCode.toLowerCase());
     await page.getByLabel('Display name').fill(roleName);
     await page
@@ -56,7 +62,10 @@ test('creates and edits a custom Identity role through live Admin and Gateway', 
         response.request().method() === 'POST'
       );
     });
-    await page.getByRole('button', { name: 'Save role' }).click();
+    await activateByKeyboard(
+      page,
+      page.getByRole('button', { name: 'Save role' }),
+    );
     const created = await createResponse;
     expect(created.status(), await created.text()).toBe(201);
     await expect(page.getByText('Role saved.')).toBeVisible();
@@ -64,7 +73,7 @@ test('creates and edits a custom Identity role through live Admin and Gateway', 
 
     const roleRow = page.getByRole('button', { name: roleName });
     await expect(roleRow).toContainText(roleCode);
-    await roleRow.click();
+    await activateByKeyboard(page, roleRow);
     await page.getByLabel('Display name').fill(updatedRoleName);
     await page.getByLabel('programme.content.manage').uncheck();
     await page.getByLabel('activity.admin').check();
@@ -74,7 +83,10 @@ test('creates and edits a custom Identity role through live Admin and Gateway', 
         response.request().method() === 'PATCH'
       );
     });
-    await page.getByRole('button', { name: 'Save role' }).click();
+    await activateByKeyboard(
+      page,
+      page.getByRole('button', { name: 'Save role' }),
+    );
     const updated = await updateResponse;
     expect(updated.status(), await updated.text()).toBe(200);
     await expect(page.getByText('Role saved.')).toBeVisible();
@@ -89,7 +101,7 @@ test('creates and edits a custom Identity role through live Admin and Gateway', 
       name: updatedRoleName,
     });
     await expect(updatedRoleRow).toContainText(roleCode);
-    await updatedRoleRow.click();
+    await activateByKeyboard(page, updatedRoleRow);
     await expect(page.getByLabel('activity.admin')).toBeChecked();
     await expect(page.getByLabel('programme.content.manage')).not.toBeChecked();
 
@@ -154,3 +166,9 @@ test('creates and edits a custom Identity role through live Admin and Gateway', 
     await pool.end();
   }
 });
+
+async function activateByKeyboard(page: Page, button: Locator) {
+  await button.focus();
+  await expect(button).toBeFocused();
+  await page.keyboard.press('Enter');
+}

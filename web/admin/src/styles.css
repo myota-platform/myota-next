@@ -584,6 +584,14 @@ select:focus-visible {
   display: flex !important;
   gap: 8px !important;
 }
+.check-field > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.check-field .field-help {
+  display: block;
+  overflow-wrap: anywhere;
+}
 .check-field input {
   width: auto;
 }
