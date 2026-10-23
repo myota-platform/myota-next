@@ -1,89 +1,147 @@
-# Implementation sequence
+# Remaining parity and implementation plan
 
-Build the clean implementation in vertical slices. Do not start deployment
-cutover or claim parity until each slice has behavioral evidence against the
-current reference.
+## Objective and current state
 
-## 0. Freeze the behavioral baseline
+Finish the behavior and operational gaps recorded in the [parity matrix](parity-matrix.md)
+for the new Node.js/NestJS platform. Start with the user-facing behaviors that affect
+correctness, authorization, and data integrity; then qualify recovery, capacity, and
+deployment.
 
-- Record the exact reference commit and snapshot all language-neutral
-  contracts, event registry, schemas, and migration files.
-- The reference OpenAPI, event registry, and 81 JSON schemas are preserved in
-  [`contracts/reference/`](../contracts/reference/), with SHA-256 checksums.
-- The eight original application/deployment migration files are preserved in
-  [`docs/reference/migrations/`](reference/migrations/) for schema-by-schema
-  comparison; active migrations remain under `deploy/db/migrations/`.
-- Inventory API operations, event producers/consumers, worker kinds, UI routes,
-  database tables, object storage buckets, environment settings, and runbooks.
-- Map the 135 upstream OpenAPI operations across 113 paths to service handlers
-  and compatibility evidence. Track the six target-only API extensions listed
-  in [`api-baseline.md`](api-baseline.md) separately from upstream parity.
-- Keep the [API operation traceability index](api-operation-traceability.md)
-  mapped to target controller sources, then link each operation to behavioral
-  compatibility evidence as it is established. Resolve ambiguities against
-  current reference source and contract behavior.
+The primary workflows across Identity, Programmes, Activity, Geodata, Email, Admin, and
+Participant are implemented. All 141 OpenAPI operations map to NestJS routes. That route
+inventory is not behavioral parity evidence. The detailed parity pages and
+[implementation status](status.md) identify the remaining work; most open items are
+qualification or edge behavior rather than missing product areas. Add code only where
+that evidence identifies a real behavior gap.
 
-## 1. Establish the new runtime
+The new platform starts from empty databases. Migration of data from the former system is
+out of scope. Preserve the three database owners and keep target-only API extensions
+separate from upstream parity claims.
 
-- Create reproducible npm workspace builds, formatting, static analysis, test,
-  and container workflows for the selected Node.js/NestJS stack.
-- Implement service startup, configuration validation, health/readiness,
-  structured logs, metrics, tracing, and graceful shutdown.
-- Start each process independently while retaining the three database targets.
+## Step 1: Establish the remaining-work ledger
 
-The Node 24/NestJS workspace, separate service and worker entry points, database-aware
-readiness, copied contracts and migrations, formatting, lint, typecheck, build gates, an
-owner-scoped migration runner, and a per-application Docker recipe are in place. GitHub
-Actions run static and build gates and provide a gated workflow for publishing
-application images. Deployment qualification remains open. Identity, Programmes,
-Activity, and Geodata have substantial working slices.
+- Review every outstanding or qualified-later item in the [parity pages](parity/) and
+  [operations guides](operations/).
+- For each item, record its owning service or application, the reference behavior, current
+  implementation location, existing evidence, missing evidence, risk, and next check.
+- Classify it as a product behavior gap, additional compatibility qualification,
+  recovery/operations qualification, performance qualification, or optional extension.
+- Remove duplicate items only after linking the same evidence to every affected area.
+  Do not count a route mapping, unit test, or successful build as workflow parity.
 
-The platform starts with empty target databases; transferring data from the old platform
-is out of scope. See the [implementation status](status.md) and [parity
-matrix](parity-matrix.md) for current coverage and known gaps.
+**Exit:** Every remaining-status statement in the parity pages is represented in the
+ledger or explicitly marked as an accepted limitation. Product gaps and operational
+gates are distinguishable.
 
-## 2. Implement contract-shaped synchronous behavior
+## Step 2: Close consequential product-behavior gaps
 
-- NestJS controllers are mapped to all upstream OpenAPI operations. Identity
-  and Programmes use owner-scoped relational persistence, and Gateway routing
-  and authorization forwarding are implemented.
-- Continue checking payload, authorization, error, and workflow behavior
-  against the reference. Route coverage alone does not establish parity.
+Work service by service, adding a focused reference comparison only where existing
+fixtures do not cover an important outcome.
 
-## 3. Implement Activity and Geodata domains
+- **Identity and Programmes:** cover remaining authorization, idempotency, validation,
+  conflict, and lifecycle outcomes that could change access or persisted state. Verify a
+  successful SMTP delivery using the deployment trust roots before declaring email
+  delivery qualified.
+- **Activity:** complete broader compatibility checks for activation and QSO behavior,
+  imports, corrections, public results, awards, notifications, and job status. Prioritize
+  ordering or failure behavior that could produce an incorrect write, duplicate side
+  effect, leaked record, or misleading user outcome. Keep the Nest-only CSV ingestion
+  endpoint documented as an extension; it is not evidence of reference parity.
+- **Geodata:** complete fixtures for outstanding PBF inputs above the qualified size,
+  less common OSM geometries, remaining geometry/CRS cases, and datum-grid-dependent
+  transformations. Verify any confirmed differences against the pinned importer before
+  changing behavior.
+- **Email:** verify the SMTP delivery, TLS, failure, retry, deduplication, and notification
+  outcomes in the deployment environment, using the existing allowlisted templates and
+  privacy constraints.
 
-- Activity and Geodata APIs and workers implement the documented activity,
-  import, award, rendering, review, and several recovery workflows. Preserve
-  the Core, Activity, and Geodata database boundaries and their high-write and
-  spatial query behavior.
-- Continue resolving behavior gaps and qualifying worker recovery and
-  throughput. See the parity matrix for specific differences and open evidence.
+For each confirmed gap, implement the smallest compatible change, update its contract or
+traceability only when the contract changes, and link the passing evidence from the owning
+parity page. Do not expand APIs merely to make the target appear more complete.
 
-## 4. Carry forward and reconcile browser applications
+**Exit:** Each material product behavior has code-level and workflow evidence; unresolved
+differences are documented with their user or data impact and an explicit disposition.
 
-- Admin and Participant applications are separate deployable artifacts and use
-  the NestJS APIs. Admin route-to-contract mapping and local build checks are in
-  place.
-- Verify payloads, permission states, destructive and conflict flows, uploads,
-  async progress, accessibility, and responsive behavior in browser workflows.
+## Step 3: Complete primary browser quality
 
-## 5. Prove parity and qualify fresh deployment
+- Review keyboard use, focus order, labels, contrast, and screen-reader announcements in
+  the primary Admin and Participant journeys.
+- Check responsive layouts at supported narrow and wide viewport sizes.
+- Exercise permission denial, validation and conflict responses, unavailable services,
+  failed uploads, interrupted uploads, and delayed or failed asynchronous work.
+- Use live services for primary journeys. Use intercepted responses only for secondary
+  presentation states that are not an end-to-end product workflow.
+- Record findings by application and workflow; fix blockers before marking the browser
+  area complete.
 
-- Extend automated compatibility evidence across APIs, databases, workers, and
-  browser workflows. Current CI static and build checks do not prove parity.
-- Compare isolated API fixtures and representative results with the reference;
-  do not transfer its database contents.
-- Initialize Core, Activity, and Geodata from empty databases and qualify
-  owner migrations, backups, and restore procedures.
-- Exercise backups, restore, broker outage, worker restart, and object-store
-  recovery before considering production deployment.
+**Exit:** Primary workflows pass browser checks at supported viewport sizes, keyboard and
+accessibility blockers are resolved, and important failure states give recoverable,
+accurate feedback.
 
-## Exit gate
+## Step 4: Qualify worker and infrastructure recovery
 
-No production deployment until the function parity matrix is fully traced to
-code and compatibility checks, the three databases initialize cleanly and
-have verified backup and restore procedures, worker recovery paths are
-qualified, browser workflows pass, and deployment qualification succeeds in an
-isolated environment. This repository is a development baseline. Use the
-parity matrix for missing behavior and the status document for current
-implementation.
+Run controlled fault injection first, then repeat the relevant scenarios against the
+isolated deployment. Keep state in the owning database and acknowledge broker messages
+only after durable state changes.
+
+- **Activity workers:** kill each work kind during side-effecting processing; verify lease
+  recovery, idempotency, and final records. Cover process loss after terminal dead-letter
+  persistence but before broker settlement.
+- **Activity notifications and Email:** qualify broker retry exhaustion and recovery under
+  the configured deployment topology, including terminal dead-letter settlement.
+- **Geodata workers:** cover process loss during claim and after side effects for each of
+  the four work kinds. Extend object-store outage/recovery checks beyond multipart upload
+  to the other consumers and persistent-volume failure cases.
+- **NATS and PostgreSQL:** qualify deployment-level NATS recovery and PostgreSQL cluster
+  failover, including relay, API, and worker reconnection and transaction outcomes.
+- **Object storage:** verify the deployed persistence and recovery procedures separately
+  from database backups. Confirm interrupted writes and cleanup remain safe to retry.
+
+**Exit:** Each listed failure window has a repeatable check with evidence of durable state,
+no duplicate side effect, eventual completion or safe dead-lettering, and observable
+recovery. Open failures are documented rather than inferred from process restart tests.
+
+## Step 5: Set and verify Geodata capacity and source limits
+
+- Build representative import fixtures and workloads for GeoJSON, WFS, ArcGIS, KML, GPX,
+  Shapefile, and OSM PBF, including configured maximum sizes and feature counts.
+- Extend OSM PBF qualification beyond 250,000 features and include less common geometries
+  before setting a production cap.
+- Measure throughput, peak memory, database load, broker backlog, and recovery time under
+  explicit CPU, memory, replica, and database-pool limits.
+- Compare results with the pinned Python implementation where a like-for-like measure is
+  possible; document differences in process-RSS scope and workload where it is not.
+- Qualify the importer’s live-source host allowlist, source licenses, source outages,
+  schedule behavior, and safe retry before enabling it outside the isolated environment.
+- Set worker concurrency, upload, feature, and timeout defaults from measured limits.
+
+**Exit:** Supported formats and limits have correctness fixtures, resource measurements,
+and documented operating bounds. Source selection and outage behavior are reviewed
+before scheduled fetching is enabled.
+
+## Step 6: Qualify a fresh isolated deployment
+
+- Initialize Core, Activity, and Geodata from empty databases using the deployment
+  migrations. Verify ownership, health/readiness, and backup/restore with the target
+  PostgreSQL and object-storage configuration. Do not import the old platform's data.
+- Supply Observe and other credentials through the deployment secret store. Verify each
+  independently deployed Nest process has its stable `serviceId`, instrumentation hook,
+  and disabled reporting when credentials are absent.
+- Render and deploy the reviewed Helm configuration to the isolated `myota-test` release
+  using immutable image digests. Keep testing and production image sources separate.
+- Exercise primary Admin and Participant workflows against that release. Verify logs,
+  metrics, traces, alerts, NATS and database recovery, object-store recovery, backup, and
+  restore using the deployment configuration.
+- Verify rollback to the previous digest and confirm that migrations and persisted work
+  remain compatible with the rollback procedure.
+
+**Exit:** Fresh installation, primary workflows, observability, recovery, backup/restore,
+image provenance, and rollback all pass in the isolated Helm release. This completes
+qualification for review; it does not authorize production cutover.
+
+## Completion gate
+
+Do not claim full parity until the parity pages link each required behavior to its
+implementation and compatibility evidence. Do not consider production use until Steps 3
+through 6 pass in the isolated deployment and all remaining differences have an explicit
+disposition. Production rollout and data transfer require separate user direction.
