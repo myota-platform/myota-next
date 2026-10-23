@@ -5,6 +5,14 @@ on the pinned [`myota` reference](https://github.com/myota-platform/myota/tree/7
 The [parity matrix](parity-matrix.md) is the acceptance inventory; this page
 summarizes implementation coverage and remaining gates.
 
+## Canonical implementation repository
+
+`myota-platform/myota-next` is the canonical repository for ongoing
+implementation of the new platform. New implementation work belongs here.
+The existing [`myota` monorepo](https://github.com/myota-platform/myota) is
+retained as the pinned behavioral reference; this source-of-code decision does
+not move live deployment ownership or claim production cutover.
+
 ## In place
 
 - Node.js 24, NestJS 12, and `@nestjs/observe` across the independently
