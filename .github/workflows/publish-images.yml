@@ -73,7 +73,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.app == 'admin-web' && './web/admin' || matrix.app == 'participant-web' && './web/participant' || '.' }}
-          file: ${{ matrix.app == 'tools' && 'deploy/Dockerfile.tools' || 'Dockerfile' }}
+          file: ${{ matrix.app == 'tools' && 'deploy/Dockerfile.tools' || matrix.app == 'admin-web' && 'web/admin/Dockerfile' || matrix.app == 'participant-web' && 'web/participant/Dockerfile' || 'Dockerfile' }}
           build-args: ${{ steps.app-build-arg.outputs.value }}
           push: false
           cache-from: type=gha,scope=${{ matrix.app }}
@@ -135,7 +135,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.app == 'admin-web' && './web/admin' || matrix.app == 'participant-web' && './web/participant' || '.' }}
-          file: ${{ matrix.app == 'tools' && 'deploy/Dockerfile.tools' || 'Dockerfile' }}
+          file: ${{ matrix.app == 'tools' && 'deploy/Dockerfile.tools' || matrix.app == 'admin-web' && 'web/admin/Dockerfile' || matrix.app == 'participant-web' && 'web/participant/Dockerfile' || 'Dockerfile' }}
           build-args: ${{ steps.app-build-arg.outputs.value }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
