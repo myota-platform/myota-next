@@ -180,9 +180,12 @@ an accepted scope decision is recorded in the dispositions section.
   skip-link keyboard navigation. The map includes a keyboard-operable directory
   for selecting loaded entities. Live authorization coverage verifies a
   least-privilege account is denied access to the Admin Identity route and
-  receives 403 from the protected Identity endpoint. A full CI run passed all
-  69 browser checks against the isolated services, including the database-backed
-  primary Admin workflows: [run 40006062372](https://github.com/myota-platform/myota-next/actions/runs/40006062372).
+  receives 403 from the protected Identity endpoint. Live completion states for
+  Identity/account changes, programme content/archive, Activity corrections and
+  statistics rebuild, Geodata import/review/edit/deletion, conflation, and map
+  selection receive narrow/wide Axe and overflow scans. A full CI run passed all
+  69 browser checks against isolated services, including the database-backed
+  primary Admin workflows: [run 40007673517](https://github.com/myota-platform/myota-next/actions/runs/40007673517).
   Local runs without the CI databases skip live-service specs.
 - **Missing evidence:** Some secondary Admin workflows still lack live
   browser-level compatibility coverage. The route scan is accessibility
@@ -209,7 +212,7 @@ an accepted scope decision is recorded in the dispositions section.
   clients, including Participant activation, QSO, profile, callsign, awards,
   and public catalogue flows. A full CI run passed all 69 browser checks,
   including live-service journeys and intercepted presentation-state specs:
-  [run 40006062372](https://github.com/myota-platform/myota-next/actions/runs/40006062372).
+  [run 40007673517](https://github.com/myota-platform/myota-next/actions/runs/40007673517).
   Automated scans check all registered Admin routes at narrow and wide
   viewports and primary Participant journeys at
   supported viewports; browser checks cover keyboard navigation and accessible

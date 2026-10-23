@@ -196,7 +196,7 @@ Some secondary Admin workflows still lack live browser-level compatibility cover
 route-wide accessibility scans and isolated component tests do not substitute for an
 end-to-end workflow through Gateway and the owning service. A complete live CI
 run passed all 69 browser checks against the isolated services, including Admin and
-Participant journeys; see [run 40006062372](https://github.com/myota-platform/myota-next/actions/runs/40006062372).
+Participant journeys; see [run 40007673517](https://github.com/myota-platform/myota-next/actions/runs/40007673517).
 Residual secondary workflow gaps remain tracked in the browser-quality issues. Refresh
 schedule checks create a temporary category and an all-programmes schedule in Admin,
 then upload an empty complete GeoJSON snapshot and verify worker completion through live
@@ -275,7 +275,10 @@ public map renders point, line, polygon, and multipart entity geometries.
 All 14 registered Admin routes are scanned with Axe against WCAG 2.0, 2.1, and 2.2 AA
 criteria at narrow (390px) and wide (1440px) viewports, with horizontal-overflow checks
 at both sizes. The dashboard and primary Participant journeys also receive narrow and
-wide viewport scans. Browser checks exercise skip-link focus and activation, mobile
+wide viewport scans. Live Admin completion states also receive narrow and wide Axe and
+overflow scans for Identity authorization/account changes, programme content and
+archive, Activity corrections/statistics rebuild, Geodata import/review/edit/deletion,
+conflation, schedules, and map selection. Browser checks exercise skip-link focus and activation, mobile
 navigation Escape/focus return, keyboard-driven Geodata multi-selection, and accessible
 job failure/retry feedback. These automated checks do not replace manual screen-reader
 and visual review. A live Admin Map workflow now loads a persisted Geodata entity through
@@ -290,7 +293,7 @@ atomic status region, and is checked at supported viewports. The live Participan
 activation/QSO workflow starts, records a contact, and closes the activation by keyboard;
 the active QSO form and completed state are checked at supported viewports, and the
 persisted QSO is verified through Gateway. Full CI run
-[40006062372](https://github.com/myota-platform/myota-next/actions/runs/40006062372)
+[40007673517](https://github.com/myota-platform/myota-next/actions/runs/40007673517)
 passed all 69 browser checks against isolated services. Local runs without the CI
 databases skip the live-service specs. Manual screen-reader and visual review remains
 open.
