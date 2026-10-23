@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('creates and edits a custom Identity role through live Admin and Gateway', async ({
   page,
@@ -128,6 +129,10 @@ test('creates and edits a custom Identity role through live Admin and Gateway', 
       'identity.role-definition.created.v1',
       'identity.role-definition.updated.v1',
     ]);
+    await expectResponsiveAccessible(
+      page,
+      'Live Admin Identity role creation and update',
+    );
   } finally {
     await pool
       .query(

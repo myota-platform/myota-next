@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('reviews live QSO corrections without changing rejected QSOs', async ({
   page,
@@ -96,7 +97,12 @@ test('reviews live QSO corrections without changing rejected QSOs', async ({
           `/v1/qsos/${qsoIds[0]}/corrections/${correctionIds[0]}/review` &&
         response.request().method() === 'POST',
     );
-    await appliedCard.getByRole('button', { name: 'Apply correction' }).click();
+    const applyCorrectionButton = appliedCard.getByRole('button', {
+      name: 'Apply correction',
+    });
+    await applyCorrectionButton.focus();
+    await expect(applyCorrectionButton).toBeFocused();
+    await page.keyboard.press('Enter');
     expect((await appliedResponse).status()).toBe(200);
     await expect(page.getByText('QSO correction applied.')).toBeVisible();
 
@@ -109,7 +115,12 @@ test('reviews live QSO corrections without changing rejected QSOs', async ({
           `/v1/qsos/${qsoIds[1]}/corrections/${correctionIds[1]}/review` &&
         response.request().method() === 'POST',
     );
-    await rejectedCard.getByRole('button', { name: 'Reject' }).click();
+    const rejectCorrectionButton = rejectedCard.getByRole('button', {
+      name: 'Reject',
+    });
+    await rejectCorrectionButton.focus();
+    await expect(rejectCorrectionButton).toBeFocused();
+    await page.keyboard.press('Enter');
     expect((await rejectedResponse).status()).toBe(200);
     await expect(page.getByText('QSO correction rejected.')).toBeVisible();
 
@@ -153,6 +164,10 @@ test('reviews live QSO corrections without changing rejected QSOs', async ({
       [programmeSlug],
     );
     expect(jobs.rows).toHaveLength(1);
+    await expectResponsiveAccessible(
+      page,
+      'Live Admin QSO correction and rejection outcomes',
+    );
   } finally {
     const jobs = await pool.query<{ id: string }>(
       `SELECT id FROM activity_job

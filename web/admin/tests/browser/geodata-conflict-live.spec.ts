@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('reloads a live entity after a stale metadata edit and saves the new version', async ({
   page,
@@ -81,7 +82,12 @@ test('reloads a live entity after a stale metadata edit and saves the new versio
           `/v1/geodata/entities/${entityId}` &&
         response.request().method() === 'PATCH',
     );
-    await editor.getByRole('button', { name: 'Save details' }).click();
+    const staleSaveButton = editor.getByRole('button', {
+      name: 'Save details',
+    });
+    await staleSaveButton.focus();
+    await expect(staleSaveButton).toBeFocused();
+    await page.keyboard.press('Enter');
     const staleResponse = await staleResponsePromise;
     metadataRequests.push({
       status: staleResponse.status(),
@@ -94,16 +100,22 @@ test('reloads a live entity after a stale metadata edit and saves the new versio
     await expect(
       page.locator('#workspace-content').getByRole('alert').first(),
     ).toContainText('entity version is stale');
+    await expectResponsiveAccessible(
+      page,
+      'Live Admin stale Geodata edit conflict',
+    );
 
     const confirmations: string[] = [];
     page.on('dialog', async (dialog) => {
       confirmations.push(dialog.message());
       await dialog.accept();
     });
-    await page
+    const reloadEntityButton = page
       .getByRole('dialog')
-      .getByRole('button', { name: 'Reload selected entity' })
-      .click();
+      .getByRole('button', { name: 'Reload selected entity' });
+    await reloadEntityButton.focus();
+    await expect(reloadEntityButton).toBeFocused();
+    await page.keyboard.press('Enter');
     const refreshedEditor = page.getByRole('dialog', { name: concurrentName });
     const refreshedDisplayName = refreshedEditor.getByLabel('Display name');
     await expect(refreshedDisplayName).toHaveValue(concurrentName);
@@ -117,7 +129,12 @@ test('reloads a live entity after a stale metadata edit and saves the new versio
           `/v1/geodata/entities/${entityId}` &&
         response.request().method() === 'PATCH',
     );
-    await refreshedEditor.getByRole('button', { name: 'Save details' }).click();
+    const saveDetailsButton = refreshedEditor.getByRole('button', {
+      name: 'Save details',
+    });
+    await saveDetailsButton.focus();
+    await expect(saveDetailsButton).toBeFocused();
+    await page.keyboard.press('Enter');
     const savedResponse = await savedResponsePromise;
     metadataRequests.push({
       status: savedResponse.status(),
@@ -155,6 +172,10 @@ test('reloads a live entity after a stale metadata edit and saves the new versio
       [entityId],
     );
     expect(audit.rows[0]?.count).toBe('1');
+    await expectResponsiveAccessible(
+      page,
+      'Live Admin corrected Geodata edit after conflict reload',
+    );
   } finally {
     await client.query('ROLLBACK').catch(() => undefined);
     await client.query('BEGIN');

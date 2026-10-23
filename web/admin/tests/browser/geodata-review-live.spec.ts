@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('reviews a Geodata candidate through live Admin and Gateway services', async ({
   page,
@@ -59,7 +60,12 @@ test('reviews a Geodata candidate through live Admin and Gateway services', asyn
         response.request().method() === 'POST'
       );
     });
-    await page.getByRole('button', { name: 'Save review decision' }).click();
+    const saveDecisionButton = page.getByRole('button', {
+      name: 'Save review decision',
+    });
+    await saveDecisionButton.focus();
+    await expect(saveDecisionButton).toBeFocused();
+    await page.keyboard.press('Enter');
     const response = await reviewResponse;
     expect(response.status(), await response.text()).toBe(200);
     const request = response.request();
@@ -114,6 +120,10 @@ test('reviews a Geodata candidate through live Admin and Gateway services', asyn
         outbox_count: 1,
       },
     ]);
+    await expectResponsiveAccessible(
+      page,
+      'Live Admin Geodata candidate review result',
+    );
   } finally {
     try {
       await fixture.query('ROLLBACK').catch(() => undefined);

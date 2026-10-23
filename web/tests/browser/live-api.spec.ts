@@ -242,6 +242,10 @@ test('loads a real programme catalogue through Gateway and Geodata', async ({
     'Page 1 · 0 entities',
   );
   expect(failedResponses).toEqual([]);
+  await expectResponsiveAccessible(
+    page,
+    'Live Participant public catalogue through Gateway and Geodata',
+  );
 });
 
 test('signs into Admin through Gateway and loads its live dashboard', async ({
@@ -262,7 +266,10 @@ test('signs into Admin through Gateway and loads its live dashboard', async ({
   await page.goto('http://127.0.0.1:8090/login');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await activateByKeyboard(
+    page,
+    page.getByRole('button', { name: 'Sign in' }),
+  );
 
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByText('API connected')).toBeVisible();
@@ -270,6 +277,7 @@ test('signs into Admin through Gateway and loads its live dashboard', async ({
     page.getByText('available programme configurations'),
   ).toBeVisible();
   expect(failedResponses).toEqual([]);
+  await expectResponsiveAccessible(page, 'Live Admin dashboard');
 });
 
 test('creates, reviews, and publishes a policy in Admin through Gateway', async ({
