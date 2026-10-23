@@ -43,8 +43,8 @@ Apply this rule to every product area and UI:
 
 ## Step 1: Establish the remaining-work ledger
 
-- Review every outstanding or qualified-later item in the [parity pages](parity/) and
-  [operations guides](operations/).
+- Review the [remaining-work ledger](remaining-work-ledger.md) against every outstanding or
+  qualified-later item in the [parity pages](parity/) and [operations guides](operations/).
 - For each item, record its owning service or application, the reference behavior, current
   implementation location, existing evidence, missing evidence, risk, and next check.
 - Classify it as a product behavior gap, additional compatibility qualification,

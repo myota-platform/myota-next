@@ -53,6 +53,7 @@ production and deployment qualification remain gated.
 
 ## Detailed behavior
 
+- [Remaining-work ledger](remaining-work-ledger.md)
 - [HTTP compatibility](parity/http.md)
 - [Identity and Programmes](parity/identity-programmes.md)
 - [Activity](parity/activity.md)
