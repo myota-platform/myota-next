@@ -278,5 +278,13 @@ job failure/retry feedback. These automated checks do not replace manual screen-
 and visual review. A live Admin Map workflow now loads a persisted Geodata entity through
 Gateway. A dedicated live Admin Awards workflow queues broad progress recalculation by
 keyboard, waits for its terminal status, checks the persisted participant progress row,
-and scans the completed workflow at supported viewports. Local runs without the CI
-databases skip the live-service specs; the CI run above qualifies the prior live journeys.
+and scans the completed workflow at supported viewports. The live Participant Award
+request is also submitted by keyboard, announces its persisted result through a polite
+atomic status region, and is checked at supported viewports. The live Participant
+activation/QSO workflow starts, records a contact, and closes the activation by keyboard;
+the active QSO form and completed state are checked at supported viewports, and the
+persisted QSO is verified through Gateway. Full CI run
+[39999854236](https://github.com/myota-platform/myota-next/actions/runs/39999854236)
+passed all 68 browser checks against isolated services. Local runs without the CI
+databases skip the live-service specs. Manual screen-reader and visual review remains
+open.

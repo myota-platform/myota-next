@@ -179,7 +179,7 @@ an accepted scope decision is recorded in the dispositions section.
   routes pass Axe and horizontal-overflow checks at 390px and 1440px, plus
   skip-link keyboard navigation. A full CI run passed all 68 browser
   checks against the isolated services, including the database-backed primary
-  Admin workflows: [run 39996779864](https://github.com/myota-platform/myota-next/actions/runs/39996779864).
+  Admin workflows: [run 39999854236](https://github.com/myota-platform/myota-next/actions/runs/39999854236).
   Local runs without the CI databases skip live-service specs.
 - **Missing evidence:** Some secondary Admin workflows still lack live
   browser-level compatibility coverage. The route scan is accessibility
@@ -206,7 +206,7 @@ an accepted scope decision is recorded in the dispositions section.
   clients, including Participant activation, QSO, profile, callsign, awards,
   and public catalogue flows. A full CI run passed all 68 browser checks,
   including live-service journeys and intercepted presentation-state specs:
-  [run 39996779864](https://github.com/myota-platform/myota-next/actions/runs/39996779864).
+  [run 39999854236](https://github.com/myota-platform/myota-next/actions/runs/39999854236).
   Automated scans check all registered Admin routes at narrow and wide
   viewports and primary Participant journeys at
   supported viewports; browser checks cover keyboard navigation and accessible

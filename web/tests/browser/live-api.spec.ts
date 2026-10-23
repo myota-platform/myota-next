@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import sharp from 'sharp';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectResponsiveAccessible } from '../../a11y';
 
 const hasApiDatabases = Boolean(
@@ -587,15 +587,25 @@ test('manages participant-owned callsigns through the live Identity API', async 
   await page.goto('http://127.0.0.1:8091');
   await page.locator('#award-email').fill(accountEmail);
   await page.locator('#award-password').fill(password);
-  await page.locator('#award-login button[type="submit"]').click();
+  await activateByKeyboard(
+    page,
+    page.locator('#award-login button[type="submit"]'),
+  );
   await expect(page.locator('#profile-callsigns')).toBeVisible();
+  await expectResponsiveAccessible(
+    page,
+    'Live Participant profile and callsign workspace',
+  );
 
   const websiteUrl = `https://radio-${randomUUID()}.example.test`;
   const biographyMarkdown =
     'Live participant profile details from the browser integration.';
   await page.locator('#profile-website').fill(websiteUrl);
   await page.locator('#profile-biography').fill(biographyMarkdown);
-  await page.getByRole('button', { name: 'Save profile details' }).click();
+  await activateByKeyboard(
+    page,
+    page.getByRole('button', { name: 'Save profile details' }),
+  );
   await expect(page.locator('#profile-status')).toHaveText('Profile saved.');
 
   const profilePicture = await sharp({
@@ -614,7 +624,10 @@ test('manages participant-owned callsigns through the live Identity API', async 
     buffer: profilePicture,
   });
   await expect(page.locator('#profile-crop-tools')).toBeVisible();
-  await page.getByRole('button', { name: 'Save cropped picture' }).click();
+  await activateByKeyboard(
+    page,
+    page.getByRole('button', { name: 'Save cropped picture' }),
+  );
   await expect(page.locator('#profile-status')).toHaveText(
     'Profile picture saved.',
   );
@@ -638,7 +651,10 @@ test('manages participant-owned callsigns through the live Identity API', async 
     'image/webp',
   );
   expect((await storedImage.body()).length).toBeGreaterThan(0);
-  await page.getByRole('button', { name: 'Remove profile picture' }).click();
+  await activateByKeyboard(
+    page,
+    page.getByRole('button', { name: 'Remove profile picture' }),
+  );
   await expect(page.locator('#profile-status')).toHaveText(
     'Profile picture removed.',
   );
@@ -650,8 +666,15 @@ test('manages participant-owned callsigns through the live Identity API', async 
   expect(removedImage.status()).toBe(404);
 
   await page.locator('#profile-callsign-value').fill(newValue);
-  await page.locator('#profile-callsign-add button[type="submit"]').click();
+  await activateByKeyboard(
+    page,
+    page.locator('#profile-callsign-add button[type="submit"]'),
+  );
   await expect(page.locator('#profile-status')).toHaveText('Callsign added.');
+  await expectResponsiveAccessible(
+    page,
+    'Live Participant callsign added for evidence and primary selection',
+  );
   const accountAfterAdd = await request.get(
     'http://127.0.0.1:8080/v1/identity/me',
     { headers },
@@ -672,9 +695,10 @@ test('manages participant-owned callsigns through the live Identity API', async 
   await page
     .locator('#profile-evidence-metadata')
     .fill('{"reference":"browser-live"}');
-  await page
-    .locator('#profile-callsign-evidence button[type="submit"]')
-    .click();
+  await activateByKeyboard(
+    page,
+    page.locator('#profile-callsign-evidence button[type="submit"]'),
+  );
   await expect(page.locator('#profile-status')).toHaveText(
     'Callsign evidence submitted.',
   );
@@ -685,15 +709,27 @@ test('manages participant-owned callsigns through the live Identity API', async 
   const oldCallsign = page
     .locator('.profile-callsign-row')
     .filter({ hasText: oldValue });
-  await newCallsign.getByRole('button', { name: 'Make primary' }).click();
+  await activateByKeyboard(
+    page,
+    newCallsign.getByRole('button', { name: 'Make primary' }),
+  );
   await expect(newCallsign).toContainText('Primary');
-  await oldCallsign.getByRole('button', { name: 'Make primary' }).click();
+  await activateByKeyboard(
+    page,
+    oldCallsign.getByRole('button', { name: 'Make primary' }),
+  );
   await expect(oldCallsign).toContainText('Primary');
-  await oldCallsign.getByRole('button', { name: 'Retire' }).click();
+  await activateByKeyboard(
+    page,
+    oldCallsign.getByRole('button', { name: 'Retire' }),
+  );
   await page
     .locator('#profile-retire-replacement')
     .selectOption(newCallsignId!);
-  await page.locator('#profile-callsign-retire button[type="submit"]').click();
+  await activateByKeyboard(
+    page,
+    page.locator('#profile-callsign-retire button[type="submit"]'),
+  );
   await expect(page.locator('#profile-status')).toHaveText('Callsign retired.');
   await expect(oldCallsign).toContainText('RETIRED');
   await expect(newCallsign).toContainText('Primary');
@@ -1066,3 +1102,9 @@ test('reviews a live QSO correction in Admin and verifies the updated QSO', asyn
   ]);
   expect(failedResponses).toEqual([]);
 });
+
+async function activateByKeyboard(page: Page, button: Locator) {
+  await button.focus();
+  await expect(button).toBeFocused();
+  await page.keyboard.press('Enter');
+}
