@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('deletes an entity and reconciles linked Activity data through live services', async ({
   page,
@@ -114,6 +115,7 @@ test('deletes an entity and reconciles linked Activity data through live service
     await expect(
       page.locator('button.entity-link').filter({ hasText: entityName }),
     ).toHaveCount(0);
+    await expectResponsiveAccessible(page, 'Live Admin entity deletion result');
 
     const geodataState = await geodata.query(
       `SELECT

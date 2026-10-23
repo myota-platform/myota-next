@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('creates shared categories and assigns them to a live programme', async ({
   page,
@@ -183,6 +184,10 @@ test('creates shared categories and assigns them to a live programme', async ({
     page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Archive programme' }).click();
     await expect(page.getByText('Programme archived.')).toBeVisible();
+    await expectResponsiveAccessible(
+      page,
+      'Live Admin programme archive result',
+    );
 
     const archivedProgramme = await pool.query<{
       payload: {

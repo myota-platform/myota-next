@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('saves manual location metadata through the live Geodata API', async ({
   page,
@@ -78,6 +79,10 @@ test('saves manual location metadata through the live Geodata API', async ({
       editor.getByRole('button', { name: 'Save location' }).click(),
     ]);
     expect(locationResponse.status(), await locationResponse.text()).toBe(200);
+    await expectResponsiveAccessible(
+      page,
+      'Live Admin manual entity location edit',
+    );
 
     const saved = await fixture.query<{
       country: string | null;

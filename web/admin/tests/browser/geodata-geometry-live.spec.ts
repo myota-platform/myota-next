@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('replaces entity geometry through live Admin and Geodata services', async ({
   page,
@@ -81,6 +82,7 @@ test('replaces entity geometry through live Admin and Geodata services', async (
     await expect(
       editor.getByText('Geometry saved.', { exact: false }),
     ).toBeVisible();
+    await expectResponsiveAccessible(page, 'Live Admin entity geometry edit');
 
     const persisted = await fixture.query<{
       longitude: number;

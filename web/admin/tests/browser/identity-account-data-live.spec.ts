@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('manages callsigns, exports, and anonymizes an account through live Admin', async ({
   page,
@@ -215,6 +216,10 @@ test('manages callsigns, exports, and anonymizes an account through live Admin',
       page.getByText('Account deactivated and anonymized.'),
     ).toBeVisible();
     await expect(page.getByText('No users match this search.')).toBeVisible();
+    await expectResponsiveAccessible(
+      page,
+      'Live Admin account deactivation result',
+    );
     expect(confirmationText).toBe(`Deactivate and anonymize ${displayName}?`);
 
     const persisted = await pool.query<{

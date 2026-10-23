@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('preserves scoped roles and refresh sessions across live account edits', async ({
   page,
@@ -241,6 +242,10 @@ test('preserves scoped roles and refresh sessions across live account edits', as
       },
     );
     expect(deactivate.status(), await deactivate.text()).toBe(200);
+    await expectResponsiveAccessible(
+      page,
+      'Live Admin account security updates',
+    );
 
     const rotatedSession = await request.post(
       `${gateway}/v1/identity/auth/refresh`,

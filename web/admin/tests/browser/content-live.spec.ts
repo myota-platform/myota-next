@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 const hasApiDatabases = Boolean(
   process.env.CORE_DATABASE_URL &&
@@ -115,6 +116,10 @@ test('creates and publishes programme content through the live Admin workflow', 
     await page.getByRole('button', { name: 'Publish' }).click();
     await expect(page.getByText('Content published.')).toBeVisible();
     await expect(page.locator('.status-pill.published')).toBeVisible();
+    await expectResponsiveAccessible(
+      page,
+      'Live Admin published programme content',
+    );
 
     expect(contentMutationKeys).toHaveLength(4);
     expect(

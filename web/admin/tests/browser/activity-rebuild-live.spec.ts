@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('rebuilds Activity statistics from the live Admin workflow', async ({
   page,
@@ -87,6 +88,10 @@ test('rebuilds Activity statistics from the live Admin workflow', async ({
     await page.getByRole('button', { name: 'Refresh status' }).click();
     await expect(page.locator('.activity-job .status-pill')).toHaveText(
       'SUCCEEDED',
+    );
+    await expectResponsiveAccessible(
+      page,
+      'Live Admin Activity statistics rebuild completion',
     );
     const persisted = await pool.query<{
       kind: string;

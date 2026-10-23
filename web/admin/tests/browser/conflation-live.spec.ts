@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('records a live conflation decision through Admin and Geodata', async ({
   page,
@@ -96,6 +97,7 @@ test('records a live conflation decision through Admin and Geodata', async ({
       `Resolution recorded for ${candidatePathId}.`,
     );
     await expect(card).toHaveCount(0);
+    await expectResponsiveAccessible(page, 'Live Admin conflation decision');
 
     const persisted = await fixture.query<{
       resolution: string;
