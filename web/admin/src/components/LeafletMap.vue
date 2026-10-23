@@ -177,7 +177,11 @@ function addEntity(entity: GeoEntity): void {
     direction: 'top',
     sticky: true,
   });
-  interactive.bindPopup(popupText(entity), { maxWidth: 340, minWidth: 250 });
+  interactive.bindPopup(popupText(entity), {
+    maxWidth: 340,
+    minWidth: 250,
+    className: 'myota-entity-popup',
+  });
   interactive.on('click', (event: any) => {
     window.L.DomEvent.stopPropagation(event);
     emit('select', entity);

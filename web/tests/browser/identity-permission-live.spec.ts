@@ -94,6 +94,9 @@ test('denies a least-privilege account access to Admin through live Identity and
       'DELETE FROM public.account_credential WHERE account_id=$1',
       [accountId],
     );
+    await pool.query('DELETE FROM public.security_event WHERE account_id=$1', [
+      accountId,
+    ]);
     await pool.query('DELETE FROM public.account WHERE id=$1', [accountId]);
     await pool.end();
   }

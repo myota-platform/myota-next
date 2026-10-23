@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../a11y';
 
 const hasApiDatabases = Boolean(
   process.env.CORE_DATABASE_URL &&
@@ -131,7 +132,10 @@ test('submits and reviews participant location proposals through live services',
 
     await page.locator('#award-email').fill(email);
     await page.locator('#award-password').fill(password);
-    await page.locator('#award-login button[type="submit"]').click();
+    await activateByKeyboard(
+      page,
+      page.locator('#award-login button[type="submit"]'),
+    );
     await expect(page.locator('#profile-status')).toHaveText('Profile loaded.');
 
     const existingProposalResponse = page.waitForResponse(
@@ -139,7 +143,10 @@ test('submits and reviews participant location proposals through live services',
         response.request().method() === 'POST' &&
         new URL(response.url()).pathname === '/v1/geodata/proposals',
     );
-    await page.locator(`.propose[data-id="${candidateId}"]`).click();
+    await activateByKeyboard(
+      page,
+      page.locator(`.propose[data-id="${candidateId}"]`),
+    );
     const existingProposal = await existingProposalResponse;
     expect(existingProposal.status()).toBe(201);
     await expect(page.locator('#proposal-status')).toHaveText(
@@ -147,7 +154,10 @@ test('submits and reviews participant location proposals through live services',
     );
     proposalRunIds.push((await existingProposal.json()).id as string);
 
-    await page.getByRole('button', { name: 'Pick coordinates on map' }).click();
+    await activateByKeyboard(
+      page,
+      page.getByRole('button', { name: 'Pick coordinates on map' }),
+    );
     await expect(
       page.getByRole('button', { name: 'Cancel map selection' }),
     ).toHaveAttribute('aria-pressed', 'true');
@@ -176,9 +186,10 @@ test('submits and reviews participant location proposals through live services',
         response.request().method() === 'POST' &&
         new URL(response.url()).pathname === '/v1/geodata/proposals',
     );
-    await page
-      .getByRole('button', { name: 'Submit location proposal' })
-      .click();
+    await activateByKeyboard(
+      page,
+      page.getByRole('button', { name: 'Submit location proposal' }),
+    );
     const pointProposal = await pointProposalResponse;
     expect(pointProposal.status()).toBe(201);
     await expect(page.locator('#proposal-status')).toHaveText(
@@ -341,6 +352,10 @@ test('submits and reviews participant location proposals through live services',
     await page.reload();
     await expect(page.locator('#entities')).toContainText(candidateName);
     await expect(page.locator('#entities')).toContainText(pointProposalName);
+    await expectResponsiveAccessible(
+      page,
+      'Live Participant community proposals and catalogue',
+    );
   } finally {
     if (proposalRunIds.length || candidateSeeded) {
       const geoClient = await geo.connect().catch(() => undefined);
@@ -477,3 +492,9 @@ test('submits and reviews participant location proposals through live services',
     await Promise.all([core.end(), geo.end()]);
   }
 });
+
+async function activateByKeyboard(page: Page, control: Locator) {
+  await control.focus();
+  await expect(control).toBeFocused();
+  await page.keyboard.press('Enter');
+}

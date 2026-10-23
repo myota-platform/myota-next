@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('explores paged entities and shows the selected map feature details', async ({
   page,
@@ -109,4 +110,5 @@ test('explores paged entities and shows the selected map feature details', async
     page.getByRole('heading', { name: 'Summit Alpha' }),
   ).toBeVisible();
   expect(requestedPages).toEqual([1, 2]);
+  await expectResponsiveAccessible(page, 'Admin entity map exploration');
 });
