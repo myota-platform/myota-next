@@ -11,14 +11,39 @@ authorization rules, domain transactions, persistence, migrations, and
 background work. The gateway routes requests and applies edge concerns; it
 does not become a domain service.
 
-| Component       | Owns                                                                                                | Database                        |
-| --------------- | --------------------------------------------------------------------------------------------------- | ------------------------------- |
-| Identity        | Accounts, credentials, sessions, callsigns, roles, scopes, security events                          | Core PostgreSQL                 |
-| Programmes      | Programme configuration, content, policy drafts, shared entity categories and programme assignments | Core PostgreSQL                 |
-| Activity        | Activations, QSOs, imports, statistics, awards, execution jobs, notification records                | Activity PostgreSQL             |
-| Geodata         | Spatial catalogue, imports, provenance, review, conflation, enrichment                              | Geodata PostgreSQL with PostGIS |
-| Admin web       | Authorized administrative workflows                                                                 | None                            |
-| Participant web | Participant-facing browse and account workflows                                                     | None                            |
+### Identity
+
+- **Owns:** Accounts, credentials, sessions, callsigns, roles, scopes, and
+  security events.
+- **Database:** Core PostgreSQL.
+
+### Programmes
+
+- **Owns:** Programme configuration, content, policy drafts, shared entity
+  categories, and programme assignments.
+- **Database:** Core PostgreSQL.
+
+### Activity
+
+- **Owns:** Activations, QSOs, imports, statistics, awards, execution jobs,
+  and notification records.
+- **Database:** Activity PostgreSQL.
+
+### Geodata
+
+- **Owns:** Spatial catalogue, imports, provenance, review, conflation, and
+  enrichment.
+- **Database:** Geodata PostgreSQL with PostGIS.
+
+### Admin web
+
+- **Owns:** Authorized administrative workflows.
+- **Database:** None.
+
+### Participant web
+
+- **Owns:** Participant-facing browse and account workflows.
+- **Database:** None.
 
 ## Data boundaries
 
@@ -52,18 +77,18 @@ Preserve the three current stream purposes: bounded domain facts, Activity
 work, and Geodata work. Work remains owned by the Activity or Geodata service
 even when several worker replicas process it.
 
-Run one outbox relay instance group for each owning database (`core`,
-`activity`, and `geodata`). Each process receives only that database's
-`OUTBOX_DATABASE_URL`, plus `OUTBOX_OWNER`, `NATS_URL`, and the shared event
-registry. The relay uses `Nats-Msg-Id` from the durable outbox event ID so a
-broker acknowledgement followed by a database update failure can be retried
-safely. It retries transient publish failures with bounded backoff and stores
-permanent or exhausted failures in the owning database's dead-letter table.
-Each process exposes Prometheus metrics at `/metrics` on port 9108 by default;
-set `OUTBOX_METRICS_PORT=0` to disable the listener.
-Do not point one relay at multiple databases or combine their transactions.
-The Activity notification consumer exposes its outcome and unresolved
-dead-letter metrics at `/metrics` on port 9110 by default; set
+Run one outbox relay instance group for each owning database (`core`, `activity`, and
+`geodata`). Each process receives only that database's `OUTBOX_DATABASE_URL`, plus
+`OUTBOX_OWNER`, `NATS_URL`, and the shared event registry. The relay uses `Nats-Msg-Id`
+from the durable outbox event ID so a broker acknowledgement followed by a database
+update failure can be retried safely. It retries transient publish failures with bounded
+backoff and stores permanent or exhausted failures in the owning database's dead-letter
+table.
+
+Each process exposes Prometheus metrics at `/metrics` on port 9108 by default; set
+`OUTBOX_METRICS_PORT=0` to disable the listener. Do not point one relay at multiple
+databases or combine their transactions. The Activity notification consumer exposes its
+outcome and unresolved dead-letter metrics at `/metrics` on port 9110 by default; set
 `ACTIVITY_NOTIFICATION_METRICS_PORT=0` to disable the listener.
 
 ## Shared runtime dependencies

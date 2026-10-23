@@ -31,16 +31,16 @@ current reference.
   structured logs, metrics, tracing, and graceful shutdown.
 - Start each process independently while retaining the three database targets.
 
-The Node 24/NestJS workspace, separate service and worker entry points,
-database-aware readiness, copied contracts and migrations, formatting, lint,
-typecheck, build gates, an owner-scoped migration runner, and a per-application
-Docker recipe are in place. GitHub Actions run static and build gates and
-provide a gated workflow for publishing application images. Deployment
-qualification remains open. Identity, Programmes, Activity, and Geodata have
-substantial working slices. The platform starts with empty target databases;
-transferring data from the old platform is out of scope. See the
-[implementation status](status.md) and [parity matrix](parity-matrix.md) for
-current coverage and known gaps.
+The Node 24/NestJS workspace, separate service and worker entry points, database-aware
+readiness, copied contracts and migrations, formatting, lint, typecheck, build gates, an
+owner-scoped migration runner, and a per-application Docker recipe are in place. GitHub
+Actions run static and build gates and provide a gated workflow for publishing
+application images. Deployment qualification remains open. Identity, Programmes,
+Activity, and Geodata have substantial working slices.
+
+The platform starts with empty target databases; transferring data from the old platform
+is out of scope. See the [implementation status](status.md) and [parity
+matrix](parity-matrix.md) for current coverage and known gaps.
 
 ## 2. Implement contract-shaped synchronous behavior
 

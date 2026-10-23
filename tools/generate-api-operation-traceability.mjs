@@ -96,28 +96,36 @@ if (missing.length) {
   );
   process.exitCode = 1;
 } else {
-  const rows = contractOperations.map((operation) => {
-    const sourceLinks = controllerOperations
-      .get(operation.key)
-      .map(
-        ({ path: sourcePath, line }) =>
-          `[${sourcePath}#L${line}](../${sourcePath}#L${line})`,
-      )
-      .join('<br>');
-    return `| \`${operation.method.toUpperCase()} ${operation.path}\` | ${sourceLinks} | Route mapped; behavior qualification is tracked in the parity matrix. |`;
+  const groups = new Map();
+  for (const operation of contractOperations) {
+    for (const source of controllerOperations.get(operation.key)) {
+      const service = source.path.split('/')[1];
+      const entries = groups.get(service) ?? [];
+      const filename = path.basename(source.path);
+      const controllerLink = `[${filename}#L${source.line}](../${source.path}#L${source.line})`;
+      entries.push(
+        `- \`${operation.method.toUpperCase()} ${operation.path}\` — ${controllerLink}`,
+      );
+      groups.set(service, entries);
+    }
+  }
+  const groupSections = [...groups.entries()].map(([service, entries]) => {
+    const title = service
+      .split('-')
+      .map((part) => part[0].toUpperCase() + part.slice(1))
+      .join(' ');
+    return [`## ${title}`, '', ...entries, ''].join('\n');
   });
   const document = [
     '# API operation traceability',
     '',
-    'This generated index maps each operation in `contracts/openapi.yaml` to its NestJS controller source. It is a navigation aid, not proof of request, response, authorization, persistence, or failure-behavior parity. Review those behaviors against the [function parity matrix](parity-matrix.md) and compatibility evidence before calling an operation complete.',
+    'This generated index groups contract operations by service and links each one to its NestJS controller source. It is a navigation aid, not proof of request, response, authorization, persistence, or failure-behavior parity. Review those behaviors against the [function parity matrix](parity-matrix.md) and compatibility evidence before calling an operation complete.',
     '',
     'Regenerate with `npm run docs:api-traceability`. The mapping must cover every operation in the copied contract; target-only operations are documented separately in [API baseline notes](api-baseline.md).',
     '',
     `Contract baseline: [${contractOperations.length} operations](../contracts/openapi.yaml).`,
     '',
-    '| OpenAPI operation | NestJS controller | Status |',
-    '| --- | --- | --- |',
-    ...rows,
+    ...groupSections,
     '',
   ].join('\n');
   const outputPath = path.join(

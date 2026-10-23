@@ -22,15 +22,16 @@ MYOTA_RESTORE_CONFIRM="RESTORE myota-20261020T120000000Z" \
   npm run db:restore -- ./backups/myota-20261020T120000000Z
 ```
 
-Replace the example directory with the exact backup directory name. Before
-writing, restore verifies the manifest, each dump checksum, archive readability,
-database names, and distinct owner targets. It requires PostgreSQL 16 client
-tools; set `PG_RESTORE_PATH` if needed. Each database restore uses one
-transaction, but the three-database restore is not atomic as a whole: if a later
-owner fails, earlier databases remain restored. The commands back up database
-state only; object-store data and JetStream messages require separate recovery
-procedures. The new platform starts with empty databases; data transfer from
-the Python schema is out of scope.
+Replace the example directory with the exact backup directory name. Before writing,
+restore verifies the manifest, each dump checksum, archive readability, database names,
+and distinct owner targets. It requires PostgreSQL 16 client tools; set
+`PG_RESTORE_PATH` if needed. Each database restore uses one transaction, but the
+three-database restore is not atomic as a whole: if a later owner fails, earlier
+databases remain restored.
+
+The commands back up database state only; object-store data and JetStream messages
+require separate recovery procedures. The new platform starts with empty databases; data
+transfer from the Python schema is out of scope.
 
 CI rehearses this path against its disposable Core, Activity, and Geodata
 databases. It writes a probe row to each owner, creates one backup, changes the

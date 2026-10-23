@@ -42,66 +42,67 @@ primary product areas.
   authorization, persistence, and shared validation/conflict checks; route
   presence alone is not proof.
 - **Recovery:** single-server JetStream restart, three-node JetStream leader
-  failover for Activity workers and notifications, each of the three owner
-  outboxes, and all four Geodata worker durables; selected worker lease
-  recovery, redrive, Geodata multipart object-store recovery, and a three-owner
-  backup and restore rehearsal have evidence. A
-  PostgreSQL TCP fault proxy now qualifies
-  Geodata import claim, state lookup, retry-state persistence, and retention
-  cleanup after source-object deletion. Activity retry settlement, terminal
-  work dead-letter persistence, ADIF retention, and notification dead-letter
-  persistence also have fault-proxy evidence. Notification terminal settlement
-  now also has three-node JetStream leader-failover coverage. Failover for
-  other consumers, PostgreSQL clusters, and additional worker and object-store
-  recovery paths remain open. See
-  [worker and operations coverage](parity/workers-operations.md), the
-  [database backup and restore notes](operations/database-backup-restore.md),
-  and the [object-store recovery notes](operations/object-store-recovery.md).
+  failover for Activity workers and notifications, each of the three owner outboxes, and
+  all four Geodata worker durables; selected worker lease recovery, redrive, Geodata
+  multipart object-store recovery, and a three-owner backup and restore rehearsal have
+  evidence. A PostgreSQL TCP fault proxy now qualifies Geodata import claim, state lookup,
+  retry-state persistence, and retention cleanup after source-object deletion.
+
+Activity retry settlement, terminal work dead-letter persistence, ADIF retention, and
+notification dead-letter persistence also have fault-proxy evidence. Notification
+terminal settlement now also has three-node JetStream leader-failover coverage. Failover
+for other consumers, PostgreSQL clusters, and additional worker and object-store
+recovery paths remain open. See [worker and operations
+coverage](parity/workers-operations.md), the [database backup and restore
+notes](operations/database-backup-restore.md), and the [object-store recovery
+notes](operations/object-store-recovery.md).
+
 - **Web applications:** CI exercises Admin sign-in/dashboard, Identity account
   creation and callsign management, plus live Admin UI export and
-  deactivation/anonymization with persisted-state and lifecycle-event checks,
-  custom Identity role creation and updates with persisted permission and audit
-  checks,
-  scoped-role-preserving account edits with duplicate-email conflict handling,
-  Admin password resets that revoke existing sessions, and status-only account
-  deactivation while an existing owner refresh session remains rotatable,
-  Activity correction review, and policy publication against running NestJS
-  services through the Gateway. Admin content creation, review, and publication
-  now also run through the live Admin, Gateway, and Core services, with the
-  public programme-content response checked afterward. Participant profile
-  editing and owner callsign
-  creation,
-  cropped profile-image upload and deletion, evidence submission, primary
-  selection, and retirement also run against live Identity APIs. Participant
-  activation creation, QSO recording, and closing
-  run through live Activity APIs. Participants can also upload ADIF logs to
-  open activations and follow import status; CI checks the displayed result,
-  imported QSO, and completion notification across Participant, Gateway, and
-  Activity workers. Admin award publication and issuance, plus
-  Participant eligible-level requests, now cross live Identity and Activity
-  APIs and verify persisted request facts and issuance records. Public catalogue
-  loading uses live services as well. Public Activity activation history,
-  leaderboard, and JSON/CSV result exports are also checked through the live
-  Gateway. Participants can read their own request
-  status, while cross-account reads are denied. Admin can queue certificate PDF
-  rendering, and Participant exposes the download only after the artifact is
-  ready. The latest render-job status persists in Admin across page reloads.
-  Admin GeoJSON, OSM GeoJSON, WFS GeoJSON, ArcGIS FeatureServer JSON, KML, GPX, OSM PBF, Shapefile, and ParkServe US file uploads now run through the resumable
-  multipart API, the CI S3-compatible fixture, and the Geodata preprocessing
-  worker; CI verifies each completed upload, preprocessed import, source
-  object, and review candidate.
-  Candidate status review now runs live through Admin, Gateway, and Geodata,
-  with persisted version, reviewer, status history, audit, and outbox checks.
-  Conflation review also runs live through Admin and Gateway, verifying the
-  selected survivor, reviewer, resolution history, idempotency record, and
-  outbox event in Geodata. The Admin refresh-schedule page now creates a
-  category-scoped schedule, uploads a complete snapshot, and verifies worker
-  completion through live services. A separate Gateway check verifies the
-  manifest, queued processing state, schedule timestamps, and outbox events.
-  Secondary browser presentation states may continue to use intercepted API
-  responses; primary user journeys remain covered through the running services.
-  Accessibility, responsive behavior, and additional failure-state review are
-  separate quality work.
+  deactivation/anonymization with persisted-state and lifecycle-event checks, custom
+  Identity role creation and updates with persisted permission and audit checks,
+  scoped-role-preserving account edits with duplicate-email conflict handling, Admin
+  password resets that revoke existing sessions, and status-only account deactivation
+  while an existing owner refresh session remains rotatable, Activity correction review,
+  and policy publication against running NestJS services through the Gateway.
+
+Admin content creation, review, and publication now also run through the live Admin,
+Gateway, and Core services, with the public programme-content response checked
+afterward. Participant profile editing and owner callsign creation, cropped
+profile-image upload and deletion, evidence submission, primary selection, and
+retirement also run against live Identity APIs. Participant activation creation, QSO
+recording, and closing run through live Activity APIs.
+
+Participants can also upload ADIF logs to open activations and follow import status; CI
+checks the displayed result, imported QSO, and completion notification across
+Participant, Gateway, and Activity workers. Admin award publication and issuance, plus
+Participant eligible-level requests, now cross live Identity and Activity APIs and
+verify persisted request facts and issuance records. Public catalogue loading uses live
+services as well.
+
+Public Activity activation history, leaderboard, and JSON/CSV result exports are also
+checked through the live Gateway. Participants can read their own request status, while
+cross-account reads are denied. Admin can queue certificate PDF rendering, and
+Participant exposes the download only after the artifact is ready. The latest render-job
+status persists in Admin across page reloads. Admin GeoJSON, OSM GeoJSON, WFS GeoJSON,
+ArcGIS FeatureServer JSON, KML, GPX, OSM PBF, Shapefile, and ParkServe US file uploads
+now run through the resumable multipart API, the CI S3-compatible fixture, and the
+Geodata preprocessing worker; CI verifies each completed upload, preprocessed import,
+source object, and review candidate.
+
+Candidate status review now runs live through Admin, Gateway, and Geodata, with
+persisted version, reviewer, status history, audit, and outbox checks. Conflation review
+also runs live through Admin and Gateway, verifying the selected survivor, reviewer,
+resolution history, idempotency record, and outbox event in Geodata. The Admin
+refresh-schedule page now creates a category-scoped schedule, uploads a complete
+snapshot, and verifies worker completion through live services.
+
+A separate Gateway check verifies the manifest, queued processing state, schedule
+timestamps, and outbox events. Secondary browser presentation states may continue to use
+intercepted API responses; primary user journeys remain covered through the running
+services. Accessibility, responsive behavior, and additional failure-state review are
+separate quality work.
+
 - **Production operations:** qualify persistent database operations, NATS,
   object storage, secrets, observability, deployment, and release automation.
 - **Geodata performance:** larger datasets and full worker throughput remain

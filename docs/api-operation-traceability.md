@@ -1,151 +1,160 @@
 # API operation traceability
 
-This generated index maps each operation in `contracts/openapi.yaml` to its NestJS controller source. It is a navigation aid, not proof of request, response, authorization, persistence, or failure-behavior parity. Review those behaviors against the [function parity matrix](parity-matrix.md) and compatibility evidence before calling an operation complete.
+This generated index groups contract operations by service and links each one to its NestJS controller source. It is a navigation aid, not proof of request, response, authorization, persistence, or failure-behavior parity. Review those behaviors against the [function parity matrix](parity-matrix.md) and compatibility evidence before calling an operation complete.
 
 Regenerate with `npm run docs:api-traceability`. The mapping must cover every operation in the copied contract; target-only operations are documented separately in [API baseline notes](api-baseline.md).
 
 Contract baseline: [141 operations](../contracts/openapi.yaml).
 
-| OpenAPI operation                                                        | NestJS controller                                                                                                                 | Status                                                                |
-| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `POST /v1/identity/auth/register`                                        | [apps/identity/src/auth.controller.ts#L54](../apps/identity/src/auth.controller.ts#L54)                                           | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/auth/login`                                           | [apps/identity/src/auth.controller.ts#L61](../apps/identity/src/auth.controller.ts#L61)                                           | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/auth/refresh`                                         | [apps/identity/src/auth.controller.ts#L70](../apps/identity/src/auth.controller.ts#L70)                                           | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/auth/logout`                                          | [apps/identity/src/auth.controller.ts#L127](../apps/identity/src/auth.controller.ts#L127)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/auth/recovery/request`                                | [apps/identity/src/auth.controller.ts#L79](../apps/identity/src/auth.controller.ts#L79)                                           | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/auth/recovery/reset`                                  | [apps/identity/src/auth.controller.ts#L85](../apps/identity/src/auth.controller.ts#L85)                                           | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/identity/me`                                                    | [apps/identity/src/auth.controller.ts#L136](../apps/identity/src/auth.controller.ts#L136)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PATCH /v1/identity/me/profile`                                          | [apps/identity/src/auth.controller.ts#L143](../apps/identity/src/auth.controller.ts#L143)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/identity/me/profile-image`                                      | [apps/identity/src/auth.controller.ts#L153](../apps/identity/src/auth.controller.ts#L153)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PUT /v1/identity/me/profile-image`                                      | [apps/identity/src/auth.controller.ts#L164](../apps/identity/src/auth.controller.ts#L164)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `DELETE /v1/identity/me/profile-image`                                   | [apps/identity/src/auth.controller.ts#L180](../apps/identity/src/auth.controller.ts#L180)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/identity/accounts/{accountId}/profile-image`                    | [apps/identity/src/auth.controller.ts#L283](../apps/identity/src/auth.controller.ts#L283)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/identity/admin/accounts`                                        | [apps/identity/src/auth.controller.ts#L191](../apps/identity/src/auth.controller.ts#L191)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/identity/admin/roles`                                           | [apps/identity/src/auth.controller.ts#L211](../apps/identity/src/auth.controller.ts#L211)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/admin/roles`                                          | [apps/identity/src/auth.controller.ts#L218](../apps/identity/src/auth.controller.ts#L218)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/roles`                                                | [apps/identity/src/auth.controller.ts#L229](../apps/identity/src/auth.controller.ts#L229)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/identity/admin/security-events`                                 | [apps/identity/src/auth.controller.ts#L201](../apps/identity/src/auth.controller.ts#L201)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/accounts`                                             | [apps/identity/src/auth.controller.ts#L251](../apps/identity/src/auth.controller.ts#L251)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/accounts/{accountId}/callsigns`                       | [apps/identity/src/auth.controller.ts#L327](../apps/identity/src/auth.controller.ts#L327)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/accounts/{accountId}/callsigns/{callsignId}/evidence` | [apps/identity/src/auth.controller.ts#L343](../apps/identity/src/auth.controller.ts#L343)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/accounts/{accountId}/callsigns/{callsignId}/verify`   | [apps/identity/src/auth.controller.ts#L359](../apps/identity/src/auth.controller.ts#L359)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/identity/accounts/{accountId}/roles`                            | [apps/identity/src/auth.controller.ts#L295](../apps/identity/src/auth.controller.ts#L295)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/identity/accounts/{accountId}/export`                           | [apps/identity/src/auth.controller.ts#L273](../apps/identity/src/auth.controller.ts#L273)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/programmes`                                                     | [apps/programmes/src/programmes.controller.ts#L20](../apps/programmes/src/programmes.controller.ts#L20)                           | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/programmes`                                                    | [apps/programmes/src/programmes.controller.ts#L34](../apps/programmes/src/programmes.controller.ts#L34)                           | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/programmes/{slug}/policy`                                       | [apps/programmes/src/programmes.controller.ts#L48](../apps/programmes/src/programmes.controller.ts#L48)                           | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/entity-types`                                                   | [apps/programmes/src/entity-types.controller.ts#L20](../apps/programmes/src/entity-types.controller.ts#L20)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/entity-types`                                                  | [apps/programmes/src/entity-types.controller.ts#L25](../apps/programmes/src/entity-types.controller.ts#L25)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/programmes/{slug}/entity-types`                                 | [apps/programmes/src/entity-types.controller.ts#L42](../apps/programmes/src/entity-types.controller.ts#L42)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/programmes/{slug}/entity-types`                                | [apps/programmes/src/entity-types.controller.ts#L50](../apps/programmes/src/entity-types.controller.ts#L50)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/entities`                                               | [apps/geodata/src/geodata.controller.ts#L36](../apps/geodata/src/geodata.controller.ts#L36)                                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/imports`                                                | [apps/geodata/src/geodata-imports.controller.ts#L151](../apps/geodata/src/geodata-imports.controller.ts#L151)                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/imports`                                               | [apps/geodata/src/geodata-imports.controller.ts#L107](../apps/geodata/src/geodata-imports.controller.ts#L107)                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/imports/{runId}`                                        | [apps/geodata/src/geodata-imports.controller.ts#L160](../apps/geodata/src/geodata-imports.controller.ts#L160)                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PUT /v1/geodata/imports/{runId}/cancellation`                           | [apps/geodata/src/geodata-imports.controller.ts#L223](../apps/geodata/src/geodata-imports.controller.ts#L223)                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/imports/{runId}/candidates`                             | [apps/geodata/src/geodata-imports.controller.ts#L280](../apps/geodata/src/geodata-imports.controller.ts#L280)                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/imports/{runId}/candidates/validate`                   | [apps/geodata/src/geodata-imports.controller.ts#L290](../apps/geodata/src/geodata-imports.controller.ts#L290)                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/imports/{runId}/process`                               | [apps/geodata/src/geodata-imports.controller.ts#L169](../apps/geodata/src/geodata-imports.controller.ts#L169)                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/imports/{runId}/processing-queues/{queueId}`            | [apps/geodata/src/geodata-imports.controller.ts#L243](../apps/geodata/src/geodata-imports.controller.ts#L243)                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/imports/{runId}/processing-queues/{queueId}/redrive`   | [apps/geodata/src/geodata-imports.controller.ts#L253](../apps/geodata/src/geodata-imports.controller.ts#L253)                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/imports/{runId}/processed`                             | [apps/geodata/src/geodata-imports.controller.ts#L194](../apps/geodata/src/geodata-imports.controller.ts#L194)                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `DELETE /v1/geodata/load-test-runs/{testRunId}`                          | [apps/geodata/src/geodata-operations.controller.ts#L163](../apps/geodata/src/geodata-operations.controller.ts#L163)               | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/import-uploads`                                        | [apps/geodata/src/geodata-imports.controller.ts#L44](../apps/geodata/src/geodata-imports.controller.ts#L44)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/import-uploads/{uploadId}`                              | [apps/geodata/src/geodata-imports.controller.ts#L55](../apps/geodata/src/geodata-imports.controller.ts#L55)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `DELETE /v1/geodata/import-uploads/{uploadId}`                           | [apps/geodata/src/geodata-imports.controller.ts#L98](../apps/geodata/src/geodata-imports.controller.ts#L98)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/import-uploads/{uploadId}/parts/{partNumber}`          | [apps/geodata/src/geodata-imports.controller.ts#L64](../apps/geodata/src/geodata-imports.controller.ts#L64)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/import-uploads/{uploadId}/complete`                    | [apps/geodata/src/geodata-imports.controller.ts#L88](../apps/geodata/src/geodata-imports.controller.ts#L88)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/location-options`                                       | [apps/geodata/src/geodata.controller.ts#L131](../apps/geodata/src/geodata.controller.ts#L131)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/activations/entity-deletion-impacts/{entityId}`                 | [apps/activity/src/activity.controller.ts#L20](../apps/activity/src/activity.controller.ts#L20)                                   | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/activations/entity-deletion-cascades`                          | [apps/activity/src/activity.controller.ts#L28](../apps/activity/src/activity.controller.ts#L28)                                   | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/activations`                                                    | [apps/activity/src/activity.controller.ts#L38](../apps/activity/src/activity.controller.ts#L38)                                   | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/activations`                                                   | [apps/activity/src/activity.controller.ts#L57](../apps/activity/src/activity.controller.ts#L57)                                   | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/activations/{activationId}`                                     | [apps/activity/src/activity.controller.ts#L66](../apps/activity/src/activity.controller.ts#L66)                                   | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PATCH /v1/activations/{activationId}`                                   | [apps/activity/src/activity.controller.ts#L84](../apps/activity/src/activity.controller.ts#L84)                                   | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/activations/{activationId}/qsos`                               | [apps/activity/src/activity.controller.ts#L74](../apps/activity/src/activity.controller.ts#L74)                                   | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/awards`                                                         | [apps/activity/src/awards.controller.ts#L24](../apps/activity/src/awards.controller.ts#L24)                                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/awards`                                                        | [apps/activity/src/awards.controller.ts#L43](../apps/activity/src/awards.controller.ts#L43)                                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/awards/{awardId}`                                               | [apps/activity/src/awards.controller.ts#L221](../apps/activity/src/awards.controller.ts#L221)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PATCH /v1/awards/{awardId}`                                             | [apps/activity/src/awards.controller.ts#L229](../apps/activity/src/awards.controller.ts#L229)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/awards/{awardId}/submit`                                       | [apps/activity/src/awards.controller.ts#L239](../apps/activity/src/awards.controller.ts#L239)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/awards/{awardId}/review`                                       | [apps/activity/src/awards.controller.ts#L249](../apps/activity/src/awards.controller.ts#L249)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/awards/{awardId}/publish`                                      | [apps/activity/src/awards.controller.ts#L260](../apps/activity/src/awards.controller.ts#L260)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/awards/assets`                                                  | [apps/activity/src/awards.controller.ts#L167](../apps/activity/src/awards.controller.ts#L167)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/awards/assets`                                                 | [apps/activity/src/awards.controller.ts#L178](../apps/activity/src/awards.controller.ts#L178)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/awards/assets/{assetId}/content`                                | [apps/activity/src/awards.controller.ts#L186](../apps/activity/src/awards.controller.ts#L186)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PUT /v1/awards/assets/{assetId}/content`                                | [apps/activity/src/awards.controller.ts#L194](../apps/activity/src/awards.controller.ts#L194)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/awards/previews`                                               | [apps/activity/src/awards.controller.ts#L85](../apps/activity/src/awards.controller.ts#L85)                                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/awards/evaluation-jobs`                                        | [apps/activity/src/awards.controller.ts#L56](../apps/activity/src/awards.controller.ts#L56)                                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/awards/evaluation-jobs/{jobId}`                                 | [apps/activity/src/awards.controller.ts#L66](../apps/activity/src/awards.controller.ts#L66)                                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/awards/progress`                                                | [apps/activity/src/awards.controller.ts#L71](../apps/activity/src/awards.controller.ts#L71)                                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/awards/requests`                                                | [apps/activity/src/awards.controller.ts#L94](../apps/activity/src/awards.controller.ts#L94)                                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/awards/requests`                                               | [apps/activity/src/awards.controller.ts#L111](../apps/activity/src/awards.controller.ts#L111)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/awards/requests/{requestId}/issuances`                         | [apps/activity/src/awards.controller.ts#L123](../apps/activity/src/awards.controller.ts#L123)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/awards/issuances`                                               | [apps/activity/src/awards.controller.ts#L133](../apps/activity/src/awards.controller.ts#L133)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/awards/issuances/{issuanceId}/render-jobs`                     | [apps/activity/src/awards.controller.ts#L144](../apps/activity/src/awards.controller.ts#L144)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/awards/issuances/{issuanceId}/render-jobs/{jobId}`              | [apps/activity/src/awards.controller.ts#L154](../apps/activity/src/awards.controller.ts#L154)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/awards/issuances/{issuanceId}/artifact`                         | [apps/activity/src/awards.controller.ts#L159](../apps/activity/src/awards.controller.ts#L159)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/auth/service-token`                                   | [apps/identity/src/auth.controller.ts#L106](../apps/identity/src/auth.controller.ts#L106)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/identity/internal/email-recipients/{accountId}`                 | [apps/identity/src/auth.controller.ts#L116](../apps/identity/src/auth.controller.ts#L116)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/identity/accounts/{accountId}`                                  | [apps/identity/src/auth.controller.ts#L263](../apps/identity/src/auth.controller.ts#L263)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PATCH /v1/identity/accounts/{accountId}`                                | [apps/identity/src/auth.controller.ts#L305](../apps/identity/src/auth.controller.ts#L305)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PATCH /v1/identity/roles/{roleCode}`                                    | [apps/identity/src/auth.controller.ts#L240](../apps/identity/src/auth.controller.ts#L240)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PUT /v1/identity/accounts/{accountId}/role-assignments`                 | [apps/identity/src/auth.controller.ts#L316](../apps/identity/src/auth.controller.ts#L316)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PUT /v1/identity/accounts/{accountId}/primary-callsign`                 | [apps/identity/src/auth.controller.ts#L377](../apps/identity/src/auth.controller.ts#L377)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/accounts/{accountId}/callsigns/{callsignId}/retire`   | [apps/identity/src/auth.controller.ts#L392](../apps/identity/src/auth.controller.ts#L392)                                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/identity/oidc/providers`                                       | [apps/identity/src/auth.controller.ts#L94](../apps/identity/src/auth.controller.ts#L94)                                           | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/programmes/{slug}`                                              | [apps/programmes/src/programmes.controller.ts#L68](../apps/programmes/src/programmes.controller.ts#L68)                           | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PATCH /v1/programmes/{slug}`                                            | [apps/programmes/src/programmes.controller.ts#L53](../apps/programmes/src/programmes.controller.ts#L53)                           | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PUT /v1/programmes/{slug}/entity-types/{categoryCode}`                  | [apps/programmes/src/entity-types.controller.ts#L69](../apps/programmes/src/entity-types.controller.ts#L69)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `DELETE /v1/programmes/{slug}/entity-types/{categoryCode}`               | [apps/programmes/src/entity-types.controller.ts#L84](../apps/programmes/src/entity-types.controller.ts#L84)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/programmes/{slug}/content`                                      | [apps/programmes/src/programme-content.controller.ts#L35](../apps/programmes/src/programme-content.controller.ts#L35)             | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/programmes/{slug}/content`                                     | [apps/programmes/src/programme-content.controller.ts#L55](../apps/programmes/src/programme-content.controller.ts#L55)             | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/programmes/{slug}/content/coverage`                             | [apps/programmes/src/programme-content.controller.ts#L27](../apps/programmes/src/programme-content.controller.ts#L27)             | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/programmes/{slug}/content/{contentId}/submit`                  | [apps/programmes/src/programme-content.controller.ts#L73](../apps/programmes/src/programme-content.controller.ts#L73)             | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/programmes/{slug}/content/{contentId}/review`                  | [apps/programmes/src/programme-content.controller.ts#L84](../apps/programmes/src/programme-content.controller.ts#L84)             | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/programmes/{slug}/content/{contentId}/publish`                 | [apps/programmes/src/programme-content.controller.ts#L102](../apps/programmes/src/programme-content.controller.ts#L102)           | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PATCH /v1/programmes/{slug}/content/{contentId}`                        | [apps/programmes/src/programme-content.controller.ts#L120](../apps/programmes/src/programme-content.controller.ts#L120)           | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/programmes/{slug}/policy-drafts`                                | [apps/programmes/src/programme-policy.controller.ts#L21](../apps/programmes/src/programme-policy.controller.ts#L21)               | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/programmes/{slug}/policy-drafts`                               | [apps/programmes/src/programme-policy.controller.ts#L39](../apps/programmes/src/programme-policy.controller.ts#L39)               | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/programmes/{slug}/policy-drafts/{draftId}/submit`              | [apps/programmes/src/programme-policy.controller.ts#L57](../apps/programmes/src/programme-policy.controller.ts#L57)               | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/programmes/{slug}/policy-drafts/{draftId}/review`              | [apps/programmes/src/programme-policy.controller.ts#L68](../apps/programmes/src/programme-policy.controller.ts#L68)               | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/programmes/{slug}/policy-drafts/{draftId}/publish`             | [apps/programmes/src/programme-policy.controller.ts#L86](../apps/programmes/src/programme-policy.controller.ts#L86)               | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PATCH /v1/programmes/{slug}/policy-drafts/{draftId}`                    | [apps/programmes/src/programme-policy.controller.ts#L104](../apps/programmes/src/programme-policy.controller.ts#L104)             | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/adapters`                                               | [apps/geodata/src/geodata.controller.ts#L50](../apps/geodata/src/geodata.controller.ts#L50)                                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/entities/{entityId}`                                    | [apps/geodata/src/geodata.controller.ts#L149](../apps/geodata/src/geodata.controller.ts#L149)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PATCH /v1/geodata/entities/{entityId}`                                  | [apps/geodata/src/geodata.controller.ts#L154](../apps/geodata/src/geodata.controller.ts#L154)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/entities/{entityId}/audit`                              | [apps/geodata/src/geodata.controller.ts#L41](../apps/geodata/src/geodata.controller.ts#L41)                                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/entities/{entityId}/location-enrichment-requests`      | [apps/geodata/src/geodata.controller.ts#L180](../apps/geodata/src/geodata.controller.ts#L180)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/tiles/{z}/{x}/{y}`                                      | [apps/geodata/src/geodata.controller.ts#L139](../apps/geodata/src/geodata.controller.ts#L139)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/refresh-schedules`                                      | [apps/geodata/src/geodata-operations.controller.ts#L86](../apps/geodata/src/geodata-operations.controller.ts#L86)                 | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/refresh-schedules`                                     | [apps/geodata/src/geodata-operations.controller.ts#L95](../apps/geodata/src/geodata-operations.controller.ts#L95)                 | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/refresh-schedules/{scheduleId}/run`                    | [apps/geodata/src/geodata-operations.controller.ts#L117](../apps/geodata/src/geodata-operations.controller.ts#L117)               | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/conflation`                                             | [apps/geodata/src/geodata.controller.ts#L98](../apps/geodata/src/geodata.controller.ts#L98)                                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/conflation/{candidateId}/resolve`                      | [apps/geodata/src/geodata.controller.ts#L107](../apps/geodata/src/geodata.controller.ts#L107)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/proposals`                                             | [apps/geodata/src/geodata-operations.controller.ts#L142](../apps/geodata/src/geodata-operations.controller.ts#L142)               | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PUT /v1/geodata/entities/{entityId}/geometry`                           | [apps/geodata/src/geodata.controller.ts#L260](../apps/geodata/src/geodata.controller.ts#L260)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `PUT /v1/geodata/entities/{entityId}/categories`                         | [apps/geodata/src/geodata.controller.ts#L234](../apps/geodata/src/geodata.controller.ts#L234)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/entities/{entityId}/reviews`                           | [apps/geodata/src/geodata.controller.ts#L207](../apps/geodata/src/geodata.controller.ts#L207)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/entity-deletion-jobs`                                  | [apps/geodata/src/geodata-operations.controller.ts#L34](../apps/geodata/src/geodata-operations.controller.ts#L34)                 | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/geodata/entity-deletion-jobs/{jobId}`                           | [apps/geodata/src/geodata-operations.controller.ts#L55](../apps/geodata/src/geodata-operations.controller.ts#L55)                 | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/geodata/entity-deletion-jobs/{jobId}/confirm`                  | [apps/geodata/src/geodata-operations.controller.ts#L63](../apps/geodata/src/geodata-operations.controller.ts#L63)                 | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/qso-ingestions`                                                | [apps/activity/src/qso-ingestion.controller.ts#L16](../apps/activity/src/qso-ingestion.controller.ts#L16)                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/qso-ingestions/csv`                                            | [apps/activity/src/qso-ingestion.controller.ts#L26](../apps/activity/src/qso-ingestion.controller.ts#L26)                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/qso-ingestions/{ingestionId}`                                   | [apps/activity/src/qso-ingestion.controller.ts#L36](../apps/activity/src/qso-ingestion.controller.ts#L36)                         | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/activity/work-jobs/{jobId}/redrive`                            | [apps/activity/src/activity-operations.controller.ts#L62](../apps/activity/src/activity-operations.controller.ts#L62)             | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/adif/imports/{importId}`                                        | [apps/activity/src/adif-import.controller.ts#L25](../apps/activity/src/adif-import.controller.ts#L25)                             | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/adif/imports`                                                  | [apps/activity/src/adif-import.controller.ts#L16](../apps/activity/src/adif-import.controller.ts#L16)                             | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/qsos/{qsoId}/corrections`                                      | [apps/activity/src/qso-correction.controller.ts#L15](../apps/activity/src/qso-correction.controller.ts#L15)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/qsos/{qsoId}/corrections/{correctionId}/review`                | [apps/activity/src/qso-correction.controller.ts#L24](../apps/activity/src/qso-correction.controller.ts#L24)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/qso-corrections`                                                | [apps/activity/src/qso-admin.controller.ts#L9](../apps/activity/src/qso-admin.controller.ts#L9)                                   | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/public/activations`                                             | [apps/activity/src/public-activity.controller.ts#L9](../apps/activity/src/public-activity.controller.ts#L9)                       | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/public/programmes/{slug}/content`                               | [apps/programmes/src/public-programme-content.controller.ts#L9](../apps/programmes/src/public-programme-content.controller.ts#L9) | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/public/leaderboards`                                            | [apps/activity/src/public-activity.controller.ts#L22](../apps/activity/src/public-activity.controller.ts#L22)                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/public/results`                                                 | [apps/activity/src/public-activity.controller.ts#L33](../apps/activity/src/public-activity.controller.ts#L33)                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/statistics/rebuild-jobs`                                       | [apps/activity/src/activity-operations.controller.ts#L35](../apps/activity/src/activity-operations.controller.ts#L35)             | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/statistics/rebuild-jobs/{jobId}`                                | [apps/activity/src/activity-operations.controller.ts#L44](../apps/activity/src/activity-operations.controller.ts#L44)             | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/statistics`                                                     | [apps/activity/src/activity-operations.controller.ts#L18](../apps/activity/src/activity-operations.controller.ts#L18)             | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/notifications`                                                  | [apps/activity/src/activity-operations.controller.ts#L49](../apps/activity/src/activity-operations.controller.ts#L49)             | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/awards/{awardId}/recalculation-jobs`                           | [apps/activity/src/awards.controller.ts#L282](../apps/activity/src/awards.controller.ts#L282)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `GET /v1/awards/{awardId}/recalculation-jobs/{jobId}`                    | [apps/activity/src/awards.controller.ts#L293](../apps/activity/src/awards.controller.ts#L293)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
-| `POST /v1/awards/{awardId}/retire`                                       | [apps/activity/src/awards.controller.ts#L271](../apps/activity/src/awards.controller.ts#L271)                                     | Route mapped; behavior qualification is tracked in the parity matrix. |
+## Identity
+
+- `POST /v1/identity/auth/register` — [auth.controller.ts#L54](../apps/identity/src/auth.controller.ts#L54)
+- `POST /v1/identity/auth/login` — [auth.controller.ts#L61](../apps/identity/src/auth.controller.ts#L61)
+- `POST /v1/identity/auth/refresh` — [auth.controller.ts#L70](../apps/identity/src/auth.controller.ts#L70)
+- `POST /v1/identity/auth/logout` — [auth.controller.ts#L127](../apps/identity/src/auth.controller.ts#L127)
+- `POST /v1/identity/auth/recovery/request` — [auth.controller.ts#L79](../apps/identity/src/auth.controller.ts#L79)
+- `POST /v1/identity/auth/recovery/reset` — [auth.controller.ts#L85](../apps/identity/src/auth.controller.ts#L85)
+- `GET /v1/identity/me` — [auth.controller.ts#L136](../apps/identity/src/auth.controller.ts#L136)
+- `PATCH /v1/identity/me/profile` — [auth.controller.ts#L143](../apps/identity/src/auth.controller.ts#L143)
+- `GET /v1/identity/me/profile-image` — [auth.controller.ts#L153](../apps/identity/src/auth.controller.ts#L153)
+- `PUT /v1/identity/me/profile-image` — [auth.controller.ts#L164](../apps/identity/src/auth.controller.ts#L164)
+- `DELETE /v1/identity/me/profile-image` — [auth.controller.ts#L180](../apps/identity/src/auth.controller.ts#L180)
+- `GET /v1/identity/accounts/{accountId}/profile-image` — [auth.controller.ts#L283](../apps/identity/src/auth.controller.ts#L283)
+- `GET /v1/identity/admin/accounts` — [auth.controller.ts#L191](../apps/identity/src/auth.controller.ts#L191)
+- `GET /v1/identity/admin/roles` — [auth.controller.ts#L211](../apps/identity/src/auth.controller.ts#L211)
+- `POST /v1/identity/admin/roles` — [auth.controller.ts#L218](../apps/identity/src/auth.controller.ts#L218)
+- `POST /v1/identity/roles` — [auth.controller.ts#L229](../apps/identity/src/auth.controller.ts#L229)
+- `GET /v1/identity/admin/security-events` — [auth.controller.ts#L201](../apps/identity/src/auth.controller.ts#L201)
+- `POST /v1/identity/accounts` — [auth.controller.ts#L251](../apps/identity/src/auth.controller.ts#L251)
+- `POST /v1/identity/accounts/{accountId}/callsigns` — [auth.controller.ts#L327](../apps/identity/src/auth.controller.ts#L327)
+- `POST /v1/identity/accounts/{accountId}/callsigns/{callsignId}/evidence` — [auth.controller.ts#L343](../apps/identity/src/auth.controller.ts#L343)
+- `POST /v1/identity/accounts/{accountId}/callsigns/{callsignId}/verify` — [auth.controller.ts#L359](../apps/identity/src/auth.controller.ts#L359)
+- `GET /v1/identity/accounts/{accountId}/roles` — [auth.controller.ts#L295](../apps/identity/src/auth.controller.ts#L295)
+- `GET /v1/identity/accounts/{accountId}/export` — [auth.controller.ts#L273](../apps/identity/src/auth.controller.ts#L273)
+- `POST /v1/identity/auth/service-token` — [auth.controller.ts#L106](../apps/identity/src/auth.controller.ts#L106)
+- `GET /v1/identity/internal/email-recipients/{accountId}` — [auth.controller.ts#L116](../apps/identity/src/auth.controller.ts#L116)
+- `GET /v1/identity/accounts/{accountId}` — [auth.controller.ts#L263](../apps/identity/src/auth.controller.ts#L263)
+- `PATCH /v1/identity/accounts/{accountId}` — [auth.controller.ts#L305](../apps/identity/src/auth.controller.ts#L305)
+- `PATCH /v1/identity/roles/{roleCode}` — [auth.controller.ts#L240](../apps/identity/src/auth.controller.ts#L240)
+- `PUT /v1/identity/accounts/{accountId}/role-assignments` — [auth.controller.ts#L316](../apps/identity/src/auth.controller.ts#L316)
+- `PUT /v1/identity/accounts/{accountId}/primary-callsign` — [auth.controller.ts#L377](../apps/identity/src/auth.controller.ts#L377)
+- `POST /v1/identity/accounts/{accountId}/callsigns/{callsignId}/retire` — [auth.controller.ts#L392](../apps/identity/src/auth.controller.ts#L392)
+- `POST /v1/identity/oidc/providers` — [auth.controller.ts#L94](../apps/identity/src/auth.controller.ts#L94)
+
+## Programmes
+
+- `GET /v1/programmes` — [programmes.controller.ts#L20](../apps/programmes/src/programmes.controller.ts#L20)
+- `POST /v1/programmes` — [programmes.controller.ts#L34](../apps/programmes/src/programmes.controller.ts#L34)
+- `GET /v1/programmes/{slug}/policy` — [programmes.controller.ts#L48](../apps/programmes/src/programmes.controller.ts#L48)
+- `GET /v1/entity-types` — [entity-types.controller.ts#L20](../apps/programmes/src/entity-types.controller.ts#L20)
+- `POST /v1/entity-types` — [entity-types.controller.ts#L25](../apps/programmes/src/entity-types.controller.ts#L25)
+- `GET /v1/programmes/{slug}/entity-types` — [entity-types.controller.ts#L42](../apps/programmes/src/entity-types.controller.ts#L42)
+- `POST /v1/programmes/{slug}/entity-types` — [entity-types.controller.ts#L50](../apps/programmes/src/entity-types.controller.ts#L50)
+- `GET /v1/programmes/{slug}` — [programmes.controller.ts#L68](../apps/programmes/src/programmes.controller.ts#L68)
+- `PATCH /v1/programmes/{slug}` — [programmes.controller.ts#L53](../apps/programmes/src/programmes.controller.ts#L53)
+- `PUT /v1/programmes/{slug}/entity-types/{categoryCode}` — [entity-types.controller.ts#L69](../apps/programmes/src/entity-types.controller.ts#L69)
+- `DELETE /v1/programmes/{slug}/entity-types/{categoryCode}` — [entity-types.controller.ts#L84](../apps/programmes/src/entity-types.controller.ts#L84)
+- `GET /v1/programmes/{slug}/content` — [programme-content.controller.ts#L35](../apps/programmes/src/programme-content.controller.ts#L35)
+- `POST /v1/programmes/{slug}/content` — [programme-content.controller.ts#L55](../apps/programmes/src/programme-content.controller.ts#L55)
+- `GET /v1/programmes/{slug}/content/coverage` — [programme-content.controller.ts#L27](../apps/programmes/src/programme-content.controller.ts#L27)
+- `POST /v1/programmes/{slug}/content/{contentId}/submit` — [programme-content.controller.ts#L73](../apps/programmes/src/programme-content.controller.ts#L73)
+- `POST /v1/programmes/{slug}/content/{contentId}/review` — [programme-content.controller.ts#L84](../apps/programmes/src/programme-content.controller.ts#L84)
+- `POST /v1/programmes/{slug}/content/{contentId}/publish` — [programme-content.controller.ts#L102](../apps/programmes/src/programme-content.controller.ts#L102)
+- `PATCH /v1/programmes/{slug}/content/{contentId}` — [programme-content.controller.ts#L120](../apps/programmes/src/programme-content.controller.ts#L120)
+- `GET /v1/programmes/{slug}/policy-drafts` — [programme-policy.controller.ts#L21](../apps/programmes/src/programme-policy.controller.ts#L21)
+- `POST /v1/programmes/{slug}/policy-drafts` — [programme-policy.controller.ts#L39](../apps/programmes/src/programme-policy.controller.ts#L39)
+- `POST /v1/programmes/{slug}/policy-drafts/{draftId}/submit` — [programme-policy.controller.ts#L57](../apps/programmes/src/programme-policy.controller.ts#L57)
+- `POST /v1/programmes/{slug}/policy-drafts/{draftId}/review` — [programme-policy.controller.ts#L68](../apps/programmes/src/programme-policy.controller.ts#L68)
+- `POST /v1/programmes/{slug}/policy-drafts/{draftId}/publish` — [programme-policy.controller.ts#L86](../apps/programmes/src/programme-policy.controller.ts#L86)
+- `PATCH /v1/programmes/{slug}/policy-drafts/{draftId}` — [programme-policy.controller.ts#L104](../apps/programmes/src/programme-policy.controller.ts#L104)
+- `GET /v1/public/programmes/{slug}/content` — [public-programme-content.controller.ts#L9](../apps/programmes/src/public-programme-content.controller.ts#L9)
+
+## Geodata
+
+- `GET /v1/geodata/entities` — [geodata.controller.ts#L36](../apps/geodata/src/geodata.controller.ts#L36)
+- `GET /v1/geodata/imports` — [geodata-imports.controller.ts#L151](../apps/geodata/src/geodata-imports.controller.ts#L151)
+- `POST /v1/geodata/imports` — [geodata-imports.controller.ts#L107](../apps/geodata/src/geodata-imports.controller.ts#L107)
+- `GET /v1/geodata/imports/{runId}` — [geodata-imports.controller.ts#L160](../apps/geodata/src/geodata-imports.controller.ts#L160)
+- `PUT /v1/geodata/imports/{runId}/cancellation` — [geodata-imports.controller.ts#L223](../apps/geodata/src/geodata-imports.controller.ts#L223)
+- `GET /v1/geodata/imports/{runId}/candidates` — [geodata-imports.controller.ts#L280](../apps/geodata/src/geodata-imports.controller.ts#L280)
+- `POST /v1/geodata/imports/{runId}/candidates/validate` — [geodata-imports.controller.ts#L290](../apps/geodata/src/geodata-imports.controller.ts#L290)
+- `POST /v1/geodata/imports/{runId}/process` — [geodata-imports.controller.ts#L169](../apps/geodata/src/geodata-imports.controller.ts#L169)
+- `GET /v1/geodata/imports/{runId}/processing-queues/{queueId}` — [geodata-imports.controller.ts#L243](../apps/geodata/src/geodata-imports.controller.ts#L243)
+- `POST /v1/geodata/imports/{runId}/processing-queues/{queueId}/redrive` — [geodata-imports.controller.ts#L253](../apps/geodata/src/geodata-imports.controller.ts#L253)
+- `POST /v1/geodata/imports/{runId}/processed` — [geodata-imports.controller.ts#L194](../apps/geodata/src/geodata-imports.controller.ts#L194)
+- `DELETE /v1/geodata/load-test-runs/{testRunId}` — [geodata-operations.controller.ts#L163](../apps/geodata/src/geodata-operations.controller.ts#L163)
+- `POST /v1/geodata/import-uploads` — [geodata-imports.controller.ts#L44](../apps/geodata/src/geodata-imports.controller.ts#L44)
+- `GET /v1/geodata/import-uploads/{uploadId}` — [geodata-imports.controller.ts#L55](../apps/geodata/src/geodata-imports.controller.ts#L55)
+- `DELETE /v1/geodata/import-uploads/{uploadId}` — [geodata-imports.controller.ts#L98](../apps/geodata/src/geodata-imports.controller.ts#L98)
+- `POST /v1/geodata/import-uploads/{uploadId}/parts/{partNumber}` — [geodata-imports.controller.ts#L64](../apps/geodata/src/geodata-imports.controller.ts#L64)
+- `POST /v1/geodata/import-uploads/{uploadId}/complete` — [geodata-imports.controller.ts#L88](../apps/geodata/src/geodata-imports.controller.ts#L88)
+- `GET /v1/geodata/location-options` — [geodata.controller.ts#L131](../apps/geodata/src/geodata.controller.ts#L131)
+- `GET /v1/geodata/adapters` — [geodata.controller.ts#L50](../apps/geodata/src/geodata.controller.ts#L50)
+- `GET /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L149](../apps/geodata/src/geodata.controller.ts#L149)
+- `PATCH /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L154](../apps/geodata/src/geodata.controller.ts#L154)
+- `GET /v1/geodata/entities/{entityId}/audit` — [geodata.controller.ts#L41](../apps/geodata/src/geodata.controller.ts#L41)
+- `POST /v1/geodata/entities/{entityId}/location-enrichment-requests` — [geodata.controller.ts#L180](../apps/geodata/src/geodata.controller.ts#L180)
+- `GET /v1/geodata/tiles/{z}/{x}/{y}` — [geodata.controller.ts#L139](../apps/geodata/src/geodata.controller.ts#L139)
+- `GET /v1/geodata/refresh-schedules` — [geodata-operations.controller.ts#L86](../apps/geodata/src/geodata-operations.controller.ts#L86)
+- `POST /v1/geodata/refresh-schedules` — [geodata-operations.controller.ts#L95](../apps/geodata/src/geodata-operations.controller.ts#L95)
+- `POST /v1/geodata/refresh-schedules/{scheduleId}/run` — [geodata-operations.controller.ts#L117](../apps/geodata/src/geodata-operations.controller.ts#L117)
+- `GET /v1/geodata/conflation` — [geodata.controller.ts#L98](../apps/geodata/src/geodata.controller.ts#L98)
+- `POST /v1/geodata/conflation/{candidateId}/resolve` — [geodata.controller.ts#L107](../apps/geodata/src/geodata.controller.ts#L107)
+- `POST /v1/geodata/proposals` — [geodata-operations.controller.ts#L142](../apps/geodata/src/geodata-operations.controller.ts#L142)
+- `PUT /v1/geodata/entities/{entityId}/geometry` — [geodata.controller.ts#L260](../apps/geodata/src/geodata.controller.ts#L260)
+- `PUT /v1/geodata/entities/{entityId}/categories` — [geodata.controller.ts#L234](../apps/geodata/src/geodata.controller.ts#L234)
+- `POST /v1/geodata/entities/{entityId}/reviews` — [geodata.controller.ts#L207](../apps/geodata/src/geodata.controller.ts#L207)
+- `POST /v1/geodata/entity-deletion-jobs` — [geodata-operations.controller.ts#L34](../apps/geodata/src/geodata-operations.controller.ts#L34)
+- `GET /v1/geodata/entity-deletion-jobs/{jobId}` — [geodata-operations.controller.ts#L55](../apps/geodata/src/geodata-operations.controller.ts#L55)
+- `POST /v1/geodata/entity-deletion-jobs/{jobId}/confirm` — [geodata-operations.controller.ts#L63](../apps/geodata/src/geodata-operations.controller.ts#L63)
+
+## Activity
+
+- `GET /v1/activations/entity-deletion-impacts/{entityId}` — [activity.controller.ts#L20](../apps/activity/src/activity.controller.ts#L20)
+- `POST /v1/activations/entity-deletion-cascades` — [activity.controller.ts#L28](../apps/activity/src/activity.controller.ts#L28)
+- `GET /v1/activations` — [activity.controller.ts#L38](../apps/activity/src/activity.controller.ts#L38)
+- `POST /v1/activations` — [activity.controller.ts#L57](../apps/activity/src/activity.controller.ts#L57)
+- `GET /v1/activations/{activationId}` — [activity.controller.ts#L66](../apps/activity/src/activity.controller.ts#L66)
+- `PATCH /v1/activations/{activationId}` — [activity.controller.ts#L84](../apps/activity/src/activity.controller.ts#L84)
+- `POST /v1/activations/{activationId}/qsos` — [activity.controller.ts#L74](../apps/activity/src/activity.controller.ts#L74)
+- `GET /v1/awards` — [awards.controller.ts#L24](../apps/activity/src/awards.controller.ts#L24)
+- `POST /v1/awards` — [awards.controller.ts#L43](../apps/activity/src/awards.controller.ts#L43)
+- `GET /v1/awards/{awardId}` — [awards.controller.ts#L221](../apps/activity/src/awards.controller.ts#L221)
+- `PATCH /v1/awards/{awardId}` — [awards.controller.ts#L229](../apps/activity/src/awards.controller.ts#L229)
+- `POST /v1/awards/{awardId}/submit` — [awards.controller.ts#L239](../apps/activity/src/awards.controller.ts#L239)
+- `POST /v1/awards/{awardId}/review` — [awards.controller.ts#L249](../apps/activity/src/awards.controller.ts#L249)
+- `POST /v1/awards/{awardId}/publish` — [awards.controller.ts#L260](../apps/activity/src/awards.controller.ts#L260)
+- `GET /v1/awards/assets` — [awards.controller.ts#L167](../apps/activity/src/awards.controller.ts#L167)
+- `POST /v1/awards/assets` — [awards.controller.ts#L178](../apps/activity/src/awards.controller.ts#L178)
+- `GET /v1/awards/assets/{assetId}/content` — [awards.controller.ts#L186](../apps/activity/src/awards.controller.ts#L186)
+- `PUT /v1/awards/assets/{assetId}/content` — [awards.controller.ts#L194](../apps/activity/src/awards.controller.ts#L194)
+- `POST /v1/awards/previews` — [awards.controller.ts#L85](../apps/activity/src/awards.controller.ts#L85)
+- `POST /v1/awards/evaluation-jobs` — [awards.controller.ts#L56](../apps/activity/src/awards.controller.ts#L56)
+- `GET /v1/awards/evaluation-jobs/{jobId}` — [awards.controller.ts#L66](../apps/activity/src/awards.controller.ts#L66)
+- `GET /v1/awards/progress` — [awards.controller.ts#L71](../apps/activity/src/awards.controller.ts#L71)
+- `GET /v1/awards/requests` — [awards.controller.ts#L94](../apps/activity/src/awards.controller.ts#L94)
+- `POST /v1/awards/requests` — [awards.controller.ts#L111](../apps/activity/src/awards.controller.ts#L111)
+- `POST /v1/awards/requests/{requestId}/issuances` — [awards.controller.ts#L123](../apps/activity/src/awards.controller.ts#L123)
+- `GET /v1/awards/issuances` — [awards.controller.ts#L133](../apps/activity/src/awards.controller.ts#L133)
+- `POST /v1/awards/issuances/{issuanceId}/render-jobs` — [awards.controller.ts#L144](../apps/activity/src/awards.controller.ts#L144)
+- `GET /v1/awards/issuances/{issuanceId}/render-jobs/{jobId}` — [awards.controller.ts#L154](../apps/activity/src/awards.controller.ts#L154)
+- `GET /v1/awards/issuances/{issuanceId}/artifact` — [awards.controller.ts#L159](../apps/activity/src/awards.controller.ts#L159)
+- `POST /v1/qso-ingestions` — [qso-ingestion.controller.ts#L16](../apps/activity/src/qso-ingestion.controller.ts#L16)
+- `POST /v1/qso-ingestions/csv` — [qso-ingestion.controller.ts#L26](../apps/activity/src/qso-ingestion.controller.ts#L26)
+- `GET /v1/qso-ingestions/{ingestionId}` — [qso-ingestion.controller.ts#L36](../apps/activity/src/qso-ingestion.controller.ts#L36)
+- `POST /v1/activity/work-jobs/{jobId}/redrive` — [activity-operations.controller.ts#L62](../apps/activity/src/activity-operations.controller.ts#L62)
+- `GET /v1/adif/imports/{importId}` — [adif-import.controller.ts#L25](../apps/activity/src/adif-import.controller.ts#L25)
+- `POST /v1/adif/imports` — [adif-import.controller.ts#L16](../apps/activity/src/adif-import.controller.ts#L16)
+- `POST /v1/qsos/{qsoId}/corrections` — [qso-correction.controller.ts#L15](../apps/activity/src/qso-correction.controller.ts#L15)
+- `POST /v1/qsos/{qsoId}/corrections/{correctionId}/review` — [qso-correction.controller.ts#L24](../apps/activity/src/qso-correction.controller.ts#L24)
+- `GET /v1/qso-corrections` — [qso-admin.controller.ts#L9](../apps/activity/src/qso-admin.controller.ts#L9)
+- `GET /v1/public/activations` — [public-activity.controller.ts#L9](../apps/activity/src/public-activity.controller.ts#L9)
+- `GET /v1/public/leaderboards` — [public-activity.controller.ts#L22](../apps/activity/src/public-activity.controller.ts#L22)
+- `GET /v1/public/results` — [public-activity.controller.ts#L33](../apps/activity/src/public-activity.controller.ts#L33)
+- `POST /v1/statistics/rebuild-jobs` — [activity-operations.controller.ts#L35](../apps/activity/src/activity-operations.controller.ts#L35)
+- `GET /v1/statistics/rebuild-jobs/{jobId}` — [activity-operations.controller.ts#L44](../apps/activity/src/activity-operations.controller.ts#L44)
+- `GET /v1/statistics` — [activity-operations.controller.ts#L18](../apps/activity/src/activity-operations.controller.ts#L18)
+- `GET /v1/notifications` — [activity-operations.controller.ts#L49](../apps/activity/src/activity-operations.controller.ts#L49)
+- `POST /v1/awards/{awardId}/recalculation-jobs` — [awards.controller.ts#L282](../apps/activity/src/awards.controller.ts#L282)
+- `GET /v1/awards/{awardId}/recalculation-jobs/{jobId}` — [awards.controller.ts#L293](../apps/activity/src/awards.controller.ts#L293)
+- `POST /v1/awards/{awardId}/retire` — [awards.controller.ts#L271](../apps/activity/src/awards.controller.ts#L271)

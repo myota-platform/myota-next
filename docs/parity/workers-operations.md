@@ -1,59 +1,61 @@
 # Workers and operations
 
 - Activity workers: QSO ingestion, ADIF processing, award evaluation and
-  recalculation, certificate rendering, and statistics rebuild are consumed
-  from their registered JetStream durables up to each durable's configured
-  `max_ack_pending` concurrency. Database leases and message progress
-  acknowledgements protect long jobs. The Python worker sends heartbeat
-  exceptions through its retry handler. NestJS logs transient database
-  heartbeat failures and retries at the next interval while processing and
-  ACK extensions continue; a confirmed lost lease still fails the work.
-  Heartbeat timers are cancelled
-  when processing settles, and long scheduled waits are cleared on shutdown.
-  Notifications are handled by the separate consumer described below. ADIF
-  source-object retention retries transient PostgreSQL failures with capped
-  jittered backoff; S3 delete failures remain isolated for later retry. Queued
-  jobs missing an outbox command are repaired periodically, retrying transient
-  PostgreSQL failures with capped jittered backoff. Process-kill
-  qualifications cover lease takeover for all six Activity job kinds. The
-  checks inspect rebuilt snapshots, award progress, ingested and imported QSOs,
-  import notification state, and rendered PDF artifacts. A live connection
-  recovery check makes PostgreSQL TCP connections temporarily unavailable
-  through a local fault proxy while claiming a queued job, then verifies it
-  completes after connectivity returns. A second fault drops connectivity
-  after claim and before retry-state persistence; the worker retains the
-  JetStream delivery while PostgreSQL is unavailable, then atomically commits
-  the queued retry and a fresh outbox command before confirming the original
-  delivery. The retry completes after outbox dispatch. The Activity worker also reconnects and resumes durable work
-  delivery after a single-server JetStream restart with its file store
-  retained. A retention recovery fixture deletes an expired ADIF source object,
-  drops PostgreSQL before persisting `source_deleted_at`, then confirms the
-  safe deletion repeats and commits the marker after recovery. A full
-  PostgreSQL service restart during a claimed statistics rebuild also verifies
-  that the worker persists the retry and its outbox command after reconnection,
-  then completes the job after dispatch. A three-node JetStream check stops the stream leader
-  while a statistics rebuild delivery is pending, verifies completion after
-  leader election, then publishes another job and confirms the Activity
-  durables settle through the surviving cluster. Process outages during other
-  Activity work kinds after processing begins remain open; all six kinds are
-  covered for process death after lease acquisition and before processing starts.
-  A service-level check also verifies that an unconfirmed ACK after terminal
-  dead-letter persistence is settled on redelivery without processing the job
-  again. Process death after terminal persistence but before broker settlement
-  remains open. Transient PostgreSQL failures while claiming work or persisting
-  retry/dead-letter state extend the current ACK and retry in place with capped
-  jittered backoff. Fault-proxy checks cover retry-state
-  writes and terminal failure settlement at delivery count eight: while
-  PostgreSQL is unavailable, the job stays running, no dead-letter row exists,
-  and the delivery remains unacknowledged; after recovery, the failed job and
-  dead-letter row commit before ACK. Invalid envelopes, missing job rows, and
-  job-kind mismatches are recorded in the Activity dead-letter ledger before
-  the worker requests a confirmed broker ACK. A three-node cluster check stops
-  the leader after this ledger write and confirms settlement through the
-  elected replacement. Process outages during terminal dead-letter settlement
-  remain open. A separate three-node cluster check also persists an exhausted
-  job and its dead-letter before stopping the leader, then confirms the broker
-  ACK through the elected replacement.
+  recalculation, certificate rendering, and statistics rebuild are consumed from their
+  registered JetStream durables up to each durable's configured `max_ack_pending`
+  concurrency. Database leases and message progress acknowledgements protect long jobs.
+  The Python worker sends heartbeat exceptions through its retry handler. NestJS logs
+  transient database heartbeat failures and retries at the next interval while processing
+  and ACK extensions continue; a confirmed lost lease still fails the work.
+
+Heartbeat timers are cancelled when processing settles, and long scheduled waits are
+cleared on shutdown. Notifications are handled by the separate consumer described below.
+ADIF source-object retention retries transient PostgreSQL failures with capped jittered
+backoff; S3 delete failures remain isolated for later retry. Queued jobs missing an
+outbox command are repaired periodically, retrying transient PostgreSQL failures with
+capped jittered backoff.
+
+Process-kill qualifications cover lease takeover for all six Activity job kinds. The
+checks inspect rebuilt snapshots, award progress, ingested and imported QSOs, import
+notification state, and rendered PDF artifacts. A live connection recovery check makes
+PostgreSQL TCP connections temporarily unavailable through a local fault proxy while
+claiming a queued job, then verifies it completes after connectivity returns. A second
+fault drops connectivity after claim and before retry-state persistence; the worker
+retains the JetStream delivery while PostgreSQL is unavailable, then atomically commits
+the queued retry and a fresh outbox command before confirming the original delivery.
+
+The retry completes after outbox dispatch. The Activity worker also reconnects and
+resumes durable work delivery after a single-server JetStream restart with its file
+store retained. A retention recovery fixture deletes an expired ADIF source object,
+drops PostgreSQL before persisting `source_deleted_at`, then confirms the safe deletion
+repeats and commits the marker after recovery. A full PostgreSQL service restart during
+a claimed statistics rebuild also verifies that the worker persists the retry and its
+outbox command after reconnection, then completes the job after dispatch.
+
+A three-node JetStream check stops the stream leader while a statistics rebuild delivery
+is pending, verifies completion after leader election, then publishes another job and
+confirms the Activity durables settle through the surviving cluster. Process outages
+during other Activity work kinds after processing begins remain open; all six kinds are
+covered for process death after lease acquisition and before processing starts.
+
+A service-level check also verifies that an unconfirmed ACK after terminal dead-letter
+persistence is settled on redelivery without processing the job again. Process death
+after terminal persistence but before broker settlement remains open. Transient
+PostgreSQL failures while claiming work or persisting retry/dead-letter state extend the
+current ACK and retry in place with capped jittered backoff. Fault-proxy checks cover
+retry-state writes and terminal failure settlement at delivery count eight: while
+PostgreSQL is unavailable, the job stays running, no dead-letter row exists, and the
+delivery remains unacknowledged; after recovery, the failed job and dead-letter row
+commit before ACK.
+
+Invalid envelopes, missing job rows, and job-kind mismatches are recorded in the
+Activity dead-letter ledger before the worker requests a confirmed broker ACK. A
+three-node cluster check stops the leader after this ledger write and confirms
+settlement through the elected replacement. Process outages during terminal dead-letter
+settlement remain open. A separate three-node cluster check also persists an exhausted
+job and its dead-letter before stopping the leader, then confirms the broker ACK through
+the elected replacement.
+
 - Identity maintenance: expired recovery tokens, revoked sessions, expired
   revocations, rate-limit windows, old security events, and aged orphan profile
   images are cleaned by a separate Core-owned worker. Transient PostgreSQL
@@ -61,130 +63,137 @@
   S3 cleanup failures remain isolated from the database sweep. Shutdown
   cancels retry waits.
 - Activity notification consumption: exact durable validation, transactional
-  processed-event/checkpoint and notification writes, deduplication, bounded
-  retry, redacted poison-event dead-lettering, and audited CLI redrive are
-  implemented, with outcome and unresolved-dead-letter metrics. If NATS setup
-  fails after connecting, the Nest worker now drains that connection before
-  startup exits, matching the Python consumer's cleanup path. A disposable
-  JetStream CI test also verifies that two Nest replicas share the durable, a
-  restarted replica resumes it, and an audited CLI redrive republishes and
-  resolves a retained dead letter. Its eight-delivery policy configures the
-  seven delays that can precede redelivery; NATS rejects a backoff list as long
-  as `max_deliver`. Falsey event types use the Python worker's `unknown`
-  fallback in poison-event records.
-  Named replay
-  durables require an explicit start sequence, and optional message limits allow
-  bounded replay runs. A recovery test restarts a single-server JetStream with
-  file storage retained and verifies delivery resumes with confirmed ACKs and
-  duplicate-event idempotency. Transient PostgreSQL errors during event
-  processing or dead-letter persistence extend the current ACK and retry with
-  capped jittered backoff. The same CI recovery check drops Activity PostgreSQL
-  connectivity while an event is processing, confirms its JetStream delivery
-  stays pending without a partial notification, then restores connectivity and
-  verifies processing, deduplication, and ACK completion. Recovery after a
-  PostgreSQL interruption during terminal dead-letter persistence is checked
-  at delivery count eight: CI confirms the delivery
-  remains unterminated with no dead-letter row during the outage, then persists
-  the eight-attempt record before terminating it after recovery. A three-node
-  JetStream CI case holds terminal notification settlement pending during a
-  PostgreSQL outage, stops the stream leader, then verifies replica election,
-  dead-letter persistence through the replacement leader, and duplicate-safe
-  processing of a subsequent event. Broker-side retry
-  exhaustion under deployment conditions remains open. The unresolved-dead-letter
-  gauge refreshes in the background every 15 seconds, so it does not block
-  consumer startup or issue a count query for every delivery.
+  processed-event/checkpoint and notification writes, deduplication, bounded retry,
+  redacted poison-event dead-lettering, and audited CLI redrive are implemented, with
+  outcome and unresolved-dead-letter metrics. If NATS setup fails after connecting, the
+  Nest worker now drains that connection before startup exits, matching the Python
+  consumer's cleanup path. A disposable JetStream CI test also verifies that two Nest
+  replicas share the durable, a restarted replica resumes it, and an audited CLI redrive
+  republishes and resolves a retained dead letter.
+
+Its eight-delivery policy configures the seven delays that can precede redelivery; NATS
+rejects a backoff list as long as `max_deliver`. Falsey event types use the Python
+worker's `unknown` fallback in poison-event records. Named replay durables require an
+explicit start sequence, and optional message limits allow bounded replay runs. A
+recovery test restarts a single-server JetStream with file storage retained and verifies
+delivery resumes with confirmed ACKs and duplicate-event idempotency.
+
+Transient PostgreSQL errors during event processing or dead-letter persistence extend
+the current ACK and retry with capped jittered backoff. The same CI recovery check drops
+Activity PostgreSQL connectivity while an event is processing, confirms its JetStream
+delivery stays pending without a partial notification, then restores connectivity and
+verifies processing, deduplication, and ACK completion. Recovery after a PostgreSQL
+interruption during terminal dead-letter persistence is checked at delivery count eight:
+CI confirms the delivery remains unterminated with no dead-letter row during the outage,
+then persists the eight-attempt record before terminating it after recovery.
+
+A three-node JetStream CI case holds terminal notification settlement pending during a
+PostgreSQL outage, stops the stream leader, then verifies replica election, dead-letter
+persistence through the replacement leader, and duplicate-safe processing of a
+subsequent event. Broker-side retry exhaustion under deployment conditions remains open.
+The unresolved-dead-letter gauge refreshes in the background every 15 seconds, so it
+does not block consumer startup or issue a count query for every delivery.
+
 - Geodata workers: registered JetStream consumers for import preprocessing and
-  promotion, confirmed entity deletion, and location enrichment are implemented.
-  Each durable is polled concurrently up to its registered `max_ack_pending`
-  limit.
-  `/healthz` and `/readyz` expose liveness and Geodata PostgreSQL/NATS
-  readiness. Worker heartbeat timers clear when jobs finish, and worker and
-  scheduled-import polling delays are cancelled on shutdown. Import run leases
-  and database heartbeats use the Python-compatible
-  `MYOTA_IMPORT_LEASE_SECONDS` and `MYOTA_IMPORT_HEARTBEAT_SECONDS` settings.
-  A transient database heartbeat failure is logged and retried at the next
-  interval while the work task and JetStream ACK extensions continue; a
-  confirmed lost lease still fails the work. This follows the Python import
-  heartbeat thread's transient-error behavior. Cancellation reconciliation
-  uses `GEODATA_CANCELLATION_RECONCILE_SECONDS`
-  (default 30 seconds, minimum 5); JetStream ACK extensions follow one third of
-  the registered durable ACK wait. Optional `GEODATA_WORKER_ACK_WAIT_SECONDS`,
-  `GEODATA_WORKER_MAX_ACK_PENDING`, and `GEODATA_WORKER_MAX_DELIVERIES` settings
-  are shared by JetStream provisioning and worker policy validation. The
-  per-durable `GEODATA_WORKER_PREPROCESSING_MAX_ACK_PENDING`,
-  `GEODATA_WORKER_PROMOTION_MAX_ACK_PENDING`,
-  `GEODATA_WORKER_DELETION_MAX_ACK_PENDING`, and
-  `GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING` settings override the global
-  pending limit and are applied consistently at provisioning and runtime.
-  The reference Python API also exposes separate thread-pool limits. The
-  NestJS runtime uses durable consumer concurrency for persisted work, so these
-  settings do not all translate to the same execution boundary:
+  promotion, confirmed entity deletion, and location enrichment are implemented. Each
+  durable is polled concurrently up to its registered `max_ack_pending` limit. `/healthz`
+  and `/readyz` expose liveness and Geodata PostgreSQL/NATS readiness. Worker heartbeat
+  timers clear when jobs finish, and worker and scheduled-import polling delays are
+  cancelled on shutdown. Import run leases and database heartbeats use the
+  Python-compatible `MYOTA_IMPORT_LEASE_SECONDS` and `MYOTA_IMPORT_HEARTBEAT_SECONDS`
+  settings.
 
-  | Python setting           | Python work                                                    | NestJS counterpart                                                                             | Compatibility status                                                             |
-  | ------------------------ | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-  | `MYOTA_UPLOAD_WORKERS`   | API-local completion and recovery of uploaded source objects   | Shared per-process cap on multipart upload finalization in Geodata API                         | Retained for API finalization; restart recovery is not scheduled by this setting |
-  | `MYOTA_IMPORT_WORKERS`   | In-process import preprocessing, promotion, and recovery tasks | Both import durables use it as a fallback and share this aggregate per-process concurrency cap | Retained when no native import concurrency setting is configured                 |
-  | `MYOTA_LOCATION_WORKERS` | In-process location-enrichment tasks                           | `geodata-location-enrichment-v1` with `GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING`              | Accepted as a fallback alias; queue and lease model differ                       |
-  | `MYOTA_DELETION_WORKERS` | In-process entity-deletion tasks                               | `geodata-entity-deletion-v1` with `GEODATA_WORKER_DELETION_MAX_ACK_PENDING`                    | Accepted as a fallback alias; queue and lease model differ                       |
+A transient database heartbeat failure is logged and retried at the next interval while
+the work task and JetStream ACK extensions continue; a confirmed lost lease still fails
+the work. This follows the Python import heartbeat thread's transient-error behavior.
+Cancellation reconciliation uses `GEODATA_CANCELLATION_RECONCILE_SECONDS` (default 30
+seconds, minimum 5); JetStream ACK extensions follow one third of the registered durable
+ACK wait.
 
-  The Nest runtime accepts the matching location and deletion aliases. When no
-  native preprocessing, promotion, or shared pending limit is configured,
-  `MYOTA_IMPORT_WORKERS` sets both import durables' fallback pending values and
-  a shared per-process cap across them. Explicit Nest settings determine the
-  effective per-durable cap. `MYOTA_UPLOAD_WORKERS` remains API-local and does
-  not control preprocessing workers. Each Nest durable can run in multiple
-  worker replicas, so
-  compare per-work throughput and resource limits under representative loads
-  before production tuning.
-  The Geodata API exposes `/metrics` with PostGIS tile-query duration and
-  slow-query counters; `MYOTA_SLOW_QUERY_THRESHOLD_MS` retains its 250 ms
-  default and controls the slow-query counter. The reference's `entity_upsert`
-  series timed a full-snapshot synchronization pass; the row-authoritative
-  implementation has no equivalent pass and does not reuse that label for
-  individual writes.
-  Stale queued and expired work is re-enqueued through the owner outbox.
-  A live-worker CI check restarts a single-server JetStream with its file store
-  retained and verifies all four registered work durables process new work
-  after reconnection. The same check injects a PostgreSQL connection outage
-  through a local TCP fault proxy while the Geodata worker claims a persisted
-  import and checks its state. It verifies the delivery remains pending while
-  those repository calls cannot connect, then restores PostgreSQL connectivity
-  and verifies the worker claims the run and resumes its handler. A second
-  import fails after claim while the proxy is down; after reconnecting, the
-  worker persists the retry state, redelivers the command, and claims the retry.
-  This qualifies import claim, state lookup, and retry-state persistence across
-  a PostgreSQL connection outage. A full PostgreSQL service restart while a
-  preprocessing delivery is pending also verifies claim retry, successful
-  processing, and acknowledgement after reconnection. A separate three-node
-  JetStream check holds a delivery on each of the four Geodata durables while
-  the leader stops, then verifies all four handlers complete and settle through
-  the replacement leader. Repository processing is stubbed in this broker
-  settlement check. Process outages during other Geodata operations remain
-  open.
-  If PostgreSQL fails while the worker is recording a failed delivery, it
-  extends the current message ACK and retries settlement for transient
-  connection, shutdown, serialization, and deadlock errors with capped jittered
-  backoff. Live fault-proxy checks now cover failure settlement for all four
-  Geodata work kinds. Preprocessing, promotion, deletion, and enrichment keep
-  their JetStream deliveries pending during a PostgreSQL outage; after
-  reconnect, their actual repositories persist retry state and the fixture
-  confirms redelivery is acknowledged. Promotion verifies its attempt count
-  and error, deletion verifies its error and lease, and enrichment verifies
-  that its current request returns to `QUEUED` before redelivery. Successful
-  reprocessing is stubbed for promotion, deletion, and enrichment to isolate
-  settlement behavior. Process outages during claim or processing for other
-  work kinds remain open.
-  Periodic cancellation, expired-work, and retention passes also retry
-  transient database failures with capped jittered backoff. Retention repeats
-  object deletion safely before retrying its database state change.
-  A live recovery check now drops PostgreSQL connectivity after an expired
-  import's source object is deleted, then verifies retention repeats the safe
-  object deletion and commits the database cleanup after connectivity returns.
-  Scheduled import and upload-session retention is implemented. CI restarts the
-  pinned SeaweedFS image during a Geodata multipart upload, verifies a failed
-  part leaves no database record, retries it after restart, and checks the
-  completed object and queued import. Other object-store and worker outage paths
-  remain open; see [object-store recovery](../operations/object-store-recovery.md).
+Optional `GEODATA_WORKER_ACK_WAIT_SECONDS`, `GEODATA_WORKER_MAX_ACK_PENDING`, and
+`GEODATA_WORKER_MAX_DELIVERIES` settings are shared by JetStream provisioning and worker
+policy validation. The per-durable `GEODATA_WORKER_PREPROCESSING_MAX_ACK_PENDING`,
+`GEODATA_WORKER_PROMOTION_MAX_ACK_PENDING`, `GEODATA_WORKER_DELETION_MAX_ACK_PENDING`,
+and `GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING` settings override the global pending
+limit and are applied consistently at provisioning and runtime.
+
+The reference Python API also exposes separate thread-pool limits. The NestJS runtime
+uses durable consumer concurrency for persisted work, so these settings do not all
+translate to the same execution boundary:
+
+- **`MYOTA_UPLOAD_WORKERS`** — Python used this for API-local upload
+  completion and recovery. NestJS retains a shared per-process cap on
+  multipart finalization in the Geodata API. Restart recovery is not
+  scheduled by this setting.
+- **`MYOTA_IMPORT_WORKERS`** — Python used this for in-process preprocessing,
+  promotion, and recovery. NestJS applies it as a fallback to both import
+  durables and shares the aggregate per-process cap when no native import
+  concurrency setting is configured.
+- **`MYOTA_LOCATION_WORKERS`** — Python used this for in-process enrichment.
+  NestJS accepts it as an alias for `geodata-location-enrichment-v1` and
+  `GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING`; queue and lease models differ.
+- **`MYOTA_DELETION_WORKERS`** — Python used this for in-process deletion.
+  NestJS accepts it as an alias for `geodata-entity-deletion-v1` and
+  `GEODATA_WORKER_DELETION_MAX_ACK_PENDING`; queue and lease models differ.
+
+The Nest runtime accepts the matching location and deletion aliases. When no native
+preprocessing, promotion, or shared pending limit is configured, `MYOTA_IMPORT_WORKERS`
+sets both import durables' fallback pending values and a shared per-process cap across
+them. Explicit Nest settings determine the effective per-durable cap.
+`MYOTA_UPLOAD_WORKERS` remains API-local and does not control preprocessing workers.
+Each Nest durable can run in multiple worker replicas, so compare per-work throughput
+and resource limits under representative loads before production tuning.
+
+The Geodata API exposes `/metrics` with PostGIS tile-query duration and slow-query
+counters; `MYOTA_SLOW_QUERY_THRESHOLD_MS` retains its 250 ms default and controls the
+slow-query counter. The reference's `entity_upsert` series timed a full-snapshot
+synchronization pass; the row-authoritative implementation has no equivalent pass and
+does not reuse that label for individual writes. Stale queued and expired work is
+re-enqueued through the owner outbox.
+
+A live-worker CI check restarts a single-server JetStream with its file store retained
+and verifies all four registered work durables process new work after reconnection. The
+same check injects a PostgreSQL connection outage through a local TCP fault proxy while
+the Geodata worker claims a persisted import and checks its state. It verifies the
+delivery remains pending while those repository calls cannot connect, then restores
+PostgreSQL connectivity and verifies the worker claims the run and resumes its handler.
+
+A second import fails after claim while the proxy is down; after reconnecting, the
+worker persists the retry state, redelivers the command, and claims the retry. This
+qualifies import claim, state lookup, and retry-state persistence across a PostgreSQL
+connection outage. A full PostgreSQL service restart while a preprocessing delivery is
+pending also verifies claim retry, successful processing, and acknowledgement after
+reconnection.
+
+A separate three-node JetStream check holds a delivery on each of the four Geodata
+durables while the leader stops, then verifies all four handlers complete and settle
+through the replacement leader. Repository processing is stubbed in this broker
+settlement check. Process outages during other Geodata operations remain open. If
+PostgreSQL fails while the worker is recording a failed delivery, it extends the current
+message ACK and retries settlement for transient connection, shutdown, serialization,
+and deadlock errors with capped jittered backoff.
+
+Live fault-proxy checks now cover failure settlement for all four Geodata work kinds.
+Preprocessing, promotion, deletion, and enrichment keep their JetStream deliveries
+pending during a PostgreSQL outage; after reconnect, their actual repositories persist
+retry state and the fixture confirms redelivery is acknowledged. Promotion verifies its
+attempt count and error, deletion verifies its error and lease, and enrichment verifies
+that its current request returns to `QUEUED` before redelivery.
+
+Successful reprocessing is stubbed for promotion, deletion, and enrichment to isolate
+settlement behavior. Process outages during claim or processing for other work kinds
+remain open. Periodic cancellation, expired-work, and retention passes also retry
+transient database failures with capped jittered backoff. Retention repeats object
+deletion safely before retrying its database state change. A live recovery check now
+drops PostgreSQL connectivity after an expired import's source object is deleted, then
+verifies retention repeats the safe object deletion and commits the database cleanup
+after connectivity returns.
+
+Scheduled import and upload-session retention is implemented. CI restarts the pinned
+SeaweedFS image during a Geodata multipart upload, verifies a failed part leaves no
+database record, retries it after restart, and checks the completed object and queued
+import. Other object-store and worker outage paths remain open; see [object-store
+recovery](../operations/object-store-recovery.md).
 
 - Email worker: transient PostgreSQL errors during delivery claiming,
   delivered/retry state updates, and dead-letter persistence extend the current
@@ -197,41 +206,44 @@
   request counters at `/metrics`; Gateway also retains its proxy-specific
   counters.
 - Outbox relay: independently configured Core, Activity, and Geodata relay
-  processes claim only their own database's events and publish registered fact
-  or work envelopes to JetStream with stable event IDs and validates existing
-  stream and durable settings at startup, validates registered work payloads,
-  and exposes Prometheus metrics.
-  `npm run outbox:admin` lists bounded dead-letter metadata and transactionally
-  redrives one retained event against its owning database, recording the prior
-  attempts and error. See [outbox recovery](../operations/outbox-recovery.md).
-  The manually triggered Operational and performance qualification workflow
-  runs the same fault-injection check against Core, Activity, and Geodata
-  separately: a transient publish failure leaves the owner-scoped outbox row
-  retryable, then JetStream accepts the retry and the row is marked published.
-  It also exhausts retries for an owner-scoped event, invokes the audited
-  redrive CLI, verifies the recorded prior attempts and error, and confirms
-  successful republishing resolves the dead letter. A second check starts an
-  isolated JetStream server for each owner, kills it after an outbox claim,
-  verifies the event stays retryable, restarts the server with its file store,
-  and confirms publication after client reconnection. A third check runs each
-  owner against a three-node JetStream cluster, kills the stream leader after a
-  confirmed publish but before the outbox row is marked, then verifies that
-  the acknowledged event settles and a second event publishes through the
-  elected replacement. Deployment-level NATS recovery remains unqualified. Transient PostgreSQL
-  errors while refreshing relay metrics, claiming events, and persisting
-  publish, retry, or dead-letter state use capped jittered backoff. After
-  JetStream confirms publication, the relay retries the owner-database state
-  transaction before claiming another event, preventing a database outage
-  from causing a tight loop of duplicate publishes. Shutdown cancels retry
-  waits. A live PostgreSQL fault-proxy check runs for each owner database,
-  drops connectivity after JetStream acknowledges an event but before the
-  published state is recorded, then verifies persistence retries after recovery
-  without publishing the event twice. CI also stops and restarts its PostgreSQL
-  service after JetStream acknowledges an event but before publication state is
-  recorded. It repeats the process restart for Core, Activity, and Geodata,
-  verifying each outbox relay reconnects, persists the acknowledgement, and
-  publishes the event only once. PostgreSQL cluster failover remains
-  unqualified.
+  processes claim only their own database's events and publish registered fact or work
+  envelopes to JetStream with stable event IDs and validates existing stream and durable
+  settings at startup, validates registered work payloads, and exposes Prometheus metrics.
+  `npm run outbox:admin` lists bounded dead-letter metadata and transactionally redrives
+  one retained event against its owning database, recording the prior attempts and error.
+
+See [outbox recovery](../operations/outbox-recovery.md). The manually triggered
+Operational and performance qualification workflow runs the same fault-injection check
+against Core, Activity, and Geodata separately: a transient publish failure leaves the
+owner-scoped outbox row retryable, then JetStream accepts the retry and the row is
+marked published. It also exhausts retries for an owner-scoped event, invokes the
+audited redrive CLI, verifies the recorded prior attempts and error, and confirms
+successful republishing resolves the dead letter.
+
+A second check starts an isolated JetStream server for each owner, kills it after an
+outbox claim, verifies the event stays retryable, restarts the server with its file
+store, and confirms publication after client reconnection. A third check runs each owner
+against a three-node JetStream cluster, kills the stream leader after a confirmed
+publish but before the outbox row is marked, then verifies that the acknowledged event
+settles and a second event publishes through the elected replacement.
+
+Deployment-level NATS recovery remains unqualified. Transient PostgreSQL errors while
+refreshing relay metrics, claiming events, and persisting publish, retry, or dead-letter
+state use capped jittered backoff. After JetStream confirms publication, the relay
+retries the owner-database state transaction before claiming another event, preventing a
+database outage from causing a tight loop of duplicate publishes. Shutdown cancels retry
+waits.
+
+A live PostgreSQL fault-proxy check runs for each owner database, drops connectivity
+after JetStream acknowledges an event but before the published state is recorded, then
+verifies persistence retries after recovery without publishing the event twice. CI also
+stops and restarts its PostgreSQL service after JetStream acknowledges an event but
+before publication state is recorded. It repeats the process restart for Core, Activity,
+and Geodata, verifying each outbox relay reconnects, persists the acknowledgement, and
+publishes the event only once.
+
+PostgreSQL cluster failover remains unqualified.
+
 - Runtime: preserve migrations, health/readiness, metrics, logs, traces,
   backups, restore paths, NATS topology, object storage buckets, and separate
   service/worker deployment units. Activity database pools honor the
