@@ -83,45 +83,6 @@ an accepted scope decision is recorded in the dispositions section.
 - **Tracked by:** [Issue #15](https://github.com/myota-platform/myota-next/issues/15).
 - **Sources:** [workers and operations, lines 90–95](parity/workers-operations.md#L90).
 
-### L-06 — Finish Geodata payload and workflow compatibility qualification
-
-- **Owner:** Geodata (`apps/geodata/`, `apps/geodata-worker/`,
-  `apps/geodata-importer/`).
-- **Class:** Product compatibility qualification.
-- **Reference behavior:** Import, review, metadata, geometry, category,
-  location, conflation, promotion, deletion, refresh schedule, and lifecycle
-  workflows preserve consequential reference payload and state behavior.
-- **Current implementation and evidence:** The Geodata parity page describes
-  source-specific, geometry, idempotency, review, and live workflow evidence.
-  Representative implementation includes `apps/geodata/src/geodata-import.service.ts`,
-  `geodata-entity-review.repository.ts`, `geodata-entity-mutation.repository.ts`,
-  and `geodata-schedule.service.ts`. Admin candidate selection now applies
-  synchronous, all-or-nothing promotion in the Geodata transaction through
-  `GeodataPromotionRepository.promoteCandidateInTransaction`; the route contract,
-  Admin feedback, and live browser qualification assert final-state responses.
-  Retry is synchronous only when the locked prior queue is failed and records
-  the selected candidate as failed; active and unrelated queue assignments
-  remain conflicts. Promotion validation checks required fields and a nonempty
-  candidate list before `targetStatus`; the synchronous limit follows target
-  validation and applies after ID deduplication. Focused regression coverage pins
-  the validation order, per-candidate authorization, retry eligibility, exact conflict
-  response, distinct-ID cap, and duplicate-side-effect boundaries. Large import intake
-  and preprocessing remain asynchronous.
-- **Missing evidence:** The page explicitly leaves broader payload and workflow
-  compatibility qualification outstanding; known fixture and importer gaps are
-  tracked separately in L-07 and L-08. The live database-backed Admin browser
-  qualification for selected promotion passed in
-  [CI run 39967423797](https://github.com/myota-platform/myota-next/actions/runs/39967423797);
-  broader importer, payload, and workflow qualification remains open.
-- **Risk:** Incorrect imported or reviewed data can affect entity geometry,
-  provenance, approval, and downstream Activity records.
-- **Next check:** Reconcile each remaining Geodata parity statement with the
-  source-handler comparison and current fixtures; add only missing material
-  compatibility cases and link their evidence.
-- **Tracked by:** [Issue #14](https://github.com/myota-platform/myota-next/issues/14).
-- **Sources:** [Geodata parity, lines 472–475](parity/geodata.md#L472);
-  [parity matrix, lines 26–35](parity-matrix.md#L26).
-
 ### L-07 — Qualify large PBF imports and less common OSM geometry
 
 - **Owner:** Geodata importer and worker (`apps/geodata-importer/`,
@@ -156,48 +117,6 @@ an accepted scope decision is recorded in the dispositions section.
 - **Tracked by:** [Issue #18](https://github.com/myota-platform/myota-next/issues/18).
 - **Sources:** [Geodata parity, lines 140–171](parity/geodata.md#L140);
   [completion criteria, lines 15–17](parity/completion-criteria.md#L15).
-
-### L-08 — Complete remaining geometry, CRS, and datum-grid fixtures
-
-- **Owner:** Geodata importer (`apps/geodata/src/`,
-  `apps/geodata-worker/src/`).
-- **Class:** Compatibility qualification.
-- **Reference behavior:** Geometry grouping, CRS transformation, source hash,
-  ordinate handling, and datum-grid-dependent transformations match the pinned
-  PyShp/PyProj reference behavior.
-- **Current implementation and evidence:** Existing fixtures compare PyShp
-  2.3.1 and PyProj 3.8.0 for selected WGS84, Web Mercator, dimensionality, and
-  polygon cases, including EPSG:25830 with PyProj-generated input coordinates.
-  EPSG:4230 and EPSG:23028 through EPSG:23038 now use the IGN Spain ED50
-  horizontal grid inside its coverage; fixtures for EPSG:4230 and EPSG:23029
-  through EPSG:23031 compare transformed coordinates against PyProj 3.8.0. A
-  PyShp 2.3.1 Shapefile fixture with ESRI WKT for ED50 / UTM zone 30N verifies
-  the `.prj` path also selects the Spanish grid and matches PyProj; geographic
-  ED50 WKT is covered by a projection fixture. An official PyProj 3.8.0 WKT2
-  Shapefile fixture now verifies that the importer resolves its root EPSG:23030
-  authority despite nested base-CRS and conversion-method identifiers, then
-  applies the same Spanish-grid transformation. A second PyProj 3.8.0 WKT2
-  Shapefile fixture removes every authority ID and confirms the ED50 datum and
-  UTM parameters still select the matching grid operation; an authority-free
-  geographic ED50 WKT2 projection fixture covers the same datum path.
-  PyShp 2.3.1 fixtures verify ordinary Point, PolyLine, Polygon, and MultiPoint
-  geometries; Z/M ordinates are dropped for PointZ, PointM, PolylineZ, PolylineM,
-  PolygonZ, PolygonM, MultiPointZ, and MultiPointM. Multipart PolyLine parts retain
-  MultiLineString grouping. Null-shape and MultiPatch fixtures pin PyShp's exact
-  rejection behavior. The separate-outer-parts PBF relation is compared with the
-  PyOsmium 4.3.2 reference in L-07; see the linked Geodata parity evidence.
-- **Missing evidence:** Less common OSM relation/member patterns, additional CRS
-  definitions, and datum-grid transformations for other CRSs still need review.
-  The Spanish grid fallback outside the checked-in grid's coverage is compared
-  with the bundled Proj4 definition; it has not yet been compared with a pinned
-  PyProj 3.8.0 output.
-- **Risk:** A valid source can be rejected, transformed incorrectly, or hashed
-  differently, changing entity location or identity.
-- **Next check:** Enumerate uncovered source geometry/CRS types, build pinned
-  reference fixtures for material cases, and verify grid availability and
-  outputs in the target runtime.
-- **Tracked by:** [Issue #14](https://github.com/myota-platform/myota-next/issues/14).
-- **Sources:** [Geodata parity, lines 260–345](parity/geodata.md#L260).
 
 ### L-09 — Qualify Geodata worker outages during claim and processing
 
@@ -476,6 +395,38 @@ an accepted scope decision is recorded in the dispositions section.
 - **Sources:** [Activity parity](parity/activity.md);
   [completion criteria, lines 1–18](parity/completion-criteria.md#L1).
 
+### D-06 — Geodata parity is qualified by material workflows and source formats
+
+- **Owner:** Geodata API, worker, importer, and Admin workflows.
+- **Class:** Functional-parity scope disposition.
+- **Current implementation and evidence:** Live Gateway/Admin browser workflows
+  cover every configured import format, persisted upload/import status, candidate
+  review, and synchronous all-or-nothing selected promotion. Reference fixtures
+  cover every supported PyShp shape family, all required OSM tag families and
+  emitted point/line/area forms, representative projected CRS families, ESRI and
+  WKT2 ED50 definitions, and the Spain-specific IGN datum grid. Code, contract,
+  repository, worker, and browser evidence is linked from the
+  [Geodata parity page](parity/geodata.md); the complete CI run for the latest
+  fixture set passed in [run 39979336005](https://github.com/myota-platform/myota-next/actions/runs/39979336005).
+- **Disposition and impact:** The launch criteria require complete common
+  workflows and material outcomes, not a fixture for every combination in the
+  4,758-entry EPSG table or every uncommon OSM relation/member encoding. Those
+  unenumerated combinations have no confirmed material mismatch; large-input
+  bounds and less-common OSM scale cases remain tracked separately in L-07 / #18.
+  The NestJS importer deliberately applies the official Spanish IGN ED50 grid
+  when available, which can differ from the legacy PyProj default operation in
+  overlapping operation areas; this is a target extension that selects the
+  source-specific Spanish grid instead of the legacy global operation, and is
+  explicitly covered by grid-operation fixtures. Outside the grid coverage,
+  the bundled EPSG definition is retained.
+- **Next check:** Reopen for a concrete material importer, projection, payload,
+  or mutation mismatch, or when an approved live source requires a currently
+  unqualified CRS/grid operation. Keep capacity and live-source safeguards in
+  their separate launch issues.
+- **Sources:** [Geodata parity](parity/geodata.md);
+  [completion criteria, lines 1–18](parity/completion-criteria.md#L1);
+  [issue #14](https://github.com/myota-platform/myota-next/issues/14).
+
 ### D-01 — Nest-only routes are extensions, not parity claims
 
 - **Owner:** API and contracts.
@@ -535,17 +486,17 @@ Every parity and operations Markdown document reviewed is mapped below. Shared
 status statements are consolidated into the ledger items above rather than
 duplicated as separate work.
 
-- [Parity matrix](parity-matrix.md): L-02, L-06, L-17 through L-18, and
-  D-01, D-02, D-04, and D-05.
+- [Parity matrix](parity-matrix.md): L-02, L-17 through L-18, and
+  D-01, D-02, D-04, D-05, and D-06.
 - [HTTP compatibility](parity/http.md): D-01.
 - [Identity and Programmes](parity/identity-programmes.md): L-02, D-04.
 - [Activity](parity/activity.md): L-04, L-05, D-01, D-03, D-05.
-- [Geodata](parity/geodata.md): L-06 through L-10, L-13, L-18.
+- [Geodata](parity/geodata.md): D-06, L-07, L-09, L-10, L-13, and L-18.
 - [Web applications](parity/web-applications.md): L-11, L-12, L-17.
 - [Workers and operations](parity/workers-operations.md): L-04, L-05,
   L-09, L-13 through L-15, L-18.
 - [Completion criteria](parity/completion-criteria.md): L-07, L-11, L-12,
-  L-15 through L-18, D-02, D-04, D-05.
+  L-15 through L-18, D-02, D-04, D-05, and D-06.
 - [Database backup and restore](operations/database-backup-restore.md):
   L-16, D-02.
 - [Geodata source importer](operations/geodata-importer.md): L-10.
