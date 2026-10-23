@@ -94,6 +94,93 @@ test('serializes concurrent account creation for normalized duplicate emails', a
   }
 });
 
+test('replays account creation before duplicate-email validation', async ({
+  request,
+}) => {
+  test.skip(!process.env.CORE_DATABASE_URL, 'requires the CI Core database');
+  if (!process.env.CORE_DATABASE_URL) return;
+
+  const adminEmail =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL ?? 'browser-e2e-admin@example.test';
+  const adminPassword =
+    process.env.MYOTA_BOOTSTRAP_ADMIN_PASSWORD ?? 'browser-e2e-password-7!Q';
+  const login = await request.post(
+    'http://127.0.0.1:8080/v1/identity/auth/login',
+    { data: { email: adminEmail, password: adminPassword } },
+  );
+  expect(login.status()).toBe(200);
+  const { accessToken } = await login.json();
+  const suffix = randomUUID();
+  const email = `browser-idempotency-${suffix}@example.test`;
+  const idempotencyKey = randomUUID();
+  const body = {
+    displayName: `Idempotent participant ${suffix}`,
+    email,
+    participationType: 'SWL',
+  };
+  const pool = new Pool({
+    connectionString: process.env.CORE_DATABASE_URL,
+    max: 1,
+  });
+  let accountId: string | undefined;
+
+  try {
+    const first = await request.post(
+      'http://127.0.0.1:8080/v1/identity/accounts',
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Idempotency-Key': idempotencyKey,
+        },
+        data: body,
+      },
+    );
+    expect(first.status()).toBe(201);
+    const firstResponse = await first.json();
+    accountId = firstResponse.id as string;
+
+    const retry = await request.post(
+      'http://127.0.0.1:8080/v1/identity/accounts',
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Idempotency-Key': idempotencyKey,
+        },
+        data: body,
+      },
+    );
+    expect(retry.status()).toBe(201);
+    expect(await retry.json()).toEqual(firstResponse);
+
+    const persisted = await pool.query<{
+      accounts: string;
+      securityEvents: string;
+      outboxEvents: string;
+    }>(
+      `SELECT
+         (SELECT count(*)::text FROM public.account WHERE identity_email_key=$1) AS accounts,
+         (SELECT count(*)::text FROM public.security_event WHERE account_id=$2::uuid) AS "securityEvents",
+         (SELECT count(*)::text FROM public.outbox_event
+           WHERE aggregate_type='account' AND aggregate_id=$2::text) AS "outboxEvents"`,
+      [email, accountId],
+    );
+    expect(persisted.rows[0]).toEqual({
+      accounts: '1',
+      securityEvents: '1',
+      outboxEvents: '2',
+    });
+  } finally {
+    if (accountId)
+      await request
+        .patch(`http://127.0.0.1:8080/v1/identity/accounts/${accountId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          data: { status: 'DEACTIVATED', anonymize: true },
+        })
+        .catch(() => undefined);
+    await pool.end();
+  }
+});
+
 test('loads a real programme catalogue through Gateway and Geodata', async ({
   page,
   request,

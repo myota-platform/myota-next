@@ -214,6 +214,11 @@ participation type. With the supported `OPERATOR` type, the live test passed aga
 isolated PostgreSQL: one request returned 201, one returned the duplicate-email 400, and
 exactly one account row was persisted ([CI run 39968418850](https://github.com/myota-platform/myota-next/actions/runs/39968418850)).
 
+Live CI also retries account creation with the same idempotency key and body after the
+first commit. It compares the full response and verifies the retry creates no extra
+account, security event, or account outbox event, pinning idempotency replay before the
+duplicate-email check.
+
 It also confirms that account creation rejects a permanent password with the reference's
 invitation-setup detail. The same live integration activates the account, requests and
 consumes a recovery token once, then signs in with the new password. A live Admin

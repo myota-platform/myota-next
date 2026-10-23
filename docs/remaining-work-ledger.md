@@ -59,8 +59,9 @@ an accepted scope decision is recorded in the dispositions section.
   compatibility coverage. The corrected live concurrent normalized-email
   creation check passed against isolated PostgreSQL: one request created the
   account, one received the reference duplicate-email response, and one row was
-  persisted. The earlier run used an unsupported participation type and is not
-  counted as evidence.
+  persisted. A live retry with the same idempotency key also returns the original
+  response without another account, security event, or outbox event. The earlier
+  race run used an unsupported participation type and is not counted as evidence.
 - **Risk:** A sequence or precedence difference could grant access, retain an
   invalid session, or persist the wrong callsign/account state.
 - **Next check:** Compare remaining material Identity and Programme handler
