@@ -490,7 +490,11 @@ onMounted(() =>
               >No categories assigned.</span
             >
           </div>
-          <select v-model="categorySelection" @change="assignSelectedCategory">
+          <select
+            v-model="categorySelection"
+            aria-label="Assign shared category"
+            @change="assignSelectedCategory"
+          >
             <option value="">Assign shared category…</option>
             <option
               v-for="category in availableCategories"

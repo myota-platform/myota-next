@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 const programmes = [
   {
@@ -234,4 +235,6 @@ test('selects a programme and renders its public content and entity catalogue', 
   });
   expect(pageErrors).toEqual([]);
   await expect(page).toHaveURL(/#coast$/);
+
+  await expectResponsiveAccessible(page, 'Participant public catalogue');
 });

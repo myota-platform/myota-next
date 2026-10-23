@@ -27,6 +27,7 @@ interface Award {
   description?: string;
   category?: string;
   status?: string;
+  version?: number;
   achievementMetric?: string;
   condition?: unknown;
   levels?: unknown;
@@ -44,11 +45,21 @@ interface AwardPage<T> {
   total: number;
   nextPage: number | null;
 }
+interface AwardRecalculationJob {
+  id?: string;
+  jobId?: string;
+  awardId: string;
+  status?: string;
+  attempts?: number;
+  lastError?: string | null;
+  completedAt?: string | null;
+}
 
 const store = useAppStore();
 const pendingAwardMutationKeys = createPendingIdempotencyKeys(
   'myota_admin_pending_award_mutations',
 );
+const awardRecalculationStorageKey = 'myota_admin_award_recalculation_job';
 const canManage = computed(() => hasAnyScope(store.account, 'awards.admin'));
 const loading = ref(false);
 let loadGeneration = 0;
@@ -70,6 +81,10 @@ const issuanceTotal = ref(0);
 const issueManagerName = ref('');
 const issueSignatureAssetId = ref('');
 const renderQueueStatus = reactive<Record<string, string>>({});
+const awardRecalculation = ref<AwardRecalculationJob | null>(null);
+const awardRecalculationLoading = ref(false);
+const awardRecalculationError = ref('');
+let awardRecalculationTimer: ReturnType<typeof setTimeout> | undefined;
 const message = ref('');
 const templateElements = ref<TemplateElement[]>(defaultElements());
 const error = ref('');
@@ -146,9 +161,95 @@ watch(
   },
   { immediate: true },
 );
-onUnmounted(() =>
-  document.documentElement.style.removeProperty('--award-canvas-aspect'),
-);
+onUnmounted(() => {
+  document.documentElement.style.removeProperty('--award-canvas-aspect');
+  if (awardRecalculationTimer) clearTimeout(awardRecalculationTimer);
+});
+
+function persistAwardRecalculation(): void {
+  try {
+    if (awardRecalculation.value)
+      sessionStorage.setItem(
+        awardRecalculationStorageKey,
+        JSON.stringify(awardRecalculation.value),
+      );
+    else sessionStorage.removeItem(awardRecalculationStorageKey);
+  } catch {
+    // Keep the current job visible for this page even if browser storage is disabled.
+  }
+}
+
+function scheduleAwardRecalculationRefresh(): void {
+  if (awardRecalculationTimer) clearTimeout(awardRecalculationTimer);
+  if (!['QUEUED', 'RUNNING'].includes(awardRecalculation.value?.status || ''))
+    return;
+  awardRecalculationTimer = setTimeout(() => {
+    void refreshAwardRecalculation();
+  }, 2000);
+}
+
+async function refreshAwardRecalculation(): Promise<void> {
+  const current = awardRecalculation.value;
+  const id = current?.jobId || current?.id;
+  if (!current || !id || awardRecalculationLoading.value) return;
+  awardRecalculationLoading.value = true;
+  awardRecalculationError.value = '';
+  try {
+    awardRecalculation.value = await apiRequest<AwardRecalculationJob>(
+      `/v1/awards/${encodeURIComponent(current.awardId)}/recalculation-jobs/${encodeURIComponent(id)}`,
+    );
+    awardRecalculation.value.awardId = current.awardId;
+    persistAwardRecalculation();
+    if (awardRecalculation.value.status === 'SUCCEEDED') await load();
+  } catch (cause) {
+    awardRecalculationError.value =
+      cause instanceof Error
+        ? cause.message
+        : 'Unable to refresh award recalculation status.';
+  } finally {
+    awardRecalculationLoading.value = false;
+    scheduleAwardRecalculationRefresh();
+  }
+}
+
+async function recalculateAllProgress(): Promise<void> {
+  const award = selected.value;
+  if (
+    !canManage.value ||
+    !award?.id ||
+    award.status !== 'PUBLISHED' ||
+    awardRecalculationLoading.value ||
+    !window.confirm(
+      `Recalculate progress for all participants using ${award.name}? This runs in the background.`,
+    )
+  )
+    return;
+  awardRecalculationLoading.value = true;
+  awardRecalculationError.value = '';
+  const fingerprint = `award-recalculate:${award.id}:${award.version ?? 1}:all`;
+  try {
+    const key = await pendingAwardMutationKeys.getOrCreate(fingerprint);
+    awardRecalculation.value = await apiRequest<AwardRecalculationJob>(
+      `/v1/awards/${encodeURIComponent(award.id)}/recalculation-jobs`,
+      {
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: JSON.stringify({ subjectIds: [] }),
+      },
+    );
+    awardRecalculation.value.awardId = award.id;
+    await pendingAwardMutationKeys.complete(fingerprint);
+    persistAwardRecalculation();
+  } catch (cause) {
+    awardRecalculationError.value =
+      cause instanceof Error
+        ? cause.message
+        : 'Unable to queue award recalculation.';
+  } finally {
+    awardRecalculationLoading.value = false;
+    scheduleAwardRecalculationRefresh();
+  }
+}
 
 function defaultElements(): TemplateElement[] {
   return [
@@ -777,6 +878,17 @@ watch(programme, () => {
 });
 onMounted(() => {
   store.currentProgramme = programme.value;
+  try {
+    const saved = JSON.parse(
+      sessionStorage.getItem(awardRecalculationStorageKey) || 'null',
+    ) as AwardRecalculationJob | null;
+    if (saved?.awardId && (saved.jobId || saved.id)) {
+      awardRecalculation.value = saved;
+      void refreshAwardRecalculation();
+    }
+  } catch {
+    sessionStorage.removeItem(awardRecalculationStorageKey);
+  }
   void load();
 });
 </script>
@@ -852,6 +964,88 @@ onMounted(() => {
         This award is read-only. Only drafts can be changed by users with award
         administration permission.
       </p>
+      <section
+        v-if="canManage && selected?.id && selected.status === 'PUBLISHED'"
+        class="award-recalculation"
+        aria-labelledby="award-recalculation-title"
+      >
+        <div class="panel-heading">
+          <div>
+            <h3 id="award-recalculation-title">Participant progress</h3>
+            <p class="muted">
+              Recalculate progress for all participants in the background.
+            </p>
+          </div>
+          <button
+            class="secondary"
+            :disabled="awardRecalculationLoading"
+            @click="recalculateAllProgress"
+          >
+            {{
+              awardRecalculationLoading
+                ? 'Working…'
+                : 'Recalculate all progress'
+            }}
+          </button>
+        </div>
+        <div
+          v-if="awardRecalculation?.awardId === selected.id"
+          class="activity-job"
+          aria-live="polite"
+        >
+          <p class="award-recalculation-message" role="status">
+            <template
+              v-if="(awardRecalculation.status || 'QUEUED') === 'QUEUED'"
+            >
+              Request accepted; recalculation is queued.
+            </template>
+            <template v-else-if="awardRecalculation.status === 'RUNNING'">
+              Recalculation is in progress.
+            </template>
+            <template v-else-if="awardRecalculation.status === 'SUCCEEDED'">
+              Recalculation completed.
+            </template>
+            <template v-else-if="awardRecalculation.status === 'FAILED'">
+              Recalculation failed.
+            </template>
+          </p>
+          <span
+            ><strong>Job</strong>
+            {{ awardRecalculation.jobId || awardRecalculation.id }}</span
+          >
+          <span
+            class="status-pill"
+            :class="(awardRecalculation.status || '').toLowerCase()"
+            role="status"
+          >
+            {{ awardRecalculation.status || 'QUEUED' }}
+          </span>
+          <span>{{ awardRecalculation.attempts ?? 0 }} attempts</span>
+          <progress
+            v-if="
+              ['QUEUED', 'RUNNING'].includes(awardRecalculation.status || '')
+            "
+            aria-label="Award recalculation is running"
+          />
+          <button
+            class="secondary"
+            :disabled="awardRecalculationLoading"
+            @click="refreshAwardRecalculation"
+          >
+            Refresh status
+          </button>
+          <p
+            v-if="awardRecalculation.lastError"
+            class="error-text"
+            role="alert"
+          >
+            {{ awardRecalculation.lastError }}
+          </p>
+        </div>
+        <p v-if="awardRecalculationError" class="error-text" role="alert">
+          {{ awardRecalculationError }}
+        </p>
+      </section>
       <form class="form-grid" @submit.prevent="save">
         <label
           >Code<input

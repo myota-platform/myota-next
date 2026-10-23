@@ -27,7 +27,11 @@ const emit = defineEmits<{ change: [page: number] }>();
     <button
       class="secondary"
       :disabled="busy || page <= 1"
-      :aria-label="`Previous page of ${label}`"
+      :aria-label="
+        previousLabel === 'Previous'
+          ? `Previous page of ${label}`
+          : previousLabel
+      "
       @click="emit('change', page - 1)"
     >
       {{ previousLabel }}
@@ -38,7 +42,7 @@ const emit = defineEmits<{ change: [page: number] }>();
     <button
       class="secondary"
       :disabled="busy || nextPage === null"
-      :aria-label="`Next page of ${label}`"
+      :aria-label="nextLabel === 'Next' ? `Next page of ${label}` : nextLabel"
       @click="emit('change', nextPage ?? page)"
     >
       {{ nextLabel }}

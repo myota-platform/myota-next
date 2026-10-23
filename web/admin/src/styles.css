@@ -1,6 +1,6 @@
 :root {
   --ink: #142b2d;
-  --muted: #6b7f80;
+  --muted: #5f7374;
   --line: #dce8e5;
   --paper: #f5f9f8;
   --white: #fff;
@@ -193,7 +193,7 @@ select:focus-visible {
   gap: 3px;
 }
 .nav-section-label {
-  color: #78908f;
+  color: #526c6a;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.11em;
@@ -638,7 +638,7 @@ select:focus-visible {
 .status-pill {
   background: #eef2f2;
   border-radius: 999px;
-  color: #607474;
+  color: #526668;
   font-size: 10px;
   font-weight: 800;
   padding: 4px 8px;
@@ -667,6 +667,18 @@ select:focus-visible {
 .status-pill.processed {
   background: #e7eef9;
   color: #345c91;
+}
+.status-pill.succeeded {
+  background: #e0f4e9;
+  color: #14663c;
+}
+.status-pill.running {
+  background: #e7eef9;
+  color: #345c91;
+}
+.status-pill.failed {
+  background: #fff0ef;
+  color: #9e3737;
 }
 .empty {
   padding: 22px 3px;
@@ -1738,6 +1750,18 @@ select:disabled {
   flex-wrap: wrap;
   gap: 12px;
 }
+.award-recalculation {
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 18px;
+  padding: 0 0 16px;
+}
+.award-recalculation progress {
+  min-width: 120px;
+}
+.award-recalculation-message {
+  flex-basis: 100%;
+  margin: 0;
+}
 .activity-job .error-text {
   flex-basis: 100%;
 }
@@ -2139,4 +2163,21 @@ select:disabled {
 .public-metadata-fields textarea {
   min-height: 82px;
   resize: vertical;
+}
+
+@media (max-width: 600px) {
+  .award-layout,
+  .award-elements {
+    min-width: 0;
+  }
+  .award-element-row,
+  .award-element-row.custom {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    min-width: 0;
+  }
+  .award-element-row > strong,
+  .award-element-row > input,
+  .award-element-row > button {
+    grid-column: 1 / -1;
+  }
 }

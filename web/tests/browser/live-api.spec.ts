@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import sharp from 'sharp';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../a11y';
 
 const hasApiDatabases = Boolean(
   process.env.CORE_DATABASE_URL &&
@@ -724,6 +725,10 @@ test('manages participant-owned callsigns through the live Identity API', async 
         evidenceIds: expect.arrayContaining([expect.any(String)]),
       }),
     ]),
+  );
+  await expectResponsiveAccessible(
+    page,
+    'Live Participant profile, image, and callsign management',
   );
   expect(failedResponses).toEqual([]);
 });

@@ -1,4 +1,150 @@
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
+
+test('queues broad award progress recalculation and shows terminal job state', async ({
+  page,
+}) => {
+  const requests: Array<{
+    method: string;
+    body?: Record<string, unknown>;
+    key?: string;
+  }> = [];
+  let statusReads = 0;
+  const award = {
+    id: 'award-live-1',
+    programmeSlug: 'alpine',
+    code: 'ALPINE-LIVE',
+    name: 'Alpine award',
+    category: 'HUNTER',
+    status: 'PUBLISHED',
+    version: 3,
+    condition: {},
+    levels: [],
+    template: { elements: [] },
+  };
+
+  page.on('dialog', (dialog) => dialog.accept());
+  await page.route('**/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+    if (url.pathname === '/v1/identity/auth/login') {
+      await route.fulfill({ json: { accessToken: 'award-admin-token' } });
+      return;
+    }
+    if (url.pathname === '/v1/identity/me') {
+      await route.fulfill({
+        json: {
+          id: 'award-admin',
+          email: 'award-admin@example.test',
+          displayName: 'Award Admin',
+          scopes: ['awards.admin'],
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({
+        json: { items: [{ slug: 'alpine', name: 'Alpine' }], nextPage: null },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/awards' && method === 'GET') {
+      await route.fulfill({
+        json: {
+          items: [award],
+          page: 1,
+          pageSize: 50,
+          total: 1,
+          nextPage: null,
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/awards/award-live-1' && method === 'GET') {
+      await route.fulfill({ json: award });
+      return;
+    }
+    if (url.pathname === '/v1/awards/assets') {
+      await route.fulfill({ json: { items: [], nextPage: null } });
+      return;
+    }
+    if (
+      url.pathname === '/v1/awards/requests' ||
+      url.pathname === '/v1/awards/issuances'
+    ) {
+      await route.fulfill({
+        json: { items: [], page: 1, pageSize: 50, total: 0 },
+      });
+      return;
+    }
+    if (
+      url.pathname === '/v1/awards/award-live-1/recalculation-jobs' &&
+      method === 'POST'
+    ) {
+      requests.push({
+        method,
+        body: request.postDataJSON() as Record<string, unknown>,
+        key: request.headers()['idempotency-key'],
+      });
+      await route.fulfill({
+        status: 202,
+        json: {
+          awardId: award.id,
+          jobId: 'award-job-1',
+          status: 'QUEUED',
+          attempts: 0,
+        },
+      });
+      return;
+    }
+    if (
+      url.pathname === '/v1/awards/award-live-1/recalculation-jobs/award-job-1'
+    ) {
+      statusReads += 1;
+      await route.fulfill({
+        json: {
+          id: 'award-job-1',
+          status: statusReads === 1 ? 'RUNNING' : 'SUCCEEDED',
+          attempts: 1,
+          lastError: null,
+          completedAt: statusReads > 1 ? '2026-10-23T10:00:00.000Z' : null,
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: { items: [], page: 1, total: 0, nextPage: null },
+    });
+  });
+
+  await page.goto('/awards');
+  await page.getByLabel('Email').fill('award-admin@example.test');
+  await page.getByLabel('Password').fill('test-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/awards$/);
+  await page.getByRole('button', { name: /Alpine award/ }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Participant progress' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Recalculate all progress' }).click();
+  await expect(page.getByText('QUEUED', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Request accepted; recalculation is queued.'),
+  ).toBeVisible();
+  await expect.poll(() => requests).toHaveLength(1);
+  expect(requests[0]).toMatchObject({
+    method: 'POST',
+    body: { subjectIds: [] },
+  });
+  expect(requests[0].key).toMatch(/^[0-9a-f-]{36}$/i);
+  await page.getByRole('button', { name: 'Refresh status' }).click();
+  await expect(page.getByText('RUNNING', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh status' }).click();
+  await expect(page.getByText('SUCCEEDED', { exact: true })).toBeVisible();
+  await expect(page.getByText('Recalculation completed.')).toBeVisible();
+  await expectResponsiveAccessible(page, 'Admin broad award recalculation');
+});
 
 test('saves an award draft and submits it for review', async ({ page }) => {
   const saveRequests: Array<{ body: Record<string, any>; key: string }> = [];

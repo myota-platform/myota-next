@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../a11y';
 
 const hasApiDatabases = Boolean(
   process.env.CORE_DATABASE_URL &&
@@ -112,6 +113,10 @@ test('uploads and processes an ADIF import from Participant through Activity wor
     await expect(page.locator('#adif-import-status')).toContainText(
       `${filename}: COMPLETED · 1 accepted, 0 rejected`,
       { timeout: 60_000 },
+    );
+    await expectResponsiveAccessible(
+      page,
+      'Live Participant ADIF import status',
     );
 
     const importIdInSession = await page.evaluate(() =>

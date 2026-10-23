@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('lets an operator manage callsigns, evidence, and primary retirement', async ({
   page,
@@ -190,6 +191,7 @@ test('lets an operator manage callsigns, evidence, and primary retirement', asyn
         mutation.authorization === 'Bearer participant-callsign-access-token',
     ),
   ).toBe(true);
+  await expectResponsiveAccessible(page, 'Participant callsign management');
 });
 
 test('keeps a successful callsign save distinct from a failed profile refresh', async ({
@@ -314,4 +316,8 @@ test('keeps a successful callsign save distinct from a failed profile refresh', 
     page.locator('.profile-callsign-row').filter({ hasText: 'DL2NEW' }),
   ).toBeVisible();
   await expect(page.locator('#profile-status')).toHaveText('Profile loaded.');
+  await expectResponsiveAccessible(
+    page,
+    'Participant callsign recovery feedback',
+  );
 });

@@ -234,6 +234,10 @@ button {
 .table-wrap {
   overflow: auto;
 }
+.table-wrap:focus-visible {
+  outline: 3px solid #176f72;
+  outline-offset: 2px;
+}
 table {
   border-collapse: collapse;
   width: 100%;

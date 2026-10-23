@@ -192,8 +192,10 @@ reviewer attribution, and note. A live Admin workflow also records that decision
 Gateway and verifies the persisted survivor, reviewer, history, idempotency record, and
 outbox event.
 
-Other Admin workflows still lack browser-level compatibility coverage. Refresh schedule
-checks create a temporary category and an all-programmes schedule in Admin, then upload
+Some secondary Admin workflows still lack live browser-level compatibility coverage;
+route-wide accessibility scans and isolated component tests do not substitute for an
+end-to-end workflow through Gateway and the owning service. Refresh schedule checks
+create a temporary category and an all-programmes schedule in Admin, then upload
 an empty complete GeoJSON snapshot and verify worker completion through live services. A
 separate Gateway check verifies the schedule record, manifest, processing queue,
 timestamps, and outbox events. Import checks cover pasted GeoJSON queueing, source
@@ -263,3 +265,13 @@ FeatureServer JSON, KML, GPX, OSM PBF, Shapefile ZIP, and ParkServe US ZIP uploa
 subject to the configured source limits. The award catalogue follows all API pages.
 Remaining work includes accessibility/visual review and deployment integration. Its
 public map renders point, line, polygon, and multipart entity geometries.
+
+The Admin route inventory is scanned with Axe against WCAG 2.0, 2.1, and 2.2 AA
+criteria at desktop size; the dashboard and primary Participant journeys also receive
+narrow and wide viewport scans. Browser checks exercise skip-link focus and activation,
+mobile navigation Escape/focus return, and accessible job failure/retry feedback. These
+automated checks do not replace manual screen-reader and visual review. A live Admin
+Map workflow now loads a persisted Geodata entity through Gateway, and the cross-app
+Awards workflow queues broad progress recalculation, waits for its terminal status, and
+checks the persisted participant progress row. Local runs without the CI databases skip
+the live-service specs; the CI run is the qualification evidence for those journeys.

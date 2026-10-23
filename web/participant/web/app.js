@@ -1065,10 +1065,17 @@ function readFileAsBase64(file) {
   });
 }
 function renderAdifImportStatus(imported) {
+  const errors = Array.isArray(imported.errors)
+    ? imported.errors.filter((error) => typeof error === 'string' && error)
+    : [];
+  const errorSummary =
+    imported.status === 'FAILED' && errors.length
+      ? ` · ${errors[0]}${errors.length > 1 ? ` · ${errors.length - 1} more errors` : ''}`
+      : '';
   $('adif-import-status').textContent =
     `${imported.filename}: ${imported.status} · ` +
     `${Number(imported.recordsAccepted || 0)} accepted, ` +
-    `${Number(imported.recordsRejected || 0)} rejected`;
+    `${Number(imported.recordsRejected || 0)} rejected${errorSummary}`;
   const terminal = ['COMPLETED', 'FAILED'].includes(imported.status);
   $('adif-refresh').hidden = terminal;
   if (terminal) {

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('submits an eligible award level with the signed-in account callsign', async ({
   page,
@@ -145,6 +146,7 @@ test('submits an eligible award level with the signed-in account callsign', asyn
       (header) => header === 'Bearer participant-award-access-token',
     ),
   ).toBe(true);
+  await expectResponsiveAccessible(page, 'Participant award request');
 });
 
 test('downloads an issued certificate only after the PDF is ready', async ({
@@ -285,4 +287,8 @@ test('downloads an issued certificate only after the PDF is ready', async ({
   await expect
     .poll(() => artifactRequests)
     .toEqual(['Bearer participant-certificate-token']);
+  await expectResponsiveAccessible(
+    page,
+    'Participant award certificate status',
+  );
 });

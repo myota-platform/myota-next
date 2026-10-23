@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, and ParkServe through the resumable live workflow', async ({
   page,
@@ -164,6 +165,7 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
       'minimumCandidates' in source ? source.minimumCandidates : 1,
   }));
   const uploadSessionIds: string[] = [];
+  let simulatedPartFailures = 0;
 
   try {
     await page.goto('/master-data');
@@ -182,6 +184,20 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
       );
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page).toHaveURL(/\/master-data$/);
+    await page.route(
+      '**/v1/geodata/import-uploads/*/parts/1',
+      async (route) => {
+        if (simulatedPartFailures < 3) {
+          simulatedPartFailures += 1;
+          await route.fulfill({
+            status: 503,
+            json: { message: 'Temporary upload interruption fixture.' },
+          });
+          return;
+        }
+        await route.continue();
+      },
+    );
     await page.getByRole('button', { name: 'New category' }).click();
     await page.getByLabel('Category code').fill(entityTypeCode);
     await page
@@ -254,6 +270,20 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
       expect(uploadSession.status()).toBe(201);
       expect(uploadSessionId).toMatch(/^[0-9a-f-]{36}$/i);
 
+      if (source.format === 'GEOJSON') {
+        await expect(page.getByRole('alert')).toContainText(
+          'Temporary upload interruption fixture.',
+        );
+        await expect(page.getByRole('status')).toContainText(
+          'Upload interrupted',
+        );
+        await expect(
+          page.getByRole('button', { name: 'Resume upload' }),
+        ).toBeEnabled();
+        expect(simulatedPartFailures).toBe(3);
+        await page.getByRole('button', { name: 'Resume upload' }).click();
+      }
+
       const completion = await completionResponse;
       expect(completion.status()).toBe(202);
       const importRunId = (await completion.json()).importRun.id as string;
@@ -268,6 +298,11 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
       await expect(
         page.getByRole('button', { name: source.featureName }),
       ).toBeVisible();
+      if (source.format === 'GEOJSON')
+        await expectResponsiveAccessible(
+          page,
+          'Live Admin resumable Geodata upload and preprocessing',
+        );
 
       const persisted = await fixture.query<{
         upload_status: string;

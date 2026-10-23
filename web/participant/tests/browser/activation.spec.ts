@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { expectAccessible, expectResponsiveAccessible } from '../../../a11y';
 
 test('signs in, records an activation contact, and closes the activation', async ({
   page,
@@ -6,8 +7,11 @@ test('signs in, records an activation contact, and closes the activation', async
   const activationPayloads: unknown[] = [];
   const qsoPayloads: unknown[] = [];
   const closePayloads: unknown[] = [];
+  const adifPayloads: unknown[] = [];
   const profilePayloads: unknown[] = [];
   const authenticatedRequests: string[] = [];
+  let adifSubmissionCount = 0;
+  const adifStatusReads = new Map<string, number>();
   let activation: {
     id: string;
     operatorCallsign: string;
@@ -135,6 +139,46 @@ test('signs in, records an activation contact, and closes the activation', async
       return;
     }
 
+    if (url.pathname === '/v1/adif/imports' && method === 'POST') {
+      adifPayloads.push(body);
+      adifSubmissionCount += 1;
+      await route.fulfill({
+        status: 202,
+        json: { id: `adif-import-${adifSubmissionCount}` },
+      });
+      return;
+    }
+
+    if (
+      url.pathname === '/v1/adif/imports/adif-import-1' ||
+      url.pathname === '/v1/adif/imports/adif-import-2'
+    ) {
+      const importId = url.pathname.split('/').at(-1)!;
+      const reads = (adifStatusReads.get(importId) || 0) + 1;
+      adifStatusReads.set(importId, reads);
+      const status =
+        importId === 'adif-import-2'
+          ? 'COMPLETED'
+          : reads === 1
+            ? 'PROCESSING'
+            : 'FAILED';
+      await route.fulfill({
+        json: {
+          id: importId,
+          filename: importId === 'adif-import-1' ? 'first.adi' : 'retry.adi',
+          status,
+          recordsSeen: 1,
+          recordsAccepted: status === 'COMPLETED' ? 1 : 0,
+          recordsRejected: status === 'COMPLETED' ? 0 : 1,
+          errors:
+            status === 'FAILED'
+              ? ['record 1: unsupported QSO date', 'record 2: invalid band']
+              : [],
+        },
+      });
+      return;
+    }
+
     if (url.pathname === '/v1/activations/activation-1' && method === 'PATCH') {
       closePayloads.push(body);
       if (activation) activation.status = 'CLOSED';
@@ -170,6 +214,37 @@ test('signs in, records an activation contact, and closes the activation', async
     'Contact recorded.',
   );
 
+  await page.locator('#adif-file').setInputFiles({
+    name: 'first.adi',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('<ADIF_VER:5>3.1.4<EOH><EOR>'),
+  });
+  await page.getByRole('button', { name: 'Import ADIF log' }).click();
+  await expect(page.locator('#adif-import-status')).toHaveText(
+    'first.adi: PROCESSING · 0 accepted, 1 rejected',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Refresh import status' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh import status' }).click();
+  await expect(page.locator('#adif-import-status')).toHaveText(
+    'first.adi: FAILED · 0 accepted, 1 rejected · record 1: unsupported QSO date · 1 more errors',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Refresh import status' }),
+  ).toBeHidden();
+  await expectAccessible(page, 'Participant failed ADIF import feedback');
+
+  await page.locator('#adif-file').setInputFiles({
+    name: 'retry.adi',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('<ADIF_VER:5>3.1.4<EOH><EOR>'),
+  });
+  await page.getByRole('button', { name: 'Import ADIF log' }).click();
+  await expect(page.locator('#adif-import-status')).toHaveText(
+    'retry.adi: COMPLETED · 1 accepted, 0 rejected',
+  );
+
   await page.getByRole('button', { name: 'Close activation' }).click();
   await expect(page.locator('#activation-status')).toHaveText(
     'Activation closed.',
@@ -203,6 +278,17 @@ test('signs in, records an activation contact, and closes the activation', async
   });
   expect(closePayloads).toHaveLength(1);
   expect(closePayloads[0]).toMatchObject({ status: 'CLOSED' });
+  expect(adifPayloads).toHaveLength(2);
+  expect(adifPayloads).toEqual([
+    expect.objectContaining({
+      activationId: 'activation-1',
+      filename: 'first.adi',
+    }),
+    expect.objectContaining({
+      activationId: 'activation-1',
+      filename: 'retry.adi',
+    }),
+  ]);
   expect(profilePayloads).toEqual([
     {
       websiteUrl: 'https://radio.example.test',
@@ -215,4 +301,8 @@ test('signs in, records an activation contact, and closes the activation', async
       (header) => header === 'Bearer participant-browser-access-token',
     ),
   ).toBe(true);
+  await expectResponsiveAccessible(
+    page,
+    'Participant activation, QSO, and profile workflow',
+  );
 });

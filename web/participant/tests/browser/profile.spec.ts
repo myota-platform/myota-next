@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('edits profile details and renders biography Markdown safely', async ({
   page,
@@ -119,4 +120,5 @@ test('edits profile details and renders biography Markdown safely', async ({
       },
     },
   ]);
+  await expectResponsiveAccessible(page, 'Participant profile editing');
 });

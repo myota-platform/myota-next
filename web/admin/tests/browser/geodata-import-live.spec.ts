@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
+import { expectResponsiveAccessible } from '../../../a11y';
 
 test('preprocesses, reviews, and promotes a pasted GeoJSON import through live services', async ({
   page,
@@ -160,6 +161,7 @@ test('preprocesses, reviews, and promotes a pasted GeoJSON import through live s
     await expect(
       page.getByText('2 records were promoted to candidate successfully.'),
     ).toBeVisible();
+    await expectResponsiveAccessible(page, 'Live Admin Geodata import review');
 
     const persisted = await fixture.query(
       `SELECT r.status AS import_status,

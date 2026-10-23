@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { expectAccessible, expectNoHorizontalOverflow } from '../../../a11y';
 
 async function openDashboard(
   page: Page,
@@ -187,4 +188,45 @@ test('keeps the dashboard available when a permitted data source fails', async (
     'GET /v1/programmes?page=1&pageSize=100',
     'GET /v1/activations?pageSize=1',
   ]);
+});
+
+test('keeps the dashboard accessible and keyboard-usable at narrow and wide viewports', async ({
+  page,
+}) => {
+  await openDashboard(page, [
+    'programme.admin',
+    'geodata.review',
+    'identity.admin',
+    'activity.read',
+  ]);
+
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expectNoHorizontalOverflow(page, 'Admin dashboard');
+    await expectAccessible(page, 'Admin dashboard');
+  }
+
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement | null)?.blur();
+  });
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.skip-link')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#workspace-content')).toBeFocused();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Toggle navigation' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Toggle navigation' }),
+  ).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
+  await expect(
+    page.getByRole('button', { name: 'Toggle navigation' }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  await expect(
+    page.getByRole('button', { name: 'Toggle navigation' }),
+  ).toBeFocused();
 });
