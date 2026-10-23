@@ -170,7 +170,10 @@ export async function* streamShapefileFeatures(
           throw new Error(
             `geodata import contains more than ${featureLimit} features`,
           );
-        if (result.value === null)
+        if (
+          result.value === null ||
+          (isRecord(result.value) && result.value.geometry === null)
+        )
           throw new Error(
             'Shape type "NULL" cannot be represented as GeoJSON.',
           );

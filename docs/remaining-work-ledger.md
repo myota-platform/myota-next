@@ -265,7 +265,8 @@ an accepted scope decision is recorded in the dispositions section.
   through EPSG:23031 compare transformed coordinates against PyProj 3.8.0.
   PyShp 2.3.1 fixtures verify Z ordinates are dropped from PolylineZ, multipart
   PolyLine parts retain MultiLineString grouping, and a simple Polygon remains
-  a Polygon. The separate-outer-parts PBF relation is also compared with the
+  a Polygon. Null-shape and MultiPatch fixtures also pin PyShp's exact rejection
+  behavior. The separate-outer-parts PBF relation is also compared with the
   PyOsmium 4.3.2 reference in L-07; see the linked Geodata parity evidence.
 - **Missing evidence:** Other material OSM types and geometry/CRS definitions
   still need fixtures, as do datum-grid transformations for other CRSs. The

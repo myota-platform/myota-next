@@ -247,6 +247,37 @@ describe('streamShapefileFeatures', () => {
   });
 
   it.each([
+    [
+      'python-null-shapefile.zip',
+      'Shape type "NULL" cannot be represented as GeoJSON.',
+    ],
+    [
+      'python-multipatch-shapefile.zip',
+      'Shape type "MULTIPATCH" cannot be represented as GeoJSON.',
+    ],
+  ])('matches PyShp 2.3.1 rejection for %s', async (filename, message) => {
+    const source = await readFile(
+      new URL(`./fixtures/${filename}`, import.meta.url),
+    );
+    async function* chunks() {
+      yield source;
+    }
+    const read = async () => {
+      for await (const _feature of streamShapefileFeatures(
+        chunks(),
+        filename,
+        '',
+        10,
+        async () => undefined,
+      )) {
+        // Consume the stream to observe its reference-compatible failure.
+      }
+    };
+
+    await expect(read()).rejects.toThrow(message);
+  });
+
+  it.each([
     'python-point-shapefile.zip',
     'python-point-shapefile-uppercase.zip',
   ])(

@@ -129,7 +129,8 @@ format alias); Shapefile member extensions and matching sidecars are case-insens
 in PyShp.
 
 Shapefile coordinates are reprojected from the supplied `.prj` to WGS84, and NULL shape
-records fail preprocessing as in PyShp's GeoJSON conversion. OSM PBF uploads are decoded
+records fail preprocessing with PyShp's GeoJSON conversion error. Its PyShp 2.3.1
+fixture is at `apps/geodata-worker/src/fixtures/python-null-shapefile.zip`. OSM PBF uploads are decoded
 by `osmium-tool` in the Geodata worker image, preserve OSM tags and type/id source
 references, and emit the configured hiking, protected-area, point, path, and
 multipolygon features using a temporary disk-backed node-location index. The worker
@@ -271,7 +272,8 @@ ring.
 
 The PyShp 2.3.1 reference rejects MultiPatch with `Shape type "MULTIPATCH" cannot be
 represented as GeoJSON.` The NestJS Shapefile parser rejects shape type 31 at file open,
-and the worker maps that error to the same message. See the [PyShp 2.3.1 conversion
+and the worker maps that error to the same message. Its reference-generated fixture is
+at `apps/geodata-worker/src/fixtures/python-multipatch-shapefile.zip`. See the [PyShp 2.3.1 conversion
 code](https://github.com/GeospatialPython/pyshp/blob/2.3.1/shapefile.py#L3174-L3176) and
 the [NestJS parser's supported shape
 types](https://github.com/mbostock/shapefile/blob/master/shp/index.js#L11-L24).
