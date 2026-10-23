@@ -195,8 +195,8 @@ outbox event.
 Some secondary Admin workflows still lack live browser-level compatibility coverage;
 route-wide accessibility scans and isolated component tests do not substitute for an
 end-to-end workflow through Gateway and the owning service. A complete live CI
-run passed all 68 browser checks against the isolated services, including Admin and
-Participant journeys; see [run 39996779864](https://github.com/myota-platform/myota-next/actions/runs/39996779864).
+run passed all 69 browser checks against the isolated services, including Admin and
+Participant journeys; see [run 40006062372](https://github.com/myota-platform/myota-next/actions/runs/40006062372).
 Residual secondary workflow gaps remain tracked in the browser-quality issues. Refresh
 schedule checks create a temporary category and an all-programmes schedule in Admin,
 then upload an empty complete GeoJSON snapshot and verify worker completion through live
@@ -210,7 +210,10 @@ decisions. Single-item decisions and bulk candidate promotion or rejection retai
 idempotency keys across same-tab retries and reloads. Pasted imports retain their exact
 request body and idempotency key for same-tab retries after reload. The Map explorer
 browser check pages through the 100-entity catalogue and verifies map selection shows
-the selected entity's status, categories, programme memberships, and location.
+the selected entity's status, categories, programme memberships, and location. The
+Admin map also exposes a keyboard-operable directory of loaded entities so selection
+does not depend on pointer interaction with map markers; live and intercepted browser
+checks select an entity by keyboard and verify its selected state and details.
 
 Geodata deletion browser coverage now verifies impact preparation, explicit
 confirmation, cascade completion, removal from the entity list, and reuse of the same
@@ -276,7 +279,10 @@ wide viewport scans. Browser checks exercise skip-link focus and activation, mob
 navigation Escape/focus return, keyboard-driven Geodata multi-selection, and accessible
 job failure/retry feedback. These automated checks do not replace manual screen-reader
 and visual review. A live Admin Map workflow now loads a persisted Geodata entity through
-Gateway. A dedicated live Admin Awards workflow queues broad progress recalculation by
+Gateway and selects it through the keyboard entity directory. A live least-privilege
+Identity account is also verified through Gateway: its `activity.read` permission does
+not allow access to the Admin Identity route or account endpoint, which returns 403.
+A dedicated live Admin Awards workflow queues broad progress recalculation by
 keyboard, waits for its terminal status, checks the persisted participant progress row,
 and scans the completed workflow at supported viewports. The live Participant Award
 request is also submitted by keyboard, announces its persisted result through a polite
@@ -284,7 +290,7 @@ atomic status region, and is checked at supported viewports. The live Participan
 activation/QSO workflow starts, records a contact, and closes the activation by keyboard;
 the active QSO form and completed state are checked at supported viewports, and the
 persisted QSO is verified through Gateway. Full CI run
-[39999854236](https://github.com/myota-platform/myota-next/actions/runs/39999854236)
-passed all 68 browser checks against isolated services. Local runs without the CI
+[40006062372](https://github.com/myota-platform/myota-next/actions/runs/40006062372)
+passed all 69 browser checks against isolated services. Local runs without the CI
 databases skip the live-service specs. Manual screen-reader and visual review remains
 open.

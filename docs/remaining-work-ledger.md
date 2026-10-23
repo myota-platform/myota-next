@@ -177,9 +177,12 @@ an accepted scope decision is recorded in the dispositions section.
   conflation, deletion, schedules, and the persisted entity map under
   `web/admin/tests/browser/` and `web/tests/browser/`. All 14 registered Admin
   routes pass Axe and horizontal-overflow checks at 390px and 1440px, plus
-  skip-link keyboard navigation. A full CI run passed all 68 browser
-  checks against the isolated services, including the database-backed primary
-  Admin workflows: [run 39999854236](https://github.com/myota-platform/myota-next/actions/runs/39999854236).
+  skip-link keyboard navigation. The map includes a keyboard-operable directory
+  for selecting loaded entities. Live authorization coverage verifies a
+  least-privilege account is denied access to the Admin Identity route and
+  receives 403 from the protected Identity endpoint. A full CI run passed all
+  69 browser checks against the isolated services, including the database-backed
+  primary Admin workflows: [run 40006062372](https://github.com/myota-platform/myota-next/actions/runs/40006062372).
   Local runs without the CI databases skip live-service specs.
 - **Missing evidence:** Some secondary Admin workflows still lack live
   browser-level compatibility coverage. The route scan is accessibility
@@ -204,9 +207,9 @@ an accepted scope decision is recorded in the dispositions section.
   present accessible loading, error, and recovery states.
 - **Current implementation and evidence:** Live browser specs exist for both
   clients, including Participant activation, QSO, profile, callsign, awards,
-  and public catalogue flows. A full CI run passed all 68 browser checks,
+  and public catalogue flows. A full CI run passed all 69 browser checks,
   including live-service journeys and intercepted presentation-state specs:
-  [run 39999854236](https://github.com/myota-platform/myota-next/actions/runs/39999854236).
+  [run 40006062372](https://github.com/myota-platform/myota-next/actions/runs/40006062372).
   Automated scans check all registered Admin routes at narrow and wide
   viewports and primary Participant journeys at
   supported viewports; browser checks cover keyboard navigation and accessible
