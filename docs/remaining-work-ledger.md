@@ -183,7 +183,8 @@ an accepted scope decision is recorded in the dispositions section.
 - **Next check:** Compare the Admin route/workflow inventory with live browser
   specs, select missing primary and consequential workflows, and add end-to-end
   evidence through Gateway and owning services.
-- **Tracked by:** [Issue #7](https://github.com/myota-platform/myota-next/issues/7).
+- **Tracked by:** [Issue #20](https://github.com/myota-platform/myota-next/issues/20),
+  under parent [Phase 3 issue #7](https://github.com/myota-platform/myota-next/issues/7).
 - **Sources:** [Web applications, lines 195–200](parity/web-applications.md#L195);
   [completion criteria, lines 19–25](parity/completion-criteria.md#L19).
 
@@ -205,7 +206,9 @@ an accepted scope decision is recorded in the dispositions section.
 - **Next check:** Record keyboard, focus, label, contrast, screen-reader, and
   narrow/wide viewport findings by journey; resolve blockers and rerun primary
   workflows against the isolated release.
-- **Tracked by:** [Issue #7](https://github.com/myota-platform/myota-next/issues/7).
+- **Tracked by:** [Admin issue #20](https://github.com/myota-platform/myota-next/issues/20)
+  and [Participant issue #21](https://github.com/myota-platform/myota-next/issues/21),
+  under parent [Phase 3 issue #7](https://github.com/myota-platform/myota-next/issues/7).
 - **Sources:** [Web applications, lines 261–265](parity/web-applications.md#L261);
   [completion criteria, lines 19–25](parity/completion-criteria.md#L19).
 
