@@ -311,6 +311,10 @@ supplies ED50 as ESRI WKT rather than an EPSG string; the adapter recognizes its
 datum and applies the IGN grid, matching PyProj 3.8.0. Geographic ED50 WKT uses
 the same grid path. This closes a previous mismatch where `.prj` WKT bypassed
 the grid and shifted the tested point by about 0.0013 degrees in each axis.
+EPSG-tagged WKT2 `.prj` files now resolve their root CRS authority before
+projection, including when nested base-geography and conversion-method IDs are
+also present. A PyProj 3.8.0 WKT2 Shapefile fixture for EPSG:23030 verifies the
+same Spanish-grid output through the streaming importer.
 Coordinates outside the grid coverage retain the bundled global definition.
 The grid's source and CC BY 4.0 attribution are recorded in
 `libs/geodata-domain/data/README.md`; other datum-grid operations remain

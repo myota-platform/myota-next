@@ -485,4 +485,38 @@ describe('streamShapefileFeatures', () => {
     expect(normalized.coordinates[0]).toBeCloseTo(-5.993670519717036, 7);
     expect(normalized.coordinates[1]).toBeCloseTo(37.367037324028914, 7);
   });
+
+  it('resolves an EPSG-tagged WKT2 Shapefile projection', async () => {
+    const source = await readFile(
+      new URL(
+        './fixtures/python-point-shapefile-ed50-utm30-wkt2.zip',
+        import.meta.url,
+      ),
+    );
+    async function* chunks() {
+      yield source;
+    }
+    let feature: unknown;
+    for await (const item of streamShapefileFeatures(
+      chunks(),
+      'python-point-shapefile-ed50-utm30-wkt2.zip',
+      '',
+      10,
+      async () => undefined,
+    )) {
+      feature = item;
+    }
+
+    expect(feature).toMatchObject({
+      geometry: { type: 'Point', coordinates: [235000, 4140000] },
+      properties: { name: 'ED50 grid point' },
+      crs: expect.stringContaining('PROJCRS['),
+    });
+    const normalized = normalizeAdapterFeature(
+      'MANUAL',
+      feature as Record<string, unknown>,
+    ).geometry as { coordinates: number[] };
+    expect(normalized.coordinates[0]).toBeCloseTo(-5.993670519717036, 7);
+    expect(normalized.coordinates[1]).toBeCloseTo(37.367037324028914, 7);
+  });
 });

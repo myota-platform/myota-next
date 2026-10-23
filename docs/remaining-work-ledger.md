@@ -271,7 +271,10 @@ an accepted scope decision is recorded in the dispositions section.
   through EPSG:23031 compare transformed coordinates against PyProj 3.8.0. A
   PyShp 2.3.1 Shapefile fixture with ESRI WKT for ED50 / UTM zone 30N verifies
   the `.prj` path also selects the Spanish grid and matches PyProj; geographic
-  ED50 WKT is covered by a projection fixture.
+  ED50 WKT is covered by a projection fixture. An official PyProj 3.8.0 WKT2
+  Shapefile fixture now verifies that the importer resolves its root EPSG:23030
+  authority despite nested base-CRS and conversion-method identifiers, then
+  applies the same Spanish-grid transformation.
   PyShp 2.3.1 fixtures verify Z/M ordinates are dropped for PointZ, PointM,
   PolylineZ, PolylineM, PolygonZ, PolygonM, MultiPointZ, and MultiPointM;
   multipart PolyLine parts retain MultiLineString grouping, and a simple Polygon

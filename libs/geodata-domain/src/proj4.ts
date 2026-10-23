@@ -35,10 +35,13 @@ for (let index = 0; index < (await gridTiff.getImageCount()); index += 1) {
  */
 export function projectToWgs84(source: string, coordinate: number[]) {
   const normalizedSource = source.trim().toUpperCase();
-  const fallback = proj4(source, 'EPSG:4326', coordinate);
+  const embeddedEpsg = epsgFromWktAuthority(source);
   const epsgMatch = /^EPSG:\s*(\d+)$/.exec(normalizedSource);
-  const gridSource = epsgMatch
-    ? spanishGridSourceForEpsg(Number(epsgMatch[1]))
+  const epsg = epsgMatch?.[1] ?? embeddedEpsg;
+  const projectionSource = epsg ? `EPSG:${epsg}` : source;
+  const fallback = proj4(projectionSource, 'EPSG:4326', coordinate);
+  const gridSource = epsg
+    ? spanishGridSourceForEpsg(Number(epsg))
     : spanishGridSourceForWkt(source);
   if (!gridSource) return fallback;
 
@@ -54,6 +57,49 @@ export function projectToWgs84(source: string, coordinate: number[]) {
 
   const shifted = proj4(gridSource, 'EPSG:4326', coordinate);
   return shifted.every(Number.isFinite) ? shifted : fallback;
+}
+
+/** Resolve the root CRS authority in WKT1/WKT2 before passing WKT to proj4js. */
+function epsgFromWktAuthority(source: string): string | undefined {
+  const root =
+    /^\s*(?:PROJCRS|PROJCS|GEOGCRS|GEOGCS|GEODCRS|COMPOUNDCRS|BOUNDCRS)\s*\[/i.exec(
+      source,
+    );
+  if (!root) return undefined;
+
+  let depth = 1;
+  let quoted = false;
+  let epsg: string | undefined;
+  let rootEnd = -1;
+  for (let index = root[0].length; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === '"') {
+      if (quoted && source[index + 1] === '"') {
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+      continue;
+    }
+    if (quoted) continue;
+
+    if (depth === 1) {
+      const authority = /^(?:ID|AUTHORITY)\s*\[\s*"EPSG"\s*,\s*"?(\d+)"?/i.exec(
+        source.slice(index),
+      );
+      if (authority) epsg = authority[1];
+    }
+
+    if (character === '[') depth += 1;
+    else if (character === ']') {
+      depth -= 1;
+      if (depth === 0) {
+        rootEnd = index;
+        break;
+      }
+    }
+  }
+  return rootEnd >= 0 && !source.slice(rootEnd + 1).trim() ? epsg : undefined;
 }
 
 function spanishGridSourceForEpsg(epsg: number): string | undefined {

@@ -42,6 +42,15 @@ describe('shared EPSG projection definitions', () => {
     expect(actual[1]).toBeCloseTo(37.367037324028914, 7);
   });
 
+  it('resolves the root EPSG authority when ED50 UTM arrives as WKT2', () => {
+    const wkt =
+      'PROJCRS["ED50 / UTM zone 30N",BASEGEOGCRS["ED50",DATUM["European Datum 1950",ELLIPSOID["International 1924",6378388,297,LENGTHUNIT["metre",1]]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],ID["EPSG",4230]],CONVERSION["UTM zone 30N",METHOD["Transverse Mercator",ID["EPSG",9807]],PARAMETER["Latitude of natural origin",0,ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8801]],PARAMETER["Longitude of natural origin",-3,ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8802]],PARAMETER["Scale factor at natural origin",0.9996,SCALEUNIT["unity",1],ID["EPSG",8805]],PARAMETER["False easting",500000,LENGTHUNIT["metre",1],ID["EPSG",8806]],PARAMETER["False northing",0,LENGTHUNIT["metre",1],ID["EPSG",8807]]],CS[Cartesian,2],AXIS["(E)",east,ORDER[1],LENGTHUNIT["metre",1]],AXIS["(N)",north,ORDER[2],LENGTHUNIT["metre",1]],ID["EPSG",23030]]';
+    const actual = projectToWgs84(wkt, [235000, 4140000]);
+
+    expect(actual[0]).toBeCloseTo(-5.993670519717036, 7);
+    expect(actual[1]).toBeCloseTo(37.367037324028914, 7);
+  });
+
   it('uses the Spanish IGN grid when geographic ED50 arrives as WKT', () => {
     const wkt =
       'GEOGCS["GCS_European_1950",DATUM["D_European_1950",SPHEROID["International_1924",6378388.0,297.0]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]';
