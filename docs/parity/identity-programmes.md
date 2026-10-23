@@ -61,7 +61,8 @@ rotation, logout revocation, recovery request/reset, current-account reads, owne
 profile updates, account creation, and administrator account listing, owner/global
 account reads and account role reads in NestJS. A live Gateway-to-Identity check also
 confirms public registration remains disabled with the Python reference's response
-detail.
+detail; `auth.controller.compatibility.spec.ts` pins the 403 status and exact denial
+detail at the Nest controller boundary.
 
 The role catalogue endpoint returns built-in and persisted custom roles under the
 existing authorized scopes; custom role creation and partial updates are backed by Core
@@ -190,14 +191,18 @@ Compatibility checks also verify account creators can read role choices without
 account-admin access, participants cannot read them, administrators cannot change their
 own role assignments, and access tokens stop working after account deactivation. The
 Admin account list resolves each subject's active role scopes from Identity, including
-the global operator `*` scope, matching the Python list behavior. Broader account,
-callsign, recovery, and authorization sequence behavior still require automated
-compatibility coverage. Focused fixtures now pin role-retention authority, logout
-rollback, and expired recovery-token side effects; remaining broad sequence coverage is
-still open. Callsign create and primary-selection idempotency fixtures also pin the Python
-order: required callsign fields precede authorization; authorization and account
-resolution precede cached replay; and replay skips mutation-specific validation and
-leaves the database and outbox unchanged.
+the global operator `*` scope, matching the Python list behavior. The pinned handler
+test inventory has been compared with focused Nest fixtures and live workflows for
+account creation and replay, role authority, callsign lifecycle, profile and image
+handling, recovery and session revocation, and Programme catalogue, content, and policy
+lifecycle operations. These checks cover the primary workflows and consequential
+authorization, validation, conflict, and persisted-state outcomes required by the
+[completion criteria](completion-criteria.md). Rare cross-product combinations are not
+separately qualified unless comparison identifies a material mismatch. Callsign create
+and primary-selection idempotency fixtures also pin the Python order: required callsign
+fields precede authorization; authorization and account resolution precede cached
+replay; and replay skips mutation-specific validation and leaves the database and outbox
+unchanged.
 
 The PostgreSQL-backed Identity HTTP fixture also exercises bootstrap account
 provisioning, password login, the authenticated current-account route, and single-use

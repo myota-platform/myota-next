@@ -331,7 +331,16 @@ owner's account feed. Missing-object notices also retain the Python reason strin
 follow Python `ObjectStore.get` behavior: the import is marked failed, counted as one
 rejection, and notified under the activation ID.
 
-Broader Activity compatibility and outage/recovery qualification remain outstanding.
+The required Activity workflows now have focused compatibility fixtures and live
+Gateway/browser evidence for activation, QSO writes and corrections, ADIF upload and
+processing, public results, award lifecycle and calculation, notifications, and durable
+job status. Shared authorization, validation, conflict, duplicate-side-effect, and
+batch-failure outcomes are covered at the service or worker boundary. This completes
+the representative functional-parity scope in the
+[completion criteria](completion-criteria.md); unenumerated rare combinations are not
+treated as open material gaps without a concrete reference mismatch. Worker process-loss
+and deployment retry qualification remain separately tracked in the remaining-work
+ledger.
 Activity activation history, public activation history, and statistics pages apply
 database limits and offsets while retaining their existing page metadata; public result
 exports remain complete exports. The private activation and statistics pagers read their

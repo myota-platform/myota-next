@@ -16,62 +16,6 @@ an accepted scope decision is recorded in the dispositions section.
 
 ## Open work
 
-### L-01 — Complete Identity and Programme sequence compatibility coverage
-
-- **Owner:** Identity and Programmes (`apps/identity/`, `apps/programmes/`).
-- **Class:** Compatibility qualification.
-- **Reference behavior:** Pinned Python request, authorization, validation,
-  conflict, recovery, callsign, and lifecycle ordering where it affects access
-  or persisted state.
-- **Current implementation and evidence:** Identity behavior is implemented in
-  the owning services and has focused fixtures such as
-  `apps/identity/src/identity-account.creation.spec.ts`,
-  `auth.service.spec.ts`, `identity-account.roles.spec.ts`,
-  `identity-callsign.lifecycle.spec.ts`,
-  `auth.recovery.spec.ts`, `auth.logout.spec.ts`,
-  `auth.profile.compatibility.spec.ts`, and
-  `identity-account.validation-order.spec.ts`. A logout fixture now also pins
-  rollback when access-token validation fails after refresh-session revocation
-  is attempted, and recovery coverage now verifies expired-token rejection has
-  no credential or session side effects. An account anonymization fixture also
-  verifies profile and image metadata clearing in the transaction and profile
-  object deletion only after commit. The Admin account-list fixture also checks
-  identity-resolved effective scopes for an active global operator. Role-grant
-  coverage also verifies an
-  Identity administrator may retain or revoke an equal-authority role already
-  on another account while being unable to grant a new one; a global operator
-  cannot grant the equal global role or remove the last active global-operator
-  assignment. Existing reference comparisons are
-  summarized in
-  [Identity and Programmes parity](parity/identity-programmes.md).
-  The own-profile fixture now also compares URL normalization, field clearing,
-  unsafe-value rejection, and transaction rollback with the Python contract.
-  Programme service fixtures also pin invalid-status precedence and the archive
-  action's ignored fields, unchanged policy version, and event payload in
-  `apps/programmes/src/programmes.service.compatibility.spec.ts`. The new
-  `apps/programmes/src/programme-entity-type.compatibility.spec.ts` covers shared
-  catalogue assignments, assignment isolation, geometry-type normalization, and
-  stable category codes. A new content-save fixture also pins cross-programme
-  ownership validation before required-field checks and required fields before
-  lifecycle-state checks, matching the Python save handler.
-- **Missing evidence:** The source page explicitly says broader account,
-  callsign, recovery, and authorization sequences still need automated
-  compatibility coverage. The corrected live concurrent normalized-email
-  creation check passed against isolated PostgreSQL: one request created the
-  account, one received the reference duplicate-email response, and one row was
-  persisted. A live retry with the same idempotency key also returns the original
-  response without another account, security event, or outbox event. The earlier
-  race run used an unsupported participation type and is not counted as evidence.
-- **Risk:** A sequence or precedence difference could grant access, retain an
-  invalid session, or persist the wrong callsign/account state.
-- **Next check:** Compare remaining material Identity and Programme handler
-  sequences with the pinned reference; add a focused fixture or workflow for
-  each uncovered material outcome. The concurrent-email result is linked from
-  the parity page and [CI run 39968418850](https://github.com/myota-platform/myota-next/actions/runs/39968418850).
-- **Tracked by:** [Issue #11](https://github.com/myota-platform/myota-next/issues/11).
-- **Sources:** [Identity and Programmes, line 167](parity/identity-programmes.md#L167);
-  [completion criteria, lines 9–17](parity/completion-criteria.md#L9).
-
 ### L-02 — Verify real SMTP delivery with deployment trust roots
 
 - **Owner:** Email worker and Identity integration
@@ -94,54 +38,6 @@ an accepted scope decision is recorded in the dispositions section.
 - **Tracked by:** [Issue #13](https://github.com/myota-platform/myota-next/issues/13).
 - **Sources:** [Identity and Programmes, lines 22–25](parity/identity-programmes.md#L22);
   [parity matrix, lines 48–52](parity-matrix.md#L48).
-
-### L-03 — Close broader Activity compatibility gaps
-
-- **Owner:** Activity API and workers (`apps/activity/`,
-  `apps/activity-worker/`, `apps/activity-notifications/`).
-- **Class:** Product compatibility qualification.
-- **Reference behavior:** Activation and QSO writes/corrections, ADIF and QSO
-  ingestion, public results, awards, notifications, and job status follow the
-  pinned Python behavior for payloads, ordering, authorization, persistence,
-  and failure outcomes.
-- **Current implementation and evidence:** The Activity parity page records
-  focused fixtures and live workflows for QSO correction, imports, awards,
-  notifications, public results, and job processing. Relevant code includes
-  `apps/activity/src/activity.service.ts`, `qso-ingestion.controller.ts`,
-  `awards.service.ts`, and `apps/activity-worker/src/activity-worker.service.ts`.
-  ADIF upload fixtures now also verify malware detection and scanner failure stop
-  before object storage and durable job creation, and operator authorization precedes
-  base64 type validation with the reference's denial detail. A QSO repository fixture pins
-  duplicate insertion to return the existing QSO without repeating aggregate,
-  outbox, or award-recalculation side effects. Awards service coverage also pins
-  synchronous single-subject progress against asynchronous broad recalculation;
-  a worker fixture pins per-record normalization errors ahead of closed-activation
-  errors before any QSO write and verifies an out-of-window later record prevents
-  insertion of the entire QSO batch. The ADIF worker fixture also confirms an
-  out-of-window later record prevents all QSO inserts and leaves import completion
-  untouched. ADIF batch insert and subsequent aggregate/outbox failures now abort and
-  retry the whole transaction instead of partially salvaging or deleting individual
-  rows outside the Python transaction boundary.
-  A focused award-domain fixture now also pins nested AND/OR condition results
-  against the Python award-condition case; a worker fixture pins requested
-  award/version filtering and recalculation for every subject in that category.
-  A new Activity service fixture also mirrors the Python activation authorization
-  case, rejecting missing credentials and non-owner creation before repository
-  writes while permitting the activation owner; it also covers non-owner QSO
-  write denial and Activity-admin access before QSO mutation, plus the Python
-  required-QSO-fields response before activation lookup and authentication.
-- **Missing evidence:** The parity page still marks broader Activity payload
-  and workflow compatibility outstanding. Existing focused cases do not prove
-  all consequential combinations and failure ordering.
-- **Risk:** Incomplete coverage can hide incorrect QSO writes, awards,
-  authorization, duplicate side effects, or user-visible job outcomes.
-- **Next check:** Use the parity matrix and handler comparison to identify the
-  uncovered material workflows, then add reference-backed API and end-to-end
-  evidence. Keep long log ingestion and broad award recalculation asynchronous;
-  keep bounded atomic commands synchronous.
-- **Tracked by:** [Issue #12](https://github.com/myota-platform/myota-next/issues/12).
-- **Sources:** [Activity parity, lines 286–290](parity/activity.md#L286);
-  [completion criteria, lines 9–17](parity/completion-criteria.md#L9).
 
 ### L-04 — Qualify Activity worker process-loss windows
 
@@ -528,6 +424,48 @@ an accepted scope decision is recorded in the dispositions section.
 
 ## Accepted limitations and explicit dispositions
 
+### D-04 — Identity and Programme parity is qualified by material workflows
+
+- **Owner:** Identity and Programmes (`apps/identity/`, `apps/programmes/`).
+- **Class:** Functional-parity scope disposition.
+- **Current implementation and evidence:** The pinned handler test inventory
+  and parity matrix have been compared with focused Nest fixtures for account
+  creation and idempotency, role authority, callsign lifecycle, profile/image
+  handling, recovery/session revocation, and Programme catalogue, content, and
+  policy lifecycle operations. Gateway and browser workflows cover persisted
+  account creation/replay and Programme administration. The owning parity page
+  links the detailed comparisons and CI evidence.
+- **Disposition and impact:** The launch completion criteria require common
+  workflows plus shared authorization, validation, and conflict behavior; they
+  do not require a test for every cross-product of valid and invalid fields.
+  Those material outcomes are covered, and the latest source comparison found
+  no additional confirmed mismatch. New concrete mismatches reopen this scope.
+  Deployment SMTP trust-root qualification remains open under L-02 / #13.
+- **Next check:** Reopen only when a concrete material reference difference is
+  identified; keep deployed email qualification in its separate launch issue.
+- **Sources:** [Identity and Programmes parity](parity/identity-programmes.md);
+  [completion criteria, lines 1–18](parity/completion-criteria.md#L1).
+
+### D-05 — Activity parity is qualified by complete common workflows
+
+- **Owner:** Activity APIs and workers (`apps/activity/`,
+  `apps/activity-worker/`, `apps/activity-notifications/`).
+- **Class:** Functional-parity scope disposition.
+- **Current implementation and evidence:** Focused reference fixtures and live
+  Gateway/browser workflows cover activation, QSO writes and corrections, ADIF
+  upload and processing, public results, award lifecycle and calculation,
+  notifications, and durable job status. The Activity parity page links
+  service/worker checks and persisted-record browser evidence.
+- **Disposition and impact:** The common workflows and shared authorization,
+  validation, conflict, and failure-order outcomes satisfy the functional
+  parity criteria. Exhaustive combinations are not individually qualified
+  without a concrete material mismatch. Process-loss, deployment retry, and
+  capacity qualification remain separately open under L-04, L-05, and #19.
+- **Next check:** Reopen for a specific reference mismatch; retain recovery and
+  capacity evidence in the owning launch issues.
+- **Sources:** [Activity parity](parity/activity.md);
+  [completion criteria, lines 1–18](parity/completion-criteria.md#L1).
+
 ### D-01 — Nest-only routes are extensions, not parity claims
 
 - **Owner:** API and contracts.
@@ -587,17 +525,17 @@ Every parity and operations Markdown document reviewed is mapped below. Shared
 status statements are consolidated into the ledger items above rather than
 duplicated as separate work.
 
-- [Parity matrix](parity-matrix.md): L-01 through L-03, L-06, L-17 through
-  L-18, and D-01 through D-02.
+- [Parity matrix](parity-matrix.md): L-02, L-06, L-17 through L-18, and
+  D-01, D-02, D-04, and D-05.
 - [HTTP compatibility](parity/http.md): D-01.
-- [Identity and Programmes](parity/identity-programmes.md): L-01, L-02.
-- [Activity](parity/activity.md): L-03 through L-05, D-01, D-03.
+- [Identity and Programmes](parity/identity-programmes.md): L-02, D-04.
+- [Activity](parity/activity.md): L-04, L-05, D-01, D-03, D-05.
 - [Geodata](parity/geodata.md): L-06 through L-10, L-13, L-18.
 - [Web applications](parity/web-applications.md): L-11, L-12, L-17.
 - [Workers and operations](parity/workers-operations.md): L-04, L-05,
   L-09, L-13 through L-15, L-18.
 - [Completion criteria](parity/completion-criteria.md): L-07, L-11, L-12,
-  L-15 through L-18, D-02.
+  L-15 through L-18, D-02, D-04, D-05.
 - [Database backup and restore](operations/database-backup-restore.md):
   L-16, D-02.
 - [Geodata source importer](operations/geodata-importer.md): L-10.
