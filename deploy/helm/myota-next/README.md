@@ -23,11 +23,11 @@ docker build -f deploy/Dockerfile.tools \
 
 Repeat the application build for every enabled Nest CLI project. The workflow
 also builds the Admin and Participant images from their own Docker contexts.
-Image names in `values-example.yaml` match the repository workflow. Pushes to
-`main` and `v*` tags publish per-image SHA and release tags after the quality
-job passes; pull requests run the quality checks and build all container images
-without publishing. Use the digest printed in the workflow summary for
-production values.
+Image names in `values-example.yaml` match the repository workflow. Publishing
+a GitHub release builds and publishes per-image SHA and release tags after the
+quality job passes. Pull requests run the quality checks and build all container
+images without publishing. Use the digest printed in the workflow summary for
+deployment values.
 
 Create Kubernetes Secrets before installation:
 
