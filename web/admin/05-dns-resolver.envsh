@@ -1,0 +1,34 @@
+#!/bin/sh
+# Nginx needs an explicit resolver when proxy_pass uses a variable upstream.
+# Derive it from this container's resolver configuration (Docker or Kubernetes).
+if [ -z "${MYOTA_DNS_RESOLVER:-}" ]; then
+  MYOTA_DNS_RESOLVER="$(awk '$1 == "nameserver" { print $2; exit }' /etc/resolv.conf)"
+fi
+if [ -z "${MYOTA_DNS_RESOLVER}" ]; then
+  echo "No DNS resolver is configured for the admin-web proxy" >&2
+  exit 1
+fi
+export MYOTA_DNS_RESOLVER
+
+# Nginx's built-in resolver does not apply Kubernetes search domains. Expand
+# short service names to the current namespace's service FQDN when running in
+# Kubernetes; Docker Compose names are left unchanged.
+MYOTA_SERVICE_DNS_SUFFIX="$(awk '$1 == "search" { for (i = 2; i <= NF; i++) if ($i ~ /\.svc\.cluster\.local$/) { print $i; exit } }' /etc/resolv.conf)"
+if [ -n "${MYOTA_SERVICE_DNS_SUFFIX}" ]; then
+  expand_service_upstream() {
+    upstream_value="$1"
+    case "${upstream_value}" in
+      *.*|"") printf '%s' "${upstream_value}"; return ;;
+    esac
+    upstream_host="${upstream_value%%:*}"
+    upstream_port="${upstream_value#*:}"
+    if [ "${upstream_port}" = "${upstream_value}" ]; then
+      printf '%s.%s' "${upstream_host}" "${MYOTA_SERVICE_DNS_SUFFIX}"
+    else
+      printf '%s.%s:%s' "${upstream_host}" "${MYOTA_SERVICE_DNS_SUFFIX}" "${upstream_port}"
+    fi
+  }
+  MYOTA_GATEWAY_UPSTREAM="$(expand_service_upstream "${MYOTA_GATEWAY_UPSTREAM:-}")"
+  MYOTA_GRAFANA_UPSTREAM="$(expand_service_upstream "${MYOTA_GRAFANA_UPSTREAM:-}")"
+  export MYOTA_GATEWAY_UPSTREAM MYOTA_GRAFANA_UPSTREAM
+fi

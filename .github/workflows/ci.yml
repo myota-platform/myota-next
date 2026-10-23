@@ -1,0 +1,106 @@
+name: Node CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: node-ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && 'manual' || 'ref' }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      geo-db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: myota_geo
+          POSTGRES_USER: myota
+          POSTGRES_PASSWORD: myota
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U myota -d myota_geo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CORE_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_core
+      ACTIVITY_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_activity
+      GEO_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_geo
+      GEO_PARITY_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_geo
+      NATS_URL: nats://127.0.0.1:14222
+      NATS_TEST_URL: nats://127.0.0.1:14222
+      ACTIVITY_NOTIFICATION_METRICS_PORT: '0'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install OSM PBF decoder for correctness fixtures
+        run: >-
+          sudo timeout 6m apt-get -o Acquire::Retries=3
+          -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          && sudo timeout 6m apt-get -o Acquire::Retries=3
+          -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install
+          --no-install-recommends --yes osmium-tool
+      - name: Start isolated JetStream
+        run: |
+          docker run --detach --name myota-ci-nats \
+            --publish 14222:4222 --publish 18222:8222 \
+            nats:2-alpine -js -p 4222 -m 8222
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18222/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs myota-ci-nats
+          exit 1
+      - run: npm ci
+      - name: Provision bounded JetStream topology for CI
+        run: npm run provision:jetstream
+        env:
+          NATS_TOPOLOGY_APPLY: '1'
+          NATS_EVENTS_MAX_BYTES: '16777216'
+          NATS_EVENTS_MAX_MESSAGES: '10000'
+          NATS_EVENTS_MAX_MESSAGE_BYTES: '1048576'
+          NATS_ACTIVITY_WORK_MAX_AGE_SECONDS: '86400'
+          NATS_ACTIVITY_WORK_MAX_BYTES: '16777216'
+          NATS_ACTIVITY_WORK_MAX_MESSAGES: '10000'
+          NATS_ACTIVITY_WORK_MAX_MESSAGE_BYTES: '1048576'
+          NATS_GEODATA_WORK_MAX_AGE_SECONDS: '86400'
+          NATS_GEODATA_WORK_MAX_BYTES: '16777216'
+          NATS_GEODATA_WORK_MAX_MESSAGES: '10000'
+          NATS_GEODATA_WORK_MAX_MESSAGE_BYTES: '1048576'
+          NATS_EMAIL_WORK_MAX_AGE_SECONDS: '86400'
+          NATS_EMAIL_WORK_MAX_BYTES: '16777216'
+          NATS_EMAIL_WORK_MAX_MESSAGES: '10000'
+          NATS_EMAIL_WORK_MAX_MESSAGE_BYTES: '1048576'
+      - run: npm run prepare:parity-databases
+      - run: npm run migrate:db -- --owner=core
+      - run: npm run migrate:db -- --owner=activity
+      - run: npm run migrate:db -- --owner=geo
+      - run: npm run test:geodata-maidenhead
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:e2e
+      - run: npm run build
+      - run: npm ci --prefix web/admin
+      - run: npm run lint --prefix web/admin
+      - run: npm run typecheck --prefix web/admin
+      - run: npm run build --prefix web/admin
+      - run: npx playwright install chromium
+      - run: npm run test:browser
+        env:
+          MYOTA_BROWSER_GEODATA_WORKERS: '1'
+          MYOTA_BROWSER_ACTIVITY_WORKERS: '1'

@@ -1,0 +1,5 @@
+MyOTA NestJS workloads are installed in namespace {{ .Release.Namespace }}.
+
+Gateway service: {{ include "myota-next.name" . }}-gateway:{{ .Values.components.gateway.port }}
+Core, Activity, and Geodata database URLs are read from Kubernetes Secrets.
+The migration Job runs before install and upgrade hooks when enabled.

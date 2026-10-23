@@ -1,0 +1,109 @@
+name: Operational and performance qualification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  qualification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      geo-db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: myota_geo
+          POSTGRES_USER: myota
+          POSTGRES_PASSWORD: myota
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U myota -d myota_geo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CORE_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_core
+      ACTIVITY_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_activity
+      GEO_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_geo
+      GEO_PARITY_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_geo
+      NATS_URL: nats://127.0.0.1:14222
+      NATS_TEST_URL: nats://127.0.0.1:14222
+      ACTIVITY_NOTIFICATION_METRICS_PORT: '0'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install qualification tools
+        run: >-
+          sudo timeout 6m apt-get -o Acquire::Retries=3
+          -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          && sudo timeout 6m apt-get -o Acquire::Retries=3
+          -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install
+          --no-install-recommends --yes osmium-tool nats-server postgresql-client-16
+      - name: Select PostgreSQL 16 client tools
+        run: echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+      - name: Start isolated JetStream
+        run: |
+          sudo systemctl stop nats-server || true
+          sudo systemctl disable nats-server || true
+          nohup nats-server -js -p 14222 -m 18222 > "$RUNNER_TEMP/nats-server.log" 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18222/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/nats-server.log"
+          exit 1
+      - run: npm ci
+      - name: Export PostgreSQL service container ID for process recovery checks
+        run: |
+          container_id="$(docker ps --filter 'ancestor=postgis/postgis:16-3.4' --format '{{.ID}}' | head -n 1)"
+          if [ -z "$container_id" ]; then
+            echo "Could not find the PostgreSQL service container" >&2
+            exit 1
+          fi
+          echo "MYOTA_POSTGRES_SERVICE_CONTAINER_ID=$container_id" >> "$GITHUB_ENV"
+      - name: Provision bounded JetStream topology
+        run: npm run provision:jetstream
+        env:
+          NATS_TOPOLOGY_APPLY: '1'
+          NATS_EVENTS_MAX_BYTES: '16777216'
+          NATS_EVENTS_MAX_MESSAGES: '10000'
+          NATS_EVENTS_MAX_MESSAGE_BYTES: '1048576'
+          NATS_ACTIVITY_WORK_MAX_AGE_SECONDS: '86400'
+          NATS_ACTIVITY_WORK_MAX_BYTES: '16777216'
+          NATS_ACTIVITY_WORK_MAX_MESSAGES: '10000'
+          NATS_ACTIVITY_WORK_MAX_MESSAGE_BYTES: '1048576'
+          NATS_GEODATA_WORK_MAX_AGE_SECONDS: '86400'
+          NATS_GEODATA_WORK_MAX_BYTES: '16777216'
+          NATS_GEODATA_WORK_MAX_MESSAGES: '10000'
+          NATS_GEODATA_WORK_MAX_MESSAGE_BYTES: '1048576'
+          NATS_EMAIL_WORK_MAX_AGE_SECONDS: '86400'
+          NATS_EMAIL_WORK_MAX_BYTES: '16777216'
+          NATS_EMAIL_WORK_MAX_MESSAGES: '10000'
+          NATS_EMAIL_WORK_MAX_MESSAGE_BYTES: '1048576'
+      - run: npm run prepare:parity-databases
+      - run: npm run migrate:db -- --owner=core
+      - run: npm run migrate:db -- --owner=activity
+      - run: npm run migrate:db -- --owner=geo
+      - name: Rehearse three-owner backup and restore
+        run: npm run test:db-backup-restore
+        env:
+          MYOTA_BACKUP_RESTORE_TEST_ALLOW: '1'
+      - run: npm run test:geodata-rss
+      - run: npm run test:geodata-pbf-rss
+      - run: npm run test:geodata-worker-recovery
+      - run: npm run test:activity-worker-recovery
+      - run: npm run test:activity-notification-restart-recovery
+      - run: npm run test:outbox-recovery
+      - run: npm run test:geodata-storage-recovery

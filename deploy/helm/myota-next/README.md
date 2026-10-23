@@ -1,0 +1,100 @@
+# MyOTA NestJS chart
+
+This chart deploys the NestJS APIs, background processes, Admin app, and
+Participant app from this monorepo. It keeps Core, Activity, and Geodata as
+three separately configured PostgreSQL owners. It does not provision
+databases, a NATS server, or object storage. Configure those services
+independently. An opt-in Job can provision the registered streams and durable
+consumers on the configured NATS server.
+
+## Images and install
+
+Build and publish a per-application image with the root `Dockerfile`. Configure
+each entry under `images` with that image's repository and either a tag or an
+immutable digest. `outbox-core`, `outbox-activity`, and `outbox-geodata` share
+the `outbox-worker` image and run with separate owner settings.
+
+```sh
+docker build --build-arg APP_NAME=identity \
+  -t ghcr.io/myota-platform/myota-next-identity:VERSION .
+docker build -f deploy/Dockerfile.tools \
+  -t ghcr.io/myota-platform/myota-next-tools:VERSION .
+```
+
+Repeat the application build for every enabled Nest CLI project. The workflow
+also builds the Admin and Participant images from their own Docker contexts.
+Image names in `values-example.yaml` match the repository workflow. Pushes to
+`main` and `v*` tags publish per-image SHA and release tags after the quality
+job passes; pull requests run the quality checks and build all container images
+without publishing. Use the digest printed in the workflow summary for
+production values.
+
+Create Kubernetes Secrets before installation:
+
+- `myota-database-urls`: `core-database-url`, `activity-database-url`,
+  `geo-database-url`.
+- `myota-database-migration-urls`: the same keys with migration credentials.
+- `myota-auth`: `signing-key`, `email-service-client-secret`; optionally
+  `bootstrap-email` and `bootstrap-password` for initial Identity setup.
+- `myota-object-storage`: `access-key`, `secret-key`,
+  `profile-image-access-key`, `profile-image-secret-key`.
+- `myota-smtp`: `password` when enabling `email-worker`.
+- `myota-nats-credentials`: `url`, the configured NATS connection URL,
+  including credentials when authentication is enabled.
+- `myota-observe`: `app-key` and `app-secret` when enabling Observe reporting.
+
+Database URLs must point to three distinct databases. Core is shared by
+Identity and Programmes; Activity and Geodata have their own URLs. Use runtime
+database credentials for services and migration credentials for the migration
+Job where permissions differ. Keep all credentials in Secrets, not Helm values.
+
+For the optional single-instance PostgreSQL StatefulSets, install
+[`myota-infrastructure`](../myota-infrastructure/README.md) first and wait for
+Core, Activity, and Geodata to become Ready. Configure the database URL Secrets
+to use that release's three service names, then install this chart. NATS and
+S3-compatible storage remain external prerequisites.
+
+Configure repository and tag or digest for each enabled component image and
+`migrations.image`, then install with environment-specific non-secret values:
+
+```sh
+helm upgrade --install myota-next deploy/helm/myota-next \
+  --namespace myota --create-namespace -f values-production.yaml
+```
+
+`migrations.enabled` runs the checked-in owner migrations as a Helm
+pre-install/pre-upgrade Job against all three databases. The Job is a release
+gate; review migration compatibility with currently running versions before
+using rolling upgrades. The chart does not migrate data from the Python
+deployment.
+
+The JetStream provisioner is disabled by default. Enable it only after
+reviewing stream topology and measured capacity, set
+`jetstreamProvisioner.confirmedCapacityReview=true`, and provide positive
+finite values for every `jetstreamProvisioner.capacity` field. The Job uses the
+same create-only, drift-rejecting tool as local provisioning and never updates
+existing stream or consumer configuration. See
+[`deploy/jetstream/README.md`](../../jetstream/README.md) for required limits.
+
+Geodata durable concurrency can be configured independently with
+`geodataWorker.maxAckPending.preprocessing`, `.promotion`, `.deletion`, and
+`.enrichment`. The chart passes these values to both the Geodata worker and the
+JetStream provisioner Job, so runtime polling concurrency matches each
+consumer's `max_ack_pending`. If provisioning is managed outside this chart,
+apply the same settings there. Existing consumer configuration is immutable in
+the provisioner; changing a policy requires an explicitly reviewed successor
+durable.
+The legacy aggregate import limit can be set with
+`geodataWorker.legacyConcurrency.import`; it applies across preprocessing and
+promotion when native import concurrency settings are absent.
+`components.geodata.legacyConcurrency.upload` sets the per-process limit for
+multipart upload finalization in the Geodata API.
+
+Workers expose internal health listeners only where their process supports
+them. The chart creates ClusterIP services for the four domain APIs and the
+Gateway; worker health ports are not exposed as Services.
+
+This is the initial Kubernetes deployment source for the NestJS monorepo. It
+does not yet reproduce the previous deployment's stateful infrastructure,
+retention schedules, autoscaling, dashboards, alerts, or Fleet release
+automation. Those remain explicit deployment work before production rollout.

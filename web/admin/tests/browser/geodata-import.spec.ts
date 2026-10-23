@@ -1,0 +1,255 @@
+import { expect, test } from '@playwright/test';
+
+test('reviews pasted GeoJSON candidates by rejecting one and promoting another', async ({
+  page,
+}) => {
+  const importRequests: Array<{ body: Record<string, any>; key: string }> = [];
+  const run = {
+    id: 'import-1',
+    filename: 'summits.geojson',
+    status: 'PREPROCESSED',
+    adapter: 'MANUAL',
+    format: 'GEOJSON',
+    entityTypes: ['SOTA'],
+    candidateCount: 2,
+    pendingCount: 2,
+  };
+  const firstFeature = {
+    id: 'candidate-1',
+    ordinal: 1,
+    name: 'Example summit to reject',
+    validationStatus: 'PENDING',
+    geometry: { type: 'Point', coordinates: [7.2, 46.1] },
+  };
+  const secondFeature = {
+    id: 'candidate-2',
+    ordinal: 2,
+    name: 'Example summit to keep',
+    validationStatus: 'PENDING',
+    geometry: { type: 'Point', coordinates: [7.3, 46.2] },
+  };
+  let pendingCandidates = [firstFeature, secondFeature];
+  const rejectionRequests: Array<{ body: unknown; key: string }> = [];
+  const promotionRequests: Array<{ body: unknown; key: string }> = [];
+
+  await page.route('**/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+
+    if (url.pathname === '/v1/identity/auth/login') {
+      await route.fulfill({
+        json: {
+          accessToken: 'admin-geodata-import-access-token',
+          refreshToken: 'admin-geodata-import-refresh-token',
+        },
+      });
+      return;
+    }
+
+    if (url.pathname === '/v1/identity/me') {
+      await route.fulfill({
+        json: {
+          id: 'geodata-importer-1',
+          email: 'geodata-importer@example.test',
+          displayName: 'Geodata Importer',
+          scopes: ['geodata.import'],
+        },
+      });
+      return;
+    }
+
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({ json: { items: [], nextPage: null } });
+      return;
+    }
+
+    if (url.pathname === '/v1/entity-types') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              code: 'SOTA',
+              label: 'Summits on the Air',
+              active: true,
+              geometryTypes: ['POINT'],
+            },
+          ],
+        },
+      });
+      return;
+    }
+
+    if (url.pathname === '/v1/geodata/imports' && method === 'GET') {
+      const items = importRequests.length ? [run] : [];
+      await route.fulfill({
+        json: {
+          items,
+          page: 1,
+          pageSize: 10,
+          total: items.length,
+          nextPage: null,
+        },
+      });
+      return;
+    }
+
+    if (url.pathname === '/v1/geodata/imports' && method === 'POST') {
+      importRequests.push({
+        body: request.postDataJSON() as Record<string, any>,
+        key: request.headers()['idempotency-key'] || '',
+      });
+      await route.fulfill({ status: 201, json: run });
+      return;
+    }
+
+    if (url.pathname === '/v1/geodata/imports/import-1/candidates') {
+      await route.fulfill({
+        json: {
+          items: pendingCandidates,
+          total: pendingCandidates.length,
+          nextPage: null,
+        },
+      });
+      return;
+    }
+
+    if (
+      url.pathname === '/v1/geodata/imports/import-1/candidates/validate' &&
+      method === 'POST'
+    ) {
+      const body = request.postDataJSON() as { candidateIds: string[] };
+      rejectionRequests.push({
+        body,
+        key: request.headers()['idempotency-key'] || '',
+      });
+      pendingCandidates = pendingCandidates.filter(
+        (candidate) => !body.candidateIds.includes(candidate.id),
+      );
+      await route.fulfill({
+        json: {
+          importRunId: 'import-1',
+          candidateIds: body.candidateIds,
+          validationStatus: 'REJECTED',
+        },
+      });
+      return;
+    }
+
+    if (
+      url.pathname === '/v1/geodata/imports/import-1/process' &&
+      method === 'POST'
+    ) {
+      promotionRequests.push({
+        body: request.postDataJSON(),
+        key: request.headers()['idempotency-key'] || '',
+      });
+      await route.fulfill({ status: 202, json: { id: 'promotion-queue-1' } });
+      return;
+    }
+
+    if (
+      url.pathname ===
+      '/v1/geodata/imports/import-1/processing-queues/promotion-queue-1'
+    ) {
+      pendingCandidates = pendingCandidates.filter(
+        (candidate) => candidate.id !== 'candidate-2',
+      );
+      await route.fulfill({
+        json: { id: 'promotion-queue-1', status: 'COMPLETED', result: {} },
+      });
+      return;
+    }
+
+    if (url.pathname === '/v1/geodata/imports/import-1') {
+      await route.fulfill({
+        json: { ...run, pendingCount: pendingCandidates.length },
+      });
+      return;
+    }
+
+    await route.fulfill({
+      json: { items: [], page: 1, total: 0, nextPage: null },
+    });
+  });
+
+  await page.goto('/geodata-imports');
+  await expect(page).toHaveURL(/\/login\?redirect=\/geodata-imports$/);
+  await page.getByLabel('Email').fill('geodata-importer@example.test');
+  await page.getByLabel('Password').fill('test-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/geodata-imports$/);
+
+  await page.getByLabel('Feature category').selectOption('SOTA');
+  await page.getByLabel('Source label').fill('Alpine manual source');
+  await page.getByLabel('Licence').fill('CC BY 4.0');
+  await page.getByLabel('Attribution').fill('Local mapping group');
+  await page.getByLabel('Source filename').fill('summits.geojson');
+  await page.getByLabel('Paste source document').fill(
+    JSON.stringify({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { name: 'Example summit to reject' },
+          geometry: { type: 'Point', coordinates: [7.2, 46.1] },
+        },
+        {
+          type: 'Feature',
+          properties: { name: 'Example summit to keep' },
+          geometry: { type: 'Point', coordinates: [7.3, 46.2] },
+        },
+      ],
+    }),
+  );
+  await page.getByRole('button', { name: 'Queue preprocessing' }).click();
+
+  await expect(
+    page.getByText('Dataset queued for preprocessing.'),
+  ).toBeVisible();
+  await expect(page.getByText('Review pre-processed records')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: firstFeature.name }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: secondFeature.name }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: firstFeature.name }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('PENDING');
+  await dialog.getByRole('button', { name: 'Reject entity' }).click();
+  await expect(dialog).toContainText(`Next item: ${secondFeature.name}.`);
+  await dialog.getByRole('button', { name: 'Promote to candidate' }).click();
+  await expect(dialog.getByRole('status')).toContainText(
+    'The last pending item in this import has been processed.',
+  );
+
+  expect(importRequests).toHaveLength(1);
+  expect(importRequests[0].key).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(importRequests[0].body).toMatchObject({
+    adapter: 'MANUAL',
+    format: 'GEOJSON',
+    entityTypes: ['SOTA'],
+    filename: 'summits.geojson',
+    content: expect.stringContaining('Example summit to reject'),
+    source: {
+      name: 'Alpine manual source',
+      license: 'CC BY 4.0',
+      attribution: 'Local mapping group',
+    },
+  });
+  expect(rejectionRequests).toHaveLength(1);
+  expect(rejectionRequests[0].key).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(rejectionRequests[0].body).toEqual({
+    candidateIds: ['candidate-1'],
+    validationStatus: 'REJECTED',
+    reviewerId: 'geodata-importer-1',
+  });
+  expect(promotionRequests).toHaveLength(1);
+  expect(promotionRequests[0].key).toMatch(/^[0-9a-f-]{36}$/i);
+  expect(promotionRequests[0].body).toEqual({
+    candidateIds: ['candidate-2'],
+    targetStatus: 'CANDIDATE',
+    processorId: 'geodata-importer-1',
+  });
+});

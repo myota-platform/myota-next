@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/myota-platform/myota/contracts/schemas/events/activity-activation-closed-v1.schema.json",
+  "title": "activity.activation.closed.v1 envelope v1",
+  "allOf": [
+    {
+      "$ref": "../event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "activity.activation.closed.v1"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "programmeSlug": {
+              "type": "string"
+            },
+            "entityId": {
+              "type": "string"
+            },
+            "entityType": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "jurisdiction": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "operatorId": {
+              "type": "string"
+            },
+            "operatorCallsign": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "startedAt": {
+              "type": "string"
+            },
+            "endedAt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "validityExpiresAt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "type": "string"
+            },
+            "location": {
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "programmeRules": {
+              "type": "object"
+            },
+            "ruleEvaluation": {
+              "type": "object"
+            },
+            "qsoCount": {
+              "type": "integer"
+            },
+            "uniqueCallsignCount": {
+              "type": "integer"
+            },
+            "uniqueEntityCount": {
+              "type": "integer"
+            },
+            "qsos": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": true
+              }
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "updatedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "programmeSlug",
+            "entityId",
+            "operatorId",
+            "startedAt",
+            "status",
+            "createdAt",
+            "updatedAt"
+          ],
+          "additionalProperties": true
+        }
+      }
+    }
+  ],
+  "x-payload-evidence": "source-derived-activity-callsite",
+  "x-data-classification": "personal"
+}

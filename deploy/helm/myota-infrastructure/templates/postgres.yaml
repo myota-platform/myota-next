@@ -1,0 +1,119 @@
+{{- range $owner, $config := .Values.databases }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-%s-postgres" (include "myota-infrastructure.name" $) $owner | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "myota-infrastructure.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $owner }}-database
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: {{ $owner }}-database
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ printf "%s-%s-postgres" (include "myota-infrastructure.name" $) $owner | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "myota-infrastructure.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $owner }}-database
+spec:
+  serviceName: {{ printf "%s-%s-postgres" (include "myota-infrastructure.name" $) $owner | trunc 63 | trimSuffix "-" }}
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ $owner }}-database
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/name: myota-infrastructure
+        app.kubernetes.io/component: {{ $owner }}-database
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgresql
+          image: {{ $config.image | quote }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          env:
+            - name: POSTGRES_DB
+              value: {{ $config.name | quote }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.postgresSecret }}
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.postgresSecret }}
+                  key: password
+            - name: MYOTA_APP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.postgresSecret }}
+                  key: app-password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgresql
+              containerPort: 5432
+              protocol: TCP
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml (default $.Values.resources $config.resources) | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d/020-create-app-role.sh
+              subPath: 020-create-app-role.sh
+              readOnly: true
+      volumes:
+        - name: initdb
+          configMap:
+            name: {{ printf "%s-postgres-init" (include "myota-infrastructure.name" $) }}
+            defaultMode: 0555
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if $.Values.storageClassName }}
+        storageClassName: {{ $.Values.storageClassName | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $config.storage | quote }}
+---
+{{- end }}

@@ -1,0 +1,11 @@
+FROM node:24-bookworm-slim
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+COPY contracts ./contracts
+COPY deploy/db/migrations ./deploy/db/migrations
+COPY tools ./tools
+COPY libs/platform/src/geodata-consumer-policy.ts ./libs/platform/src/geodata-consumer-policy.ts
+
+USER node

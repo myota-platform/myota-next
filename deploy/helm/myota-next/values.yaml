@@ -1,0 +1,351 @@
+environment: production
+buildVersion: ''
+imagePullPolicy: IfNotPresent
+jetstreamProvisioner:
+  enabled: false
+  confirmedCapacityReview: false
+  image: { repository: '', tag: '', digest: '' }
+  backoffLimit: 4
+  activeDeadlineSeconds: 1800
+  capacity:
+    eventsMaxBytes: ''
+    eventsMaxMessages: ''
+    eventsMaxMessageBytes: ''
+    activityWorkMaxAgeSeconds: ''
+    activityWorkMaxBytes: ''
+    activityWorkMaxMessages: ''
+    activityWorkMaxMessageBytes: ''
+    geodataWorkMaxAgeSeconds: ''
+    geodataWorkMaxBytes: ''
+    geodataWorkMaxMessages: ''
+    geodataWorkMaxMessageBytes: ''
+    emailWorkMaxAgeSeconds: ''
+    emailWorkMaxBytes: ''
+    emailWorkMaxMessages: ''
+    emailWorkMaxMessageBytes: ''
+geodataWorker:
+  maxAckPending:
+    preprocessing: ''
+    promotion: ''
+    deletion: ''
+    enrichment: ''
+  legacyConcurrency:
+    import: ''
+    deletion: ''
+    location: ''
+geodataImporter:
+  pollSeconds: 60
+  sourceAllowlist: []
+images:
+  gateway: { repository: '', tag: '', digest: '' }
+  identity: { repository: '', tag: '', digest: '' }
+  identity-maintenance: { repository: '', tag: '', digest: '' }
+  programmes: { repository: '', tag: '', digest: '' }
+  activity: { repository: '', tag: '', digest: '' }
+  activity-worker: { repository: '', tag: '', digest: '' }
+  activity-notifications: { repository: '', tag: '', digest: '' }
+  geodata: { repository: '', tag: '', digest: '' }
+  geodata-worker: { repository: '', tag: '', digest: '' }
+  geodata-importer: { repository: '', tag: '', digest: '' }
+  email-worker: { repository: '', tag: '', digest: '' }
+  outbox-worker: { repository: '', tag: '', digest: '' }
+  admin-web: { repository: '', tag: '', digest: '' }
+  participant-web: { repository: '', tag: '', digest: '' }
+migrations:
+  enabled: true
+  image: { repository: '', tag: '', digest: '' }
+  backoffLimit: 4
+  activeDeadlineSeconds: 1800
+secrets:
+  databaseUrls: myota-database-urls
+  databaseMigrations: myota-database-migration-urls
+  auth: myota-auth
+  objectStorage: myota-object-storage
+  smtp: myota-smtp
+  nats: myota-nats-credentials
+observe:
+  enabled: false
+  secretName: myota-observe
+  appKeyKey: app-key
+  appSecretKey: app-secret
+dependencies:
+  objectStorageEndpoint: http://myota-s3:8333
+  objectStoragePublicEndpoint: ''
+  activityUrl: ''
+  identityUrl: ''
+  programmesUrl: ''
+  geodataUrl: ''
+  clamavUrl: tcp://myota-clamav:3310
+  gatewayUpstream: ''
+  grafanaUpstream: grafana:3000
+  profileImageBucket: myota-user-profile-images
+  adifBucket: myota-adif
+  awardAssetBucket: myota-award-assets
+  awardSignatureBucket: myota-award-signatures
+  certificateBucket: myota-certificates
+  geodataImportBucket: myota-geodata-imports
+  smtp:
+    senderAddress: ''
+    senderDisplayName: MyOTA
+    host: ''
+    port: '587'
+    username: ''
+    tlsMode: starttls
+    timeoutSeconds: '10'
+components:
+  gateway:
+    enabled: true
+    app: gateway
+    replicas: 2
+    port: 8080
+    service: true
+    env:
+      PORT: '8080'
+      MYOTA_IDENTITY_URL: '{{ default (printf "http://%s-identity:8001" .Release.Name) .Values.dependencies.identityUrl }}'
+      MYOTA_PROGRAMMES_URL: '{{ default (printf "http://%s-programmes:8002" .Release.Name) .Values.dependencies.programmesUrl }}'
+      MYOTA_GEODATA_URL: '{{ default (printf "http://%s-geodata:8003" .Release.Name) .Values.dependencies.geodataUrl }}'
+      MYOTA_ACTIVITY_URL: '{{ default (printf "http://%s-activity:8004" .Release.Name) .Values.dependencies.activityUrl }}'
+      MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
+  identity:
+    enabled: true
+    app: identity
+    replicas: 2
+    port: 8001
+    service: true
+    env:
+      PORT: '8001'
+      CORE_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
+      MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
+      MYOTA_EMAIL_SERVICE_CLIENT_SECRET:
+        { secret: auth, key: email-service-client-secret }
+      MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'
+      MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: path
+      MYOTA_PROFILE_IMAGE_ACCESS_KEY:
+        { secret: objectStorage, key: profile-image-access-key }
+      MYOTA_PROFILE_IMAGE_SECRET_KEY:
+        { secret: objectStorage, key: profile-image-secret-key }
+      MYOTA_PROFILE_IMAGE_BUCKET: '{{ .Values.dependencies.profileImageBucket }}'
+      MYOTA_MAX_BODY_BYTES: '33554432'
+      MYOTA_BOOTSTRAP_ADMIN_EMAIL:
+        { secret: auth, key: bootstrap-email, optional: true }
+      MYOTA_BOOTSTRAP_ADMIN_PASSWORD:
+        { secret: auth, key: bootstrap-password, optional: true }
+  identity-maintenance:
+    enabled: true
+    app: identity-maintenance
+    replicas: 1
+    env:
+      CORE_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
+      MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'
+      MYOTA_OBJECT_STORAGE_ACCESS_KEY:
+        { secret: objectStorage, key: access-key }
+      MYOTA_OBJECT_STORAGE_SECRET_KEY:
+        { secret: objectStorage, key: secret-key }
+      MYOTA_PROFILE_IMAGE_ACCESS_KEY:
+        { secret: objectStorage, key: profile-image-access-key }
+      MYOTA_PROFILE_IMAGE_SECRET_KEY:
+        { secret: objectStorage, key: profile-image-secret-key }
+      MYOTA_PROFILE_IMAGE_BUCKET: '{{ .Values.dependencies.profileImageBucket }}'
+  programmes:
+    enabled: true
+    app: programmes
+    replicas: 2
+    port: 8002
+    service: true
+    env:
+      PORT: '8002'
+      CORE_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
+      MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
+  activity:
+    enabled: true
+    app: activity
+    replicas: 2
+    port: 8004
+    service: true
+    env:
+      PORT: '8004'
+      ACTIVITY_DATABASE_URL:
+        { secret: databaseUrls, key: activity-database-url }
+      MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
+      MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'
+      MYOTA_OBJECT_STORAGE_PUBLIC_ENDPOINT: '{{ default .Values.dependencies.objectStorageEndpoint .Values.dependencies.objectStoragePublicEndpoint }}'
+      MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: path
+      MYOTA_OBJECT_STORAGE_ACCESS_KEY:
+        { secret: objectStorage, key: access-key }
+      MYOTA_OBJECT_STORAGE_SECRET_KEY:
+        { secret: objectStorage, key: secret-key }
+      MYOTA_ADIF_BUCKET: '{{ .Values.dependencies.adifBucket }}'
+      MYOTA_MAX_BODY_BYTES: '41943040'
+      MYOTA_AWARD_ASSET_BUCKET: '{{ .Values.dependencies.awardAssetBucket }}'
+      MYOTA_AWARD_SIGNATURE_BUCKET: '{{ .Values.dependencies.awardSignatureBucket }}'
+      MYOTA_CERTIFICATE_BUCKET: '{{ .Values.dependencies.certificateBucket }}'
+  activity-worker:
+    enabled: true
+    app: activity-worker
+    replicas: 1
+    healthPort: 9112
+    terminationGracePeriodSeconds: 60
+    env:
+      ACTIVITY_DATABASE_URL:
+        { secret: databaseUrls, key: activity-database-url }
+      NATS_URL: { secret: nats, key: url }
+      MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'
+      MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: path
+      MYOTA_OBJECT_STORAGE_ACCESS_KEY:
+        { secret: objectStorage, key: access-key }
+      MYOTA_OBJECT_STORAGE_SECRET_KEY:
+        { secret: objectStorage, key: secret-key }
+      MYOTA_ADIF_BUCKET: '{{ .Values.dependencies.adifBucket }}'
+      MYOTA_CERTIFICATE_BUCKET: '{{ .Values.dependencies.certificateBucket }}'
+      MYOTA_CLAMAV_URL: '{{ .Values.dependencies.clamavUrl }}'
+      ACTIVITY_WORKER_HEALTH_PORT: '9112'
+  activity-notifications:
+    enabled: true
+    app: activity-notifications
+    replicas: 1
+    healthPort: 9110
+    env:
+      ACTIVITY_DATABASE_URL:
+        { secret: databaseUrls, key: activity-database-url }
+      NATS_URL: { secret: nats, key: url }
+      ACTIVITY_NOTIFICATION_METRICS_PORT: '9110'
+  geodata:
+    enabled: true
+    app: geodata
+    replicas: 2
+    port: 8003
+    service: true
+    legacyConcurrency:
+      upload: ''
+    env:
+      PORT: '8003'
+      GEO_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }
+      MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
+      MYOTA_ACTIVITY_URL: '{{ default (printf "http://%s-activity:8004" .Release.Name) .Values.dependencies.activityUrl }}'
+      MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'
+      MYOTA_OBJECT_STORAGE_PUBLIC_ENDPOINT: '{{ default .Values.dependencies.objectStorageEndpoint .Values.dependencies.objectStoragePublicEndpoint }}'
+      MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: path
+      MYOTA_OBJECT_STORAGE_ACCESS_KEY:
+        { secret: objectStorage, key: access-key }
+      MYOTA_OBJECT_STORAGE_SECRET_KEY:
+        { secret: objectStorage, key: secret-key }
+      MYOTA_GEODATA_IMPORT_BUCKET: '{{ .Values.dependencies.geodataImportBucket }}'
+      MYOTA_UPLOAD_WORKERS: '{{ .Values.components.geodata.legacyConcurrency.upload }}'
+      MYOTA_CLAMAV_URL: '{{ .Values.dependencies.clamavUrl }}'
+      MYOTA_MAX_BODY_BYTES: '1073741824'
+  geodata-worker:
+    enabled: true
+    app: geodata-worker
+    replicas: 1
+    healthPort: 9113
+    terminationGracePeriodSeconds: 60
+    env:
+      GEO_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }
+      NATS_URL: { secret: nats, key: url }
+      MYOTA_ACTIVITY_URL: '{{ default (printf "http://%s-activity:8004" .Release.Name) .Values.dependencies.activityUrl }}'
+      MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
+      MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'
+      MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: path
+      MYOTA_OBJECT_STORAGE_ACCESS_KEY:
+        { secret: objectStorage, key: access-key }
+      MYOTA_OBJECT_STORAGE_SECRET_KEY:
+        { secret: objectStorage, key: secret-key }
+      MYOTA_GEODATA_IMPORT_BUCKET: '{{ .Values.dependencies.geodataImportBucket }}'
+      MYOTA_CLAMAV_URL: '{{ .Values.dependencies.clamavUrl }}'
+      GEODATA_WORKER_HEALTH_PORT: '9113'
+  geodata-importer:
+    enabled: false
+    app: geodata-importer
+    replicas: 1
+    env:
+      GEODATA_IMPORTER_ENABLED: 'false'
+      GEODATA_IMPORTER_POLL_SECONDS: '{{ .Values.geodataImporter.pollSeconds }}'
+      GEODATA_SOURCE_ALLOWLIST: '{{ join "," .Values.geodataImporter.sourceAllowlist }}'
+      MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
+      MYOTA_GEODATA_URL: '{{ default (printf "http://%s-geodata:8003" .Release.Name) .Values.dependencies.geodataUrl }}'
+  email-worker:
+    enabled: false
+    app: email-worker
+    replicas: 1
+    healthPort: 9108
+    terminationGracePeriodSeconds: 75
+    env:
+      CORE_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
+      NATS_URL: { secret: nats, key: url }
+      MYOTA_IDENTITY_URL: '{{ default (printf "http://%s-identity:8001" .Release.Name) .Values.dependencies.identityUrl }}'
+      MYOTA_EMAIL_SERVICE_CLIENT_SECRET:
+        { secret: auth, key: email-service-client-secret }
+      EMAIL_SENDER_ADDRESS: '{{ .Values.dependencies.smtp.senderAddress }}'
+      EMAIL_SENDER_DISPLAY_NAME: '{{ .Values.dependencies.smtp.senderDisplayName }}'
+      EMAIL_SMTP_HOST: '{{ .Values.dependencies.smtp.host }}'
+      EMAIL_SMTP_PORT: '{{ .Values.dependencies.smtp.port }}'
+      EMAIL_SMTP_USERNAME: '{{ .Values.dependencies.smtp.username }}'
+      EMAIL_SMTP_PASSWORD: { secret: smtp, key: password }
+      EMAIL_SMTP_TLS_MODE: '{{ .Values.dependencies.smtp.tlsMode }}'
+      EMAIL_SMTP_TIMEOUT_SECONDS: '{{ .Values.dependencies.smtp.timeoutSeconds }}'
+      EMAIL_HEALTH_PORT: '9108'
+  outbox-core:
+    enabled: true
+    app: outbox-worker
+    replicas: 1
+    healthPort: 9108
+    env:
+      OUTBOX_OWNER: core
+      OUTBOX_WORKER: core-outbox
+      OUTBOX_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
+      NATS_URL: { secret: nats, key: url }
+      OUTBOX_METRICS_PORT: '9108'
+  outbox-activity:
+    enabled: true
+    app: outbox-worker
+    replicas: 1
+    healthPort: 9108
+    env:
+      OUTBOX_OWNER: activity
+      OUTBOX_WORKER: activity-outbox
+      OUTBOX_DATABASE_URL: { secret: databaseUrls, key: activity-database-url }
+      NATS_URL: { secret: nats, key: url }
+      OUTBOX_METRICS_PORT: '9108'
+  outbox-geodata:
+    enabled: true
+    app: outbox-worker
+    replicas: 1
+    healthPort: 9108
+    env:
+      OUTBOX_OWNER: geodata
+      OUTBOX_WORKER: geodata-outbox
+      OUTBOX_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }
+      NATS_URL: { secret: nats, key: url }
+      OUTBOX_METRICS_PORT: '9108'
+  admin-web:
+    enabled: true
+    app: admin-web
+    observe: false
+    replicas: 1
+    port: 8080
+    service: true
+    livenessPath: /
+    readinessPath: /
+    env:
+      MYOTA_GATEWAY_UPSTREAM: '{{ default (printf "%s-gateway:8080" .Release.Name) .Values.dependencies.gatewayUpstream }}'
+      MYOTA_GRAFANA_UPSTREAM: '{{ .Values.dependencies.grafanaUpstream }}'
+  participant-web:
+    enabled: true
+    app: participant-web
+    observe: false
+    replicas: 1
+    port: 8080
+    service: true
+    livenessPath: /
+    readinessPath: /
+    env: {}
+ingress:
+  enabled: false
+  className: ''
+  host: api.myota.top
+  adminHost: ''
+  participantHost: ''
+  tlsSecretName: ''
+commonResources:
+  requests: { cpu: 100m, memory: 128Mi }
+  limits: { cpu: '1', memory: 1Gi }

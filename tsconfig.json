@@ -1,0 +1,47 @@
+{
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolveJsonModule": true,
+    "resolvePackageJsonExports": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2023",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "strictPropertyInitialization": false,
+    "types": ["vitest/globals", "node"],
+    "paths": {
+      "@app/platform": ["./libs/platform/src/index.ts"],
+      "@app/platform/*": ["./libs/platform/src/*"],
+      "@app/geodata-domain": ["./libs/geodata-domain/src/index.ts"],
+      "@app/geodata-domain/*": ["./libs/geodata-domain/src/*"]
+    }
+  },
+  "files": [],
+  "references": [
+    { "path": "./apps/gateway/tsconfig.app.json" },
+    { "path": "./apps/identity/tsconfig.app.json" },
+    { "path": "./apps/identity-maintenance/tsconfig.app.json" },
+    { "path": "./apps/programmes/tsconfig.app.json" },
+    { "path": "./apps/activity/tsconfig.app.json" },
+    { "path": "./apps/geodata/tsconfig.app.json" },
+    { "path": "./apps/geodata-importer/tsconfig.app.json" },
+    { "path": "./apps/activity-worker/tsconfig.app.json" },
+    { "path": "./apps/activity-notifications/tsconfig.app.json" },
+    { "path": "./apps/geodata-worker/tsconfig.app.json" },
+    { "path": "./apps/email-worker/tsconfig.app.json" },
+    { "path": "./apps/outbox-worker/tsconfig.app.json" },
+    { "path": "./libs/platform/tsconfig.lib.json" },
+    { "path": "./libs/geodata-domain/tsconfig.lib.json" }
+  ]
+}

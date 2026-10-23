@@ -1,0 +1,71 @@
+{{- range $name, $component := .Values.components }}
+{{- if $component.enabled }}
+{{- $imageName := $component.app }}
+{{- $usesObserve := true }}
+{{- if hasKey $component "observe" }}
+{{- $usesObserve = $component.observe }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-%s" (include "myota-next.name" $) $name | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "myota-next.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  replicas: {{ default 1 $component.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/component: {{ $name }}
+        app.kubernetes.io/name: {{ include "myota-next.name" $ }}
+    spec:
+      terminationGracePeriodSeconds: {{ default 30 $component.terminationGracePeriodSeconds }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "myota-next.image" (dict "image" (index $.Values.images $imageName) "name" $imageName) | quote }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          {{- if $component.port }}
+          ports:
+            - name: http
+              containerPort: {{ $component.port }}
+              protocol: TCP
+          {{- else if $component.healthPort }}
+          ports:
+            - name: health
+              containerPort: {{ $component.healthPort }}
+              protocol: TCP
+          {{- end }}
+          env:
+            {{- include "myota-next.env" (dict "root" $ "env" $component.env "observe" (and $.Values.observe.enabled $usesObserve)) | nindent 12 }}
+            {{- if eq $name "geodata-worker" }}
+            {{- include "myota-next.geodata-worker-policy-env" $ | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml (default $.Values.commonResources $component.resources) | nindent 12 }}
+          {{- if or $component.port $component.healthPort }}
+          livenessProbe:
+            httpGet:
+              path: {{ default "/healthz" $component.livenessPath }}
+              port: {{ ternary "http" "health" (hasKey $component "port") }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: {{ default "/readyz" $component.readinessPath }}
+              port: {{ ternary "health" "http" (hasKey $component "healthPort") }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          {{- end }}
+---
+{{- end }}
+{{- end }}

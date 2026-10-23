@@ -1,0 +1,2425 @@
+openapi: 3.1.0
+info:
+  title: MyOTA Outdoor Activation Platform APIs
+  version: 1.0.0
+  description: >-
+    Service contracts for a programme-agnostic amateur-radio outdoor activation platform.
+    All platform operation times, publication effective dates, QSOs, audit events,
+    logs and observability use UTC. Canonical API date-times carry Z or an explicit
+    UTC offset; timezone-bearing inputs are normalized to UTC. Legacy unqualified
+    date-times are interpreted as UTC, never the server or browser local timezone.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: Identity
+  - name: Programmes
+  - name: Geodata
+  - name: Activity
+  - name: Awards
+paths:
+  /v1/identity/auth/register:
+    post:
+      tags: [Identity]
+      summary: Disabled until email verification and registration abuse controls are deployed
+      deprecated: true
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RegisterAccount' } } }
+      responses:
+        '403': { description: Public registration is not available }
+  /v1/identity/auth/login:
+    post:
+      tags: [Identity]
+      summary: Authenticate with email and password
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Login' } } }
+      responses: { '200': { description: Authenticated } }
+  /v1/identity/auth/refresh:
+    post:
+      tags: [Identity]
+      summary: Rotate a refresh token
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RefreshToken' } } }
+      responses: { '200': { description: Rotated session } }
+  /v1/identity/auth/logout:
+    post:
+      tags: [Identity]
+      summary: Revoke a session or access token
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/RefreshToken' } } }
+      responses: { '200': { description: Logged out } }
+  /v1/identity/auth/recovery/request:
+    post:
+      tags: [Identity]
+      summary: Request password recovery without disclosing account existence
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RecoveryRequest' } } }
+      responses: { '200': { description: Recovery request accepted } }
+  /v1/identity/auth/recovery/reset:
+    post:
+      tags: [Identity]
+      summary: Set a new password using a single-use recovery token
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RecoveryReset' } } }
+      responses: { '200': { description: Password reset } }
+  /v1/identity/me:
+    get:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Get the authenticated account and scopes
+      responses: { '200': { description: Authenticated account } }
+  /v1/identity/me/profile:
+    patch:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Update the authenticated account's private profile fields
+      operationId: patchIdentityProfile
+      description: >-
+        Only the authenticated account can update its own website and biography.
+        The biography is returned as Markdown source; clients must render a safe
+        Markdown subset, strip raw HTML, and sanitize links. Profile fields are
+        private by default and are not exposed through anonymous public reads.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountProfileUpdate' }
+      responses:
+        '200': { description: Updated profile fields }
+        '400': { description: Invalid profile fields }
+        '403': { description: Authentication is missing or the caller is not the account owner }
+  /v1/identity/me/profile-image:
+    get:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Read the authenticated account's private profile image
+      operationId: getIdentityProfileImage
+      description: Returns a normalized WebP image with private, no-store caching. No public or signed storage URL is issued.
+      responses:
+        '200':
+          description: Normalized private profile image
+          content: { image/webp: { schema: { type: string, format: binary } } }
+        '403': { description: Authentication is required }
+        '404': { description: No profile image is set }
+    put:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Upload or replace the authenticated account's profile image
+      operationId: putIdentityProfileImage
+      description: >-
+        Upload raw JPEG, PNG, or WebP bytes (not multipart). Identity validates
+        decoded content, rejects animation, SVG and unsafe dimensions, crops and
+        resizes to a square 512 by 512 WebP, strips metadata, and stores the
+        result in the private Identity profile-image bucket. Input is limited
+        to 5 MiB and 4096 by 4096 pixels; output is limited to 256 KiB. Reads
+        remain authenticated through this API; bucket names, object keys,
+        credentials, and permanent URLs are never returned.
+      requestBody:
+        required: true
+        content:
+          image/jpeg: { schema: { type: string, format: binary } }
+          image/png: { schema: { type: string, format: binary } }
+          image/webp: { schema: { type: string, format: binary } }
+      responses:
+        '200': { description: Profile image uploaded or replaced, including safe image metadata }
+        '400': { description: Malformed, animated, unsafe, or unsupported image content }
+        '403': { description: Authentication is required }
+        '413': { description: Input exceeds 5 MiB }
+    delete:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Remove the authenticated account's profile image
+      operationId: deleteIdentityProfileImage
+      responses:
+        '200': { description: Profile image reference cleared; object cleanup is retried by Identity maintenance }
+        '403': { description: Authentication is required }
+  /v1/identity/accounts/{accountId}/profile-image:
+    get:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Read an account profile image as the owner or an Identity administrator
+      operationId: getAccountProfileImage
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      description: Authenticated owner or Identity administrator only. Returns private, no-store WebP bytes; no public URL or storage credential is issued.
+      responses:
+        '200':
+          description: Normalized private profile image
+          content: { image/webp: { schema: { type: string, format: binary } } }
+        '403': { description: Caller is not the account owner or an Identity administrator }
+        '404': { description: Account or profile image not found }
+  /v1/identity/admin/accounts:
+    get:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: List accounts for global identity administrators
+      parameters:
+        - { in: query, name: q, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses: { '200': { description: Account page } }
+  /v1/identity/admin/roles:
+    get:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: List built-in and custom administrative roles and permissions
+      description: >-
+        Requires identity.admin, identity.accounts.create,
+        identity.roles.assign, or identity.roles.manage. Account creators use
+        this non-personal role catalogue to show only roles they may grant.
+      responses:
+        '200': { description: Role catalogue }
+        '403': { description: Missing role-catalogue access }
+    post:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Create a custom administrative role
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AdminRoleDefinition' } } }
+      responses: { '201': { description: Created role definition } }
+  /v1/identity/roles:
+    post:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Create a custom administrative role
+      operationId: createIdentityRole
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AdminRoleDefinition' } } }
+      responses: { '201': { description: Created role definition } }
+  /v1/identity/admin/security-events:
+    get:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: List security events for global identity administrators
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses: { '200': { description: Security-event page } }
+  /v1/identity/accounts:
+    post:
+      tags: [Identity]
+      summary: Create a participant account; role grants require separate authority
+      operationId: createAccount
+      security: [{ bearerAuth: [] }]
+      description: >-
+        Requires identity.accounts.create. Every new account receives the
+        participant role and remains pending credential setup. This operation
+        does not send an invitation; invitation delivery and credential setup
+        are not available yet. Clients must show the pending setup state and
+        must not claim that an invitation was sent. Supplying any additional
+        role requires identity.roles.assign and each granted role must be
+        strictly below the actor's current authority. Permanent passwords and
+        client-supplied permission scopes are not accepted. Repeating a request
+        with the same Idempotency-Key replays the original result; a duplicate
+        email without a prior idempotent result is rejected.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAccount' }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } }
+        '400': { description: Invalid account data or duplicate email address }
+        '401': { description: Missing or invalid authentication }
+        '403': { description: Missing account-create or role-grant authority }
+  /v1/identity/accounts/{accountId}/callsigns:
+    post:
+      tags: [Identity]
+      summary: Add and optionally verify a callsign
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddCallsign' }
+      responses:
+        '201': { description: Created }
+  /v1/identity/accounts/{accountId}/callsigns/{callsignId}/evidence:
+    post:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Submit callsign verification evidence
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/CallsignId'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CallsignEvidence' } } }
+      responses: { '201': { description: Evidence submitted } }
+  /v1/identity/accounts/{accountId}/callsigns/{callsignId}/verify:
+    post:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Verify callsign evidence using the callsign.verify scope
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/CallsignId'
+      responses: { '200': { description: Callsign verified } }
+  /v1/identity/accounts/{accountId}/roles:
+    get:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      responses: { '200': { description: Account roles } }
+  /v1/identity/accounts/{accountId}/export:
+    get:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      responses: { '200': { description: Personal data export } }
+  /v1/programmes:
+    get:
+      tags: [Programmes]
+      summary: List configured programmes
+      responses:
+        '200': { description: Programme list }
+    post:
+      tags: [Programmes]
+      summary: Create a programme configuration
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Programme' }
+      responses: { '201': { description: Created } }
+  /v1/programmes/{slug}/policy:
+    get:
+      tags: [Programmes]
+      summary: Get the effective programme policy version
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Effective programme policy }
+  /v1/entity-types:
+    get:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: List shared entity category master data
+      responses: { '200': { description: Shared entity category catalogue } }
+    post:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: Create or update a shared entity category definition
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/EntityType' } } }
+      responses: { '200': { description: Updated category }, '201': { description: Created category } }
+  /v1/programmes/{slug}/entity-types:
+    get:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: List entity categories assigned to the programme
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }]
+      responses: { '200': { description: Entity category catalogue } }
+    post:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: Legacy category upsert and assignment compatibility endpoint
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/EntityType' } } }
+      responses: { '200': { description: Updated category }, '201': { description: Created category } }
+  /v1/geodata/entities:
+    get:
+      tags: [Geodata]
+      summary: List verified and candidate entities
+      parameters:
+        - in: query
+          name: programme
+          schema: { type: string }
+        - in: query
+          name: status
+          description: Repeat or comma-separate values for a multi-status filter; omit for all statuses.
+          style: form
+          explode: true
+          schema: { type: array, items: { type: string, enum: [CANDIDATE, APPROVED, RETIRED, REJECTED] } }
+        - { in: query, name: entityType, schema: { type: string } }
+        - { in: query, name: continent, schema: { type: string } }
+        - { in: query, name: country, schema: { type: string } }
+        - { in: query, name: region, description: Provider-derived first subdivision / region name., schema: { type: string } }
+        - { in: query, name: province, schema: { type: string } }
+        - { in: query, name: city, description: Matches either city or municipality., schema: { type: string } }
+        - { in: query, name: minLon, schema: { type: number, format: double } }
+        - { in: query, name: minLat, schema: { type: number, format: double } }
+        - { in: query, name: maxLon, schema: { type: number, format: double } }
+        - { in: query, name: maxLat, schema: { type: number, format: double } }
+        - { in: query, name: bbox, description: Preferred map filter as minLon,minLat,maxLon,maxLat. Takes precedence over legacy individual bounds when supplied., schema: { type: string, pattern: '^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$' } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Entity list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/GeoEntity' }
+                  total: { type: integer }
+                  page: { type: integer }
+                  pageSize: { type: integer }
+                  nextPage: { type: integer, nullable: true }
+  /v1/geodata/imports:
+    get:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: List geodata import runs
+      responses: { '200': { description: Import runs } }
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Create a geodata import resource and queue candidate preprocessing
+      description: Accepts a JSON feature collection or text document, a multipart upload, or a durable object-storage reference. All sources enter the preprocessing queue before promotion.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { oneOf: [{ $ref: '#/components/schemas/GeoImport' }, { $ref: '#/components/schemas/GeoImportObjectReference' }] } }
+          multipart/form-data: { schema: { $ref: '#/components/schemas/GeoImportMultipart' } }
+      responses: { '202': { description: Import accepted } }
+  /v1/geodata/imports/{runId}:
+    get:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Get geodata import status and summary
+      parameters:
+        - { in: path, name: runId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Import status, processing counts, source manifest, and errors
+          content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportRun' } } }
+        '404': { description: Import run not found }
+  /v1/geodata/imports/{runId}/cancellation:
+    put:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Cancel a queued upload or request cancellation of active preprocessing
+      description: Idempotently creates the cancellation resource for an import run. QUEUED and UPLOAD_PENDING runs become CANCELLED immediately; PROCESSING runs become CANCELLING and stop at a worker checkpoint. Preprocessed runs cannot be cancelled because review begins at that point. Cancellation removes staged records and temporary source bytes.
+      parameters:
+        - { in: path, name: runId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Import cancelled, or cancellation was already complete
+          content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportRun' } } }
+        '202':
+          description: Cancellation requested; the worker will stop at a safe checkpoint
+          content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportRun' } } }
+        '400': { description: Import has passed the preprocessing stage or cannot be cancelled }
+        '404': { description: Import run not found }
+  /v1/geodata/imports/{runId}/candidates:
+    get:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: List the paged pre-processed records for an import run
+      description: Pre-processed records are not entities yet. They remain invisible to the entity catalogue until confirmed and promoted.
+      parameters:
+        - { in: path, name: runId, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Paged pending pre-processed import records; confirmed, rejected, and processed staging records are omitted
+          content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportCandidatePage' } } }
+  /v1/geodata/imports/{runId}/candidates/validate:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Confirm or reject selected pre-processed records for promotion
+      parameters:
+        - { in: path, name: runId, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportCandidateValidation' } } }
+      responses: { '200': { description: Selected records confirmed or rejected; rejected records are deleted from staging } }
+  /v1/geodata/imports/{runId}/process:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Queue selected records for entity promotion
+      description: The request is published to the geodata import processing subject. Pending or previously confirmed records may be selected. The target is explicitly CANDIDATE or APPROVED.
+      parameters:
+        - { in: path, name: runId, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportProcessingRequest' } } }
+      responses:
+        '202':
+          description: Promotion queue accepted
+          content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportProcessingQueue' } } }
+  /v1/geodata/imports/{runId}/processing-queues/{queueId}:
+    get:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Read the outcome of an import promotion queue
+      description: Returns terminal state and per-candidate outcomes for a queue belonging to this import run. Failed candidates may be retried through the process operation after the failed result is observed.
+      parameters:
+        - { in: path, name: runId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: queueId, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Current promotion queue state and candidate outcomes
+          content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportProcessingQueue' } } }
+        '403': { description: geodata.import scope required }
+        '404': { description: Queue not found for this import run }
+  /v1/geodata/imports/{runId}/processed:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Finalize an import and discard staged records
+      description: Idempotently removes the run's pre-processed candidate and promotion-queue rows while preserving the import summary and any already materialized entities.
+      parameters:
+        - { in: path, name: runId, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportFinalization' } } }
+      responses:
+        '200':
+          description: Import finalized and staged records discarded
+          content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportRun' } } }
+  /v1/geodata/load-test-runs/{testRunId}:
+    delete:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Clean up a tagged geodata load-test run
+      description: Available only when cleanup is explicitly enabled in a declared environment. Production additionally requires a separate production-cleanup acknowledgement. Requires a bearer token with GLOBAL_ADMIN or GLOBAL_OPERATOR role and exact confirmation. Removes only tagged import runs, their candidates and queues, uploaded source objects, and entities created by those runs. Refuses active runs, objects outside the geodata import bucket, and entities with QSO, activation, or award-progress impact.
+      operationId: deleteGeodataLoadTestRun
+      parameters:
+        - { in: path, name: testRunId, required: true, schema: { type: string, pattern: '^lt-[A-Za-z0-9._-]{1,77}$', maxLength: 80 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmation]
+              properties:
+                confirmation: { type: string, description: Must exactly equal `DELETE LOAD TEST DATA <testRunId>`. }
+      responses:
+        '200':
+          description: Tagged test fixtures and source objects removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [testRunId, importsDeleted, entitiesDeleted, objectsDeleted, uploadSessionsDeleted, cleaned]
+                properties:
+                  testRunId: { type: string }
+                  importsDeleted: { type: integer, minimum: 0 }
+                  entitiesDeleted: { type: integer, minimum: 0 }
+                  objectsDeleted: { type: integer, minimum: 0 }
+                  uploadSessionsDeleted: { type: integer, minimum: 0 }
+                  cleaned: { type: boolean, const: true }
+        '400': { description: Invalid test-run identifier, confirmation mismatch, active run or queue, protected activity impact, or unsafe object scope }
+        '403': { description: Cleanup disabled, production acknowledgement missing, missing bearer credentials, or caller is not a global administrator }
+  /v1/geodata/import-uploads:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Create a restart-safe resumable geodata upload
+      description: Creates an owner-bound upload session backed by SeaweedFS S3 multipart storage. Upload in bounded parts, then explicitly complete. Abandoned sessions expire after 24 hours.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportUploadSessionCreate' } } }
+      responses:
+        '201': { description: Upload session created, content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportUploadSession' } } } }
+        '400': { description: Invalid metadata or size }
+        '403': { description: geodata.import scope required }
+  /v1/geodata/import-uploads/{uploadId}:
+    get:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Inspect an owned upload session and its received parts
+      parameters: [{ in: path, name: uploadId, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Current upload progress, content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportUploadSessionProgress' } } } }, '404': { description: Session not found for this user } }
+    delete:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Abort an owned incomplete upload session
+      parameters: [{ in: path, name: uploadId, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Multipart parts aborted and session closed } }
+  /v1/geodata/import-uploads/{uploadId}/parts/{partNumber}:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Upload or retry one bounded binary part
+      parameters:
+        - { in: path, name: uploadId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: partNumber, required: true, schema: { type: integer, minimum: 1, maximum: 10000 } }
+        - { in: header, name: X-Part-SHA256, required: false, schema: { type: string, pattern: '^[a-fA-F0-9]{64}$' } }
+      requestBody:
+        required: true
+        content: { application/octet-stream: { schema: { type: string, format: binary } } }
+      responses: { '200': { description: Part stored idempotently }, '400': { description: Part too large or checksum mismatch }, '404': { description: Session not found } }
+  /v1/geodata/import-uploads/{uploadId}/complete:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Verify and complete an upload, then durably enqueue preprocessing
+      parameters: [{ in: path, name: uploadId, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false } } }
+      responses: { '202': { description: Object verified and import run created; preprocessing is asynchronous } }
+  /v1/geodata/location-options:
+    get:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: List provider-derived location hierarchy options
+      description: Values are aggregated from stored BigDataCloud reverse-geocoding responses; this endpoint does not issue remote lookups.
+      responses:
+        '200':
+          description: Searchable continent, country, subdivision, and province hierarchy
+          content: { application/json: { schema: { $ref: '#/components/schemas/LocationOptions' } } }
+  /v1/activations/entity-deletion-impacts/{entityId}:
+    get:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Read the activity impact of deleting an entity
+      operationId: getEntityDeletionImpact
+      parameters: [{ $ref: '#/components/parameters/EntityId' }]
+      responses: { '200': { description: QSO and award impact } }
+  /v1/activations/entity-deletion-cascades:
+    post:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Create the activity cascade for an approved geodata deletion job
+      operationId: cascadeEntityDeletion
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entityId, deletedBy]
+              properties:
+                entityId: { type: string, format: uuid }
+                deletedBy: { type: string }
+      responses: { '200': { description: QSO cascade and award recalculation result } }
+  /v1/activations:
+    get:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: List activations for authorised operators and administrators
+      parameters:
+        - in: query
+          name: programme
+          schema: { type: string }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses: { '200': { description: Activation page } }
+    post:
+      tags: [Activity]
+      summary: Start an activation
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Activation' } } }
+      responses: { '201': { description: Created } }
+  /v1/activations/{activationId}:
+    get:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Get an activation and its normalized QSOs
+      parameters: [{ $ref: '#/components/parameters/ActivationId' }]
+      responses: { '200': { description: Activation } }
+    patch:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Update an activation lifecycle state
+      operationId: patchActivation
+      parameters: [{ $ref: '#/components/parameters/ActivationId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ActivationClose' } } }
+      responses: { '200': { description: Activation closed with the stored rule evaluation snapshot } }
+  /v1/activations/{activationId}/qsos:
+    post:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Record a normalized QSO for an open activation
+      parameters: [{ $ref: '#/components/parameters/ActivationId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Qso' } } }
+      responses: { '201': { description: QSO recorded } }
+  /v1/awards:
+    get:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: List programme-owned award definitions
+      parameters:
+        - { in: query, name: programme, schema: { type: string } }
+        - { in: query, name: category, schema: { type: string, enum: [HUNTER, ACTIVATOR] } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses: { '200': { description: Award definition page } }
+    post:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Save a draft programme-owned award definition
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AwardDefinition' } } }
+      responses: { '201': { description: Draft award created } }
+  /v1/awards/{awardId}:
+    get:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Get an award definition
+      parameters: [{ $ref: '#/components/parameters/AwardId' }]
+      responses: { '200': { description: Award definition } }
+    patch:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Update an award or advance its draft lifecycle
+      operationId: patchAward
+      parameters: [{ $ref: '#/components/parameters/AwardId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true, description: Set status to UNDER_REVIEW, APPROVED, CHANGES_REQUESTED, PUBLISHED, or RETIRED to invoke the corresponding lifecycle transition. } } }
+      responses: { '200': { description: Award updated or lifecycle transition recorded } }
+  /v1/awards/{awardId}/submit:
+    post:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      deprecated: true
+      summary: Submit an award definition for review
+      parameters: [{ $ref: '#/components/parameters/AwardId' }]
+      responses: { '200': { description: Award submitted } }
+  /v1/awards/{awardId}/review:
+    post:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      deprecated: true
+      summary: Approve or return an award definition for changes
+      parameters: [{ $ref: '#/components/parameters/AwardId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AwardReview' } } }
+      responses: { '200': { description: Review recorded } }
+  /v1/awards/{awardId}/publish:
+    post:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      deprecated: true
+      summary: Publish an approved award with an effective date
+      parameters: [{ $ref: '#/components/parameters/AwardId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AwardPublication' } } }
+      responses: { '200': { description: Award published } }
+  /v1/awards/assets:
+    get:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: List registered background and signature assets
+      responses: { '200': { description: Asset page } }
+    post:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Register an image asset stored in S3-compatible object storage
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AwardAsset' } } }
+      responses: { '201': { description: Asset registered } }
+  /v1/awards/assets/{assetId}/content:
+    get:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      operationId: getAwardAssetContent
+      summary: Read bounded registered PNG/JPEG content for authenticated design
+      parameters: [{ $ref: '#/components/parameters/AssetId' }]
+      responses:
+        '200':
+          description: Image content and server-owned metadata
+          content: { application/json: { schema: { $ref: '#/components/schemas/AwardAssetContent' } } }
+    put:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      operationId: putAwardAssetContent
+      summary: Store and validate registered PNG/JPEG artwork through the API
+      parameters: [{ $ref: '#/components/parameters/AssetId' }]
+      requestBody:
+        required: true
+        content:
+          image/png: { schema: { type: string, format: binary } }
+          image/jpeg: { schema: { type: string, format: binary } }
+      responses:
+        '200': { description: Stored asset metadata with actual image dimensions }
+        '400': { description: Invalid image, over 20 MiB, or over 16 million pixels }
+  /v1/awards/previews:
+    post:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      operationId: createAwardPreview
+      summary: Render an unsaved certificate design with mock data without issuance or storage
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AwardPreviewRequest' } } }
+      responses:
+        '200':
+          description: Ephemeral PDF preview; no award, request, issuance or object is created
+          content: { application/json: { schema: { $ref: '#/components/schemas/AwardPreview' } } }
+        '400': { description: Invalid layout, missing asset content or unsupported print specification }
+        '429': { description: One preview is already rendering in this API pod; retry shortly }
+  /v1/awards/evaluation-jobs:
+    post:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Queue award condition evaluation
+      operationId: createAwardEvaluationJob
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AwardEvaluationJobRequest' } } }
+      responses: { '202': { description: Evaluation queued for background processing } }
+  /v1/awards/evaluation-jobs/{jobId}:
+    get:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Get award evaluation job status
+      operationId: getAwardEvaluationJob
+      parameters: [{ in: path, name: jobId, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Evaluation job status and retry information } }
+  /v1/awards/progress:
+    get:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Get award progress for a participant
+      operationId: getAwardProgress
+      parameters:
+        - { in: query, name: awardId, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: participantId, required: true, schema: { type: string, format: uuid } }
+      responses: { '200': { description: Progress and eligible levels } }
+  /v1/awards/requests:
+    get:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: List award requests
+      parameters:
+        - { in: query, name: subjectId, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses: { '200': { description: Award request page } }
+    post:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Request an eligible award level
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AwardRequest' } } }
+      responses: { '201': { description: Award request created } }
+  /v1/awards/requests/{requestId}/issuances:
+    post:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Create a permanent award issuance
+      operationId: createAwardIssuance
+      parameters: [{ $ref: '#/components/parameters/RequestId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AwardIssuanceRequest' } } }
+      responses: { '201': { description: Award issuance created } }
+  /v1/awards/issuances:
+    get:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: List permanent award issuance records
+      responses: { '200': { description: Award issuance page } }
+  /v1/awards/issuances/{issuanceId}/render-jobs:
+    post:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Queue certificate rendering
+      operationId: createCertificateRenderJob
+      parameters: [{ $ref: '#/components/parameters/IssuanceId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '202': { description: Certificate rendering queued } }
+  /v1/awards/issuances/{issuanceId}/render-jobs/{jobId}:
+    get:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Get certificate render job status
+      operationId: getCertificateRenderJob
+      parameters: [{ $ref: '#/components/parameters/IssuanceId' }, { in: path, name: jobId, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Render job status and retry information } }
+  /v1/awards/issuances/{issuanceId}/artifact:
+    get:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Get the issued certificate artifact
+      operationId: getAwardArtifact
+      parameters: [{ $ref: '#/components/parameters/IssuanceId' }]
+      responses: { '200': { description: Presigned certificate artifact URL } }
+  /v1/identity/auth/service-token:
+    post:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }, {}]
+      summary: Issue a service token for an authorised service integration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServiceTokenRequest' }
+      responses:
+        '200': { description: Five-minute service token issued }
+        '400': { description: Invalid service token request }
+        '403': { description: Invalid service client credentials or unauthorized issuer }
+  /v1/identity/internal/email-recipients/{accountId}:
+    get:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Resolve a deliverable email address for the email service
+      description: >-
+        Internal service-to-service route. Only an `email-service` token with
+        the fixed `identity.email.resolve` scope and Identity audience is
+        accepted. The public Gateway rejects `/v1/identity/internal/` paths.
+        Only active accounts are eligible. Missing, pending-setup, deactivated,
+        and unaddressable accounts share the same 404.
+        Returns only the deliverable address; no account object or profile
+        fields are returned. The address must not be logged or placed in NATS.
+      operationId: getEmailRecipientAddress
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      responses:
+        '200':
+          description: Current deliverable address for this account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailRecipientAddress' }
+        '401': { description: Service authentication required }
+        '403': { description: Email recipient resolution scope required }
+        '404': { description: Recipient is unavailable }
+  /v1/identity/accounts/{accountId}:
+    get:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Get an account by identifier
+      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      responses: { '200': { description: Account } }
+    patch:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Partially update an account and optionally replace its active administrative roles
+      operationId: patchIdentityAccount
+      parameters: [{ $ref: '#/components/parameters/AccountId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: { type: string }
+                email: { type: string, format: email, nullable: true }
+                participationType: { type: string, enum: [OPERATOR, SWL] }
+                status: { type: string, enum: [ACTIVE, DEACTIVATED] }
+                websiteUrl: { type: [string, 'null'], maxLength: 2048, format: uri, pattern: '^[Hh][Tt][Tt][Pp][Ss]?://' }
+                biographyMarkdown: { type: [string, 'null'], maxLength: 2000 }
+                anonymize: { type: boolean, description: Anonymize and revoke sessions when status is DEACTIVATED }
+                password: { type: string, minLength: 12, writeOnly: true }
+                roles: { type: array, items: { $ref: '#/components/schemas/RoleGrant' } }
+      responses: { '200': { description: Updated account and active roles } }
+  /v1/identity/roles/{roleCode}:
+    patch:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Partially update a custom administrative role
+      operationId: patchIdentityRole
+      parameters:
+        - in: path
+          name: roleCode
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AdminRoleDefinition' } } }
+      responses: { '200': { description: Updated role definition } }
+  /v1/identity/accounts/{accountId}/role-assignments:
+    put:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Replace an account's active administrative role assignments
+      operationId: replaceAccountRoleAssignments
+      parameters: [{ $ref: '#/components/parameters/AccountId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roles]
+              properties:
+                roles:
+                  type: array
+                  items: { $ref: '#/components/schemas/RoleGrant' }
+      responses: { '200': { description: Updated account and active roles } }
+  /v1/identity/accounts/{accountId}/primary-callsign:
+    put:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Replace an account's primary callsign
+      operationId: setPrimaryCallsign
+      parameters: [{ $ref: '#/components/parameters/AccountId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [callsignId], properties: { callsignId: { type: string, format: uuid } } } } }
+      responses: { '200': { description: Primary callsign changed } }
+  /v1/identity/accounts/{accountId}/callsigns/{callsignId}/retire:
+    post:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Retire a callsign association
+      parameters: [{ $ref: '#/components/parameters/AccountId' }, { $ref: '#/components/parameters/CallsignId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { description: Callsign retired } }
+  /v1/identity/oidc/providers:
+    post:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Register or update programme-scoped OIDC provider mapping
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses: { '200': { description: OIDC mapping saved } }
+  /v1/programmes/{slug}:
+    get:
+      tags: [Programmes]
+      summary: Get a programme configuration
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }]
+      responses: { '200': { description: Programme } }
+    patch:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: Partially update a programme configuration or archive it
+      operationId: patchProgramme
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProgrammeUpdate' } } }
+      responses: { '200': { description: Updated or archived programme } }
+  /v1/programmes/{slug}/entity-types/{categoryCode}:
+    put:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: Idempotently assign an entity category to a programme
+      operationId: assignProgrammeEntityCategory
+      parameters:
+        - { in: path, name: slug, required: true, schema: { type: string } }
+        - { in: path, name: categoryCode, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses: { '200': { description: Updated programme assignments } }
+    delete:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: Idempotently remove an entity category from a programme
+      operationId: unassignProgrammeEntityCategory
+      parameters:
+        - { in: path, name: slug, required: true, schema: { type: string } }
+        - { in: path, name: categoryCode, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses: { '200': { description: Updated programme assignments } }
+  /v1/programmes/{slug}/content:
+    get:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: List programme-owned content versions
+      parameters:
+        - { in: path, name: slug, required: true, schema: { type: string } }
+        - { in: query, name: locale, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses: { '200': { description: Content version page } }
+    post:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: Create or update a draft content version
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses: { '200': { description: Draft saved } }
+  /v1/programmes/{slug}/content/coverage:
+    get:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: Report programme content locale coverage
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }]
+      responses: { '200': { description: Locale coverage report } }
+  /v1/programmes/{slug}/content/{contentId}/submit:
+    post:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      deprecated: true
+      summary: Submit content for review
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: contentId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { description: Content submitted } }
+  /v1/programmes/{slug}/content/{contentId}/review:
+    post:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      deprecated: true
+      summary: Review programme content
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: contentId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses: { '200': { description: Content review recorded } }
+  /v1/programmes/{slug}/content/{contentId}/publish:
+    post:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      deprecated: true
+      summary: Publish programme content
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: contentId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { description: Content published } }
+  /v1/programmes/{slug}/content/{contentId}:
+    patch:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: Update content or advance its draft lifecycle
+      operationId: patchProgrammeContent
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: contentId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true, description: Set status to UNDER_REVIEW, APPROVED, CHANGES_REQUESTED, or PUBLISHED to invoke the corresponding lifecycle transition. } } }
+      responses: { '200': { description: Content updated or lifecycle transition recorded } }
+  /v1/programmes/{slug}/policy-drafts:
+    get:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: List programme policy drafts
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' }]
+      responses: { '200': { description: Policy draft page } }
+    post:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: Create or update a programme policy draft
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses: { '200': { description: Policy draft saved } }
+  /v1/programmes/{slug}/policy-drafts/{draftId}/submit:
+    post:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      deprecated: true
+      summary: Submit a policy draft for review
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { description: Policy draft submitted } }
+  /v1/programmes/{slug}/policy-drafts/{draftId}/review:
+    post:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      deprecated: true
+      summary: Review a policy draft
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses: { '200': { description: Policy review recorded } }
+  /v1/programmes/{slug}/policy-drafts/{draftId}/publish:
+    post:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      deprecated: true
+      summary: Publish a policy draft
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { description: Policy draft published } }
+  /v1/programmes/{slug}/policy-drafts/{draftId}:
+    patch:
+      tags: [Programmes]
+      security: [{ bearerAuth: [] }]
+      summary: Update a policy draft or advance its lifecycle
+      operationId: patchProgrammePolicyDraft
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true, description: Set status to UNDER_REVIEW, APPROVED, CHANGES_REQUESTED, or PUBLISHED to invoke the corresponding lifecycle transition. } } }
+      responses: { '200': { description: Policy draft updated or lifecycle transition recorded } }
+  /v1/geodata/adapters:
+    get:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: List supported geodata import adapters and formats
+      responses: { '200': { description: Adapter catalogue } }
+  /v1/geodata/entities/{entityId}:
+    get:
+      tags: [Geodata]
+      summary: Get a geodata entity
+      parameters: [{ $ref: '#/components/parameters/EntityId' }]
+      responses: { '409': { description: Stale version or conflicting concurrent update }, '200': { description: Geodata entity } }
+    patch:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Update editable entity metadata
+      operationId: patchGeodataEntityMetadata
+      parameters: [{ $ref: '#/components/parameters/EntityId' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GeodataEntityMetadataPatch' } } }
+      responses: { '200': { description: Metadata updated and audited } }
+  /v1/geodata/entities/{entityId}/audit:
+    get:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Get entity review, geometry, and lifecycle audit context
+      parameters: [{ $ref: '#/components/parameters/EntityId' }]
+      responses: { '200': { description: Entity audit history } }
+  /v1/geodata/entities/{entityId}/location-enrichment-requests:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Queue reverse-geocoding for missing entity location metadata
+      description: Creates an auditable asynchronous request for the entity's current geometry. Provider values never overwrite manually managed location fields. A stale geometry result is discarded.
+      operationId: postGeodataEntityLocationEnrichmentRequest
+      parameters: [{ $ref: '#/components/parameters/EntityId' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/LocationEnrichmentRequest' } } }
+      responses:
+        '202':
+          description: Reverse-geocoding request committed to the durable geodata outbox
+          content: { application/json: { schema: { $ref: '#/components/schemas/LocationEnrichmentReceipt' } } }
+        '403': { description: GIS location-management permission required }
+        '409': { description: Location metadata is complete or the entity version is stale }
+  /v1/geodata/tiles/{z}/{x}/{y}:
+    get:
+      tags: [Geodata]
+      summary: Get a vector tile for geodata display
+      parameters:
+        - { in: path, name: z, required: true, schema: { type: integer } }
+        - { in: path, name: x, required: true, schema: { type: integer } }
+        - { in: path, name: y, required: true, schema: { type: integer } }
+      responses: { '200': { description: Vector tile } }
+  /v1/geodata/refresh-schedules:
+    get:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: List geodata refresh schedules
+      responses: { '200': { description: Refresh schedule page } }
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Create a geodata refresh schedule
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses: { '201': { description: Refresh schedule created } }
+  /v1/geodata/refresh-schedules/{scheduleId}/run:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Run a geodata refresh schedule
+      parameters: [{ in: path, name: scheduleId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '202': { description: Refresh run queued } }
+  /v1/geodata/conflation:
+    get:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: List open geodata conflation candidates
+      responses: { '200': { description: Conflation candidate page } }
+  /v1/geodata/conflation/{candidateId}/resolve:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Resolve a geodata conflation candidate
+      parameters: [{ in: path, name: candidateId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses: { '200': { description: Conflation decision recorded } }
+  /v1/geodata/proposals:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Create a candidate proposal
+      operationId: postGeodataProposal
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GeodataProposal' } } }
+      responses: { '201': { description: Candidate proposal created } }
+  /v1/geodata/entities/{entityId}/geometry:
+    put:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Replace an entity geometry with validated GeoJSON
+      operationId: putGeodataEntityGeometry
+      parameters: [{ $ref: '#/components/parameters/EntityId' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [geometry, editorId], properties: { geometry: { type: object }, editorId: { type: string }, note: { type: string } } } } }
+      responses: { '409': { description: Stale version or conflicting concurrent update }, '200': { description: Geometry replaced and audited } }
+  /v1/geodata/entities/{entityId}/categories:
+    put:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Replace an entity's shared category assignments
+      operationId: putGeodataEntityCategories
+      parameters: [{ $ref: '#/components/parameters/EntityId' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GeodataEntityCategoriesPut' } } }
+      responses: { '409': { description: Stale version or conflicting concurrent update }, '200': { description: Categories replaced and audited } }
+  /v1/geodata/entities/{entityId}/reviews:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Record an entity lifecycle review decision
+      operationId: postGeodataEntityReview
+      parameters: [{ $ref: '#/components/parameters/EntityId' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GeodataEntityReview' } } }
+      responses: { '409': { description: Stale version or conflicting concurrent update }, '200': { description: Review decision recorded and audited } }
+  /v1/geodata/entity-deletion-jobs:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Create an entity deletion impact and confirmation job
+      operationId: createGeodataEntityDeletionJob
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GeodataEntityDeletionJobRequest' } } }
+      responses: { '201': { description: Impact calculated; explicit confirmation required } }
+  /v1/geodata/entity-deletion-jobs/{jobId}:
+    get:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Get an entity deletion job
+      operationId: getGeodataEntityDeletionJob
+      parameters: [{ in: path, name: jobId, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Deletion impact, confirmation, and execution status } }
+  /v1/geodata/entity-deletion-jobs/{jobId}/confirm:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Confirm and queue entity deletion
+      operationId: confirmGeodataEntityDeletionJob
+      parameters: [{ in: path, name: jobId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GeodataEntityDeletionConfirmation' } } }
+      responses: { '202': { description: Deletion queued; QSOs and derived award progress are recalculated by activity service } }
+  /v1/qso-ingestions:
+    post:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Queue a high-volume normalized QSO ingestion
+      operationId: createQsoIngestion
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/QsoIngestionRequest' } } }
+      responses: { '202': { description: Ingestion queued for COPY-based processing } }
+  /v1/qso-ingestions/{ingestionId}:
+    get:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Get QSO ingestion job status
+      operationId: getQsoIngestion
+      parameters: [{ in: path, name: ingestionId, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Ingestion job state and retry information } }
+  /v1/adif/imports/{importId}:
+    get:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Get ADIF import status
+      parameters: [{ in: path, name: importId, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: ADIF import status } }
+  /v1/qsos/{qsoId}/corrections:
+    post:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Request a QSO correction
+      parameters: [{ in: path, name: qsoId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses: { '201': { description: Correction request created } }
+  /v1/qsos/{qsoId}/corrections/{correctionId}/review:
+    post:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Review a QSO correction under its QSO resource
+      operationId: reviewQsoCorrection
+      parameters: [{ in: path, name: qsoId, required: true, schema: { type: string, format: uuid } }, { in: path, name: correctionId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/QsoCorrectionReview' } } }
+      responses: { '200': { description: Correction decision recorded } }
+  /v1/public/activations:
+    get:
+      tags: [Activity]
+      summary: List public activation history
+      parameters: [{ in: query, name: programme, schema: { type: string } }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' }]
+      responses: { '200': { description: Public activation page } }
+  /v1/public/leaderboards:
+    get:
+      tags: [Activity]
+      summary: List public programme leaderboards
+      parameters: [{ in: query, name: programme, required: true, schema: { type: string } }, { in: query, name: category, required: true, schema: { type: string } }]
+      responses: { '200': { description: Public leaderboard } }
+  /v1/public/results:
+    get:
+      tags: [Activity]
+      summary: Download public activation results
+      parameters: [{ in: query, name: programme, schema: { type: string } }, { in: query, name: format, schema: { type: string, enum: [json, csv] } }]
+      responses: { '200': { description: Public results document } }
+  /v1/statistics/rebuild-jobs:
+    post:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Create a reproducible activity statistics rebuild job
+      operationId: createStatisticsRebuildJob
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { programmeSlug: { type: string, nullable: true } } } } }
+      responses: { '202': { description: Statistics rebuild queued } }
+  /v1/statistics/rebuild-jobs/{jobId}:
+    get:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Get statistics rebuild job status
+      operationId: getStatisticsRebuildJob
+      parameters: [{ in: path, name: jobId, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Rebuild status, attempts, and retry error } }
+  /v1/statistics:
+    get:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: List precomputed activity statistics
+      parameters: [{ in: query, name: programme, schema: { type: string } }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' }]
+      responses: { '200': { description: Statistics page } }
+  /v1/notifications:
+    get:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: List notifications for the authenticated account
+      parameters: [{ in: query, name: recipientId, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' }]
+      responses: { '200': { description: Notification page } }
+  /v1/awards/{awardId}/recalculation-jobs:
+    post:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Queue historical award progress recalculation
+      operationId: createAwardRecalculationJob
+      parameters: [{ $ref: '#/components/parameters/AwardId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { subjectIds: { type: array, items: { type: string, format: uuid } } } } } }
+      responses: { '202': { description: Award recalculation queued } }
+  /v1/awards/{awardId}/recalculation-jobs/{jobId}:
+    get:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Get award recalculation job status
+      operationId: getAwardRecalculationJob
+      parameters: [{ $ref: '#/components/parameters/AwardId' }, { in: path, name: jobId, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Recalculation status and retry information } }
+  /v1/awards/{awardId}/retire:
+    post:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      deprecated: true
+      summary: Retire an award definition
+      parameters: [{ $ref: '#/components/parameters/AwardId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '200': { description: Award retired } }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IfMatch:
+      in: header
+      name: If-Match
+      required: false
+      description: Quoted entity version from a previous GET or catalogue response. A stale version returns HTTP 409; reload and reconcile rather than retrying blindly.
+      schema: { type: string, pattern: '^"[0-9]+"$' }
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      schema: { type: string, maxLength: 128 }
+    AccountId:
+      in: path
+      name: accountId
+      required: true
+      schema: { type: string, format: uuid }
+    EntityId:
+      in: path
+      name: entityId
+      required: true
+      schema: { type: string, format: uuid }
+    ActivationId:
+      in: path
+      name: activationId
+      required: true
+      schema: { type: string, format: uuid }
+    CallsignId:
+      in: path
+      name: callsignId
+      required: true
+      schema: { type: string, format: uuid }
+    AwardId:
+      in: path
+      name: awardId
+      required: true
+      schema: { type: string, format: uuid }
+    RequestId:
+      in: path
+      name: requestId
+      required: true
+      schema: { type: string, format: uuid }
+    AssetId:
+      in: path
+      name: assetId
+      required: true
+      schema: { type: string, format: uuid }
+    IssuanceId:
+      in: path
+      name: issuanceId
+      required: true
+      schema: { type: string, format: uuid }
+    Page:
+      in: query
+      name: page
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      in: query
+      name: pageSize
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+  schemas:
+    ServiceTokenRequest:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [service, clientSecret]
+          properties:
+            service: { const: email-service }
+            clientSecret: { type: string, minLength: 32, writeOnly: true }
+          description: Email service client-credentials flow; scope is fixed by Identity.
+        - type: object
+          additionalProperties: false
+          required: [service, scopes]
+          properties:
+            service: { type: string, minLength: 1, maxLength: 80, not: { const: email-service } }
+            scopes: { type: array, items: { type: string }, uniqueItems: true }
+          description: Administrative service-token issuance; requires identity.service.issue.
+    EmailRecipientAddress:
+      type: object
+      additionalProperties: false
+      required: [deliverableAddress]
+      properties:
+        deliverableAddress: { type: string, format: email, maxLength: 254 }
+    JetStreamConsumer:
+      type: object
+      required: [name, filterSubjects, pending, ackPending, redelivered, oldestMessageAgeSeconds]
+      properties:
+        name: { type: string }
+        durable: { type: [string, 'null'] }
+        filterSubjects: { type: array, items: { type: string } }
+        pending: { type: integer, minimum: 0 }
+        ackPending: { type: integer, minimum: 0 }
+        redelivered: { type: integer, minimum: 0, description: Current broker num_redelivered value; not a cumulative lifetime total. }
+        waiting: { type: integer }
+        ackPolicy: { type: string }
+        ackWaitSeconds: { type: number }
+        maxAckPending: { type: integer }
+        maxDeliver: { type: integer }
+        deliveredSequence: { type: integer }
+        ackFloorSequence: { type: integer }
+        oldestMessageAgeSeconds: { type: [number, 'null'], description: Null if the referenced message timestamp cannot be verified. }
+    JetStreamStream:
+      type: object
+      required: [name, subjects, messages, bytes, consumers]
+      properties:
+        name: { type: string }
+        subjects: { type: array, items: { type: string } }
+        messages: { type: integer }
+        bytes: { type: integer }
+        firstSequence: { type: integer }
+        lastSequence: { type: integer }
+        consumerCount: { type: integer }
+        consumersTruncated: { type: boolean }
+        storage: { type: string }
+        retention: { type: string }
+        consumers: { type: array, items: { $ref: '#/components/schemas/JetStreamConsumer' } }
+    JetStreamSnapshot:
+      type: object
+      required: [id, capturedAt, status, streams, errors, pollSeconds, historyRetentionDays]
+      properties:
+        id: { type: string }
+        capturedAt: { type: string, format: date-time }
+        sampledAt: { type: string, format: date-time }
+        status: { type: string, enum: [HEALTHY, PARTIAL, UNAVAILABLE] }
+        stale: { type: boolean }
+        streamsTruncated: { type: boolean }
+        pollSeconds: { type: integer }
+        historyRetentionDays: { type: integer }
+        errors: { type: array, items: { type: string } }
+        streams: { type: array, items: { $ref: '#/components/schemas/JetStreamStream' } }
+    Account:
+      type: object
+      required: [id, displayName, participationType, status]
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string }
+        email: { type: string, format: email, nullable: true }
+        participationType: { type: string, enum: [OPERATOR, SWL] }
+        status: { type: string, enum: [PENDING_SETUP, ACTIVE, DEACTIVATED] }
+        websiteUrl: { type: [string, 'null'], maxLength: 2048, format: uri, pattern: '^[Hh][Tt][Tt][Pp][Ss]?://', description: Optional personal website. Only HTTP and HTTPS are accepted; embedded credentials are rejected. }
+        biographyMarkdown: { type: [string, 'null'], maxLength: 2000, description: Optional Markdown source. Clients must strip raw HTML and sanitize rendered output. }
+        profileImage:
+          anyOf:
+            - { $ref: '#/components/schemas/ProfileImageMetadata' }
+            - { type: 'null' }
+        callsigns: { type: array, items: { type: object } }
+        roles: { type: array, items: { $ref: '#/components/schemas/RoleAssignment' } }
+        scopes:
+          type: array
+          description: Effective permissions resolved by Identity for the account.
+          items: { type: string }
+    AccountProfileUpdate:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      description: Send null or an empty string to clear a field; omitted fields are unchanged.
+      properties:
+        websiteUrl: { type: [string, 'null'], maxLength: 2048, format: uri, pattern: '^[Hh][Tt][Tt][Pp][Ss]?://', description: Only HTTP and HTTPS are accepted; embedded credentials are rejected. }
+        biographyMarkdown: { type: [string, 'null'], maxLength: 2000, description: Markdown source; raw HTML must be stripped during rendering. }
+    ProfileImageMetadata:
+      type: object
+      additionalProperties: false
+      required: [id, contentType, width, height, updatedAt]
+      description: Server-managed opaque profile-image reference and safe rendition metadata; no bucket, object key, or URL is exposed.
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        contentType: { type: string, const: image/webp }
+        width: { type: integer, const: 512 }
+        height: { type: integer, const: 512 }
+        updatedAt: { type: string, format: date-time }
+    RegisterAccount:
+      type: object
+      required: [displayName, email, password, participationType]
+      additionalProperties: false
+      properties:
+        displayName: { type: string, minLength: 1 }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 12, format: password, writeOnly: true }
+        participationType: { type: string, enum: [OPERATOR, SWL] }
+    Login:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+    RefreshToken:
+      type: object
+      required: [refreshToken]
+      properties: { refreshToken: { type: string } }
+    RecoveryRequest:
+      type: object
+      required: [email]
+      properties: { email: { type: string, format: email } }
+    RecoveryReset:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token: { type: string }
+        newPassword: { type: string, minLength: 12, format: password }
+    CallsignEvidence:
+      type: object
+      required: [evidenceType, source]
+      properties:
+        evidenceType: { type: string }
+        source: { type: string }
+        checksum: { type: string }
+        metadata: { type: object }
+    RoleAssignment:
+      type: object
+      required: [id, accountId, role, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        role: { type: string }
+        scopes: { type: array, items: { type: string } }
+        programmeSlug: { type: string }
+        jurisdiction: { type: string }
+        entityType: { type: string }
+        createdAt: { type: string, format: date-time }
+        validTo: { type: string, format: date-time, nullable: true }
+    RoleGrant:
+      type: object
+      required: [role]
+      additionalProperties: false
+      properties:
+        role: { type: string, pattern: '^[A-Z][A-Z0-9_]*$' }
+        programmeSlug: { type: string }
+        jurisdiction: { type: string }
+        entityType: { type: string }
+    AdminRoleDefinition:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, pattern: '^[A-Z][A-Z0-9_]*$' }
+        name: { type: string }
+        description: { type: string }
+        scopes: { type: array, uniqueItems: true, items: { type: string } }
+    CreateAccount:
+      type: object
+      required: [displayName, email, participationType]
+      additionalProperties: false
+      properties:
+        displayName: { type: string, minLength: 1 }
+        email: { type: string, format: email }
+        participationType: { type: string, enum: [OPERATOR, SWL] }
+        callsign: { type: string, description: Optional initial callsign for an operator }
+        roles:
+          type: array
+          description: Optional additional role grants; requires identity.roles.assign and strict lower authority.
+          items: { $ref: '#/components/schemas/RoleGrant' }
+    AddCallsign:
+      type: object
+      required: [callsign]
+      properties:
+        callsign: { type: string }
+        status: { type: string, enum: [UNVERIFIED, VERIFIED, RETIRED] }
+        source: { type: string }
+    Programme:
+      type: object
+      required: [slug, name, entityTypes, rules]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        entityTypes: { type: array, items: { type: object } }
+        rules: { type: object }
+        theme: { type: object }
+        oidc: { type: object, nullable: true }
+    EntityType:
+      type: object
+      required: [code, label, geometryTypes]
+      properties:
+        code: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$', description: Stable shared category code; it cannot be renamed. }
+        originalCode: { type: string }
+        label: { type: string }
+        geometry: { type: string, enum: [POINT, LINESTRING, MULTILINESTRING, POLYGON, MULTIPOLYGON], deprecated: true, description: Legacy single geometry value; use geometryTypes. }
+        geometryTypes: { type: array, minItems: 1, uniqueItems: true, items: { type: string, enum: [POINT, LINESTRING, MULTILINESTRING, POLYGON, MULTIPOLYGON] }, description: GeoJSON geometry types accepted by this category. }
+        description: { type: string }
+        active: { type: boolean, default: true }
+    EntityTypeAssignment:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$', description: Shared category code to assign or unassign. }
+    EntityTypeChange:
+      type: object
+      required: [entityTypes, editorId]
+      properties:
+        entityTypes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' }
+        entityTypeCodes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' }
+        entityType: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' }
+        editorId: { type: string }
+        note: { type: string }
+    EntityNameChange:
+      type: object
+      required: [name, editorId]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 240 }
+        editorId: { type: string }
+        note: { type: string }
+    ProgrammeUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        entityTypes: { type: array, items: { type: object } }
+        rules: { type: object }
+        theme: { type: object }
+        oidc: { type: object, nullable: true }
+    GeoImport:
+      type: object
+      required: [adapter, source, entityTypes]
+      properties:
+        programmeSlug: { type: string, nullable: true, description: Legacy optional scope; omit for a platform-wide import. }
+        adapter: { type: string, enum: [PARKSERVE_US, OSM, GOVERNMENT_GIS, MANUAL] }
+        format: { type: string, enum: [GEOJSON, KML, GPX, WFS, SHAPEFILE, SHP, ARCGIS_FEATURESERVER, OSM_PBF, PARKSERVE_US] }
+        entityTypes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: Shared Master data category codes; imports are pre-processed first and require administrator promotion to CANDIDATE or APPROVED. The first code is the primary compatibility entityType.
+          items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' }
+        entityTypeCodes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: Compatibility alias for entityTypes.
+          items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' }
+        entityType: { type: string, deprecated: true, description: Deprecated single-category compatibility input; use entityTypes. }
+        source: { type: object }
+        features: { type: array, items: { type: object } }
+        content: { type: string }
+        filename: { type: string }
+    GeoImportUpload:
+      type: object
+      required: [adapter, source, entityTypes, filename, contentBase64]
+      properties:
+        programmeSlug: { type: string, nullable: true, description: Legacy optional scope; omit for a platform-wide import. }
+        adapter: { type: string, enum: [PARKSERVE_US, OSM, GOVERNMENT_GIS, MANUAL] }
+        format: { type: string, enum: [GEOJSON, KML, GPX, WFS, SHAPEFILE, SHP, ARCGIS_FEATURESERVER, OSM_PBF, PARKSERVE_US] }
+        entityTypes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: Shared Master data category codes; imports are programme-independent and enter the durable pre-processing queue before promotion.
+          items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' }
+        entityTypeCodes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: Compatibility alias for entityTypes.
+          items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' }
+        entityType: { type: string, deprecated: true, description: Deprecated single-category compatibility input; use entityTypes. }
+        source: { type: object }
+        filename: { type: string }
+        contentBase64: { type: string, format: byte }
+    GeoImportUploadSessionCreate:
+      type: object
+      required: [adapter, source, entityTypes, filename, expectedSize]
+      properties:
+        adapter: { type: string, enum: [PARKSERVE_US, OSM, GOVERNMENT_GIS, MANUAL] }
+        format: { type: string, enum: [GEOJSON, KML, GPX, WFS, SHAPEFILE, SHP, ARCGIS_FEATURESERVER, OSM_PBF, PARKSERVE_US] }
+        entityTypes: { type: array, minItems: 1, uniqueItems: true, items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' } }
+        filename: { type: string, minLength: 1 }
+        expectedSize: { type: integer, minimum: 1, maximum: 1073741824 }
+        sha256: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
+        source: { type: object }
+    GeoImportUploadSession:
+      type: object
+      required: [uploadId, status, partSizeBytes, expiresInSeconds]
+      properties:
+        uploadId: { type: string, format: uuid }
+        status: { type: string, enum: [UPLOADING, COMPLETING, COMPLETED, ABORTED, EXPIRED, FAILED] }
+        partSizeBytes: { type: integer }
+        expiresInSeconds: { type: integer }
+    GeoImportUploadSessionProgress:
+      type: object
+      required: [uploadId, status, filename, expectedSize, parts]
+      properties:
+        uploadId: { type: string, format: uuid }
+        status: { type: string }
+        filename: { type: string }
+        expectedSize: { type: integer }
+        parts: { type: array, items: { type: object, required: [partNumber, sizeBytes, sha256], properties: { partNumber: { type: integer }, sizeBytes: { type: integer }, sha256: { type: string } } } }
+    GeoImportObjectReference:
+      type: object
+      required: [adapter, source, entityTypes, filename]
+      properties:
+        programmeSlug: { type: string, nullable: true }
+        adapter: { type: string, enum: [PARKSERVE_US, OSM, GOVERNMENT_GIS, MANUAL] }
+        format: { type: string, enum: [GEOJSON, KML, GPX, WFS, SHAPEFILE, SHP, ARCGIS_FEATURESERVER, OSM_PBF, PARKSERVE_US] }
+        entityTypes: { type: array, minItems: 1, uniqueItems: true, items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' } }
+        filename: { type: string }
+        source:
+          type: object
+          required: [objectKey]
+          properties:
+            bucket: { type: string }
+            objectKey: { type: string }
+            sha256: { type: string }
+            license: { type: string }
+            attribution: { type: string }
+    GeoImportMultipart:
+      type: object
+      required: [adapter, source, entityTypes, file]
+      properties:
+        adapter: { type: string, enum: [PARKSERVE_US, OSM, GOVERNMENT_GIS, MANUAL] }
+        format: { type: string, enum: [GEOJSON, KML, GPX, WFS, SHAPEFILE, SHP, ARCGIS_FEATURESERVER, OSM_PBF, PARKSERVE_US] }
+        entityTypes: { type: array, minItems: 1, uniqueItems: true, items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' } }
+        source: { type: object, additionalProperties: true }
+        file: { type: string, format: binary }
+    GeodataProposal:
+      type: object
+      required: [feature]
+      properties:
+        feature:
+          type: object
+          description: GeoJSON Feature containing proposed geometry and properties.
+          properties:
+            properties:
+              type: object
+              properties:
+                website: { type: [string, 'null'], maxLength: 2048, format: uri, pattern: '^https?://' }
+                description: { type: [string, 'null'], maxLength: 2000, description: Plain-text entity description; clients render as text, never HTML. }
+              additionalProperties: true
+        source: { type: object, additionalProperties: true }
+        entityTypes: { type: array, minItems: 1, uniqueItems: true, items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' } }
+        proposerId: { type: string }
+    GeoImportRun:
+      type: object
+      required: [id, status, adapter, format, entityTypes]
+      properties:
+        id: { type: string, format: uuid }
+        programmeSlug: { type: string, nullable: true }
+        adapter: { type: string }
+        format: { type: string }
+        filename: { type: string, nullable: true }
+        entityType: { type: string, description: Primary compatibility category code }
+        entityTypes: { type: array, items: { type: string } }
+        source: { type: object, additionalProperties: true }
+        status: { type: string, enum: [UPLOAD_PENDING, QUEUED, PROCESSING, CANCELLING, CANCELLED, PREPROCESSED, PREPROCESSED_WITH_ERRORS, COMPLETED, COMPLETED_WITH_ERRORS, FAILED, PROCESSED] }
+        queuedAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        featureCount: { type: integer, nullable: true }
+        stats: { type: object, additionalProperties: { type: integer } }
+        manifest: { type: object, nullable: true, additionalProperties: true }
+        errors: { type: array, items: { type: object, additionalProperties: true } }
+        candidateCounts: { type: object, additionalProperties: { type: integer } }
+        processedAt: { type: string, format: date-time, nullable: true }
+        processedBy: { type: string, nullable: true }
+        cancellationRequestedAt: { type: string, format: date-time, nullable: true }
+        cancellationRequestedBy: { type: string, nullable: true }
+    GeoImportCandidate:
+      type: object
+      required: [id, importRunId, ordinal, name, geometry, validationStatus]
+      properties:
+        id: { type: string, format: uuid }
+        importRunId: { type: string, format: uuid }
+        ordinal: { type: integer, minimum: 0 }
+        existingEntityId: { type: string, format: uuid, nullable: true }
+        name: { type: string }
+        entityTypes: { type: array, items: { type: string } }
+        geometry: { type: object, additionalProperties: true }
+        centroid: { type: object, additionalProperties: true }
+        sourceRef: { type: string, nullable: true }
+        candidateSource: { type: object, additionalProperties: true }
+        dedupeWarning: { type: string, enum: [POSSIBLE_DUPLICATE], nullable: true, description: Present when an existing entity has identical geometry or is within 50 metres. }
+        possibleDuplicates: { type: array, items: { $ref: '#/components/schemas/GeoImportDuplicate' } }
+        validationStatus: { type: string, enum: [PENDING, CONFIRMED, REJECTED, PROCESSED] }
+        validationNote: { type: string, nullable: true }
+        validatedBy: { type: string, nullable: true }
+        validatedAt: { type: string, format: date-time, nullable: true }
+        targetStatus: { type: string, enum: [CANDIDATE, APPROVED], nullable: true }
+        processedEntityId: { type: string, format: uuid, nullable: true }
+        processedAt: { type: string, format: date-time, nullable: true }
+        location: { type: object, additionalProperties: true }
+    GeoImportDuplicate:
+      type: object
+      required: [entityId, name, geometry, distanceMeters, matchType]
+      properties:
+        entityId: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string, nullable: true }
+        entityTypes: { type: array, items: { type: string } }
+        geometry: { type: object, additionalProperties: true }
+        centroid: { type: object, additionalProperties: true }
+        distanceMeters: { type: number, format: double, minimum: 0, maximum: 50 }
+        matchType: { type: string, enum: [IDENTICAL_GEOMETRY, WITHIN_50_METERS] }
+    GeoImportCandidatePage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/GeoImportCandidate' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        nextPage: { type: integer, nullable: true }
+    GeoImportCandidateValidation:
+      type: object
+      required: [candidateIds, reviewerId]
+      properties:
+        candidateIds: { type: array, minItems: 1, items: { type: string, format: uuid } }
+        reviewerId: { type: string }
+        validationStatus: { type: string, enum: [VALID, REJECTED], default: VALID, description: VALID confirms records for later promotion; REJECTED removes them from the import staging queue. }
+        note: { type: string }
+    GeoImportProcessingRequest:
+      type: object
+      required: [candidateIds, targetStatus, processorId]
+      properties:
+        candidateIds: { type: array, minItems: 1, items: { type: string, format: uuid } }
+        targetStatus: { type: string, enum: [CANDIDATE, APPROVED] }
+        processorId: { type: string }
+        note: { type: string }
+    GeoImportFinalization:
+      type: object
+      required: [processedBy]
+      properties:
+        processedBy: { type: string, description: Account or administrator identifier that finalized the run. }
+        actor: { type: string, description: Compatibility alias for processedBy. }
+    GeoImportProcessingQueue:
+      type: object
+      required: [id, importRunId, candidateIds, targetStatus, status]
+      properties:
+        id: { type: string, format: uuid }
+        importRunId: { type: string, format: uuid }
+        candidateIds: { type: array, items: { type: string, format: uuid } }
+        targetStatus: { type: string, enum: [CANDIDATE, APPROVED] }
+        requestedBy: { type: string }
+        status: { type: string, enum: [QUEUED, PROCESSING, COMPLETED, FAILED] }
+        requestedAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        result:
+          type: object
+          properties:
+            created: { type: array, items: { type: string, format: uuid } }
+            updated: { type: array, items: { type: string, format: uuid } }
+            errors:
+              type: array
+              items:
+                type: object
+                required: [candidateId, message]
+                properties:
+                  candidateId: { type: string, format: uuid }
+                  message: { type: string }
+          additionalProperties: true
+        error: { type: string, nullable: true }
+    GeoEntity:
+      type: object
+      required: [id, name, status, geometry]
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1, readOnly: true, description: Database revision for optimistic concurrency; also returned as ETag on entity responses. }
+        programmeSlug: { type: string, nullable: true, description: Optional programme eligibility assignment. }
+        entityType: { type: string }
+        entityTypes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' }
+        entityTypeCodes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' }
+        name: { type: string }
+        website: { type: [string, 'null'], maxLength: 2048, format: uri, pattern: '^https?://', description: Optional absolute HTTP or HTTPS URL. }
+        description: { type: [string, 'null'], maxLength: 2000, description: Optional plain-text description. }
+        status: { type: string, enum: [CANDIDATE, APPROVED, REJECTED, RETIRED] }
+        candidateSource:
+          type: object
+          required: [type]
+          properties:
+            type: { type: string, enum: [ADAPTER_IMPORT, COMMUNITY_PROPOSAL] }
+            adapter: { type: string, nullable: true }
+            importRunId: { type: string, format: uuid, nullable: true }
+            proposalId: { type: string, format: uuid, nullable: true }
+            proposerId: { type: string, nullable: true }
+            sourceKey: { type: string, nullable: true }
+            sourceRef: { type: string, nullable: true }
+        geometry: { type: object, additionalProperties: true, description: GeoJSON geometry. Ways use type LineString; the import API also accepts the non-standard geometry type alias way and normalizes it to LineString. }
+        centroid: { type: object, additionalProperties: true }
+        maidenheadGridSquares4:
+          type: array
+          readOnly: true
+          uniqueItems: true
+          items: { type: string, pattern: '^[A-R]{2}[0-9]{2}$' }
+          description: Sorted grid squares at four-character Maidenhead precision intersected by the entity geometry.
+        maidenheadLocators6:
+          type: array
+          readOnly: true
+          uniqueItems: true
+          items: { type: string, pattern: '^[A-R]{2}[0-9]{2}[a-x]{2}$' }
+          description: Sorted locators at six-character Maidenhead precision intersected by the entity geometry.
+        continent: { type: string, nullable: true }
+        continentCode: { type: string, nullable: true, description: ISO-style continent code from the geocoder }
+        country: { type: string, nullable: true }
+        countryCode: { type: string, nullable: true, description: ISO 3166-1 country code }
+        region: { type: string, nullable: true, description: First administrative subdivision after the country }
+        regionCode: { type: string, nullable: true, description: ISO 3166-2 code for the first subdivision after the country }
+        subdivision: { type: string, nullable: true }
+        subdivisionCode: { type: string, nullable: true }
+        province: { type: string, nullable: true }
+        provinceCode: { type: string, nullable: true }
+        county: { type: string, nullable: true }
+        countyCode: { type: string, nullable: true }
+        city: { type: string, nullable: true, description: City or municipality }
+        municipality: { type: string, nullable: true }
+        locality: { type: string, nullable: true }
+        manualLocationFields: { type: array, items: { type: string }, description: Fields explicitly maintained by an administrator }
+        geocodeProvider: { type: string, nullable: true }
+        geocodeStatus: { type: string, enum: [ENRICHED, SOURCE_DATA, FAILED, NOT_CONFIGURED, SKIPPED_NO_CENTROID], nullable: true }
+        geocodedAt: { type: string, format: date-time, nullable: true }
+        locationEnrichmentStatus: { type: string, enum: [QUEUED, COMPLETED, FAILED], nullable: true, readOnly: true }
+        locationEnrichmentRequestedAt: { type: string, format: date-time, nullable: true, readOnly: true }
+        locationEnrichmentCompletedAt: { type: string, format: date-time, nullable: true, readOnly: true }
+        provenance: { type: object, additionalProperties: true }
+    GeodataEntityMetadataPatch:
+      type: object
+      required: [editorId]
+      minProperties: 2
+      description: Omitted fields are unchanged. Website and description accept null or empty string to clear their stored value.
+      properties:
+        editorId: { type: string }
+        name: { type: string, minLength: 1, maxLength: 240 }
+        website: { type: [string, 'null'], maxLength: 2048, format: uri, pattern: '^https?://', description: Send null or an empty string to clear. Omission preserves the stored value. }
+        description: { type: [string, 'null'], maxLength: 2000, description: Plain text only; send null or an empty string to clear. Omission preserves the stored value. }
+        location: { $ref: '#/components/schemas/LocationMetadata' }
+        manualFields: { type: array, items: { type: string } }
+        note: { type: string }
+    LocationEnrichmentRequest:
+      type: object
+      required: [editorId]
+      additionalProperties: false
+      properties:
+        editorId: { type: string }
+    LocationEnrichmentReceipt:
+      type: object
+      required: [entityId, requestId, status, missingFields, queued]
+      properties:
+        entityId: { type: string, format: uuid }
+        requestId: { type: string, format: uuid }
+        status: { type: string, enum: [QUEUED] }
+        missingFields: { type: array, items: { type: string } }
+        queued: { type: boolean, const: true }
+    GeodataEntityCategoriesPut:
+      type: object
+      required: [entityTypes, editorId]
+      properties:
+        entityTypes: { type: array, minItems: 1, uniqueItems: true, items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' } }
+        editorId: { type: string }
+        note: { type: string }
+    GeodataEntityReview:
+      type: object
+      required: [status, reviewerId]
+      properties:
+        status: { type: string, enum: [CANDIDATE, APPROVED, RETIRED, REJECTED] }
+        decision: { type: string, deprecated: true }
+        reviewerId: { type: string }
+        note: { type: string }
+    GeodataEntityDeletionJobRequest:
+      type: object
+      required: [entityId, requestedBy]
+      properties:
+        entityId: { type: string, format: uuid }
+        requestedBy: { type: string }
+    GeodataEntityDeletionConfirmation:
+      type: object
+      required: [confirmation, deletedBy]
+      properties:
+        confirmation: { type: string, enum: [DELETE] }
+        deletedBy: { type: string }
+    LocationMetadata:
+      type: object
+      additionalProperties: false
+      properties:
+        continent: { type: string, nullable: true }
+        continentCode: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        countryCode: { type: string, nullable: true }
+        region: { type: string, nullable: true }
+        regionCode: { type: string, nullable: true }
+        subdivision: { type: string, nullable: true }
+        subdivisionCode: { type: string, nullable: true }
+        province: { type: string, nullable: true }
+        provinceCode: { type: string, nullable: true }
+        county: { type: string, nullable: true }
+        countyCode: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        municipality: { type: string, nullable: true }
+        locality: { type: string, nullable: true }
+    LocationOptions:
+      type: object
+      required: [provider, continents]
+      properties:
+        provider: { type: string, example: BIGDATACLOUD }
+        codeStandards: { type: object, additionalProperties: { type: string } }
+        continents:
+          type: array
+          items:
+            type: object
+            required: [name, countries]
+            properties:
+              name: { type: string }
+              code: { type: string, nullable: true }
+              countries:
+                type: array
+                items:
+                  type: object
+                  required: [name, subdivisions]
+                  properties:
+                    name: { type: string }
+                    code: { type: string, nullable: true }
+                    subdivisions:
+                      type: array
+                      items:
+                        type: object
+                        required: [name, provinces]
+                        properties:
+                          name: { type: string }
+                          code: { type: string, nullable: true }
+                          provinces:
+                            type: array
+                            items:
+                              type: object
+                              required: [name]
+                              properties:
+                                name: { type: string }
+                                code: { type: string, nullable: true }
+    LocationMetadataEdit:
+      type: object
+      required: [location, editorId]
+      properties:
+        location:
+          allOf:
+            - $ref: '#/components/schemas/LocationMetadata'
+          description: Stable GeoEntity location fields; null clears a manual value.
+        manualFields:
+          type: array
+          items: { type: string, enum: [continent, country, region, subdivision, province, county, city, municipality, locality] }
+          description: Fields that remain authoritative over reverse-geocoding refreshes.
+        editorId: { type: string }
+        note: { type: string }
+    Activation:
+      type: object
+      required: [programmeSlug, entityId, operatorId, startedAt]
+      properties:
+        programmeSlug: { type: string }
+        entityId: { type: string, format: uuid }
+        operatorId: { type: string, format: uuid }
+        startedAt: { type: string, format: date-time }
+        entityType: { type: string }
+        location: { type: object, additionalProperties: true }
+    ActivationClose:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [CLOSED] }
+        endedAt: { type: string, format: date-time }
+    Qso:
+      type: object
+      required: [workedCallsign, timestamp]
+      properties:
+        workedCallsign: { type: string }
+        timestamp: { type: string, format: date-time }
+        band: { type: string }
+        mode: { type: string }
+        rst: { type: string }
+        hunterId: { type: string, format: uuid }
+        workedEntityId: { type: string, format: uuid }
+        source: { type: string }
+    QsoIngestionRequest:
+      type: object
+      required: [activationId, qsos]
+      properties:
+        activationId: { type: string, format: uuid }
+        sourceFormat: { type: string, enum: [JSON, CSV, ADIF] }
+        qsos: { type: array, minItems: 1, items: { $ref: '#/components/schemas/Qso' } }
+    QsoCorrectionReview:
+      type: object
+      required: [decision, reviewedBy]
+      properties:
+        decision: { type: string, enum: [APPLIED, REJECTED] }
+        reviewedBy: { type: string }
+        reviewNote: { type: string }
+    AwardCondition:
+      description: Programme-owned recursive AND/OR condition tree.
+      oneOf:
+        - type: object
+          required: [kind, conditions]
+          properties:
+            kind: { type: string, enum: [AND, OR, ALL, ANY] }
+            conditions: { type: array, items: { $ref: '#/components/schemas/AwardCondition' }, minItems: 1 }
+        - type: object
+          required: [kind, operator, value]
+          properties:
+            kind: { type: string, enum: [QSO_COUNT, ACTIVATION_COUNT, UNIQUE_CALLSIGNS, UNIQUE_ENTITIES, FIELD] }
+            field: { type: string }
+            operator: { type: string, enum: [GTE, GT, EQ, LTE, LT] }
+            value: { type: number }
+        - type: object
+          required: [kind, values]
+          properties:
+            kind: { type: string, enum: [ENTITY_TYPE] }
+            values: { type: array, items: { type: string }, minItems: 1 }
+        - type: object
+          required: [kind, condition]
+          properties:
+            kind: { type: string, enum: [NOT] }
+            condition: { $ref: '#/components/schemas/AwardCondition' }
+    AwardLevel:
+      type: object
+      required: [id, name, threshold]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        threshold: { type: number, exclusiveMinimum: 0 }
+    AwardAsset:
+      type: object
+      required: [kind, name, objectKey, mediaType, widthPx, heightPx]
+      properties:
+        assetId: { type: string, format: uuid }
+        kind: { type: string, enum: [BACKGROUND, SIGNATURE] }
+        name: { type: string }
+        objectKey: { type: string }
+        mediaType: { type: string, pattern: '^image/' }
+        widthPx: { type: integer, minimum: 1 }
+        heightPx: { type: integer, minimum: 1 }
+        sha256: { type: string }
+        bucket:
+          type: string
+          readOnly: true
+          description: Server-selected bucket determined by asset kind and storage configuration.
+    AwardAssetContent:
+      type: object
+      required: [asset, mediaType, contentBase64]
+      properties:
+        asset: { $ref: '#/components/schemas/AwardAsset' }
+        mediaType: { type: string, enum: [image/png, image/jpeg] }
+        contentBase64: { type: string, contentEncoding: base64 }
+    AwardPreviewRequest:
+      type: object
+      required: [name, printSpec, template]
+      properties:
+        name: { type: string, maxLength: 200 }
+        backgroundAsset: { $ref: '#/components/schemas/AwardAsset' }
+        signatureAssetId: { type: string, format: uuid }
+        managerName: { type: string, maxLength: 200 }
+        printSpec: { $ref: '#/components/schemas/AwardPrintSpec' }
+        template: { $ref: '#/components/schemas/AwardTemplate' }
+      description: Registered artwork only, or blank paper when backgroundAsset is omitted; preview resolution is bounded to 150–300 DPI.
+    AwardPreview:
+      type: object
+      required: [preview, mediaType, filename, contentBase64, mockData]
+      properties:
+        preview: { type: boolean, const: true }
+        mediaType: { type: string, const: application/pdf }
+        filename: { type: string }
+        contentBase64: { type: string, contentEncoding: base64 }
+        mockData: { type: object, readOnly: true }
+    AwardTemplateElement:
+      type: object
+      required: [kind, x, y, width, height]
+      properties:
+        kind: { type: string, enum: [AWARD_NAME, CALLSIGN, PERSON_NAME, DATE_OBTAINED, MANAGER_NAME, MANAGER_SIGNATURE, CUSTOM_TEXT] }
+        label: { type: string, maxLength: 200, description: Required text for CUSTOM_TEXT; optional display label for semantic fields. }
+        x: { type: number, minimum: 0, maximum: 1 }
+        y: { type: number, minimum: 0, maximum: 1 }
+        width: { type: number, exclusiveMinimum: 0, maximum: 1 }
+        height: { type: number, exclusiveMinimum: 0, maximum: 1 }
+        style: { type: object }
+    AwardTemplate:
+      type: object
+      required: [elements]
+      properties:
+        elements: { type: array, minItems: 6, items: { $ref: '#/components/schemas/AwardTemplateElement' } }
+    AwardPrintSpec:
+      type: object
+      properties:
+        page: { type: string, enum: [A4, LETTER], default: A4 }
+        orientation: { type: string, enum: [PORTRAIT, LANDSCAPE], default: PORTRAIT }
+        dpi: { type: integer, minimum: 150, default: 300 }
+    AwardDefinition:
+      type: object
+      required: [programmeSlug, code, name, category, condition, levels, backgroundAsset, template]
+      properties:
+        awardId: { type: string, format: uuid }
+        programmeSlug: { type: string }
+        code: { type: string }
+        name: { type: string }
+        description: { type: string }
+        category: { type: string, enum: [HUNTER, ACTIVATOR] }
+        achievementMetric: { type: string, enum: [QSO_COUNT, ACTIVATION_COUNT, UNIQUE_CALLSIGNS, UNIQUE_ENTITIES] }
+        condition: { $ref: '#/components/schemas/AwardCondition' }
+        levels: { type: array, minItems: 1, items: { $ref: '#/components/schemas/AwardLevel' } }
+        backgroundAsset: { $ref: '#/components/schemas/AwardAsset' }
+        signatureAssetId: { type: [string, 'null'], format: uuid }
+        managerName: { type: string }
+        effectiveFrom: { type: [string, 'null'], format: date-time }
+        printSpec: { $ref: '#/components/schemas/AwardPrintSpec' }
+        template: { $ref: '#/components/schemas/AwardTemplate' }
+    AwardReview:
+      type: object
+      required: [decision, reviewerId]
+      properties:
+        decision: { type: string, enum: [APPROVED, CHANGES_REQUESTED] }
+        reviewerId: { type: string }
+        note: { type: string }
+    AwardPublication:
+      type: object
+      required: [effectiveFrom, publisherId]
+      properties:
+        effectiveFrom: { type: string, format: date-time }
+        publisherId: { type: string }
+    AwardEvaluationRequest:
+      type: object
+      required: [awardId, subjectId, facts]
+      properties:
+        awardId: { type: string, format: uuid }
+        subjectId: { type: string, format: uuid }
+        facts: { type: object, additionalProperties: true }
+    AwardEvaluationJobRequest:
+      type: object
+      required: [awardId, subjectId]
+      properties:
+        awardId: { type: string, format: uuid }
+        subjectId: { type: string, format: uuid }
+        facts: { type: object, additionalProperties: true, description: Optional reproducible fact snapshot; omitted values are read from aggregates. }
+    AwardProgressRequest:
+      type: object
+      required: [awardId, subjectId]
+      properties:
+        awardId: { type: string, format: uuid }
+        subjectId: { type: string, format: uuid }
+    AwardRequest:
+      type: object
+      required: [awardId, levelId, subjectId, callsign, personName]
+      properties:
+        awardId: { type: string, format: uuid }
+        levelId: { type: string }
+        subjectId: { type: string, format: uuid }
+        callsign: { type: string }
+        personName: { type: string }
+        facts: { type: object, additionalProperties: true, description: Optional facts for trusted service/admin callers; participant requests use server-side activity facts. }
+    AwardIssuanceRequest:
+      type: object
+      required: [managerName, signatureAssetId]
+      properties:
+        managerName: { type: string }
+        signatureAssetId: { type: string, format: uuid }
+        dateObtained: { type: string, format: date-time }
+    AssetContent:
+      type: object
+      required: [contentBase64]
+      properties:
+        contentBase64: { type: string, contentEncoding: base64 }

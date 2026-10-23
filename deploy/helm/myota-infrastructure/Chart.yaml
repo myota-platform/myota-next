@@ -1,0 +1,6 @@
+apiVersion: v2
+name: myota-infrastructure
+description: Optional single-instance PostgreSQL infrastructure for MyOTA's three database owners
+type: application
+version: 0.1.0
+appVersion: '16'

@@ -1,0 +1,656 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { apiRequest } from '../lib/api';
+import { hasAnyScope } from '../lib/adminAccess';
+import PageHeader from '../components/PageHeader.vue';
+import PageFeedback from '../components/PageFeedback.vue';
+import PageNavigation from '../components/PageNavigation.vue';
+import { usePageFeedback } from '../composables/usePageFeedback';
+import { utcDisplay } from '../lib/utc';
+import { useAppStore } from '../stores/app';
+
+interface Qso {
+  id: string;
+  workedCallsign?: string;
+  timestamp?: string;
+  band?: string;
+  mode?: string;
+  status?: string;
+}
+
+interface Activation {
+  id: string;
+  programmeSlug?: string;
+  entityId?: string;
+  operatorId?: string;
+  operatorCallsign?: string;
+  status?: string;
+  qsos?: Qso[];
+  qsoCount?: number;
+  startedAt?: string;
+  endedAt?: string;
+  location?: Record<string, unknown>;
+  ruleEvaluation?: Record<string, unknown>;
+}
+
+interface Statistic {
+  id: string;
+  programme?: string;
+  type?: string;
+  scope?: string;
+  values?: unknown;
+  algorithmVersion?: string;
+  generatedAt?: string;
+}
+
+interface ActivityNotification {
+  id: string;
+  type?: string;
+  payload?: unknown;
+  status?: string;
+  createdAt?: string;
+  deliveredAt?: string | null;
+}
+
+interface ActivityJob {
+  jobId?: string;
+  id?: string;
+  kind?: string;
+  status?: string;
+  attempts?: number;
+  lastError?: string | null;
+  completedAt?: string | null;
+}
+
+interface QsoCorrection {
+  id: string;
+  qsoId: string;
+  requestedBy: string;
+  reason: string;
+  proposedValues: Record<string, unknown>;
+  status: string;
+  programmeSlug?: string;
+  entityId?: string;
+  createdAt?: string;
+  qso: {
+    activationId: string;
+    operatorCallsign?: string;
+    workedCallsign?: string;
+    timestamp?: string;
+    band?: string;
+    mode?: string;
+  };
+}
+
+interface Page<T> {
+  items: T[];
+  page: number;
+  total: number;
+  nextPage: number | null;
+}
+
+const store = useAppStore();
+const feedback = usePageFeedback();
+const { error, loading, message, saving } = feedback;
+const items = ref<Activation[]>([]);
+const activationPage = ref(1);
+const activationNextPage = ref<number | null>(null);
+const activationTotal = ref(0);
+const statistics = ref<Statistic[]>([]);
+const statisticsPage = ref(1);
+const statisticsNextPage = ref<number | null>(null);
+const statisticsTotal = ref(0);
+const notifications = ref<ActivityNotification[]>([]);
+const corrections = ref<QsoCorrection[]>([]);
+const correctionPage = ref(1);
+const correctionNextPage = ref<number | null>(null);
+const correctionTotal = ref(0);
+const correctionStatus = ref('PENDING');
+const correctionReviewNotes = reactive<Record<string, string>>({});
+const selected = ref<Activation | null>(null);
+const detailLoading = ref(false);
+const detailError = ref('');
+const jobLoading = ref(false);
+const jobError = ref('');
+const job = ref<ActivityJob | null>(null);
+const canRead = computed(() =>
+  hasAnyScope(store.account, 'activity.read', 'activity.admin'),
+);
+const canRebuild = computed(() => hasAnyScope(store.account, 'activity.admin'));
+const canReviewCorrections = computed(() =>
+  hasAnyScope(store.account, 'activity.admin'),
+);
+const programme = computed(() => store.currentProgramme || '');
+
+function scopedPath(path: string): string {
+  if (!programme.value) return path;
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}${new URLSearchParams({ programme: programme.value })}`;
+}
+
+function pagePath(path: string, page: number): string {
+  const query = new URLSearchParams({ page: String(page), pageSize: '50' });
+  return scopedPath(`${path}?${query.toString()}`);
+}
+
+async function load(): Promise<void> {
+  await feedback.run(async () => {
+    const [activations, statisticPage] = await Promise.all([
+      apiRequest<Page<Activation>>(
+        pagePath('/v1/activations', activationPage.value),
+      ),
+      apiRequest<Page<Statistic>>(
+        pagePath('/v1/statistics', statisticsPage.value),
+      ),
+    ]);
+    items.value = activations.items || [];
+    statistics.value = statisticPage.items || [];
+    activationPage.value = activations.page || activationPage.value;
+    activationTotal.value = activations.total || 0;
+    activationNextPage.value = activations.nextPage ?? null;
+    statisticsPage.value = statisticPage.page || statisticsPage.value;
+    statisticsTotal.value = statisticPage.total || 0;
+    statisticsNextPage.value = statisticPage.nextPage ?? null;
+    await loadNotifications();
+    if (canReviewCorrections.value) await loadCorrections();
+    if (selected.value) {
+      const fresh = items.value.find((item) => item.id === selected.value?.id);
+      if (!fresh) selected.value = null;
+    }
+  });
+}
+
+async function loadCorrections(page = correctionPage.value): Promise<void> {
+  if (!canReviewCorrections.value) {
+    corrections.value = [];
+    correctionTotal.value = 0;
+    correctionNextPage.value = null;
+    return;
+  }
+  const query = new URLSearchParams({
+    page: String(page),
+    pageSize: '20',
+    status: correctionStatus.value,
+  });
+  if (programme.value) query.set('programme', programme.value);
+  const result = await apiRequest<Page<QsoCorrection>>(
+    `/v1/qso-corrections?${query.toString()}`,
+  );
+  corrections.value = result.items || [];
+  correctionPage.value = result.page || page;
+  correctionTotal.value = result.total || 0;
+  correctionNextPage.value = result.nextPage ?? null;
+}
+
+async function changeCorrectionPage(page: number): Promise<void> {
+  if (page < 1 || loading.value) return;
+  await feedback.run(() => loadCorrections(page));
+}
+
+async function changeCorrectionStatus(status: string): Promise<void> {
+  correctionStatus.value = status;
+  correctionPage.value = 1;
+  await feedback.run(() => loadCorrections(1));
+}
+
+async function reviewCorrection(
+  correction: QsoCorrection,
+  decision: 'APPLIED' | 'REJECTED',
+): Promise<void> {
+  const reviewedBy = store.account?.id;
+  if (!canReviewCorrections.value || !reviewedBy) return;
+  const action = decision === 'APPLIED' ? 'apply' : 'reject';
+  const qsoLabel = correction.qso.workedCallsign || correction.qsoId;
+  const effect =
+    decision === 'APPLIED'
+      ? 'This will update the QSO and queue award recalculation.'
+      : 'This will close the request without changing the QSO.';
+  if (
+    !window.confirm(
+      `Are you sure you want to ${action} the correction for ${qsoLabel}? ${effect}`,
+    )
+  )
+    return;
+  await feedback.run(
+    async () => {
+      await apiRequest(
+        `/v1/qsos/${encodeURIComponent(correction.qsoId)}/corrections/${encodeURIComponent(correction.id)}/review`,
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          body: JSON.stringify({
+            decision,
+            reviewedBy,
+            reviewNote: correctionReviewNotes[correction.id] || undefined,
+          }),
+        },
+      );
+      await loadCorrections();
+    },
+    {
+      mutation: true,
+      success:
+        decision === 'APPLIED'
+          ? 'QSO correction applied.'
+          : 'QSO correction rejected.',
+    },
+  );
+}
+
+async function changeActivationPage(page: number): Promise<void> {
+  if (page < 1 || loading.value) return;
+  await feedback.run(async () => {
+    const result = await apiRequest<Page<Activation>>(
+      pagePath('/v1/activations', page),
+    );
+    items.value = result.items || [];
+    activationPage.value = result.page || page;
+    activationTotal.value = result.total || 0;
+    activationNextPage.value = result.nextPage ?? null;
+    selected.value = null;
+  });
+}
+
+async function changeStatisticsPage(page: number): Promise<void> {
+  if (page < 1 || loading.value) return;
+  await feedback.run(async () => {
+    const result = await apiRequest<Page<Statistic>>(
+      pagePath('/v1/statistics', page),
+    );
+    statistics.value = result.items || [];
+    statisticsPage.value = result.page || page;
+    statisticsTotal.value = result.total || 0;
+    statisticsNextPage.value = result.nextPage ?? null;
+  });
+}
+
+async function loadNotifications(): Promise<void> {
+  const result = await apiRequest<{ items: ActivityNotification[] }>(
+    '/v1/notifications',
+  );
+  notifications.value = result.items || [];
+}
+
+async function openActivation(item: Activation): Promise<void> {
+  if (selected.value?.id === item.id) {
+    selected.value = null;
+    detailError.value = '';
+    return;
+  }
+  selected.value = item;
+  detailLoading.value = true;
+  detailError.value = '';
+  try {
+    selected.value = await apiRequest<Activation>(
+      `/v1/activations/${encodeURIComponent(item.id)}`,
+    );
+  } catch (cause) {
+    detailError.value =
+      cause instanceof Error
+        ? cause.message
+        : 'Unable to load activation details.';
+  } finally {
+    detailLoading.value = false;
+  }
+}
+
+async function rebuildStatistics(): Promise<void> {
+  jobLoading.value = true;
+  jobError.value = '';
+  try {
+    const created = await apiRequest<ActivityJob>(
+      '/v1/statistics/rebuild-jobs',
+      {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({ programmeSlug: programme.value || null }),
+      },
+    );
+    job.value = created;
+  } catch (cause) {
+    jobError.value =
+      cause instanceof Error
+        ? cause.message
+        : 'Unable to queue statistics rebuild.';
+  } finally {
+    jobLoading.value = false;
+  }
+}
+
+async function refreshJob(): Promise<void> {
+  const id = job.value?.jobId || job.value?.id;
+  if (!id) return;
+  jobLoading.value = true;
+  jobError.value = '';
+  try {
+    job.value = await apiRequest<ActivityJob>(
+      `/v1/statistics/rebuild-jobs/${encodeURIComponent(id)}`,
+    );
+    if (['SUCCEEDED', 'FAILED'].includes(job.value.status || '')) await load();
+  } catch (cause) {
+    jobError.value =
+      cause instanceof Error
+        ? cause.message
+        : 'Unable to refresh rebuild status.';
+  } finally {
+    jobLoading.value = false;
+  }
+}
+
+function formatValues(values: unknown): string {
+  return JSON.stringify(values ?? {});
+}
+
+onMounted(() => {
+  if (canRead.value) void load();
+});
+watch(programme, () => {
+  activationPage.value = 1;
+  statisticsPage.value = 1;
+  correctionPage.value = 1;
+  selected.value = null;
+  if (canRead.value) void load();
+});
+</script>
+
+<template>
+  <PageHeader :refresh="load" :busy="loading" />
+  <PageFeedback :error="error" :message="message" :loading="loading" />
+
+  <article v-if="canRebuild" class="panel">
+    <div class="panel-heading">
+      <div>
+        <h2>Statistics maintenance</h2>
+        <p class="muted">
+          Queue a versioned rebuild for {{ programme || 'all programmes' }}.
+        </p>
+      </div>
+      <button class="primary" :disabled="jobLoading" @click="rebuildStatistics">
+        {{ jobLoading ? 'Working…' : 'Rebuild statistics' }}
+      </button>
+    </div>
+    <div v-if="job" class="activity-job">
+      <span><strong>Job</strong> {{ job.jobId || job.id }}</span>
+      <span class="status-pill" :class="(job.status || '').toLowerCase()">
+        {{ job.status || 'QUEUED' }}
+      </span>
+      <span>{{ job.attempts ?? 0 }} attempts</span>
+      <button class="secondary" :disabled="jobLoading" @click="refreshJob">
+        Refresh status
+      </button>
+      <p v-if="job.lastError" class="error-text">{{ job.lastError }}</p>
+    </div>
+    <p v-if="jobError" class="error-text" role="alert">{{ jobError }}</p>
+  </article>
+
+  <article class="panel">
+    <div class="panel-heading">
+      <h2>Activation history</h2>
+      <span class="muted"
+        >{{ activationTotal }} total · page {{ activationPage }}</span
+      >
+    </div>
+    <div class="table-list">
+      <button
+        v-for="item in items"
+        :key="item.id"
+        class="table-row activity-row"
+        :class="{ selected: selected?.id === item.id }"
+        :aria-expanded="selected?.id === item.id"
+        @click="openActivation(item)"
+      >
+        <span>
+          <strong>{{
+            item.operatorCallsign || item.operatorId || 'Unknown operator'
+          }}</strong>
+          <small
+            >{{ item.programmeSlug || 'Unassigned' }} ·
+            {{ item.entityId || 'No entity' }}</small
+          >
+          <small>
+            {{ item.startedAt ? utcDisplay(item.startedAt) : 'Not started' }}
+            <span v-if="item.endedAt"> → {{ utcDisplay(item.endedAt) }}</span>
+          </small>
+        </span>
+        <span class="status-pill" :class="(item.status || '').toLowerCase()">{{
+          item.status
+        }}</span>
+        <span>{{ item.qsoCount ?? '—' }} QSOs</span>
+      </button>
+      <p v-if="!items.length && !loading" class="muted empty">
+        No activations recorded.
+      </p>
+    </div>
+    <PageNavigation
+      :page="activationPage"
+      :next-page="activationNextPage"
+      :busy="loading"
+      :show-summary="false"
+      label="activations"
+      previous-label="Previous activations"
+      next-label="Next activations"
+      @change="changeActivationPage"
+    />
+    <section v-if="selected" class="activity-detail" aria-live="polite">
+      <p v-if="detailLoading" class="muted">Loading activation details…</p>
+      <p v-else-if="detailError" class="error-text" role="alert">
+        {{ detailError }}
+      </p>
+      <template v-else>
+        <div class="panel-heading">
+          <h3>QSOs ({{ selected.qsos?.length || 0 }})</h3>
+          <span class="muted">{{ selected.id }}</span>
+        </div>
+        <div class="table-list">
+          <div
+            v-for="qso in selected.qsos || []"
+            :key="qso.id"
+            class="table-row"
+          >
+            <span>
+              <strong>{{ qso.workedCallsign || 'Unknown callsign' }}</strong>
+              <small>{{
+                qso.timestamp ? utcDisplay(qso.timestamp) : 'Time unavailable'
+              }}</small>
+            </span>
+            <span>{{
+              [qso.band, qso.mode].filter(Boolean).join(' · ') || '—'
+            }}</span>
+            <span
+              class="status-pill"
+              :class="(qso.status || '').toLowerCase()"
+              >{{ qso.status }}</span
+            >
+          </div>
+          <p v-if="!selected.qsos?.length" class="muted empty">
+            No QSOs recorded.
+          </p>
+        </div>
+      </template>
+    </section>
+  </article>
+
+  <article v-if="canReviewCorrections" class="panel">
+    <div class="panel-heading">
+      <div>
+        <h2>QSO correction requests</h2>
+        <p class="muted">
+          Review requests for {{ programme || 'all programmes' }}.
+        </p>
+      </div>
+      <label class="toolbar-field">
+        Status
+        <select
+          :value="correctionStatus"
+          :disabled="loading || saving"
+          @change="
+            changeCorrectionStatus(($event.target as HTMLSelectElement).value)
+          "
+        >
+          <option value="PENDING">Pending</option>
+          <option value="APPLIED">Applied</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="ALL">All</option>
+        </select>
+      </label>
+    </div>
+    <div class="table-list correction-list">
+      <article
+        v-for="correction in corrections"
+        :key="correction.id"
+        class="correction-card"
+      >
+        <div class="panel-heading">
+          <div>
+            <strong>{{
+              correction.qso.workedCallsign || 'Unknown callsign'
+            }}</strong>
+            <small>
+              Requested by {{ correction.requestedBy }} · Operator
+              {{ correction.qso.operatorCallsign || 'Unknown' }} ·
+              {{
+                correction.qso.timestamp
+                  ? utcDisplay(correction.qso.timestamp)
+                  : 'Time unavailable'
+              }}
+            </small>
+          </div>
+          <span class="status-pill" :class="correction.status.toLowerCase()">
+            {{ correction.status }}
+          </span>
+        </div>
+        <p><strong>Reason:</strong> {{ correction.reason }}</p>
+        <p>
+          <strong>Proposed values:</strong>
+          <code>{{ formatValues(correction.proposedValues) }}</code>
+        </p>
+        <p class="muted">
+          {{ correction.programmeSlug || 'Unknown programme' }} ·
+          {{ correction.entityId || 'No entity' }} ·
+          {{
+            [correction.qso.band, correction.qso.mode]
+              .filter(Boolean)
+              .join(' · ') || '—'
+          }}
+        </p>
+        <label v-if="correction.status === 'PENDING'" class="correction-note">
+          Review note (optional)
+          <textarea v-model="correctionReviewNotes[correction.id]" rows="2" />
+        </label>
+        <div v-if="correction.status === 'PENDING'" class="form-actions">
+          <button
+            class="approve"
+            type="button"
+            :disabled="saving"
+            @click="reviewCorrection(correction, 'APPLIED')"
+          >
+            Apply correction
+          </button>
+          <button
+            class="danger"
+            type="button"
+            :disabled="saving"
+            @click="reviewCorrection(correction, 'REJECTED')"
+          >
+            Reject
+          </button>
+        </div>
+      </article>
+      <p v-if="!corrections.length && !loading" class="muted empty">
+        No correction requests match this filter.
+      </p>
+    </div>
+    <PageNavigation
+      :page="correctionPage"
+      :next-page="correctionNextPage"
+      :total="correctionTotal"
+      count-label="correction requests"
+      :busy="loading || saving"
+      label="correction requests"
+      @change="changeCorrectionPage"
+    />
+  </article>
+
+  <article class="panel">
+    <div class="panel-heading">
+      <div>
+        <h2>Statistics snapshots</h2>
+        <p class="muted">
+          Precomputed Activity statistics for
+          {{ programme || 'all programmes' }}.
+        </p>
+      </div>
+      <span class="muted"
+        >{{ statisticsTotal }} total · page {{ statisticsPage }}</span
+      >
+    </div>
+    <div class="table-list">
+      <div
+        v-for="item in statistics"
+        :key="item.id"
+        class="table-row statistic-row"
+      >
+        <span>
+          <strong
+            >{{ item.type || 'Statistic' }} ·
+            {{ item.scope || 'all scope' }}</strong
+          >
+          <small
+            >{{ item.programme || 'Unknown programme' }} · algorithm
+            {{ item.algorithmVersion || '—' }}</small
+          >
+          <small>{{
+            item.generatedAt
+              ? utcDisplay(item.generatedAt)
+              : 'Generation time unavailable'
+          }}</small>
+          <code>{{ formatValues(item.values) }}</code>
+        </span>
+      </div>
+      <p v-if="!statistics.length && !loading" class="muted empty">
+        No statistics snapshots available.
+      </p>
+    </div>
+    <PageNavigation
+      :page="statisticsPage"
+      :next-page="statisticsNextPage"
+      :busy="loading"
+      :show-summary="false"
+      label="statistics snapshots"
+      previous-label="Previous statistics"
+      next-label="Next statistics"
+      @change="changeStatisticsPage"
+    />
+  </article>
+
+  <article class="panel">
+    <div class="panel-heading">
+      <div>
+        <h2>My Activity notifications</h2>
+        <p class="muted">Notification records addressed to your account.</p>
+      </div>
+      <span class="muted">{{ notifications.length }} loaded</span>
+    </div>
+    <div class="table-list">
+      <div
+        v-for="item in notifications"
+        :key="item.id"
+        class="table-row statistic-row"
+      >
+        <span>
+          <strong>{{ item.type || 'Activity notification' }}</strong>
+          <small>{{
+            item.createdAt ? utcDisplay(item.createdAt) : 'Time unavailable'
+          }}</small>
+          <code>{{ formatValues(item.payload) }}</code>
+        </span>
+        <span class="status-pill" :class="(item.status || '').toLowerCase()">
+          {{ item.status || 'UNKNOWN' }}
+        </span>
+      </div>
+      <p v-if="!notifications.length && !loading" class="muted empty">
+        No Activity notifications for this account.
+      </p>
+    </div>
+  </article>
+</template>

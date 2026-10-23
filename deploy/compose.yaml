@@ -1,0 +1,524 @@
+name: myota
+
+x-node-app: &node-app
+  restart: unless-stopped
+  init: true
+  environment: &observe-env
+    OBSERVE_APP_KEY: ${OBSERVE_APP_KEY:-}
+    OBSERVE_APP_SECRET: ${OBSERVE_APP_SECRET:-}
+    MYOTA_BUILD_VERSION: ${MYOTA_BUILD_VERSION:-local}
+
+services:
+  core-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: myota
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-myota-dev-only}
+      POSTGRES_DB: myota_core
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - core-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U myota -d myota_core]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  activity-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: myota
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-myota-dev-only}
+      POSTGRES_DB: myota_activity
+    volumes:
+      - activity-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U myota -d myota_activity]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  geo-db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: myota
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-myota-dev-only}
+      POSTGRES_DB: myota_geo
+    volumes:
+      - geo-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U myota -d myota_geo]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrations:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.tools
+    restart: on-failure
+    command:
+      - sh
+      - -ec
+      - >-
+        node --experimental-strip-types tools/db-migrate.ts --owner=core &&
+        node --experimental-strip-types tools/db-migrate.ts --owner=activity &&
+        node --experimental-strip-types tools/db-migrate.ts --owner=geo
+    environment:
+      CORE_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@core-db:5432/myota_core
+      ACTIVITY_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@activity-db:5432/myota_activity
+      GEO_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@geo-db:5432/myota_geo
+    depends_on:
+      core-db: { condition: service_healthy }
+      activity-db: { condition: service_healthy }
+      geo-db: { condition: service_healthy }
+
+  nats:
+    image: nats:2.10-alpine
+    restart: unless-stopped
+    command: [-js, -sd, /data, -m, '8222']
+    volumes:
+      - nats-data:/data
+    ports:
+      - '127.0.0.1:4222:4222'
+      - '127.0.0.1:8222:8222'
+
+  object-store:
+    image: chrislusf/seaweedfs:latest@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    restart: unless-stopped
+    command:
+      [
+        mini,
+        -dir=/data,
+        -ip.bind=0.0.0.0,
+        -metricsPort=9324,
+        -s3.config=/etc/seaweedfs-auth/s3.json,
+      ]
+    environment:
+      AWS_ACCESS_KEY_ID: ${MYOTA_OBJECT_STORAGE_ACCESS_KEY:-myota-s3}
+      AWS_SECRET_ACCESS_KEY: ${MYOTA_OBJECT_STORAGE_SECRET_KEY:-myota-s3-dev-only}
+    volumes:
+      - seaweedfs-data:/data
+      - seaweedfs-s3-config:/etc/seaweedfs-auth:ro
+    depends_on:
+      seaweedfs-s3-config-init: { condition: service_completed_successfully }
+    ports:
+      - '127.0.0.1:8333:8333'
+      - '127.0.0.1:8888:8888'
+      - '127.0.0.1:9324:9324'
+    healthcheck:
+      test: [CMD-SHELL, wget -q -O /dev/null http://localhost:8333/status]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  seaweedfs-s3-config-init:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.tools
+    restart: on-failure
+    user: '0:0'
+    command:
+      [node, --experimental-strip-types, tools/render-seaweedfs-s3-config.ts]
+    environment:
+      OUTPUT_PATH: /config/s3.json
+      MYOTA_OBJECT_STORAGE_ACCESS_KEY: ${MYOTA_OBJECT_STORAGE_ACCESS_KEY:-myota-s3}
+      MYOTA_OBJECT_STORAGE_SECRET_KEY: ${MYOTA_OBJECT_STORAGE_SECRET_KEY:-myota-s3-dev-only}
+      MYOTA_PROFILE_IMAGE_ACCESS_KEY: ${MYOTA_PROFILE_IMAGE_ACCESS_KEY:-myota-profile-image}
+      MYOTA_PROFILE_IMAGE_SECRET_KEY: ${MYOTA_PROFILE_IMAGE_SECRET_KEY:-myota-profile-image-dev-only}
+      MYOTA_PROFILE_IMAGE_BUCKET: myota-user-profile-images
+      MYOTA_MAX_BODY_BYTES: '33554432'
+    volumes:
+      - seaweedfs-s3-config:/config
+
+  object-buckets:
+    image: public.ecr.aws/aws-cli/aws-cli:2.27.41
+    restart: on-failure
+    entrypoint: [/bin/sh, -ec]
+    command: >-
+      until aws s3api list-buckets --endpoint-url "$AWS_ENDPOINT_URL" >/dev/null 2>&1; do sleep 2; done;
+      for bucket in myota-user-profile-images myota-adif myota-award-assets myota-award-signatures myota-certificates myota-geodata-imports;
+      do aws s3api create-bucket --bucket "$bucket" --endpoint-url "$AWS_ENDPOINT_URL" >/dev/null 2>&1 || true; done
+    environment:
+      AWS_ACCESS_KEY_ID: ${MYOTA_OBJECT_STORAGE_ACCESS_KEY:-myota-s3}
+      AWS_SECRET_ACCESS_KEY: ${MYOTA_OBJECT_STORAGE_SECRET_KEY:-myota-s3-dev-only}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://object-store:8333
+    depends_on:
+      object-store: { condition: service_healthy }
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    command:
+      - --smtp-tls-cert
+      - /smtp-certs/tls.crt
+      - --smtp-tls-key
+      - /smtp-certs/tls.key
+      - --smtp-require-starttls
+      - --smtp-auth-accept-any
+    volumes:
+      - smtp-certs:/smtp-certs:ro
+    depends_on:
+      smtp-cert-init: { condition: service_completed_successfully }
+    ports:
+      - '127.0.0.1:8025:8025'
+
+  smtp-cert-init:
+    image: alpine:3.21
+    restart: on-failure
+    entrypoint: [/bin/sh, -ec]
+    command: >-
+      apk add --no-cache openssl >/dev/null;
+      if [ ! -s /certs/tls.crt ] || [ ! -s /certs/tls.key ]; then
+        openssl req -x509 -newkey rsa:2048 -nodes -keyout /certs/tls.key -out /certs/tls.crt -days 365 -subj /CN=mailpit -addext subjectAltName=DNS:mailpit -addext basicConstraints=critical,CA:TRUE;
+        chmod 644 /certs/tls.key;
+      fi
+    volumes:
+      - smtp-certs:/certs
+
+  clamav:
+    image: clamav/clamav:1.4
+    restart: unless-stopped
+    expose: [3310]
+
+  jetstream-provisioner:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.tools
+    restart: on-failure
+    command: [node, --experimental-strip-types, tools/provision-jetstream.ts]
+    environment:
+      NATS_URL: nats://nats:4222
+      NATS_TOPOLOGY_APPLY: ${NATS_TOPOLOGY_APPLY:-0}
+      NATS_TOPOLOGY_SCOPE: all
+      NATS_EVENTS_MAX_BYTES: ${NATS_EVENTS_MAX_BYTES:-}
+      NATS_EVENTS_MAX_MESSAGES: ${NATS_EVENTS_MAX_MESSAGES:-}
+      NATS_EVENTS_MAX_MESSAGE_BYTES: ${NATS_EVENTS_MAX_MESSAGE_BYTES:-}
+      NATS_ACTIVITY_WORK_MAX_AGE_SECONDS: ${NATS_ACTIVITY_WORK_MAX_AGE_SECONDS:-}
+      NATS_ACTIVITY_WORK_MAX_BYTES: ${NATS_ACTIVITY_WORK_MAX_BYTES:-}
+      NATS_ACTIVITY_WORK_MAX_MESSAGES: ${NATS_ACTIVITY_WORK_MAX_MESSAGES:-}
+      NATS_ACTIVITY_WORK_MAX_MESSAGE_BYTES: ${NATS_ACTIVITY_WORK_MAX_MESSAGE_BYTES:-}
+      NATS_GEODATA_WORK_MAX_AGE_SECONDS: ${NATS_GEODATA_WORK_MAX_AGE_SECONDS:-}
+      NATS_GEODATA_WORK_MAX_BYTES: ${NATS_GEODATA_WORK_MAX_BYTES:-}
+      NATS_GEODATA_WORK_MAX_MESSAGES: ${NATS_GEODATA_WORK_MAX_MESSAGES:-}
+      NATS_GEODATA_WORK_MAX_MESSAGE_BYTES: ${NATS_GEODATA_WORK_MAX_MESSAGE_BYTES:-}
+      GEODATA_WORKER_PREPROCESSING_MAX_ACK_PENDING: ${GEODATA_WORKER_PREPROCESSING_MAX_ACK_PENDING:-}
+      GEODATA_WORKER_PROMOTION_MAX_ACK_PENDING: ${GEODATA_WORKER_PROMOTION_MAX_ACK_PENDING:-}
+      GEODATA_WORKER_DELETION_MAX_ACK_PENDING: ${GEODATA_WORKER_DELETION_MAX_ACK_PENDING:-}
+      GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING: ${GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING:-}
+      MYOTA_IMPORT_WORKERS: ${MYOTA_IMPORT_WORKERS:-}
+      MYOTA_DELETION_WORKERS: ${MYOTA_DELETION_WORKERS:-}
+      MYOTA_LOCATION_WORKERS: ${MYOTA_LOCATION_WORKERS:-}
+      NATS_EMAIL_WORK_MAX_AGE_SECONDS: ${NATS_EMAIL_WORK_MAX_AGE_SECONDS:-}
+      NATS_EMAIL_WORK_MAX_BYTES: ${NATS_EMAIL_WORK_MAX_BYTES:-}
+      NATS_EMAIL_WORK_MAX_MESSAGES: ${NATS_EMAIL_WORK_MAX_MESSAGES:-}
+      NATS_EMAIL_WORK_MAX_MESSAGE_BYTES: ${NATS_EMAIL_WORK_MAX_MESSAGE_BYTES:-}
+    depends_on:
+      nats: { condition: service_started }
+
+  identity:
+    <<: *node-app
+    build: { context: .., dockerfile: Dockerfile, args: { APP_NAME: identity } }
+    environment:
+      <<: *observe-env
+      CORE_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@core-db:5432/myota_core
+      MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
+      MYOTA_EMAIL_SERVICE_CLIENT_SECRET: ${MYOTA_EMAIL_SERVICE_CLIENT_SECRET:-myota-local-email-service-secret-32-chars-minimum}
+      MYOTA_BOOTSTRAP_ADMIN_EMAIL: ${MYOTA_BOOTSTRAP_ADMIN_EMAIL:-}
+      MYOTA_BOOTSTRAP_ADMIN_PASSWORD: ${MYOTA_BOOTSTRAP_ADMIN_PASSWORD:-}
+      MYOTA_ENV: development
+      MYOTA_EXPOSE_DEV_TOKENS: '1'
+      MYOTA_OBJECT_STORAGE_ENDPOINT: http://object-store:8333
+      MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: path
+      MYOTA_PROFILE_IMAGE_ACCESS_KEY: ${MYOTA_PROFILE_IMAGE_ACCESS_KEY:-myota-profile-image}
+      MYOTA_PROFILE_IMAGE_SECRET_KEY: ${MYOTA_PROFILE_IMAGE_SECRET_KEY:-myota-profile-image-dev-only}
+      MYOTA_PROFILE_IMAGE_BUCKET: myota-user-profile-images
+    depends_on:
+      migrations: { condition: service_completed_successfully }
+      object-buckets: { condition: service_completed_successfully }
+
+  identity-maintenance:
+    <<: *node-app
+    build:
+      {
+        context: ..,
+        dockerfile: Dockerfile,
+        args: { APP_NAME: identity-maintenance },
+      }
+    environment:
+      <<: *observe-env
+      CORE_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@core-db:5432/myota_core
+      MYOTA_OBJECT_STORAGE_ENDPOINT: http://object-store:8333
+      MYOTA_OBJECT_STORAGE_ACCESS_KEY: ${MYOTA_OBJECT_STORAGE_ACCESS_KEY:-myota-s3}
+      MYOTA_OBJECT_STORAGE_SECRET_KEY: ${MYOTA_OBJECT_STORAGE_SECRET_KEY:-myota-s3-dev-only}
+      MYOTA_PROFILE_IMAGE_ACCESS_KEY: ${MYOTA_PROFILE_IMAGE_ACCESS_KEY:-myota-profile-image}
+      MYOTA_PROFILE_IMAGE_SECRET_KEY: ${MYOTA_PROFILE_IMAGE_SECRET_KEY:-myota-profile-image-dev-only}
+      MYOTA_PROFILE_IMAGE_BUCKET: myota-user-profile-images
+      MYOTA_IDENTITY_MAINTENANCE_SECONDS: '3600'
+    depends_on:
+      migrations: { condition: service_completed_successfully }
+      object-buckets: { condition: service_completed_successfully }
+
+  programmes:
+    <<: *node-app
+    build:
+      { context: .., dockerfile: Dockerfile, args: { APP_NAME: programmes } }
+    environment:
+      <<: *observe-env
+      CORE_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@core-db:5432/myota_core
+      MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
+      MYOTA_ENV: development
+    depends_on:
+      migrations: { condition: service_completed_successfully }
+
+  activity:
+    <<: *node-app
+    build: { context: .., dockerfile: Dockerfile, args: { APP_NAME: activity } }
+    environment:
+      <<: *observe-env
+      ACTIVITY_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@activity-db:5432/myota_activity
+      MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
+      MYOTA_ENV: development
+      MYOTA_OBJECT_STORAGE_ENDPOINT: http://object-store:8333
+      MYOTA_OBJECT_STORAGE_PUBLIC_ENDPOINT: http://localhost:8333
+      MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: path
+      MYOTA_OBJECT_STORAGE_ACCESS_KEY: ${MYOTA_OBJECT_STORAGE_ACCESS_KEY:-myota-s3}
+      MYOTA_OBJECT_STORAGE_SECRET_KEY: ${MYOTA_OBJECT_STORAGE_SECRET_KEY:-myota-s3-dev-only}
+      MYOTA_ADIF_BUCKET: myota-adif
+      MYOTA_MAX_BODY_BYTES: '41943040'
+      MYOTA_AWARD_ASSET_BUCKET: myota-award-assets
+      MYOTA_AWARD_SIGNATURE_BUCKET: myota-award-signatures
+      MYOTA_CERTIFICATE_BUCKET: myota-certificates
+    depends_on:
+      migrations: { condition: service_completed_successfully }
+      object-buckets: { condition: service_completed_successfully }
+
+  geodata:
+    <<: *node-app
+    build: { context: .., dockerfile: Dockerfile, args: { APP_NAME: geodata } }
+    environment:
+      <<: *observe-env
+      GEO_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@geo-db:5432/myota_geo
+      MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
+      MYOTA_ENV: development
+      MYOTA_ACTIVITY_URL: http://activity:8004
+      MYOTA_OBJECT_STORAGE_ENDPOINT: http://object-store:8333
+      MYOTA_OBJECT_STORAGE_PUBLIC_ENDPOINT: http://localhost:8333
+      MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: path
+      MYOTA_OBJECT_STORAGE_ACCESS_KEY: ${MYOTA_OBJECT_STORAGE_ACCESS_KEY:-myota-s3}
+      MYOTA_OBJECT_STORAGE_SECRET_KEY: ${MYOTA_OBJECT_STORAGE_SECRET_KEY:-myota-s3-dev-only}
+      MYOTA_GEODATA_IMPORT_BUCKET: myota-geodata-imports
+      MYOTA_UPLOAD_WORKERS: ${MYOTA_UPLOAD_WORKERS:-}
+      MYOTA_CLAMAV_URL: tcp://clamav:3310
+      MYOTA_MAX_BODY_BYTES: '1073741824'
+      MYOTA_IMPORT_MAX_FEATURE_BYTES: ${MYOTA_IMPORT_MAX_FEATURE_BYTES:-16777216}
+      GEODATA_MAX_IMPORT_FEATURES: ${GEODATA_MAX_IMPORT_FEATURES:-5000}
+    depends_on:
+      migrations: { condition: service_completed_successfully }
+      object-buckets: { condition: service_completed_successfully }
+      clamav: { condition: service_started }
+    ports: ['8003:8003']
+
+  activity-worker:
+    <<: *node-app
+    build:
+      {
+        context: ..,
+        dockerfile: Dockerfile,
+        args: { APP_NAME: activity-worker },
+      }
+    environment:
+      <<: *observe-env
+      ACTIVITY_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@activity-db:5432/myota_activity
+      NATS_URL: nats://nats:4222
+      MYOTA_OBJECT_STORAGE_ENDPOINT: http://object-store:8333
+      MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: path
+      MYOTA_OBJECT_STORAGE_ACCESS_KEY: ${MYOTA_OBJECT_STORAGE_ACCESS_KEY:-myota-s3}
+      MYOTA_OBJECT_STORAGE_SECRET_KEY: ${MYOTA_OBJECT_STORAGE_SECRET_KEY:-myota-s3-dev-only}
+      MYOTA_ADIF_BUCKET: myota-adif
+      MYOTA_CERTIFICATE_BUCKET: myota-certificates
+      MYOTA_CLAMAV_URL: tcp://clamav:3310
+    depends_on:
+      migrations: { condition: service_completed_successfully }
+      jetstream-provisioner: { condition: service_completed_successfully }
+      object-buckets: { condition: service_completed_successfully }
+
+  activity-notifications:
+    <<: *node-app
+    build:
+      {
+        context: ..,
+        dockerfile: Dockerfile,
+        args: { APP_NAME: activity-notifications },
+      }
+    environment:
+      <<: *observe-env
+      ACTIVITY_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@activity-db:5432/myota_activity
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrations: { condition: service_completed_successfully }
+      jetstream-provisioner: { condition: service_completed_successfully }
+
+  geodata-worker:
+    <<: *node-app
+    build:
+      {
+        context: ..,
+        dockerfile: Dockerfile,
+        args: { APP_NAME: geodata-worker },
+      }
+    environment:
+      <<: *observe-env
+      GEO_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@geo-db:5432/myota_geo
+      NATS_URL: nats://nats:4222
+      MYOTA_ACTIVITY_URL: http://activity:8004
+      MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
+      MYOTA_ENV: development
+      MYOTA_OBJECT_STORAGE_ENDPOINT: http://object-store:8333
+      MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: path
+      MYOTA_OBJECT_STORAGE_ACCESS_KEY: ${MYOTA_OBJECT_STORAGE_ACCESS_KEY:-myota-s3}
+      MYOTA_OBJECT_STORAGE_SECRET_KEY: ${MYOTA_OBJECT_STORAGE_SECRET_KEY:-myota-s3-dev-only}
+      MYOTA_GEODATA_IMPORT_BUCKET: myota-geodata-imports
+      MYOTA_UPLOAD_SPOOL_DIR: ${MYOTA_UPLOAD_SPOOL_DIR:-}
+      MYOTA_CLAMAV_URL: tcp://clamav:3310
+      MYOTA_IMPORT_MAX_FEATURE_BYTES: ${MYOTA_IMPORT_MAX_FEATURE_BYTES:-16777216}
+      GEODATA_MAX_IMPORT_FEATURES: ${GEODATA_MAX_IMPORT_FEATURES:-5000}
+      GEODATA_WORKER_PREPROCESSING_MAX_ACK_PENDING: ${GEODATA_WORKER_PREPROCESSING_MAX_ACK_PENDING:-}
+      GEODATA_WORKER_PROMOTION_MAX_ACK_PENDING: ${GEODATA_WORKER_PROMOTION_MAX_ACK_PENDING:-}
+      GEODATA_WORKER_DELETION_MAX_ACK_PENDING: ${GEODATA_WORKER_DELETION_MAX_ACK_PENDING:-}
+      GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING: ${GEODATA_WORKER_ENRICHMENT_MAX_ACK_PENDING:-}
+      MYOTA_IMPORT_WORKERS: ${MYOTA_IMPORT_WORKERS:-}
+      MYOTA_DELETION_WORKERS: ${MYOTA_DELETION_WORKERS:-}
+      MYOTA_LOCATION_WORKERS: ${MYOTA_LOCATION_WORKERS:-}
+    depends_on:
+      migrations: { condition: service_completed_successfully }
+      jetstream-provisioner: { condition: service_completed_successfully }
+      object-buckets: { condition: service_completed_successfully }
+      clamav: { condition: service_started }
+
+  geodata-importer:
+    <<: *node-app
+    build:
+      {
+        context: ..,
+        dockerfile: Dockerfile,
+        args: { APP_NAME: geodata-importer },
+      }
+    environment:
+      <<: *observe-env
+      GEODATA_IMPORTER_ENABLED: ${GEODATA_IMPORTER_ENABLED:-false}
+      GEODATA_MAX_IMPORT_FEATURES: ${GEODATA_MAX_IMPORT_FEATURES:-5000}
+      GEODATA_SOURCE_ALLOWLIST: ${GEODATA_SOURCE_ALLOWLIST:-}
+      MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
+      MYOTA_GEODATA_URL: http://geodata:8003
+    depends_on:
+      geodata: { condition: service_started }
+
+  email-worker:
+    <<: *node-app
+    build:
+      { context: .., dockerfile: Dockerfile, args: { APP_NAME: email-worker } }
+    environment:
+      <<: *observe-env
+      CORE_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@core-db:5432/myota_core
+      NATS_URL: nats://nats:4222
+      MYOTA_IDENTITY_URL: http://identity:8001
+      MYOTA_EMAIL_SERVICE_CLIENT_SECRET: ${MYOTA_EMAIL_SERVICE_CLIENT_SECRET:-myota-local-email-service-secret-32-chars-minimum}
+      EMAIL_SENDER_ADDRESS: ${EMAIL_SENDER_ADDRESS:-myota@example.test}
+      EMAIL_SENDER_DISPLAY_NAME: MyOTA Local
+      EMAIL_SMTP_HOST: mailpit
+      EMAIL_SMTP_PORT: '1025'
+      EMAIL_SMTP_USERNAME: local
+      EMAIL_SMTP_PASSWORD: local
+      EMAIL_SMTP_TLS_MODE: starttls
+      NODE_EXTRA_CA_CERTS: /run/smtp-certs/tls.crt
+    volumes:
+      - smtp-certs:/run/smtp-certs:ro
+    depends_on:
+      migrations: { condition: service_completed_successfully }
+      jetstream-provisioner: { condition: service_completed_successfully }
+      mailpit: { condition: service_started }
+      smtp-cert-init: { condition: service_completed_successfully }
+
+  outbox-core:
+    <<: *node-app
+    build:
+      { context: .., dockerfile: Dockerfile, args: { APP_NAME: outbox-worker } }
+    environment:
+      <<: *observe-env
+      OUTBOX_OWNER: core
+      OUTBOX_WORKER: core-outbox
+      OUTBOX_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@core-db:5432/myota_core
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrations: { condition: service_completed_successfully }
+      jetstream-provisioner: { condition: service_completed_successfully }
+
+  outbox-activity:
+    <<: *node-app
+    build:
+      { context: .., dockerfile: Dockerfile, args: { APP_NAME: outbox-worker } }
+    environment:
+      <<: *observe-env
+      OUTBOX_OWNER: activity
+      OUTBOX_WORKER: activity-outbox
+      OUTBOX_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@activity-db:5432/myota_activity
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrations: { condition: service_completed_successfully }
+      jetstream-provisioner: { condition: service_completed_successfully }
+
+  outbox-geodata:
+    <<: *node-app
+    build:
+      { context: .., dockerfile: Dockerfile, args: { APP_NAME: outbox-worker } }
+    environment:
+      <<: *observe-env
+      OUTBOX_OWNER: geodata
+      OUTBOX_WORKER: geodata-outbox
+      OUTBOX_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@geo-db:5432/myota_geo
+      NATS_URL: nats://nats:4222
+    depends_on:
+      migrations: { condition: service_completed_successfully }
+      jetstream-provisioner: { condition: service_completed_successfully }
+
+  gateway:
+    <<: *node-app
+    build: { context: .., dockerfile: Dockerfile, args: { APP_NAME: gateway } }
+    environment:
+      <<: *observe-env
+      MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
+      MYOTA_IDENTITY_URL: http://identity:8001
+      MYOTA_PROGRAMMES_URL: http://programmes:8002
+      MYOTA_GEODATA_URL: http://geodata:8003
+      MYOTA_ACTIVITY_URL: http://activity:8004
+    depends_on: [identity, programmes, geodata, activity]
+    ports: ['8080:8080']
+
+  participant-web:
+    build: { context: ../web/participant, dockerfile: Dockerfile }
+    restart: unless-stopped
+    depends_on: [gateway]
+    ports: ['8090:8080']
+
+  admin-web:
+    build: { context: ../web/admin, dockerfile: Dockerfile }
+    restart: unless-stopped
+    environment:
+      MYOTA_GATEWAY_UPSTREAM: gateway:8080
+    depends_on: [gateway]
+    ports: ['8091:8080']
+
+volumes:
+  core-data:
+  activity-data:
+  geo-data:
+  nats-data:
+  seaweedfs-data:
+  seaweedfs-s3-config:
+  smtp-certs:

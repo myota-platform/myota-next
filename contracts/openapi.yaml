@@ -8,6 +8,10 @@ info:
     logs and observability use UTC. Canonical API date-times carry Z or an explicit
     UTC offset; timezone-bearing inputs are normalized to UTC. Legacy unqualified
     date-times are interpreted as UTC, never the server or browser local timezone.
+    Error responses use the Problem schema and include X-Request-ID and
+    X-Correlation-ID response headers. The Gateway forwards W3C trace context
+    headers to API services and returns upstream trace headers when provided.
+    X-Trace-ID matches the request ID used by Nest observability.
 servers:
   - url: http://localhost:8080
 tags:
@@ -199,6 +203,7 @@ paths:
       tags: [Identity]
       security: [{ bearerAuth: [] }]
       summary: List security events for global identity administrators
+      operationId: listSecurityEvents
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -278,6 +283,7 @@ paths:
   /v1/identity/accounts/{accountId}/export:
     get:
       tags: [Identity]
+      operationId: exportAccount
       security: [{ bearerAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/AccountId' }]
       responses: { '200': { description: Personal data export } }
@@ -363,7 +369,7 @@ paths:
         - { in: query, name: minLat, schema: { type: number, format: double } }
         - { in: query, name: maxLon, schema: { type: number, format: double } }
         - { in: query, name: maxLat, schema: { type: number, format: double } }
-        - { in: query, name: bbox, description: Preferred map filter as minLon,minLat,maxLon,maxLat. Takes precedence over legacy individual bounds when supplied., schema: { type: string, pattern: '^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$' } }
+        - { in: query, name: bbox, description: Map filter as minLon,minLat,maxLon,maxLat. Used when no legacy individual bounds are supplied; if any individual bound is supplied, the individual bounds take precedence., schema: { type: string, pattern: '^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$' } }
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
@@ -391,14 +397,16 @@ paths:
       tags: [Geodata]
       security: [{ bearerAuth: [] }]
       summary: Create a geodata import resource and queue candidate preprocessing
-      description: Accepts a JSON feature collection or text document, a multipart upload, or a durable object-storage reference. All sources enter the preprocessing queue before promotion.
+      description: Accepts a JSON feature collection or text document, or a durable object-storage reference. Persistent deployments reject single-request multipart uploads; use the resumable upload session endpoints instead. All accepted sources enter the preprocessing queue before promotion.
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content:
           application/json: { schema: { oneOf: [{ $ref: '#/components/schemas/GeoImport' }, { $ref: '#/components/schemas/GeoImportObjectReference' }] } }
           multipart/form-data: { schema: { $ref: '#/components/schemas/GeoImportMultipart' } }
-      responses: { '202': { description: Import accepted } }
+      responses:
+        '202': { description: Import accepted }
+        '400': { description: Invalid request, oversized body, or single-request multipart uploads are disabled }
   /v1/geodata/imports/{runId}:
     get:
       tags: [Geodata]
@@ -459,7 +467,7 @@ paths:
       tags: [Geodata]
       security: [{ bearerAuth: [] }]
       summary: Queue selected records for entity promotion
-      description: The request is published to the geodata import processing subject. Pending or previously confirmed records may be selected. The target is explicitly CANDIDATE or APPROVED.
+      description: Pending or previously confirmed candidates may be selected. A candidate tied to an earlier queue is eligible only when its ID appears in that FAILED queue's candidate-level errors. The target is explicitly CANDIDATE or APPROVED.
       parameters:
         - { in: path, name: runId, required: true, schema: { type: string, format: uuid } }
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -483,6 +491,24 @@ paths:
         '200':
           description: Current promotion queue state and candidate outcomes
           content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportProcessingQueue' } } }
+        '403': { description: geodata.import scope required }
+        '404': { description: Queue not found for this import run }
+  /v1/geodata/imports/{runId}/processing-queues/{queueId}/redrive:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Redrive a failed import promotion queue
+      description: Requeues the original candidate set, resets the worker retry count, and records the authenticated administrator and required reason in queue metadata. Processed candidates are handled idempotently by the worker.
+      parameters:
+        - { in: path, name: runId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: queueId, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GeoImportProcessingRedrive' } } }
+      responses:
+        '202': { description: Failed queue requeued for processing }
+        '400': { description: Queue is not failed or redrive reason is invalid }
         '403': { description: geodata.import scope required }
         '404': { description: Queue not found for this import run }
   /v1/geodata/imports/{runId}/processed:
@@ -631,6 +657,10 @@ paths:
         - in: query
           name: programme
           schema: { type: string }
+        - in: query
+          name: operatorId
+          description: Required for participants, who may list only their own activations.
+          schema: { type: string, format: uuid }
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses: { '200': { description: Activation page } }
@@ -686,7 +716,7 @@ paths:
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AwardDefinition' } } }
-      responses: { '201': { description: Draft award created } }
+      responses: { '200': { description: Existing draft updated }, '201': { description: Draft award created } }
   /v1/awards/{awardId}:
     get:
       tags: [Awards]
@@ -834,7 +864,7 @@ paths:
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AwardRequest' } } }
-      responses: { '201': { description: Award request created } }
+      responses: { '200': { description: Existing eligible request returned }, '201': { description: Award request created } }
   /v1/awards/requests/{requestId}/issuances:
     post:
       tags: [Awards]
@@ -881,6 +911,7 @@ paths:
       tags: [Identity]
       security: [{ bearerAuth: [] }, {}]
       summary: Issue a service token for an authorised service integration
+      operationId: issueServiceToken
       requestBody:
         required: true
         content:
@@ -898,8 +929,9 @@ paths:
       description: >-
         Internal service-to-service route. Only an `email-service` token with
         the fixed `identity.email.resolve` scope and Identity audience is
-        accepted. The public Gateway rejects `/v1/identity/internal/` paths.
-        Only active accounts are eligible. Missing, pending-setup, deactivated,
+        accepted; revoked service tokens are rejected. The public Gateway
+        rejects `/v1/identity/internal/` paths. Only active accounts are
+        eligible. Malformed identifiers, missing, pending-setup, deactivated,
         and unaddressable accounts share the same 404.
         Returns only the deliverable address; no account object or profile
         fields are returned. The address must not be logged or placed in NATS.
@@ -1000,12 +1032,13 @@ paths:
     post:
       tags: [Identity]
       security: [{ bearerAuth: [] }]
-      summary: Register or update programme-scoped OIDC provider mapping
+      summary: Register a programme-scoped OIDC provider mapping
+      operationId: saveOidcMapping
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, additionalProperties: true } } }
-      responses: { '200': { description: OIDC mapping saved } }
+      responses: { '201': { description: OIDC mapping saved } }
   /v1/programmes/{slug}:
     get:
       tags: [Programmes]
@@ -1077,7 +1110,7 @@ paths:
       security: [{ bearerAuth: [] }]
       deprecated: true
       summary: Submit content for review
-      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: contentId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: contentId, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses: { '200': { description: Content submitted } }
   /v1/programmes/{slug}/content/{contentId}/review:
     post:
@@ -1085,7 +1118,7 @@ paths:
       security: [{ bearerAuth: [] }]
       deprecated: true
       summary: Review programme content
-      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: contentId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: contentId, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, additionalProperties: true } } }
@@ -1096,7 +1129,7 @@ paths:
       security: [{ bearerAuth: [] }]
       deprecated: true
       summary: Publish programme content
-      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: contentId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: contentId, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses: { '200': { description: Content published } }
   /v1/programmes/{slug}/content/{contentId}:
     patch:
@@ -1104,7 +1137,7 @@ paths:
       security: [{ bearerAuth: [] }]
       summary: Update content or advance its draft lifecycle
       operationId: patchProgrammeContent
-      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: contentId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: contentId, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, additionalProperties: true, description: Set status to UNDER_REVIEW, APPROVED, CHANGES_REQUESTED, or PUBLISHED to invoke the corresponding lifecycle transition. } } }
@@ -1131,7 +1164,7 @@ paths:
       security: [{ bearerAuth: [] }]
       deprecated: true
       summary: Submit a policy draft for review
-      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses: { '200': { description: Policy draft submitted } }
   /v1/programmes/{slug}/policy-drafts/{draftId}/review:
     post:
@@ -1139,7 +1172,7 @@ paths:
       security: [{ bearerAuth: [] }]
       deprecated: true
       summary: Review a policy draft
-      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, additionalProperties: true } } }
@@ -1150,7 +1183,7 @@ paths:
       security: [{ bearerAuth: [] }]
       deprecated: true
       summary: Publish a policy draft
-      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses: { '200': { description: Policy draft published } }
   /v1/programmes/{slug}/policy-drafts/{draftId}:
     patch:
@@ -1158,7 +1191,7 @@ paths:
       security: [{ bearerAuth: [] }]
       summary: Update a policy draft or advance its lifecycle
       operationId: patchProgrammePolicyDraft
-      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ in: path, name: slug, required: true, schema: { type: string } }, { in: path, name: draftId, required: true, schema: { type: string } }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, additionalProperties: true, description: Set status to UNDER_REVIEW, APPROVED, CHANGES_REQUESTED, or PUBLISHED to invoke the corresponding lifecycle transition. } } }
@@ -1212,18 +1245,43 @@ paths:
   /v1/geodata/tiles/{z}/{x}/{y}:
     get:
       tags: [Geodata]
-      summary: Get a vector tile for geodata display
+      summary: Get a GeoJSON vector collection for a Web Mercator tile
       parameters:
         - { in: path, name: z, required: true, schema: { type: integer } }
         - { in: path, name: x, required: true, schema: { type: integer } }
         - { in: path, name: y, required: true, schema: { type: integer } }
-      responses: { '200': { description: Vector tile } }
+      responses:
+        '200':
+          description: GeoJSON FeatureCollection with tile metadata, capped at 500 features
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GeodataTileCollection' }
   /v1/geodata/refresh-schedules:
     get:
       tags: [Geodata]
       security: [{ bearerAuth: [] }]
       summary: List geodata refresh schedules
-      responses: { '200': { description: Refresh schedule page } }
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Refresh schedule page using the shared page/pageSize contract.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page, pageSize, total, nextPage]
+                properties:
+                  items: { type: array, items: { type: object } }
+                  page: { type: integer, minimum: 1 }
+                  pageSize: { type: integer, minimum: 1, maximum: 100 }
+                  total: { type: integer, minimum: 0 }
+                  nextPage: { type: [integer, 'null'], minimum: 1 }
     post:
       tags: [Geodata]
       security: [{ bearerAuth: [] }]
@@ -1238,7 +1296,26 @@ paths:
       tags: [Geodata]
       security: [{ bearerAuth: [] }]
       summary: Run a geodata refresh schedule
+      description: Submit a complete GeoJSON snapshot for the schedule. Valid records are staged and promoted to CANDIDATE; the configured disappearance policy applies only after the full snapshot is promoted successfully.
       parameters: [{ in: path, name: scheduleId, required: true, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [features]
+              properties:
+                features:
+                  type: array
+                  items:
+                    type: object
+                    required: [type, geometry, properties]
+                    properties:
+                      type: { const: Feature }
+                      id: { type: [string, number] }
+                      geometry: { type: object }
+                      properties: { type: object, additionalProperties: true }
       responses: { '202': { description: Refresh run queued } }
   /v1/geodata/conflation:
     get:
@@ -1341,6 +1418,20 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/QsoIngestionRequest' } } }
       responses: { '202': { description: Ingestion queued for COPY-based processing } }
+  /v1/qso-ingestions/csv:
+    post:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Upload and queue a CSV QSO log for an activation
+      operationId: createCsvQsoIngestion
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CsvQsoIngestionRequest' } } }
+      responses:
+        '202': { description: Validated CSV rows queued for asynchronous ingestion }
+        '400': { description: Invalid file encoding, CSV structure, or row limit }
+        '403': { description: Caller does not operate the activation }
   /v1/qso-ingestions/{ingestionId}:
     get:
       tags: [Activity]
@@ -1349,6 +1440,23 @@ paths:
       operationId: getQsoIngestion
       parameters: [{ in: path, name: ingestionId, required: true, schema: { type: string, format: uuid } }]
       responses: { '200': { description: Ingestion job state and retry information } }
+  /v1/activity/work-jobs/{jobId}/redrive:
+    post:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Redrive a failed or recoverable Activity work job
+      description: Requires activity.admin. Resets failed jobs, creates a fresh work outbox event, records the actor and reason, and resolves related unresolved work dead letters in one transaction.
+      parameters:
+        - { in: path, name: jobId, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ActivityWorkRedriveRequest' } } }
+      responses:
+        '202': { description: Work job requeued for delivery }
+        '400': { description: Job state or kind cannot be redriven }
+        '403': { description: activity.admin scope required }
+        '404': { description: Activity job not found }
   /v1/adif/imports/{importId}:
     get:
       tags: [Activity]
@@ -1356,6 +1464,19 @@ paths:
       summary: Get ADIF import status
       parameters: [{ in: path, name: importId, required: true, schema: { type: string, format: uuid } }]
       responses: { '200': { description: ADIF import status } }
+  /v1/adif/imports:
+    post:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: Upload and queue an ADIF log for an activation
+      operationId: createAdifImport
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AdifImportRequest' } } }
+      responses:
+        '202': { description: ADIF source stored and import queued }
+        '403': { description: Caller does not operate the activation }
   /v1/qsos/{qsoId}/corrections:
     post:
       tags: [Activity]
@@ -1377,12 +1498,39 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/QsoCorrectionReview' } } }
       responses: { '200': { description: Correction decision recorded } }
+  /v1/qso-corrections:
+    get:
+      tags: [Activity]
+      security: [{ bearerAuth: [] }]
+      summary: List and page QSO correction requests for Activity administrators
+      operationId: listQsoCorrections
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [PENDING, APPLIED, REJECTED, ALL], default: PENDING } }
+        - { in: query, name: programme, schema: { type: string } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Paged correction requests with their associated QSO context
+          content: { application/json: { schema: { $ref: '#/components/schemas/QsoCorrectionPage' } } }
+        '403': { description: activity.admin scope required }
   /v1/public/activations:
     get:
       tags: [Activity]
       summary: List public activation history
       parameters: [{ in: query, name: programme, schema: { type: string } }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' }]
       responses: { '200': { description: Public activation page } }
+  /v1/public/programmes/{slug}/content:
+    get:
+      tags: [Programmes]
+      summary: Get currently effective published programme content
+      operationId: getPublishedProgrammeContent
+      parameters:
+        - { in: path, name: slug, required: true, schema: { type: string } }
+        - { in: query, name: locale, schema: { type: string } }
+      responses:
+        '200': { description: Published content for the programme and locale }
+        '404': { description: Programme not found }
   /v1/public/leaderboards:
     get:
       tags: [Activity]
@@ -1425,8 +1573,19 @@ paths:
       tags: [Activity]
       security: [{ bearerAuth: [] }]
       summary: List notifications for the authenticated account
-      parameters: [{ in: query, name: recipientId, schema: { type: string, format: uuid } }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/PageSize' }]
-      responses: { '200': { description: Notification page } }
+      parameters: [{ in: query, name: recipientId, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: Notification list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { type: object, additionalProperties: true }
   /v1/awards/{awardId}/recalculation-jobs:
     post:
       tags: [Awards]
@@ -1520,6 +1679,17 @@ components:
       name: pageSize
       schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
   schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code, detail, requestId, correlationId]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        code: { type: string, enum: [invalid_request, not_found, forbidden, conflict, internal_error] }
+        detail: { type: string }
+        requestId: { type: string, minLength: 1, maxLength: 128, pattern: '^[!-~]+$' }
+        correlationId: { type: string, minLength: 1, maxLength: 128, pattern: '^[!-~]+$' }
     ServiceTokenRequest:
       oneOf:
         - type: object
@@ -1591,13 +1761,16 @@ components:
         streams: { type: array, items: { $ref: '#/components/schemas/JetStreamStream' } }
     Account:
       type: object
-      required: [id, displayName, participationType, status]
+      required: [id, displayName, participationType, status, createdAt, updatedAt, primaryCallsignId]
       properties:
         id: { type: string, format: uuid }
         displayName: { type: string }
         email: { type: string, format: email, nullable: true }
         participationType: { type: string, enum: [OPERATOR, SWL] }
         status: { type: string, enum: [PENDING_SETUP, ACTIVE, DEACTIVATED] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        primaryCallsignId: { type: [string, 'null'], format: uuid }
         websiteUrl: { type: [string, 'null'], maxLength: 2048, format: uri, pattern: '^[Hh][Tt][Tt][Pp][Ss]?://', description: Optional personal website. Only HTTP and HTTPS are accepted; embedded credentials are rejected. }
         biographyMarkdown: { type: [string, 'null'], maxLength: 2000, description: Optional Markdown source. Clients must strip raw HTML and sanitize rendered output. }
         profileImage:
@@ -1830,7 +2003,7 @@ components:
         format: { type: string, enum: [GEOJSON, KML, GPX, WFS, SHAPEFILE, SHP, ARCGIS_FEATURESERVER, OSM_PBF, PARKSERVE_US] }
         entityTypes: { type: array, minItems: 1, uniqueItems: true, items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' } }
         filename: { type: string, minLength: 1 }
-        expectedSize: { type: integer, minimum: 1, maximum: 1073741824 }
+        expectedSize: { type: integer, minimum: 1, maximum: 20971520, description: Source files are limited to 20 MiB; Shapefile ZIP archives are additionally limited to 64 MiB expanded. }
         sha256: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
         source: { type: object }
     GeoImportUploadSession:
@@ -1894,6 +2067,24 @@ components:
         source: { type: object, additionalProperties: true }
         entityTypes: { type: array, minItems: 1, uniqueItems: true, items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' } }
         proposerId: { type: string }
+        attachments:
+          type: array
+          maxItems: 20
+          description: Optional attachment metadata preserved on the proposed entity.
+          items:
+            type: object
+            required: [name, mediaType]
+            properties:
+              name: { type: string }
+              mediaType: { type: string }
+              sizeBytes: { type: integer, minimum: 0, maximum: 26214400, default: 0 }
+              uri: { type: string }
+              sha256: { type: string }
+              license: { type: string }
+              caption: { type: string }
+            anyOf:
+              - required: [uri]
+              - required: [sha256]
     GeoImportRun:
       type: object
       required: [id, status, adapter, format, entityTypes]
@@ -1999,6 +2190,20 @@ components:
         requestedAt: { type: string, format: date-time }
         startedAt: { type: string, format: date-time, nullable: true }
         completedAt: { type: string, format: date-time, nullable: true }
+        attemptCount: { type: integer, minimum: 0 }
+        error: { type: string, nullable: true }
+        redriveHistory:
+          type: array
+          items:
+            type: object
+            required: [requestedAt, requestedBy, reason]
+            properties:
+              requestedAt: { type: string, format: date-time }
+              requestedBy: { type: string }
+              reason: { type: string }
+              previousAttemptCount: { type: integer }
+              previousError: { type: string, nullable: true }
+              previousResult: { type: object, nullable: true, additionalProperties: true }
         result:
           type: object
           properties:
@@ -2013,7 +2218,11 @@ components:
                   candidateId: { type: string, format: uuid }
                   message: { type: string }
           additionalProperties: true
-        error: { type: string, nullable: true }
+    GeoImportProcessingRedrive:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 1000 }
     GeoEntity:
       type: object
       required: [id, name, status, geometry]
@@ -2084,18 +2293,54 @@ components:
         locationEnrichmentRequestedAt: { type: string, format: date-time, nullable: true, readOnly: true }
         locationEnrichmentCompletedAt: { type: string, format: date-time, nullable: true, readOnly: true }
         provenance: { type: object, additionalProperties: true }
+    GeodataTileCollection:
+      type: object
+      required: [type, bbox, features, count, truncated, cacheTtlSeconds, cacheKey, performanceBudgetMs, tile, format]
+      properties:
+        type: { const: FeatureCollection }
+        bbox:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: { type: number }
+          description: 'minLon, minLat, maxLon, maxLat'
+        features:
+          type: array
+          items:
+            type: object
+            required: [type, id, geometry, properties]
+            properties:
+              type: { const: Feature }
+              id: { type: string }
+              geometry: { type: object, additionalProperties: true }
+              properties:
+                type: object
+                additionalProperties: true
+        count: { type: integer, minimum: 0, maximum: 500 }
+        truncated: { type: boolean }
+        cacheTtlSeconds: { type: integer, const: 60 }
+        cacheKey: { type: string, pattern: '^[a-f0-9]{64}$' }
+        performanceBudgetMs: { type: integer, const: 250 }
+        tile:
+          type: object
+          required: [z, x, y]
+          properties:
+            z: { type: integer, minimum: 0, maximum: 22 }
+            x: { type: integer, minimum: 0 }
+            y: { type: integer, minimum: 0 }
+        format: { const: geojson-vector }
     GeodataEntityMetadataPatch:
       type: object
       required: [editorId]
       minProperties: 2
-      description: Omitted fields are unchanged. Website and description accept null or empty string to clear their stored value.
+      description: Omitted fields are unchanged. Website and description accept null or empty string to clear their stored value. Location fields are edited under geodata.location.manage; manualFields identifies the values protected from provider refreshes, while catalogue codes remain provider-derived.
       properties:
         editorId: { type: string }
         name: { type: string, minLength: 1, maxLength: 240 }
         website: { type: [string, 'null'], maxLength: 2048, format: uri, pattern: '^https?://', description: Send null or an empty string to clear. Omission preserves the stored value. }
         description: { type: [string, 'null'], maxLength: 2000, description: Plain text only; send null or an empty string to clear. Omission preserves the stored value. }
         location: { $ref: '#/components/schemas/LocationMetadata' }
-        manualFields: { type: array, items: { type: string } }
+        manualFields: { type: array, uniqueItems: true, items: { type: string, enum: [continent, country, region, subdivision, province, county, city, municipality, locality] } }
         note: { type: string }
     LocationEnrichmentRequest:
       type: object
@@ -2245,6 +2490,25 @@ components:
         activationId: { type: string, format: uuid }
         sourceFormat: { type: string, enum: [JSON, CSV, ADIF] }
         qsos: { type: array, minItems: 1, items: { $ref: '#/components/schemas/Qso' } }
+    ActivityWorkRedriveRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    CsvQsoIngestionRequest:
+      type: object
+      required: [activationId, filename, contentBase64]
+      properties:
+        activationId: { type: string, format: uuid }
+        filename: { type: string, minLength: 5, maxLength: 255, pattern: '\.csv$' }
+        contentBase64: { type: string, contentEncoding: base64, description: UTF-8 CSV with workedCallsign and timestamp columns; optional band, mode, rst, hunterCallsign, hunterId, workedEntityId, and workedLocator columns }
+    AdifImportRequest:
+      type: object
+      required: [activationId, filename, contentBase64]
+      properties:
+        activationId: { type: string, format: uuid }
+        filename: { type: string, minLength: 1, maxLength: 255 }
+        contentBase64: { type: string, contentEncoding: base64 }
     QsoCorrectionReview:
       type: object
       required: [decision, reviewedBy]
@@ -2252,6 +2516,49 @@ components:
         decision: { type: string, enum: [APPLIED, REJECTED] }
         reviewedBy: { type: string }
         reviewNote: { type: string }
+    QsoCorrectionPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/QsoCorrectionWithContext' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        nextPage: { type: integer, nullable: true }
+    QsoCorrectionWithContext:
+      allOf:
+        - $ref: '#/components/schemas/QsoCorrection'
+        - type: object
+          required: [programmeSlug, entityId, qso]
+          properties:
+            programmeSlug: { type: string }
+            entityId: { type: string, nullable: true }
+            qso:
+              type: object
+              required: [id, activationId]
+              properties:
+                id: { type: string, format: uuid }
+                activationId: { type: string, format: uuid }
+                operatorId: { type: string, nullable: true }
+                operatorCallsign: { type: string, nullable: true }
+                workedCallsign: { type: string, nullable: true }
+                timestamp: { type: string, format: date-time, nullable: true }
+                band: { type: string, nullable: true }
+                mode: { type: string, nullable: true }
+    QsoCorrection:
+      type: object
+      required: [id, qsoId, requestedBy, reason, proposedValues, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        qsoId: { type: string, format: uuid }
+        requestedBy: { type: string }
+        reason: { type: string }
+        proposedValues: { type: object, additionalProperties: true }
+        status: { type: string, enum: [PENDING, APPLIED, REJECTED] }
+        reviewedBy: { type: string, nullable: true }
+        reviewNote: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        reviewedAt: { type: string, format: date-time, nullable: true }
     AwardCondition:
       description: Programme-owned recursive AND/OR condition tree.
       oneOf:

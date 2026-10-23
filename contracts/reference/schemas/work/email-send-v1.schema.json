@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/myota-platform/myota-contracts/contracts/schemas/work/email-send-v1.schema.json",
+  "title": "email.send.v1 command envelope v1",
+  "allOf": [
+    {
+      "$ref": "../work-command.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "workType": {
+          "const": "email.send.v1"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "recipientAccountId",
+            "templateId",
+            "templateData"
+          ],
+          "properties": {
+            "recipientAccountId": {
+              "type": "string",
+              "format": "uuid",
+              "maxLength": 36
+            },
+            "templateId": {
+              "type": "string",
+              "enum": [
+                "account-created-participant.v1",
+                "account-created-administrator.v1"
+              ],
+              "maxLength": 40
+            },
+            "templateData": {
+              "type": "object"
+            }
+          },
+          "allOf": [
+            {
+              "oneOf": [
+                {
+                  "properties": {
+                    "templateId": {
+                      "const": "account-created-participant.v1"
+                    },
+                    "templateData": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "displayName"
+                      ],
+                      "properties": {
+                        "displayName": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "templateId": {
+                      "const": "account-created-administrator.v1"
+                    },
+                    "templateData": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "createdAccountName",
+                        "createdAccountRole"
+                      ],
+                      "properties": {
+                        "createdAccountName": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "createdAccountRole": {
+                          "type": "string",
+                          "enum": [
+                            "PARTICIPANT",
+                            "ADMINISTRATOR"
+                          ],
+                          "maxLength": 20
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "x-payload-evidence": "proposed-versioned-allowlisted-template-reference; approved by email workstream decisions",
+  "x-work-id-source": "myota_identity.email_delivery_intent.id",
+  "x-producer-sources": [
+    "apps/identity/identity.py"
+  ],
+  "x-consumer-sources": [
+    "apps/email/email_worker.py"
+  ],
+  "x-max-payload-bytes": 8192,
+  "x-delivery-semantics": "at-least-once; explicit acknowledgement after durable outcome; unknown version/template is never success-acked; transient failures retry under deployment-bounded policy; ambiguous SMTP acceptance can duplicate"
+}

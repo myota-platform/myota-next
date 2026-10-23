@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MyOTA · Outdoor Activation Platform</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <span class="eyebrow">MYOTA PLATFORM</span>
+        <h1 id="programme-name">Outdoor Activation</h1>
+      </div>
+      <label
+        >Programme
+        <select id="programme-select"></select
+      ></label>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">UNIVERSAL PROGRAMME VIEW</p>
+          <h2 id="programme-description">
+            Discover places where radio meets the outdoors.
+          </h2>
+          <p>
+            Verified entities are green. Imported candidates are amber until a
+            community member proposes and an approver reviews them.
+          </p>
+        </div>
+        <div class="stat">
+          <strong id="entity-count">–</strong
+          ><span>entities on this programme</span>
+        </div>
+      </section>
+      <section class="layout">
+        <div class="panel map-panel">
+          <div class="panel-head">
+            <h3>Entity map</h3>
+            <div class="legend">
+              <span class="dot verified"></span> Approved
+              <span class="dot candidate"></span> Candidate
+            </div>
+          </div>
+          <div id="map" class="map">
+            <div class="map-grid"></div>
+            <div id="markers"></div>
+            <div class="map-note">
+              OpenStreetMap-compatible map surface · geometry is served by the
+              geodata API
+            </div>
+          </div>
+        </div>
+        <aside class="panel">
+          <div class="panel-head"><h3>Programme rules</h3></div>
+          <dl id="rules"></dl>
+          <button id="refresh">Refresh map</button>
+        </aside>
+      </section>
+      <section class="panel public-content-panel">
+        <div class="panel-head">
+          <h3>Programme information</h3>
+          <label id="content-locale-label" hidden
+            >Language<select id="content-locale"></select
+          ></label>
+        </div>
+        <p
+          id="content-status"
+          class="small"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div id="programme-content"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head">
+          <h3>Entities</h3>
+          <span id="loading">Loading…</span>
+        </div>
+        <p
+          id="proposal-status"
+          class="small"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Source</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="entities"></tbody>
+          </table>
+        </div>
+        <nav class="entity-pagination" aria-label="Entity pages">
+          <button id="entity-prev" type="button" class="secondary" disabled>
+            Previous
+          </button>
+          <span id="entity-page-status" class="small" aria-live="polite"></span>
+          <button id="entity-next" type="button" class="secondary" disabled>
+            Next
+          </button>
+        </nav>
+        <form id="new-proposal-form" class="profile-form proposal-form">
+          <h4>Suggest a new point location</h4>
+          <p class="small">
+            Proposals enter community review and are not active until approved.
+            Sign in below before submitting.
+          </p>
+          <label
+            >Location name
+            <input id="proposal-name" maxlength="200" required />
+          </label>
+          <label
+            >Entity type<select id="proposal-entity-type" required></select
+          ></label>
+          <div class="proposal-coordinates">
+            <label
+              >Latitude
+              <input
+                id="proposal-latitude"
+                type="number"
+                min="-90"
+                max="90"
+                step="any"
+                required
+              />
+            </label>
+            <label
+              >Longitude
+              <input
+                id="proposal-longitude"
+                type="number"
+                min="-180"
+                max="180"
+                step="any"
+                required
+              />
+            </label>
+          </div>
+          <button
+            id="proposal-location-pick"
+            type="button"
+            class="secondary"
+            aria-pressed="false"
+          >
+            Pick coordinates on map
+          </button>
+          <button type="submit">Submit location proposal</button>
+        </form>
+      </section>
+      <section class="panel profile-panel">
+        <div class="panel-head">
+          <div>
+            <h3>Your profile</h3>
+            <p class="small">
+              Sign in to edit the private profile on your Identity account.
+            </p>
+          </div>
+          <span
+            id="profile-status"
+            class="small"
+            role="status"
+            aria-live="polite"
+          ></span>
+        </div>
+        <form id="profile-form" class="profile-form" hidden>
+          <label
+            >Personal website
+            <input
+              id="profile-website"
+              type="url"
+              maxlength="2048"
+              autocomplete="url"
+              placeholder="https://example.org"
+            />
+          </label>
+          <label
+            >Short biography (Markdown, 2,000 characters maximum)
+            <textarea
+              id="profile-biography"
+              maxlength="2000"
+              rows="5"
+            ></textarea>
+          </label>
+          <div>
+            <h4>Biography preview</h4>
+            <div id="profile-biography-preview" class="biography-preview"></div>
+          </div>
+          <button type="submit">Save profile details</button>
+        </form>
+        <section id="profile-callsigns" class="profile-callsigns" hidden>
+          <h4>Your callsigns</h4>
+          <p class="small">
+            Add callsigns, choose the primary callsign used for new activity,
+            submit verification evidence, or retire callsigns you no longer use.
+          </p>
+          <div id="profile-callsign-list" class="profile-callsign-list"></div>
+          <form id="profile-callsign-add" class="profile-form">
+            <h5>Add a callsign</h5>
+            <label>
+              Callsign
+              <input id="profile-callsign-value" maxlength="32" required />
+            </label>
+            <label>
+              Valid from (ISO 8601, optional)
+              <input
+                id="profile-callsign-valid-from"
+                placeholder="2026-10-21T12:00:00Z"
+              />
+            </label>
+            <label>
+              Valid to (ISO 8601, optional)
+              <input
+                id="profile-callsign-valid-to"
+                placeholder="2026-10-21T12:00:00Z"
+              />
+            </label>
+            <button type="submit">Add callsign</button>
+          </form>
+          <form id="profile-callsign-evidence" class="profile-form">
+            <h5>Submit verification evidence</h5>
+            <label>
+              Callsign
+              <select id="profile-evidence-callsign" required></select>
+            </label>
+            <label>
+              Evidence type
+              <input id="profile-evidence-type" required />
+            </label>
+            <label>
+              Source
+              <input id="profile-evidence-source" required />
+            </label>
+            <label>
+              Checksum (optional)
+              <input id="profile-evidence-checksum" />
+            </label>
+            <label>
+              Metadata JSON (optional)
+              <textarea id="profile-evidence-metadata" rows="3"></textarea>
+            </label>
+            <button type="submit">Submit evidence</button>
+          </form>
+          <form id="profile-callsign-retire" class="profile-form" hidden>
+            <h5>Retire a callsign</h5>
+            <label>
+              Callsign
+              <select id="profile-retire-callsign" required></select>
+            </label>
+            <label id="profile-retire-replacement-label" hidden>
+              Replacement primary callsign
+              <select id="profile-retire-replacement"></select>
+            </label>
+            <label>
+              Valid to (ISO 8601, optional)
+              <input
+                id="profile-retire-valid-to"
+                placeholder="Defaults to the current time"
+              />
+            </label>
+            <p id="profile-retire-help" class="small" hidden></p>
+            <div class="profile-callsign-actions">
+              <button type="submit">Retire callsign</button>
+              <button
+                id="profile-retire-cancel"
+                type="button"
+                class="secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </section>
+        <div id="profile-image-editor" class="profile-image-editor" hidden>
+          <h4>Profile picture</h4>
+          <img
+            id="profile-image-current"
+            class="profile-image-current"
+            alt="Current profile picture"
+            hidden
+          />
+          <label
+            >Choose a JPEG, PNG, or WebP image (5 MiB maximum)
+            <input
+              id="profile-image-file"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+            />
+          </label>
+          <div id="profile-crop-tools" hidden>
+            <p class="small">
+              Adjust the square crop. The saved picture is resized to 512 × 512
+              WebP.
+            </p>
+            <canvas
+              id="profile-crop-canvas"
+              width="240"
+              height="240"
+              role="img"
+              aria-label="Square profile picture crop preview"
+            ></canvas>
+            <label
+              >Zoom
+              <input
+                id="profile-crop-zoom"
+                type="range"
+                min="100"
+                max="300"
+                value="100"
+              />
+            </label>
+            <div class="crop-controls" aria-label="Move crop position">
+              <button
+                type="button"
+                data-crop-pan="up"
+                aria-label="Move crop up"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                data-crop-pan="left"
+                aria-label="Move crop left"
+              >
+                ←
+              </button>
+              <button
+                type="button"
+                data-crop-pan="down"
+                aria-label="Move crop down"
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                data-crop-pan="right"
+                aria-label="Move crop right"
+              >
+                →
+              </button>
+            </div>
+            <button id="profile-image-upload" type="button">
+              Save cropped picture
+            </button>
+          </div>
+          <button
+            id="profile-image-delete"
+            type="button"
+            class="secondary"
+            hidden
+          >
+            Remove profile picture
+          </button>
+        </div>
+      </section>
+      <section class="panel awards-panel">
+        <div class="panel-head">
+          <div>
+            <h3>Programme awards</h3>
+            <p class="small">
+              Awards and levels are defined by this programme. Sign in to
+              request a level you have achieved.
+            </p>
+          </div>
+          <span
+            id="award-status"
+            class="small"
+            role="status"
+            aria-live="polite"
+          ></span>
+        </div>
+        <div id="public-awards"></div>
+        <form id="award-login" class="award-login">
+          <label
+            >Email<input
+              id="award-email"
+              type="email"
+              autocomplete="username"
+              required /></label
+          ><label
+            >Password<input
+              id="award-password"
+              type="password"
+              autocomplete="current-password"
+              required /></label
+          ><button type="submit">Sign in</button>
+        </form>
+        <div id="award-request-status" class="small"></div>
+        <div id="participant-award-requests" class="award-request-list" hidden>
+          <h4>Your award requests</h4>
+          <div id="participant-award-request-items"></div>
+        </div>
+      </section>
+      <section class="panel activation-panel">
+        <div class="panel-head">
+          <div>
+            <h3>Field activations</h3>
+            <p class="small">
+              Sign in above to start an activation and record contacts.
+            </p>
+          </div>
+          <span
+            id="activation-status"
+            class="small"
+            role="status"
+            aria-live="polite"
+          ></span>
+        </div>
+        <form id="activation-start-form" class="profile-form" hidden>
+          <label>Entity<select id="activation-entity" required></select></label>
+          <label
+            >Operator callsign<select id="activation-callsign" required></select
+          ></label>
+          <button type="submit">Start activation</button>
+        </form>
+        <div id="activations-list"></div>
+        <form id="qso-form" class="profile-form" hidden>
+          <label
+            >Open activation<select id="qso-activation" required></select
+          ></label>
+          <label
+            >Worked callsign<input id="qso-callsign" maxlength="32" required
+          /></label>
+          <label>Band<input id="qso-band" placeholder="20M" /></label>
+          <label>Mode<input id="qso-mode" placeholder="SSB" /></label>
+          <button type="submit">Record contact</button>
+          <button id="activation-close" class="secondary" type="button">
+            Close activation
+          </button>
+        </form>
+        <form id="adif-import-form" class="profile-form" hidden>
+          <label
+            >ADIF log file<input
+              id="adif-file"
+              type="file"
+              accept=".adi,.adif,text/plain"
+              required
+          /></label>
+          <button type="submit">Import ADIF log</button>
+          <button id="adif-refresh" class="secondary" type="button" hidden>
+            Refresh import status
+          </button>
+          <span
+            id="adif-import-status"
+            class="small"
+            role="status"
+            aria-live="polite"
+          ></span>
+        </form>
+      </section>
+    </main>
+    <script src="/profile-utils.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

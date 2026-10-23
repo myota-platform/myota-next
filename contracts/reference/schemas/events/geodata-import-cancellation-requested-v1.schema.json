@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/myota-platform/myota/contracts/schemas/events/geodata-import-cancellation-requested-v1.schema.json",
+  "title": "geodata.import.cancellation-requested.v1 envelope v1",
+  "allOf": [
+    {
+      "$ref": "../event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "geodata.import.cancellation-requested.v1"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "importRunId": {
+              "type": "string"
+            },
+            "requestedBy": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "importRunId",
+            "requestedBy"
+          ],
+          "additionalProperties": true
+        }
+      }
+    }
+  ],
+  "x-payload-evidence": "source-derived-geodata-callsite",
+  "x-data-classification": "internal-operational-metadata"
+}

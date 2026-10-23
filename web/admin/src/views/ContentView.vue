@@ -1,0 +1,352 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { apiRequest } from '../lib/api';
+import { myotaClient } from '../lib/myotaClient';
+import { createPendingIdempotencyKeys } from '../lib/pendingIdempotencyKeys';
+import { useAppStore } from '../stores/app';
+import { utcInput, utcInputValue } from '../lib/utc';
+import PageHeader from '../components/PageHeader.vue';
+import PageFeedback from '../components/PageFeedback.vue';
+import PageNavigation from '../components/PageNavigation.vue';
+import ProgrammeScope from '../components/ProgrammeScope.vue';
+import { usePageFeedback } from '../composables/usePageFeedback';
+interface ContentItem {
+  id?: string;
+  key: string;
+  locale: string;
+  fallbackLocale?: string;
+  value: string;
+  status?: string;
+  effectiveFrom?: string;
+}
+interface Page<T> {
+  items: T[];
+  page: number;
+  total: number;
+  nextPage: number | null;
+}
+const store = useAppStore();
+const pendingContentMutationKeys = createPendingIdempotencyKeys(
+  'myota_admin_pending_content_mutations',
+);
+const programme = ref(
+  store.currentProgramme || store.programmes[0]?.slug || '',
+);
+const items = ref<ContentItem[]>([]);
+const contentPage = ref(1);
+const contentNextPage = ref<number | null>(null);
+const contentTotal = ref(0);
+const coverage = ref<any[]>([]);
+const selected = ref<ContentItem | null>(null);
+const feedback = usePageFeedback();
+const { error, message, loading, saving } = feedback;
+const editable = computed(
+  () =>
+    !selected.value ||
+    ['DRAFT', 'CHANGES_REQUESTED'].includes(selected.value.status || ''),
+);
+let generation = 0;
+
+const form = reactive({
+  key: '',
+  locale: 'en',
+  fallbackLocale: '',
+  value: '',
+  effectiveFrom: '',
+});
+function edit(item: ContentItem | null): void {
+  selected.value = item ? JSON.parse(JSON.stringify(item)) : null;
+  Object.assign(form, {
+    key: item?.key || '',
+    locale: item?.locale || 'en',
+    fallbackLocale: item?.fallbackLocale || '',
+    value: item?.value || '',
+    effectiveFrom: utcInput(item?.effectiveFrom),
+  });
+}
+async function fetchItems(
+  selectedId?: string | Event,
+  requestedPage = contentPage.value,
+): Promise<void> {
+  if (!programme.value) return;
+  const current = ++generation;
+  const id = typeof selectedId === 'string' ? selectedId : undefined;
+  const [data, coverageData] = await Promise.all([
+    apiRequest<Page<ContentItem>>(
+      `/v1/programmes/${encodeURIComponent(programme.value)}/content?page=${requestedPage}&pageSize=50`,
+    ),
+    apiRequest<{ locales: any[] }>(
+      `/v1/programmes/${encodeURIComponent(programme.value)}/content/coverage`,
+    ),
+  ]);
+  if (current !== generation) return;
+  items.value = data.items || [];
+  contentPage.value = data.page || requestedPage;
+  contentTotal.value = data.total || 0;
+  contentNextPage.value = data.nextPage ?? null;
+  coverage.value = coverageData.locales || [];
+  if (id) edit(items.value.find((item) => item.id === id) || null);
+}
+async function load(): Promise<void> {
+  await feedback.run(() => fetchItems(selected.value?.id));
+}
+async function changeContentPage(page: number): Promise<void> {
+  if (page < 1 || loading.value || saving.value) return;
+  await feedback.run(async () => {
+    edit(null);
+    await fetchItems(undefined, page);
+  });
+}
+async function save(): Promise<void> {
+  if (!editable.value || !programme.value) return;
+  await feedback.run(
+    async () => {
+      const creating = !selected.value?.id;
+      const body = {
+        contentId: selected.value?.id,
+        key: form.key.trim(),
+        locale: form.locale.trim(),
+        fallbackLocale: form.fallbackLocale.trim() || null,
+        value: form.value,
+      };
+      const requestPath = `/v1/programmes/${encodeURIComponent(programme.value)}/content`;
+      const fingerprint = JSON.stringify([
+        store.account?.id,
+        requestPath,
+        'POST',
+        body,
+      ]);
+      const saved = await apiRequest<ContentItem>(requestPath, {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: {
+          'Idempotency-Key':
+            await pendingContentMutationKeys.getOrCreate(fingerprint),
+        },
+      });
+      await pendingContentMutationKeys.complete(fingerprint);
+      if (creating) contentPage.value = 1;
+      await fetchItems(saved.id);
+    },
+    { mutation: true, success: 'Content draft saved.' },
+  );
+}
+async function action(actionName: string, decision?: string): Promise<void> {
+  const record = selected.value;
+  if (!record?.id) return;
+  const id = record.id;
+  await feedback.run(
+    async () => {
+      if (actionName === 'publish' && !form.effectiveFrom)
+        throw new Error('Choose an effective date before publishing.');
+      const body =
+        actionName === 'review'
+          ? { status: decision, reviewerId: store.account?.id }
+          : actionName === 'publish'
+            ? {
+                status: 'PUBLISHED',
+                effectiveFrom: utcInputValue(
+                  form.effectiveFrom,
+                  record.effectiveFrom,
+                ),
+                publisherId: store.account?.id,
+              }
+            : { status: 'UNDER_REVIEW', submitterId: store.account?.id };
+      const requestPath = `/v1/programmes/${encodeURIComponent(programme.value)}/content/${encodeURIComponent(id)}`;
+      const fingerprint = JSON.stringify([
+        store.account?.id,
+        requestPath,
+        'PATCH',
+        body,
+      ]);
+      await myotaClient.patchProgrammeContent(
+        programme.value,
+        id,
+        body,
+        await pendingContentMutationKeys.getOrCreate(fingerprint),
+      );
+      await pendingContentMutationKeys.complete(fingerprint);
+      message.value = `Content ${actionName === 'publish' ? 'published' : actionName === 'review' ? 'reviewed' : 'submitted for review'}.`;
+      await fetchItems(id);
+    },
+    { mutation: true },
+  );
+}
+watch(programme, () => {
+  generation++;
+  contentPage.value = 1;
+  edit(null);
+  items.value = [];
+  coverage.value = [];
+  store.currentProgramme = programme.value;
+  void load();
+});
+onMounted(() => {
+  store.currentProgramme = programme.value;
+  void load();
+});
+</script>
+
+<template>
+  <PageHeader :refresh="load" :busy="loading || saving"
+    ><button
+      class="primary"
+      :disabled="loading || saving || !programme"
+      @click="edit(null)"
+    >
+      New content draft
+    </button></PageHeader
+  >
+  <ProgrammeScope v-model="programme" :disabled="loading || saving" />
+  <PageFeedback :error="error" :message="message" :loading="loading" />
+  <article class="panel">
+    <div class="panel-heading">
+      <div>
+        <h2>Locale coverage</h2>
+        <small class="muted"
+          >Published keys only; drafts remain visible below.</small
+        >
+      </div>
+    </div>
+    <div class="coverage-grid">
+      <div
+        v-for="locale in coverage"
+        :key="locale.locale"
+        class="coverage-card"
+      >
+        <strong>{{ locale.locale }}</strong
+        ><span>{{ locale.coveragePercent }}%</span
+        ><small>{{ locale.published }} of {{ locale.total }} published</small>
+      </div>
+      <p v-if="!coverage.length" class="muted empty">No content keys yet.</p>
+    </div>
+  </article>
+  <div class="split-layout">
+    <article class="panel">
+      <div class="panel-heading">
+        <h2>Content versions</h2>
+        <span class="muted"
+          >{{ contentTotal }} versions · page {{ contentPage }}</span
+        >
+      </div>
+      <div class="table-list">
+        <button
+          v-for="item in items"
+          :key="item.id"
+          class="table-row"
+          :class="{ selected: selected?.id === item.id }"
+          @click="edit(item)"
+        >
+          <span
+            ><strong>{{ item.key }}</strong
+            ><small
+              >{{ item.locale
+              }}<span v-if="item.fallbackLocale">
+                · fallback {{ item.fallbackLocale }}</span
+              ></small
+            ></span
+          ><span
+            class="status-pill"
+            :class="(item.status || '').toLowerCase()"
+            >{{ item.status }}</span
+          >
+        </button>
+        <p v-if="!items.length" class="muted empty">No content drafts yet.</p>
+      </div>
+      <PageNavigation
+        class="content-pagination"
+        :page="contentPage"
+        :next-page="contentNextPage"
+        :busy="loading || saving"
+        :show-summary="false"
+        label="content versions"
+        @change="changeContentPage"
+      />
+    </article>
+    <article class="panel">
+      <div class="panel-heading">
+        <h2>{{ selected ? selected.key : 'New content draft' }}</h2>
+      </div>
+      <p v-if="!editable" class="read-only-note" role="status">
+        This version is read-only. Create a new draft to change its contents;
+        review and publication actions remain available where applicable.
+      </p>
+      <form class="form-grid" :aria-busy="saving" @submit.prevent="save">
+        <label
+          >Content key<input
+            v-model="form.key"
+            :readonly="!editable || saving"
+            required /></label
+        ><label
+          >Locale<input
+            v-model="form.locale"
+            :readonly="!editable || saving"
+            required /></label
+        ><label
+          >Fallback locale<input
+            v-model="form.fallbackLocale"
+            :readonly="!editable || saving" /></label
+        ><label
+          >Effective from (UTC)<input
+            v-model="form.effectiveFrom"
+            :disabled="saving || selected?.status !== 'APPROVED'"
+            type="datetime-local"
+          /><small class="field-help"
+            >Choose this after approval; it is saved when publishing, in
+            UTC.</small
+          ></label
+        ><label class="wide"
+          >Text or content value<textarea
+            v-model="form.value"
+            :readonly="!editable || saving"
+            required
+          ></textarea>
+        </label>
+        <div class="form-actions wide">
+          <button
+            v-if="editable"
+            class="primary"
+            type="submit"
+            :disabled="saving || loading || !programme"
+          >
+            {{ saving ? 'Saving…' : 'Save draft' }}</button
+          ><button
+            v-if="
+              selected &&
+              ['DRAFT', 'CHANGES_REQUESTED'].includes(selected.status || '')
+            "
+            class="secondary"
+            type="button"
+            :disabled="saving || loading"
+            @click="action('submit')"
+          >
+            Submit for review</button
+          ><button
+            v-if="selected?.status === 'UNDER_REVIEW'"
+            class="approve"
+            type="button"
+            :disabled="saving || loading"
+            @click="action('review', 'APPROVED')"
+          >
+            Approve</button
+          ><button
+            v-if="selected?.status === 'UNDER_REVIEW'"
+            class="reject"
+            type="button"
+            :disabled="saving || loading"
+            @click="action('review', 'CHANGES_REQUESTED')"
+          >
+            Request changes</button
+          ><button
+            v-if="selected?.status === 'APPROVED'"
+            class="primary"
+            type="button"
+            @click="action('publish')"
+          >
+            Publish
+          </button>
+        </div>
+      </form>
+    </article>
+  </div>
+</template>
