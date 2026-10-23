@@ -451,4 +451,38 @@ describe('streamShapefileFeatures', () => {
     expect(normalized.coordinates[0]).toBeCloseTo(7.2, 7);
     expect(normalized.coordinates[1]).toBeCloseTo(46.10000000000001, 7);
   });
+
+  it('applies the PyProj Spanish grid to an ED50 Shapefile WKT projection', async () => {
+    const source = await readFile(
+      new URL(
+        './fixtures/python-point-shapefile-ed50-utm30.zip',
+        import.meta.url,
+      ),
+    );
+    async function* chunks() {
+      yield source;
+    }
+    let feature: unknown;
+    for await (const item of streamShapefileFeatures(
+      chunks(),
+      'python-point-shapefile-ed50-utm30.zip',
+      '',
+      10,
+      async () => undefined,
+    )) {
+      feature = item;
+    }
+
+    expect(feature).toMatchObject({
+      geometry: { type: 'Point', coordinates: [235000, 4140000] },
+      properties: { name: 'ED50 grid point' },
+      crs: expect.stringContaining('D_European_1950'),
+    });
+    const normalized = normalizeAdapterFeature(
+      'MANUAL',
+      feature as Record<string, unknown>,
+    ).geometry as { coordinates: number[] };
+    expect(normalized.coordinates[0]).toBeCloseTo(-5.993670519717036, 7);
+    expect(normalized.coordinates[1]).toBeCloseTo(37.367037324028914, 7);
+  });
 });

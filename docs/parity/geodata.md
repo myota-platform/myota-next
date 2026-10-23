@@ -306,10 +306,15 @@ degrees, including the Python import path's EPSG:25830 point at `(-5.99, 37.39)`
 EPSG:4230 and projected ED50 EPSG:23028 through EPSG:23038 use the IGN Spain
 ED50-to-ETRS89 grid when the fallback coordinate is within its geographic
 coverage. PyProj 3.8.0 grid fixtures for EPSG:4230 and EPSG:23029 through
-EPSG:23031 match within `1e-7` degrees. Coordinates outside the grid coverage
-retain the bundled global definition. The grid's source and CC BY 4.0
-attribution are recorded in `libs/geodata-domain/data/README.md`; other
-datum-grid operations remain unqualified.
+EPSG:23031 match within `1e-7` degrees. A PyShp 2.3.1 Shapefile fixture also
+supplies ED50 as ESRI WKT rather than an EPSG string; the adapter recognizes its
+datum and applies the IGN grid, matching PyProj 3.8.0. Geographic ED50 WKT uses
+the same grid path. This closes a previous mismatch where `.prj` WKT bypassed
+the grid and shifted the tested point by about 0.0013 degrees in each axis.
+Coordinates outside the grid coverage retain the bundled global definition.
+The grid's source and CC BY 4.0 attribution are recorded in
+`libs/geodata-domain/data/README.md`; other datum-grid operations remain
+unqualified.
 Geometry type aliases use Python-compatible Unicode case folding, and CRS
 metadata selects the first Python-truthy identifier field. Integer-valued floating CRS
 identifiers use Python's decimal integer formatting, including values whose default

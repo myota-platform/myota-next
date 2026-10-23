@@ -33,6 +33,24 @@ describe('shared EPSG projection definitions', () => {
     },
   );
 
+  it('uses the Spanish IGN grid when ED50 UTM arrives as Shapefile WKT', () => {
+    const wkt =
+      'PROJCS["ED_1950_UTM_Zone_30N",GEOGCS["GCS_European_1950",DATUM["D_European_1950",SPHEROID["International_1924",6378388.0,297.0]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["False_Easting",500000.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",-3.0],PARAMETER["Scale_Factor",0.9996],PARAMETER["Latitude_Of_Origin",0.0],UNIT["Meter",1.0]]';
+    const actual = projectToWgs84(wkt, [235000, 4140000]);
+
+    expect(actual[0]).toBeCloseTo(-5.993670519717036, 7);
+    expect(actual[1]).toBeCloseTo(37.367037324028914, 7);
+  });
+
+  it('uses the Spanish IGN grid when geographic ED50 arrives as WKT', () => {
+    const wkt =
+      'GEOGCS["GCS_European_1950",DATUM["D_European_1950",SPHEROID["International_1924",6378388.0,297.0]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]';
+    const actual = projectToWgs84(wkt, [-5.99, 37.39]);
+
+    expect(actual[0]).toBeCloseTo(-5.991339397674241, 7);
+    expect(actual[1]).toBeCloseTo(37.388740840920605, 7);
+  });
+
   it('keeps the bundled ED50 fallback outside the PyProj Spain operation area', () => {
     const coordinate = [500000, 6000000];
     expect(projectToWgs84('EPSG:23030', coordinate)).toEqual(

@@ -37,15 +37,9 @@ export function projectToWgs84(source: string, coordinate: number[]) {
   const normalizedSource = source.trim().toUpperCase();
   const fallback = proj4(source, 'EPSG:4326', coordinate);
   const epsgMatch = /^EPSG:\s*(\d+)$/.exec(normalizedSource);
-  if (!epsgMatch) return fallback;
-
-  const epsg = Number(epsgMatch[1]);
-  const gridSource =
-    epsg === 4230
-      ? '+proj=longlat +ellps=intl +nadgrids=es_ign_SPED2ETV2.tif +no_defs'
-      : epsg >= 23028 && epsg <= 23038
-        ? `+proj=utm +zone=${epsg - 23000} +ellps=intl +nadgrids=es_ign_SPED2ETV2.tif +units=m +no_defs`
-        : undefined;
+  const gridSource = epsgMatch
+    ? spanishGridSourceForEpsg(Number(epsgMatch[1]))
+    : spanishGridSourceForWkt(source);
   if (!gridSource) return fallback;
 
   const [longitude, latitude] = fallback;
@@ -60,6 +54,48 @@ export function projectToWgs84(source: string, coordinate: number[]) {
 
   const shifted = proj4(gridSource, 'EPSG:4326', coordinate);
   return shifted.every(Number.isFinite) ? shifted : fallback;
+}
+
+function spanishGridSourceForEpsg(epsg: number): string | undefined {
+  if (epsg === 4230)
+    return '+proj=longlat +ellps=intl +nadgrids=es_ign_SPED2ETV2.tif +no_defs';
+  if (epsg >= 23028 && epsg <= 23038)
+    return `+proj=utm +zone=${epsg - 23000} +ellps=intl +nadgrids=es_ign_SPED2ETV2.tif +units=m +no_defs`;
+  return undefined;
+}
+
+function spanishGridSourceForWkt(source: string): string | undefined {
+  const projection = proj4.Proj(source) as unknown as Record<string, unknown>;
+  const datumCode =
+    typeof projection.datumCode === 'string'
+      ? projection.datumCode.toLowerCase().replaceAll(/[^a-z0-9]/g, '')
+      : '';
+  if (datumCode !== 'european1950') return undefined;
+
+  const projectionName =
+    typeof projection.projName === 'string'
+      ? projection.projName.toLowerCase().replaceAll(/[^a-z0-9]/g, '')
+      : '';
+  if (projectionName === 'longlat')
+    return '+proj=longlat +ellps=intl +nadgrids=es_ign_SPED2ETV2.tif +no_defs';
+
+  if (
+    !['tmerc', 'transversemercator', 'extendedtransversemercator'].includes(
+      projectionName,
+    ) ||
+    projection.ellps !== 'intl' ||
+    projection.x0 !== 500000 ||
+    projection.y0 !== 0 ||
+    projection.k0 !== 0.9996 ||
+    projection.lat0 !== 0 ||
+    typeof projection.long0 !== 'number'
+  )
+    return undefined;
+
+  const centralMeridian = (projection.long0 * 180) / Math.PI;
+  const zone = Math.round((centralMeridian + 183) / 6);
+  if (zone < 28 || zone > 38) return undefined;
+  return `+proj=utm +zone=${zone} +ellps=intl +nadgrids=es_ign_SPED2ETV2.tif +units=m +no_defs`;
 }
 
 export default proj4;
