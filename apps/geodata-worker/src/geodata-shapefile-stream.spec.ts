@@ -297,6 +297,17 @@ describe('streamShapefileFeatures', () => {
       },
     ],
     [
+      'python-polyline-shapefile.zip',
+      {
+        type: 'LineString',
+        coordinates: [
+          [-5.99, 37.39],
+          [-5.98, 37.4],
+          [-5.97, 37.41],
+        ],
+      },
+    ],
+    [
       'python-polygonz-shapefile.zip',
       {
         type: 'Polygon',
@@ -333,6 +344,16 @@ describe('streamShapefileFeatures', () => {
         coordinates: [
           [7.2, 46.1],
           [7.3, 46.2],
+        ],
+      },
+    ],
+    [
+      'python-multipoint-shapefile.zip',
+      {
+        type: 'MultiPoint',
+        coordinates: [
+          [-5.99, 37.39],
+          [-5.98, 37.4],
         ],
       },
     ],

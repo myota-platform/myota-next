@@ -213,6 +213,70 @@ describe('OSM PBF reference parity', () => {
     ]);
   });
 
+  it('matches the Python importer for every required OSM tag family', async () => {
+    const source = await readFile(
+      new URL('./fixtures/python-osm-tag-matrix.osm.pbf', import.meta.url),
+    );
+    async function* chunks() {
+      yield source;
+    }
+    const features = [];
+    for await (const feature of decodeOsmPbfStream(
+      chunks(),
+      'python-osm-tag-matrix.osm.pbf',
+      30,
+      '',
+    )) {
+      features.push(feature);
+    }
+
+    expect(
+      features.map((feature) => [
+        feature.id,
+        feature.properties.name,
+        feature.geometry.type,
+        feature.properties.sourceRef,
+      ]),
+    ).toEqual([
+      ['node/1', 'Park node', 'Point', 'node/1'],
+      ['node/2', 'Reserve node', 'Point', 'node/2'],
+      ['node/3', 'Boundary node', 'Point', 'node/3'],
+      ['node/4', 'Recreation node', 'Point', 'node/4'],
+      ['node/5', 'Path node', 'Point', 'node/5'],
+      ['node/6', 'Footway node', 'Point', 'node/6'],
+      ['node/7', 'Track node', 'Point', 'node/7'],
+      ['node/8', 'Bridleway node', 'Point', 'node/8'],
+      ['node/9', 'Hiking node', 'Point', 'node/9'],
+      ['way/101', 'Path way', 'LineString', 'way/101'],
+      ['way/102', 'Footway way', 'LineString', 'way/102'],
+      ['way/103', 'Track way', 'LineString', 'way/103'],
+      ['way/104', 'Bridleway way', 'LineString', 'way/104'],
+      ['way/105', 'Hiking way', 'LineString', 'way/105'],
+      ['way/201', 'Reserve area', 'MultiPolygon', 'way/201'],
+      ['way/202', 'Protected area', 'MultiPolygon', 'way/202'],
+      ['way/203', 'Recreation area', 'MultiPolygon', 'way/203'],
+    ]);
+    expect(features.map(sourceFeatureHashOverride)).toEqual([
+      '4203e5b605624f3f858acb2abaf07d67253302cdd0ed31ebfa65fff542b4daac',
+      '8288dde711c546f7e1b3dcd0cb3db84e57d5ed04453fdb0a1def6d8b506b901a',
+      '3193573f4429ef65f77993e4dbd7f59d12f5dde4d73ed4c182d92faf902b821f',
+      '204577612052e5934658bd4973865ee20c04192368fa69ba4e7b3f72b5a7dff2',
+      '767e15783f3ad7b406fbd915f285446cde1901dd472ab916d7d36803ee4e4a09',
+      'a95bfa94c1bf87e79117e950b437c4f60fdc0ba97e5bdff14052ff4a7608a495',
+      '08106f2bdde2a240028998a591f93201a431c31a71034130c6556b9763dd294a',
+      '94d13b7c5cab1a7a4b1c3303d01f26bf489545df5dc608fbd1632629faa015a4',
+      '5edcfb18423dc896b15c35da0a9dc190c8d8f2ea3e19fc1903f75e5827837750',
+      '8528c488bda924db9a5f88a202377f50085a62c4e656a30191a97d47c0daa92f',
+      'e690c12fc0b7649961c7509be4bd9cc4e47bf0836f8bdf747a03cf6a8c6d573a',
+      '184261dd88f02592771b0d4feab3f89800757739ef1ffdb06f5df0b746d9a3db',
+      'a280b11b2289596635963b6be11be773728154722864551bd1065026b507730f',
+      '05ab8cb95b6b1373aac7a960b338cc93535d83508e5ea2cfbd0bce5454b1e332',
+      'c134031d94548b6d440349aa883fc5bb30ba8190d012df5f5e6e31fa7f3c229e',
+      '106ea0a1e7e2b118f77f9d774abb47061e24aee086757d45fd9aa164eacd1679',
+      '029fc91da4d6e4e8bb98152a3a26bd4daef074843b97f94e7881131051f8a5bc',
+    ]);
+  });
+
   it('matches Python node, way, and multipolygon features and hashes', async () => {
     const source = await readFile(
       new URL('./fixtures/python-osm-parity.osm.pbf', import.meta.url),

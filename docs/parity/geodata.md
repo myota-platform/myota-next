@@ -147,8 +147,8 @@ area features with the same source ID and Python-compatible hashes
 PyOsmium 4.3.2 fixture verifies a `route=hiking` way without a `highway` tag is
 imported as a `LineString` with hash
 `2d72daf72126a5e207880d327a13916f5d9b48806a02cec51bf3cc18dd8b7718`. The manually
-triggered Operational and performance
-qualification workflow decodes generated 50,000-feature, 250,000-feature, and
+triggered Operational and performance qualification workflow decodes generated
+50,000-feature, 250,000-feature, and
 300,000-feature PBFs and checks that Linux Node plus `osmium` subprocess-tree RSS growth
 stays within 96 MiB, 192 MiB, and 192 MiB, respectively, above the test-worker baseline.
 The manual runner now executes all three memory cases instead of returning success
@@ -160,8 +160,13 @@ PBF's resource workload contains tagged nodes. Checked-in geometry fixtures cove
 a protected-area multipolygon with an inner ring, and a Python-generated multipart
 multipolygon with two disjoint outer components and one inner ring. Its PyOsmium 4.3.2
 feature hash is `667e7748be2bab9cb530e1a05342c819bb7a9239858daaddbb593c6eef9db968`.
-Inputs above 300,000 features and other less common OSM geometries still need
-qualification. Area and way vertex limits use the
+The PyOsmium 4.3.2 `python-osm-tag-matrix.osm.pbf` fixture exercises each of the
+nine required tag values on nodes and the five accepted linear-way tags, plus
+the remaining area-tag values on closed ways. All 17 emitted Point,
+LineString, and MultiPolygon features match the Python importer in order,
+source reference, properties, geometry type, and SHA-256 feature hash.
+Inputs above 300,000 features and less common OSM relation/member patterns
+still need qualification. Area and way vertex limits use the
 reference errors; the CLI decoder checks after osmium emits a record, bounded by the
 decoded feature-size cap, while PyOsmium checks areas before GeoJSON materialization.
 
@@ -295,19 +300,25 @@ A PyShp 2.3.1 multipart `PolyLine` fixture confirms that both parsers retain the
 parts as a `MultiLineString` with the same coordinate grouping; it is checked in at
 `apps/geodata-worker/src/fixtures/python-multiline-shapefile.zip`.
 
+Separate PyShp 2.3.1 `PolyLine` and `MultiPoint` fixtures cover their ordinary
+2D shapes, including single-part `LineString` and XY `MultiPoint` outputs.
+
 A simple PyShp 2.3.1 `Polygon` fixture also confirms that a single exterior ring stays a
 GeoJSON `Polygon`; it is checked in at
 `apps/geodata-worker/src/fixtures/python-polygon-shapefile.zip`.
 
 Additional PyShp 2.3.1 `PointZ`, `PointM`, `PolylineM`, `PolygonZ`, `PolygonM`, and
 `MultiPointM` fixtures confirm that both parsers drop extra ordinates and preserve the
-2D geometry types and part grouping.
+2D geometry types and part grouping. Along with the base Point, PolyLine, Polygon,
+MultiPoint, and multipart fixtures, these cover every supported PyShp shape family;
+Null and MultiPatch are explicitly rejected with the reference errors.
 
 Shapefile multipart uploads stream to temporary disk and decode records one at a time,
 with the same shared API/worker 1 GiB upload cap or optional format-specific override, a
 1 GiB expanded-size cap, 16 MiB per-feature size by default, 250,000 vertices, and the
-configured feature count. Less common geometry types and CRS transformations that depend
-on datum grids still need compatibility qualification against the reference parser.
+configured feature count. Less common geometry layouts and CRS transformations that
+depend on datum grids beyond the Spanish ED50 grid still need compatibility qualification
+against the reference parser.
 
 Thirteen EPSG coordinate fixtures compare with PyProj 3.8.0 within `1e-7`
 degrees, including the Python import path's EPSG:25830 point at `(-5.99, 37.39)`.

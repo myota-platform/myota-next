@@ -136,7 +136,10 @@ an accepted scope decision is recorded in the dispositions section.
   with two outer components and one inner ring against PyOsmium 4.3.2, including its
   feature hash. A separate PyOsmium 4.3.2 reference fixture verifies a closed way
   carrying both line and area tags emits both expected geometries with Python-compatible
-  hashes; another fixture covers a `route=hiking` way without a highway tag. The
+  hashes; another fixture covers a `route=hiking` way without a highway tag. A
+  PyOsmium 4.3.2 tag-matrix fixture now checks all nine accepted tag values on nodes,
+  each of the five accepted line-way tags, the remaining area-way tags, and all 17
+  Python-compatible outputs and hashes. The
   manually triggered RSS suite now executes generated 50,000-,
   250,000-, and 300,000-feature workloads; the 300,000 case stays within the existing
   192 MiB Node-plus-osmium process-tree growth bound. The runner previously selected a
@@ -151,7 +154,7 @@ an accepted scope decision is recorded in the dispositions section.
   add other less common OSM types, and document comparable versus non-comparable RSS
   scopes before setting production caps.
 - **Tracked by:** [Issue #18](https://github.com/myota-platform/myota-next/issues/18).
-- **Sources:** [Geodata parity, lines 140–151](parity/geodata.md#L140);
+- **Sources:** [Geodata parity, lines 140–171](parity/geodata.md#L140);
   [completion criteria, lines 15–17](parity/completion-criteria.md#L15).
 
 ### L-08 — Complete remaining geometry, CRS, and datum-grid fixtures
@@ -177,23 +180,24 @@ an accepted scope decision is recorded in the dispositions section.
   Shapefile fixture removes every authority ID and confirms the ED50 datum and
   UTM parameters still select the matching grid operation; an authority-free
   geographic ED50 WKT2 projection fixture covers the same datum path.
-  PyShp 2.3.1 fixtures verify Z/M ordinates are dropped for PointZ, PointM,
-  PolylineZ, PolylineM, PolygonZ, PolygonM, MultiPointZ, and MultiPointM;
-  multipart PolyLine parts retain MultiLineString grouping, and a simple Polygon
-  remains a Polygon. Null-shape and MultiPatch fixtures also pin PyShp's exact
+  PyShp 2.3.1 fixtures verify ordinary Point, PolyLine, Polygon, and MultiPoint
+  geometries; Z/M ordinates are dropped for PointZ, PointM, PolylineZ, PolylineM,
+  PolygonZ, PolygonM, MultiPointZ, and MultiPointM. Multipart PolyLine parts retain
+  MultiLineString grouping. Null-shape and MultiPatch fixtures pin PyShp's exact
   rejection behavior. The separate-outer-parts PBF relation is compared with the
   PyOsmium 4.3.2 reference in L-07; see the linked Geodata parity evidence.
-- **Missing evidence:** Other material OSM types and geometry/CRS definitions
-  still need fixtures, as do datum-grid transformations for other CRSs. The
-  Spanish grid fallback outside the checked-in grid's coverage also remains
-  compared only with the bundled Proj4 definition.
+- **Missing evidence:** Less common OSM relation/member patterns, additional CRS
+  definitions, and datum-grid transformations for other CRSs still need review.
+  The Spanish grid fallback outside the checked-in grid's coverage is compared
+  with the bundled Proj4 definition; it has not yet been compared with a pinned
+  PyProj 3.8.0 output.
 - **Risk:** A valid source can be rejected, transformed incorrectly, or hashed
   differently, changing entity location or identity.
 - **Next check:** Enumerate uncovered source geometry/CRS types, build pinned
   reference fixtures for material cases, and verify grid availability and
   outputs in the target runtime.
 - **Tracked by:** [Issue #14](https://github.com/myota-platform/myota-next/issues/14).
-- **Sources:** [Geodata parity, lines 250–275](parity/geodata.md#L250).
+- **Sources:** [Geodata parity, lines 260–345](parity/geodata.md#L260).
 
 ### L-09 — Qualify Geodata worker outages during claim and processing
 
