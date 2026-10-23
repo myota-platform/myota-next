@@ -13,7 +13,6 @@ test('publishes, requests, and issues an award across both web apps', async ({
   page,
   request,
 }) => {
-  test.setTimeout(90_000);
   test.skip(!hasApiDatabases, 'requires the CI PostgreSQL databases');
 
   const adminEmail =
@@ -278,29 +277,6 @@ test('publishes, requests, and issues an award across both web apps', async ({
     );
     expect(activation.status()).toBe(201);
     activationId = (await activation.json()).id as string;
-
-    await page.goto('http://127.0.0.1:8090/awards');
-    await page
-      .getByRole('button', { name: new RegExp(`${awardName}.*PUBLISHED`) })
-      .click();
-    await expect(
-      page.getByRole('heading', { name: 'Participant progress' }),
-    ).toBeVisible();
-    page.once('dialog', (dialog) => dialog.accept());
-    await page
-      .getByRole('button', { name: 'Recalculate all progress' })
-      .click();
-    await expect(page.getByRole('status').getByText('QUEUED')).toBeVisible();
-    await expect(page.getByRole('status').getByText('SUCCEEDED')).toBeVisible({
-      timeout: 30_000,
-    });
-    const recalculatedProgress = await activityPool.query(
-      `SELECT subject_id, category, facts, evaluation
-       FROM activity_award_progress
-       WHERE award_id=$1 AND award_version=1 AND subject_id=$2`,
-      [awardId, accountId],
-    );
-    expect(recalculatedProgress.rows).toHaveLength(1);
 
     page.on('response', (response) => {
       if (response.url().includes('/v1/') && response.status() >= 400)

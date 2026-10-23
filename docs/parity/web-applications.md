@@ -271,7 +271,7 @@ criteria at desktop size; the dashboard and primary Participant journeys also re
 narrow and wide viewport scans. Browser checks exercise skip-link focus and activation,
 mobile navigation Escape/focus return, and accessible job failure/retry feedback. These
 automated checks do not replace manual screen-reader and visual review. A live Admin
-Map workflow now loads a persisted Geodata entity through Gateway, and the cross-app
-Awards workflow queues broad progress recalculation, waits for its terminal status, and
-checks the persisted participant progress row. Local runs without the CI databases skip
+Map workflow now loads a persisted Geodata entity through Gateway. A dedicated live
+Admin Awards workflow queues broad progress recalculation, waits for its terminal status,
+and checks the persisted participant progress row. Local runs without the CI databases skip
 the live-service specs; the CI run is the qualification evidence for those journeys.
