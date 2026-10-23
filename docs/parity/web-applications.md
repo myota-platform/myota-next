@@ -269,8 +269,7 @@ and confirms success after the programme catalogue refreshes.
 The Admin import form supports resumable GeoJSON, OSM GeoJSON, WFS GeoJSON, ArcGIS
 FeatureServer JSON, KML, GPX, OSM PBF, Shapefile ZIP, and ParkServe US ZIP uploads,
 subject to the configured source limits. The award catalogue follows all API pages.
-Remaining work includes accessibility/visual review and deployment integration. Its
-public map renders point, line, polygon, and multipart entity geometries.
+Its public map renders point, line, polygon, and multipart entity geometries.
 
 All 14 registered Admin routes are scanned with Axe against WCAG 2.0, 2.1, and 2.2 AA
 criteria at narrow (390px) and wide (1440px) viewports, with horizontal-overflow checks
@@ -278,10 +277,19 @@ at both sizes. The dashboard and primary Participant journeys also receive narro
 wide viewport scans. Live Admin completion states also receive narrow and wide Axe and
 overflow scans for Identity authorization/account changes, programme content and
 archive, Activity corrections/statistics rebuild, Geodata import/review/edit/deletion,
-conflation, schedules, and map selection. Browser checks exercise skip-link focus and activation, mobile
-navigation Escape/focus return, keyboard-driven Geodata multi-selection, and accessible
-job failure/retry feedback. These automated checks do not replace manual screen-reader
-and visual review. A live Admin Map workflow now loads a persisted Geodata entity through
+conflation, schedules, and map selection. Browser checks exercise skip-link focus and
+activation, mobile navigation Escape/focus return, keyboard-driven Geodata
+multi-selection, and accessible job failure/retry feedback. A manual review with Orca
+46.1 and Chromium 156.0.8078.4
+covered Admin sign-in labels and denied-login feedback, the Activity statistics rebuild
+status from `QUEUED` to `SUCCEEDED`, the Participant skip-link path, award sign-in labels
+and denied-login feedback, and activation/contact completion announcements. Orca
+announced the field labels and live status text in each checked flow. The review found
+that Participant lacked a skip link and the Admin Activity rebuild status was not a live
+region; both are fixed and have regression coverage. Visual spot checks of the Admin
+dashboard and Activity workspace plus the Participant catalogue at 390px and 1440px
+found no remaining layout blocker; the page-level contrast and structure scans passed.
+A live Admin Map workflow now loads a persisted Geodata entity through
 Gateway and selects it through the keyboard entity directory. A live least-privilege
 Identity account is also verified through Gateway: its `activity.read` permission does
 not allow access to the Admin Identity route or account endpoint, which returns 403.
@@ -295,5 +303,5 @@ the active QSO form and completed state are checked at supported viewports, and 
 persisted QSO is verified through Gateway. Full CI run
 [40007673517](https://github.com/myota-platform/myota-next/actions/runs/40007673517)
 passed all 69 browser checks against isolated services. Local runs without the CI
-databases skip the live-service specs. Manual screen-reader and visual review remains
-open.
+databases skip the live-service specs. Local assistive-technology and visual review
+covers representative primary flows; deployment integration remains open under L-12.

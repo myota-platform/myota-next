@@ -369,7 +369,13 @@ watch(programme, () => {
         {{ jobLoading ? 'Working…' : 'Rebuild statistics' }}
       </button>
     </div>
-    <div v-if="job" class="activity-job">
+    <div
+      v-if="job"
+      class="activity-job"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <span><strong>Job</strong> {{ job.jobId || job.id }}</span>
       <span class="status-pill" :class="(job.status || '').toLowerCase()">
         {{ job.status || 'QUEUED' }}

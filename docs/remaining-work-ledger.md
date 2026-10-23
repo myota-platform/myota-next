@@ -218,15 +218,19 @@ an accepted scope decision is recorded in the dispositions section.
   supported viewports; browser checks cover keyboard navigation and accessible
   failure/retry feedback. Local runs without the CI service databases skip the
   live-service specs.
-- **Missing evidence:** Manual screen-reader and visual review plus deployment
-  integration remain open. Automated Axe, keyboard, and viewport checks do not
-  establish behavior with an actual screen reader or in the deployed release.
+- **Missing evidence:** Orca 46.1 with Chromium 156.0.8078.4 has now reviewed
+  representative Admin sign-in and Activity rebuild flows plus Participant
+  skip-link, award sign-in, activation, and QSO feedback. The review found and
+  fixed a missing Participant skip link and missing live announcement for Admin
+  Activity rebuild status. Narrow/wide visual spot checks found no remaining
+  representative layout blocker. Screen-reader review of every secondary journey
+  and integration against the isolated deployment remain open; automated Axe,
+  keyboard, and viewport checks do not establish behavior in the deployed release.
 - **Risk:** Users may be blocked by inaccessible controls, layout failures, or
   inaccurate feedback in the actual deployed environment.
-- **Next check:** Record manual keyboard, focus, screen-reader, and visual
-  findings by journey; resolve blockers and rerun primary workflows against the
-  isolated release. The latest CI run does not replace manual
-  assistive-technology or deployed-release review.
+- **Next check:** Extend assistive-technology review to remaining high-consequence
+  journeys as they receive workflow coverage, then rerun primary workflows against
+  the isolated release. The latest CI run does not replace deployed-release review.
 - **Tracked by:** [Admin issue #20](https://github.com/myota-platform/myota-next/issues/20)
   and [Participant issue #21](https://github.com/myota-platform/myota-next/issues/21),
   under parent [Phase 3 issue #7](https://github.com/myota-platform/myota-next/issues/7).

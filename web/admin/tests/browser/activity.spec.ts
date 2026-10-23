@@ -121,10 +121,14 @@ test('views activation QSOs and queues a statistics rebuild', async ({
   await expect(page.getByText('20m · SSB')).toBeVisible();
 
   await page.getByRole('button', { name: 'Rebuild statistics' }).click();
-  await expect(page.getByText('rebuild-1')).toBeVisible();
-  await expect(page.getByText('QUEUED')).toBeVisible();
+  const rebuildStatus = page.locator('.activity-job');
+  await expect(rebuildStatus).toHaveAttribute('role', 'status');
+  await expect(rebuildStatus).toHaveAttribute('aria-live', 'polite');
+  await expect(rebuildStatus).toHaveAttribute('aria-atomic', 'true');
+  await expect(rebuildStatus).toContainText('rebuild-1');
+  await expect(rebuildStatus).toContainText('QUEUED');
   await page.getByRole('button', { name: 'Refresh status' }).click();
-  await expect(page.getByText('SUCCEEDED')).toBeVisible();
+  await expect(rebuildStatus).toContainText('SUCCEEDED');
   expect(rebuildRequests).toHaveLength(1);
   expect(rebuildRequests[0].body).toEqual({ programmeSlug: null });
   expect(rebuildRequests[0].idempotencyKey).toMatch(/^[0-9a-f-]{36}$/i);
