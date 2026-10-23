@@ -278,6 +278,96 @@ describe('streamShapefileFeatures', () => {
   });
 
   it.each([
+    [
+      'python-pointz-shapefile.zip',
+      { type: 'Point', coordinates: [7.2, 46.1] },
+    ],
+    [
+      'python-pointm-shapefile.zip',
+      { type: 'Point', coordinates: [7.2, 46.1] },
+    ],
+    [
+      'python-polylinem-shapefile.zip',
+      {
+        type: 'LineString',
+        coordinates: [
+          [7.2, 46.1],
+          [7.3, 46.2],
+        ],
+      },
+    ],
+    [
+      'python-polygonz-shapefile.zip',
+      {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [-1.25, 2.5],
+            [-1.25, 4.5],
+            [3.75, 4.5],
+            [3.75, 2.5],
+            [-1.25, 2.5],
+          ],
+        ],
+      },
+    ],
+    [
+      'python-polygonm-shapefile.zip',
+      {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [-1.25, 2.5],
+            [-1.25, 4.5],
+            [3.75, 4.5],
+            [3.75, 2.5],
+            [-1.25, 2.5],
+          ],
+        ],
+      },
+    ],
+    [
+      'python-multipointm-shapefile.zip',
+      {
+        type: 'MultiPoint',
+        coordinates: [
+          [7.2, 46.1],
+          [7.3, 46.2],
+        ],
+      },
+    ],
+  ] as const)(
+    'matches PyShp 2.3.1 XY dimensionality for %s',
+    async (filename, geometry) => {
+      const source = await readFile(
+        new URL(`./fixtures/${filename}`, import.meta.url),
+      );
+      async function* chunks() {
+        yield source;
+      }
+      const features: unknown[] = [];
+      for await (const feature of streamShapefileFeatures(
+        chunks(),
+        filename,
+        '',
+        10,
+        async () => undefined,
+      )) {
+        features.push(feature);
+      }
+
+      expect(features).toHaveLength(1);
+      expect(features[0]).toMatchObject({
+        type: 'Feature',
+        geometry,
+        properties: {
+          name: filename.replace('python-', '').replace('.zip', ''),
+        },
+      });
+    },
+  );
+
+  it.each([
     'python-point-shapefile.zip',
     'python-point-shapefile-uppercase.zip',
   ])(

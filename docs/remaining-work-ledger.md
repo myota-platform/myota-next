@@ -263,10 +263,11 @@ an accepted scope decision is recorded in the dispositions section.
   EPSG:4230 and EPSG:23028 through EPSG:23038 now use the IGN Spain ED50
   horizontal grid inside its coverage; fixtures for EPSG:4230 and EPSG:23029
   through EPSG:23031 compare transformed coordinates against PyProj 3.8.0.
-  PyShp 2.3.1 fixtures verify Z ordinates are dropped from PolylineZ, multipart
-  PolyLine parts retain MultiLineString grouping, and a simple Polygon remains
-  a Polygon. Null-shape and MultiPatch fixtures also pin PyShp's exact rejection
-  behavior. The separate-outer-parts PBF relation is also compared with the
+  PyShp 2.3.1 fixtures verify Z/M ordinates are dropped for PointZ, PointM,
+  PolylineZ, PolylineM, PolygonZ, PolygonM, MultiPointZ, and MultiPointM;
+  multipart PolyLine parts retain MultiLineString grouping, and a simple Polygon
+  remains a Polygon. Null-shape and MultiPatch fixtures also pin PyShp's exact
+  rejection behavior. The separate-outer-parts PBF relation is compared with the
   PyOsmium 4.3.2 reference in L-07; see the linked Geodata parity evidence.
 - **Missing evidence:** Other material OSM types and geometry/CRS definitions
   still need fixtures, as do datum-grid transformations for other CRSs. The

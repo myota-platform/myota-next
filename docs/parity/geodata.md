@@ -291,6 +291,10 @@ A simple PyShp 2.3.1 `Polygon` fixture also confirms that a single exterior ring
 GeoJSON `Polygon`; it is checked in at
 `apps/geodata-worker/src/fixtures/python-polygon-shapefile.zip`.
 
+Additional PyShp 2.3.1 `PointZ`, `PointM`, `PolylineM`, `PolygonZ`, `PolygonM`, and
+`MultiPointM` fixtures confirm that both parsers drop extra ordinates and preserve the
+2D geometry types and part grouping.
+
 Shapefile multipart uploads stream to temporary disk and decode records one at a time,
 with the same shared API/worker 1 GiB upload cap or optional format-specific override, a
 1 GiB expanded-size cap, 16 MiB per-feature size by default, 250,000 vertices, and the
