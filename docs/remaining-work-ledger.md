@@ -26,13 +26,18 @@ an accepted scope decision is recorded in the dispositions section.
 - **Current implementation and evidence:** Identity behavior is implemented in
   the owning services and has focused fixtures such as
   `apps/identity/src/identity-account.creation.spec.ts`,
-  `identity-account.roles.spec.ts`, `identity-callsign.lifecycle.spec.ts`,
+  `auth.service.spec.ts`, `identity-account.roles.spec.ts`,
+  `identity-callsign.lifecycle.spec.ts`,
   `auth.recovery.spec.ts`, `auth.logout.spec.ts`,
   `auth.profile.compatibility.spec.ts`, and
   `identity-account.validation-order.spec.ts`. A logout fixture now also pins
   rollback when access-token validation fails after refresh-session revocation
   is attempted, and recovery coverage now verifies expired-token rejection has
-  no credential or session side effects. Role-grant coverage also verifies an
+  no credential or session side effects. An account anonymization fixture also
+  verifies profile and image metadata clearing in the transaction and profile
+  object deletion only after commit. The Admin account-list fixture also checks
+  identity-resolved effective scopes for an active global operator. Role-grant
+  coverage also verifies an
   Identity administrator may retain or revoke an equal-authority role already
   on another account while being unable to grant a new one; a global operator
   cannot grant the equal global role or remove the last active global-operator

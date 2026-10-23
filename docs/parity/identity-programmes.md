@@ -109,9 +109,12 @@ As in the reference handler, changing status alone does not anonymize the accoun
 revoke its sessions; existing refresh sessions also remain rotatable, and both session
 revocation and anonymization happen when `anonymize` is true. Password changes and
 anonymization refresh `revokedAt` on already-revoked sessions as well, matching the
-handler's per-session update. A live Admin workflow now deactivates an account by
-changing status alone, then rotates the owner's existing refresh session and verifies
-the response retains the deactivated status.
+handler's per-session update. An anonymization fixture also verifies private profile
+fields and image metadata are cleared in the database transaction, then the old image
+object is deleted only after commit, matching the Python profile-image lifecycle test.
+A live Admin workflow now deactivates an account by changing status alone, then rotates
+the owner's existing refresh session and verifies the response retains the deactivated
+status.
 
 Callsign creation, evidence, verification, primary selection, and retirement also write
 to the relational Core model and outbox. Account reads and exports preserve the
@@ -185,8 +188,10 @@ event payload integers beyond JavaScript's safe range remain exact after export.
 
 Compatibility checks also verify account creators can read role choices without
 account-admin access, participants cannot read them, administrators cannot change their
-own role assignments, and access tokens stop working after account deactivation. Broader
-account, callsign, recovery, and authorization sequence behavior still require automated
+own role assignments, and access tokens stop working after account deactivation. The
+Admin account list resolves each subject's active role scopes from Identity, including
+the global operator `*` scope, matching the Python list behavior. Broader account,
+callsign, recovery, and authorization sequence behavior still require automated
 compatibility coverage. Focused fixtures now pin role-retention authority, logout
 rollback, and expired recovery-token side effects; remaining broad sequence coverage is
 still open. Callsign create and primary-selection idempotency fixtures also pin the Python

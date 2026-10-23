@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { UnauthorizedException } from '@nestjs/common';
+import { vi } from 'vitest';
 import { IdentityAuthService } from './auth.service.js';
 
 describe('Identity service token compatibility', () => {
@@ -184,5 +185,78 @@ describe('Identity service token compatibility', () => {
     expect(
       statements.find((sql) => sql.includes('FROM public.account a')),
     ).toContain("a.status = 'ACTIVE'");
+  });
+
+  it('returns identity-resolved effective scopes in the Admin account list', async () => {
+    const accountId = '566b8475-bda2-4a2d-8ab8-d7a9a93c0041';
+    const timestamp = '2026-01-01T00:00:00.000000Z';
+    const client = {
+      query: async (sql: string) => {
+        if (sql.includes('WITH matching AS MATERIALIZED'))
+          return { rows: [{ id: accountId, total: '1' }], rowCount: 1 };
+        if (sql.includes('FROM public.account a'))
+          return {
+            rows: [
+              {
+                id: accountId,
+                display_name: 'Global operator',
+                email: 'root@example.test',
+                participation_type: 'OPERATOR',
+                status: 'ACTIVE',
+                created_at: timestamp,
+                updated_at: timestamp,
+                profile_image_id: null,
+                profile_image_media_type: null,
+                profile_image_updated_at: null,
+                primary_callsign_id: null,
+              },
+            ],
+            rowCount: 1,
+          };
+        if (sql.includes('FROM public.account_role ar'))
+          return {
+            rows: [
+              {
+                accountId,
+                id: 'role-assignment-1',
+                role: 'GLOBAL_OPERATOR',
+                programmeId: null,
+                programmeSlug: null,
+                jurisdictionId: null,
+                jurisdiction: null,
+                entityType: null,
+                scopes: ['*'],
+                createdAt: timestamp,
+                validTo: null,
+              },
+            ],
+            rowCount: 1,
+          };
+        if (sql.includes('FROM public.callsign c'))
+          return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 0 };
+      },
+      release: () => undefined,
+    };
+    const auth = new IdentityAuthService({
+      connect: async () => client,
+    } as never);
+    vi.spyOn(auth, 'currentAccount').mockResolvedValue({
+      id: 'admin-1',
+      scopes: ['*'],
+    } as never);
+
+    const result = await auth.listAdminAccounts('Bearer admin', {});
+
+    expect(result).toMatchObject({
+      total: 1,
+      items: [
+        {
+          id: accountId,
+          roles: [{ role: 'GLOBAL_OPERATOR', scopes: ['*'] }],
+          scopes: ['*', 'identity.me'],
+        },
+      ],
+    });
   });
 });

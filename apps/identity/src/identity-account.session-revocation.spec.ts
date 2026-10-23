@@ -3,12 +3,14 @@ import type { IdentityAuthService } from './auth.service.js';
 import type { IdentityRoleService } from './identity-role.service.js';
 import type { IdentityProfileImageService } from './identity-profile-image.service.js';
 import { IdentityAccountService } from './identity-account.service.js';
+import { vi } from 'vitest';
 
 describe('IdentityAccountService session revocation parity', () => {
   const accountId = '11111111-1111-4111-8111-111111111111';
 
   async function updateAccount(body: Record<string, unknown>) {
     const queries: Array<{ sql: string; values: unknown[] }> = [];
+    const events: string[] = [];
     const account = {
       id: accountId,
       display_name: 'Participant',
@@ -17,9 +19,9 @@ describe('IdentityAccountService session revocation parity', () => {
       status: 'ACTIVE',
       website_url: null,
       biography_markdown: null,
-      profile_image_id: null,
-      profile_image_media_type: null,
-      profile_image_updated_at: null,
+      profile_image_id: 'image-to-remove',
+      profile_image_media_type: 'image/webp',
+      profile_image_updated_at: '2026-10-21T12:00:00.000000Z',
       primary_callsign_id: null,
       created_at: new Date('2025-01-01T00:00:00.000Z'),
       updated_at: new Date('2025-01-01T00:00:00.000Z'),
@@ -27,6 +29,7 @@ describe('IdentityAccountService session revocation parity', () => {
     const client = {
       query: async (sql: string, values: unknown[] = []) => {
         queries.push({ sql, values });
+        if (sql === 'COMMIT') events.push('commit');
         if (sql.includes('FROM public.account a'))
           return { rows: [account], rowCount: 1 };
         if (sql.includes('INSERT INTO public.security_event'))
@@ -44,22 +47,26 @@ describe('IdentityAccountService session revocation parity', () => {
     const auth = {
       currentAccount: async () => ({ id: 'admin-1', scopes: ['*'] }),
     } as unknown as IdentityAuthService;
+    const deleteObjectBestEffort = vi.fn(() => events.push('image-delete'));
+    const profileImages = {
+      deleteObjectBestEffort,
+    } as unknown as IdentityProfileImageService;
     const service = new IdentityAccountService(
       pool,
       auth,
       {} as IdentityRoleService,
-      {} as IdentityProfileImageService,
+      profileImages,
     );
 
     await service.updateAccount('Bearer admin', accountId, body);
-    return queries;
+    return { queries, events, deleteObjectBestEffort };
   }
 
   it.each([
     ['admin password change', { password: 'Changed-password-123' }],
     ['account anonymization', { status: 'DEACTIVATED', anonymize: true }],
   ])('%s overwrites existing session revocation times', async (_name, body) => {
-    const queries = await updateAccount(body);
+    const { queries } = await updateAccount(body);
     const sessionUpdate = queries.find((query) =>
       query.sql.includes('UPDATE public.auth_session SET revoked_at'),
     );
@@ -70,12 +77,39 @@ describe('IdentityAccountService session revocation parity', () => {
   });
 
   it('does not revoke sessions for a status-only deactivation', async () => {
-    const queries = await updateAccount({ status: 'DEACTIVATED' });
+    const { queries } = await updateAccount({ status: 'DEACTIVATED' });
 
     expect(
       queries.some((query) =>
         query.sql.includes('UPDATE public.auth_session SET revoked_at'),
       ),
     ).toBe(false);
+  });
+
+  it('clears private profile data and deletes its object after anonymization commits', async () => {
+    const { queries, events, deleteObjectBestEffort } = await updateAccount({
+      status: 'DEACTIVATED',
+      anonymize: true,
+    });
+    const profileUpdate = queries.find((query) =>
+      query.sql.includes('INSERT INTO public.identity_account_profile'),
+    );
+
+    expect(profileUpdate?.sql).toContain(
+      'profile_image_id = CASE WHEN $6 THEN NULL',
+    );
+    expect(profileUpdate?.values).toEqual([
+      accountId,
+      null,
+      null,
+      true,
+      true,
+      true,
+    ]);
+    expect(deleteObjectBestEffort).toHaveBeenCalledWith(
+      accountId,
+      'image-to-remove',
+    );
+    expect(events).toEqual(['commit', 'image-delete']);
   });
 });
