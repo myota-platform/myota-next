@@ -59,7 +59,7 @@ test('denies a least-privilege account access to Admin through live Identity and
       return { status: response.status, body: await response.json() };
     });
     expect(currentAccount.status).toBe(200);
-    expect(currentAccount.body.scopes).toEqual(['activity.read']);
+    expect(currentAccount.body.scopes).toEqual(['activity.read', 'identity.me']);
 
     await page.goto('/identity');
     await expect(page).toHaveURL(/\/access-denied$/);

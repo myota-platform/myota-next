@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectResponsiveAccessible } from '../../../a11y';
 
 test('explores a persisted Geodata entity through the live Admin map', async ({
@@ -50,7 +50,12 @@ test('explores a persisted Geodata entity through the live Admin map', async ({
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page).toHaveURL(/\/entity-map$/);
     await expect(page.getByText(/entities loaded$/)).toBeVisible();
-    await page.locator(`.leaflet-marker-icon[title="${entityName}"]`).click();
+    const directory = page.locator('.entity-map-directory');
+    const directorySummary = directory.locator('summary');
+    await activateByKeyboard(page, directorySummary);
+    const entityOption = directory.getByRole('button', { name: entityName });
+    await activateByKeyboard(page, entityOption);
+    await expect(entityOption).toHaveAttribute('aria-pressed', 'true');
 
     const selected = page.locator('.selected-entity');
     await expect(
@@ -77,3 +82,9 @@ test('explores a persisted Geodata entity through the live Admin map', async ({
     await pool.end();
   }
 });
+
+async function activateByKeyboard(page: Page, control: Locator) {
+  await control.focus();
+  await expect(control).toBeFocused();
+  await page.keyboard.press('Enter');
+}

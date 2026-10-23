@@ -110,5 +110,20 @@ test('explores paged entities and shows the selected map feature details', async
     page.getByRole('heading', { name: 'Summit Alpha' }),
   ).toBeVisible();
   expect(requestedPages).toEqual([1, 2]);
+
+  const directorySummary = page.locator('.entity-map-directory summary');
+  await directorySummary.focus();
+  await expect(directorySummary).toBeFocused();
+  await page.keyboard.press('Enter');
+  const betaSelection = page
+    .locator('.entity-map-directory')
+    .getByRole('button', { name: /Summit Beta/ });
+  await betaSelection.focus();
+  await expect(betaSelection).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByRole('heading', { name: 'Summit Beta' }),
+  ).toBeVisible();
+  await expect(betaSelection).toHaveAttribute('aria-pressed', 'true');
   await expectResponsiveAccessible(page, 'Admin entity map exploration');
 });

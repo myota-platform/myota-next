@@ -81,6 +81,21 @@ onMounted(() => load());
       height="760px"
       @select="select"
     ></LeafletMap>
+    <details class="entity-map-directory">
+      <summary>Browse loaded entities by name ({{ entities.length }})</summary>
+      <ul>
+        <li v-for="entity in entities" :key="entity.id">
+          <button
+            type="button"
+            :aria-pressed="selected?.id === entity.id"
+            @click="select(entity)"
+          >
+            <strong>{{ entity.name }}</strong>
+            <span>{{ entity.status }} · {{ categories(entity) }}</span>
+          </button>
+        </li>
+      </ul>
+    </details>
   </article>
   <article v-if="selected" class="panel selected-entity">
     <div class="panel-heading">
