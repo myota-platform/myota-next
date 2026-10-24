@@ -60,6 +60,8 @@ const terminalDeadLetterRecoveryTestName =
   'settles a terminal dead letter after process loss before termination';
 const objectStoreRecoveryTestName =
   'retries import preprocessing after a temporary object-store outage';
+const processLossBeforeAckTestName =
+  'settles committed import preprocessing after worker loss before acknowledgement';
 
 describe('Geodata worker process recovery', () => {
   it.skipIf(
@@ -115,7 +117,294 @@ describe('Geodata worker process recovery', () => {
     async () => verifyImportObjectStoreRecovery(),
     90_000,
   );
+
+  it.skipIf(
+    process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
+      !process.env.GEO_DATABASE_URL,
+  )(
+    processLossBeforeAckTestName,
+    async () => {
+      if (process.env.MYOTA_GEO_WORKER_PROCESS_LOSS_PHASE) {
+        await runProcessLossBeforeAckWorkerPhase();
+        return;
+      }
+      await verifyProcessLossBeforeAckRecovery();
+    },
+    90_000,
+  );
 });
+
+async function verifyProcessLossBeforeAckRecovery() {
+  const databaseUrl = process.env.GEO_DATABASE_URL;
+  if (!databaseUrl) throw new Error('GEO_DATABASE_URL is required');
+  if (
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(databaseUrl).hostname)
+  )
+    throw new Error('worker process-loss recovery requires local Postgres');
+
+  const directory = await mkdtemp(join(tmpdir(), 'myota-geodata-before-ack-'));
+  const natsPort = await reserveLocalPort();
+  const natsUrl = `nats://127.0.0.1:${natsPort}`;
+  const runId = randomUUID();
+  const source = Buffer.concat(recoveryFeatureChunks(runId, 2));
+  const sourceHash = createHash('sha256').update(source).digest('hex');
+  const savedEnvironment = new Map<string, string | undefined>();
+  for (const [name, value] of Object.entries({
+    NATS_URL: natsUrl,
+    GEO_DATABASE_URL: databaseUrl,
+    GEODATA_WORKER_HEALTH_PORT: String(await reserveLocalPort()),
+    GEODATA_WORKER_MAX_ACK_PENDING: '1',
+    GEODATA_WORKER_ACK_WAIT_SECONDS: '2',
+    GEODATA_WORKER_MAX_DELIVERIES: '10',
+    MYOTA_GEO_WORKER_RECOVERY_RUN_ID: runId,
+  })) {
+    savedEnvironment.set(name, process.env[name]);
+    process.env[name] = value;
+  }
+
+  const { Pool } = await import('pg');
+  const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+  let server: ChildProcess | undefined;
+  let publisher: Awaited<ReturnType<typeof connect>> | undefined;
+  let interrupted:
+    ReturnType<typeof spawnProcessLossBeforeAckWorker> | undefined;
+
+  try {
+    server = await startRecoveryJetStream(natsPort, directory);
+    publisher = await connect({
+      servers: natsUrl,
+      name: 'geodata-before-ack-recovery-publisher',
+    });
+    const manager = await jetstreamManager(publisher);
+    await manager.streams.add({
+      name: 'MYOTA_GEODATA_WORK',
+      subjects: ['myota.work.geodata.>'],
+      retention: RetentionPolicy.Workqueue,
+      storage: StorageType.File,
+      num_replicas: 1,
+      max_age: 86_400_000_000_000,
+      max_bytes: 16 * 1024 * 1024,
+      max_msgs: 100,
+      max_msg_size: 900_000,
+    } as StreamConfig);
+    for (const [durable, subject] of [
+      ['geodata-preprocessing-v1', 'myota.work.geodata.import-preprocess.v1'],
+      ['geodata-import-promotion-v1', 'myota.work.geodata.import-promotion.v1'],
+      ['geodata-entity-deletion-v1', 'myota.work.geodata.entity-delete.v1'],
+      [
+        'geodata-location-enrichment-v1',
+        'myota.work.geodata.location-enrichment.v1',
+      ],
+    ] as const) {
+      const policy = geodataConsumerPolicy(durable);
+      await manager.consumers.add('MYOTA_GEODATA_WORK', {
+        durable_name: durable,
+        filter_subject: subject,
+        deliver_policy: DeliverPolicy.All,
+        ack_policy: AckPolicy.Explicit,
+        replay_policy: ReplayPolicy.Instant,
+        ack_wait: policy.ackWaitSeconds * 1_000_000_000,
+        max_deliver: policy.maxDeliveries,
+        max_ack_pending: policy.maxPending,
+        max_waiting: 1,
+        num_replicas: 0,
+      } as ConsumerConfig);
+    }
+
+    const fixture = await pool.connect();
+    try {
+      await fixture.query('BEGIN');
+      await fixture.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await fixture.query(
+        `INSERT INTO import_run
+          (id,adapter_code,source_metadata,status,source_key,source_hash)
+         VALUES ($1,'MANUAL',$2::jsonb,$3,$4,$5)`,
+        [
+          runId,
+          stringifyJsonWithBigInts({
+            source: { name: 'worker loss before acknowledgement' },
+            sourceObject: { bucket: 'recovery-test', key: `${runId}.geojson` },
+            filename: `${runId}.geojson`,
+            format: 'GEOJSON',
+            entityTypes: ['TEST_PARK'],
+          }),
+          'QUEUED',
+          `recovery/${runId}.geojson`,
+          sourceHash,
+        ],
+      );
+      await fixture.query('COMMIT');
+    } catch (error) {
+      await fixture.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      fixture.release();
+    }
+
+    await publishGeodataWork(
+      publisher,
+      'geodata.import-preprocess.v1',
+      runId,
+      { type: 'import_run', id: runId },
+      { importRunId: runId },
+    );
+    const workerEnvironment = {
+      ...process.env,
+      MYOTA_GEO_WORKER_RECOVERY_TEST: '1',
+      MYOTA_GEO_WORKER_PROCESS_LOSS_PHASE: 'interrupt',
+    };
+    interrupted = spawnProcessLossBeforeAckWorker(workerEnvironment);
+    await waitForOutput(interrupted, 'IMPORT_COMMITTED_BEFORE_ACK', 45_000);
+    const committed = await pool.query<{
+      status: string;
+      attempt_count: number;
+      candidates: number;
+      distinct_ordinals: number;
+    }>(
+      `SELECT run.status,run.attempt_count,
+              count(candidate.ordinal)::int AS candidates,
+              count(DISTINCT candidate.ordinal)::int AS distinct_ordinals
+         FROM import_run run LEFT JOIN geodata_import_candidate candidate
+           ON candidate.import_run_id=run.id
+        WHERE run.id=$1 GROUP BY run.id`,
+      [runId],
+    );
+    expect(committed.rows[0]).toMatchObject({
+      status: 'PREPROCESSED',
+      attempt_count: 1,
+      candidates: 2,
+      distinct_ordinals: 2,
+    });
+    interrupted.kill('SIGKILL');
+    await waitForExit(interrupted);
+
+    const pending = await manager.consumers.info(
+      'MYOTA_GEODATA_WORK',
+      'geodata-preprocessing-v1',
+    );
+    expect(pending.num_ack_pending).toBe(1);
+    const replayEnvironment = {
+      ...process.env,
+      MYOTA_GEO_WORKER_RECOVERY_TEST: '1',
+      MYOTA_GEO_WORKER_PROCESS_LOSS_PHASE: 'settle',
+    };
+    const replay = spawnProcessLossBeforeAckWorker(replayEnvironment);
+    const replayResult = await waitForExit(replay, 45_000);
+    expect(replayResult.code, replayResult.output).toBe(0);
+
+    const finalState = await pool.query<{
+      status: string;
+      attempt_count: number;
+      candidates: number;
+      distinct_ordinals: number;
+    }>(
+      `SELECT run.status,run.attempt_count,
+              count(candidate.ordinal)::int AS candidates,
+              count(DISTINCT candidate.ordinal)::int AS distinct_ordinals
+         FROM import_run run LEFT JOIN geodata_import_candidate candidate
+           ON candidate.import_run_id=run.id
+        WHERE run.id=$1 GROUP BY run.id`,
+      [runId],
+    );
+    expect(finalState.rows[0]).toMatchObject({
+      status: 'PREPROCESSED',
+      attempt_count: 1,
+      candidates: 2,
+      distinct_ordinals: 2,
+    });
+    const settled = await manager.consumers.info(
+      'MYOTA_GEODATA_WORK',
+      'geodata-preprocessing-v1',
+    );
+    expect(settled.num_pending).toBe(0);
+    expect(settled.num_ack_pending).toBe(0);
+    expect(settled.delivered?.consumer_seq).toBeGreaterThanOrEqual(2);
+  } finally {
+    if (interrupted && interrupted.exitCode === null) {
+      interrupted.kill('SIGKILL');
+      await waitForExit(interrupted).catch(() => undefined);
+    }
+    await publisher?.drain().catch(() => undefined);
+    if (server) await stopRecoveryJetStream(server).catch(() => undefined);
+    await cleanupRecoveryFixture(pool, runId);
+    await rm(directory, { recursive: true, force: true });
+    for (const [name, value] of savedEnvironment) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+}
+
+async function runProcessLossBeforeAckWorkerPhase() {
+  const databaseUrl = process.env.GEO_DATABASE_URL;
+  const natsUrl = process.env.NATS_URL;
+  const runId = process.env.MYOTA_GEO_WORKER_RECOVERY_RUN_ID;
+  const phase = process.env.MYOTA_GEO_WORKER_PROCESS_LOSS_PHASE;
+  if (!databaseUrl || !natsUrl || !runId || !phase)
+    throw new Error('Geodata before-ACK worker phase settings are required');
+
+  const source = Buffer.concat(recoveryFeatureChunks(runId, 2));
+  const originalSend = Object.getOwnPropertyDescriptor(
+    S3Client.prototype,
+    'send',
+  )?.value as typeof S3Client.prototype.send;
+  S3Client.prototype.send = (async (command: unknown) => {
+    if (!(command instanceof GetObjectCommand))
+      throw new Error('unexpected S3 command in before-ACK recovery fixture');
+    return { Body: Readable.from([source]) };
+  }) as typeof S3Client.prototype.send;
+
+  const { Pool } = await import('pg');
+  const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+  const worker = new GeodataWorkerService(
+    new GeodataWorkRepository(pool),
+    new GeodataPromotionRepository(pool, new GeodataPromotionScoring()),
+    new GeodataEnrichmentRepository(pool),
+    new GeodataDeletionRepository(pool),
+    new GeodataRetentionRepository(pool),
+    pool,
+  );
+  const internalWorker = worker as unknown as {
+    process(workType: string, job: unknown, message: unknown): Promise<void>;
+  };
+  const processWork = internalWorker.process.bind(worker);
+  internalWorker.process = async (workType, job, message) => {
+    await processWork(workType, job, message);
+    if (phase === 'interrupt' && workType === 'geodata.import-preprocess.v1') {
+      process.stdout.write('IMPORT_COMMITTED_BEFORE_ACK\n');
+      await new Promise<void>(() => undefined);
+    }
+  };
+
+  let monitor: Awaited<ReturnType<typeof connect>> | undefined;
+  try {
+    await worker.onModuleInit();
+    if (phase === 'interrupt') await new Promise<void>(() => undefined);
+    monitor = await connect({
+      servers: natsUrl,
+      name: 'geodata-before-ack-monitor',
+    });
+    const manager = await jetstreamManager(monitor);
+    await waitForRecovery(async () => {
+      const info = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        'geodata-preprocessing-v1',
+      );
+      return (
+        info.delivered?.consumer_seq >= 2 &&
+        info.num_pending === 0 &&
+        info.num_ack_pending === 0
+      );
+    }, 'Geodata replay did not settle the completed import delivery');
+  } finally {
+    await worker.onModuleDestroy().catch(() => undefined);
+    await monitor?.drain().catch(() => undefined);
+    await pool.end();
+    S3Client.prototype.send = originalSend;
+  }
+}
 
 async function verifyTerminalDeadLetterRecovery() {
   const databaseUrl = process.env.GEO_DATABASE_URL;
@@ -2545,6 +2834,30 @@ function spawnRecoveryWorker(
   return Object.assign(child, { getOutput: () => output });
 }
 
+function spawnProcessLossBeforeAckWorker(environment: NodeJS.ProcessEnv) {
+  const child = spawn(
+    process.execPath,
+    [
+      'node_modules/vitest/vitest.mjs',
+      'run',
+      'apps/geodata-worker/src/geodata-worker-recovery.spec.ts',
+      '-t',
+      processLossBeforeAckTestName,
+      '--maxWorkers=1',
+      '--no-file-parallelism',
+    ],
+    { env: environment, stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  let output = '';
+  child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+    output += chunk;
+  });
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+    output += chunk;
+  });
+  return Object.assign(child, { getOutput: () => output });
+}
+
 function spawnTerminalDeadLetterWorker(
   phase: 'interrupt' | 'settle',
   environment: NodeJS.ProcessEnv,
@@ -2599,6 +2912,23 @@ async function waitForCheckpoint(
   throw new Error(
     `worker did not stage its first 100 features: ${child.getOutput()}`,
   );
+}
+
+async function waitForOutput(
+  child: ReturnType<typeof spawnProcessLossBeforeAckWorker>,
+  checkpoint: string,
+  timeoutMilliseconds: number,
+) {
+  const deadline = Date.now() + timeoutMilliseconds;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null || child.signalCode !== null)
+      throw new Error(
+        `worker exited before ${checkpoint}: ${child.getOutput()}`,
+      );
+    if (child.getOutput().includes(checkpoint)) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`worker did not reach ${checkpoint}: ${child.getOutput()}`);
 }
 
 async function waitForExit(
