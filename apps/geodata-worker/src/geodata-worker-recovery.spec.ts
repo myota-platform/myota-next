@@ -167,6 +167,7 @@ async function verifyTerminalDeadLetterRecovery() {
           workType: 'geodata.import-preprocess.v1',
           producer: 'geodata',
           createdAt: new Date().toISOString(),
+          causationId: eventId,
           aggregate: { type: 'import_run', id: eventId },
           payload: { importRunId: eventId },
           unexpected: true,
@@ -189,13 +190,23 @@ async function verifyTerminalDeadLetterRecovery() {
             `Geodata dead-letter worker exited before persistence (code ${String(interrupted.exitCode)}, signal ${String(interrupted.signalCode)})`,
           );
         const result = await pool.query<{ count: number }>(
-          'SELECT count(*)::int AS count FROM dead_letter_event WHERE event_id=$1',
+          `SELECT count(*)::int AS count FROM dead_letter_event
+           WHERE event_id=$1 OR payload->>'workId'=$1
+              OR payload->>'causationId'=$1`,
           [eventId],
         );
         return result.rows[0]?.count === 1;
       }, 'Geodata dead letter was not persisted before termination');
     } catch (error) {
-      throw new Error(`${String(error)}\n${interrupted.getOutput()}`);
+      const recentDeadLetters = await pool.query(
+        `SELECT event_id::text,event_type,payload,attempts
+         FROM dead_letter_event
+         WHERE dead_lettered_at>now()-interval '2 minutes'
+         ORDER BY dead_lettered_at DESC LIMIT 5`,
+      );
+      throw new Error(
+        `${String(error)}\n${interrupted.getOutput()}\nRecent dead letters: ${stringifyJsonWithBigInts(recentDeadLetters.rows)}`,
+      );
     }
     expect(interrupted.exitCode).toBeNull();
     interrupted.kill('SIGKILL');
