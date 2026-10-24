@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { Readable } from 'node:stream';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -9,6 +9,7 @@ import {
   AbortMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import {
@@ -115,7 +116,9 @@ describe('Geodata worker process recovery', () => {
 
   it.skipIf(
     process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
-      !process.env.GEO_DATABASE_URL,
+      !process.env.GEO_DATABASE_URL ||
+      !process.env.MYOTA_S3_RECOVERY_CONTAINER ||
+      !process.env.MYOTA_OBJECT_STORAGE_ENDPOINT,
   )(
     objectStoreRecoveryTestName,
     async () => verifyImportObjectStoreRecovery(),
@@ -1897,7 +1900,17 @@ async function verifyImportObjectStoreRecovery() {
   const natsPort = await reserveLocalPort();
   const healthPort = await reserveLocalPort();
   const natsUrl = `nats://127.0.0.1:${natsPort}`;
+  const container = process.env.MYOTA_S3_RECOVERY_CONTAINER;
+  const endpoint = process.env.MYOTA_OBJECT_STORAGE_ENDPOINT;
+  const bucket = process.env.MYOTA_GEODATA_IMPORT_BUCKET;
+  const accessKey = process.env.MYOTA_OBJECT_STORAGE_ACCESS_KEY;
+  const secretKey = process.env.MYOTA_OBJECT_STORAGE_SECRET_KEY;
+  if (!container || !endpoint || !bucket || !accessKey || !secretKey)
+    throw new Error('SeaweedFS recovery settings are required');
+  if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(endpoint).hostname))
+    throw new Error('object-store recovery requires local SeaweedFS');
   const runId = randomUUID();
+  const objectKey = `recovery/${runId}.geojson`;
   const feature = {
     type: 'Feature',
     geometry: { type: 'Point', coordinates: [-5.99, 37.39] },
@@ -1918,8 +1931,7 @@ async function verifyImportObjectStoreRecovery() {
     GEODATA_WORKER_MAX_ACK_PENDING: '1',
     GEODATA_WORKER_ACK_WAIT_SECONDS: '2',
     GEODATA_WORKER_MAX_DELIVERIES: '10',
-    GEODATA_WORKER_RETRY_DELAY_SECONDS: '0',
-    MYOTA_GEODATA_IMPORT_BUCKET: 'geodata-object-store-recovery',
+    GEODATA_WORKER_RETRY_DELAY_SECONDS: '10',
   })) {
     environment.set(name, process.env[name]);
     process.env[name] = value;
@@ -1927,23 +1939,23 @@ async function verifyImportObjectStoreRecovery() {
 
   const { Pool } = await import('pg');
   const pool = new Pool({ connectionString: databaseUrl, max: 4 });
-  const originalSend = S3Client.prototype.send.bind(S3Client.prototype);
-  let sourceReads = 0;
+  const storage = new S3Client({
+    endpoint,
+    region: process.env.MYOTA_OBJECT_STORAGE_REGION ?? 'us-east-1',
+    forcePathStyle: true,
+    maxAttempts: 1,
+    credentials: { accessKeyId: accessKey, secretAccessKey: secretKey },
+  });
+  let objectStoreStopped = false;
   let server: ChildProcess | undefined;
   let publisher: Awaited<ReturnType<typeof connect>> | undefined;
   let worker: GeodataWorkerService | undefined;
   let operationError: unknown;
 
-  S3Client.prototype.send = (async (command: unknown) => {
-    if (!(command instanceof GetObjectCommand))
-      throw new Error('unexpected S3 command in object-store recovery fixture');
-    sourceReads++;
-    if (sourceReads === 1)
-      throw new Error('injected temporary object-store outage');
-    return { Body: Readable.from([source]) };
-  }) as typeof S3Client.prototype.send;
-
   try {
+    await storage.send(
+      new PutObjectCommand({ Bucket: bucket, Key: objectKey, Body: source }),
+    );
     server = await startRecoveryJetStream(natsPort, directory);
     publisher = await connect({
       servers: natsUrl,
@@ -2002,14 +2014,14 @@ async function verifyImportObjectStoreRecovery() {
           stringifyJsonWithBigInts({
             source: { name: 'object-store recovery fixture' },
             sourceObject: {
-              bucket: 'geodata-object-store-recovery',
-              key: `recovery/${runId}.geojson`,
+              bucket,
+              key: objectKey,
             },
             filename: `${runId}.geojson`,
             format: 'GEOJSON',
             entityTypes: ['TEST_PARK'],
           }),
-          `recovery/${runId}.geojson`,
+          objectKey,
           sourceHash,
         ],
       );
@@ -2020,6 +2032,9 @@ async function verifyImportObjectStoreRecovery() {
     } finally {
       fixture.release();
     }
+
+    runDocker('stop', container);
+    objectStoreStopped = true;
 
     worker = new GeodataWorkerService(
       new GeodataWorkRepository(pool),
@@ -2037,6 +2052,19 @@ async function verifyImportObjectStoreRecovery() {
       { type: 'import_run', id: runId },
       { importRunId: runId },
     );
+
+    await waitForRecovery(async () => {
+      const state = await pool.query<{
+        status: string;
+        attempt_count: number;
+      }>('SELECT status,attempt_count FROM import_run WHERE id=$1', [runId]);
+      return (
+        state.rows[0]?.status === 'QUEUED' && state.rows[0]?.attempt_count === 1
+      );
+    }, 'Geodata did not persist the source-store outage for retry');
+    runDocker('start', container);
+    objectStoreStopped = false;
+    await waitForSeaweedFS(endpoint);
 
     await waitForRecovery(async () => {
       const state = await pool.query<{
@@ -2069,7 +2097,6 @@ async function verifyImportObjectStoreRecovery() {
       candidates: 1,
       distinct_ordinals: 1,
     });
-    expect(sourceReads).toBe(3);
     const settled = await manager.consumers.info(
       'MYOTA_GEODATA_WORK',
       'geodata-preprocessing-v1',
@@ -2087,7 +2114,15 @@ async function verifyImportObjectStoreRecovery() {
 
   let cleanupError: unknown;
   if (worker) await worker.onModuleDestroy().catch(() => undefined);
-  S3Client.prototype.send = originalSend;
+  if (objectStoreStopped) {
+    try {
+      runDocker('start', container);
+      await waitForSeaweedFS(endpoint);
+      objectStoreStopped = false;
+    } catch (error) {
+      cleanupError = error;
+    }
+  }
   await publisher?.drain().catch(() => undefined);
   if (server) await stopRecoveryJetStream(server).catch(() => undefined);
   try {
@@ -2128,6 +2163,12 @@ async function verifyImportObjectStoreRecovery() {
   } catch (error) {
     cleanupError = error;
   }
+  await storage
+    .send(new DeleteObjectCommand({ Bucket: bucket, Key: objectKey }))
+    .catch((error: unknown) => {
+      cleanupError ??= error;
+    });
+  storage.destroy();
   await pool.end().catch((error: unknown) => {
     cleanupError ??= error;
   });
@@ -3760,6 +3801,34 @@ async function waitForRecovery(
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error(message);
+}
+
+function runDocker(command: 'start' | 'stop', container: string) {
+  const result = spawnSync('docker', [command, container], {
+    encoding: 'utf8',
+    timeout: 15_000,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0)
+    throw new Error(
+      `docker ${command} failed: ${result.stderr || result.stdout}`,
+    );
+}
+
+async function waitForSeaweedFS(endpoint: string) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(new URL('/status', endpoint), {
+        signal: AbortSignal.timeout(1000),
+      });
+      if (response.ok) return;
+    } catch {
+      // Retry while SeaweedFS restarts.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error('SeaweedFS did not become ready after restart');
 }
 
 function createDeferred() {

@@ -141,6 +141,32 @@ try {
       MYOTA_S3_RECOVERY_CONTAINER: container,
     },
   );
+  if (!process.exitCode)
+    runProcess(
+      process.execPath,
+      [
+        'node_modules/vitest/vitest.mjs',
+        'run',
+        'apps/geodata-worker/src/geodata-worker-recovery.spec.ts',
+        '-t',
+        'retries import preprocessing after a temporary object-store outage',
+        '--maxWorkers=1',
+        '--no-file-parallelism',
+      ],
+      {
+        ...process.env,
+        AWS_MAX_ATTEMPTS: '1',
+        GEO_DATABASE_URL: databaseUrl,
+        MYOTA_GEO_WORKER_RECOVERY_TEST: '1',
+        MYOTA_OBJECT_STORAGE_ENDPOINT: endpoint,
+        MYOTA_OBJECT_STORAGE_REGION: 'us-east-1',
+        MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: 'path',
+        MYOTA_OBJECT_STORAGE_ACCESS_KEY: accessKey,
+        MYOTA_OBJECT_STORAGE_SECRET_KEY: secretKey,
+        MYOTA_GEODATA_IMPORT_BUCKET: bucket,
+        MYOTA_S3_RECOVERY_CONTAINER: container,
+      },
+    );
 } finally {
   const cleanupErrors = [];
   if (containerCreated) {
