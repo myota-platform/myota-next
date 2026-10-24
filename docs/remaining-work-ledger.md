@@ -293,8 +293,10 @@ an accepted scope decision is recorded in the dispositions section.
   successful retry.
 - **Missing evidence:** Clustered failover, recovery after permanent volume loss
   in the deployed storage topology, production recovery procedures, and outage
-  behavior for remaining object-store consumers, including Identity profile
-  image uploads, is not covered by those checks.
+  behavior for remaining object-store consumers, including integrated and
+  deployed Identity profile-image recovery, are not covered by those checks. A
+  focused profile-image unit test verifies a failed S3 write rolls back without
+  replacing the existing image reference.
 - **Risk:** Uploaded or generated objects can be lost or orphaned while their
   database references remain, or recovery may require undocumented manual work.
 - **Next check:** Rehearse backup, restore, failover, permanent-volume-loss

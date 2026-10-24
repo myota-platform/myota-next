@@ -1,7 +1,80 @@
 import { readFile } from 'node:fs/promises';
+import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
+import { afterEach, expect, it, vi } from 'vitest';
 import { IdentityProfileImageService } from './identity-profile-image.service.js';
 import type { IdentityAuthService } from './auth.service.js';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
+
+describe('Identity profile image storage recovery', () => {
+  it('leaves the current image metadata intact when an upload hits a storage outage', async () => {
+    const source = await readFile(
+      new URL('./fixtures/profile-image-rgba.png', import.meta.url),
+    );
+    const accountId = '67c16d92-8728-4a9d-a191-3c682dbb5986';
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [{ id: accountId }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ profile_image_id: 'previous-image' }] })
+      .mockResolvedValueOnce({});
+    const release = vi.fn();
+    const pool = { connect: vi.fn().mockResolvedValue({ query, release }) };
+    const auth = {
+      currentAccount: vi.fn().mockResolvedValue({ id: accountId }),
+    };
+    const service = new IdentityProfileImageService(
+      pool as never,
+      auth as unknown as IdentityAuthService,
+    );
+    const send = vi.spyOn(S3Client.prototype, 'send').mockRejectedValue(
+      Object.assign(new Error('temporary object-store outage'), {
+        $metadata: { httpStatusCode: 503 },
+      }),
+    );
+    vi.stubEnv('MYOTA_PROFILE_IMAGE_ACCESS_KEY', 'test-access');
+    vi.stubEnv('MYOTA_PROFILE_IMAGE_SECRET_KEY', 'test-secret');
+    vi.stubEnv('MYOTA_OBJECT_STORAGE_ENDPOINT', 'http://127.0.0.1:1');
+
+    await expect(
+      service.uploadOwnProfileImage(
+        'Bearer test',
+        'image/png',
+        String(source.byteLength),
+        (async function* () {
+          yield source;
+        })(),
+      ),
+    ).rejects.toThrow('temporary object-store outage');
+
+    expect(send).toHaveBeenCalledOnce();
+    expect(query.mock.calls.map(([statement]) => String(statement))).toEqual([
+      'BEGIN',
+      'SELECT id FROM public.account WHERE id = $1 FOR UPDATE',
+      expect.stringContaining(
+        'SELECT profile_image_id FROM public.identity_account_profile',
+      ),
+      'ROLLBACK',
+    ]);
+    expect(
+      query.mock.calls.some(([statement]) =>
+        /INSERT INTO public\.identity_account_profile|UPDATE public\.account/.test(
+          String(statement),
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      send.mock.calls.some(
+        ([command]) => command instanceof DeleteObjectCommand,
+      ),
+    ).toBe(false);
+    expect(release).toHaveBeenCalledOnce();
+  });
+});
 
 describe('IdentityProfileImageService Pillow compatibility', () => {
   it('keeps a transparent gradient crop within decoded-pixel tolerance', async () => {
