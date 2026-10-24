@@ -171,10 +171,15 @@ reconnection.
 A separate three-node JetStream check holds a delivery on each of the four Geodata
 durables while the leader stops, then verifies all four handlers complete and settle
 through the replacement leader. Repository processing is stubbed in this broker
-settlement check. Process outages during other Geodata operations remain open. If
-PostgreSQL fails while the worker is recording a failed delivery, it extends the current
-message ACK and retries settlement for transient connection, shutdown, serialization,
-and deadlock errors with capped jittered backoff.
+settlement check. A separate live-worker process-loss check runs real import
+preprocessing, kills the worker after the `PREPROCESSED` state and candidate rows commit
+but before ACK, then starts a fresh worker on the redelivered message. The fresh worker
+settles the terminal work without another claim attempt or duplicate candidates. This
+check passed in [operational qualification run 40081202081](https://github.com/myota-platform/myota-next/actions/runs/40081202081).
+Process outages during promotion, deletion, and enrichment remain open. If PostgreSQL
+fails while the worker is recording a failed delivery, it extends the current message
+ACK and retries settlement for transient connection, shutdown, serialization, and
+deadlock errors with capped jittered backoff.
 
 Live fault-proxy checks now cover failure settlement for all four Geodata work kinds.
 Preprocessing, promotion, deletion, and enrichment keep their JetStream deliveries
@@ -184,7 +189,7 @@ attempt count and error, deletion verifies its error and lease, and enrichment v
 that its current request returns to `QUEUED` before redelivery.
 
 Successful reprocessing is stubbed for promotion, deletion, and enrichment to isolate
-settlement behavior. Process outages during claim or processing for other work kinds
+settlement behavior. Process outages during claim or processing for those work kinds
 remain open. Periodic cancellation, expired-work, and retention passes also retry
 transient database failures with capped jittered backoff. Retention repeats object
 deletion safely before retrying its database state change. A live recovery check now

@@ -132,17 +132,22 @@ an accepted scope decision is recorded in the dispositions section.
   enrichment, and other asynchronous work recover after process and database
   outages without duplicate side effects or lost durable state.
 - **Current implementation and evidence:** CI verifies preprocessing recovery
-  across PostgreSQL reconnection, settlement paths for all four work kinds,
-  and JetStream leader replacement. Some settlement checks stub successful
-  reprocessing.
-- **Missing evidence:** Processing and process-loss windows for other Geodata
-  operations remain open; full source handling is not exercised by all broker
-  settlement checks.
+  across PostgreSQL reconnection and settlement paths for all four work kinds;
+  some settlement checks stub successful reprocessing. A live-worker check now
+  kills the process after preprocessing commits `PREPROCESSED` and its candidate
+  rows but before ACK, then verifies redelivery settles without another attempt
+  or duplicate candidates. This passed in
+  [operational qualification run 40081202081](https://github.com/myota-platform/myota-next/actions/runs/40081202081).
+- **Missing evidence:** Process-loss windows during claim and after side effects
+  for promotion, deletion, and enrichment remain open. Some broker settlement
+  checks still stub successful reprocessing; deployment recovery remains
+  unqualified.
 - **Risk:** Import, promotion, deletion, enrichment, or retention work may be
   stranded or repeated after a crash or database outage.
 - **Next check:** Inject process loss during claim and after side effects for
-  each remaining work kind, then verify real repositories, leases, outbox state,
-  retries, and final records against the isolated deployment.
+  promotion, deletion, and enrichment, then verify real repositories, leases,
+  outbox state, retries, and final records; repeat relevant scenarios against
+  the isolated deployment.
 - **Tracked by:** [Issue #16](https://github.com/myota-platform/myota-next/issues/16).
 - **Sources:** [Geodata parity, lines 18–25](parity/geodata.md#L18);
   [workers and operations, lines 168–190](parity/workers-operations.md#L168).
