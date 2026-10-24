@@ -49,27 +49,32 @@ an accepted scope decision is recorded in the dispositions section.
   every consequential point.
 - **Current implementation and evidence:** Recovery checks kill workers after
   lease acquisition and before processing starts for all six work kinds. Other
-  checks inject process loss during QSO ingestion and broad award recalculation,
-  and cover selected three-node leader changes. A child-process test also
+  checks inject process loss during QSO ingestion, ADIF import while QSO rows
+  are being written, and broad award recalculation, verifying transaction
+  rollback, no partial QSO/outbox/notification effects, lease reclaim, and
+  successful retry. They also cover selected three-node leader changes. A
+  child-process test also
   persists a terminal failed job and dead-letter, kills the worker while its
   delivery is still pending, then verifies redelivery settles without
   reprocessing. The Activity leader-failover check retries ACK confirmation
   while extending the pending delivery. Isolated CI exercises Activity
   notification retry exhaustion and audited redrive, plus Email retry
   exhaustion followed by audited command replay; the Email dead-letter resolves
-  only after delivery succeeds. These checks passed in
-  [operational qualification run 40089452267](https://github.com/myota-platform/myota-next/actions/runs/40089452267).
+  only after delivery succeeds. The full checks, including ADIF side-effect
+  interruption and ACK retry through JetStream leader change, passed in
+  [operational qualification run 40091940815](https://github.com/myota-platform/myota-next/actions/runs/40091940815).
 - **Missing evidence:** Process death during side-effecting processing for the
-  remaining Activity work kinds, retry exhaustion and operator redrive under
-  the deployed topology, and recovery under the deployed topology are still
-  open. Terminal dead-letter persistence followed by process loss before
-  settlement is covered by the existing CI check.
+  remaining Activity work kinds, including PDF artifact writes, retry
+  exhaustion and operator redrive under the deployed topology, and recovery
+  under the deployed topology are still open. Terminal dead-letter persistence
+  followed by process loss before settlement is covered by the existing CI
+  check.
 - **Risk:** A restart could duplicate or lose a QSO/award side effect, strand a
   job, or leave a terminal message unsettled.
-- **Next check:** Inject process loss during side-effecting work for the
-  remaining Activity kinds; verify durable final state, idempotency, and lease
-  recovery. Exercise retry exhaustion and audited operator redrive in the
-  isolated deployment when its recovery topology is available.
+- **Next check:** Inject process loss during PDF artifact writes; verify durable
+  final state, idempotency, and lease recovery. Exercise retry exhaustion and
+  audited operator redrive in the isolated deployment when its recovery topology
+  is available.
 - **Tracked by:** [Issue #15](https://github.com/myota-platform/myota-next/issues/15).
 - **Sources:** [Activity parity, lines 255–264](parity/activity.md#L255);
   [workers and operations, lines 35–57](parity/workers-operations.md#L35).
