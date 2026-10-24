@@ -132,6 +132,8 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
       objectStore = await startRecoveryObjectStore();
       process.env.MYOTA_OBJECT_STORAGE_ENDPOINT = objectStore.endpoint;
       process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE = 'path';
+      workerEnvironment.MYOTA_OBJECT_STORAGE_ENDPOINT = objectStore.endpoint;
+      workerEnvironment.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE = 'path';
     }
     if (activationId) {
       await pool.query(
