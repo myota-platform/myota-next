@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmod, mkdtemp, rm } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -19,16 +19,15 @@ if (!readFileSync('deploy/compose.yaml', 'utf8').includes(image))
 
 const suffix = randomUUID().replaceAll('-', '').slice(0, 16);
 const container = `myota-geodata-storage-recovery-${suffix}`;
-const volume = `${container}-data`;
 const directory = await mkdtemp(join(tmpdir(), 'myota-seaweedfs-recovery-'));
 const config = join(directory, 's3.json');
+const dataDirectory = join(directory, 'seaweedfs-data');
 const bucket = `myota-geodata-recovery-${suffix}`;
 const accessKey = `myota-recovery-${suffix}`;
 const secretKey = `myota-recovery-secret-${suffix}`;
 const profileAccessKey = `myota-profile-${suffix}`;
 const profileSecretKey = `myota-profile-secret-${suffix}`;
 const endpoint = 'http://127.0.0.1:18333';
-let volumeCreated = false;
 let containerCreated = false;
 
 function docker(args) {
@@ -95,8 +94,7 @@ try {
   if (process.exitCode) throw new Error('could not render SeaweedFS S3 config');
   await chmod(directory, 0o755);
   await chmod(config, 0o644);
-  docker(['volume', 'create', volume]);
-  volumeCreated = true;
+  await mkdir(dataDirectory, { mode: 0o755 });
   docker([
     'run',
     '--detach',
@@ -107,7 +105,7 @@ try {
     '--volume',
     `${directory}:/etc/seaweedfs-auth:ro`,
     '--volume',
-    `${volume}:/data`,
+    `${dataDirectory}:/data`,
     image,
     'mini',
     '-dir=/data',
@@ -139,7 +137,7 @@ try {
       MYOTA_OBJECT_STORAGE_SECRET_KEY: secretKey,
       MYOTA_GEODATA_IMPORT_BUCKET: bucket,
       MYOTA_S3_RECOVERY_CONTAINER: container,
-      MYOTA_S3_RECOVERY_VOLUME: volume,
+      MYOTA_S3_RECOVERY_DATA_DIRECTORY: dataDirectory,
     },
   );
   if (!process.exitCode)
@@ -173,13 +171,6 @@ try {
   if (containerCreated) {
     try {
       docker(['rm', '--force', container]);
-    } catch (error) {
-      cleanupErrors.push(error);
-    }
-  }
-  if (volumeCreated) {
-    try {
-      docker(['volume', 'rm', '--force', volume]);
     } catch (error) {
       cleanupErrors.push(error);
     }

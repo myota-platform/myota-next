@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { mkdir, rm } from 'node:fs/promises';
 import {
   AbortMultipartUploadCommand,
   CreateBucketCommand,
@@ -21,7 +22,7 @@ describe.skipIf(!enabled)('Geodata object-store recovery', () => {
     const endpoint = process.env.MYOTA_OBJECT_STORAGE_ENDPOINT;
     const bucket = process.env.MYOTA_GEODATA_IMPORT_BUCKET;
     const container = process.env.MYOTA_S3_RECOVERY_CONTAINER;
-    const volume = process.env.MYOTA_S3_RECOVERY_VOLUME;
+    const dataDirectory = process.env.MYOTA_S3_RECOVERY_DATA_DIRECTORY;
     const accessKey = process.env.MYOTA_OBJECT_STORAGE_ACCESS_KEY;
     const secretKey = process.env.MYOTA_OBJECT_STORAGE_SECRET_KEY;
     if (
@@ -29,7 +30,7 @@ describe.skipIf(!enabled)('Geodata object-store recovery', () => {
       !endpoint ||
       !bucket ||
       !container ||
-      !volume ||
+      !dataDirectory ||
       !accessKey ||
       !secretKey
     )
@@ -150,7 +151,7 @@ describe.skipIf(!enabled)('Geodata object-store recovery', () => {
       await service.uploadPart(owner, lostVolumeUploadId, 2, lastBody);
 
       runDocker('stop', container);
-      replaceDockerVolume(volume);
+      await replaceStorageDirectory(dataDirectory);
       runDocker('start', container);
       await waitForSeaweedFS(endpoint);
       await client.send(new CreateBucketCommand({ Bucket: bucket }));
@@ -256,21 +257,9 @@ function runDocker(command: 'start' | 'stop', container: string) {
     );
 }
 
-function replaceDockerVolume(volume: string) {
-  runDockerVolume(['volume', 'rm', volume]);
-  runDockerVolume(['volume', 'create', volume]);
-}
-
-function runDockerVolume(args: string[]) {
-  const result = spawnSync('docker', args, {
-    encoding: 'utf8',
-    timeout: 15_000,
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0)
-    throw new Error(
-      `docker ${args.join(' ')} failed: ${result.stderr || result.stdout}`,
-    );
+async function replaceStorageDirectory(dataDirectory: string) {
+  await rm(dataDirectory, { recursive: true, force: true });
+  await mkdir(dataDirectory, { recursive: true, mode: 0o755 });
 }
 
 async function waitForSeaweedFS(endpoint: string) {
