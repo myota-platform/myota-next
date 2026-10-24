@@ -1305,9 +1305,9 @@ async function verifyClaimProcessLossRecovery() {
             `SELECT public_properties->>'locationEnrichmentStatus' AS status,
                 (SELECT count(*)::int FROM outbox_event
                  WHERE event_type='geodata.entity.location-enriched.v1'
-                   AND aggregate_id=$1::text) AS events
+                   AND aggregate_id=$2::text) AS events
              FROM geodata_entity WHERE id=$1`,
-            [enrichmentEntityId],
+            [enrichmentEntityId, enrichmentEntityId],
           );
           expect(result.rows[0]).toEqual({ status: 'PROCESSING', events: 0 });
         },
@@ -1322,9 +1322,9 @@ async function verifyClaimProcessLossRecovery() {
             `SELECT public_properties->>'locationEnrichmentStatus' AS status,
                 (SELECT count(*)::int FROM outbox_event
                  WHERE event_type='geodata.entity.location-enriched.v1'
-                   AND aggregate_id=$1::text) AS events
+                   AND aggregate_id=$2::text) AS events
              FROM geodata_entity WHERE id=$1`,
-            [enrichmentEntityId],
+            [enrichmentEntityId, enrichmentEntityId],
           );
           expect(result.rows[0]).toEqual({ status: 'COMPLETED', events: 1 });
         },
