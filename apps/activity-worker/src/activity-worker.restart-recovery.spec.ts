@@ -1367,8 +1367,13 @@ async function waitForConsumerAckPending(
   expected: number,
 ) {
   await waitFor(async () => {
-    const consumer = await manager.consumers.info(stream, durable);
-    return consumer.num_ack_pending === expected;
+    try {
+      const consumer = await manager.consumers.info(stream, durable);
+      return consumer.num_ack_pending === expected;
+    } catch {
+      // JetStream may be electing a replacement leader during this poll.
+      return false;
+    }
   }, `Activity durable ${durable} did not release pending deliveries`);
 }
 
