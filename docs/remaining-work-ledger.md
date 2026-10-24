@@ -285,12 +285,15 @@ an accepted scope decision is recorded in the dispositions section.
   parts of a second multipart upload; completion then marks the session
   `FAILED`, creates no import run or outbox event, and directs the caller to
   start a new upload. The fixture cleans up both sessions. These storage cases
-  passed in [operational qualification run 40097566429](https://github.com/myota-platform/myota-next/actions/runs/40097566429).
+  passed in [operational qualification run 40098768950](https://github.com/myota-platform/myota-next/actions/runs/40098768950).
   That run also verifies Geodata preprocessing retries a temporary object-store
   outage and retention repeats safe deletion after a database interruption.
   Activity ADIF and certificate rendering retry temporary object-store failures;
   checks verify no partial QSO or ready-artifact effect is committed before the
   successful retry.
+- **Additional consumer check:** Node CI verifies a failed Identity profile-image
+  S3 write rolls back without replacing the existing image reference; the test
+  uses mocked database and object-store clients. See [Node CI run 40098386128](https://github.com/myota-platform/myota-next/actions/runs/40098386128).
 - **Missing evidence:** Clustered failover, recovery after permanent volume loss
   in the deployed storage topology, production recovery procedures, and outage
   behavior for remaining object-store consumers, including integrated and

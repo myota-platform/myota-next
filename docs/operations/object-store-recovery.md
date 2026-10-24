@@ -15,7 +15,7 @@ parts of a second session, deletes SeaweedFS's local data volume, and verifies
 completion marks that session `FAILED` without creating an import run or
 outbox event. The operator-facing conflict requires starting a new upload, and
 the fixture cleans up both sessions. These cases passed in
-[operational qualification run 40097566429](https://github.com/myota-platform/myota-next/actions/runs/40097566429).
+[operational qualification run 40098768950](https://github.com/myota-platform/myota-next/actions/runs/40098768950).
 The permanent-loss check verifies safe application state; it does not recover
 the lost bytes or qualify clustered failover or production storage procedures.
 
@@ -35,6 +35,9 @@ profile-image upload has a focused unit test for a failed S3 write: the
 transaction rolls back without replacing the existing image reference. That
 test uses a mocked database and S3 client; an integrated outage and deployed
 storage recovery path for profile images are not yet qualified.
+
+The profile-image unit test passed in [Node CI run
+40098386128](https://github.com/myota-platform/myota-next/actions/runs/40098386128).
 
 The object-store recovery guide does not yet qualify clustered storage
 failover, backup/restore, recovery after permanent volume loss in the deployed
