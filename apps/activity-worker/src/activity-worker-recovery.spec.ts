@@ -110,7 +110,8 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
   const interruptDuringProcessing =
     jobKind === 'QSO_INGESTION' ||
     jobKind === 'ADIF_IMPORT' ||
-    jobKind === 'AWARD_RECALCULATE';
+    jobKind === 'AWARD_RECALCULATE' ||
+    jobKind === 'PDF_RENDER';
   const workerEnvironment = {
     ...process.env,
     ACTIVITY_DATABASE_URL: databaseUrl,
@@ -129,7 +130,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
 
   try {
     if (importId || issuanceId) {
-      objectStore = await startRecoveryObjectStore();
+      objectStore = await startRecoveryObjectStore(jobKind === 'PDF_RENDER');
       process.env.MYOTA_OBJECT_STORAGE_ENDPOINT = objectStore.endpoint;
       process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE = 'path';
       workerEnvironment.MYOTA_OBJECT_STORAGE_ENDPOINT = objectStore.endpoint;
@@ -283,7 +284,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
       ],
     );
 
-    if (interruptDuringProcessing) {
+    if (interruptDuringProcessing && jobKind !== 'PDF_RENDER') {
       const targetId =
         jobKind === 'QSO_INGESTION'
           ? activationId
@@ -305,7 +306,9 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
 
     worker = spawnRecoveryWorker(workerEnvironment);
     await waitForClaim(worker, pool, jobId);
-    if (sideEffectBlocker)
+    if (jobKind === 'PDF_RENDER' && objectStore)
+      await waitForArtifactWrite(worker, objectStore);
+    else if (sideEffectBlocker)
       blockedBackendPid = await waitForBlockedSideEffect(
         worker,
         pool,
@@ -313,6 +316,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
       );
     killRecoveryWorker(worker);
     await waitForExit(worker);
+    objectStore?.releaseArtifactWrite();
     if (blockerClient) {
       if (blockedBackendPid !== undefined)
         await waitForDatabaseBackendExit(pool, blockedBackendPid);
@@ -328,6 +332,8 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
         importId,
         awardId,
         subjectId,
+        issuanceId,
+        objectStore,
       );
 
     const expiredLease = await pool.query<{
@@ -390,6 +396,10 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
           failed_notifications: 0,
         });
       } else {
+        const existingArtifact = objectStore.objects.get(
+          objectStore.artifactKey ?? '',
+        );
+        expect(existingArtifact?.toString('ascii', 0, 4)).toBe('%PDF');
         const interrupted = await pool.query<{
           job_status: string;
           attempts: number;
@@ -414,8 +424,8 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
           downloadReady: true,
           renderStatus: 'READY',
         });
-        expect(objectStore.objects.has(objectStore.artifactKey ?? '')).toBe(
-          false,
+        expect(objectStore.objects.get(objectStore.artifactKey ?? '')).toEqual(
+          existingArtifact,
         );
       }
       await repository.retryWorkJob(recovered, storageError, 0);
@@ -536,8 +546,12 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
         status: string;
         attempts: number;
         issuance: string;
+        render_events: number;
       }>(
-        `SELECT job.status,job.attempts,issuance.issuance::text AS issuance
+        `SELECT job.status,job.attempts,issuance.issuance::text AS issuance,
+                (SELECT count(*)::int FROM outbox_event
+                 WHERE aggregate_type='award_issuance'
+                   AND aggregate_id=issuance.id::text) AS render_events
          FROM activity_job job
          JOIN activity_award_issuance issuance ON issuance.id=$2
          WHERE job.id=$1`,
@@ -546,6 +560,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
       expect(result.rows[0]).toMatchObject({
         status: 'SUCCEEDED',
         attempts: 3,
+        render_events: 1,
       });
       const storedIssuance = JSON.parse(result.rows[0]!.issuance);
       expect(storedIssuance.artifact).toMatchObject({
@@ -553,11 +568,13 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
         renderStatus: 'READY',
       });
       expect(storedIssuance.artifact.contentSha256).toMatch(/^[0-9a-f]{64}$/);
-      expect(
-        objectStore?.objects
-          .get(objectStore.artifactKey ?? '')
-          ?.toString('ascii', 0, 4),
-      ).toBe('%PDF');
+      const renderedArtifact = objectStore?.objects.get(
+        objectStore.artifactKey ?? '',
+      );
+      expect(renderedArtifact?.toString('ascii', 0, 4)).toBe('%PDF');
+      expect(createHash('sha256').update(renderedArtifact!).digest('hex')).toBe(
+        storedIssuance.artifact.contentSha256,
+      );
     }
   } finally {
     if (worker && worker.exitCode === null) {
@@ -585,7 +602,10 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
         issuanceId,
       );
     } finally {
-      if (objectStore) await stopRecoveryObjectStore(objectStore);
+      if (objectStore) {
+        objectStore.releaseArtifactWrite();
+        await stopRecoveryObjectStore(objectStore);
+      }
       if (previousObjectStorageEndpoint === undefined)
         delete process.env.MYOTA_OBJECT_STORAGE_ENDPOINT;
       else
@@ -722,6 +742,8 @@ type RecoveryObjectStore = {
   objects: Map<string, Buffer>;
   available: boolean;
   artifactKey?: string;
+  artifactWriteObserved: boolean;
+  releaseArtifactWrite(): void;
 };
 
 function adifRecoveryContent() {
@@ -734,9 +756,14 @@ function objectStoreKey(bucket: string, key: string) {
   return `/${bucket}/${key}`;
 }
 
-async function startRecoveryObjectStore() {
+async function startRecoveryObjectStore(blockArtifactWrite = false) {
   const objects = new Map<string, Buffer>();
   let available = true;
+  let artifactWriteObserved = false;
+  let releaseArtifactWriteGate: () => void = () => undefined;
+  const artifactWriteGate = new Promise<void>((resolve) => {
+    releaseArtifactWriteGate = resolve;
+  });
   const server = createServer((request, response) => {
     const key = decodeURIComponent(
       new URL(request.url ?? '/', 'http://127.0.0.1').pathname,
@@ -768,13 +795,20 @@ async function startRecoveryObjectStore() {
       );
       request.on('end', () => {
         const body = Buffer.concat(chunks);
-        objects.set(key, body);
-        response.statusCode = 200;
-        response.setHeader(
-          'ETag',
-          `"${createHash('md5').update(body).digest('hex')}"`,
-        );
-        response.end();
+        void (async () => {
+          objects.set(key, body);
+          if (blockArtifactWrite && key === recoveryObjectStore.artifactKey) {
+            artifactWriteObserved = true;
+            await artifactWriteGate;
+          }
+          if (response.destroyed) return;
+          response.statusCode = 200;
+          response.setHeader(
+            'ETag',
+            `"${createHash('md5').update(body).digest('hex')}"`,
+          );
+          response.end();
+        })();
       });
       return;
     }
@@ -792,7 +826,7 @@ async function startRecoveryObjectStore() {
       resolve(address.port);
     });
   });
-  return {
+  const recoveryObjectStore: RecoveryObjectStore = {
     endpoint: `http://127.0.0.1:${port}`,
     server,
     objects,
@@ -802,7 +836,14 @@ async function startRecoveryObjectStore() {
     set available(value: boolean) {
       available = value;
     },
-  } satisfies RecoveryObjectStore;
+    get artifactWriteObserved() {
+      return artifactWriteObserved;
+    },
+    releaseArtifactWrite() {
+      releaseArtifactWriteGate();
+    },
+  };
+  return recoveryObjectStore;
 }
 
 async function stopRecoveryObjectStore(objectStore: RecoveryObjectStore) {
@@ -960,6 +1001,24 @@ async function waitForBlockedSideEffect(
   );
 }
 
+async function waitForArtifactWrite(
+  worker: ReturnType<typeof spawnRecoveryWorker>,
+  objectStore: RecoveryObjectStore,
+) {
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    if (worker.exitCode !== null || worker.signalCode !== null)
+      throw new Error(
+        `Activity worker exited before writing the PDF artifact: ${worker.getOutput()}`,
+      );
+    if (objectStore.artifactWriteObserved) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(
+    `Activity worker did not write the PDF artifact: ${worker.getOutput()}`,
+  );
+}
+
 async function waitForDatabaseBackendExit(pool: Pool, pid: number) {
   await pool.query('SELECT pg_terminate_backend($1)', [pid]);
   const deadline = Date.now() + 15_000;
@@ -981,6 +1040,8 @@ async function expectRolledBackSideEffects(
   importId?: string,
   awardId?: string,
   subjectId?: string,
+  issuanceId?: string,
+  objectStore?: RecoveryObjectStore,
 ) {
   if (jobKind === 'QSO_INGESTION' && activationId) {
     const result = await pool.query(
@@ -1037,6 +1098,30 @@ async function expectRolledBackSideEffects(
       [awardId, subjectId, `award-qualified:${awardId}:1:${subjectId}%`],
     );
     expect(result.rows[0]).toMatchObject({ progress: 0, notifications: 0 });
+    return;
+  }
+  if (jobKind === 'PDF_RENDER' && issuanceId && objectStore) {
+    const result = await pool.query<{
+      issuance: string;
+      render_events: number;
+    }>(
+      `SELECT issuance::text AS issuance,
+              (SELECT count(*)::int FROM outbox_event
+               WHERE aggregate_type='award_issuance'
+                 AND aggregate_id=activity_award_issuance.id::text) AS render_events
+       FROM activity_award_issuance WHERE id=$1`,
+      [issuanceId],
+    );
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.render_events).toBe(0);
+    expect(JSON.parse(result.rows[0]!.issuance).artifact).not.toMatchObject({
+      downloadReady: true,
+      renderStatus: 'READY',
+    });
+    const orphanedArtifact = objectStore.objects.get(
+      objectStore.artifactKey ?? '',
+    );
+    expect(orphanedArtifact?.toString('ascii', 0, 4)).toBe('%PDF');
   }
 }
 
