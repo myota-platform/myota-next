@@ -708,8 +708,8 @@ async function verifyOtherWorkKindProcessLossRecovery() {
                   AND aggregate_id IN ($1,$2)) AS events,
                (SELECT count(*)::int FROM geodata_audit_event
                 WHERE aggregate_id=$1) AS audit,
-               (SELECT count(*)::int FROM geodata_entity WHERE id=$1) AS remaining_entities`,
-            [deletionEntityId, deletionJobId],
+               (SELECT count(*)::int FROM geodata_entity WHERE id=$3) AS remaining_entities`,
+            [deletionEntityId, deletionJobId, deletionEntityId],
           );
           expect(job.rows[0]?.status).toBe('COMPLETED');
           expect(effects.rows[0]).toEqual({
@@ -1250,9 +1250,9 @@ async function verifyClaimProcessLossRecovery() {
           const result = await pool.query(
             `SELECT payload->>'status' AS status,
                 (SELECT count(*)::int FROM geodata_entity WHERE id=$2) AS entities,
-                (SELECT count(*)::int FROM geodata_audit_event WHERE aggregate_id=$2) AS audit
+                (SELECT count(*)::int FROM geodata_audit_event WHERE aggregate_id=$3) AS audit
              FROM geodata_control_record WHERE kind='entityDeletionJobs' AND id=$1`,
-            [deletionJobId, deletionEntityId],
+            [deletionJobId, deletionEntityId, deletionEntityId],
           );
           expect(result.rows[0]).toEqual({
             status: 'PROCESSING',
@@ -1271,14 +1271,14 @@ async function verifyClaimProcessLossRecovery() {
         assertFinal: async () => {
           const result = await pool.query(
             `SELECT payload->>'status' AS status,
-                (SELECT count(*)::int FROM geodata_entity WHERE id=$2) AS entities,
+                (SELECT count(*)::int FROM geodata_entity WHERE id=$3) AS entities,
                 (SELECT count(*)::int FROM geodata_audit_event WHERE aggregate_id=$2) AS audit,
                 (SELECT count(*)::int FROM outbox_event
                  WHERE event_type IN ('geodata.entity.deleted.v1',
                    'geodata.entity-deletion-job.completed.v1')
                    AND aggregate_id IN ($1,$2)) AS events
              FROM geodata_control_record WHERE kind='entityDeletionJobs' AND id=$1`,
-            [deletionJobId, deletionEntityId],
+            [deletionJobId, deletionEntityId, deletionEntityId],
           );
           expect(result.rows[0]).toEqual({
             status: 'COMPLETED',
