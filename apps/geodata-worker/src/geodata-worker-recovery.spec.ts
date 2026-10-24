@@ -118,7 +118,8 @@ async function verifyTerminalDeadLetterRecovery() {
   const directory = await mkdtemp(join(tmpdir(), 'myota-geodata-dead-letter-'));
   const natsPort = await reserveLocalPort();
   const natsUrl = `nats://127.0.0.1:${natsPort}`;
-  const eventId = randomUUID();
+  const workId = randomUUID();
+  let deadLetterId: string | undefined;
   const { Pool } = await import('pg');
   const pool = new Pool({ connectionString: databaseUrl, max: 2 });
   const savedNatsUrl = process.env.NATS_URL;
@@ -158,29 +159,32 @@ async function verifyTerminalDeadLetterRecovery() {
       num_replicas: 0,
     } as ConsumerConfig);
 
-    await jetstream(publisher).publish(
+    const published = await jetstream(publisher).publish(
       'myota.work.geodata.import-preprocess.v1',
       new TextEncoder().encode(
         stringifyJsonWithBigInts({
           envelopeVersion: 1,
-          workId: eventId,
+          workId,
           workType: 'geodata.import-preprocess.v1',
           producer: 'geodata',
           createdAt: new Date().toISOString(),
-          causationId: eventId,
-          aggregate: { type: 'import_run', id: eventId },
-          payload: { importRunId: eventId },
+          aggregate: { type: 'import_run', id: workId },
+          payload: { importRunId: workId },
           unexpected: true,
         }),
       ),
     );
+    deadLetterId = expectedGeodataDeadLetterId(
+      'myota.work.geodata.import-preprocess.v1',
+      published.seq,
+    );
+    const expectedDeadLetterId = deadLetterId;
 
     const workerEnvironment = {
       ...process.env,
       GEO_DATABASE_URL: databaseUrl,
       NATS_URL: natsUrl,
       MYOTA_GEO_WORKER_RECOVERY_TEST: '1',
-      MYOTA_GEO_WORKER_DEAD_LETTER_ID: eventId,
     };
     interrupted = spawnTerminalDeadLetterWorker('interrupt', workerEnvironment);
     try {
@@ -191,9 +195,8 @@ async function verifyTerminalDeadLetterRecovery() {
           );
         const result = await pool.query<{ count: number }>(
           `SELECT count(*)::int AS count FROM dead_letter_event
-           WHERE event_id=$1::uuid OR payload->>'workId'=$1::text
-              OR payload->>'causationId'=$1::text`,
-          [eventId],
+           WHERE event_id=$1`,
+          [expectedDeadLetterId],
         );
         return result.rows[0]?.count === 1;
       }, 'Geodata dead letter was not persisted before termination');
@@ -229,17 +232,25 @@ async function verifyTerminalDeadLetterRecovery() {
     expect(settled.num_pending).toBe(0);
     expect(settled.num_ack_pending).toBe(0);
     const deadLetters = await pool.query<{
-      count: number;
+      event_id: string;
+      event_type: string;
+      payload: Record<string, unknown>;
       attempts: number;
       resolved_at: Date | null;
     }>(
-      `SELECT count(*)::int AS count,max(attempts)::int AS attempts,
-          max(resolved_at) AS resolved_at
+      `SELECT event_id::text,event_type,payload,attempts,resolved_at
        FROM dead_letter_event WHERE event_id=$1`,
-      [eventId],
+      [expectedDeadLetterId],
     );
-    expect(deadLetters.rows[0]).toMatchObject({ count: 1, attempts: 2 });
-    expect(deadLetters.rows[0]?.resolved_at).toBeNull();
+    expect(deadLetters.rows).toEqual([
+      {
+        event_id: expectedDeadLetterId,
+        event_type: 'unknown',
+        payload: {},
+        attempts: 2,
+        resolved_at: null,
+      },
+    ]);
   } finally {
     if (interrupted && interrupted.exitCode === null) {
       interrupted.kill('SIGKILL');
@@ -247,9 +258,10 @@ async function verifyTerminalDeadLetterRecovery() {
     }
     await publisher?.drain().catch(() => undefined);
     if (server) await stopRecoveryJetStream(server).catch(() => undefined);
-    await pool.query('DELETE FROM dead_letter_event WHERE event_id=$1', [
-      eventId,
-    ]);
+    if (deadLetterId)
+      await pool.query('DELETE FROM dead_letter_event WHERE event_id=$1', [
+        deadLetterId,
+      ]);
     await pool.end();
     await rm(directory, { recursive: true, force: true });
     if (savedNatsUrl === undefined) delete process.env.NATS_URL;
@@ -260,9 +272,8 @@ async function verifyTerminalDeadLetterRecovery() {
 async function runTerminalDeadLetterWorkerPhase() {
   const databaseUrl = process.env.GEO_DATABASE_URL;
   const natsUrl = process.env.NATS_URL;
-  const eventId = process.env.MYOTA_GEO_WORKER_DEAD_LETTER_ID;
   const phase = process.env.MYOTA_GEO_WORKER_DEAD_LETTER_PHASE;
-  if (!databaseUrl || !natsUrl || !eventId || !phase)
+  if (!databaseUrl || !natsUrl || !phase)
     throw new Error('Geodata dead-letter worker phase settings are required');
 
   const { Pool } = await import('pg');
@@ -271,6 +282,7 @@ async function runTerminalDeadLetterWorkerPhase() {
     servers: natsUrl,
     name: `geodata-dead-letter-${phase}`,
   });
+
   try {
     const consumer = await jetstream(connection).consumers.get(
       'MYOTA_GEODATA_WORK',
@@ -324,6 +336,18 @@ async function runTerminalDeadLetterWorkerPhase() {
     await connection.drain();
     await pool.end();
   }
+}
+
+function expectedGeodataDeadLetterId(subject: string, streamSequence: number) {
+  const namespace = Buffer.from('6ba7b8109dad11d180b400c04fd430c8', 'hex');
+  const digest = createHash('sha1')
+    .update(namespace)
+    .update(`MYOTA_GEODATA_WORK:${subject}:${streamSequence}`)
+    .digest();
+  digest[6] = (digest[6]! & 0x0f) | 0x50;
+  digest[8] = (digest[8]! & 0x3f) | 0x80;
+  const hex = digest.subarray(0, 16).toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 async function verifyClusterFailover() {

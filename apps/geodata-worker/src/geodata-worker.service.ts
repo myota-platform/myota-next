@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   Inject,
@@ -562,7 +562,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
     const eventId =
       typeof suppliedId === 'string' && isPythonUuid(suppliedId)
         ? suppliedId
-        : randomUUID();
+        : deadLetterEventId(message);
     const suppliedType = pythonTruthy(envelope?.workType)
       ? envelope?.workType
       : pythonTruthy(envelope?.eventType)
@@ -793,6 +793,20 @@ function isPythonUuid(value: string): boolean {
     .replace(/^[{}]+|[{}]+$/g, '')
     .replaceAll('-', '');
   return /^[0-9a-f]{32}$/i.test(hex);
+}
+
+function deadLetterEventId(message: JsMsg): string {
+  const namespace = Buffer.from('6ba7b8109dad11d180b400c04fd430c8', 'hex');
+  const digest = createHash('sha1')
+    .update(namespace)
+    .update(
+      `MYOTA_GEODATA_WORK:${message.subject}:${message.info.streamSequence}`,
+    )
+    .digest();
+  digest[6] = (digest[6]! & 0x0f) | 0x50;
+  digest[8] = (digest[8]! & 0x3f) | 0x80;
+  const hex = digest.subarray(0, 16).toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function safeError(error: unknown): string {
