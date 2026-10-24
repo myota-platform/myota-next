@@ -327,6 +327,7 @@ test('saves an award draft and submits it for review', async ({ page }) => {
     page.getByRole('button', { name: 'Submit for review' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Submit for review' }).click();
+  await expect(page.getByRole('status')).toHaveText('Award submitted.');
   await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();
   await page.getByRole('button', { name: 'Approve' }).click();
   await expect(page.getByRole('button', { name: 'Publish' })).toBeVisible();

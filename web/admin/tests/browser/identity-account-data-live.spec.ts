@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
 import { expectResponsiveAccessible } from '../../../a11y';
 
-test('manages callsigns, exports, and anonymizes an account through live Admin', async ({
+test('creates and manages an account through live Admin', async ({
   page,
   request,
 }) => {
@@ -46,13 +46,61 @@ test('manages callsigns, exports, and anonymizes an account through live Admin',
       Authorization: `Bearer ${adminSession.accessToken}`,
     };
 
-    const created = await request.post(`${gateway}/v1/identity/accounts`, {
-      headers: { ...authorization, 'Idempotency-Key': randomUUID() },
-      data: { displayName, email, participationType: 'OPERATOR' },
+    await page.goto('/identity');
+    await expect(page).toHaveURL(/\/login\?redirect=\/identity$/);
+    await page.getByLabel('Email').fill(adminEmail);
+    await page.getByLabel('Password').fill(adminPassword);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page).toHaveURL(/\/identity$/);
+
+    await page.getByRole('button', { name: 'Create account' }).first().click();
+    await page.getByLabel('Display name').fill(displayName);
+    await page.getByLabel('Email').last().fill(email);
+    await page.getByLabel(/Activity administrator/).check();
+    await expect(page.getByLabel(/Global administrator/)).toHaveCount(0);
+    const createResponsePromise = page.waitForResponse((response) => {
+      return (
+        new URL(response.url()).pathname === '/v1/identity/accounts' &&
+        response.request().method() === 'POST'
+      );
     });
+    await page.getByRole('button', { name: 'Create account' }).last().click();
+    const created = await createResponsePromise;
     const createdAccount = (await created.json()) as { id: string };
     expect(created.status(), JSON.stringify(createdAccount)).toBe(201);
+    expect(created.request().headers()['idempotency-key']).toMatch(
+      /^[0-9a-f-]{36}$/i,
+    );
     accountId = createdAccount.id;
+    await expect(
+      page.getByText(
+        'Account created with status PENDING_SETUP. No invitation was sent; invitation delivery is not available yet.',
+      ),
+    ).toBeVisible();
+    const initialState = await pool.query<{
+      display_name: string;
+      email: string;
+      status: string;
+    }>('SELECT display_name,email,status FROM public.account WHERE id=$1', [
+      accountId,
+    ]);
+    expect(initialState.rows).toEqual([
+      { display_name: displayName, email, status: 'PENDING_SETUP' },
+    ]);
+    const initialRoles = await pool.query<{
+      role_code: string;
+      scopes: string[];
+    }>(
+      `SELECT role_code,scopes FROM public.account_role
+        WHERE account_id=$1 AND valid_to IS NULL`,
+      [accountId],
+    );
+    expect(initialRoles.rows).toEqual([
+      {
+        role_code: 'ACTIVITY_ADMIN',
+        scopes: ['activity.read', 'activity.admin'],
+      },
+    ]);
 
     const activated = await request.patch(
       `${gateway}/v1/identity/accounts/${accountId}`,
@@ -63,12 +111,6 @@ test('manages callsigns, exports, and anonymizes an account through live Admin',
     );
     expect(activated.status(), await activated.text()).toBe(200);
 
-    await page.goto('/identity');
-    await expect(page).toHaveURL(/\/login\?redirect=\/identity$/);
-    await page.getByLabel('Email').fill(adminEmail);
-    await page.getByLabel('Password').fill(adminPassword);
-    await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page).toHaveURL(/\/identity$/);
     await page.getByLabel('Search users').fill(displayName);
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     await page.getByRole('button', { name: new RegExp(displayName) }).click();

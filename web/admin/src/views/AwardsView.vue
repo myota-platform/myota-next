@@ -772,7 +772,10 @@ async function save(): Promise<void> {
     saving.value = false;
   }
 }
-async function action(actionName: string, decision?: string): Promise<void> {
+async function action(
+  actionName: 'submit' | 'review' | 'publish',
+  decision?: string,
+): Promise<void> {
   if (!selected.value?.id || !canManage.value || saving.value) return;
   saving.value = true;
   error.value = '';
@@ -809,7 +812,12 @@ async function action(actionName: string, decision?: string): Promise<void> {
       await pendingAwardMutationKeys.getOrCreate(fingerprint),
     );
     await pendingAwardMutationKeys.complete(fingerprint);
-    message.value = `Award ${actionName === 'publish' ? 'published' : `${actionName}ed`}.`;
+    const actionMessages = {
+      submit: 'submitted',
+      review: 'reviewed',
+      publish: 'published',
+    };
+    message.value = `Award ${actionMessages[actionName]}.`;
     await load(selected.value.id);
   } catch (cause) {
     message.value = '';

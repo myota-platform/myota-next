@@ -99,9 +99,14 @@ snapshot, and verifies worker completion through live services.
 
 A separate Gateway check verifies the manifest, queued processing state, schedule
 timestamps, and outbox events. Secondary browser presentation states may continue to use
-intercepted API responses; primary user journeys remain covered through the running
-services. Accessibility, responsive behavior, and additional failure-state review are
-separate quality work.
+intercepted API responses where they are read-only. All high-impact Admin mutations have
+live browser evidence; Orca reviewed secondary Admin and Participant workflows, and all
+registered Admin routes have Axe and narrow/wide viewport checks. Remaining read-only
+dashboard/filter and monitoring presentation combinations are dispositioned in
+[L-11/L-12](remaining-work-ledger.md#l-11--complete-browser-compatibility-coverage-for-admin-workflows)
+and Phase 3 issues [#22](https://github.com/myota-platform/myota-next/issues/22) and
+[#7](https://github.com/myota-platform/myota-next/issues/7). Primary workflow review
+against the isolated deployment remains under Phase 6 issue #10.
 
 - **Production operations:** qualify persistent database operations, NATS,
   object storage, secrets, observability, deployment, and release automation.

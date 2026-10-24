@@ -192,13 +192,29 @@ reviewer attribution, and note. A live Admin workflow also records that decision
 Gateway and verifies the persisted survivor, reviewer, history, idempotency record, and
 outbox event.
 
-Some secondary Admin workflows still lack live browser-level compatibility coverage;
-route-wide accessibility scans and isolated component tests do not substitute for an
-end-to-end workflow through Gateway and the owning service. A complete live CI
-run passed all 69 browser checks against the isolated services, including Admin and
-Participant journeys; see [run 40007673517](https://github.com/myota-platform/myota-next/actions/runs/40007673517).
-Residual secondary workflow gaps remain tracked in the browser-quality issues. Refresh
-schedule checks create a temporary category and an all-programmes schedule in Admin,
+### Secondary workflow evidence and disposition
+
+The Phase 3 audit compared Admin mutations with the live browser suite. High-impact
+changes have browser paths through Admin, Gateway, and their owning services: Identity
+account creation with a least-privilege role grant, role and account changes,
+export/anonymization and callsigns;
+programme/category configuration and archive; policy, content, and award
+review/publication; Activity corrections and recalculation; and Geodata review, import,
+geometry, conflation, deletion, and refresh scheduling. The corresponding live specs are
+in `web/admin/tests/browser/*-live.spec.ts` and `web/tests/browser/*-live.spec.ts`.
+The complete [Node CI run 40098386128](https://github.com/myota-platform/myota-next/actions/runs/40098386128)
+passed all 70 browser checks against isolated services, along with the other CI checks.
+
+The accepted L-11 omissions are read-only presentation combinations: every dashboard
+data-source outage, table filter/page-size combination, and legacy/external monitoring
+entry point does not have a separate live browser workflow. They do not mutate owner
+data or add an authorization boundary. Route-wide Axe, keyboard, viewport, and overflow
+checks cover the browser surfaces; live permission denial and the underlying owner
+service workflows are checked separately. `/grafana` is a view into the separately
+operated monitoring service, and `/object-storage` is a compatibility redirect. Any
+primary journey against the isolated deployment remains under Phase 6 issue #10.
+
+Refresh schedule checks create a temporary category and an all-programmes schedule in Admin,
 then upload an empty complete GeoJSON snapshot and verify worker completion through live
 services. A separate Gateway check verifies the schedule record, manifest, processing
 queue, timestamps, and outbox events. Import checks cover pasted GeoJSON queueing, source
@@ -279,16 +295,22 @@ overflow scans for Identity authorization/account changes, programme content and
 archive, Activity corrections/statistics rebuild, Geodata import/review/edit/deletion,
 conflation, schedules, and map selection. Browser checks exercise skip-link focus and
 activation, mobile navigation Escape/focus return, keyboard-driven Geodata
-multi-selection, and accessible job failure/retry feedback. A manual review with Orca
-46.1 and Chromium 156.0.8078.4
-covered Admin sign-in labels and denied-login feedback, the Activity statistics rebuild
-status from `QUEUED` to `SUCCEEDED`, the Participant skip-link path, award sign-in labels
-and denied-login feedback, and activation/contact completion announcements. Orca
-announced the field labels and live status text in each checked flow. The review found
-that Participant lacked a skip link and the Admin Activity rebuild status was not a live
-region; both are fixed and have regression coverage. Visual spot checks of the Admin
-dashboard and Activity workspace plus the Participant catalogue at 390px and 1440px
-found no remaining layout blocker; the page-level contrast and structure scans passed.
+multi-selection, and accessible job failure/retry feedback. Manual review with Orca 46.1
+and Chromium 156.0.8078.4 covers the earlier primary Admin sign-in and Activity rebuild
+flow, Participant skip-link, award sign-in, activation/QSO feedback, plus secondary
+high-impact Admin programme creation/archive, Identity account creation and
+deactivation/anonymization, Geodata deletion and retry/completion, custom role creation, and award
+submission/review/publication. Participant callsign/evidence/primary-retirement and
+profile-image save were also reviewed. Orca announced relevant field names, native and
+in-page confirmation dialogs, failure/retry text, and completion messages. The review
+found that the award submission message said “submited”; the UI now uses “submitted” and
+the browser test asserts the status. No critical blocker remains in the reviewed launch
+workflows. Earlier reviews found and fixed the missing Participant skip link and missing
+live announcement for Admin Activity rebuild status. Remaining unreviewed AT states are
+read-only dashboard/filter combinations and monitoring redirects accepted above. Visual
+spot checks of the Admin dashboard and Activity workspace plus Participant catalogue at
+390px and 1440px found no remaining layout blocker; page-level contrast and structure
+scans passed.
 A live Admin Map workflow now loads a persisted Geodata entity through
 Gateway and selects it through the keyboard entity directory. A live least-privilege
 Identity account is also verified through Gateway: its `activity.read` permission does

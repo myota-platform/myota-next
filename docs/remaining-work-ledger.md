@@ -200,36 +200,38 @@ an accepted scope decision is recorded in the dispositions section.
 - **Reference behavior:** Primary Admin workflows return accurate persisted
   outcomes and recover correctly from authorization, validation, conflict,
   upload, and downstream-service failures.
-- **Current implementation and evidence:** Browser specs cover dashboard scope,
-  identity, programmes, policies, awards, Activity, Geodata imports/review,
-  conflation, deletion, schedules, and the persisted entity map under
-  `web/admin/tests/browser/` and `web/tests/browser/`. All 14 registered Admin
-  routes pass Axe and horizontal-overflow checks at 390px and 1440px, plus
-  skip-link keyboard navigation. The map includes a keyboard-operable directory
-  for selecting loaded entities. Live authorization coverage verifies a
-  least-privilege account is denied access to the Admin Identity route and
-  receives 403 from the protected Identity endpoint. Live completion states for
-  Identity/account changes, programme content/archive, Activity corrections and
-  statistics rebuild, Geodata import/review/edit/deletion, conflation, and map
-  selection receive narrow/wide Axe and overflow scans. A full CI run passed all
-  69 browser checks against isolated services, including the database-backed
-  primary Admin workflows: [run 40007673517](https://github.com/myota-platform/myota-next/actions/runs/40007673517).
-  Local runs without the CI databases skip live-service specs.
-- **Missing evidence:** Some secondary Admin workflows still lack live
-  browser-level compatibility coverage. The route scan is accessibility
-  evidence, not end-to-end evidence; the successful CI run qualifies only the
-  workflows represented by its live specs.
-- **Risk:** Admin actions can appear successful while failing to persist,
-  disclose scoped data, or recover from uncertain responses.
-- **Next check:** Compare the Admin route/workflow inventory with live browser
-  specs, select remaining high-consequence gaps for end-to-end coverage, and
-  record any accepted secondary omissions explicitly.
+- **Current implementation and evidence:** The Phase 3 audit maps every Admin
+  mutation with launch impact to a live browser path through Gateway and the
+  owning service. Coverage includes Identity account creation/edit/role grants,
+  export/anonymization and callsigns; programme/category creation, edits and
+  archive; policy/content/award review and publication; Activity corrections
+  and recalculation; and Geodata review, imports, geometry, conflation, deletion,
+  maps and refresh schedules. The route-to-workflow evidence and accepted
+  read-only omissions are recorded in
+  [Web applications: secondary workflow evidence](parity/web-applications.md#secondary-workflow-evidence-and-disposition).
+  All 14 user-facing Admin routes pass Axe and horizontal-overflow checks at
+  390px and 1440px, with keyboard navigation coverage. Live permission denial
+  verifies a least-privilege account cannot access the Identity route or
+  protected endpoint. [Node CI run 40098386128](https://github.com/myota-platform/myota-next/actions/runs/40098386128)
+  passed all 70 browser checks and the other configured checks against isolated
+  services.
+- **Reviewed omissions:** Dashboard metric-source outage combinations, every
+  table filter/page-size combination, and monitoring/legacy redirect pages are
+  read-only presentation states. They do not create a new persistent mutation or
+  authorization boundary; the underlying owner workflows and access denial are
+  covered live, and the browser surfaces have route-level Axe, keyboard, and
+  viewport checks. These bounded omissions are accepted for this launch phase.
+- **Risk:** The accepted gaps can affect secondary read-only presentation, but
+  do not leave an unqualified launch-scope write or permission-changing action.
+- **Next check:** Reopen L-11 if a new high-impact Admin mutation is added without
+  an end-to-end browser path. Isolated-deployment primary-journey qualification
+  remains under Phase 6 issue #10.
 - **Tracked by:** The completed primary-workflow evidence is in
-  [Issue #20](https://github.com/myota-platform/myota-next/issues/20); the
-  remaining secondary-workflow gap is tracked by
+  [Issue #20](https://github.com/myota-platform/myota-next/issues/20). Secondary
+  workflow coverage and accepted omissions are dispositioned in
   [Phase 3 follow-up issue #22](https://github.com/myota-platform/myota-next/issues/22),
   under [Phase 3 issue #7](https://github.com/myota-platform/myota-next/issues/7).
-- **Sources:** [Web applications, lines 195–200](parity/web-applications.md#L195);
+- **Sources:** [Web applications: secondary workflow evidence](parity/web-applications.md#secondary-workflow-evidence-and-disposition);
   [completion criteria, lines 19–25](parity/completion-criteria.md#L19).
 
 ### L-12 — Complete accessibility, visual, and Participant browser review
@@ -239,36 +241,40 @@ an accepted scope decision is recorded in the dispositions section.
 - **Reference behavior:** Primary Admin and Participant journeys are usable
   with keyboard and assistive technology, at supported viewport sizes, and
   present accessible loading, error, and recovery states.
-- **Current implementation and evidence:** Live browser specs exist for both
-  clients, including Participant activation, QSO, profile, callsign, awards,
-  and public catalogue flows. A full CI run passed all 69 browser checks,
-  including live-service journeys and intercepted presentation-state specs:
-  [run 40007673517](https://github.com/myota-platform/myota-next/actions/runs/40007673517).
-  Automated scans check all registered Admin routes at narrow and wide
-  viewports and primary Participant journeys at
-  supported viewports; browser checks cover keyboard navigation and accessible
-  failure/retry feedback. Local runs without the CI service databases skip the
-  live-service specs.
-- **Missing evidence:** Orca 46.1 with Chromium 156.0.8078.4 has now reviewed
-  representative Admin sign-in and Activity rebuild flows plus Participant
-  skip-link, award sign-in, activation, and QSO feedback. The review found and
-  fixed a missing Participant skip link and missing live announcement for Admin
-  Activity rebuild status. Narrow/wide visual spot checks found no remaining
-  representative layout blocker. Screen-reader review of every secondary journey
-  and integration against the isolated deployment remain open; automated Axe,
-  keyboard, and viewport checks do not establish behavior in the deployed release.
-- **Risk:** Users may be blocked by inaccessible controls, layout failures, or
-  inaccurate feedback in the actual deployed environment.
-- **Next check:** Extend assistive-technology review to remaining high-consequence
-  journeys as they receive workflow coverage, then rerun primary workflows against
-  the isolated release. The latest CI run does not replace deployed-release review.
+- **Current implementation and evidence:** Orca 46.1 with Chromium 156.0.8078.4
+  reviewed secondary high-impact Admin programme creation/archive, Identity
+  least-privilege account creation and deactivation/anonymization, Geodata
+  deletion and retry/completion, custom role creation, and award
+  submission/review/publication. Participant callsign
+  evidence/primary retirement and profile-image save were also reviewed. Orca
+  announced the field names, dialog names and consequences, failure/retry
+  feedback, and completion messages. The review caught a misspelled award
+  submission announcement; it is corrected to “Award submitted.” and has a
+  browser regression assertion. No critical blocker remains in the reviewed
+  flows. Earlier reviews fixed the Participant skip link and made Activity
+  rebuild job status a live region. The route-to-review record is in
+  [Web applications: secondary workflow evidence](parity/web-applications.md#secondary-workflow-evidence-and-disposition).
+  All 14 user-facing Admin routes and primary Participant views have Axe and
+  viewport evidence, and focused browser runs of the destructive, permissions,
+  award, callsign, and image flows passed.
+- **Reviewed omissions:** Unreviewed AT states are limited to read-only
+  dashboard/filter/paging variations and external monitoring/compatibility
+  redirects; these have no launch-scope mutation, and their structure remains
+  covered by route-level Axe and keyboard checks. Deployment integration for
+  primary journeys is explicitly tracked separately by Phase 6 issue #10.
+- **Risk:** Accepted residual risk is limited to secondary read-only
+  presentation; no unresolved critical accessibility or workflow blocker was
+  found for the agreed launch scope.
+- **Next check:** Reopen L-12 if the read-only surfaces gain mutations or a new
+  high-impact screen-reader flow is added. Keep isolated-deployment review under
+  issue #10; that scope is not a Phase 3 secondary-browser blocker.
 - **Tracked by:** Completed primary Admin and Participant review is recorded in
   [issues #20](https://github.com/myota-platform/myota-next/issues/20) and
-  [#21](https://github.com/myota-platform/myota-next/issues/21). Remaining
-  secondary screen-reader review is tracked by
+  [#21](https://github.com/myota-platform/myota-next/issues/21). Secondary
+  screen-reader evidence and dispositions are recorded under
   [Phase 3 follow-up issue #22](https://github.com/myota-platform/myota-next/issues/22),
-  under [Phase 3 issue #7](https://github.com/myota-platform/myota-next/issues/7).
-- **Sources:** [Web applications, lines 261–265](parity/web-applications.md#L261);
+  in [Phase 3 issue #7](https://github.com/myota-platform/myota-next/issues/7).
+- **Sources:** [Web applications: secondary workflow evidence](parity/web-applications.md#secondary-workflow-evidence-and-disposition);
   [completion criteria, lines 19–25](parity/completion-criteria.md#L19).
 
 ### L-13 — Qualify object-store failover, data loss, and all consumers
