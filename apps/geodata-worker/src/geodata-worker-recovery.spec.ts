@@ -191,8 +191,8 @@ async function verifyTerminalDeadLetterRecovery() {
           );
         const result = await pool.query<{ count: number }>(
           `SELECT count(*)::int AS count FROM dead_letter_event
-           WHERE event_id=$1 OR payload->>'workId'=$1
-              OR payload->>'causationId'=$1`,
+           WHERE event_id=$1::uuid OR payload->>'workId'=$1::text
+              OR payload->>'causationId'=$1::text`,
           [eventId],
         );
         return result.rows[0]?.count === 1;
