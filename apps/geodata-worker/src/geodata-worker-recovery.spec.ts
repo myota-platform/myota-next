@@ -841,18 +841,17 @@ async function verifyOtherWorkKindProcessLossRecovery() {
           [[promotedEntityId, deletionEntityId, enrichmentEntityId]],
         );
         await cleanup.query(
-          'DELETE FROM geodata_import_candidate WHERE import_run_id=ANY($1::uuid[])',
-          [[importRunId, promotionRunId]],
+          'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+          [promotionRunId],
         );
         await cleanup.query(
           `DELETE FROM source_snapshot_record WHERE manifest_id IN
-             (SELECT id FROM source_snapshot_manifest
-              WHERE import_run_id=ANY($1::uuid[]))`,
-          [[importRunId, promotionRunId]],
+             (SELECT id FROM source_snapshot_manifest WHERE import_run_id=$1)`,
+          [promotionRunId],
         );
         await cleanup.query(
-          'DELETE FROM source_snapshot_manifest WHERE import_run_id=ANY($1::uuid[])',
-          [[importRunId, promotionRunId]],
+          'DELETE FROM source_snapshot_manifest WHERE import_run_id=$1',
+          [promotionRunId],
         );
         await cleanup.query(
           'DELETE FROM geodata_import_processing_queue WHERE id=$1',
