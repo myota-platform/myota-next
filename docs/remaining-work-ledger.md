@@ -133,28 +133,25 @@ an accepted scope decision is recorded in the dispositions section.
   outages without duplicate side effects or lost durable state.
 - **Current implementation and evidence:** CI verifies preprocessing recovery
   across PostgreSQL reconnection and settlement paths for all four work kinds;
-  some settlement checks stub successful reprocessing. A live-worker check now
-  kills the process after preprocessing commits `PREPROCESSED` and its candidate
-  rows but before ACK, then verifies redelivery settles without another attempt
-  or duplicate candidates. This passed in
-  [operational qualification run 40081202081](https://github.com/myota-platform/myota-next/actions/runs/40081202081).
-  A follow-up live-worker check kills promotion, deletion, and enrichment workers
-  after their repositories commit but before ACK, then verifies terminal state,
-  audit/outbox counts, and settled redelivery without duplicate records. The
-  Geodata recovery suite passed in
-  [run 40081869805](https://github.com/myota-platform/myota-next/actions/runs/40081869805).
-  The promotion fixture has an empty candidate list and the deletion fixture has
-  no existing target entity, so neither verifies a non-empty entity mutation.
-- **Missing evidence:** Process loss during claim remains unqualified for all
-  work kinds. Entity mutation coverage for non-empty promotion and deletion
-  fixtures remains open. Some broker settlement checks still stub successful
-  reprocessing; deployment recovery remains unqualified.
+  some settlement checks stub successful reprocessing. Live-worker checks kill
+  processing workers after repository commits but before ACK for preprocessing,
+  promotion, deletion, and enrichment, then verify redelivery settles without
+  duplicate records. A further check kills workers after the durable claim and
+  lease commit but before processing for all four work kinds, expires the lease,
+  and verifies a fresh worker completes redelivery. The promotion and deletion
+  fixtures contain a confirmed candidate and an existing target entity, so the
+  post-commit checks verify actual entity creation and deletion. The full
+  operational qualification passed in
+  [run 40084571566](https://github.com/myota-platform/myota-next/actions/runs/40084571566).
+- **Missing evidence:** Object-store outage/recovery for consumers beyond the
+  preprocessing path, persistent-volume failure cases, and deployment recovery
+  remain unqualified. Some broker settlement checks still stub successful
+  reprocessing.
 - **Risk:** Import, promotion, deletion, enrichment, or retention work may be
   stranded or repeated after a crash or database outage.
-- **Next check:** Inject process loss during claim for every work kind; add
-  non-empty promotion and existing-entity deletion fixtures and verify durable
-  mutations after redelivery. Repeat relevant scenarios against the isolated
-  deployment.
+- **Next check:** Extend object-store outage and retry checks to relevant
+  consumers, qualify interrupted persistent-volume writes and cleanup, then
+  repeat the recovery scenarios against the isolated deployment.
 - **Tracked by:** [Issue #16](https://github.com/myota-platform/myota-next/issues/16).
 - **Sources:** [Geodata parity, lines 18–25](parity/geodata.md#L18);
   [workers and operations, lines 168–190](parity/workers-operations.md#L168).
