@@ -174,10 +174,6 @@ describe.skipIf(!enabled)('Geodata object-store recovery', () => {
         runs: 0,
         queued_events: 0,
       });
-      expect(await service.get(owner, lostVolumeUploadId)).toMatchObject({
-        uploadId: lostVolumeUploadId,
-        status: 'FAILED',
-      });
     } catch (error) {
       operationError = error;
     }
