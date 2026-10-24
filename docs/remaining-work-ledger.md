@@ -48,32 +48,32 @@ an accepted scope decision is recorded in the dispositions section.
   persistence, and JetStream settlement remain safe when a process stops at
   every consequential point.
 - **Current implementation and evidence:** Recovery checks kill workers after
-  lease acquisition and before processing starts for all six work kinds. Other
-  checks inject process loss during QSO ingestion, ADIF import while QSO rows
-  are being written, and broad award recalculation, verifying transaction
-  rollback, no partial QSO/outbox/notification effects, lease reclaim, and
-  successful retry. They also cover selected three-node leader changes. A
-  child-process check persists a terminal failed job and dead-letter, kills the
-  worker while its delivery is still pending, then verifies redelivery settles
-  without reprocessing. The Activity leader-failover check retries ACK confirmation
-  while extending the pending delivery. Isolated CI exercises Activity
+  lease acquisition and before processing starts for all six work kinds.
+  Process-loss checks now interrupt side effects for every kind: statistics
+  snapshot writes, direct and broad award progress, QSO ingestion, ADIF QSO
+  writes, and PDF artifact storage after the object is written but before its
+  database transaction commits. They verify rollback of database effects,
+  lease reclaim, successful retry, deterministic artifact overwrite, and a
+  single render event. The checks also cover selected three-node leader
+  changes. A child-process check persists a terminal failed job and dead-letter,
+  kills the worker while its delivery is still pending, then verifies redelivery
+  settles without reprocessing. Activity leader-failover checks retry ACK
+  confirmation while extending the pending delivery. Isolated CI exercises Activity
   notification retry exhaustion and audited redrive, plus Email retry
   exhaustion followed by audited command replay; the Email dead-letter resolves
   only after delivery succeeds. The full checks, including ADIF side-effect
-  interruption and ACK retry through JetStream leader change, passed in
-  [operational qualification run 40091940815](https://github.com/myota-platform/myota-next/actions/runs/40091940815).
-- **Missing evidence:** Process death during side-effecting processing for the
-  remaining Activity work kinds, including PDF artifact writes, retry
-  exhaustion and operator redrive under the deployed topology, and recovery
-  under the deployed topology are still open. Terminal dead-letter persistence
-  followed by process loss before settlement is covered by the existing CI
-  check.
+  interruption for all six work kinds, and ACK retry through JetStream leader
+  change, passed in
+  [operational qualification run 40093916289](https://github.com/myota-platform/myota-next/actions/runs/40093916289).
+- **Missing evidence:** Retry exhaustion and operator redrive under the deployed
+  topology, and recovery under the deployed topology, are still open. Terminal
+  dead-letter persistence followed by process loss before settlement is covered
+  by the existing CI check.
 - **Risk:** A restart could duplicate or lose a QSO/award side effect, strand a
   job, or leave a terminal message unsettled.
-- **Next check:** Inject process loss during PDF artifact writes; verify durable
-  final state, idempotency, and lease recovery. Exercise retry exhaustion and
-  audited operator redrive in the isolated deployment when its recovery topology
-  is available.
+- **Next check:** Exercise retry exhaustion and audited operator redrive in the
+  isolated deployment when its recovery topology is available; verify terminal
+  state, metrics, alerts, and operator recovery actions.
 - **Tracked by:** [Issue #15](https://github.com/myota-platform/myota-next/issues/15).
 - **Sources:** [Activity parity, lines 255–264](parity/activity.md#L255);
   [workers and operations, lines 35–57](parity/workers-operations.md#L35).
