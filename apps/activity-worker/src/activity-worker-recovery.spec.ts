@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint.js';
 import { ActivityWorkRepository } from './activity-work.repository.js';
@@ -68,6 +68,10 @@ async function runInterruptedWorkerPhase() {
       120,
     );
     if (!job) throw new Error('Activity worker could not claim the fixture');
+    if (process.env.MYOTA_ACTIVITY_WORKER_RECOVERY_PHASE === 'process') {
+      await new ActivityWorkRepository(pool).process(job);
+      return;
+    }
     await new Promise<void>(() => setInterval(() => undefined, 1000));
   } finally {
     await pool.end();
@@ -103,16 +107,22 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
   const previousObjectStorageAddressingStyle =
     process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE;
   let objectStore: RecoveryObjectStore | undefined;
+  const interruptDuringProcessing =
+    jobKind === 'QSO_INGESTION' || jobKind === 'AWARD_RECALCULATE';
   const workerEnvironment = {
     ...process.env,
     ACTIVITY_DATABASE_URL: databaseUrl,
     MYOTA_ACTIVITY_WORKER_RECOVERY_TEST: '1',
-    MYOTA_ACTIVITY_WORKER_RECOVERY_PHASE: 'interrupt',
+    MYOTA_ACTIVITY_WORKER_RECOVERY_PHASE: interruptDuringProcessing
+      ? 'process'
+      : 'interrupt',
     MYOTA_ACTIVITY_WORKER_RECOVERY_JOB_ID: jobId,
     MYOTA_ACTIVITY_WORKER_RECOVERY_JOB_KIND: jobKind,
     MYOTA_ACTIVITY_WORKER_RECOVERY_TEST_NAME: testName,
   };
   let worker: ReturnType<typeof spawnRecoveryWorker> | undefined;
+  let sideEffectBlocker: SideEffectBlocker | undefined;
+  let blockerClient: PoolClient | undefined;
 
   try {
     if (importId || issuanceId) {
@@ -268,10 +278,40 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
       ],
     );
 
+    if (interruptDuringProcessing) {
+      const targetId = jobKind === 'QSO_INGESTION' ? activationId : awardId;
+      if (!targetId)
+        throw new Error(
+          `${jobKind} recovery fixture has no side-effect target`,
+        );
+      sideEffectBlocker = await installSideEffectBlocker(
+        pool,
+        jobKind,
+        targetId,
+      );
+      blockerClient = await pool.connect();
+      await blockerClient.query('SELECT pg_advisory_lock(4815162342)');
+    }
+
     worker = spawnRecoveryWorker(workerEnvironment);
     await waitForClaim(worker, pool, jobId);
+    if (sideEffectBlocker)
+      await waitForBlockedSideEffect(worker, pool, sideEffectBlocker);
     worker.kill('SIGKILL');
     await waitForExit(worker);
+    if (blockerClient) {
+      await blockerClient.query('SELECT pg_advisory_unlock(4815162342)');
+      blockerClient.release();
+      blockerClient = undefined;
+    }
+    if (interruptDuringProcessing)
+      await expectRolledBackSideEffects(
+        pool,
+        jobKind,
+        activationId,
+        awardId,
+        subjectId,
+      );
 
     await pool.query(
       `UPDATE activity_job SET lease_expires_at=now()-interval '1 second'
@@ -420,6 +460,14 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
       worker.kill('SIGKILL');
       await waitForExit(worker).catch(() => undefined);
     }
+    if (blockerClient) {
+      await blockerClient
+        .query('SELECT pg_advisory_unlock(4815162342)')
+        .catch(() => undefined);
+      blockerClient.release();
+    }
+    if (sideEffectBlocker)
+      await removeSideEffectBlocker(pool, sideEffectBlocker);
     try {
       await cleanupRecoveryFixture(
         pool,
@@ -686,6 +734,125 @@ async function waitForClaim(
   throw new Error(
     `Activity worker did not claim the job: ${worker.getOutput()}`,
   );
+}
+
+type SideEffectBlocker = {
+  table: 'activity_qso' | 'activity_award_progress';
+  triggerName: string;
+  functionName: string;
+};
+
+async function installSideEffectBlocker(
+  pool: Pool,
+  jobKind: string,
+  targetId: string,
+): Promise<SideEffectBlocker> {
+  const suffix = randomUUID().replaceAll('-', '');
+  const blocker =
+    jobKind === 'QSO_INGESTION'
+      ? {
+          table: 'activity_qso' as const,
+          column: 'activation_id',
+        }
+      : {
+          table: 'activity_award_progress' as const,
+          column: 'award_id',
+        };
+  const triggerName = `recovery_block_${suffix}`;
+  const functionName = `recovery_block_fn_${suffix}`;
+  await pool.query(
+    `CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+     BEGIN
+       IF NEW.${blocker.column} = '${targetId}'::uuid THEN
+         PERFORM pg_advisory_xact_lock(4815162342);
+       END IF;
+       RETURN NEW;
+     END;
+     $$`,
+  );
+  try {
+    await pool.query(
+      `CREATE TRIGGER ${triggerName} AFTER INSERT OR UPDATE ON ${blocker.table}
+       FOR EACH ROW EXECUTE FUNCTION ${functionName}()`,
+    );
+  } catch (error) {
+    await pool.query(`DROP FUNCTION ${functionName}()`).catch(() => undefined);
+    throw error;
+  }
+  return { ...blocker, triggerName, functionName };
+}
+
+async function waitForBlockedSideEffect(
+  worker: ReturnType<typeof spawnRecoveryWorker>,
+  pool: Pool,
+  blocker: SideEffectBlocker,
+) {
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    if (worker.exitCode !== null || worker.signalCode !== null)
+      throw new Error(
+        `Activity worker exited before entering ${blocker.table} side effects: ${worker.getOutput()}`,
+      );
+    const result = await pool.query(
+      `SELECT pid FROM pg_stat_activity
+       WHERE datname=current_database() AND wait_event_type='Lock'
+         AND query ILIKE $1 LIMIT 1`,
+      [`%INSERT INTO ${blocker.table}%`],
+    );
+    if (result.rowCount) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(
+    `Activity worker did not reach the blocked ${blocker.table} side effect: ${worker.getOutput()}`,
+  );
+}
+
+async function expectRolledBackSideEffects(
+  pool: Pool,
+  jobKind: string,
+  activationId?: string,
+  awardId?: string,
+  subjectId?: string,
+) {
+  if (jobKind === 'QSO_INGESTION' && activationId) {
+    const result = await pool.query(
+      `SELECT activation.qso_count,
+         (SELECT count(*)::int FROM activity_qso WHERE activation_id=$1) AS qsos,
+         (SELECT count(*)::int FROM outbox_event
+          WHERE aggregate_type='qso' AND aggregate_id IN
+            (SELECT id::text FROM activity_qso WHERE activation_id=$1)) AS qso_events,
+         (SELECT count(*)::int FROM activity_job
+          WHERE idempotency_key LIKE 'batch:' || $1::text || ':%'
+            AND kind='AWARD_RECALCULATE') AS award_jobs
+       FROM activity_activation activation WHERE activation.id=$1`,
+      [activationId],
+    );
+    expect(result.rows[0]).toMatchObject({
+      qso_count: 0,
+      qsos: 0,
+      qso_events: 0,
+      award_jobs: 0,
+    });
+    return;
+  }
+  if (jobKind === 'AWARD_RECALCULATE' && awardId && subjectId) {
+    const result = await pool.query(
+      `SELECT
+         (SELECT count(*)::int FROM activity_award_progress
+          WHERE award_id=$1 AND subject_id=$2) AS progress,
+         (SELECT count(*)::int FROM activity_notification
+          WHERE recipient_id=$2 AND deduplication_key LIKE $3) AS notifications`,
+      [awardId, subjectId, `award-qualified:${awardId}:1:${subjectId}%`],
+    );
+    expect(result.rows[0]).toMatchObject({ progress: 0, notifications: 0 });
+  }
+}
+
+async function removeSideEffectBlocker(pool: Pool, blocker: SideEffectBlocker) {
+  await pool.query(
+    `DROP TRIGGER IF EXISTS ${blocker.triggerName} ON ${blocker.table}`,
+  );
+  await pool.query(`DROP FUNCTION IF EXISTS ${blocker.functionName}()`);
 }
 
 async function waitForExit(
