@@ -55,6 +55,8 @@ const retentionRecoveryTestName =
   'retries expired import retention after a database outage during source deletion';
 const clusterFailoverTestName =
   'resumes every durable after JetStream leader failover';
+const terminalDeadLetterRecoveryTestName =
+  'settles a terminal dead letter after process loss before termination';
 
 describe('Geodata worker process recovery', () => {
   it.skipIf(
@@ -86,7 +88,224 @@ describe('Geodata worker process recovery', () => {
     process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
       !process.env.GEO_DATABASE_URL,
   )(clusterFailoverTestName, async () => verifyClusterFailover(), 60_000);
+
+  it.skipIf(
+    process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
+      !process.env.GEO_DATABASE_URL,
+  )(
+    terminalDeadLetterRecoveryTestName,
+    async () => {
+      if (process.env.MYOTA_GEO_WORKER_DEAD_LETTER_PHASE) {
+        await runTerminalDeadLetterWorkerPhase();
+        return;
+      }
+      await verifyTerminalDeadLetterRecovery();
+    },
+    90_000,
+  );
 });
+
+async function verifyTerminalDeadLetterRecovery() {
+  const databaseUrl = process.env.GEO_DATABASE_URL;
+  if (!databaseUrl) throw new Error('GEO_DATABASE_URL is required');
+  if (
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(databaseUrl).hostname)
+  )
+    throw new Error(
+      'dead-letter recovery qualification requires local Postgres',
+    );
+
+  const directory = await mkdtemp(join(tmpdir(), 'myota-geodata-dead-letter-'));
+  const natsPort = await reserveLocalPort();
+  const natsUrl = `nats://127.0.0.1:${natsPort}`;
+  const eventId = randomUUID();
+  const { Pool } = await import('pg');
+  const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+  const savedNatsUrl = process.env.NATS_URL;
+  let server: ChildProcess | undefined;
+  let publisher: Awaited<ReturnType<typeof connect>> | undefined;
+  let interrupted: ReturnType<typeof spawnTerminalDeadLetterWorker> | undefined;
+
+  try {
+    server = await startRecoveryJetStream(natsPort, directory);
+    process.env.NATS_URL = natsUrl;
+    publisher = await connect({
+      servers: natsUrl,
+      name: 'geodata-dead-letter-recovery-publisher',
+    });
+    const manager = await jetstreamManager(publisher);
+    await manager.streams.add({
+      name: 'MYOTA_GEODATA_WORK',
+      subjects: ['myota.work.geodata.>'],
+      retention: RetentionPolicy.Workqueue,
+      storage: StorageType.File,
+      num_replicas: 1,
+      max_age: 86_400_000_000_000,
+      max_bytes: 16 * 1024 * 1024,
+      max_msgs: 100,
+      max_msg_size: 900_000,
+    } as StreamConfig);
+    await manager.consumers.add('MYOTA_GEODATA_WORK', {
+      durable_name: 'geodata-preprocessing-v1',
+      filter_subject: 'myota.work.geodata.import-preprocess.v1',
+      deliver_policy: DeliverPolicy.All,
+      ack_policy: AckPolicy.Explicit,
+      replay_policy: ReplayPolicy.Instant,
+      ack_wait: 1_000_000_000,
+      max_deliver: 100,
+      max_ack_pending: 1,
+      max_waiting: 1,
+      num_replicas: 0,
+    } as ConsumerConfig);
+
+    await jetstream(publisher).publish(
+      'myota.work.geodata.import-preprocess.v1',
+      new TextEncoder().encode(
+        JSON.stringify({
+          envelopeVersion: 1,
+          workId: eventId,
+          workType: 'geodata.import-preprocess.v1',
+          producer: 'geodata',
+          createdAt: new Date().toISOString(),
+          aggregate: { type: 'import_run', id: eventId },
+          payload: { importRunId: eventId },
+          unexpected: true,
+        }),
+      ),
+    );
+
+    const workerEnvironment = {
+      ...process.env,
+      GEO_DATABASE_URL: databaseUrl,
+      NATS_URL: natsUrl,
+      MYOTA_GEO_WORKER_RECOVERY_TEST: '1',
+      MYOTA_GEO_WORKER_DEAD_LETTER_ID: eventId,
+    };
+    interrupted = spawnTerminalDeadLetterWorker('interrupt', workerEnvironment);
+    await waitForRecovery(async () => {
+      const result = await pool.query<{ count: number }>(
+        'SELECT count(*)::int AS count FROM dead_letter_event WHERE event_id=$1',
+        [eventId],
+      );
+      return result.rows[0]?.count === 1;
+    }, 'Geodata dead letter was not persisted before termination');
+    expect(interrupted.exitCode).toBeNull();
+    interrupted.kill('SIGKILL');
+    await waitForExit(interrupted);
+
+    const beforeRedelivery = await manager.consumers.info(
+      'MYOTA_GEODATA_WORK',
+      'geodata-preprocessing-v1',
+    );
+    expect(beforeRedelivery.num_ack_pending).toBe(1);
+
+    const replay = spawnTerminalDeadLetterWorker('settle', workerEnvironment);
+    const replayResult = await waitForExit(replay, 20_000);
+    expect(replayResult.code, replayResult.output).toBe(0);
+
+    const settled = await manager.consumers.info(
+      'MYOTA_GEODATA_WORK',
+      'geodata-preprocessing-v1',
+    );
+    expect(settled.num_pending).toBe(0);
+    expect(settled.num_ack_pending).toBe(0);
+    const deadLetters = await pool.query<{
+      count: number;
+      attempts: number;
+      resolved_at: Date | null;
+    }>(
+      `SELECT count(*)::int AS count,max(attempts)::int AS attempts,
+          max(resolved_at) AS resolved_at
+       FROM dead_letter_event WHERE event_id=$1`,
+      [eventId],
+    );
+    expect(deadLetters.rows[0]).toMatchObject({ count: 1, attempts: 2 });
+    expect(deadLetters.rows[0]?.resolved_at).toBeNull();
+  } finally {
+    if (interrupted && interrupted.exitCode === null) {
+      interrupted.kill('SIGKILL');
+      await waitForExit(interrupted).catch(() => undefined);
+    }
+    await publisher?.drain().catch(() => undefined);
+    if (server) await stopRecoveryJetStream(server).catch(() => undefined);
+    await pool.query('DELETE FROM dead_letter_event WHERE event_id=$1', [
+      eventId,
+    ]);
+    await pool.end();
+    await rm(directory, { recursive: true, force: true });
+    if (savedNatsUrl === undefined) delete process.env.NATS_URL;
+    else process.env.NATS_URL = savedNatsUrl;
+  }
+}
+
+async function runTerminalDeadLetterWorkerPhase() {
+  const databaseUrl = process.env.GEO_DATABASE_URL;
+  const natsUrl = process.env.NATS_URL;
+  const eventId = process.env.MYOTA_GEO_WORKER_DEAD_LETTER_ID;
+  const phase = process.env.MYOTA_GEO_WORKER_DEAD_LETTER_PHASE;
+  if (!databaseUrl || !natsUrl || !eventId || !phase)
+    throw new Error('Geodata dead-letter worker phase settings are required');
+
+  const { Pool } = await import('pg');
+  const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+  const connection = await connect({
+    servers: natsUrl,
+    name: `geodata-dead-letter-${phase}`,
+  });
+  try {
+    const consumer = await jetstream(connection).consumers.get(
+      'MYOTA_GEODATA_WORK',
+      'geodata-preprocessing-v1',
+    );
+    const message = await consumer.next({ expires: 15_000 });
+    if (!message) throw new Error('Geodata dead-letter redelivery was missing');
+    if (phase === 'settle' && message.info.deliveryCount < 2)
+      throw new Error('Geodata dead-letter message was not redelivered');
+
+    const worker = new GeodataWorkerService(
+      new GeodataWorkRepository(pool as Pool),
+      {} as GeodataPromotionRepository,
+      {} as GeodataEnrichmentRepository,
+      {} as GeodataDeletionRepository,
+      {} as GeodataRetentionRepository,
+      null,
+    );
+    const definition = {
+      workType: 'geodata.import-preprocess.v1',
+      subject: 'myota.work.geodata.import-preprocess.v1',
+      durable: 'geodata-preprocessing-v1',
+      producers: ['geodata'],
+      consumer,
+      extractId: (envelope: Record<string, unknown>) => String(envelope.workId),
+      claim: async () => null,
+      getState: async () => null,
+      process: async () => undefined,
+      ackWaitSeconds: 1,
+      maxPending: 1,
+      maxDeliveries: 100,
+    };
+    const handler = worker as unknown as {
+      handle(definition: unknown, message: unknown): Promise<void>;
+    };
+    if (phase === 'interrupt') {
+      const deferredSettlement = new Proxy(message, {
+        get(target, property) {
+          if (property === 'term')
+            return () => process.stdout.write('DEAD_LETTER_BEFORE_TERM\\n');
+          const value = Reflect.get(target, property, target) as unknown;
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+      await handler.handle(definition, deferredSettlement);
+      await new Promise<void>(() => undefined);
+      return;
+    }
+    await handler.handle(definition, message);
+  } finally {
+    await connection.drain();
+    await pool.end();
+  }
+}
 
 async function verifyClusterFailover() {
   const databaseUrl = process.env.GEO_DATABASE_URL;
@@ -2003,6 +2222,39 @@ function spawnRecoveryWorker(
     ],
     {
       env: { ...environment, MYOTA_GEO_WORKER_RECOVERY_PHASE: phase },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+  let output = '';
+  child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+    output += chunk;
+  });
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+    output += chunk;
+  });
+  return Object.assign(child, { getOutput: () => output });
+}
+
+function spawnTerminalDeadLetterWorker(
+  phase: 'interrupt' | 'settle',
+  environment: NodeJS.ProcessEnv,
+) {
+  const child = spawn(
+    process.execPath,
+    [
+      'node_modules/vitest/vitest.mjs',
+      'run',
+      'apps/geodata-worker/src/geodata-worker-recovery.spec.ts',
+      '-t',
+      terminalDeadLetterRecoveryTestName,
+      '--maxWorkers=1',
+      '--no-file-parallelism',
+    ],
+    {
+      env: {
+        ...environment,
+        MYOTA_GEO_WORKER_DEAD_LETTER_PHASE: phase,
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );

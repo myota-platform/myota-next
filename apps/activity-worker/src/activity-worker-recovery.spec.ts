@@ -313,14 +313,29 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
         subjectId,
       );
 
-    await pool.query(
-      `UPDATE activity_job SET lease_expires_at=now()-interval '1 second'
-       WHERE id=$1`,
+    const expiredLease = await pool.query<{
+      status: string;
+      attempts: number;
+      available_at: Date;
+      lease_expires_at: Date | null;
+    }>(
+      `UPDATE activity_job SET available_at=now(),
+         lease_expires_at=now()-interval '1 second'
+       WHERE id=$1
+       RETURNING status,attempts,available_at,lease_expires_at`,
       [jobId],
     );
+    expect(expiredLease.rows).toHaveLength(1);
+    expect(expiredLease.rows[0]).toMatchObject({
+      status: 'RUNNING',
+      attempts: 1,
+    });
     const repository = new ActivityWorkRepository(pool);
     const recovered = await repository.claimWorkJob(jobId, jobKind, 120);
-    expect(recovered).toMatchObject({ id: jobId, attempts: 2 });
+    expect(
+      recovered,
+      `Activity job was not reclaimable after process death: ${JSON.stringify(expiredLease.rows[0])}`,
+    ).toMatchObject({ id: jobId, attempts: 2 });
     if (!recovered) throw new Error('Activity job lease was not reclaimed');
     await repository.process(recovered);
 
