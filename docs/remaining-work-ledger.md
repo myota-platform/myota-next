@@ -325,17 +325,20 @@ an accepted scope decision is recorded in the dispositions section.
   messages only after owner-database state changes.
 - **Current implementation and evidence:** CI covers process restart with a
   retained local file store and three-node JetStream leader changes for several
-  worker and relay paths.
-- **Missing evidence:** Recovery of the configured NATS/JetStream instance in
-  the active isolated Helm deployment remains unqualified. CI broker leader
-  failover is evidence for worker behavior, not a requirement for the launch
-  topology.
+  worker and relay paths. The 2026-10-24 isolated deployment rehearsal restarted
+  the configured NATS instance, verified durable redelivery/settlement, and
+  verified the Core relay retries and publishes one retained event after
+  recovery. The deployed services and workers are legacy Python images.
+- **Missing evidence:** Repeat relay, API, and worker reconnect/settlement checks
+  with the NestJS monorepo images deployed. The current deployment evidence does
+  not prove behavior of those target images.
 - **Risk:** A deployed single-instance broker failure may stop APIs/workers,
   cause duplicate publication, or leave acknowledged work unsettled.
-- **Next check:** Fault-inject a restart or connection interruption of the
-  configured broker in the isolated Helm deployment; verify reconnect,
-  settlement, relay idempotency, alerting, and operator recovery. Clustered
-  NATS failover is deferred to standalone low-priority
+- **Next check:** After deploying the NestJS monorepo images, repeat the broker
+  restart and outbox retry check; verify API/worker reconnect, settlement,
+  relay idempotency, health signals, and operator recovery. Current measurements
+  and steps are in [single-instance restart recovery](operations/single-instance-restart-recovery.md).
+  Clustered NATS failover is deferred to standalone low-priority
   [myota-next#24](https://github.com/myota-platform/myota-next/issues/24).
 - **Tracked by:** [Issue #17](https://github.com/myota-platform/myota-next/issues/17).
 - **Sources:** [workers and operations, lines 230–235](parity/workers-operations.md#L230);
@@ -349,14 +352,20 @@ an accepted scope decision is recorded in the dispositions section.
   currently configured owner-database instance restarts or loses connectivity,
   without cross-owner transactions, lost committed writes, or duplicate effects.
 - **Current implementation and evidence:** CI covers transient PostgreSQL
-  connection loss and process restart for selected worker and outbox paths.
-- **Missing evidence:** Recovery after restarting each configured PostgreSQL
-  instance in the active isolated Helm deployment remains unqualified.
+  connection loss and process restart for selected worker and outbox paths. On
+  2026-10-24, each configured isolated PostgreSQL pod restarted with a committed
+  probe row preserved and an interrupted transaction rolled back. Replacement
+  pods became Ready about 11 seconds after creation. The deployed APIs and
+  workers are legacy Python images.
+- **Missing evidence:** Repeat application-level reconnect and transaction
+  outcome checks with the NestJS monorepo images deployed; the current pod-level
+  probe does not establish target-runtime behavior.
 - **Risk:** An instance restart can interrupt transactions or strand work across
   one or more of the three database owners.
-- **Next check:** Rehearse one-at-a-time instance restart and connection loss
-  for Core, Activity, and Geodata in the isolated deployment; verify transaction
-  results, reconnect, worker/relay recovery, health signals, and operator steps.
+- **Next check:** After deploying the NestJS monorepo images, repeat one-at-a-time
+  instance restart and connection loss for Core, Activity, and Geodata; verify
+  transaction results, reconnect, worker/relay recovery, health signals, and
+  operator steps in [single-instance restart recovery](operations/single-instance-restart-recovery.md).
   HA failover and multi-instance scaling are deferred to standalone low-priority
   [myota-next#24](https://github.com/myota-platform/myota-next/issues/24).
 - **Tracked by:** [Issue #17](https://github.com/myota-platform/myota-next/issues/17).

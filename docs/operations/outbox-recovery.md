@@ -40,6 +40,9 @@ Clustered broker failover is deferred to standalone low-priority
 [myota-next#24](https://github.com/myota-platform/myota-next/issues/24);
 single-instance deployment restart and reconnect recovery remains under Phase 4
 issue [#17](https://github.com/myota-platform/myota-next/issues/17).
+The isolated deployment rehearsal, measured recovery times, operator steps, and
+runtime qualification limit are recorded in
+[single-instance restart recovery](single-instance-restart-recovery.md).
 
 When JetStream acknowledges a publish but the owner-database update fails, the
 relay leaves the outbox event unpublished. A later claim retries the event with

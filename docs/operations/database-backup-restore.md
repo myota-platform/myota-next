@@ -39,3 +39,8 @@ rows, verifies that an incorrect restore confirmation is rejected, restores
 the backup, and checks that all three values return to their saved state. This
 qualifies the scripts and owner mapping on CI PostgreSQL; production operators
 still need to rehearse against their deployment configuration and storage.
+
+The separate isolated restart rehearsal checks committed and interrupted
+transaction outcomes for the configured single-instance databases. See
+[single-instance restart recovery](single-instance-restart-recovery.md); it does
+not replace a backup-and-restore rehearsal.

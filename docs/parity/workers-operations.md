@@ -248,12 +248,18 @@ against a three-node JetStream cluster, kills the stream leader after a confirme
 publish but before the outbox row is marked, then verifies that the acknowledged event
 settles and a second event publishes through the elected replacement.
 
-Deployment-level NATS recovery remains unqualified. Transient PostgreSQL errors while
-refreshing relay metrics, claiming events, and persisting publish, retry, or dead-letter
-state use capped jittered backoff. After JetStream confirms publication, the relay
-retries the owner-database state transaction before claiming another event, preventing a
-database outage from causing a tight loop of duplicate publishes. Shutdown cancels retry
-waits.
+An isolated deployment rehearsal now verifies the configured single-instance NATS
+restart, durable redelivery and settlement, each owner PostgreSQL restart, and Core
+outbox relay recovery. See [single-instance restart recovery](../operations/single-instance-restart-recovery.md)
+for timings and operator steps. The current Helm release still runs legacy Python
+services and workers, so this is deployment evidence for that runtime; it does not
+qualify the NestJS monorepo images in deployment.
+
+Transient PostgreSQL errors while refreshing relay metrics, claiming events, and
+persisting publish, retry, or dead-letter state use capped jittered backoff. After
+JetStream confirms publication, the relay retries the owner-database state transaction
+before claiming another event, preventing a database outage from causing a tight loop of
+duplicate publishes. Shutdown cancels retry waits.
 
 A live PostgreSQL fault-proxy check runs for each owner database, drops connectivity
 after JetStream acknowledges an event but before the published state is recorded, then

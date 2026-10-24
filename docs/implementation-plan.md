@@ -144,7 +144,10 @@ only after durable state changes.
   the other consumers and persistent-volume failure cases.
 - **NATS and PostgreSQL:** qualify recovery from process and connection interruptions
   for the currently configured single NATS/JetStream instance and each owner database,
-  including relay, API, and worker reconnection and transaction outcomes.
+  including relay, API, and worker reconnection and transaction outcomes. Repeatable
+  infrastructure and legacy-runtime evidence is recorded in
+  [single-instance restart recovery](operations/single-instance-restart-recovery.md);
+  repeat the application-level checks after the NestJS monorepo images are deployed.
 - **Object storage:** verify the deployed persistence and recovery procedures separately
   from database backups. Confirm interrupted writes and cleanup remain safe to retry.
 
