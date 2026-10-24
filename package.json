@@ -47,6 +47,7 @@
     "test:geodata-storage-recovery": "node tools/run-geodata-storage-recovery.mjs",
     "test:activity-worker-recovery": "node tools/run-activity-worker-recovery.mjs",
     "test:activity-notification-restart-recovery": "node tools/run-activity-notification-restart-recovery.mjs",
+    "test:email-worker-recovery": "node tools/run-email-worker-recovery.mjs",
     "test:outbox-recovery": "node tools/run-outbox-recovery.mjs",
     "prepare:parity-databases": "node tools/create-parity-databases.mjs",
     "docs:api-traceability": "node tools/generate-api-operation-traceability.mjs",

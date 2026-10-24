@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -42,6 +42,14 @@ const enabled =
   Boolean(process.env.ACTIVITY_DATABASE_URL);
 
 describe.skipIf(!enabled)('Activity worker connection recovery', () => {
+  it('settles terminal dead-letter redelivery after process loss before ACK', async () => {
+    if (process.env.MYOTA_ACTIVITY_TERMINAL_RECOVERY_PHASE === 'persist') {
+      await persistTerminalFailureInChild();
+      return;
+    }
+    await verifyTerminalFailureProcessRecovery();
+  }, 90_000);
+
   it('recovers after PostgreSQL connection loss and JetStream restart', async () => {
     const databaseUrl = process.env.ACTIVITY_DATABASE_URL;
     if (!databaseUrl) throw new Error('ACTIVITY_DATABASE_URL is required');
@@ -1000,6 +1008,291 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
     }
   }, 60_000);
 });
+
+async function verifyTerminalFailureProcessRecovery() {
+  const databaseUrl = process.env.ACTIVITY_DATABASE_URL;
+  if (!databaseUrl) throw new Error('ACTIVITY_DATABASE_URL is required');
+  if (
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(databaseUrl).hostname)
+  )
+    throw new Error('terminal process recovery requires local Postgres');
+
+  const pool = new Pool({ connectionString: databaseUrl, max: 3 });
+  const directory = await mkdtemp(
+    join(tmpdir(), 'myota-activity-terminal-process-recovery-'),
+  );
+  const jobId = randomUUID();
+  const programmeSlug = `terminal-process-${jobId}`;
+  const port = await reserveLocalPort();
+  const natsUrl = `nats://127.0.0.1:${port}`;
+  const previousNatsUrl = process.env.NATS_URL;
+  let server: ReturnType<typeof spawn> | undefined;
+  let publisher: Awaited<ReturnType<typeof connect>> | undefined;
+  let interrupted: (ChildProcess & { getOutput(): string }) | undefined;
+
+  try {
+    server = await startJetStream(port, directory);
+    process.env.NATS_URL = natsUrl;
+    publisher = await connect({
+      servers: natsUrl,
+      name: 'activity-terminal-process-recovery-publisher',
+      maxReconnectAttempts: -1,
+      reconnectTimeWait: 100,
+    });
+    const registry = await loadOutboxRegistry();
+    const statisticsWork = registry.work.find(
+      (work) => work.workType === 'activity.statistics-rebuild.v1',
+    );
+    if (!statisticsWork)
+      throw new Error('statistics rebuild work is not registered');
+
+    const manager = await jetstreamManager(publisher);
+    await addTestStreamWithPlacementRetry(manager, {
+      name: registry.activityWorkStream,
+      subjects: [`${registry.activityWorkSubjectPrefix}>`],
+      retention: RetentionPolicy.Workqueue,
+      storage: StorageType.File,
+      num_replicas: 1,
+      max_age: 3_600_000_000_000,
+      max_bytes: 16 * 1024 * 1024,
+      max_msgs: 100,
+      max_msg_size: 1024 * 1024,
+    } as StreamConfig);
+    await manager.consumers.add(registry.activityWorkStream, {
+      durable_name: statisticsWork.durable,
+      filter_subject: statisticsWork.subject,
+      deliver_policy: DeliverPolicy.All,
+      ack_policy: AckPolicy.Explicit,
+      ack_wait: 2_000_000_000,
+      max_deliver: 8,
+      max_ack_pending: 1,
+      max_waiting: 1,
+      replay_policy: ReplayPolicy.Instant,
+      num_replicas: 0,
+    } as ConsumerConfig);
+
+    await queueStatisticsJob(pool, jobId, programmeSlug);
+    await publishWork(publisher, registry, jobId);
+    interrupted = spawnTerminalPersistenceWorker({
+      ...process.env,
+      ACTIVITY_DATABASE_URL: databaseUrl,
+      NATS_URL: natsUrl,
+      MYOTA_ACTIVITY_WORKER_RECOVERY_TEST: '1',
+      MYOTA_ACTIVITY_TERMINAL_RECOVERY_PHASE: 'persist',
+    });
+    await waitFor(
+      async () => {
+        if (interrupted?.exitCode !== null || interrupted?.signalCode !== null)
+          throw new Error(
+            `terminal persistence worker exited early: ${interrupted.getOutput()}`,
+          );
+        const job = await pool.query<{ status: string }>(
+          'SELECT status FROM activity_job WHERE id=$1',
+          [jobId],
+        );
+        const deadLetter = await pool.query(
+          'SELECT 1 FROM activity_work_dead_letter WHERE work_id=$1',
+          [jobId],
+        );
+        const consumerState = await manager.consumers.info(
+          registry.activityWorkStream,
+          statisticsWork.durable,
+        );
+        return (
+          job.rows[0]?.status === 'FAILED' &&
+          deadLetter.rowCount === 1 &&
+          consumerState.num_ack_pending === 1
+        );
+      },
+      'terminal Activity failure was not durable before the worker stopped',
+      30_000,
+    );
+
+    interrupted.kill('SIGKILL');
+    await waitForProcessExit(interrupted);
+    const consumer = await jetstream(publisher).consumers.get(
+      registry.activityWorkStream,
+      statisticsWork.durable,
+    );
+    const redelivery = await consumer.next({ expires: 15_000 });
+    if (!redelivery)
+      throw new Error('JetStream did not redeliver unsettled terminal work');
+
+    const repository = new ActivityWorkRepository(pool);
+    const service = new ActivityWorkerService(
+      repository,
+      {} as ActivityRetentionRepository,
+      pool,
+    );
+    const handler = service as unknown as {
+      handle(
+        definition: {
+          kind: string;
+          workType: string;
+          subject: string;
+          durable: string;
+        },
+        message: JsMsg,
+      ): Promise<void>;
+    };
+    await handler.handle(
+      {
+        kind: 'STATISTICS_REBUILD',
+        workType: statisticsWork.workType,
+        subject: statisticsWork.subject,
+        durable: statisticsWork.durable,
+      },
+      redelivery,
+    );
+    await waitForConsumerAckPending(
+      manager,
+      registry.activityWorkStream,
+      statisticsWork.durable,
+      0,
+    );
+
+    const finalJob = await pool.query<{ status: string }>(
+      'SELECT status FROM activity_job WHERE id=$1',
+      [jobId],
+    );
+    const finalDeadLetters = await pool.query<{ count: number }>(
+      'SELECT count(*)::int AS count FROM activity_work_dead_letter WHERE work_id=$1',
+      [jobId],
+    );
+    expect(finalJob.rows[0]?.status).toBe('FAILED');
+    expect(finalDeadLetters.rows[0]?.count).toBe(1);
+  } finally {
+    if (interrupted && interrupted.exitCode === null) {
+      interrupted.kill('SIGKILL');
+      await waitForProcessExit(interrupted).catch(() => undefined);
+    }
+    await publisher?.drain().catch(() => undefined);
+    if (server) await stopJetStream(server);
+    await pool
+      .query('DELETE FROM activity_work_dead_letter WHERE work_id=$1', [jobId])
+      .catch(() => undefined);
+    await pool
+      .query('DELETE FROM activity_job WHERE id=$1', [jobId])
+      .catch(() => undefined);
+    await pool.end().catch(() => undefined);
+    await rm(directory, { recursive: true, force: true });
+    if (previousNatsUrl === undefined) delete process.env.NATS_URL;
+    else process.env.NATS_URL = previousNatsUrl;
+  }
+}
+
+async function persistTerminalFailureInChild() {
+  const databaseUrl = process.env.ACTIVITY_DATABASE_URL;
+  const natsUrl = process.env.NATS_URL;
+  if (!databaseUrl || !natsUrl)
+    throw new Error('terminal recovery child is missing database or broker');
+  const registry = await loadOutboxRegistry();
+  const statisticsWork = registry.work.find(
+    (work) => work.workType === 'activity.statistics-rebuild.v1',
+  );
+  if (!statisticsWork)
+    throw new Error('statistics rebuild work is not registered');
+  const publisher = await connect({
+    servers: natsUrl,
+    name: 'activity-terminal-persistence-child',
+    maxReconnectAttempts: -1,
+    reconnectTimeWait: 100,
+  });
+  const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+  try {
+    const consumer = await jetstream(publisher).consumers.get(
+      registry.activityWorkStream,
+      statisticsWork.durable,
+    );
+    const brokerMessage = await consumer.next({ expires: 10_000 });
+    if (!brokerMessage)
+      throw new Error('terminal recovery child received no work message');
+    const repository = new ActivityWorkRepository(pool);
+    repository.process = async () => {
+      throw new Error('injected terminal processing failure');
+    };
+    const persistFailure = repository.failWorkJob.bind(repository);
+    repository.failWorkJob = async (...args) => {
+      await persistFailure(...args);
+      await new Promise<void>(() => setInterval(() => undefined, 1000));
+    };
+    const service = new ActivityWorkerService(
+      repository,
+      {} as ActivityRetentionRepository,
+      pool,
+    );
+    const handler = service as unknown as {
+      handle(
+        definition: {
+          kind: string;
+          workType: string;
+          subject: string;
+          durable: string;
+        },
+        message: JsMsg,
+      ): Promise<void>;
+    };
+    const terminalMessage = {
+      subject: brokerMessage.subject,
+      data: brokerMessage.data,
+      info: { ...brokerMessage.info, deliveryCount: 8 },
+      working: () => brokerMessage.working(),
+      ackAck: () => brokerMessage.ackAck(),
+      nak: (milliseconds?: number) => brokerMessage.nak(milliseconds),
+      term: () => brokerMessage.term(),
+    } as unknown as JsMsg;
+    await handler.handle(
+      {
+        kind: 'STATISTICS_REBUILD',
+        workType: statisticsWork.workType,
+        subject: statisticsWork.subject,
+        durable: statisticsWork.durable,
+      },
+      terminalMessage,
+    );
+  } finally {
+    await publisher.drain().catch(() => undefined);
+    await pool.end().catch(() => undefined);
+  }
+}
+
+function spawnTerminalPersistenceWorker(environment: NodeJS.ProcessEnv) {
+  const child = spawn(
+    process.execPath,
+    [
+      'node_modules/vitest/vitest.mjs',
+      'run',
+      'apps/activity-worker/src/activity-worker.restart-recovery.spec.ts',
+      '-t',
+      'settles terminal dead-letter redelivery after process loss before ACK',
+      '--maxWorkers=1',
+      '--no-file-parallelism',
+    ],
+    { env: environment, stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  let output = '';
+  child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+    output += chunk;
+  });
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+    output += chunk;
+  });
+  return Object.assign(child, { getOutput: () => output });
+}
+
+async function waitForProcessExit(child: ChildProcess, timeoutMs = 15_000) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error('terminal recovery child did not exit')),
+      timeoutMs,
+    );
+    child.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
 
 async function queueStatisticsJob(
   pool: Pool,

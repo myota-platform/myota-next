@@ -105,5 +105,6 @@ jobs:
       - run: npm run test:geodata-worker-recovery
       - run: npm run test:activity-worker-recovery
       - run: npm run test:activity-notification-restart-recovery
+      - run: npm run test:email-worker-recovery
       - run: npm run test:outbox-recovery
       - run: npm run test:geodata-storage-recovery
