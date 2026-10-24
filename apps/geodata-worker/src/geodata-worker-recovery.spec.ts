@@ -64,6 +64,8 @@ const processLossBeforeAckTestName =
   'settles committed import preprocessing after worker loss before acknowledgement';
 const otherWorkKindProcessLossTestName =
   'settles committed promotion, deletion, and enrichment after worker loss before acknowledgement';
+const claimProcessLossTestName =
+  'recovers every Geodata work kind after process loss immediately after claim';
 
 describe('Geodata worker process recovery', () => {
   it.skipIf(
@@ -148,6 +150,21 @@ describe('Geodata worker process recovery', () => {
       await verifyOtherWorkKindProcessLossRecovery();
     },
     120_000,
+  );
+
+  it.skipIf(
+    process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
+      !process.env.GEO_DATABASE_URL,
+  )(
+    claimProcessLossTestName,
+    async () => {
+      if (process.env.MYOTA_GEO_WORKER_CLAIM_LOSS_PHASE) {
+        await runClaimLossWorkerPhase();
+        return;
+      }
+      await verifyClaimProcessLossRecovery();
+    },
+    300_000,
   );
 });
 
@@ -437,6 +454,12 @@ async function verifyOtherWorkKindProcessLossRecovery() {
   const natsUrl = `nats://127.0.0.1:${natsPort}`;
   const promotionRunId = randomUUID();
   const promotionQueueId = randomUUID();
+  const promotionCandidateId = randomUUID();
+  const promotedEntityId = randomUUID();
+  const promotionEntityTypeCode = `WORKER_LOSS_${promotionCandidateId
+    .replaceAll('-', '')
+    .slice(0, 8)
+    .toUpperCase()}`;
   const deletionJobId = randomUUID();
   const deletionEntityId = randomUUID();
   const enrichmentEntityId = randomUUID();
@@ -534,8 +557,44 @@ async function verifyOtherWorkKindProcessLossRecovery() {
       await fixture.query(
         `INSERT INTO geodata_import_processing_queue
           (id,import_run_id,candidate_ids,target_status,requested_by)
-         VALUES ($1,$2,'[]'::jsonb,'CANDIDATE','recovery-test')`,
-        [promotionQueueId, promotionRunId],
+         VALUES ($1,$2,$3::jsonb,'CANDIDATE','recovery-test')`,
+        [
+          promotionQueueId,
+          promotionRunId,
+          stringifyJsonWithBigInts([promotionCandidateId]),
+        ],
+      );
+      await fixture.query(
+        `INSERT INTO geodata_import_candidate
+          (id,import_run_id,ordinal,planned_entity_id,entity_type_codes,name,geom,
+           candidate_source,source_ref,source_hash,entity_payload,validation_status,
+           target_status,validated_by,validated_at,processing_queue_id)
+         VALUES ($1,$2,1,$3,$4::jsonb,'Worker loss promotion candidate',
+           ST_SetSRID(ST_GeomFromGeoJSON($5),4326),$6::jsonb,$7,$8,$9::jsonb,
+           'CONFIRMED','CANDIDATE','recovery-test',now(),$10)`,
+        [
+          promotionCandidateId,
+          promotionRunId,
+          promotedEntityId,
+          stringifyJsonWithBigInts([promotionEntityTypeCode]),
+          stringifyJsonWithBigInts(geometry),
+          stringifyJsonWithBigInts({ name: 'worker loss fixture' }),
+          `worker-loss-${promotionCandidateId}`,
+          'd'.repeat(64),
+          stringifyJsonWithBigInts({
+            geometry,
+            candidateSource: { name: 'worker loss fixture' },
+          }),
+          promotionQueueId,
+        ],
+      );
+      await fixture.query(
+        `INSERT INTO geodata_entity
+          (id,name,lifecycle_status,geom,centroid,public_properties)
+         VALUES ($1,'worker-loss-deletion-target','CANDIDATE',
+           ST_SetSRID(ST_MakePoint(7,46),4326),
+           ST_SetSRID(ST_MakePoint(7,46),4326)::geography,'{}'::jsonb)`,
+        [deletionEntityId],
       );
       await fixture.query(
         `INSERT INTO geodata_control_record(kind,id,payload,updated_at)
@@ -594,18 +653,34 @@ async function verifyOtherWorkKindProcessLossRecovery() {
             status: string;
             attempt_count: number;
             facts: number;
+            candidate_status: string;
+            entity_id: string;
+            entity_status: string;
+            source_references: number;
           }>(
             `SELECT queue.status,queue.attempt_count,
+                candidate.validation_status AS candidate_status,
+                candidate.processed_entity_id::text AS entity_id,
+                entity.lifecycle_status AS entity_status,
+                (SELECT count(*)::int FROM source_reference
+                 WHERE entity_id=entity.id) AS source_references,
                 (SELECT count(*)::int FROM outbox_event
                  WHERE event_type='geodata.import.processing.completed.v1'
                    AND aggregate_id=queue.id::text) AS facts
-             FROM geodata_import_processing_queue queue WHERE queue.id=$1`,
-            [promotionQueueId],
+             FROM geodata_import_processing_queue queue
+             JOIN geodata_import_candidate candidate ON candidate.id=$2
+             LEFT JOIN geodata_entity entity ON entity.id=$3
+             WHERE queue.id=$1`,
+            [promotionQueueId, promotionCandidateId, promotedEntityId],
           );
           expect(result.rows[0]).toMatchObject({
             status: 'COMPLETED',
             attempt_count: 1,
             facts: 1,
+            candidate_status: 'PROCESSED',
+            entity_id: promotedEntityId,
+            entity_status: 'CANDIDATE',
+            source_references: 1,
           });
         },
       },
@@ -621,18 +696,27 @@ async function verifyOtherWorkKindProcessLossRecovery() {
              WHERE kind='entityDeletionJobs' AND id=$1`,
             [deletionJobId],
           );
-          const effects = await pool.query<{ events: number; audit: number }>(
+          const effects = await pool.query<{
+            events: number;
+            audit: number;
+            remaining_entities: number;
+          }>(
             `SELECT
                (SELECT count(*)::int FROM outbox_event
                 WHERE event_type IN ('geodata.entity.deleted.v1',
                   'geodata.entity-deletion-job.completed.v1')
                   AND aggregate_id IN ($1,$2)) AS events,
                (SELECT count(*)::int FROM geodata_audit_event
-                WHERE aggregate_id=$1) AS audit`,
+                WHERE aggregate_id=$1) AS audit,
+               (SELECT count(*)::int FROM geodata_entity WHERE id=$1) AS remaining_entities`,
             [deletionEntityId, deletionJobId],
           );
           expect(job.rows[0]?.status).toBe('COMPLETED');
-          expect(effects.rows[0]).toEqual({ events: 2, audit: 1 });
+          expect(effects.rows[0]).toEqual({
+            events: 2,
+            audit: 1,
+            remaining_entities: 0,
+          });
         },
       },
       {
@@ -736,6 +820,7 @@ async function verifyOtherWorkKindProcessLossRecovery() {
           `DELETE FROM outbox_event WHERE aggregate_id=ANY($1::text[])`,
           [
             [
+              promotionCandidateId,
               promotionQueueId,
               promotionRunId,
               deletionJobId,
@@ -748,6 +833,26 @@ async function verifyOtherWorkKindProcessLossRecovery() {
           'DELETE FROM geodata_audit_event WHERE aggregate_id=$1',
           [deletionEntityId],
         );
+        await cleanup.query('DELETE FROM source_reference WHERE entity_id=$1', [
+          promotedEntityId,
+        ]);
+        await cleanup.query(
+          'DELETE FROM geodata_entity_category WHERE entity_id=ANY($1::uuid[])',
+          [[promotedEntityId, deletionEntityId, enrichmentEntityId]],
+        );
+        await cleanup.query(
+          'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+          [promotionRunId],
+        );
+        await cleanup.query(
+          `DELETE FROM source_snapshot_record WHERE manifest_id IN
+             (SELECT id FROM source_snapshot_manifest WHERE import_run_id=$1)`,
+          [promotionRunId],
+        );
+        await cleanup.query(
+          'DELETE FROM source_snapshot_manifest WHERE import_run_id=$1',
+          [promotionRunId],
+        );
         await cleanup.query(
           'DELETE FROM geodata_import_processing_queue WHERE id=$1',
           [promotionQueueId],
@@ -759,9 +864,14 @@ async function verifyOtherWorkKindProcessLossRecovery() {
           "DELETE FROM geodata_control_record WHERE kind='entityDeletionJobs' AND id=$1",
           [deletionJobId],
         );
-        await cleanup.query('DELETE FROM geodata_entity WHERE id=$1', [
-          enrichmentEntityId,
-        ]);
+        await cleanup.query(
+          'DELETE FROM geodata_entity WHERE id=ANY($1::uuid[])',
+          [[promotedEntityId, deletionEntityId, enrichmentEntityId]],
+        );
+        await cleanup.query(
+          'DELETE FROM entity_type WHERE programme_id IS NULL AND code=$1',
+          [promotionEntityTypeCode],
+        );
         await cleanup.query('COMMIT');
       } catch (error) {
         await cleanup.query('ROLLBACK').catch(() => undefined);
@@ -784,6 +894,661 @@ async function verifyOtherWorkKindProcessLossRecovery() {
     }
   }
   if (cleanupError) throw cleanupError;
+}
+
+async function verifyClaimProcessLossRecovery() {
+  const databaseUrl = process.env.GEO_DATABASE_URL;
+  if (!databaseUrl) throw new Error('GEO_DATABASE_URL is required');
+  if (
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(databaseUrl).hostname)
+  )
+    throw new Error('Geodata claim recovery requires local Postgres');
+
+  const directory = await mkdtemp(join(tmpdir(), 'myota-geodata-claim-loss-'));
+  const natsPort = await reserveLocalPort();
+  const healthPort = await reserveLocalPort();
+  const natsUrl = `nats://127.0.0.1:${natsPort}`;
+  const importRunId = randomUUID();
+  const promotionRunId = randomUUID();
+  const promotionQueueId = randomUUID();
+  const promotionCandidateId = randomUUID();
+  const promotedEntityId = randomUUID();
+  const promotionEntityTypeCode = `RECOVERY_PARK_${promotionCandidateId
+    .replaceAll('-', '')
+    .slice(0, 8)
+    .toUpperCase()}`;
+  const deletionJobId = randomUUID();
+  const deletionEntityId = randomUUID();
+  const enrichmentEntityId = randomUUID();
+  const enrichmentRequestId = randomUUID();
+  const geometry = { type: 'Point', coordinates: [7, 46] };
+  const geometryHash = createHash('sha256')
+    .update(stringifyJsonWithBigInts(geometry))
+    .digest('hex');
+  const sourceChunks = recoveryFeatureChunks(importRunId, 2);
+  const source = Buffer.concat(sourceChunks);
+  const sourceHash = createHash('sha256').update(source).digest('hex');
+  const savedEnvironment = new Map<string, string | undefined>();
+  for (const [name, value] of Object.entries({
+    NATS_URL: natsUrl,
+    GEO_DATABASE_URL: databaseUrl,
+    GEODATA_WORKER_HEALTH_PORT: String(healthPort),
+    GEODATA_WORKER_MAX_ACK_PENDING: '1',
+    GEODATA_WORKER_ACK_WAIT_SECONDS: '2',
+    GEODATA_WORKER_MAX_DELIVERIES: '10',
+    MYOTA_ACTIVITY_URL: 'http://activity.fixture.test',
+    BIGDATACLOUD_API_KEY: 'recovery-test-key',
+    BIGDATACLOUD_REVERSE_GEOCODE_URL: 'https://geocoder.fixture.test/reverse',
+    MYOTA_GEO_WORKER_CLAIM_LOSS_RUN_ID: importRunId,
+  })) {
+    savedEnvironment.set(name, process.env[name]);
+    process.env[name] = value;
+  }
+
+  const { Pool } = await import('pg');
+  const pool = new Pool({ connectionString: databaseUrl, max: 5 });
+  let server: ChildProcess | undefined;
+  let publisher: Awaited<ReturnType<typeof connect>> | undefined;
+  let interrupted:
+    ReturnType<typeof spawnProcessLossBeforeAckWorker> | undefined;
+  let cleanupError: unknown;
+
+  try {
+    server = await startRecoveryJetStream(natsPort, directory);
+    publisher = await connect({
+      servers: natsUrl,
+      name: 'geodata-claim-loss-publisher',
+    });
+    const manager = await jetstreamManager(publisher);
+    await manager.streams.add({
+      name: 'MYOTA_GEODATA_WORK',
+      subjects: ['myota.work.geodata.>'],
+      retention: RetentionPolicy.Workqueue,
+      storage: StorageType.File,
+      num_replicas: 1,
+      max_age: 86_400_000_000_000,
+      max_bytes: 16 * 1024 * 1024,
+      max_msgs: 100,
+      max_msg_size: 900_000,
+    } as StreamConfig);
+    const durables = [
+      ['geodata-preprocessing-v1', 'myota.work.geodata.import-preprocess.v1'],
+      ['geodata-import-promotion-v1', 'myota.work.geodata.import-promotion.v1'],
+      ['geodata-entity-deletion-v1', 'myota.work.geodata.entity-delete.v1'],
+      [
+        'geodata-location-enrichment-v1',
+        'myota.work.geodata.location-enrichment.v1',
+      ],
+    ] as const;
+    for (const [durable, subject] of durables) {
+      const policy = geodataConsumerPolicy(durable);
+      await manager.consumers.add('MYOTA_GEODATA_WORK', {
+        durable_name: durable,
+        filter_subject: subject,
+        deliver_policy: DeliverPolicy.All,
+        ack_policy: AckPolicy.Explicit,
+        replay_policy: ReplayPolicy.Instant,
+        ack_wait: policy.ackWaitSeconds * 1_000_000_000,
+        max_deliver: policy.maxDeliveries,
+        max_ack_pending: policy.maxPending,
+        max_waiting: 1,
+        num_replicas: 0,
+      } as ConsumerConfig);
+    }
+
+    const fixture = await pool.connect();
+    try {
+      await fixture.query('BEGIN');
+      await fixture.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await fixture.query(
+        `INSERT INTO import_run
+          (id,adapter_code,source_metadata,status,source_key,source_hash)
+         VALUES ($1,'MANUAL',$2::jsonb,'QUEUED',$3,$4)`,
+        [
+          importRunId,
+          stringifyJsonWithBigInts({
+            source: { name: `claim-loss-${importRunId}` },
+            sourceObject: {
+              bucket: 'recovery-test',
+              key: `${importRunId}.geojson`,
+            },
+            filename: `${importRunId}.geojson`,
+            format: 'GEOJSON',
+            entityTypes: ['TEST_PARK'],
+          }),
+          `claim-loss/${importRunId}`,
+          sourceHash,
+        ],
+      );
+      await fixture.query(
+        `INSERT INTO import_run
+          (id,adapter_code,source_metadata,status,source_key,source_hash)
+         VALUES ($1,'MANUAL',$2::jsonb,'PREPROCESSED',$3,$4)`,
+        [
+          promotionRunId,
+          stringifyJsonWithBigInts({
+            source: { name: `promotion-claim-loss-${promotionRunId}` },
+          }),
+          `promotion-claim-loss/${promotionRunId}`,
+          'b'.repeat(64),
+        ],
+      );
+      await fixture.query(
+        `INSERT INTO geodata_import_processing_queue
+          (id,import_run_id,candidate_ids,target_status,requested_by)
+         VALUES ($1,$2,$3::jsonb,'CANDIDATE','recovery-test')`,
+        [
+          promotionQueueId,
+          promotionRunId,
+          stringifyJsonWithBigInts([promotionCandidateId]),
+        ],
+      );
+      await fixture.query(
+        `INSERT INTO geodata_import_candidate
+          (id,import_run_id,ordinal,planned_entity_id,entity_type_codes,name,geom,
+           candidate_source,source_ref,source_hash,entity_payload,validation_status,
+           target_status,validated_by,validated_at,processing_queue_id)
+         VALUES ($1,$2,1,$3,$10::jsonb,'Claim loss park',
+           ST_SetSRID(ST_GeomFromGeoJSON($4),4326),$5::jsonb,$6,$7,$8::jsonb,
+           'CONFIRMED','CANDIDATE','recovery-test',now(),$9)`,
+        [
+          promotionCandidateId,
+          promotionRunId,
+          promotedEntityId,
+          stringifyJsonWithBigInts(geometry),
+          stringifyJsonWithBigInts({ name: 'claim loss fixture' }),
+          `promotion-${promotionCandidateId}`,
+          'c'.repeat(64),
+          stringifyJsonWithBigInts({
+            geometry,
+            candidateSource: { name: 'claim loss fixture' },
+          }),
+          promotionQueueId,
+          stringifyJsonWithBigInts([promotionEntityTypeCode]),
+        ],
+      );
+      await fixture.query(
+        `INSERT INTO geodata_entity
+          (id,name,lifecycle_status,geom,centroid,public_properties)
+         VALUES ($1,'claim-loss-deletion-target','CANDIDATE',
+           ST_SetSRID(ST_MakePoint(7,46),4326),
+           ST_SetSRID(ST_MakePoint(7,46),4326)::geography,'{}'::jsonb)`,
+        [deletionEntityId],
+      );
+      await fixture.query(
+        `INSERT INTO geodata_control_record(kind,id,payload,updated_at)
+         VALUES ('entityDeletionJobs',$1,$2::jsonb,now())`,
+        [
+          deletionJobId,
+          stringifyJsonWithBigInts({
+            id: deletionJobId,
+            entityId: deletionEntityId,
+            requestedBy: 'recovery-test',
+            status: 'QUEUED',
+            leaseUntil: null,
+            executionClaims: {
+              sub: 'recovery-test',
+              scp: [],
+              roles: [{ role: 'GLOBAL_OPERATOR' }],
+            },
+          }),
+        ],
+      );
+      await fixture.query(
+        `INSERT INTO geodata_entity
+          (id,name,lifecycle_status,geom,centroid,public_properties)
+         VALUES ($1,'claim-loss-enrichment-target','APPROVED',
+           ST_SetSRID(ST_MakePoint(7,46),4326),
+           ST_SetSRID(ST_MakePoint(7,46),4326)::geography,$2::jsonb)`,
+        [
+          enrichmentEntityId,
+          stringifyJsonWithBigInts({
+            locationEnrichmentRequestId: enrichmentRequestId,
+            locationEnrichmentGeometryHash: geometryHash,
+            locationEnrichmentStatus: 'QUEUED',
+            locationEnrichmentOnlyMissing: true,
+            locationEnrichmentReason: 'claim-loss-recovery',
+            locationEnrichmentRequestedBy: 'recovery-test',
+          }),
+        ],
+      );
+      await fixture.query('COMMIT');
+    } catch (error) {
+      await fixture.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      fixture.release();
+    }
+
+    const scenarios = [
+      {
+        workType: 'geodata.import-preprocess.v1',
+        durable: 'geodata-preprocessing-v1',
+        workId: importRunId,
+        aggregate: { type: 'import_run', id: importRunId },
+        payload: { importRunId },
+        assertClaimed: async () => {
+          const result = await pool.query(
+            `SELECT run.status,run.attempt_count,count(candidate.ordinal)::int AS candidates
+             FROM import_run run LEFT JOIN geodata_import_candidate candidate
+               ON candidate.import_run_id=run.id
+             WHERE run.id=$1 GROUP BY run.id`,
+            [importRunId],
+          );
+          expect(result.rows[0]).toMatchObject({
+            status: 'PROCESSING',
+            attempt_count: 1,
+            candidates: 0,
+          });
+        },
+        expireClaim: () =>
+          pool.query(
+            `UPDATE import_run SET lease_until=now()-interval '1 second'
+             WHERE id=$1`,
+            [importRunId],
+          ),
+        assertFinal: async () => {
+          const result = await pool.query(
+            `SELECT run.status,run.attempt_count,count(candidate.ordinal)::int AS candidates,
+                count(DISTINCT candidate.ordinal)::int AS distinct_ordinals
+             FROM import_run run LEFT JOIN geodata_import_candidate candidate
+               ON candidate.import_run_id=run.id
+             WHERE run.id=$1 GROUP BY run.id`,
+            [importRunId],
+          );
+          expect(result.rows[0]).toMatchObject({
+            status: 'PREPROCESSED',
+            attempt_count: 2,
+            candidates: 2,
+            distinct_ordinals: 2,
+          });
+        },
+      },
+      {
+        workType: 'geodata.import-promotion.v1',
+        durable: 'geodata-import-promotion-v1',
+        workId: promotionQueueId,
+        aggregate: { type: 'import_processing_queue', id: promotionQueueId },
+        payload: { queueId: promotionQueueId },
+        assertClaimed: async () => {
+          const result = await pool.query(
+            `SELECT queue.status,queue.attempt_count,candidate.validation_status,
+                count(entity.id)::int AS entities
+             FROM geodata_import_processing_queue queue
+             JOIN geodata_import_candidate candidate ON candidate.id=$2
+             LEFT JOIN geodata_entity entity ON entity.id=$3
+             WHERE queue.id=$1
+             GROUP BY queue.id,candidate.validation_status`,
+            [promotionQueueId, promotionCandidateId, promotedEntityId],
+          );
+          expect(result.rows[0]).toMatchObject({
+            status: 'PROCESSING',
+            attempt_count: 1,
+            validation_status: 'CONFIRMED',
+            entities: 0,
+          });
+        },
+        expireClaim: () =>
+          pool.query(
+            `UPDATE geodata_import_processing_queue
+             SET lease_until=now()-interval '1 second' WHERE id=$1`,
+            [promotionQueueId],
+          ),
+        assertFinal: async () => {
+          const result = await pool.query(
+            `SELECT queue.status,queue.attempt_count,candidate.validation_status,
+                candidate.processed_entity_id::text AS entity_id,
+                entity.lifecycle_status,
+                (SELECT count(*)::int FROM source_reference
+                 WHERE entity_id=entity.id) AS source_ref_count,
+                (SELECT count(*)::int FROM outbox_event
+                 WHERE event_type='geodata.import.processing.completed.v1'
+                   AND aggregate_id=queue.id::text) AS completion_facts
+             FROM geodata_import_processing_queue queue
+             JOIN geodata_import_candidate candidate ON candidate.id=$2
+             LEFT JOIN geodata_entity entity ON entity.id=$3
+             WHERE queue.id=$1`,
+            [promotionQueueId, promotionCandidateId, promotedEntityId],
+          );
+          expect(result.rows[0]).toMatchObject({
+            status: 'COMPLETED',
+            attempt_count: 2,
+            validation_status: 'PROCESSED',
+            entity_id: promotedEntityId,
+            lifecycle_status: 'CANDIDATE',
+            source_ref_count: 1,
+            completion_facts: 1,
+          });
+        },
+      },
+      {
+        workType: 'geodata.entity-delete.v1',
+        durable: 'geodata-entity-deletion-v1',
+        workId: deletionJobId,
+        aggregate: { type: 'entity_deletion_job', id: deletionJobId },
+        payload: { jobId: deletionJobId },
+        assertClaimed: async () => {
+          const result = await pool.query(
+            `SELECT payload->>'status' AS status,
+                (SELECT count(*)::int FROM geodata_entity WHERE id=$2) AS entities,
+                (SELECT count(*)::int FROM geodata_audit_event WHERE aggregate_id=$2) AS audit
+             FROM geodata_control_record WHERE kind='entityDeletionJobs' AND id=$1`,
+            [deletionJobId, deletionEntityId],
+          );
+          expect(result.rows[0]).toEqual({
+            status: 'PROCESSING',
+            entities: 1,
+            audit: 0,
+          });
+        },
+        expireClaim: () =>
+          pool.query(
+            `UPDATE geodata_control_record
+             SET payload=jsonb_set(payload,'{leaseUntil}',to_jsonb(now()-interval '1 second')),
+                 updated_at=now()
+             WHERE kind='entityDeletionJobs' AND id=$1`,
+            [deletionJobId],
+          ),
+        assertFinal: async () => {
+          const result = await pool.query(
+            `SELECT payload->>'status' AS status,
+                (SELECT count(*)::int FROM geodata_entity WHERE id=$2) AS entities,
+                (SELECT count(*)::int FROM geodata_audit_event WHERE aggregate_id=$2) AS audit,
+                (SELECT count(*)::int FROM outbox_event
+                 WHERE event_type IN ('geodata.entity.deleted.v1',
+                   'geodata.entity-deletion-job.completed.v1')
+                   AND aggregate_id IN ($1,$2)) AS events
+             FROM geodata_control_record WHERE kind='entityDeletionJobs' AND id=$1`,
+            [deletionJobId, deletionEntityId],
+          );
+          expect(result.rows[0]).toEqual({
+            status: 'COMPLETED',
+            entities: 0,
+            audit: 1,
+            events: 2,
+          });
+        },
+      },
+      {
+        workType: 'geodata.location-enrichment.v1',
+        durable: 'geodata-location-enrichment-v1',
+        workId: enrichmentRequestId,
+        aggregate: { type: 'entity', id: enrichmentEntityId },
+        payload: {
+          entityId: enrichmentEntityId,
+          requestId: enrichmentRequestId,
+          geometryHash,
+          onlyMissing: true,
+          reason: 'claim-loss-recovery',
+        },
+        assertClaimed: async () => {
+          const result = await pool.query(
+            `SELECT public_properties->>'locationEnrichmentStatus' AS status,
+                (SELECT count(*)::int FROM outbox_event
+                 WHERE event_type='geodata.entity.location-enriched.v1'
+                   AND aggregate_id=$1::text) AS events
+             FROM geodata_entity WHERE id=$1`,
+            [enrichmentEntityId],
+          );
+          expect(result.rows[0]).toEqual({ status: 'PROCESSING', events: 0 });
+        },
+        expireClaim: () =>
+          pool.query(
+            `UPDATE geodata_entity SET location_work_dispatched_at=now()-interval '1 second'
+             WHERE id=$1`,
+            [enrichmentEntityId],
+          ),
+        assertFinal: async () => {
+          const result = await pool.query(
+            `SELECT public_properties->>'locationEnrichmentStatus' AS status,
+                (SELECT count(*)::int FROM outbox_event
+                 WHERE event_type='geodata.entity.location-enriched.v1'
+                   AND aggregate_id=$1::text) AS events
+             FROM geodata_entity WHERE id=$1`,
+            [enrichmentEntityId],
+          );
+          expect(result.rows[0]).toEqual({ status: 'COMPLETED', events: 1 });
+        },
+      },
+    ] as const;
+
+    for (const scenario of scenarios) {
+      await publishGeodataWork(
+        publisher,
+        scenario.workType,
+        scenario.workId,
+        scenario.aggregate,
+        scenario.payload,
+      );
+      interrupted = spawnProcessLossBeforeAckWorker(
+        {
+          ...process.env,
+          MYOTA_GEO_WORKER_RECOVERY_TEST: '1',
+          MYOTA_GEO_WORKER_CLAIM_LOSS_PHASE: 'interrupt',
+          MYOTA_GEO_WORKER_CLAIM_LOSS_KIND: scenario.workType,
+        },
+        claimProcessLossTestName,
+      );
+      await waitForOutput(
+        interrupted,
+        `CLAIMED_BEFORE_PROCESS:${scenario.workType}`,
+        45_000,
+      );
+      await scenario.assertClaimed();
+      killWorkerProcessTree(interrupted);
+      await waitForExit(interrupted);
+      interrupted = undefined;
+
+      const pending = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        scenario.durable,
+      );
+      expect(pending.num_ack_pending).toBe(1);
+      await scenario.expireClaim();
+      const replay = spawnProcessLossBeforeAckWorker(
+        {
+          ...process.env,
+          MYOTA_GEO_WORKER_RECOVERY_TEST: '1',
+          MYOTA_GEO_WORKER_CLAIM_LOSS_PHASE: 'settle',
+          MYOTA_GEO_WORKER_CLAIM_LOSS_KIND: scenario.workType,
+        },
+        claimProcessLossTestName,
+      );
+      const replayResult = await waitForExit(replay, 60_000);
+      expect(replayResult.code, replayResult.output).toBe(0);
+      await scenario.assertFinal();
+
+      const settled = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        scenario.durable,
+      );
+      expect(settled.num_pending).toBe(0);
+      expect(settled.num_ack_pending).toBe(0);
+      expect(settled.delivered?.consumer_seq).toBeGreaterThanOrEqual(2);
+    }
+  } finally {
+    if (interrupted && interrupted.exitCode === null) {
+      killWorkerProcessTree(interrupted);
+      await waitForExit(interrupted).catch(() => undefined);
+    }
+    await publisher?.drain().catch(() => undefined);
+    if (server) await stopRecoveryJetStream(server).catch(() => undefined);
+    const cleanup = await pool.connect().catch(() => undefined);
+    if (cleanup) {
+      try {
+        await cleanup.query('BEGIN');
+        await cleanup.query(
+          "SELECT set_config('myota.geodata_writer','row-v1',true)",
+        );
+        await cleanup.query(
+          `DELETE FROM outbox_event WHERE aggregate_id=ANY($1::text[])`,
+          [
+            [
+              importRunId,
+              promotionQueueId,
+              promotionRunId,
+              deletionJobId,
+              deletionEntityId,
+              enrichmentEntityId,
+              promotedEntityId,
+            ],
+          ],
+        );
+        await cleanup.query(
+          'DELETE FROM geodata_audit_event WHERE aggregate_id=$1',
+          [deletionEntityId],
+        );
+        await cleanup.query('DELETE FROM source_reference WHERE entity_id=$1', [
+          promotedEntityId,
+        ]);
+        await cleanup.query(
+          'DELETE FROM geodata_entity_category WHERE entity_id=ANY($1::uuid[])',
+          [[promotedEntityId, deletionEntityId, enrichmentEntityId]],
+        );
+        await cleanup.query(
+          'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+          [promotionRunId],
+        );
+        await cleanup.query(
+          `DELETE FROM source_snapshot_record WHERE manifest_id IN
+             (SELECT id FROM source_snapshot_manifest WHERE import_run_id=$1)`,
+          [promotionRunId],
+        );
+        await cleanup.query(
+          'DELETE FROM source_snapshot_manifest WHERE import_run_id=$1',
+          [promotionRunId],
+        );
+        await cleanup.query(
+          'DELETE FROM geodata_import_processing_queue WHERE id=$1',
+          [promotionQueueId],
+        );
+        await cleanup.query('DELETE FROM import_run WHERE id=ANY($1::uuid[])', [
+          [importRunId, promotionRunId],
+        ]);
+        await cleanup.query(
+          "DELETE FROM geodata_control_record WHERE kind='entityDeletionJobs' AND id=$1",
+          [deletionJobId],
+        );
+        await cleanup.query(
+          'DELETE FROM geodata_entity WHERE id=ANY($1::uuid[])',
+          [[promotedEntityId, deletionEntityId, enrichmentEntityId]],
+        );
+        await cleanup.query(
+          'DELETE FROM entity_type WHERE programme_id IS NULL AND code=$1',
+          [promotionEntityTypeCode],
+        );
+        await cleanup.query('COMMIT');
+      } catch (error) {
+        await cleanup.query('ROLLBACK').catch(() => undefined);
+        cleanupError = error;
+      } finally {
+        cleanup.release();
+      }
+    }
+    await pool.end().catch((error: unknown) => {
+      cleanupError ??= error;
+    });
+    await rm(directory, { recursive: true, force: true }).catch(
+      (error: unknown) => {
+        cleanupError ??= error;
+      },
+    );
+    for (const [name, value] of savedEnvironment) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+  if (cleanupError) throw cleanupError;
+}
+
+async function runClaimLossWorkerPhase() {
+  const databaseUrl = process.env.GEO_DATABASE_URL;
+  const natsUrl = process.env.NATS_URL;
+  const phase = process.env.MYOTA_GEO_WORKER_CLAIM_LOSS_PHASE;
+  const workType = process.env.MYOTA_GEO_WORKER_CLAIM_LOSS_KIND;
+  const importRunId = process.env.MYOTA_GEO_WORKER_CLAIM_LOSS_RUN_ID;
+  if (!databaseUrl || !natsUrl || !phase || !workType || !importRunId)
+    throw new Error('Geodata claim-loss worker phase settings are required');
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url.includes('activity.fixture.test/'))
+      return new Response('{}', { status: 200 });
+    if (url.includes('geocoder.fixture.test/'))
+      return new Response('{}', { status: 200 });
+    return originalFetch(input, init);
+  };
+  const originalSend = Object.getOwnPropertyDescriptor(
+    S3Client.prototype,
+    'send',
+  )?.value as typeof S3Client.prototype.send;
+  S3Client.prototype.send = (async (command: unknown) => {
+    if (!(command instanceof GetObjectCommand))
+      throw new Error('unexpected S3 command in claim-loss recovery fixture');
+    return { Body: Readable.from(recoveryFeatureChunks(importRunId, 2)) };
+  }) as typeof S3Client.prototype.send;
+
+  const { Pool } = await import('pg');
+  const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+  const worker = new GeodataWorkerService(
+    new GeodataWorkRepository(pool),
+    new GeodataPromotionRepository(pool, new GeodataPromotionScoring()),
+    new GeodataEnrichmentRepository(pool),
+    new GeodataDeletionRepository(pool),
+    new GeodataRetentionRepository(pool),
+    pool,
+  );
+  const internalWorker = worker as unknown as {
+    claim(
+      workType: string,
+      envelope: Record<string, unknown>,
+    ): Promise<unknown>;
+  };
+  const claimWork = internalWorker.claim.bind(worker);
+  internalWorker.claim = async (currentWorkType, envelope) => {
+    const job = await claimWork(currentWorkType, envelope);
+    if (phase === 'interrupt' && currentWorkType === workType && job !== null) {
+      process.stdout.write(`CLAIMED_BEFORE_PROCESS:${workType}\n`);
+      await new Promise<void>(() => undefined);
+    }
+    return job;
+  };
+
+  let monitor: Awaited<ReturnType<typeof connect>> | undefined;
+  try {
+    await worker.onModuleInit();
+    if (phase === 'interrupt') await new Promise<void>(() => undefined);
+    monitor = await connect({
+      servers: natsUrl,
+      name: `geodata-claim-loss-${phase}-monitor`,
+    });
+    const manager = await jetstreamManager(monitor);
+    const durableByWorkType: Record<string, string> = {
+      'geodata.import-preprocess.v1': 'geodata-preprocessing-v1',
+      'geodata.import-promotion.v1': 'geodata-import-promotion-v1',
+      'geodata.entity-delete.v1': 'geodata-entity-deletion-v1',
+      'geodata.location-enrichment.v1': 'geodata-location-enrichment-v1',
+    };
+    const durable = durableByWorkType[workType];
+    if (!durable) throw new Error(`Unsupported recovery work kind ${workType}`);
+    await waitForRecovery(async () => {
+      const info = await manager.consumers.info('MYOTA_GEODATA_WORK', durable);
+      return (
+        info.delivered?.consumer_seq >= 2 &&
+        info.num_pending === 0 &&
+        info.num_ack_pending === 0
+      );
+    }, `Geodata ${workType} claim-loss redelivery did not settle`);
+  } finally {
+    await worker.onModuleDestroy().catch(() => undefined);
+    await monitor?.drain().catch(() => undefined);
+    await pool.end();
+    globalThis.fetch = originalFetch;
+    S3Client.prototype.send = originalSend;
+  }
 }
 
 async function runOtherWorkKindProcessLossWorkerPhase() {
