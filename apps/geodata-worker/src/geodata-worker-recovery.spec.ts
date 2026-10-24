@@ -182,13 +182,21 @@ async function verifyTerminalDeadLetterRecovery() {
       MYOTA_GEO_WORKER_DEAD_LETTER_ID: eventId,
     };
     interrupted = spawnTerminalDeadLetterWorker('interrupt', workerEnvironment);
-    await waitForRecovery(async () => {
-      const result = await pool.query<{ count: number }>(
-        'SELECT count(*)::int AS count FROM dead_letter_event WHERE event_id=$1',
-        [eventId],
-      );
-      return result.rows[0]?.count === 1;
-    }, 'Geodata dead letter was not persisted before termination');
+    try {
+      await waitForRecovery(async () => {
+        if (interrupted?.exitCode !== null || interrupted?.signalCode !== null)
+          throw new Error(
+            `Geodata dead-letter worker exited before persistence (code ${String(interrupted.exitCode)}, signal ${String(interrupted.signalCode)})`,
+          );
+        const result = await pool.query<{ count: number }>(
+          'SELECT count(*)::int AS count FROM dead_letter_event WHERE event_id=$1',
+          [eventId],
+        );
+        return result.rows[0]?.count === 1;
+      }, 'Geodata dead letter was not persisted before termination');
+    } catch (error) {
+      throw new Error(`${String(error)}\n${interrupted.getOutput()}`);
+    }
     expect(interrupted.exitCode).toBeNull();
     interrupted.kill('SIGKILL');
     await waitForExit(interrupted);
