@@ -158,14 +158,14 @@ an accepted scope decision is recorded in the dispositions section.
   operational qualification passed in
   [run 40084571566](https://github.com/myota-platform/myota-next/actions/runs/40084571566).
 - **Missing evidence:** Object-store outage/recovery for consumers beyond the
-  preprocessing path, persistent-volume failure cases, and deployment recovery
-  remain unqualified. Some broker settlement checks still stub successful
-  reprocessing.
+  preprocessing path and deployment recovery remain unqualified. The local
+  SeaweedFS volume-loss case is now covered under L-13, but does not qualify the
+  deployed storage topology. Some broker settlement checks still stub
+  successful reprocessing.
 - **Risk:** Import, promotion, deletion, enrichment, or retention work may be
   stranded or repeated after a crash or database outage.
 - **Next check:** Extend object-store outage and retry checks to relevant
-  consumers, qualify interrupted persistent-volume writes and cleanup, then
-  repeat the recovery scenarios against the isolated deployment.
+  consumers, then repeat the recovery scenarios against the isolated deployment.
 - **Tracked by:** [Issue #16](https://github.com/myota-platform/myota-next/issues/16).
 - **Sources:** [Geodata parity, lines 18–25](parity/geodata.md#L18);
   [workers and operations, lines 168–190](parity/workers-operations.md#L168).
@@ -281,20 +281,25 @@ an accepted scope decision is recorded in the dispositions section.
   objects used by imports and other workflows.
 - **Current implementation and evidence:** CI stops a pinned SeaweedFS process
   during a multipart upload, retains its local volume, retries, and verifies
-  the queued import. Geodata retention also repeats safe object deletion after
-  a database interruption. Activity ADIF import recovery injects an object-store
-  HTTP 503, verifies no failed-import notification or partial QSO effect is
-  committed, persists a retry, restores storage, and verifies successful import
-  with one QSO. The checks passed in
-  [operational qualification run 40085295634](https://github.com/myota-platform/myota-next/actions/runs/40085295634).
-- **Missing evidence:** Clustered failover, permanent volume loss, production
-  recovery procedures, and outage paths for remaining object-store consumers
-  (including Activity certificate rendering) are not covered by those checks.
+  the queued import. It also deletes the local data volume after uploading both
+  parts of a second multipart upload; completion then marks the session
+  `FAILED`, creates no import run or outbox event, and directs the caller to
+  start a new upload. The fixture cleans up both sessions. These storage cases
+  passed in [operational qualification run 40097566429](https://github.com/myota-platform/myota-next/actions/runs/40097566429).
+  That run also verifies Geodata preprocessing retries a temporary object-store
+  outage and retention repeats safe deletion after a database interruption.
+  Activity ADIF and certificate rendering retry temporary object-store failures;
+  checks verify no partial QSO or ready-artifact effect is committed before the
+  successful retry.
+- **Missing evidence:** Clustered failover, recovery after permanent volume loss
+  in the deployed storage topology, production recovery procedures, and outage
+  behavior for remaining object-store consumers, including Identity profile
+  image uploads, is not covered by those checks.
 - **Risk:** Uploaded or generated objects can be lost or orphaned while their
   database references remain, or recovery may require undocumented manual work.
 - **Next check:** Rehearse backup, restore, failover, permanent-volume-loss
-  recovery, and safe retry for each consumer against the selected deployment
-  storage; document operator actions and evidence.
+  recovery, and safe retry against the selected deployment storage; exercise
+  remaining consumer outage paths and document operator actions and evidence.
 - **Tracked by:** [Activity issue #15](https://github.com/myota-platform/myota-next/issues/15)
   and [Geodata issue #16](https://github.com/myota-platform/myota-next/issues/16).
 - **Sources:** [workers and operations, lines 192–196](parity/workers-operations.md#L192);
