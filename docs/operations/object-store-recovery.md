@@ -12,4 +12,12 @@ part 1, verifies a failed part 2 leaves no database part row, restarts SeaweedFS
 with its original data volume, retries part 2, completes the upload, and checks
 the stored bytes and queued import. This covers one process restart with local
 data retained. It does not qualify clustered failover, permanent volume loss,
-other object-store consumers, or production recovery procedures.
+remaining object-store consumers, or production recovery procedures.
+
+The Geodata worker recovery qualification also injects a failed source-object
+read during import preprocessing. It verifies the owning database returns the
+run to a retryable state, the same JetStream delivery is retried, preprocessing
+completes after the object store recovers, and the final staged candidate is
+present once with no dead letter. This check injects the outage at the S3 client
+boundary; deployment-level object-store and persistent-volume failures remain
+unqualified.

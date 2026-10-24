@@ -43,6 +43,7 @@ import { GeodataPromotionScoring } from './geodata-promotion-scoring.js';
 import { GeodataDeletionRepository } from './geodata-deletion.repository.js';
 import { GeodataWorkerService } from './geodata-worker.service.js';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
+import { geodataConsumerPolicy } from '../../../libs/platform/src/geodata-consumer-policy.js';
 import { GeodataEntityEnrichmentRequestRepository } from '../../geodata/src/geodata-entity-enrichment.repository.js';
 import { GeodataEntityMutationSupport } from '../../geodata/src/geodata-entity-mutation-support.js';
 import type { AccessTokenClaims } from '../../../libs/platform/src/access-token.js';
@@ -57,6 +58,8 @@ const clusterFailoverTestName =
   'resumes every durable after JetStream leader failover';
 const terminalDeadLetterRecoveryTestName =
   'settles a terminal dead letter after process loss before termination';
+const objectStoreRecoveryTestName =
+  'retries import preprocessing after a temporary object-store outage';
 
 describe('Geodata worker process recovery', () => {
   it.skipIf(
@@ -101,6 +104,15 @@ describe('Geodata worker process recovery', () => {
       }
       await verifyTerminalDeadLetterRecovery();
     },
+    90_000,
+  );
+
+  it.skipIf(
+    process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
+      !process.env.GEO_DATABASE_URL,
+  )(
+    objectStoreRecoveryTestName,
+    async () => verifyImportObjectStoreRecovery(),
     90_000,
   );
 });
@@ -348,6 +360,261 @@ function expectedGeodataDeadLetterId(subject: string, streamSequence: number) {
   digest[8] = (digest[8]! & 0x3f) | 0x80;
   const hex = digest.subarray(0, 16).toString('hex');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+async function verifyImportObjectStoreRecovery() {
+  const databaseUrl = process.env.GEO_DATABASE_URL;
+  if (!databaseUrl) throw new Error('GEO_DATABASE_URL is required');
+  if (
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(databaseUrl).hostname)
+  )
+    throw new Error('object-store recovery requires local Postgres');
+
+  const directory = await mkdtemp(join(tmpdir(), 'myota-geodata-s3-recovery-'));
+  const natsPort = await reserveLocalPort();
+  const healthPort = await reserveLocalPort();
+  const natsUrl = `nats://127.0.0.1:${natsPort}`;
+  const runId = randomUUID();
+  const feature = {
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [-5.99, 37.39] },
+    properties: { name: 'object-store retry fixture', sourceRef: runId },
+  };
+  const source = Buffer.from(
+    stringifyJsonWithBigInts({
+      type: 'FeatureCollection',
+      features: [feature],
+    }),
+  );
+  const sourceHash = createHash('sha256').update(source).digest('hex');
+  const environment = new Map<string, string | undefined>();
+  for (const [name, value] of Object.entries({
+    NATS_URL: natsUrl,
+    GEO_DATABASE_URL: databaseUrl,
+    GEODATA_WORKER_HEALTH_PORT: String(healthPort),
+    GEODATA_WORKER_MAX_ACK_PENDING: '1',
+    GEODATA_WORKER_ACK_WAIT_SECONDS: '2',
+    GEODATA_WORKER_MAX_DELIVERIES: '10',
+    GEODATA_WORKER_RETRY_DELAY_SECONDS: '0',
+    MYOTA_GEODATA_IMPORT_BUCKET: 'geodata-object-store-recovery',
+  })) {
+    environment.set(name, process.env[name]);
+    process.env[name] = value;
+  }
+
+  const { Pool } = await import('pg');
+  const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+  const originalSend = S3Client.prototype.send.bind(S3Client.prototype);
+  let sourceReads = 0;
+  let server: ChildProcess | undefined;
+  let publisher: Awaited<ReturnType<typeof connect>> | undefined;
+  let worker: GeodataWorkerService | undefined;
+  let operationError: unknown;
+
+  S3Client.prototype.send = (async (command: unknown) => {
+    if (!(command instanceof GetObjectCommand))
+      throw new Error('unexpected S3 command in object-store recovery fixture');
+    sourceReads++;
+    if (sourceReads === 1)
+      throw new Error('injected temporary object-store outage');
+    return { Body: Readable.from([source]) };
+  }) as typeof S3Client.prototype.send;
+
+  try {
+    server = await startRecoveryJetStream(natsPort, directory);
+    publisher = await connect({
+      servers: natsUrl,
+      name: 'geodata-object-store-recovery-publisher',
+    });
+    const manager = await jetstreamManager(publisher);
+    await manager.streams.add({
+      name: 'MYOTA_GEODATA_WORK',
+      subjects: ['myota.work.geodata.>'],
+      retention: RetentionPolicy.Workqueue,
+      storage: StorageType.File,
+      num_replicas: 1,
+      max_age: 1_209_600_000_000_000,
+      max_bytes: 16 * 1024 * 1024,
+      max_msgs: 100,
+      max_msg_size: 900_000,
+    } as StreamConfig);
+
+    const consumers = [
+      ['geodata-preprocessing-v1', 'myota.work.geodata.import-preprocess.v1'],
+      ['geodata-import-promotion-v1', 'myota.work.geodata.import-promotion.v1'],
+      ['geodata-entity-deletion-v1', 'myota.work.geodata.entity-delete.v1'],
+      [
+        'geodata-location-enrichment-v1',
+        'myota.work.geodata.location-enrichment.v1',
+      ],
+    ] as const;
+    for (const [durable, filterSubject] of consumers) {
+      const policy = geodataConsumerPolicy(durable);
+      await manager.consumers.add('MYOTA_GEODATA_WORK', {
+        durable_name: durable,
+        filter_subject: filterSubject,
+        deliver_policy: DeliverPolicy.All,
+        ack_policy: AckPolicy.Explicit,
+        replay_policy: ReplayPolicy.Instant,
+        ack_wait: policy.ackWaitSeconds * 1_000_000_000,
+        max_deliver: policy.maxDeliveries,
+        max_ack_pending: policy.maxPending,
+        max_waiting: 1,
+        num_replicas: 0,
+      } as ConsumerConfig);
+    }
+
+    const fixture = await pool.connect();
+    try {
+      await fixture.query('BEGIN');
+      await fixture.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await fixture.query(
+        `INSERT INTO import_run
+        (id,adapter_code,source_metadata,status,source_key,source_hash)
+       VALUES ($1,'MANUAL',$2::jsonb,'QUEUED',$3,$4)`,
+        [
+          runId,
+          stringifyJsonWithBigInts({
+            source: { name: 'object-store recovery fixture' },
+            sourceObject: {
+              bucket: 'geodata-object-store-recovery',
+              key: `recovery/${runId}.geojson`,
+            },
+            filename: `${runId}.geojson`,
+            format: 'GEOJSON',
+            entityTypes: ['TEST_PARK'],
+          }),
+          `recovery/${runId}.geojson`,
+          sourceHash,
+        ],
+      );
+      await fixture.query('COMMIT');
+    } catch (error) {
+      await fixture.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      fixture.release();
+    }
+
+    worker = new GeodataWorkerService(
+      new GeodataWorkRepository(pool),
+      new GeodataPromotionRepository(pool, new GeodataPromotionScoring()),
+      new GeodataEnrichmentRepository(pool),
+      new GeodataDeletionRepository(pool),
+      new GeodataRetentionRepository(pool),
+      pool,
+    );
+    await worker.onModuleInit();
+    await publishGeodataWork(
+      publisher,
+      'geodata.import-preprocess.v1',
+      runId,
+      { type: 'import_run', id: runId },
+      { importRunId: runId },
+    );
+
+    await waitForRecovery(async () => {
+      const state = await pool.query<{
+        status: string;
+        attempt_count: number;
+      }>('SELECT status,attempt_count FROM import_run WHERE id=$1', [runId]);
+      return (
+        state.rows[0]?.status === 'PREPROCESSED' &&
+        state.rows[0]?.attempt_count === 2
+      );
+    }, 'Geodata import did not retry after the object store recovered');
+
+    const result = await pool.query<{
+      status: string;
+      attempt_count: number;
+      candidates: number;
+      distinct_ordinals: number;
+    }>(
+      `SELECT run.status,run.attempt_count,
+              count(candidate.ordinal)::int AS candidates,
+              count(DISTINCT candidate.ordinal)::int AS distinct_ordinals
+       FROM import_run run LEFT JOIN geodata_import_candidate candidate
+         ON candidate.import_run_id=run.id
+       WHERE run.id=$1 GROUP BY run.id`,
+      [runId],
+    );
+    expect(result.rows[0]).toMatchObject({
+      status: 'PREPROCESSED',
+      attempt_count: 2,
+      candidates: 1,
+      distinct_ordinals: 1,
+    });
+    expect(sourceReads).toBe(3);
+    const settled = await manager.consumers.info(
+      'MYOTA_GEODATA_WORK',
+      'geodata-preprocessing-v1',
+    );
+    expect(settled.num_pending).toBe(0);
+    expect(settled.num_ack_pending).toBe(0);
+    const deadLetters = await pool.query(
+      'SELECT 1 FROM dead_letter_event WHERE event_id=$1',
+      [runId],
+    );
+    expect(deadLetters.rowCount).toBe(0);
+  } catch (error) {
+    operationError = error;
+  }
+
+  let cleanupError: unknown;
+  if (worker) await worker.onModuleDestroy().catch(() => undefined);
+  S3Client.prototype.send = originalSend;
+  await publisher?.drain().catch(() => undefined);
+  if (server) await stopRecoveryJetStream(server).catch(() => undefined);
+  try {
+    const cleanup = await pool.connect();
+    try {
+      await cleanup.query('BEGIN');
+      await cleanup.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await cleanup.query(
+        `DELETE FROM source_snapshot_record WHERE manifest_id IN
+           (SELECT id FROM source_snapshot_manifest WHERE import_run_id=$1)`,
+        [runId],
+      );
+      await cleanup.query(
+        'DELETE FROM source_snapshot_manifest WHERE import_run_id=$1',
+        [runId],
+      );
+      await cleanup.query(
+        'DELETE FROM geodata_import_candidate WHERE import_run_id=$1',
+        [runId],
+      );
+      await cleanup.query(
+        'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1',
+        [runId],
+      );
+      await cleanup.query('DELETE FROM outbox_event WHERE aggregate_id=$1', [
+        runId,
+      ]);
+      await cleanup.query('DELETE FROM import_run WHERE id=$1', [runId]);
+      await cleanup.query('COMMIT');
+    } catch (error) {
+      await cleanup.query('ROLLBACK').catch(() => undefined);
+      cleanupError = error;
+    } finally {
+      cleanup.release();
+    }
+  } catch (error) {
+    cleanupError = error;
+  }
+  await pool.end().catch((error: unknown) => {
+    cleanupError ??= error;
+  });
+  await rm(directory, { recursive: true, force: true });
+  for (const [name, value] of environment) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+  if (operationError) throw operationError;
+  if (cleanupError) throw cleanupError;
 }
 
 async function verifyClusterFailover() {
