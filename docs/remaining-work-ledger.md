@@ -212,7 +212,7 @@ an accepted scope decision is recorded in the dispositions section.
   All 14 user-facing Admin routes pass Axe and horizontal-overflow checks at
   390px and 1440px, with keyboard navigation coverage. Live permission denial
   verifies a least-privilege account cannot access the Identity route or
-  protected endpoint. [Node CI run 40098386128](https://github.com/myota-platform/myota-next/actions/runs/40098386128)
+  protected endpoint. [Node CI run 40111255807](https://github.com/myota-platform/myota-next/actions/runs/40111255807)
   passed all 70 browser checks and the other configured checks against isolated
   services.
 - **Reviewed omissions:** Dashboard metric-source outage combinations, every

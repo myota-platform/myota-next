@@ -202,7 +202,7 @@ programme/category configuration and archive; policy, content, and award
 review/publication; Activity corrections and recalculation; and Geodata review, import,
 geometry, conflation, deletion, and refresh scheduling. The corresponding live specs are
 in `web/admin/tests/browser/*-live.spec.ts` and `web/tests/browser/*-live.spec.ts`.
-The complete [Node CI run 40098386128](https://github.com/myota-platform/myota-next/actions/runs/40098386128)
+The complete [Node CI run 40111255807](https://github.com/myota-platform/myota-next/actions/runs/40111255807)
 passed all 70 browser checks against isolated services, along with the other CI checks.
 
 The accepted L-11 omissions are read-only presentation combinations: every dashboard
