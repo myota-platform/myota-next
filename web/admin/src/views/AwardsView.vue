@@ -773,7 +773,7 @@ async function save(): Promise<void> {
   }
 }
 async function action(
-  actionName: 'submit' | 'review' | 'publish',
+  actionName: 'submit' | 'review' | 'publish' | 'retire',
   decision?: string,
 ): Promise<void> {
   if (!selected.value?.id || !canManage.value || saving.value) return;
@@ -816,6 +816,7 @@ async function action(
       submit: 'submitted',
       review: 'reviewed',
       publish: 'published',
+      retire: 'retired',
     };
     message.value = `Award ${actionMessages[actionName]}.`;
     await load(selected.value.id);
