@@ -53,12 +53,12 @@ an accepted scope decision is recorded in the dispositions section.
   and cover selected three-node leader changes. A child-process test also
   persists a terminal failed job and dead-letter, kills the worker while its
   delivery is still pending, then verifies redelivery settles without
-  reprocessing. Existing isolated CI exercises Activity notification retry
-  exhaustion and audited redrive, plus Email retry exhaustion. This change
-  extends the Email recovery scenario through audited replay and verifies the
-  dead-letter resolves only after delivery succeeds; that extension awaits its
-  qualification run. The prior checks passed in
-  [operational qualification run 40086059062](https://github.com/myota-platform/myota-next/actions/runs/40086059062).
+  reprocessing. The Activity leader-failover check retries ACK confirmation
+  while extending the pending delivery. Isolated CI exercises Activity
+  notification retry exhaustion and audited redrive, plus Email retry
+  exhaustion followed by audited command replay; the Email dead-letter resolves
+  only after delivery succeeds. These checks passed in
+  [operational qualification run 40089452267](https://github.com/myota-platform/myota-next/actions/runs/40089452267).
 - **Missing evidence:** Process death during side-effecting processing for the
   remaining Activity work kinds, retry exhaustion and operator redrive under
   the deployed topology, and recovery under the deployed topology are still
@@ -85,8 +85,9 @@ an accepted scope decision is recorded in the dispositions section.
   terminal dead-letter persistence, replica sharing, restart recovery, and a
   three-node JetStream leader change. Isolated CI also verifies Activity
   notification retry exhaustion and audited redrive, plus Email retry
-  exhaustion. The new Email audited-replay and dead-letter-resolution check
-  awaits qualification.
+  exhaustion followed by audited command replay; successful delivery resolves
+  the Email dead-letter. These checks passed in
+  [operational qualification run 40089452267](https://github.com/myota-platform/myota-next/actions/runs/40089452267).
 - **Missing evidence:** Broker-side retry exhaustion under the deployment
   conditions is explicitly unqualified.
 - **Risk:** A sustained consumer or broker failure may lose notifications or
