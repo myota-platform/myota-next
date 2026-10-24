@@ -663,7 +663,7 @@ async function verifyOtherWorkKindProcessLossRecovery() {
                 candidate.processed_entity_id::text AS entity_id,
                 entity.lifecycle_status AS entity_status,
                 (SELECT count(*)::int FROM source_reference
-                 WHERE entity_id=entity.id::text) AS source_references,
+                 WHERE entity_id=entity.id) AS source_references,
                 (SELECT count(*)::int FROM outbox_event
                  WHERE event_type='geodata.import.processing.completed.v1'
                    AND aggregate_id=queue.id::text) AS facts
@@ -1219,7 +1219,7 @@ async function verifyClaimProcessLossRecovery() {
                 candidate.processed_entity_id::text AS entity_id,
                 entity.lifecycle_status,
                 (SELECT count(*)::int FROM source_reference
-                 WHERE entity_id=entity.id::text) AS source_ref_count,
+                 WHERE entity_id=entity.id) AS source_ref_count,
                 (SELECT count(*)::int FROM outbox_event
                  WHERE event_type='geodata.import.processing.completed.v1'
                    AND aggregate_id=queue.id::text) AS completion_facts
