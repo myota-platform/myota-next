@@ -138,16 +138,23 @@ an accepted scope decision is recorded in the dispositions section.
   rows but before ACK, then verifies redelivery settles without another attempt
   or duplicate candidates. This passed in
   [operational qualification run 40081202081](https://github.com/myota-platform/myota-next/actions/runs/40081202081).
-- **Missing evidence:** Process-loss windows during claim and after side effects
-  for promotion, deletion, and enrichment remain open. Some broker settlement
-  checks still stub successful reprocessing; deployment recovery remains
-  unqualified.
+  A follow-up live-worker check kills promotion, deletion, and enrichment workers
+  after their repositories commit but before ACK, then verifies terminal state,
+  audit/outbox counts, and settled redelivery without duplicate records. The
+  Geodata recovery suite passed in
+  [run 40081869805](https://github.com/myota-platform/myota-next/actions/runs/40081869805).
+  The promotion fixture has an empty candidate list and the deletion fixture has
+  no existing target entity, so neither verifies a non-empty entity mutation.
+- **Missing evidence:** Process loss during claim remains unqualified for all
+  work kinds. Entity mutation coverage for non-empty promotion and deletion
+  fixtures remains open. Some broker settlement checks still stub successful
+  reprocessing; deployment recovery remains unqualified.
 - **Risk:** Import, promotion, deletion, enrichment, or retention work may be
   stranded or repeated after a crash or database outage.
-- **Next check:** Inject process loss during claim and after side effects for
-  promotion, deletion, and enrichment, then verify real repositories, leases,
-  outbox state, retries, and final records; repeat relevant scenarios against
-  the isolated deployment.
+- **Next check:** Inject process loss during claim for every work kind; add
+  non-empty promotion and existing-entity deletion fixtures and verify durable
+  mutations after redelivery. Repeat relevant scenarios against the isolated
+  deployment.
 - **Tracked by:** [Issue #16](https://github.com/myota-platform/myota-next/issues/16).
 - **Sources:** [Geodata parity, lines 18–25](parity/geodata.md#L18);
   [workers and operations, lines 168–190](parity/workers-operations.md#L168).

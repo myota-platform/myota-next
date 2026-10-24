@@ -176,10 +176,19 @@ preprocessing, kills the worker after the `PREPROCESSED` state and candidate row
 but before ACK, then starts a fresh worker on the redelivered message. The fresh worker
 settles the terminal work without another claim attempt or duplicate candidates. This
 check passed in [operational qualification run 40081202081](https://github.com/myota-platform/myota-next/actions/runs/40081202081).
-Process outages during promotion, deletion, and enrichment remain open. If PostgreSQL
-fails while the worker is recording a failed delivery, it extends the current message
-ACK and retries settlement for transient connection, shutdown, serialization, and
-deadlock errors with capped jittered backoff.
+
+A follow-up live-worker check kills workers after the promotion, deletion, and location
+enrichment repositories commit but before ACK, then redelivers each message to a fresh
+worker. It verifies terminal queue/job/entity state, the expected audit/outbox records,
+and settled redelivery without duplicate records. The promotion fixture uses an empty
+candidate list, and the deletion fixture has no existing target entity; these cases
+qualify committed completion and settlement, not non-empty entity mutations. The
+Geodata worker recovery suite passed in
+[operational qualification run 40081869805](https://github.com/myota-platform/myota-next/actions/runs/40081869805).
+Process loss during claim remains unqualified for all work kinds. If PostgreSQL fails
+while the worker is recording a failed delivery, it extends the current message ACK and
+retries settlement for transient connection, shutdown, serialization, and deadlock
+errors with capped jittered backoff.
 
 Live fault-proxy checks now cover failure settlement for all four Geodata work kinds.
 Preprocessing, promotion, deletion, and enrichment keep their JetStream deliveries
@@ -188,14 +197,13 @@ retry state and the fixture confirms redelivery is acknowledged. Promotion verif
 attempt count and error, deletion verifies its error and lease, and enrichment verifies
 that its current request returns to `QUEUED` before redelivery.
 
-Successful reprocessing is stubbed for promotion, deletion, and enrichment to isolate
-settlement behavior. Process outages during claim or processing for those work kinds
-remain open. Periodic cancellation, expired-work, and retention passes also retry
-transient database failures with capped jittered backoff. Retention repeats object
-deletion safely before retrying its database state change. A live recovery check now
-drops PostgreSQL connectivity after an expired import's source object is deleted, then
-verifies retention repeats the safe object deletion and commits the database cleanup
-after connectivity returns.
+Successful reprocessing is stubbed in the separate fault-proxy settlement checks for
+promotion, deletion, and enrichment. Process loss during claim remains open. Periodic
+cancellation, expired-work, and retention passes also retry transient database failures
+with capped jittered backoff. Retention repeats object deletion safely before retrying
+its database state change. A live recovery check now drops PostgreSQL connectivity after
+an expired import's source object is deleted, then verifies retention repeats the safe
+object deletion and commits the database cleanup after connectivity returns.
 
 Scheduled import and upload-session retention is implemented. CI restarts the pinned
 SeaweedFS image during a Geodata multipart upload, verifies a failed part leaves no
