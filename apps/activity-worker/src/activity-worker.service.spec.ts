@@ -107,7 +107,7 @@ describe('ActivityWorkerService work command metadata', () => {
 });
 
 describe('ActivityWorkerService terminal settlement recovery', () => {
-  it('acknowledges a redelivery after terminal persistence outlives an unconfirmed ACK', async () => {
+  it('retries an unconfirmed terminal ACK and safely handles redelivery', async () => {
     const workId = 'd4cb7610-6077-4b33-93d7-fefdd3c4a2a1';
     const subject = 'myota.work.activity.statistics-rebuild.v1';
     const repository = {
@@ -138,6 +138,12 @@ describe('ActivityWorkerService terminal settlement recovery', () => {
       {} as never,
       null,
     );
+    vi.spyOn(
+      service as unknown as {
+        wait: (milliseconds: number) => Promise<void>;
+      },
+      'wait',
+    ).mockResolvedValue(undefined);
     const encodedEnvelope = new TextEncoder().encode(
       JSON.stringify({
         envelopeVersion: 1,
@@ -185,7 +191,8 @@ describe('ActivityWorkerService terminal settlement recovery', () => {
 
     expect(repository.failWorkJob).toHaveBeenCalledOnce();
     expect(repository.getWorkJobState).toHaveBeenCalledOnce();
-    expect(firstDelivery.ackAck).toHaveBeenCalledOnce();
+    expect(firstDelivery.ackAck).toHaveBeenCalledTimes(7);
+    expect(firstDelivery.working).toHaveBeenCalledTimes(6);
     expect(redelivery.ackAck).toHaveBeenCalledOnce();
     expect(repository.process).toHaveBeenCalledOnce();
   });

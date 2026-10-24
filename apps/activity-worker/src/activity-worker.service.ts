@@ -380,15 +380,33 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async acknowledge(message: JsMsg, context: string): Promise<boolean> {
-    try {
-      if (await message.ackAck()) return true;
-    } catch (error) {
-      this.logger.warn(
-        `Activity worker could not confirm ACK while ${context}: ${safeError(error)}`,
-      );
-      return false;
+    const retryDelays = [0, 100, 250, 500, 1000, 2000, 4000];
+    let lastError: unknown;
+    for (const delay of retryDelays) {
+      if (this.stopping) return false;
+      if (delay > 0) {
+        try {
+          await this.wait(delay);
+        } catch {
+          return false;
+        }
+        this.extendMessageAck(message, context);
+      }
+      try {
+        if (await message.ackAck()) return true;
+      } catch (error) {
+        lastError = error;
+      }
     }
-    this.logger.warn(`Activity worker ACK was not confirmed while ${context}`);
+    if (lastError) {
+      this.logger.warn(
+        `Activity worker could not confirm ACK while ${context}: ${safeError(lastError)}`,
+      );
+    } else {
+      this.logger.warn(
+        `Activity worker ACK was not confirmed while ${context}`,
+      );
+    }
     return false;
   }
 
