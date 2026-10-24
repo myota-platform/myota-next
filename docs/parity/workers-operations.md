@@ -265,7 +265,7 @@ publishes the event only once.
 
 PostgreSQL cluster failover remains unqualified and is outside the launch gates;
 the future HA and multi-instance topology is tracked by standalone low-priority
-[myota-deploy#67](https://github.com/myota-platform/myota-deploy/issues/67). Recovery
+[myota-next#24](https://github.com/myota-platform/myota-next/issues/24). Recovery
 from restarts of the configured single-instance databases remains in Phase 4 issue
 [#17](https://github.com/myota-platform/myota-next/issues/17).
 

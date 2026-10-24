@@ -37,7 +37,7 @@ after the server returns, the client reconnects and the retained event is
 published. This exercises one broker process and retained local file store. It
 does not qualify clustered failover or production NATS deployment recovery.
 Clustered broker failover is deferred to standalone low-priority
-[myota-deploy#67](https://github.com/myota-platform/myota-deploy/issues/67);
+[myota-next#24](https://github.com/myota-platform/myota-next/issues/24);
 single-instance deployment restart and reconnect recovery remains under Phase 4
 issue [#17](https://github.com/myota-platform/myota-next/issues/17).
 

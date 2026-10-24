@@ -336,7 +336,7 @@ an accepted scope decision is recorded in the dispositions section.
   configured broker in the isolated Helm deployment; verify reconnect,
   settlement, relay idempotency, alerting, and operator recovery. Clustered
   NATS failover is deferred to standalone low-priority
-  [myota-deploy#67](https://github.com/myota-platform/myota-deploy/issues/67).
+  [myota-next#24](https://github.com/myota-platform/myota-next/issues/24).
 - **Tracked by:** [Issue #17](https://github.com/myota-platform/myota-next/issues/17).
 - **Sources:** [workers and operations, lines 230–235](parity/workers-operations.md#L230);
   [outbox recovery guide, lines 33–38](operations/outbox-recovery.md#L33).
@@ -358,7 +358,7 @@ an accepted scope decision is recorded in the dispositions section.
   for Core, Activity, and Geodata in the isolated deployment; verify transaction
   results, reconnect, worker/relay recovery, health signals, and operator steps.
   HA failover and multi-instance scaling are deferred to standalone low-priority
-  [myota-deploy#67](https://github.com/myota-platform/myota-deploy/issues/67).
+  [myota-next#24](https://github.com/myota-platform/myota-next/issues/24).
 - **Tracked by:** [Issue #17](https://github.com/myota-platform/myota-next/issues/17).
 - **Sources:** [workers and operations, lines 237–245](parity/workers-operations.md#L237);
   [completion criteria, lines 15–17](parity/completion-criteria.md#L15).
@@ -455,14 +455,14 @@ an accepted scope decision is recorded in the dispositions section.
   horizontal multi-instance service qualification are not prerequisites for
   Phases 1–6 or parent issue #4. These improvements are tracked as the
   unparented, unphased low-priority task
-  [myota-deploy#67](https://github.com/myota-platform/myota-deploy/issues/67).
+  [myota-next#24](https://github.com/myota-platform/myota-next/issues/24).
   This defers topology-level availability and scale-out guarantees; single-
   instance restart/reconnect recovery remains required under L-14/L-15.
 - **Next check:** Reopen as a launch gate only if product or operations adopts
   an HA or multi-instance requirement for the initial release. Otherwise plan
-  it independently under #67.
+  it independently under issue #24.
 - **Sources:** [Phase 4 issue #17](https://github.com/myota-platform/myota-next/issues/17);
-  [future deployment task #67](https://github.com/myota-platform/myota-deploy/issues/67).
+  [future infrastructure issue #24](https://github.com/myota-platform/myota-next/issues/24).
 
 ### D-04 — Identity and Programme parity is qualified by material workflows
 

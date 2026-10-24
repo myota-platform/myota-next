@@ -150,7 +150,7 @@ only after durable state changes.
 
 HA PostgreSQL, clustered NATS/JetStream, and multi-instance scale-out are optional future
 infrastructure improvements tracked by standalone low-priority
-[myota-deploy#67](https://github.com/myota-platform/myota-deploy/issues/67). They are not
+[myota-next#24](https://github.com/myota-platform/myota-next/issues/24). They are not
 requirements or blockers for Phases 1–6 or Launch Readiness.
 
 **Exit:** Each listed failure window has a repeatable check with evidence of durable state,
@@ -179,7 +179,7 @@ recovery. Open failures are documented rather than inferred from process restart
 - Compare results with the pinned Python implementation where a like-for-like measure is
   possible; document differences in process-RSS scope and workload where it is not.
 - Keep these capacity measurements on the configured launch replica counts. Horizontal
-  multi-instance scaling is future work under myota-deploy#67, outside the launch gate.
+  multi-instance scaling is future work under myota-next#24, outside the launch gate.
 - Qualify the importer’s live-source host allowlist, source licenses, source outages,
   schedule behavior, and safe retry before enabling it outside the isolated environment.
 - Set worker concurrency, upload, feature, and timeout defaults from measured limits.
