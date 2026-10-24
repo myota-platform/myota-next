@@ -62,6 +62,8 @@ const objectStoreRecoveryTestName =
   'retries import preprocessing after a temporary object-store outage';
 const processLossBeforeAckTestName =
   'settles committed import preprocessing after worker loss before acknowledgement';
+const otherWorkKindProcessLossTestName =
+  'settles committed promotion, deletion, and enrichment after worker loss before acknowledgement';
 
 describe('Geodata worker process recovery', () => {
   it.skipIf(
@@ -131,6 +133,21 @@ describe('Geodata worker process recovery', () => {
       await verifyProcessLossBeforeAckRecovery();
     },
     90_000,
+  );
+
+  it.skipIf(
+    process.env.MYOTA_GEO_WORKER_RECOVERY_TEST !== '1' ||
+      !process.env.GEO_DATABASE_URL,
+  )(
+    otherWorkKindProcessLossTestName,
+    async () => {
+      if (process.env.MYOTA_GEO_WORKER_OTHER_PROCESS_LOSS_PHASE) {
+        await runOtherWorkKindProcessLossWorkerPhase();
+        return;
+      }
+      await verifyOtherWorkKindProcessLossRecovery();
+    },
+    120_000,
   );
 });
 
@@ -403,6 +420,440 @@ async function runProcessLossBeforeAckWorkerPhase() {
     await monitor?.drain().catch(() => undefined);
     await pool.end();
     S3Client.prototype.send = originalSend;
+  }
+}
+
+async function verifyOtherWorkKindProcessLossRecovery() {
+  const databaseUrl = process.env.GEO_DATABASE_URL;
+  if (!databaseUrl) throw new Error('GEO_DATABASE_URL is required');
+  if (
+    !['localhost', '127.0.0.1', '[::1]'].includes(new URL(databaseUrl).hostname)
+  )
+    throw new Error('Geodata process-loss recovery requires local Postgres');
+
+  const directory = await mkdtemp(join(tmpdir(), 'myota-geodata-work-kinds-'));
+  const natsPort = await reserveLocalPort();
+  const healthPort = await reserveLocalPort();
+  const natsUrl = `nats://127.0.0.1:${natsPort}`;
+  const promotionRunId = randomUUID();
+  const promotionQueueId = randomUUID();
+  const deletionJobId = randomUUID();
+  const deletionEntityId = randomUUID();
+  const enrichmentEntityId = randomUUID();
+  const enrichmentRequestId = randomUUID();
+  const geometry = { type: 'Point', coordinates: [7, 46] };
+  const geometryHash = createHash('sha256')
+    .update(stringifyJsonWithBigInts(geometry))
+    .digest('hex');
+  const savedEnvironment = new Map<string, string | undefined>();
+  for (const [name, value] of Object.entries({
+    NATS_URL: natsUrl,
+    GEO_DATABASE_URL: databaseUrl,
+    GEODATA_WORKER_HEALTH_PORT: String(healthPort),
+    GEODATA_WORKER_MAX_ACK_PENDING: '1',
+    GEODATA_WORKER_ACK_WAIT_SECONDS: '2',
+    GEODATA_WORKER_MAX_DELIVERIES: '10',
+    MYOTA_ACTIVITY_URL: 'http://activity.fixture.test',
+    BIGDATACLOUD_API_KEY: 'recovery-test-key',
+    BIGDATACLOUD_REVERSE_GEOCODE_URL: 'https://geocoder.fixture.test/reverse',
+  })) {
+    savedEnvironment.set(name, process.env[name]);
+    process.env[name] = value;
+  }
+
+  const { Pool } = await import('pg');
+  const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+  let server: ChildProcess | undefined;
+  let publisher: Awaited<ReturnType<typeof connect>> | undefined;
+  let interrupted:
+    ReturnType<typeof spawnProcessLossBeforeAckWorker> | undefined;
+  let cleanupError: unknown;
+
+  try {
+    server = await startRecoveryJetStream(natsPort, directory);
+    publisher = await connect({
+      servers: natsUrl,
+      name: 'geodata-work-kind-before-ack-publisher',
+    });
+    const manager = await jetstreamManager(publisher);
+    await manager.streams.add({
+      name: 'MYOTA_GEODATA_WORK',
+      subjects: ['myota.work.geodata.>'],
+      retention: RetentionPolicy.Workqueue,
+      storage: StorageType.File,
+      num_replicas: 1,
+      max_age: 86_400_000_000_000,
+      max_bytes: 16 * 1024 * 1024,
+      max_msgs: 100,
+      max_msg_size: 900_000,
+    } as StreamConfig);
+    const durables = [
+      ['geodata-preprocessing-v1', 'myota.work.geodata.import-preprocess.v1'],
+      ['geodata-import-promotion-v1', 'myota.work.geodata.import-promotion.v1'],
+      ['geodata-entity-deletion-v1', 'myota.work.geodata.entity-delete.v1'],
+      [
+        'geodata-location-enrichment-v1',
+        'myota.work.geodata.location-enrichment.v1',
+      ],
+    ] as const;
+    for (const [durable, subject] of durables) {
+      const policy = geodataConsumerPolicy(durable);
+      await manager.consumers.add('MYOTA_GEODATA_WORK', {
+        durable_name: durable,
+        filter_subject: subject,
+        deliver_policy: DeliverPolicy.All,
+        ack_policy: AckPolicy.Explicit,
+        replay_policy: ReplayPolicy.Instant,
+        ack_wait: policy.ackWaitSeconds * 1_000_000_000,
+        max_deliver: policy.maxDeliveries,
+        max_ack_pending: policy.maxPending,
+        max_waiting: 1,
+        num_replicas: 0,
+      } as ConsumerConfig);
+    }
+
+    const fixture = await pool.connect();
+    try {
+      await fixture.query('BEGIN');
+      await fixture.query(
+        "SELECT set_config('myota.geodata_writer','row-v1',true)",
+      );
+      await fixture.query(
+        `INSERT INTO import_run
+          (id,adapter_code,source_metadata,status,source_key,source_hash)
+         VALUES ($1,'MANUAL',$2::jsonb,'PREPROCESSED',$3,$4)`,
+        [
+          promotionRunId,
+          stringifyJsonWithBigInts({
+            source: { name: `worker-loss-${promotionRunId}` },
+          }),
+          `worker-loss/${promotionRunId}`,
+          'a'.repeat(64),
+        ],
+      );
+      await fixture.query(
+        `INSERT INTO geodata_import_processing_queue
+          (id,import_run_id,candidate_ids,target_status,requested_by)
+         VALUES ($1,$2,'[]'::jsonb,'CANDIDATE','recovery-test')`,
+        [promotionQueueId, promotionRunId],
+      );
+      await fixture.query(
+        `INSERT INTO geodata_control_record(kind,id,payload,updated_at)
+         VALUES ('entityDeletionJobs',$1,$2::jsonb,now())`,
+        [
+          deletionJobId,
+          stringifyJsonWithBigInts({
+            id: deletionJobId,
+            entityId: deletionEntityId,
+            requestedBy: 'recovery-test',
+            status: 'QUEUED',
+            leaseUntil: null,
+            executionClaims: {
+              sub: 'recovery-test',
+              scp: [],
+              roles: [{ role: 'GLOBAL_OPERATOR' }],
+            },
+          }),
+        ],
+      );
+      await fixture.query(
+        `INSERT INTO geodata_entity
+          (id,name,lifecycle_status,geom,centroid,public_properties)
+         VALUES ($1,'worker-loss-enrichment','APPROVED',
+           ST_SetSRID(ST_MakePoint(7,46),4326),
+           ST_SetSRID(ST_MakePoint(7,46),4326)::geography,$2::jsonb)`,
+        [
+          enrichmentEntityId,
+          stringifyJsonWithBigInts({
+            locationEnrichmentRequestId: enrichmentRequestId,
+            locationEnrichmentGeometryHash: geometryHash,
+            locationEnrichmentStatus: 'QUEUED',
+            locationEnrichmentOnlyMissing: true,
+            locationEnrichmentReason: 'worker-loss-recovery',
+            locationEnrichmentRequestedBy: 'recovery-test',
+          }),
+        ],
+      );
+      await fixture.query('COMMIT');
+    } catch (error) {
+      await fixture.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      fixture.release();
+    }
+
+    const scenarios = [
+      {
+        workType: 'geodata.import-promotion.v1',
+        durable: 'geodata-import-promotion-v1',
+        workId: promotionQueueId,
+        aggregate: { type: 'import_processing_queue', id: promotionQueueId },
+        payload: { queueId: promotionQueueId },
+        assertCommitted: async () => {
+          const result = await pool.query<{
+            status: string;
+            attempt_count: number;
+            facts: number;
+          }>(
+            `SELECT queue.status,queue.attempt_count,
+                (SELECT count(*)::int FROM outbox_event
+                 WHERE event_type='geodata.import.processing.completed.v1'
+                   AND aggregate_id=queue.id::text) AS facts
+             FROM geodata_import_processing_queue queue WHERE queue.id=$1`,
+            [promotionQueueId],
+          );
+          expect(result.rows[0]).toMatchObject({
+            status: 'COMPLETED',
+            attempt_count: 1,
+            facts: 1,
+          });
+        },
+      },
+      {
+        workType: 'geodata.entity-delete.v1',
+        durable: 'geodata-entity-deletion-v1',
+        workId: deletionJobId,
+        aggregate: { type: 'entity_deletion_job', id: deletionJobId },
+        payload: { jobId: deletionJobId },
+        assertCommitted: async () => {
+          const job = await pool.query<{ status: string }>(
+            `SELECT payload->>'status' AS status FROM geodata_control_record
+             WHERE kind='entityDeletionJobs' AND id=$1`,
+            [deletionJobId],
+          );
+          const effects = await pool.query<{ events: number; audit: number }>(
+            `SELECT
+               (SELECT count(*)::int FROM outbox_event
+                WHERE event_type IN ('geodata.entity.deleted.v1',
+                  'geodata.entity-deletion-job.completed.v1')
+                  AND aggregate_id IN ($1,$2)) AS events,
+               (SELECT count(*)::int FROM geodata_audit_event
+                WHERE aggregate_id=$1) AS audit`,
+            [deletionEntityId, deletionJobId],
+          );
+          expect(job.rows[0]?.status).toBe('COMPLETED');
+          expect(effects.rows[0]).toEqual({ events: 2, audit: 1 });
+        },
+      },
+      {
+        workType: 'geodata.location-enrichment.v1',
+        durable: 'geodata-location-enrichment-v1',
+        workId: enrichmentRequestId,
+        aggregate: { type: 'entity', id: enrichmentEntityId },
+        payload: {
+          entityId: enrichmentEntityId,
+          requestId: enrichmentRequestId,
+          geometryHash,
+          onlyMissing: true,
+          reason: 'worker-loss-recovery',
+        },
+        assertCommitted: async () => {
+          const result = await pool.query<{
+            status: string;
+            events: number;
+          }>(
+            `SELECT entity.public_properties->>'locationEnrichmentStatus' AS status,
+                (SELECT count(*)::int FROM outbox_event
+                 WHERE event_type='geodata.entity.location-enriched.v1'
+                   AND aggregate_id=entity.id::text) AS events
+             FROM geodata_entity entity WHERE entity.id=$1`,
+            [enrichmentEntityId],
+          );
+          expect(result.rows[0]).toEqual({ status: 'COMPLETED', events: 1 });
+        },
+      },
+    ] as const;
+
+    for (const scenario of scenarios) {
+      await publishGeodataWork(
+        publisher,
+        scenario.workType,
+        scenario.workId,
+        scenario.aggregate,
+        scenario.payload,
+      );
+      const workerEnvironment = {
+        ...process.env,
+        MYOTA_GEO_WORKER_RECOVERY_TEST: '1',
+        MYOTA_GEO_WORKER_OTHER_PROCESS_LOSS_PHASE: 'interrupt',
+        MYOTA_GEO_WORKER_OTHER_PROCESS_LOSS_KIND: scenario.workType,
+      };
+      interrupted = spawnProcessLossBeforeAckWorker(
+        workerEnvironment,
+        otherWorkKindProcessLossTestName,
+      );
+      await waitForOutput(
+        interrupted,
+        `COMMITTED_BEFORE_ACK:${scenario.workType}`,
+        45_000,
+      );
+      await scenario.assertCommitted();
+      killWorkerProcessTree(interrupted);
+      await waitForExit(interrupted);
+      interrupted = undefined;
+
+      const pending = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        scenario.durable,
+      );
+      expect(pending.num_ack_pending).toBe(1);
+      const replay = spawnProcessLossBeforeAckWorker(
+        {
+          ...process.env,
+          MYOTA_GEO_WORKER_RECOVERY_TEST: '1',
+          MYOTA_GEO_WORKER_OTHER_PROCESS_LOSS_PHASE: 'settle',
+          MYOTA_GEO_WORKER_OTHER_PROCESS_LOSS_KIND: scenario.workType,
+        },
+        otherWorkKindProcessLossTestName,
+      );
+      const replayResult = await waitForExit(replay, 45_000);
+      expect(replayResult.code, replayResult.output).toBe(0);
+      await scenario.assertCommitted();
+
+      const settled = await manager.consumers.info(
+        'MYOTA_GEODATA_WORK',
+        scenario.durable,
+      );
+      expect(settled.num_pending).toBe(0);
+      expect(settled.num_ack_pending).toBe(0);
+      expect(settled.delivered?.consumer_seq).toBeGreaterThanOrEqual(2);
+    }
+  } finally {
+    if (interrupted && interrupted.exitCode === null) {
+      killWorkerProcessTree(interrupted);
+      await waitForExit(interrupted).catch(() => undefined);
+    }
+    await publisher?.drain().catch(() => undefined);
+    if (server) await stopRecoveryJetStream(server).catch(() => undefined);
+    const cleanup = await pool.connect().catch(() => undefined);
+    if (cleanup) {
+      try {
+        await cleanup.query('BEGIN');
+        await cleanup.query(
+          "SELECT set_config('myota.geodata_writer','row-v1',true)",
+        );
+        await cleanup.query(
+          `DELETE FROM outbox_event WHERE aggregate_id=ANY($1::text[])`,
+          [
+            [
+              promotionQueueId,
+              promotionRunId,
+              deletionJobId,
+              deletionEntityId,
+              enrichmentEntityId,
+            ],
+          ],
+        );
+        await cleanup.query(
+          'DELETE FROM geodata_audit_event WHERE aggregate_id=$1',
+          [deletionEntityId],
+        );
+        await cleanup.query(
+          'DELETE FROM geodata_import_processing_queue WHERE id=$1',
+          [promotionQueueId],
+        );
+        await cleanup.query('DELETE FROM import_run WHERE id=$1', [
+          promotionRunId,
+        ]);
+        await cleanup.query(
+          "DELETE FROM geodata_control_record WHERE kind='entityDeletionJobs' AND id=$1",
+          [deletionJobId],
+        );
+        await cleanup.query('DELETE FROM geodata_entity WHERE id=$1', [
+          enrichmentEntityId,
+        ]);
+        await cleanup.query('COMMIT');
+      } catch (error) {
+        await cleanup.query('ROLLBACK').catch(() => undefined);
+        cleanupError = error;
+      } finally {
+        cleanup.release();
+      }
+    }
+    await pool.end().catch((error: unknown) => {
+      cleanupError ??= error;
+    });
+    await rm(directory, { recursive: true, force: true }).catch(
+      (error: unknown) => {
+        cleanupError ??= error;
+      },
+    );
+    for (const [name, value] of savedEnvironment) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+  if (cleanupError) throw cleanupError;
+}
+
+async function runOtherWorkKindProcessLossWorkerPhase() {
+  const databaseUrl = process.env.GEO_DATABASE_URL;
+  const natsUrl = process.env.NATS_URL;
+  const phase = process.env.MYOTA_GEO_WORKER_OTHER_PROCESS_LOSS_PHASE;
+  const workType = process.env.MYOTA_GEO_WORKER_OTHER_PROCESS_LOSS_KIND;
+  if (!databaseUrl || !natsUrl || !phase || !workType)
+    throw new Error('Geodata work-kind process-loss settings are required');
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url.includes('activity.fixture.test/'))
+      return new Response('{}', { status: 200 });
+    if (url.includes('geocoder.fixture.test/'))
+      return new Response('{}', { status: 200 });
+    return originalFetch(input, init);
+  };
+  const { Pool } = await import('pg');
+  const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+  const worker = new GeodataWorkerService(
+    new GeodataWorkRepository(pool),
+    new GeodataPromotionRepository(pool, new GeodataPromotionScoring()),
+    new GeodataEnrichmentRepository(pool),
+    new GeodataDeletionRepository(pool),
+    new GeodataRetentionRepository(pool),
+    pool,
+  );
+  const internalWorker = worker as unknown as {
+    process(workType: string, job: unknown, message: unknown): Promise<void>;
+  };
+  const processWork = internalWorker.process.bind(worker);
+  internalWorker.process = async (currentWorkType, job, message) => {
+    await processWork(currentWorkType, job, message);
+    if (phase === 'interrupt' && currentWorkType === workType) {
+      process.stdout.write(`COMMITTED_BEFORE_ACK:${workType}\n`);
+      await new Promise<void>(() => undefined);
+    }
+  };
+
+  let monitor: Awaited<ReturnType<typeof connect>> | undefined;
+  try {
+    await worker.onModuleInit();
+    if (phase === 'interrupt') await new Promise<void>(() => undefined);
+    monitor = await connect({
+      servers: natsUrl,
+      name: `geodata-work-kind-${phase}-monitor`,
+    });
+    const manager = await jetstreamManager(monitor);
+    const durableByWorkType: Record<string, string> = {
+      'geodata.import-promotion.v1': 'geodata-import-promotion-v1',
+      'geodata.entity-delete.v1': 'geodata-entity-deletion-v1',
+      'geodata.location-enrichment.v1': 'geodata-location-enrichment-v1',
+    };
+    const durable = durableByWorkType[workType];
+    if (!durable) throw new Error(`Unsupported recovery work kind ${workType}`);
+    await waitForRecovery(async () => {
+      const info = await manager.consumers.info('MYOTA_GEODATA_WORK', durable);
+      return (
+        info.delivered?.consumer_seq >= 2 &&
+        info.num_pending === 0 &&
+        info.num_ack_pending === 0
+      );
+    }, `Geodata ${workType} redelivery did not settle`);
+  } finally {
+    await worker.onModuleDestroy().catch(() => undefined);
+    await monitor?.drain().catch(() => undefined);
+    await pool.end();
+    globalThis.fetch = originalFetch;
   }
 }
 
@@ -2834,7 +3285,10 @@ function spawnRecoveryWorker(
   return Object.assign(child, { getOutput: () => output });
 }
 
-function spawnProcessLossBeforeAckWorker(environment: NodeJS.ProcessEnv) {
+function spawnProcessLossBeforeAckWorker(
+  environment: NodeJS.ProcessEnv,
+  testName = processLossBeforeAckTestName,
+) {
   const child = spawn(
     process.execPath,
     [
@@ -2842,7 +3296,7 @@ function spawnProcessLossBeforeAckWorker(environment: NodeJS.ProcessEnv) {
       'run',
       'apps/geodata-worker/src/geodata-worker-recovery.spec.ts',
       '-t',
-      processLossBeforeAckTestName,
+      testName,
       '--maxWorkers=1',
       '--no-file-parallelism',
     ],
