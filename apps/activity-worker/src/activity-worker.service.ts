@@ -380,7 +380,9 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async acknowledge(message: JsMsg, context: string): Promise<boolean> {
-    const retryDelays = [0, 100, 250, 500, 1000, 2000, 4000];
+    // Give JetStream leader elections time to complete while the pending
+    // delivery is extended on every retry.
+    const retryDelays = [0, 100, 250, 500, 1000, 2000, 4000, 8000, 15000];
     let lastError: unknown;
     for (const delay of retryDelays) {
       if (this.stopping) return false;

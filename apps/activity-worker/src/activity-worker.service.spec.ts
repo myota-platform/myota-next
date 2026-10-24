@@ -191,8 +191,8 @@ describe('ActivityWorkerService terminal settlement recovery', () => {
 
     expect(repository.failWorkJob).toHaveBeenCalledOnce();
     expect(repository.getWorkJobState).toHaveBeenCalledOnce();
-    expect(firstDelivery.ackAck).toHaveBeenCalledTimes(7);
-    expect(firstDelivery.working).toHaveBeenCalledTimes(6);
+    expect(firstDelivery.ackAck).toHaveBeenCalledTimes(9);
+    expect(firstDelivery.working).toHaveBeenCalledTimes(8);
     expect(redelivery.ackAck).toHaveBeenCalledOnce();
     expect(repository.process).toHaveBeenCalledOnce();
   });

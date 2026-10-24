@@ -741,6 +741,7 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
         registry.activityWorkStream,
         qsoWork.durable,
         0,
+        60_000,
       );
       const invalidDeadLetter = await pool.query<{ count: number }>(
         `SELECT count(*)::int AS count FROM activity_work_dead_letter
@@ -1365,16 +1366,21 @@ async function waitForConsumerAckPending(
   stream: string,
   durable: string,
   expected: number,
+  timeoutMs = 15_000,
 ) {
-  await waitFor(async () => {
-    try {
-      const consumer = await manager.consumers.info(stream, durable);
-      return consumer.num_ack_pending === expected;
-    } catch {
-      // JetStream may be electing a replacement leader during this poll.
-      return false;
-    }
-  }, `Activity durable ${durable} did not release pending deliveries`);
+  await waitFor(
+    async () => {
+      try {
+        const consumer = await manager.consumers.info(stream, durable);
+        return consumer.num_ack_pending === expected;
+      } catch {
+        // JetStream may be electing a replacement leader during this poll.
+        return false;
+      }
+    },
+    `Activity durable ${durable} did not release pending deliveries`,
+    timeoutMs,
+  );
 }
 
 async function provisionActivityWorkStream(
