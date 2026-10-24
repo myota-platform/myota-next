@@ -277,7 +277,7 @@ async function verifyProcessLossBeforeAckRecovery() {
       candidates: 2,
       distinct_ordinals: 2,
     });
-    interrupted.kill('SIGKILL');
+    killWorkerProcessTree(interrupted);
     await waitForExit(interrupted);
 
     const pending = await manager.consumers.info(
@@ -323,7 +323,7 @@ async function verifyProcessLossBeforeAckRecovery() {
     expect(settled.delivered?.consumer_seq).toBeGreaterThanOrEqual(2);
   } finally {
     if (interrupted && interrupted.exitCode === null) {
-      interrupted.kill('SIGKILL');
+      killWorkerProcessTree(interrupted);
       await waitForExit(interrupted).catch(() => undefined);
     }
     await publisher?.drain().catch(() => undefined);
@@ -2846,7 +2846,11 @@ function spawnProcessLossBeforeAckWorker(environment: NodeJS.ProcessEnv) {
       '--maxWorkers=1',
       '--no-file-parallelism',
     ],
-    { env: environment, stdio: ['ignore', 'pipe', 'pipe'] },
+    {
+      detached: true,
+      env: environment,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
   );
   let output = '';
   child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
@@ -2856,6 +2860,22 @@ function spawnProcessLossBeforeAckWorker(environment: NodeJS.ProcessEnv) {
     output += chunk;
   });
   return Object.assign(child, { getOutput: () => output });
+}
+
+function killWorkerProcessTree(
+  child: ReturnType<typeof spawnProcessLossBeforeAckWorker>,
+) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (child.pid === undefined) {
+    child.kill('SIGKILL');
+    return;
+  }
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+    child.kill('SIGKILL');
+  }
 }
 
 function spawnTerminalDeadLetterWorker(
