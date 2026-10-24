@@ -302,7 +302,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
         pool,
         sideEffectBlocker,
       );
-    worker.kill('SIGKILL');
+    killRecoveryWorker(worker);
     await waitForExit(worker);
     if (blockerClient) {
       if (blockedBackendPid !== undefined)
@@ -479,7 +479,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
     }
   } finally {
     if (worker && worker.exitCode === null) {
-      worker.kill('SIGKILL');
+      killRecoveryWorker(worker);
       await waitForExit(worker).catch(() => undefined);
     }
     if (blockerClient) {
@@ -722,7 +722,11 @@ function spawnRecoveryWorker(environment: NodeJS.ProcessEnv) {
       '--maxWorkers=1',
       '--no-file-parallelism',
     ],
-    { env: environment, stdio: ['ignore', 'pipe', 'pipe'] },
+    {
+      detached: process.platform !== 'win32',
+      env: environment,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
   );
   let output = '';
   child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
@@ -732,6 +736,23 @@ function spawnRecoveryWorker(environment: NodeJS.ProcessEnv) {
     output += chunk;
   });
   return Object.assign(child, { getOutput: () => output });
+}
+
+function killRecoveryWorker(worker: ReturnType<typeof spawnRecoveryWorker>) {
+  if (process.platform !== 'win32' && worker.pid) {
+    try {
+      process.kill(-worker.pid, 'SIGKILL');
+      return;
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !('code' in error) ||
+        error.code !== 'ESRCH'
+      )
+        throw error;
+    }
+  }
+  if (worker.exitCode === null) worker.kill('SIGKILL');
 }
 
 async function waitForClaim(
@@ -899,7 +920,7 @@ async function waitForExit(
     return { code: worker.exitCode, output: worker.getOutput() };
   return await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
-      worker.kill('SIGKILL');
+      killRecoveryWorker(worker);
       reject(new Error(`Activity worker did not exit: ${worker.getOutput()}`));
     }, timeoutMilliseconds);
     worker.once('exit', (code) => {
