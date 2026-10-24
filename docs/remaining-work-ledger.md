@@ -53,10 +53,9 @@ an accepted scope decision is recorded in the dispositions section.
   are being written, and broad award recalculation, verifying transaction
   rollback, no partial QSO/outbox/notification effects, lease reclaim, and
   successful retry. They also cover selected three-node leader changes. A
-  child-process test also
-  persists a terminal failed job and dead-letter, kills the worker while its
-  delivery is still pending, then verifies redelivery settles without
-  reprocessing. The Activity leader-failover check retries ACK confirmation
+  child-process check persists a terminal failed job and dead-letter, kills the
+  worker while its delivery is still pending, then verifies redelivery settles
+  without reprocessing. The Activity leader-failover check retries ACK confirmation
   while extending the pending delivery. Isolated CI exercises Activity
   notification retry exhaustion and audited redrive, plus Email retry
   exhaustion followed by audited command replay; the Email dead-letter resolves
