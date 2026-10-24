@@ -122,6 +122,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
   };
   let worker: ReturnType<typeof spawnRecoveryWorker> | undefined;
   let sideEffectBlocker: SideEffectBlocker | undefined;
+  let blockedBackendPid: number | undefined;
   let blockerClient: PoolClient | undefined;
 
   try {
@@ -296,10 +297,16 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
     worker = spawnRecoveryWorker(workerEnvironment);
     await waitForClaim(worker, pool, jobId);
     if (sideEffectBlocker)
-      await waitForBlockedSideEffect(worker, pool, sideEffectBlocker);
+      blockedBackendPid = await waitForBlockedSideEffect(
+        worker,
+        pool,
+        sideEffectBlocker,
+      );
     worker.kill('SIGKILL');
     await waitForExit(worker);
     if (blockerClient) {
+      if (blockedBackendPid !== undefined)
+        await waitForDatabaseBackendExit(pool, blockedBackendPid);
       await blockerClient.query('SELECT pg_advisory_unlock(4815162342)');
       blockerClient.release();
       blockerClient = undefined;
@@ -801,7 +808,7 @@ async function waitForBlockedSideEffect(
   worker: ReturnType<typeof spawnRecoveryWorker>,
   pool: Pool,
   blocker: SideEffectBlocker,
-) {
+): Promise<number> {
   const deadline = Date.now() + 45_000;
   while (Date.now() < deadline) {
     if (worker.exitCode !== null || worker.signalCode !== null)
@@ -809,17 +816,31 @@ async function waitForBlockedSideEffect(
         `Activity worker exited before entering ${blocker.table} side effects: ${worker.getOutput()}`,
       );
     const result = await pool.query(
-      `SELECT pid FROM pg_stat_activity
+      `SELECT pid::int AS pid FROM pg_stat_activity
        WHERE datname=current_database() AND wait_event_type='Lock'
          AND query ILIKE $1 LIMIT 1`,
       [`%INSERT INTO ${blocker.table}%`],
     );
-    if (result.rowCount) return;
+    const pid = result.rows[0]?.pid;
+    if (typeof pid === 'number') return pid;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error(
     `Activity worker did not reach the blocked ${blocker.table} side effect: ${worker.getOutput()}`,
   );
+}
+
+async function waitForDatabaseBackendExit(pool: Pool, pid: number) {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const result = await pool.query(
+      'SELECT 1 FROM pg_stat_activity WHERE pid=$1',
+      [pid],
+    );
+    if (!result.rowCount) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Activity worker PostgreSQL backend ${pid} did not exit`);
 }
 
 async function expectRolledBackSideEffects(
