@@ -21,6 +21,7 @@ describe.skipIf(!enabled)('Geodata object-store recovery', () => {
     const endpoint = process.env.MYOTA_OBJECT_STORAGE_ENDPOINT;
     const bucket = process.env.MYOTA_GEODATA_IMPORT_BUCKET;
     const container = process.env.MYOTA_S3_RECOVERY_CONTAINER;
+    const volume = process.env.MYOTA_S3_RECOVERY_VOLUME;
     const accessKey = process.env.MYOTA_OBJECT_STORAGE_ACCESS_KEY;
     const secretKey = process.env.MYOTA_OBJECT_STORAGE_SECRET_KEY;
     if (
@@ -28,6 +29,7 @@ describe.skipIf(!enabled)('Geodata object-store recovery', () => {
       !endpoint ||
       !bucket ||
       !container ||
+      !volume ||
       !accessKey ||
       !secretKey
     )
@@ -63,6 +65,7 @@ describe.skipIf(!enabled)('Geodata object-store recovery', () => {
     const body = Buffer.concat([firstBody, lastBody]);
     const service = new GeodataUploadService(pool as Pool);
     let uploadId: string | undefined;
+    let lostVolumeUploadId: string | undefined;
     let operationError: unknown;
 
     try {
@@ -133,17 +136,59 @@ describe.skipIf(!enabled)('Geodata object-store recovery', () => {
         run_status: 'QUEUED',
         part_count: 2,
       });
+
+      const doomedUpload = await service.create(owner, `${id}-volume-loss`, {
+        adapter: 'MANUAL',
+        source: { name: 'SeaweedFS lost-volume fixture' },
+        filename: `lost-${filename}`,
+        format: 'GEOJSON',
+        expectedSize: body.length,
+        entityTypes: ['TEST_PARK'],
+      });
+      lostVolumeUploadId = doomedUpload.uploadId;
+      await service.uploadPart(owner, lostVolumeUploadId, 1, firstBody);
+      await service.uploadPart(owner, lostVolumeUploadId, 2, lastBody);
+
+      runDocker('stop', container);
+      replaceDockerVolume(volume);
+      runDocker('start', container);
+      await waitForSeaweedFS(endpoint);
+      await client.send(new CreateBucketCommand({ Bucket: bucket }));
+
+      await expect(service.complete(owner, lostVolumeUploadId)).rejects.toThrow(
+        'object storage lost the multipart upload; start a new upload',
+      );
+      const lostVolumeState = await pool.query(
+        `SELECT session.status,session.import_run_id,
+                (SELECT count(*)::int FROM import_run WHERE id=session.id) AS runs,
+                (SELECT count(*)::int FROM outbox_event
+                 WHERE event_type='geodata.import.queued.v1'
+                   AND aggregate_id=session.id::text) AS queued_events
+         FROM geodata_upload_session session WHERE session.id=$1`,
+        [lostVolumeUploadId],
+      );
+      expect(lostVolumeState.rows[0]).toMatchObject({
+        status: 'FAILED',
+        import_run_id: null,
+        runs: 0,
+        queued_events: 0,
+      });
+      expect(await service.get(owner, lostVolumeUploadId)).toMatchObject({
+        uploadId: lostVolumeUploadId,
+        status: 'FAILED',
+      });
     } catch (error) {
       operationError = error;
     }
 
     let cleanupError: unknown;
     try {
-      if (uploadId) {
+      for (const cleanupUploadId of [uploadId, lostVolumeUploadId]) {
+        if (!cleanupUploadId) continue;
         const run = await pool.query(
           `SELECT import_run_id::text AS id,object_key,
                   multipart_upload_id FROM geodata_upload_session WHERE id=$1`,
-          [uploadId],
+          [cleanupUploadId],
         );
         const runId = run.rows[0]?.id as string | undefined;
         const objectKey = run.rows[0]?.object_key as string | undefined;
@@ -179,7 +224,7 @@ describe.skipIf(!enabled)('Geodata object-store recovery', () => {
           }
           await cleanup.query(
             'DELETE FROM geodata_upload_session WHERE id=$1',
-            [uploadId],
+            [cleanupUploadId],
           );
           await cleanup.query('COMMIT');
         } catch (error) {
@@ -208,6 +253,23 @@ function runDocker(command: 'start' | 'stop', container: string) {
   if (result.status !== 0)
     throw new Error(
       `docker ${command} failed: ${result.stderr || result.stdout}`,
+    );
+}
+
+function replaceDockerVolume(volume: string) {
+  runDockerVolume(['volume', 'rm', volume]);
+  runDockerVolume(['volume', 'create', volume]);
+}
+
+function runDockerVolume(args: string[]) {
+  const result = spawnSync('docker', args, {
+    encoding: 'utf8',
+    timeout: 15_000,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0)
+    throw new Error(
+      `docker ${args.join(' ')} failed: ${result.stderr || result.stdout}`,
     );
 }
 

@@ -357,9 +357,26 @@ export class GeodataUploadService {
               Key: session.object_key,
             }),
           )
-          .catch(() => undefined);
-        if (Number(head?.ContentLength) !== Number(session.expected_size))
+          .then(
+            (result) => ({ result, error: undefined }),
+            (headError: unknown) => ({ result: undefined, error: headError }),
+          );
+        if (
+          Number(head.result?.ContentLength) !== Number(session.expected_size)
+        ) {
+          if (isNoSuchUploadError(error) && isObjectNotFoundError(head.error)) {
+            await client.query(
+              `UPDATE geodata_upload_session
+               SET status='FAILED',updated_at=now()
+               WHERE id=$1 AND status='COMPLETING'`,
+              [id],
+            );
+            throw new ConflictException(
+              'object storage lost the multipart upload; start a new upload',
+            );
+          }
           throw error;
+        }
       }
       const metadata = session.metadata as Record<string, unknown>;
       const format =
@@ -806,6 +823,31 @@ function validateCreatePrerequisites(body: Record<string, unknown>) {
 
 function integerEnv(name: string, fallback: number) {
   return integerSetting(process.env[name], fallback);
+}
+
+function isNoSuchUploadError(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    error.name === 'NoSuchUpload'
+  );
+}
+
+function isObjectNotFoundError(error: unknown) {
+  if (typeof error !== 'object' || error === null) return false;
+  const metadata =
+    '$metadata' in error &&
+    typeof error.$metadata === 'object' &&
+    error.$metadata !== null
+      ? error.$metadata
+      : undefined;
+  return (
+    ('name' in error && error.name === 'NotFound') ||
+    (metadata &&
+      'httpStatusCode' in metadata &&
+      metadata.httpStatusCode === 404)
+  );
 }
 
 function pythonInteger(value: unknown): bigint | null {

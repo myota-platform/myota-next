@@ -139,6 +139,7 @@ try {
       MYOTA_OBJECT_STORAGE_SECRET_KEY: secretKey,
       MYOTA_GEODATA_IMPORT_BUCKET: bucket,
       MYOTA_S3_RECOVERY_CONTAINER: container,
+      MYOTA_S3_RECOVERY_VOLUME: volume,
     },
   );
   if (!process.exitCode)
