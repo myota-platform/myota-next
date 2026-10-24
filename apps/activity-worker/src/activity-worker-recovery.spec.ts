@@ -721,6 +721,7 @@ function spawnRecoveryWorker(environment: NodeJS.ProcessEnv) {
         recoveryCases[0].testName,
       '--maxWorkers=1',
       '--no-file-parallelism',
+      '--pool=threads',
     ],
     {
       detached: process.platform !== 'win32',
@@ -852,6 +853,7 @@ async function waitForBlockedSideEffect(
 }
 
 async function waitForDatabaseBackendExit(pool: Pool, pid: number) {
+  await pool.query('SELECT pg_terminate_backend($1)', [pid]);
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     const result = await pool.query(
