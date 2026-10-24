@@ -38,15 +38,18 @@ confirms the Activity durables settle through the surviving cluster. Process out
 during other Activity work kinds after processing begins remain open; all six kinds are
 covered for process death after lease acquisition and before processing starts.
 
-A service-level check also verifies that an unconfirmed ACK after terminal dead-letter
-persistence is settled on redelivery without processing the job again. Process death
-after terminal persistence but before broker settlement remains open. Transient
-PostgreSQL failures while claiming work or persisting retry/dead-letter state extend the
-current ACK and retry in place with capped jittered backoff. Fault-proxy checks cover
-retry-state writes and terminal failure settlement at delivery count eight: while
-PostgreSQL is unavailable, the job stays running, no dead-letter row exists, and the
-delivery remains unacknowledged; after recovery, the failed job and dead-letter row
-commit before ACK.
+A child-process check persists a terminal failed job and dead-letter, then holds the
+worker before ACK while the delivery remains pending. The test kills that process,
+confirms JetStream redelivers the message, and verifies the next handler observes the
+terminal owner state and settles without processing the job again. This passed in
+[operational qualification run 40079304427](https://github.com/myota-platform/myota-next/actions/runs/40079304427).
+Process death during the confirmed terminal settlement call and during processing for
+the remaining Activity work kinds are still open. Transient PostgreSQL failures while
+claiming work or persisting retry/dead-letter state extend the current ACK and retry in
+place with capped jittered backoff. Fault-proxy checks cover retry-state writes and
+terminal failure settlement at delivery count eight: while PostgreSQL is unavailable,
+the job stays running, no dead-letter row exists, and the delivery remains
+unacknowledged; after recovery, the failed job and dead-letter row commit before ACK.
 
 Invalid envelopes, missing job rows, and job-kind mismatches are recorded in the
 Activity dead-letter ledger before the worker requests a confirmed broker ACK. A

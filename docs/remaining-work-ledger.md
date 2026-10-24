@@ -49,16 +49,21 @@ an accepted scope decision is recorded in the dispositions section.
   every consequential point.
 - **Current implementation and evidence:** Recovery checks kill workers after
   lease acquisition and before processing starts for all six work kinds. Other
-  checks cover redelivery after a terminal dead-letter commit and selected
-  three-node leader changes.
-- **Missing evidence:** Process death during side-effecting processing, after
-  terminal dead-letter persistence but before broker settlement, and during
-  terminal dead-letter settlement is still open.
+  checks inject process loss during QSO ingestion and broad award recalculation,
+  and cover selected three-node leader changes. A child-process test also
+  persists a terminal failed job and dead-letter, kills the worker while its
+  delivery is still pending, then verifies redelivery settles without
+  reprocessing. These checks passed in
+  [operational qualification run 40079304427](https://github.com/myota-platform/myota-next/actions/runs/40079304427).
+- **Missing evidence:** Process death during side-effecting processing for the
+  remaining Activity work kinds, during terminal dead-letter settlement, and
+  recovery under the deployed topology are still open.
 - **Risk:** A restart could duplicate or lose a QSO/award side effect, strand a
   job, or leave a terminal message unsettled.
-- **Next check:** Inject process loss in each missing window for each applicable
-  work kind; verify durable final state, idempotency, lease recovery, and
-  confirmed settlement or safe dead-lettering.
+- **Next check:** Inject process loss in the remaining work-kind and terminal
+  settlement windows; verify durable final state, idempotency, lease recovery,
+  and confirmed settlement or safe dead-lettering. Repeat required scenarios in
+  the isolated deployment when its recovery topology is available.
 - **Tracked by:** [Issue #15](https://github.com/myota-platform/myota-next/issues/15).
 - **Sources:** [Activity parity, lines 255–264](parity/activity.md#L255);
   [workers and operations, lines 35–57](parity/workers-operations.md#L35).
