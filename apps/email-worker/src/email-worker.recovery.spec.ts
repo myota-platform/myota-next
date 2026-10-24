@@ -64,6 +64,7 @@ describe.skipIf(!enabled)('Email worker JetStream recovery', () => {
     let server: ReturnType<typeof spawn> | undefined;
     let publisher: Awaited<ReturnType<typeof connect>> | undefined;
     let smtpAttempts = 0;
+    let smtpAvailable = false;
 
     try {
       process.env.NATS_URL = natsUrl;
@@ -125,29 +126,30 @@ describe.skipIf(!enabled)('Email worker JetStream recovery', () => {
       internals.transporter = {
         sendMail: async () => {
           smtpAttempts++;
-          throw new Error('injected SMTP outage');
+          if (!smtpAvailable) throw new Error('injected SMTP outage');
         },
         close: () => undefined,
       };
 
       const recipientAccountId = randomUUID();
-      await jetstream(publisher).publish(
-        subject,
-        new TextEncoder().encode(
-          JSON.stringify({
-            envelopeVersion: 1,
-            workId,
-            workType: 'email.send.v1',
-            createdAt: new Date().toISOString(),
-            producer: 'myota-identity',
-            payload: {
-              recipientAccountId,
-              templateId: 'account-created-participant.v1',
-              templateData: { displayName: 'Recovery Test' },
-            },
-          }),
-        ),
-      );
+      const command = {
+        envelopeVersion: 1,
+        workId,
+        workType: 'email.send.v1',
+        createdAt: new Date().toISOString(),
+        producer: 'myota-identity',
+        payload: {
+          recipientAccountId,
+          templateId: 'account-created-participant.v1',
+          templateData: { displayName: 'Recovery Test' },
+        },
+      };
+      const publishCommand = async () =>
+        await jetstream(publisher!).publish(
+          subject,
+          new TextEncoder().encode(JSON.stringify(command)),
+        );
+      await publishCommand();
       const consumer = await jetstream(publisher).consumers.get(
         stream,
         durable,
@@ -218,6 +220,65 @@ describe.skipIf(!enabled)('Email worker JetStream recovery', () => {
       const settled = await manager.consumers.info(stream, durable);
       expect(settled.num_ack_pending).toBe(0);
       expect(settled.num_pending).toBe(0);
+
+      const redrive = await runEmailRedrive(workId, natsUrl);
+      expect(redrive).toContain('Audited redrive recorded');
+      const redriveState = await pool.query<{
+        status: string;
+        attempts: number;
+        actor: string;
+        reason: string;
+        resolved_at: Date | null;
+      }>(
+        `SELECT d.status,d.attempts,l.redrive_actor AS actor,
+                l.redrive_reason AS reason,l.resolved_at
+           FROM public.email_delivery d
+           JOIN public.email_dead_letter l USING (work_id)
+          WHERE d.work_id=$1 AND l.error_code='delivery_exhausted'`,
+        [workId],
+      );
+      expect(redriveState.rows[0]).toMatchObject({
+        status: 'PENDING',
+        attempts: 8,
+        actor: 'ci-recovery-test',
+        reason: 'verify audited Email recovery',
+        resolved_at: null,
+      });
+
+      smtpAvailable = true;
+      await publishCommand();
+      const replay = await consumer.next({ expires: 10_000 });
+      if (!replay) throw new Error('Email redrive replay did not arrive');
+      await internals.handle(replay);
+
+      const recovered = await pool.query<{ status: string; attempts: number }>(
+        `SELECT status,attempts FROM public.email_delivery WHERE work_id=$1`,
+        [workId],
+      );
+      expect(recovered.rows[0]).toEqual({ status: 'DELIVERED', attempts: 9 });
+      expect(smtpAttempts).toBe(9);
+      const resolvedDeadLetter = await pool.query<{
+        redrive_actor: string;
+        redrive_reason: string;
+        resolved_at: Date | null;
+      }>(
+        `SELECT redrive_actor,redrive_reason,resolved_at
+           FROM public.email_dead_letter
+          WHERE work_id=$1 AND error_code='delivery_exhausted'`,
+        [workId],
+      );
+      expect(resolvedDeadLetter.rows[0]).toMatchObject({
+        redrive_actor: 'ci-recovery-test',
+        redrive_reason: 'verify audited Email recovery',
+      });
+      expect(resolvedDeadLetter.rows[0]?.resolved_at).toBeInstanceOf(Date);
+      const redriveAudit = await pool.query(
+        `SELECT 1 FROM public.email_dead_letter_redrive
+          WHERE work_id=$1 AND error_code='delivery_exhausted'
+            AND actor='ci-recovery-test' AND reason='verify audited Email recovery'`,
+        [workId],
+      );
+      expect(redriveAudit.rowCount).toBe(1);
     } finally {
       await publisher?.drain().catch(() => undefined);
       if (server) await stopJetStream(server);
@@ -232,6 +293,12 @@ describe.skipIf(!enabled)('Email worker JetStream recovery', () => {
         ])
         .catch(() => undefined);
       await pool
+        .query(
+          'DELETE FROM public.email_dead_letter_redrive WHERE work_id=$1',
+          [workId],
+        )
+        .catch(() => undefined);
+      await pool
         .query('DELETE FROM public.email_delivery WHERE work_id=$1', [workId])
         .catch(() => undefined);
       await pool.end().catch(() => undefined);
@@ -243,6 +310,48 @@ describe.skipIf(!enabled)('Email worker JetStream recovery', () => {
     }
   }, 120_000);
 });
+
+async function runEmailRedrive(workId: string, natsUrl: string) {
+  return await new Promise<string>((resolveRedrive, rejectRedrive) => {
+    const child = spawn(
+      process.execPath,
+      [
+        '--experimental-strip-types',
+        resolve(process.cwd(), 'apps/email-worker/src/redrive-email.ts'),
+        '--work-id',
+        workId,
+        '--error-code',
+        'delivery_exhausted',
+        '--actor',
+        'ci-recovery-test',
+        '--reason',
+        'verify audited Email recovery',
+      ],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          CORE_DATABASE_URL: process.env.CORE_DATABASE_URL,
+          NATS_URL: natsUrl,
+        },
+      },
+    );
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+      stderr += chunk;
+    });
+    child.once('error', rejectRedrive);
+    child.once('close', (code) => {
+      if (code === 0) resolveRedrive(stdout);
+      else
+        rejectRedrive(new Error(`Email redrive failed (${code}): ${stderr}`));
+    });
+  });
+}
 
 async function reserveLocalPort() {
   const server = createServer();

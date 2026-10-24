@@ -446,6 +446,12 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
           WHERE work_id=$1 AND outcome='started' ORDER BY attempted_at DESC,id DESC LIMIT 1)`,
         [workId],
       );
+      await client.query(
+        `UPDATE public.email_dead_letter SET resolved_at=now()
+          WHERE work_id=$1 AND resolved_at IS NULL
+            AND redrive_requested_at IS NOT NULL`,
+        [workId],
+      );
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);

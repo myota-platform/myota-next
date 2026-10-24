@@ -53,8 +53,12 @@ an accepted scope decision is recorded in the dispositions section.
   and cover selected three-node leader changes. A child-process test also
   persists a terminal failed job and dead-letter, kills the worker while its
   delivery is still pending, then verifies redelivery settles without
-  reprocessing. These checks passed in
-  [operational qualification run 40079304427](https://github.com/myota-platform/myota-next/actions/runs/40079304427).
+  reprocessing. Existing isolated CI exercises Activity notification retry
+  exhaustion and audited redrive, plus Email retry exhaustion. This change
+  extends the Email recovery scenario through audited replay and verifies the
+  dead-letter resolves only after delivery succeeds; that extension awaits its
+  qualification run. The prior checks passed in
+  [operational qualification run 40086059062](https://github.com/myota-platform/myota-next/actions/runs/40086059062).
 - **Missing evidence:** Process death during side-effecting processing for the
   remaining Activity work kinds, retry exhaustion and operator redrive under
   the deployed topology, and recovery under the deployed topology are still
@@ -79,7 +83,10 @@ an accepted scope decision is recorded in the dispositions section.
   acknowledgement, and redrive follow the configured deployment topology.
 - **Current implementation and evidence:** CI covers PostgreSQL interruption,
   terminal dead-letter persistence, replica sharing, restart recovery, and a
-  three-node JetStream leader change.
+  three-node JetStream leader change. Isolated CI also verifies Activity
+  notification retry exhaustion and audited redrive, plus Email retry
+  exhaustion. The new Email audited-replay and dead-letter-resolution check
+  awaits qualification.
 - **Missing evidence:** Broker-side retry exhaustion under the deployment
   conditions is explicitly unqualified.
 - **Risk:** A sustained consumer or broker failure may lose notifications or

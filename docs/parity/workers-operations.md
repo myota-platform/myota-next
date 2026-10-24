@@ -93,7 +93,12 @@ then persists the eight-attempt record before terminating it after recovery.
 A three-node JetStream CI case holds terminal notification settlement pending during a
 PostgreSQL outage, stops the stream leader, then verifies replica election, dead-letter
 persistence through the replacement leader, and duplicate-safe processing of a
-subsequent event. Broker-side retry exhaustion under deployment conditions remains open.
+subsequent event. Isolated CI also drives Activity notification and Email work through
+retry exhaustion. Notification recovery verifies audited redrive. The Email recovery
+scenario is being extended to replay the original command after its audited reset and
+verify that successful delivery resolves the prior dead-letter; the updated check awaits
+qualification. These local broker checks do not qualify the deployed topology, where
+retry exhaustion and recovery remain open.
 The unresolved-dead-letter gauge refreshes in the background every 15 seconds, so it
 does not block consumer startup or issue a count query for every delivery.
 
