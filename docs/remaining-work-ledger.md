@@ -56,14 +56,16 @@ an accepted scope decision is recorded in the dispositions section.
   reprocessing. These checks passed in
   [operational qualification run 40079304427](https://github.com/myota-platform/myota-next/actions/runs/40079304427).
 - **Missing evidence:** Process death during side-effecting processing for the
-  remaining Activity work kinds, during terminal dead-letter settlement, and
-  recovery under the deployed topology are still open.
+  remaining Activity work kinds, retry exhaustion and operator redrive under
+  the deployed topology, and recovery under the deployed topology are still
+  open. Terminal dead-letter persistence followed by process loss before
+  settlement is covered by the existing CI check.
 - **Risk:** A restart could duplicate or lose a QSO/award side effect, strand a
   job, or leave a terminal message unsettled.
-- **Next check:** Inject process loss in the remaining work-kind and terminal
-  settlement windows; verify durable final state, idempotency, lease recovery,
-  and confirmed settlement or safe dead-lettering. Repeat required scenarios in
-  the isolated deployment when its recovery topology is available.
+- **Next check:** Inject process loss during side-effecting work for the
+  remaining Activity kinds; verify durable final state, idempotency, and lease
+  recovery. Exercise retry exhaustion and audited operator redrive in the
+  isolated deployment when its recovery topology is available.
 - **Tracked by:** [Issue #15](https://github.com/myota-platform/myota-next/issues/15).
 - **Sources:** [Activity parity, lines 255–264](parity/activity.md#L255);
   [workers and operations, lines 35–57](parity/workers-operations.md#L35).
@@ -262,16 +264,21 @@ an accepted scope decision is recorded in the dispositions section.
 - **Current implementation and evidence:** CI stops a pinned SeaweedFS process
   during a multipart upload, retains its local volume, retries, and verifies
   the queued import. Geodata retention also repeats safe object deletion after
-  a database interruption.
+  a database interruption. Activity ADIF import recovery injects an object-store
+  HTTP 503, verifies no failed-import notification or partial QSO effect is
+  committed, persists a retry, restores storage, and verifies successful import
+  with one QSO. The checks passed in
+  [operational qualification run 40085295634](https://github.com/myota-platform/myota-next/actions/runs/40085295634).
 - **Missing evidence:** Clustered failover, permanent volume loss, production
-  recovery procedures, and outage paths for other object-store consumers are
-  not covered by those checks.
+  recovery procedures, and outage paths for remaining object-store consumers
+  (including Activity certificate rendering) are not covered by those checks.
 - **Risk:** Uploaded or generated objects can be lost or orphaned while their
   database references remain, or recovery may require undocumented manual work.
 - **Next check:** Rehearse backup, restore, failover, permanent-volume-loss
   recovery, and safe retry for each consumer against the selected deployment
   storage; document operator actions and evidence.
-- **Tracked by:** [Issue #16](https://github.com/myota-platform/myota-next/issues/16).
+- **Tracked by:** [Activity issue #15](https://github.com/myota-platform/myota-next/issues/15)
+  and [Geodata issue #16](https://github.com/myota-platform/myota-next/issues/16).
 - **Sources:** [workers and operations, lines 192–196](parity/workers-operations.md#L192);
   [object-store recovery guide, lines 10–15](operations/object-store-recovery.md#L10).
 
