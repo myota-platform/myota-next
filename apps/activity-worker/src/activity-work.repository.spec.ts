@@ -81,7 +81,7 @@ describe('ActivityWorkRepository ADIF failure notifications', () => {
     });
   });
 
-  it('maps object-store read failures to the Python missing-object result', async () => {
+  it('maps an explicit missing object to the Python missing-object result', async () => {
     const queries: { sql: string; values: unknown[] }[] = [];
     const client = {
       query: async (sql: string, values: unknown[] = []) => {
@@ -127,9 +127,12 @@ describe('ActivityWorkRepository ADIF failure notifications', () => {
         return { rows: [] };
       },
     } as unknown as PoolClient;
-    const read = vi
-      .spyOn(S3Client.prototype, 'send')
-      .mockRejectedValue(new Error('object storage unavailable'));
+    const read = vi.spyOn(S3Client.prototype, 'send').mockRejectedValue(
+      Object.assign(new Error('object does not exist'), {
+        name: 'NoSuchKey',
+        $metadata: { httpStatusCode: 404 },
+      }),
+    );
     const repository = new ActivityWorkRepository(null);
     const internal = repository as unknown as {
       processAdifImport: (
@@ -160,6 +163,56 @@ describe('ActivityWorkRepository ADIF failure notifications', () => {
       importId: 'import-1',
       reason: 'object unavailable',
     });
+  });
+
+  it('rethrows a temporary object-store outage so the worker can retry', async () => {
+    const queries: string[] = [];
+    const client = {
+      query: async (sql: string) => {
+        queries.push(sql);
+        if (sql.startsWith('SELECT i.*'))
+          return {
+            rows: [
+              {
+                id: 'import-1',
+                activation_id: 'activation-1',
+                filename: 'log.adi',
+                object_key: 'adif/activation-1/log.adi',
+                bucket: 'myota-adif',
+                status: 'PROCESSING',
+                operator_id: 'operator-1',
+              },
+            ],
+          };
+        return { rows: [] };
+      },
+    } as unknown as PoolClient;
+    const outage = Object.assign(new Error('object storage unavailable'), {
+      $metadata: { httpStatusCode: 503 },
+    });
+    const read = vi.spyOn(S3Client.prototype, 'send').mockRejectedValue(outage);
+    const repository = new ActivityWorkRepository(null);
+    const internal = repository as unknown as {
+      processAdifImport: (
+        db: PoolClient,
+        payload: Record<string, unknown>,
+      ) => Promise<void>;
+    };
+
+    try {
+      await expect(
+        internal.processAdifImport(client, { importId: 'import-1' }),
+      ).rejects.toBe(outage);
+    } finally {
+      read.mockRestore();
+    }
+
+    expect(
+      queries.some((sql) => sql.startsWith('UPDATE activity_import')),
+    ).toBe(false);
+    expect(queries.some((sql) => sql.includes('ADIF_IMPORT_FAILED'))).toBe(
+      false,
+    );
   });
 });
 

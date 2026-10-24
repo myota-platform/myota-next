@@ -27,6 +27,7 @@ const result = spawnSync(
     stdio: 'inherit',
     env: {
       ...process.env,
+      AWS_MAX_ATTEMPTS: '1',
       MYOTA_ACTIVITY_WORKER_RECOVERY_TEST: '1',
       ACTIVITY_WORK_RECONCILE_SECONDS: '5',
     },

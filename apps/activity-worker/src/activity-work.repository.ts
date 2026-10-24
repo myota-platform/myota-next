@@ -431,7 +431,8 @@ export class ActivityWorkRepository {
         record.bucket,
         record.object_key,
       );
-    } catch {
+    } catch (error) {
+      if (!isObjectNotFound(error)) throw error;
       await this.finishAdifImport(
         client,
         record,
@@ -1219,6 +1220,18 @@ async function readObject(client: S3Client, bucket: string, key: string) {
   );
   if (!response.Body) throw new Error(`award asset is missing: ${key}`);
   return Buffer.from(await response.Body.transformToByteArray());
+}
+
+function isObjectNotFound(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const httpStatusCode = (
+    error as Error & { $metadata?: { httpStatusCode?: number } }
+  ).$metadata?.httpStatusCode;
+  return (
+    error.name === 'NoSuchKey' ||
+    error.name === 'NotFound' ||
+    httpStatusCode === 404
+  );
 }
 
 async function scanAdifContent(content: Buffer, filename: string) {

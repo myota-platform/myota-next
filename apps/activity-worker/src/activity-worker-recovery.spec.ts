@@ -344,7 +344,46 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
       `Activity job was not reclaimable after process death: ${JSON.stringify(expiredLease.rows[0])}`,
     ).toMatchObject({ id: jobId, attempts: 2 });
     if (!recovered) throw new Error('Activity job lease was not reclaimed');
-    await repository.process(recovered);
+    if (jobKind === 'ADIF_IMPORT' && objectStore) {
+      objectStore.available = false;
+      let storageError: unknown;
+      try {
+        await repository.process(recovered);
+      } catch (error) {
+        storageError = error;
+      }
+      expect(storageError).toBeDefined();
+      const interrupted = await pool.query<{
+        job_status: string;
+        attempts: number;
+        import_status: string;
+        imported_qsos: number;
+        failed_notifications: number;
+      }>(
+        `SELECT job.status AS job_status,job.attempts,import.status AS import_status,
+           (SELECT count(*)::int FROM activity_qso WHERE source_import_id=import.id) AS imported_qsos,
+           (SELECT count(*)::int FROM activity_notification
+            WHERE deduplication_key='adif:' || import.id::text || ':failed') AS failed_notifications
+         FROM activity_job job JOIN activity_import import ON import.id=$2
+         WHERE job.id=$1`,
+        [jobId, importId],
+      );
+      expect(interrupted.rows[0]).toMatchObject({
+        job_status: 'RUNNING',
+        attempts: 2,
+        import_status: 'PROCESSING',
+        imported_qsos: 0,
+        failed_notifications: 0,
+      });
+      await repository.retryWorkJob(recovered, storageError, 0);
+      objectStore.available = true;
+      const retried = await repository.claimWorkJob(jobId, jobKind, 120);
+      expect(retried).toMatchObject({ id: jobId, attempts: 3 });
+      if (!retried) throw new Error('Activity retry was not reclaimable');
+      await repository.process(retried);
+    } else {
+      await repository.process(recovered);
+    }
 
     if (jobKind === 'STATISTICS_REBUILD') {
       const result = await pool.query(
@@ -440,7 +479,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
       );
       expect(result.rows[0]).toMatchObject({
         status: 'SUCCEEDED',
-        attempts: 2,
+        attempts: 3,
         import_status: 'COMPLETED',
         records_seen: 1,
         records_accepted: 1,
@@ -622,6 +661,10 @@ async function cleanupRecoveryFixture(
         activationId,
       ]);
     }
+    await pool.query(
+      "DELETE FROM outbox_event WHERE aggregate_type='activity_job' AND aggregate_id=$1",
+      [jobId],
+    );
     await pool.query('DELETE FROM activity_job WHERE id=$1', [jobId]);
   } catch (error) {
     cleanupError = error;
@@ -634,6 +677,7 @@ type RecoveryObjectStore = {
   endpoint: string;
   server: ReturnType<typeof createServer>;
   objects: Map<string, Buffer>;
+  available: boolean;
   artifactKey?: string;
 };
 
@@ -649,10 +693,19 @@ function objectStoreKey(bucket: string, key: string) {
 
 async function startRecoveryObjectStore() {
   const objects = new Map<string, Buffer>();
+  let available = true;
   const server = createServer((request, response) => {
     const key = decodeURIComponent(
       new URL(request.url ?? '/', 'http://127.0.0.1').pathname,
     );
+    if (!available) {
+      response.statusCode = 503;
+      response.setHeader('content-type', 'application/xml');
+      response.end(
+        '<Error><Code>ServiceUnavailable</Code><Message>Temporary object-store outage</Message></Error>',
+      );
+      return;
+    }
     if (request.method === 'GET') {
       const object = objects.get(key);
       response.statusCode = object ? 200 : 404;
@@ -700,6 +753,12 @@ async function startRecoveryObjectStore() {
     endpoint: `http://127.0.0.1:${port}`,
     server,
     objects,
+    get available() {
+      return available;
+    },
+    set available(value: boolean) {
+      available = value;
+    },
   } satisfies RecoveryObjectStore;
 }
 
