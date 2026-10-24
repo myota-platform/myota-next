@@ -100,6 +100,8 @@ try {
     '--detach',
     '--name',
     container,
+    '--user',
+    `${process.getuid()}:${process.getgid()}`,
     '--publish',
     '127.0.0.1:18333:8333',
     '--volume',

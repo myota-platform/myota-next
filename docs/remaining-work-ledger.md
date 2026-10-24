@@ -224,8 +224,11 @@ an accepted scope decision is recorded in the dispositions section.
 - **Next check:** Compare the Admin route/workflow inventory with live browser
   specs, select remaining high-consequence gaps for end-to-end coverage, and
   record any accepted secondary omissions explicitly.
-- **Tracked by:** [Issue #20](https://github.com/myota-platform/myota-next/issues/20),
-  under parent [Phase 3 issue #7](https://github.com/myota-platform/myota-next/issues/7).
+- **Tracked by:** The completed primary-workflow evidence is in
+  [Issue #20](https://github.com/myota-platform/myota-next/issues/20); the
+  remaining secondary-workflow gap is tracked by
+  [Phase 3 follow-up issue #22](https://github.com/myota-platform/myota-next/issues/22),
+  under [Phase 3 issue #7](https://github.com/myota-platform/myota-next/issues/7).
 - **Sources:** [Web applications, lines 195–200](parity/web-applications.md#L195);
   [completion criteria, lines 19–25](parity/completion-criteria.md#L19).
 
@@ -259,9 +262,12 @@ an accepted scope decision is recorded in the dispositions section.
 - **Next check:** Extend assistive-technology review to remaining high-consequence
   journeys as they receive workflow coverage, then rerun primary workflows against
   the isolated release. The latest CI run does not replace deployed-release review.
-- **Tracked by:** [Admin issue #20](https://github.com/myota-platform/myota-next/issues/20)
-  and [Participant issue #21](https://github.com/myota-platform/myota-next/issues/21),
-  under parent [Phase 3 issue #7](https://github.com/myota-platform/myota-next/issues/7).
+- **Tracked by:** Completed primary Admin and Participant review is recorded in
+  [issues #20](https://github.com/myota-platform/myota-next/issues/20) and
+  [#21](https://github.com/myota-platform/myota-next/issues/21). Remaining
+  secondary screen-reader review is tracked by
+  [Phase 3 follow-up issue #22](https://github.com/myota-platform/myota-next/issues/22),
+  under [Phase 3 issue #7](https://github.com/myota-platform/myota-next/issues/7).
 - **Sources:** [Web applications, lines 261–265](parity/web-applications.md#L261);
   [completion criteria, lines 19–25](parity/completion-criteria.md#L19).
 
