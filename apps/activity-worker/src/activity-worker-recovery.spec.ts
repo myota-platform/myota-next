@@ -344,7 +344,10 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
       `Activity job was not reclaimable after process death: ${JSON.stringify(expiredLease.rows[0])}`,
     ).toMatchObject({ id: jobId, attempts: 2 });
     if (!recovered) throw new Error('Activity job lease was not reclaimed');
-    if (jobKind === 'ADIF_IMPORT' && objectStore) {
+    if (
+      (jobKind === 'ADIF_IMPORT' || jobKind === 'PDF_RENDER') &&
+      objectStore
+    ) {
       objectStore.available = false;
       let storageError: unknown;
       try {
@@ -353,28 +356,58 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
         storageError = error;
       }
       expect(storageError).toBeDefined();
-      const interrupted = await pool.query<{
-        job_status: string;
-        attempts: number;
-        import_status: string;
-        imported_qsos: number;
-        failed_notifications: number;
-      }>(
-        `SELECT job.status AS job_status,job.attempts,import.status AS import_status,
-           (SELECT count(*)::int FROM activity_qso WHERE source_import_id=import.id) AS imported_qsos,
-           (SELECT count(*)::int FROM activity_notification
-            WHERE deduplication_key='adif:' || import.id::text || ':failed') AS failed_notifications
-         FROM activity_job job JOIN activity_import import ON import.id=$2
-         WHERE job.id=$1`,
-        [jobId, importId],
-      );
-      expect(interrupted.rows[0]).toMatchObject({
-        job_status: 'RUNNING',
-        attempts: 2,
-        import_status: 'PROCESSING',
-        imported_qsos: 0,
-        failed_notifications: 0,
-      });
+      if (jobKind === 'ADIF_IMPORT') {
+        const interrupted = await pool.query<{
+          job_status: string;
+          attempts: number;
+          import_status: string;
+          imported_qsos: number;
+          failed_notifications: number;
+        }>(
+          `SELECT job.status AS job_status,job.attempts,import.status AS import_status,
+             (SELECT count(*)::int FROM activity_qso WHERE source_import_id=import.id) AS imported_qsos,
+             (SELECT count(*)::int FROM activity_notification
+              WHERE deduplication_key='adif:' || import.id::text || ':failed') AS failed_notifications
+           FROM activity_job job JOIN activity_import import ON import.id=$2
+           WHERE job.id=$1`,
+          [jobId, importId],
+        );
+        expect(interrupted.rows[0]).toMatchObject({
+          job_status: 'RUNNING',
+          attempts: 2,
+          import_status: 'PROCESSING',
+          imported_qsos: 0,
+          failed_notifications: 0,
+        });
+      } else {
+        const interrupted = await pool.query<{
+          job_status: string;
+          attempts: number;
+          issuance: string;
+          render_events: number;
+        }>(
+          `SELECT job.status AS job_status,job.attempts,issuance.issuance::text AS issuance,
+             (SELECT count(*)::int FROM outbox_event
+              WHERE aggregate_type='award_issuance' AND aggregate_id=issuance.id::text) AS render_events
+           FROM activity_job job JOIN activity_award_issuance issuance ON issuance.id=$2
+           WHERE job.id=$1`,
+          [jobId, issuanceId],
+        );
+        expect(interrupted.rows[0]).toMatchObject({
+          job_status: 'RUNNING',
+          attempts: 2,
+          render_events: 0,
+        });
+        expect(
+          JSON.parse(interrupted.rows[0]!.issuance).artifact,
+        ).not.toMatchObject({
+          downloadReady: true,
+          renderStatus: 'READY',
+        });
+        expect(objectStore.objects.has(objectStore.artifactKey ?? '')).toBe(
+          false,
+        );
+      }
       await repository.retryWorkJob(recovered, storageError, 0);
       objectStore.available = true;
       const retried = await repository.claimWorkJob(jobId, jobKind, 120);
@@ -502,7 +535,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
       );
       expect(result.rows[0]).toMatchObject({
         status: 'SUCCEEDED',
-        attempts: 2,
+        attempts: 3,
       });
       const storedIssuance = JSON.parse(result.rows[0]!.issuance);
       expect(storedIssuance.artifact).toMatchObject({
