@@ -161,7 +161,7 @@ async function verifyTerminalDeadLetterRecovery() {
     await jetstream(publisher).publish(
       'myota.work.geodata.import-preprocess.v1',
       new TextEncoder().encode(
-        JSON.stringify({
+        stringifyJsonWithBigInts({
           envelopeVersion: 1,
           workId: eventId,
           workType: 'geodata.import-preprocess.v1',
