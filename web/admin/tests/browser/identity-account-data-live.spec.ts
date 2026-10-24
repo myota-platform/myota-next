@@ -95,12 +95,16 @@ test('creates and manages an account through live Admin', async ({
         WHERE account_id=$1 AND valid_to IS NULL`,
       [accountId],
     );
-    expect(initialRoles.rows).toEqual([
-      {
-        role_code: 'ACTIVITY_ADMIN',
-        scopes: ['activity.read', 'activity.admin'],
-      },
-    ]);
+    expect(initialRoles.rows).toEqual(
+      expect.arrayContaining([
+        { role_code: 'PARTICIPANT', scopes: [] },
+        {
+          role_code: 'ACTIVITY_ADMIN',
+          scopes: ['activity.read', 'activity.admin'],
+        },
+      ]),
+    );
+    expect(initialRoles.rows).toHaveLength(2);
 
     const activated = await request.patch(
       `${gateway}/v1/identity/accounts/${accountId}`,
