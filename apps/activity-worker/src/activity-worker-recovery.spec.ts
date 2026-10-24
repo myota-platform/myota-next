@@ -26,7 +26,7 @@ const recoveryCases = [
   },
   {
     kind: 'ADIF_IMPORT',
-    testName: 'reclaims an ADIF import after worker process death',
+    testName: 'reclaims an interrupted ADIF import after worker process death',
   },
   {
     kind: 'PDF_RENDER',
@@ -108,7 +108,9 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
     process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE;
   let objectStore: RecoveryObjectStore | undefined;
   const interruptDuringProcessing =
-    jobKind === 'QSO_INGESTION' || jobKind === 'AWARD_RECALCULATE';
+    jobKind === 'QSO_INGESTION' ||
+    jobKind === 'ADIF_IMPORT' ||
+    jobKind === 'AWARD_RECALCULATE';
   const workerEnvironment = {
     ...process.env,
     ACTIVITY_DATABASE_URL: databaseUrl,
@@ -280,7 +282,12 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
     );
 
     if (interruptDuringProcessing) {
-      const targetId = jobKind === 'QSO_INGESTION' ? activationId : awardId;
+      const targetId =
+        jobKind === 'QSO_INGESTION'
+          ? activationId
+          : jobKind === 'ADIF_IMPORT'
+            ? importId
+            : awardId;
       if (!targetId)
         throw new Error(
           `${jobKind} recovery fixture has no side-effect target`,
@@ -316,6 +323,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
         pool,
         jobKind,
         activationId,
+        importId,
         awardId,
         subjectId,
       );
@@ -874,6 +882,7 @@ async function waitForClaim(
 
 type SideEffectBlocker = {
   table: 'activity_qso' | 'activity_award_progress';
+  column: 'activation_id' | 'source_import_id' | 'award_id';
   triggerName: string;
   functionName: string;
 };
@@ -888,12 +897,17 @@ async function installSideEffectBlocker(
     jobKind === 'QSO_INGESTION'
       ? {
           table: 'activity_qso' as const,
-          column: 'activation_id',
+          column: 'activation_id' as const,
         }
-      : {
-          table: 'activity_award_progress' as const,
-          column: 'award_id',
-        };
+      : jobKind === 'ADIF_IMPORT'
+        ? {
+            table: 'activity_qso' as const,
+            column: 'source_import_id' as const,
+          }
+        : {
+            table: 'activity_award_progress' as const,
+            column: 'award_id' as const,
+          };
   const triggerName = `recovery_block_${suffix}`;
   const functionName = `recovery_block_fn_${suffix}`;
   await pool.query(
@@ -962,6 +976,7 @@ async function expectRolledBackSideEffects(
   pool: Pool,
   jobKind: string,
   activationId?: string,
+  importId?: string,
   awardId?: string,
   subjectId?: string,
 ) {
@@ -983,6 +998,30 @@ async function expectRolledBackSideEffects(
       qsos: 0,
       qso_events: 0,
       award_jobs: 0,
+    });
+    return;
+  }
+  if (jobKind === 'ADIF_IMPORT' && importId) {
+    const result = await pool.query(
+      `SELECT import.status AS import_status,import.records_seen,
+         import.records_accepted,import.records_rejected,
+         (SELECT count(*)::int FROM activity_qso WHERE source_import_id=$1) AS qsos,
+         (SELECT count(*)::int FROM outbox_event event
+          JOIN activity_qso qso ON qso.id::text=event.aggregate_id
+          WHERE event.aggregate_type='qso' AND qso.source_import_id=$1) AS qso_events,
+         (SELECT count(*)::int FROM activity_notification
+          WHERE deduplication_key IN ($2,$3)) AS notifications
+       FROM activity_import import WHERE import.id=$1`,
+      [importId, `adif:${importId}:completed`, `adif:${importId}:failed`],
+    );
+    expect(result.rows[0]).toMatchObject({
+      import_status: 'PROCESSING',
+      records_seen: 0,
+      records_accepted: 0,
+      records_rejected: 0,
+      qsos: 0,
+      qso_events: 0,
+      notifications: 0,
     });
     return;
   }
