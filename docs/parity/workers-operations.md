@@ -263,7 +263,11 @@ before publication state is recorded. It repeats the process restart for Core, A
 and Geodata, verifying each outbox relay reconnects, persists the acknowledgement, and
 publishes the event only once.
 
-PostgreSQL cluster failover remains unqualified.
+PostgreSQL cluster failover remains unqualified and is outside the launch gates;
+the future HA and multi-instance topology is tracked by standalone low-priority
+[myota-deploy#67](https://github.com/myota-platform/myota-deploy/issues/67). Recovery
+from restarts of the configured single-instance databases remains in Phase 4 issue
+[#17](https://github.com/myota-platform/myota-next/issues/17).
 
 - Runtime: preserve migrations, health/readiness, metrics, logs, traces,
   backups, restore paths, NATS topology, object storage buckets, and separate

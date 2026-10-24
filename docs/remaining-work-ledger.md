@@ -314,39 +314,45 @@ an accepted scope decision is recorded in the dispositions section.
 
 - **Owner:** NATS and owner-scoped outbox/worker operations.
 - **Class:** Recovery/operations qualification.
-- **Reference behavior:** APIs, relays, and workers reconnect and settle durable
-  messages correctly across broker failure and cluster recovery.
+- **Reference behavior:** APIs, relays, and workers recover from interruption of
+  the currently configured single NATS/JetStream instance and settle durable
+  messages only after owner-database state changes.
 - **Current implementation and evidence:** CI covers process restart with a
   retained local file store and three-node JetStream leader changes for several
   worker and relay paths.
-- **Missing evidence:** Deployment-level NATS recovery is explicitly
-  unqualified; process restart and isolated cluster checks do not prove recovery
-  for the configured deployment topology.
-- **Risk:** A deployed broker failure may stop APIs/workers, cause duplicate
-  publication, or leave acknowledged work unsettled.
-- **Next check:** Fault-inject broker interruption and cluster recovery in the
-  isolated Helm deployment; verify durable topology, reconnect, settlement,
-  relay idempotency, alerting, and operator recovery.
+- **Missing evidence:** Recovery of the configured NATS/JetStream instance in
+  the active isolated Helm deployment remains unqualified. CI broker leader
+  failover is evidence for worker behavior, not a requirement for the launch
+  topology.
+- **Risk:** A deployed single-instance broker failure may stop APIs/workers,
+  cause duplicate publication, or leave acknowledged work unsettled.
+- **Next check:** Fault-inject a restart or connection interruption of the
+  configured broker in the isolated Helm deployment; verify reconnect,
+  settlement, relay idempotency, alerting, and operator recovery. Clustered
+  NATS failover is deferred to standalone low-priority
+  [myota-deploy#67](https://github.com/myota-platform/myota-deploy/issues/67).
 - **Tracked by:** [Issue #17](https://github.com/myota-platform/myota-next/issues/17).
 - **Sources:** [workers and operations, lines 230–235](parity/workers-operations.md#L230);
   [outbox recovery guide, lines 33–38](operations/outbox-recovery.md#L33).
 
-### L-15 — Qualify PostgreSQL cluster failover
+### L-15 — Qualify single-instance PostgreSQL recovery in deployment
 
 - **Owner:** Core, Activity, and Geodata database operations.
 - **Class:** Recovery/operations qualification.
-- **Reference behavior:** Each API, relay, and worker recovers from database
-  failover without cross-owner transactions, lost writes, or duplicate effects.
+- **Reference behavior:** Each API, relay, and worker recovers when its
+  currently configured owner-database instance restarts or loses connectivity,
+  without cross-owner transactions, lost committed writes, or duplicate effects.
 - **Current implementation and evidence:** CI covers transient PostgreSQL
   connection loss and process restart for selected worker and outbox paths.
-- **Missing evidence:** PostgreSQL cluster failover remains explicitly
-  unqualified; process restarts and fault-proxy disconnects do not prove
-  failover behavior of the target cluster.
-- **Risk:** Failover can interrupt transactions or strand work across one or
-  more of the three database owners.
-- **Next check:** Rehearse cluster failover for Core, Activity, and Geodata in
-  the isolated deployment; verify transaction results, reconnect, worker/relay
-  recovery, health signals, and operator procedures per owner.
+- **Missing evidence:** Recovery after restarting each configured PostgreSQL
+  instance in the active isolated Helm deployment remains unqualified.
+- **Risk:** An instance restart can interrupt transactions or strand work across
+  one or more of the three database owners.
+- **Next check:** Rehearse one-at-a-time instance restart and connection loss
+  for Core, Activity, and Geodata in the isolated deployment; verify transaction
+  results, reconnect, worker/relay recovery, health signals, and operator steps.
+  HA failover and multi-instance scaling are deferred to standalone low-priority
+  [myota-deploy#67](https://github.com/myota-platform/myota-deploy/issues/67).
 - **Tracked by:** [Issue #17](https://github.com/myota-platform/myota-next/issues/17).
 - **Sources:** [workers and operations, lines 237–245](parity/workers-operations.md#L237);
   [completion criteria, lines 15–17](parity/completion-criteria.md#L15).
@@ -406,7 +412,7 @@ an accepted scope decision is recorded in the dispositions section.
 - **Class:** Performance qualification.
 - **Reference behavior:** Supported upload and computation workloads remain
   within documented resource, latency, concurrency, and recovery bounds under
-  explicit CPU, memory, replica, and database-pool limits.
+  explicit CPU, memory, configured launch replica counts, and database-pool limits.
 - **Current implementation and evidence:** Geodata has manually triggered RSS
   checks for selected GeoJSON, Shapefile, and PBF inputs; worker concurrency,
   database-pool defaults, and source limits are configurable.
@@ -429,6 +435,28 @@ an accepted scope decision is recorded in the dispositions section.
   [implementation plan, Step 5](implementation-plan.md#L154).
 
 ## Accepted limitations and explicit dispositions
+
+### D-10 — Defer HA and multi-instance deployment beyond launch readiness
+
+- **Owner:** Deployment and platform operations (`myota-deploy`).
+- **Class:** Low-priority future infrastructure improvement.
+- **Current implementation and evidence:** Launch qualification targets the
+  currently configured replica counts and single-instance NATS/JetStream and
+  PostgreSQL services. Local CI separately exercises three-node JetStream
+  failover, but the isolated deployment does not currently provide clustered
+  broker or database topology.
+- **Disposition and impact:** HA PostgreSQL, clustered NATS/JetStream, and
+  horizontal multi-instance service qualification are not prerequisites for
+  Phases 1–6 or parent issue #4. These improvements are tracked as the
+  unparented, unphased low-priority task
+  [myota-deploy#67](https://github.com/myota-platform/myota-deploy/issues/67).
+  This defers topology-level availability and scale-out guarantees; single-
+  instance restart/reconnect recovery remains required under L-14/L-15.
+- **Next check:** Reopen as a launch gate only if product or operations adopts
+  an HA or multi-instance requirement for the initial release. Otherwise plan
+  it independently under #67.
+- **Sources:** [Phase 4 issue #17](https://github.com/myota-platform/myota-next/issues/17);
+  [future deployment task #67](https://github.com/myota-platform/myota-deploy/issues/67).
 
 ### D-04 — Identity and Programme parity is qualified by material workflows
 

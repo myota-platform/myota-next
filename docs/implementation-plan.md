@@ -142,10 +142,16 @@ only after durable state changes.
   finish transactionally in the API request and are qualified as synchronous mutations,
   not worker jobs. Extend object-store outage/recovery checks beyond multipart upload to
   the other consumers and persistent-volume failure cases.
-- **NATS and PostgreSQL:** qualify deployment-level NATS recovery and PostgreSQL cluster
-  failover, including relay, API, and worker reconnection and transaction outcomes.
+- **NATS and PostgreSQL:** qualify recovery from process and connection interruptions
+  for the currently configured single NATS/JetStream instance and each owner database,
+  including relay, API, and worker reconnection and transaction outcomes.
 - **Object storage:** verify the deployed persistence and recovery procedures separately
   from database backups. Confirm interrupted writes and cleanup remain safe to retry.
+
+HA PostgreSQL, clustered NATS/JetStream, and multi-instance scale-out are optional future
+infrastructure improvements tracked by standalone low-priority
+[myota-deploy#67](https://github.com/myota-platform/myota-deploy/issues/67). They are not
+requirements or blockers for Phases 1–6 or Launch Readiness.
 
 **Exit:** Each listed failure window has a repeatable check with evidence of durable state,
 no duplicate side effect, eventual completion or safe dead-lettering, and observable
@@ -158,7 +164,7 @@ recovery. Open failures are documented rather than inferred from process restart
 - Extend OSM PBF qualification beyond 250,000 features and include less common geometries
   before setting a production cap.
 - Measure throughput, peak memory, database load, broker backlog, and recovery time under
-  explicit CPU, memory, replica, and database-pool limits.
+  explicit CPU, memory, configured launch replica counts, and database-pool limits.
 - Include representative log-upload/QSO-ingestion and broad award-calculation workloads;
   measure job latency, throughput, peak memory, database load, backlog, and recovery.
 - Measure bounded synchronous commands in each owning area, including Activity QSO
@@ -172,6 +178,8 @@ recovery. Open failures are documented rather than inferred from process restart
   converting it to asynchronous work or partially applying it.
 - Compare results with the pinned Python implementation where a like-for-like measure is
   possible; document differences in process-RSS scope and workload where it is not.
+- Keep these capacity measurements on the configured launch replica counts. Horizontal
+  multi-instance scaling is future work under myota-deploy#67, outside the launch gate.
 - Qualify the importer’s live-source host allowlist, source licenses, source outages,
   schedule behavior, and safe retry before enabling it outside the isolated environment.
 - Set worker concurrency, upload, feature, and timeout defaults from measured limits.
