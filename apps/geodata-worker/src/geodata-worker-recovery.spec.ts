@@ -663,7 +663,7 @@ async function verifyOtherWorkKindProcessLossRecovery() {
                 candidate.processed_entity_id::text AS entity_id,
                 entity.lifecycle_status AS entity_status,
                 (SELECT count(*)::int FROM source_reference
-                 WHERE entity_id=entity.id) AS source_references,
+                 WHERE entity_id=entity.id::text) AS source_references,
                 (SELECT count(*)::int FROM outbox_event
                  WHERE event_type='geodata.import.processing.completed.v1'
                    AND aggregate_id=queue.id::text) AS facts
@@ -1122,6 +1122,23 @@ async function verifyClaimProcessLossRecovery() {
       fixture.release();
     }
 
+    const expireClaimWithWriter = async (sql: string, values: unknown[]) => {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          "SELECT set_config('myota.geodata_writer','row-v1',true)",
+        );
+        await client.query(sql, values);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    };
+
     const scenarios = [
       {
         workType: 'geodata.import-preprocess.v1',
@@ -1144,7 +1161,7 @@ async function verifyClaimProcessLossRecovery() {
           });
         },
         expireClaim: () =>
-          pool.query(
+          expireClaimWithWriter(
             `UPDATE import_run SET lease_until=now()-interval '1 second'
              WHERE id=$1`,
             [importRunId],
@@ -1191,7 +1208,7 @@ async function verifyClaimProcessLossRecovery() {
           });
         },
         expireClaim: () =>
-          pool.query(
+          expireClaimWithWriter(
             `UPDATE geodata_import_processing_queue
              SET lease_until=now()-interval '1 second' WHERE id=$1`,
             [promotionQueueId],
@@ -1202,7 +1219,7 @@ async function verifyClaimProcessLossRecovery() {
                 candidate.processed_entity_id::text AS entity_id,
                 entity.lifecycle_status,
                 (SELECT count(*)::int FROM source_reference
-                 WHERE entity_id=entity.id) AS source_ref_count,
+                 WHERE entity_id=entity.id::text) AS source_ref_count,
                 (SELECT count(*)::int FROM outbox_event
                  WHERE event_type='geodata.import.processing.completed.v1'
                    AND aggregate_id=queue.id::text) AS completion_facts
@@ -1244,7 +1261,7 @@ async function verifyClaimProcessLossRecovery() {
           });
         },
         expireClaim: () =>
-          pool.query(
+          expireClaimWithWriter(
             `UPDATE geodata_control_record
              SET payload=jsonb_set(payload,'{leaseUntil}',to_jsonb(now()-interval '1 second')),
                  updated_at=now()
@@ -1295,7 +1312,7 @@ async function verifyClaimProcessLossRecovery() {
           expect(result.rows[0]).toEqual({ status: 'PROCESSING', events: 0 });
         },
         expireClaim: () =>
-          pool.query(
+          expireClaimWithWriter(
             `UPDATE geodata_entity SET location_work_dispatched_at=now()-interval '1 second'
              WHERE id=$1`,
             [enrichmentEntityId],
