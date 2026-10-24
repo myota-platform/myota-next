@@ -108,6 +108,8 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
     process.env.MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE;
   let objectStore: RecoveryObjectStore | undefined;
   const interruptDuringProcessing =
+    jobKind === 'STATISTICS_REBUILD' ||
+    jobKind === 'AWARD_EVALUATION' ||
     jobKind === 'QSO_INGESTION' ||
     jobKind === 'ADIF_IMPORT' ||
     jobKind === 'AWARD_RECALCULATE' ||
@@ -286,11 +288,13 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
 
     if (interruptDuringProcessing && jobKind !== 'PDF_RENDER') {
       const targetId =
-        jobKind === 'QSO_INGESTION'
-          ? activationId
-          : jobKind === 'ADIF_IMPORT'
-            ? importId
-            : awardId;
+        jobKind === 'STATISTICS_REBUILD'
+          ? programmeSlug
+          : jobKind === 'QSO_INGESTION'
+            ? activationId
+            : jobKind === 'ADIF_IMPORT'
+              ? importId
+              : awardId;
       if (!targetId)
         throw new Error(
           `${jobKind} recovery fixture has no side-effect target`,
@@ -332,6 +336,7 @@ async function verifyWorkerRecovery(jobKind: string, testName: string) {
         importId,
         awardId,
         subjectId,
+        programmeSlug,
         issuanceId,
         objectStore,
       );
@@ -924,8 +929,9 @@ async function waitForClaim(
 }
 
 type SideEffectBlocker = {
-  table: 'activity_qso' | 'activity_award_progress';
-  column: 'activation_id' | 'source_import_id' | 'award_id';
+  table:
+    'activity_qso' | 'activity_award_progress' | 'activity_statistic_snapshot';
+  column: 'activation_id' | 'source_import_id' | 'award_id' | 'programme_slug';
   triggerName: string;
   functionName: string;
 };
@@ -937,26 +943,31 @@ async function installSideEffectBlocker(
 ): Promise<SideEffectBlocker> {
   const suffix = randomUUID().replaceAll('-', '');
   const blocker =
-    jobKind === 'QSO_INGESTION'
+    jobKind === 'STATISTICS_REBUILD'
       ? {
-          table: 'activity_qso' as const,
-          column: 'activation_id' as const,
+          table: 'activity_statistic_snapshot' as const,
+          column: 'programme_slug' as const,
         }
-      : jobKind === 'ADIF_IMPORT'
+      : jobKind === 'QSO_INGESTION'
         ? {
             table: 'activity_qso' as const,
-            column: 'source_import_id' as const,
+            column: 'activation_id' as const,
           }
-        : {
-            table: 'activity_award_progress' as const,
-            column: 'award_id' as const,
-          };
+        : jobKind === 'ADIF_IMPORT'
+          ? {
+              table: 'activity_qso' as const,
+              column: 'source_import_id' as const,
+            }
+          : {
+              table: 'activity_award_progress' as const,
+              column: 'award_id' as const,
+            };
   const triggerName = `recovery_block_${suffix}`;
   const functionName = `recovery_block_fn_${suffix}`;
   await pool.query(
     `CREATE FUNCTION ${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
      BEGIN
-       IF NEW.${blocker.column} = '${targetId}'::uuid THEN
+       IF NEW.${blocker.column}::text = '${targetId}' THEN
          PERFORM pg_advisory_xact_lock(4815162342);
        END IF;
        RETURN NEW;
@@ -1040,6 +1051,7 @@ async function expectRolledBackSideEffects(
   importId?: string,
   awardId?: string,
   subjectId?: string,
+  programmeSlug?: string,
   issuanceId?: string,
   objectStore?: RecoveryObjectStore,
 ) {
@@ -1088,7 +1100,20 @@ async function expectRolledBackSideEffects(
     });
     return;
   }
-  if (jobKind === 'AWARD_RECALCULATE' && awardId && subjectId) {
+  if (jobKind === 'STATISTICS_REBUILD' && programmeSlug) {
+    const result = await pool.query(
+      `SELECT count(*)::int AS snapshots FROM activity_statistic_snapshot
+       WHERE programme_slug=$1 AND algorithm_version='activity-v2'`,
+      [programmeSlug],
+    );
+    expect(result.rows[0]?.snapshots).toBe(0);
+    return;
+  }
+  if (
+    (jobKind === 'AWARD_RECALCULATE' || jobKind === 'AWARD_EVALUATION') &&
+    awardId &&
+    subjectId
+  ) {
     const result = await pool.query(
       `SELECT
          (SELECT count(*)::int FROM activity_award_progress
