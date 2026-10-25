@@ -726,9 +726,9 @@ async function removeCapacityFixtures(
       `DELETE FROM outbox_event WHERE producer='activity-service'
        AND occurred_at >= $1 AND (
          aggregate_id=$2 OR
-         aggregate_id IN (SELECT id::text FROM activity_qso WHERE activation_id=$2) OR
+         aggregate_id IN (SELECT id::text FROM activity_qso WHERE activation_id::text=$2) OR
          aggregate_id IN (SELECT id::text FROM activity_job WHERE payload->>'programmeSlug'=$3) OR
-         aggregate_id IN (SELECT id::text FROM activity_import WHERE activation_id=$2) OR
+         aggregate_id IN (SELECT id::text FROM activity_import WHERE activation_id::text=$2) OR
          payload->>'subjectId' LIKE $4
        )`,
       [runStartedAt, activationId, programmeSlug, `${idPrefix}%`],
