@@ -164,8 +164,9 @@ recovery. Open failures are documented rather than inferred from process restart
 
 - Build representative import fixtures and workloads for GeoJSON, WFS, ArcGIS, KML, GPX,
   Shapefile, and OSM PBF, including configured maximum sizes and feature counts.
-- Extend OSM PBF qualification beyond 250,000 features and include less common geometries
-  before setting a production cap.
+- Set the launch OSM PBF RSS qualification target to a maximum of 25,000 features.
+  Complete remaining correctness and less-common-geometry coverage within that bound;
+  no additional scale testing above 25,000 features is required for launch.
 - Measure throughput, peak memory, database load, broker backlog, and recovery time under
   explicit CPU, memory, configured launch replica counts, and database-pool limits.
 - Include representative log-upload/QSO-ingestion and broad award-calculation workloads;

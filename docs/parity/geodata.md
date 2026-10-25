@@ -154,6 +154,11 @@ stays within 96 MiB, 192 MiB, and 192 MiB, respectively, above the test-worker b
 The manual runner now executes all three memory cases instead of returning success
 with the qualification skipped.
 
+These higher-scale runs are retained as historical resource measurements. The launch
+RSS qualification target is now capped at 25,000 features; no additional OSM PBF RSS
+workload above that size is required for launch. Remaining OSM correctness and uncommon
+geometry coverage should stay within the 25,000-feature target.
+
 The 50,000-feature case matches the Python stress fixture's count and limit, but
 measures a different RSS scope; the values are not directly comparable. The 300,000
 PBF's resource workload contains tagged nodes. Checked-in geometry fixtures cover ways,
@@ -165,10 +170,11 @@ nine required tag values on nodes and the five accepted linear-way tags, plus
 the remaining area-tag values on closed ways. All 17 emitted Point,
 LineString, and MultiPolygon features match the Python importer in order,
 source reference, properties, geometry type, and SHA-256 feature hash.
-Inputs above 300,000 features and less common OSM relation/member patterns
-still need qualification. Area and way vertex limits use the
-reference errors; the CLI decoder checks after osmium emits a record, bounded by the
-decoded feature-size cap, while PyOsmium checks areas before GeoJSON materialization.
+Less common OSM relation/member patterns within the 25,000-feature launch target
+still need qualification; no higher-scale RSS testing is required. Area and way vertex
+limits use the reference errors; the CLI decoder checks after osmium emits a record,
+bounded by the decoded feature-size cap, while PyOsmium checks areas before GeoJSON
+materialization.
 
 The same manually triggered workflow streams a generated 300,000-feature GeoJSON
 FeatureCollection through the metadata scan and feature pass, with Node RSS growth under
