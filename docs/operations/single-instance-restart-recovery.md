@@ -123,13 +123,57 @@ outbox rows, trigger, and trigger function were removed. The QSO-ingestion and
 award-recalculation durables both had zero pending and acknowledgement-pending
 messages after cleanup.
 
+Two deployed business jobs were also held during a single NATS process restart.
+An Activity QSO-ingestion job was in its targeted pre-insert database pause
+when the NATS StatefulSet was scaled to zero and restored. Activity PostgreSQL
+remained available; the worker completed the job on attempt 1, persisted one
+QSO and one `activity.qso.recorded.v1` outbox event, and settled the durable.
+The downstream broad award job also completed once. The QSO and award durables
+had zero pending and acknowledgement-pending messages afterward; all fixture
+rows and the trigger were removed.
+
+A Geodata preprocessing job was held in its final status transaction during a
+second NATS restart. The durable had one unacknowledged delivery before the
+restart. The job completed as `PREPROCESSED` on attempt 1 with one candidate
+and one outbox event, and the durable returned to zero pending and
+acknowledgement-pending messages. The worker logged `Geodata work lease was
+lost` after the transaction committed and the row had become terminal; its
+failure path observed the terminal owner state and safely settled the message.
+This exposed a completion-versus-heartbeat race in the worker logs, even though
+the owner state and ACK outcome were correct. The source object, candidate,
+import row, trigger, and fixture outbox rows were removed.
+
+A second Geodata import was held by a test-only trigger immediately before its
+final `PREPROCESSED` status update. While that transaction was open, the
+Geodata PostgreSQL pod was replaced. PostgreSQL rolled back the interrupted
+transaction; the worker logged that it could not persist retry state while the
+database was unavailable and did not ACK the work. The restored worker waited
+for the existing 900-second owner lease to expire, then redelivered and
+completed the same import on attempt 2. The run ended `PREPROCESSED` with one
+candidate from one feature, zero errors, and a single completion outbox event.
+The durable ended with zero pending and acknowledgement-pending messages. The
+measured lease wait is specific to this configured test and is not a recovery
+SLO. The source object, candidate, manifest, import row, outbox rows, trigger,
+and trigger function were removed.
+
+The deployed Activity notification consumer was given a unique registered
+account-created event while a temporary Activity database trigger rejected
+only that event's notification insert. The consumer left it unacknowledged and
+retried it twice, with both deliveries logged as failures. After the trigger
+and function were removed and their absence verified, the next delivery
+committed one notification and one processed-event marker, then acknowledged
+the event. Pending and acknowledgement-pending counts returned to zero. The
+notification and processed-event fixture rows were removed. This verifies a
+transient deployed notification retry; it does not qualify retry exhaustion
+or audited redrive.
+
 These checks establish owner-database transaction outcomes, deployed NestJS
 connection recovery, readiness signals, NATS redelivery, and Core outbox
-recovery, and Activity QSO recovery after owner-database loss. They do not yet
-exercise an in-flight Activity or Geodata business job through a deployed NATS
-process interruption, or a Geodata business job through owner-database loss.
-Object-store outage recovery across all consumers and deployed
-notification/Email retry exhaustion and redrive also remain open.
+recovery, Activity QSO recovery after owner-database loss, and in-flight
+Activity and Geodata job settlement across NATS process interruption, and
+Geodata preprocessing recovery after owner-database loss. Object-store outage
+recovery across all consumers and deployed notification retry exhaustion/
+redrive remain open.
 The Email worker is explicitly disabled in this test release, so CI Email
 recovery checks are not deployment evidence. See [Activity recovery](../parity/workers-operations.md)
 and the [remaining work ledger](../remaining-work-ledger.md) for those gaps.
