@@ -8,7 +8,6 @@ import { join } from 'node:path';
 import {
   AbortMultipartUploadCommand,
   DeleteObjectCommand,
-  HeadBucketCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -2064,9 +2063,20 @@ async function verifyImportObjectStoreRecovery() {
         state.rows[0]?.status === 'QUEUED' && state.rows[0]?.attempt_count === 3
       );
     }, 'Geodata did not retain the import through three source-store failures');
+    await worker.onModuleDestroy();
+    worker = undefined;
     runDocker('start', container);
     objectStoreStopped = false;
-    await waitForSeaweedFS(storage, bucket);
+    await waitForSeaweedFS(storage, bucket, objectKey);
+    worker = new GeodataWorkerService(
+      new GeodataWorkRepository(pool),
+      new GeodataPromotionRepository(pool, new GeodataPromotionScoring()),
+      new GeodataEnrichmentRepository(pool),
+      new GeodataDeletionRepository(pool),
+      new GeodataRetentionRepository(pool),
+      pool,
+    );
+    await worker.onModuleInit();
 
     await waitForRecovery(async () => {
       const state = await pool.query<{
@@ -2119,7 +2129,7 @@ async function verifyImportObjectStoreRecovery() {
   if (objectStoreStopped) {
     try {
       runDocker('start', container);
-      await waitForSeaweedFS(storage, bucket);
+      await waitForSeaweedFS(storage, bucket, objectKey);
       objectStoreStopped = false;
     } catch (error) {
       cleanupError = error;
@@ -3817,14 +3827,22 @@ function runDocker(command: 'start' | 'stop', container: string) {
     );
 }
 
-async function waitForSeaweedFS(storage: S3Client, bucket: string) {
+async function waitForSeaweedFS(
+  storage: S3Client,
+  bucket: string,
+  key: string,
+) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     try {
-      await storage.send(new HeadBucketCommand({ Bucket: bucket }));
+      const response = await storage.send(
+        new GetObjectCommand({ Bucket: bucket, Key: key }),
+      );
+      if (!response.Body) throw new Error('Recovery fixture object is empty');
+      await response.Body.transformToByteArray();
       return;
     } catch {
-      // Retry until the S3 API and the existing bucket are ready.
+      // Retry until the persisted object can be read like the worker reads it.
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
