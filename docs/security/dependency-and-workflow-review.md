@@ -22,9 +22,9 @@ zizmor .github/workflows
 
 The pull-request workflows run dependency audits, source and secret scanning,
 rendered Helm misconfiguration scanning, and image build/scans without
-publishing. The same build-and-scan gate must pass for a GitHub release before
-release images are published. Helm scans render both charts with representative
-values, including enabled object storage.
+publishing. The image scan includes fixed and unfixed HIGH/CRITICAL findings;
+every deployable image must pass before a release can publish. Helm scans render
+both charts with representative values, including enabled object storage.
 
 ## Results
 
@@ -91,11 +91,26 @@ values, including enabled object storage.
 
 ## Follow-up
 
-The upstream images remain unchanged and still report findings, but deployable
-references are replaced by MyOTA-derived images built from pinned source and
-patched inputs. Pull-request and release workflows build and scan the final
-images before release publication. The PR image scan is still required to
-complete this review; release outputs include immutable digests and provenance.
+On 2026-10-25, PR #33 built and scanned the release image set without publishing
+images (GitHub Actions run 40219796050). The custom PostgreSQL, PostGIS, and NATS
+images passed. The Admin and Participant Nginx images passed. Thirteen images
+that share the pinned `node:24-bookworm-slim` runtime/base—including the tools
+image—failed with the same 57 HIGH/CRITICAL findings each (56 HIGH, 1 CRITICAL).
+The report includes findings in Debian `util-linux`, systemd, ncurses, Perl, and
+zlib packages; the CRITICAL zlib finding is marked `will_not_fix` by the current
+Debian vulnerability metadata. These results are not an image-wide unique
+finding count; the same base-image findings repeat across images.
+
+This changes the next remediation step: refresh or replace the pinned Node
+Bookworm base, or otherwise remove the affected OS packages from the runtime
+images where safe, then rerun the release-image matrix. Do not treat the
+PostgreSQL/PostGIS/NATS remediation as complete until the final composed image
+scan passes, and do not weaken the gate or silently suppress the zlib result.
+Track the outstanding app/tool image remediation in [issue #28](https://github.com/myota-platform/myota-next/issues/28), under parent [issue #31](https://github.com/myota-platform/myota-next/issues/31).
+
+The browser images and rebuilt infrastructure images passed this PR scan, but
+the full release image gate did not. Release outputs must still carry immutable
+digests and provenance after all scan gates pass.
 
 ## References
 
