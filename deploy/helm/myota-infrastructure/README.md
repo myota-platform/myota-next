@@ -10,7 +10,16 @@ It can also provision an isolated SeaweedFS S3-compatible endpoint by setting
 `profile-image-access-key`, and `profile-image-secret-key`; and
 `myota-seaweedfs-s3-config` with the generated `s3.json` key. The latter is
 created from `tools/render-seaweedfs-s3-config.ts`. The chart creates the
-standard MyOTA buckets after SeaweedFS becomes ready.
+standard MyOTA buckets after SeaweedFS becomes ready. Set
+`objectStorage.provisionerImage` to a release-tagged
+`ghcr.io/myota-platform/myota-next-tools` image; the bucket Job uses that
+image's S3 SDK helper instead of a general-purpose cloud CLI image.
+
+```yaml
+objectStorage:
+  enabled: true
+  provisionerImage: ghcr.io/myota-platform/myota-next-tools:<release-tag>
+```
 
 The chart is optional. Use it for a small single-cluster deployment or point
 the NestJS chart at externally managed database services instead. The

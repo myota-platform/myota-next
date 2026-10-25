@@ -2,7 +2,9 @@ name: Node CI
 
 on:
   push:
+    branches: [main, testing]
   pull_request:
+    branches: [main, testing]
   workflow_dispatch:
 
 permissions:
@@ -14,11 +16,12 @@ concurrency:
 
 jobs:
   checks:
+    name: Build, test, and scan
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       geo-db:
-        image: postgis/postgis:16-3.4
+        image: postgis/postgis:16-3.6-alpine@sha256:a8ae5aac22bfe4b734c1fa0644ca18039a1e6bd7105c5aa9308cd24bfa1b2ef7
         env:
           POSTGRES_DB: myota_geo
           POSTGRES_USER: myota
@@ -39,17 +42,22 @@ jobs:
       NATS_TEST_URL: nats://127.0.0.1:14222
       ACTIVITY_NOTIFICATION_METRICS_PORT: '0'
     steps:
-      - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v4.3.0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm
       - name: Validate Helm chart and testing routes
         run: |
           helm lint deploy/helm/myota-next -f deploy/helm/myota-next/values-testing.yaml
+          helm lint deploy/helm/myota-infrastructure \
+            --set objectStorage.enabled=true \
+            --set objectStorage.provisionerImage=ghcr.io/myota-platform/myota-next-tools:ci
           helm template myota-test deploy/helm/myota-next \
             --namespace myota-test \
             -f deploy/helm/myota-next/values-testing.yaml \
@@ -69,7 +77,7 @@ jobs:
         run: |
           docker run --detach --name myota-ci-nats \
             --publish 14222:4222 --publish 18222:8222 \
-            nats:2-alpine -js -p 4222 -m 8222
+            nats:2.14.8-alpine3.22@sha256:fce5fbf8b29ee0baa790e67bcd4abafebdd97363aa025f7d46a17489df002e30 -js -p 4222 -m 8222
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:18222/healthz >/dev/null; then
               exit 0
@@ -79,6 +87,20 @@ jobs:
           docker logs myota-ci-nats
           exit 1
       - run: npm ci
+      - run: npm run audit:dependencies
+      - name: Scan tracked source and production dependencies
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      - name: Audit GitHub Actions workflows
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-cache-dir zizmor==1.31.1
+          zizmor .github/workflows
       - name: Provision bounded JetStream topology for CI
         run: npm run provision:jetstream
         env:

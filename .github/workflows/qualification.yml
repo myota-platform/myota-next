@@ -12,11 +12,12 @@ concurrency:
 
 jobs:
   qualification:
+    name: Runtime qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       geo-db:
-        image: postgis/postgis:16-3.4
+        image: postgis/postgis:16-3.6-alpine@sha256:a8ae5aac22bfe4b734c1fa0644ca18039a1e6bd7105c5aa9308cd24bfa1b2ef7
         env:
           POSTGRES_DB: myota_geo
           POSTGRES_USER: myota
@@ -37,8 +38,10 @@ jobs:
       NATS_TEST_URL: nats://127.0.0.1:14222
       ACTIVITY_NOTIFICATION_METRICS_PORT: '0'
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm
