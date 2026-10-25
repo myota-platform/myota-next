@@ -117,10 +117,12 @@ an accepted scope decision is recorded in the dispositions section.
   stub successful reprocessing.
 - **Risk:** Import, promotion, deletion, enrichment, or retention work may be
   stranded or repeated after a crash or database outage.
-- **Next check:** Rehearse deployed object-store backup/restore and permanent
-  volume-loss limits. Other consumer checks include deployed PDF artifact
-  writes and the full Geodata source-read outage/restart/recovery path.
-- **Tracked by:** [Issue #16](https://github.com/myota-platform/myota-next/issues/16).
+- **Next check:** Rehearse object-store backup/restore and permanent volume-loss
+  limits as part of the fresh isolated deployment in
+  [Issue #10](https://github.com/myota-platform/myota-next/issues/10). The
+  retained-PVC Geodata restart and all identified consumer outage paths are
+  qualified in the current testing release.
+- **Tracked by:** [Issue #10](https://github.com/myota-platform/myota-next/issues/10).
 - **Sources:** [Geodata parity, lines 18–25](parity/geodata.md#L18);
   [workers and operations, lines 168–190](parity/workers-operations.md#L168).
 
@@ -304,11 +306,13 @@ an accepted scope decision is recorded in the dispositions section.
   retry the failed HTTP upload request.
 - **Risk:** Uploaded or generated objects can be lost or orphaned while their
   database references remain, or recovery may require undocumented manual work.
-- **Next check:** Rehearse backup, restore, failover, and permanent-volume-loss
-  recovery against the selected deployment storage, and fix or disposition the HTTP 500 error
-  mapping for Identity and Geodata uploads.
-- **Tracked by:** [Activity issue #15](https://github.com/myota-platform/myota-next/issues/15)
-  and [Geodata issue #16](https://github.com/myota-platform/myota-next/issues/16).
+- **Next check:** Rehearse object-store backup/restore and permanent-volume-loss
+  recovery under [Issue #10](https://github.com/myota-platform/myota-next/issues/10),
+  qualify clustered failover under
+  [Issue #24](https://github.com/myota-platform/myota-next/issues/24), and fix
+  or disposition the Identity and Geodata HTTP 500 error mapping.
+- **Tracked by:** [Isolated deployment issue #10](https://github.com/myota-platform/myota-next/issues/10)
+  and [future HA issue #24](https://github.com/myota-platform/myota-next/issues/24).
 - **Sources:** [workers and operations, lines 192–196](parity/workers-operations.md#L192);
   [object-store recovery guide, lines 10–15](operations/object-store-recovery.md#L10).
 
