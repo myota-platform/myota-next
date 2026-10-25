@@ -59,6 +59,17 @@ jobs:
           docker logs myota-qualification-geodata-db
           docker logs myota-qualification-nats
           exit 1
+      - name: Install pinned NATS server for process-level tests
+        run: |
+          container_id="$(docker create local/myota-nats:qualification)"
+          trap 'docker rm -f "$container_id" >/dev/null 2>&1 || true' EXIT
+          docker cp "$container_id:/usr/local/bin/nats-server" \
+            "$RUNNER_TEMP/nats-server"
+          docker rm "$container_id"
+          trap - EXIT
+          chmod 0755 "$RUNNER_TEMP/nats-server"
+          "$RUNNER_TEMP/nats-server" --version
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
@@ -69,7 +80,7 @@ jobs:
           -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
           && sudo timeout 6m apt-get -o Acquire::Retries=3
           -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install
-          --no-install-recommends --yes nats-server osmium-tool
+          --no-install-recommends --yes osmium-tool
           postgresql-client-16
       - name: Select PostgreSQL 16 client tools
         run: echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
