@@ -1,4 +1,6 @@
 import { readFile } from 'node:fs/promises';
+import { performance } from 'node:perf_hooks';
+import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint.js';
 import { normalizeAdapterFeature } from './geodata-adapter.js';
 import { sourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 import { streamShapefileFeatures } from './geodata-shapefile-stream.js';
@@ -11,6 +13,7 @@ describe('streamShapefileFeatures', () => {
         new URL('./fixtures/python-shapefile-rss-50000.zip', import.meta.url),
       );
       const beforeMaxRssKb = process.resourceUsage().maxRSS;
+      const startedAt = performance.now();
       async function* chunks() {
         yield source;
       }
@@ -32,11 +35,22 @@ describe('streamShapefileFeatures', () => {
       }
       const rssGrowthBytes =
         Math.max(0, process.resourceUsage().maxRSS - beforeMaxRssKb) * 1024;
+      const elapsedMilliseconds = performance.now() - startedAt;
 
       expect(count).toBe(50_000);
       expect(firstName).toBe('fixture-0');
       expect(lastName).toBe('fixture-49999');
       expect(rssGrowthBytes).toBeLessThanOrEqual(96 * 1024 * 1024);
+      console.info(
+        stringifyJsonWithBigInts({
+          qualification: 'shapefile-rss',
+          featureCount: count,
+          elapsedMilliseconds: Math.round(elapsedMilliseconds),
+          featuresPerSecond: Math.round((count * 1000) / elapsedMilliseconds),
+          rssGrowthBytes,
+          rssLimitBytes: 96 * 1024 * 1024,
+        }),
+      );
     },
     120_000,
   );

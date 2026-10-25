@@ -3,10 +3,12 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import { vi } from 'vitest';
+import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint.js';
 import { sourceFeatureHashOverride } from './geodata-source-feature-hash.js';
 import { decodeOsmPbfStream } from './geodata-osm-pbf.js';
 
@@ -81,6 +83,7 @@ async function measureOsmPbfRssGrowth(featureCount: number) {
       }
     })();
     let decoded = 0;
+    const decodeStartedAt = performance.now();
     try {
       for await (const _feature of decodeOsmPbfStream(
         createReadStream(pbfPath),
@@ -98,7 +101,11 @@ async function measureOsmPbfRssGrowth(featureCount: number) {
         await readProcessTreeRssBytes(process.pid),
       );
     }
-    return { decoded, rssGrowthBytes: peakRssBytes - beforeRssBytes };
+    return {
+      decoded,
+      elapsedMilliseconds: performance.now() - decodeStartedAt,
+      rssGrowthBytes: peakRssBytes - beforeRssBytes,
+    };
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -474,17 +481,25 @@ describe('OSM PBF reference parity', () => {
     process.platform !== 'linux' ||
       process.env.MYOTA_PBF_RSS_QUALIFICATION !== '1',
   )('PBF process-tree memory bounds', () => {
-    it.each([
-      { featureCount: 50_000, rssLimitBytes: 96 * 1024 * 1024 },
-      { featureCount: 250_000, rssLimitBytes: 192 * 1024 * 1024 },
-      { featureCount: 300_000, rssLimitBytes: 192 * 1024 * 1024 },
-    ])(
+    it.each([{ featureCount: 25_000, rssLimitBytes: 96 * 1024 * 1024 }])(
       'decodes $featureCount features within its RSS growth limit',
       async ({ featureCount, rssLimitBytes }) => {
-        const { decoded, rssGrowthBytes } =
+        const { decoded, elapsedMilliseconds, rssGrowthBytes } =
           await measureOsmPbfRssGrowth(featureCount);
         expect(decoded).toBe(featureCount);
         expect(rssGrowthBytes).toBeLessThanOrEqual(rssLimitBytes);
+        console.info(
+          stringifyJsonWithBigInts({
+            qualification: 'osm-pbf-rss',
+            featureCount,
+            elapsedMilliseconds: Math.round(elapsedMilliseconds),
+            featuresPerSecond: Math.round(
+              (decoded * 1000) / elapsedMilliseconds,
+            ),
+            rssGrowthBytes,
+            rssLimitBytes,
+          }),
+        );
       },
       180_000,
     );

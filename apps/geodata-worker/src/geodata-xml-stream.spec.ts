@@ -3,9 +3,11 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { describe, expect, it } from 'vitest';
+import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint.js';
 import { streamXmlFeatures } from './geodata-xml-stream.js';
 
 async function* chunks(source: string, width = 17) {
@@ -101,7 +103,8 @@ describe('streamXmlFeatures', () => {
 
       try {
         const beforeMaxRssKb = process.resourceUsage().maxRSS;
-        let decoded = 0;
+        const startedAt = performance.now();
+        let decodedTotal = 0;
         for (const format of ['KML', 'GPX'] as const) {
           const path = join(
             directory,
@@ -131,12 +134,27 @@ describe('streamXmlFeatures', () => {
             formatCount++;
           }
           expect(formatCount).toBe(featureCount);
-          decoded += formatCount;
+          decodedTotal += formatCount;
         }
         const rssGrowthBytes =
           Math.max(0, process.resourceUsage().maxRSS - beforeMaxRssKb) * 1024;
-        expect(decoded).toBe(featureCount * 2);
+        const elapsedMilliseconds = performance.now() - startedAt;
+        expect(decodedTotal).toBe(featureCount * 2);
         expect(rssGrowthBytes).toBeLessThanOrEqual(96 * 1024 * 1024);
+        console.info(
+          stringifyJsonWithBigInts({
+            qualification: 'kml-gpx-rss',
+            formats: ['KML', 'GPX'],
+            featureCountPerFormat: featureCount,
+            totalFeatureCount: decodedTotal,
+            elapsedMilliseconds: Math.round(elapsedMilliseconds),
+            featuresPerSecond: Math.round(
+              (decodedTotal * 1000) / elapsedMilliseconds,
+            ),
+            rssGrowthBytes,
+            rssLimitBytes: 96 * 1024 * 1024,
+          }),
+        );
       } finally {
         await rm(directory, { recursive: true, force: true });
       }

@@ -10,6 +10,8 @@ const result = spawnSync(
     'decodes',
     '--maxWorkers=1',
     '--no-file-parallelism',
+    '--silent=false',
+    '--disableConsoleIntercept',
   ],
   {
     stdio: 'inherit',

@@ -146,18 +146,18 @@ area features with the same source ID and Python-compatible hashes
 `ddc69af65206ffd17949c1c0dc70ab83781a36579a6550e715891c277c23e398`). A further
 PyOsmium 4.3.2 fixture verifies a `route=hiking` way without a `highway` tag is
 imported as a `LineString` with hash
-`2d72daf72126a5e207880d327a13916f5d9b48806a02cec51bf3cc18dd8b7718`. The manually
-triggered Operational and performance qualification workflow decodes generated
-50,000-feature, 250,000-feature, and
-300,000-feature PBFs and checks that Linux Node plus `osmium` subprocess-tree RSS growth
-stays within 96 MiB, 192 MiB, and 192 MiB, respectively, above the test-worker baseline.
-The manual runner now executes all three memory cases instead of returning success
-with the qualification skipped.
+`2d72daf72126a5e207880d327a13916f5d9b48806a02cec51bf3cc18dd8b7718`. Earlier PBF
+qualification runs exercised generated 50,000-feature, 250,000-feature, and
+300,000-feature workloads. Those are historical measurements only; the launch runner no
+longer executes them. It now runs one 25,000-feature workload and checks Linux Node plus
+`osmium` subprocess-tree RSS growth against a 96 MiB limit above the test-worker baseline.
 
 These higher-scale runs are retained as historical resource measurements. The launch
 RSS qualification target is now capped at 25,000 features; no additional OSM PBF RSS
-workload above that size is required for launch. Remaining OSM correctness and uncommon
-geometry coverage should stay within the 25,000-feature target.
+workload above that size is required for launch. The checked-in correctness fixtures
+cover a hiking route way without a highway tag, a closed way emitted as both a linear
+and area feature, and a multipolygon with two disjoint outer components and an inner
+ring. These fixtures are small correctness cases, not additional RSS workloads.
 
 The 50,000-feature case matches the Python stress fixture's count and limit, but
 measures a different RSS scope; the values are not directly comparable. The 300,000
@@ -189,6 +189,46 @@ and checks that Node RSS growth stays within 96 MiB while preserving the first a
 DBF names. The Python Shapefile fixture uses the same record count and absolute
 process-RSS limit; the Nest test measures growth above its worker baseline, so those RSS
 values are not directly comparable.
+
+### Capacity qualification results
+
+On 2026-10-25, Node 24.21.0 Linux runs emitted the measurements below. The runner is
+`npm run test:geodata-rss` for GeoJSON, KML/GPX, and Shapefile, and
+`npm run test:geodata-pbf-rss` for OSM PBF. Elapsed time covers the measured parse and
+feature iteration; RSS is the increase over the worker's prior high-water mark, except
+PBF which samples the Node and `osmium` process tree. Each RSS value is from an isolated
+Vitest process. These parser measurements do not include API admission, PostgreSQL
+staging, NATS queueing, or object-storage traffic, and they are not deployment-capacity
+claims.
+
+- GeoJSON: 300,000 features in 9,603 ms (31,240 features/s), 112,988,160 bytes RSS
+  growth against a 160 MiB limit.
+- KML and GPX: 50,000 features per format, 100,000 combined in 2,514 ms (39,782
+  features/s), 52,166,656 bytes RSS growth against a 96 MiB limit.
+- Shapefile: 50,000 records in 4,118 ms (12,143 records/s), 31,457,280 bytes RSS
+  growth against a 96 MiB limit.
+- OSM PBF: 25,000 tagged-node features in 1,162 ms (21,514 features/s), 54,165,504
+  bytes process-tree RSS growth against a 96 MiB limit.
+
+The importer defaults remain a 1 GiB source-upload cap (with optional GeoJSON, OSM PBF,
+and Shapefile overrides), 5,000 imported features per source, 16 MiB per decoded
+feature, 250,000 vertices per feature, and 100 features or 32 MiB per staging batch.
+Shapefile expanded content is separately capped at 1 GiB. WFS and ArcGIS FeatureServer
+records use the streaming JSON parsing path and the same 5,000-feature import limit;
+their response size remains subject to the shared upload cap. The 25,000-feature PBF
+RSS workload qualifies decoder memory only and does not raise the 5,000-feature import
+limit.
+
+The RSS commands do not exercise WFS or ArcGIS network sources; their JSON decoder is
+covered by correctness fixtures, while their live host, licensing, outage, and retry
+review remains a separate gate. Scheduled source fetching is disabled by default and no
+live source host is allowlisted. The test deployment currently gives application
+containers 50m CPU/96Mi memory requests and 1 CPU/1Gi memory limits, but its PostgreSQL
+and NATS pods have no resource requests or limits. Database pool maxima also remain code
+defaults (10 for Core/Geodata and 12 for Activity), not chart-configured values. The
+end-to-end CPU, memory, database-load, backlog, recovery, and synchronous mutation
+qualification therefore remains open until the test stack has explicit database,
+broker, and pool bounds.
 
 Shapefile and PBF working directories use `MYOTA_UPLOAD_SPOOL_DIR` when set, and
 otherwise use the OS temporary directory. PBF source bytes stream to disk with checksum

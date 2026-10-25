@@ -1,0 +1,7 @@
+# NATS Helm chart (nats/nats 1.3.12) override for isolated capacity measurements.
+# Keep the limit above the configured 1 GiB JetStream memory-store maximum.
+container:
+  merge:
+    resources:
+      requests: { cpu: 100m, memory: 512Mi }
+      limits: { cpu: '1', memory: 2Gi }

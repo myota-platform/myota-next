@@ -39,6 +39,7 @@ jobs:
             --tag local/myota-nats:qualification .
           docker run --detach --name myota-qualification-geodata-db \
             --publish 5432:5432 \
+            --cpus=1 --memory=2g --memory-swap=2g \
             --env POSTGRES_DB=myota_geo \
             --env POSTGRES_USER=myota \
             --env POSTGRES_PASSWORD=myota \
@@ -46,6 +47,7 @@ jobs:
             local/myota-postgis:qualification
           docker run --detach --name myota-qualification-nats \
             --publish 14222:4222 --publish 18222:8222 \
+            --cpus=1 --memory=2g --memory-swap=2g \
             local/myota-nats:qualification -js -p 4222 -m 8222
           for attempt in $(seq 1 60); do
             if docker exec myota-qualification-geodata-db pg_isready -U myota -d myota_geo >/dev/null \
@@ -102,6 +104,27 @@ jobs:
       - run: npm run migrate:db -- --owner=core
       - run: npm run migrate:db -- --owner=activity
       - run: npm run migrate:db -- --owner=geo
+      - name: Qualify Activity capacity under bounded resources
+        run: |
+          docker run --rm --network host \
+            --cpus=1 --memory=1g --memory-swap=1g \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            --env ACTIVITY_DATABASE_URL \
+            --env NATS_URL \
+            --env MYOTA_ACTIVITY_CAPACITY_ENFORCE_LIMITS=1 \
+            node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 \
+            npm run test:activity-capacity
+      - name: Qualify Geodata synchronous mutation bounds
+        run: |
+          docker run --rm --network host \
+            --cpus=1 --memory=1g --memory-swap=1g \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            --env GEO_DATABASE_URL \
+            --env NATS_URL \
+            node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 \
+            npm run test:geodata-capacity
       - name: Rehearse three-owner backup and restore
         run: npm run test:db-backup-restore
         env:
