@@ -325,19 +325,24 @@ an accepted scope decision is recorded in the dispositions section.
   messages only after owner-database state changes.
 - **Current implementation and evidence:** CI covers process restart with a
   retained local file store and three-node JetStream leader changes for several
-  worker and relay paths. The 2026-10-24 isolated deployment rehearsal restarted
-  the configured NATS instance, verified durable redelivery/settlement, and
-  verified the Core relay retries and publishes one retained event after
-  recovery. The deployed services and workers are legacy Python images.
-- **Missing evidence:** Repeat relay, API, and worker reconnect/settlement checks
-  with the NestJS monorepo images deployed. The current deployment evidence does
-  not prove behavior of those target images.
+  worker and relay paths. The 2026-10-25 isolated deployment rehearsal used the
+  NestJS monorepo images. A file-backed durable consumer redelivered an
+  unacknowledged message with delivery count 2 and settled to zero pending after
+  ACK. The Core relay retried one registered outbox event while NATS was down,
+  then published the same event once after NATS returned. The monitoring
+  endpoint subsequently listed all six configured NestJS relay/worker clients.
+  See [single-instance restart recovery](operations/single-instance-restart-recovery.md).
+- **Missing evidence:** Exercise an actual in-flight Activity or Geodata
+  business job through deployed NATS interruption and verify durable owner
+  state before ACK, including no duplicate side effect. Deployed notification
+  retry exhaustion and audited redrive remain open.
 - **Risk:** A deployed single-instance broker failure may stop APIs/workers,
   cause duplicate publication, or leave acknowledged work unsettled.
-- **Next check:** After deploying the NestJS monorepo images, repeat the broker
-  restart and outbox retry check; verify API/worker reconnect, settlement,
-  relay idempotency, health signals, and operator recovery. Current measurements
-  and steps are in [single-instance restart recovery](operations/single-instance-restart-recovery.md).
+- **Next check:** Exercise a real Activity and Geodata work item through broker
+  disconnection with the NestJS release; verify worker reconnection, durable
+  owner-state change before ACK, no duplicate side effect, and observable
+  recovery. Current measurements and steps are in
+  [single-instance restart recovery](operations/single-instance-restart-recovery.md).
   Clustered NATS failover is deferred to standalone low-priority
   [myota-next#24](https://github.com/myota-platform/myota-next/issues/24).
 - **Tracked by:** [Issue #17](https://github.com/myota-platform/myota-next/issues/17).
@@ -353,19 +358,24 @@ an accepted scope decision is recorded in the dispositions section.
   without cross-owner transactions, lost committed writes, or duplicate effects.
 - **Current implementation and evidence:** CI covers transient PostgreSQL
   connection loss and process restart for selected worker and outbox paths. On
-  2026-10-24, each configured isolated PostgreSQL pod restarted with a committed
-  probe row preserved and an interrupted transaction rolled back. Replacement
-  pods became Ready about 11 seconds after creation. The deployed APIs and
-  workers are legacy Python images.
-- **Missing evidence:** Repeat application-level reconnect and transaction
-  outcome checks with the NestJS monorepo images deployed; the current pod-level
-  probe does not establish target-runtime behavior.
+  2026-10-25, each owner database pod was replaced while a transaction held an
+  uncommitted marker. The committed marker survived and the open transaction
+  rolled back. The deployed NestJS APIs and workers reported temporary 503
+  readiness while the new database endpoints recovered, then returned Ready;
+  owner-specific transition timings and relay-pool `SELECT 1` checks are in
+  [single-instance restart recovery](operations/single-instance-restart-recovery.md).
+- **Missing evidence:** Exercise a deployed Activity or Geodata transaction
+  carrying actual business work across owner-database connection loss, then
+  verify durable final records, redelivery/settlement order, no duplicate side
+  effect, and recovery timing. The infrastructure transaction probes do not
+  establish those application-level outcomes.
 - **Risk:** An instance restart can interrupt transactions or strand work across
   one or more of the three database owners.
-- **Next check:** After deploying the NestJS monorepo images, repeat one-at-a-time
-  instance restart and connection loss for Core, Activity, and Geodata; verify
-  transaction results, reconnect, worker/relay recovery, health signals, and
-  operator steps in [single-instance restart recovery](operations/single-instance-restart-recovery.md).
+- **Next check:** Run one deployed Activity or Geodata work item through owner
+  database connection loss; verify commit/rollback, redelivery, settlement
+  order, idempotency, and health recovery. Repeatable database restart steps,
+  current NestJS readiness evidence, and timings are in
+  [single-instance restart recovery](operations/single-instance-restart-recovery.md).
   HA failover and multi-instance scaling are deferred to standalone low-priority
   [myota-next#24](https://github.com/myota-platform/myota-next/issues/24).
 - **Tracked by:** [Issue #17](https://github.com/myota-platform/myota-next/issues/17).

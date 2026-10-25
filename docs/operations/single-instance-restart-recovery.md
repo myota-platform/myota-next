@@ -61,10 +61,51 @@ while NATS was unavailable, recorded two retry attempts, then marked it
 published after NATS returned. The retained stream contained exactly one
 message with the probe event ID. The probe row and message were removed.
 
-This release still runs legacy Python API, relay, and worker images rather
-than the NestJS monorepo images. These deployed observations qualify the
-configured infrastructure and legacy runtime. NestJS behavior is covered by
-the monorepo integration and recovery tests, but is not yet proven by this
-deployed check. The Email worker also remains unready because
-`myota-test` lacks its service-client credential Secret; see
-[Activity recovery](../parity/workers-operations.md) for the remaining gap.
+## NestJS deployment qualification
+
+On 2026-10-25, the checks were repeated against isolated Helm release
+`myota-test` revision 2 using the NestJS monorepo images built from
+`e2dd79d`. The release has separate Core, Activity, and Geodata PostgreSQL
+StatefulSets, a single file-backed NATS/JetStream server, and a SeaweedFS
+object store. This remains a single-node, single-instance qualification.
+
+For each owner database, a fresh PostgreSQL pod UID replaced the old pod while
+a transaction held an uncommitted marker open. The committed marker remained
+and the interrupted marker was absent after recovery; all probe tables were
+removed. The replacement PostgreSQL pods became Ready within 14–16 seconds of
+the restart request. Health and readiness checks returned HTTP 503 while owner
+database DNS/endpoints were being restored, then returned HTTP 200. The
+application readiness transitions after each new PostgreSQL pod was created
+were:
+
+| Owner database | NestJS API / worker readiness |
+| --- | --- |
+| Core | Identity 17 s; Programmes 14 s; Core outbox 18 s |
+| Activity | Activity API 16 s; worker 15 s; notifications 16 s; Activity outbox 32 s |
+| Geodata | Geodata API 16 s; worker 12 s; Geodata outbox 16 s |
+
+Database health warnings and outbox polling errors were emitted during each
+interruption. After the replacement endpoints stabilized, the API and worker
+readiness checks returned HTTP 200 and a fresh `SELECT 1` through each deployed
+outbox relay's configured owner-database pool succeeded. The three owner
+databases remained separate.
+
+The NATS restart check ran a Node NATS client in the deployed Core outbox pod.
+Its file-backed durable consumer redelivered the unacknowledged message with
+delivery count 2; after ACK, both pending and acknowledgement-pending counts
+were zero. The Core outbox check held one uniquely identified registered event
+while NATS was unavailable, observed retry attempts, and then confirmed the
+same event was published once after NATS returned. After recovery, the NATS
+monitoring endpoint listed all six configured monorepo clients: Core,
+Activity, and Geodata outbox relays, Activity worker, Activity notifications,
+and Geodata worker.
+
+These checks establish owner-database transaction outcomes, deployed NestJS
+connection recovery, readiness signals, NATS redelivery, and Core outbox
+recovery. They do not yet exercise an in-flight Activity or Geodata business
+job through a deployed broker/database interruption, or prove its owner-state
+commit precedes ACK. Object-store outage recovery across all consumers and
+deployed notification/Email retry exhaustion and redrive also remain open.
+The Email worker is explicitly disabled in this test release, so CI Email
+recovery checks are not deployment evidence. See [Activity recovery](../parity/workers-operations.md)
+and the [remaining work ledger](../remaining-work-ledger.md) for those gaps.
