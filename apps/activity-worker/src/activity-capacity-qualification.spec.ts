@@ -699,7 +699,14 @@ function percentile(values: number[], quantile: number) {
 function maximumAdifDocument(qsoCount: number) {
   const records = Array.from({ length: qsoCount }, (_, index) => {
     const callsign = `W${String(index).padStart(5, '0')}`;
-    const timeOn = String(index % 86_400).padStart(6, '0');
+    const secondsSinceMidnight = index % 86_400;
+    const timeOn = [
+      Math.floor(secondsSinceMidnight / 3_600),
+      Math.floor((secondsSinceMidnight % 3_600) / 60),
+      secondsSinceMidnight % 60,
+    ]
+      .map((part) => String(part).padStart(2, '0'))
+      .join('');
     return `<CALL:${callsign.length}>${callsign}<QSO_DATE:8>20260102<TIME_ON:6>${timeOn}<BAND:3>20M<MODE:3>SSB<EOR>\n`;
   }).join('');
   const prefix = '<ADIF_VER:5>3.1.0<EOH>\n';
