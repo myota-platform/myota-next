@@ -70,7 +70,7 @@ jobs:
       - run: npm ci
       - name: Export PostgreSQL service container ID for process recovery checks
         run: |
-          container_id="$(docker ps --filter 'ancestor=postgis/postgis:16-3.6-alpine' --format '{{.ID}}' | head -n 1)"
+          container_id="$(docker ps --filter 'publish=5432' --format '{{.ID}}' | head -n 1)"
           if [ -z "$container_id" ]; then
             echo "Could not find the PostgreSQL service container" >&2
             exit 1
