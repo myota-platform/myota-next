@@ -85,8 +85,8 @@ jobs:
         run: npm run provision:jetstream
         env:
           NATS_TOPOLOGY_APPLY: '1'
-          NATS_EVENTS_MAX_BYTES: '16777216'
-          NATS_EVENTS_MAX_MESSAGES: '10000'
+          NATS_EVENTS_MAX_BYTES: '134217728'
+          NATS_EVENTS_MAX_MESSAGES: '50000'
           NATS_EVENTS_MAX_MESSAGE_BYTES: '1048576'
           NATS_ACTIVITY_WORK_MAX_AGE_SECONDS: '86400'
           NATS_ACTIVITY_WORK_MAX_BYTES: '16777216'
