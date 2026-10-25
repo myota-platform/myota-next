@@ -104,7 +104,7 @@ function popupText(entity: GeoEntity): string {
   const programmes = (entity.programmes || [])
     .map((item) => (typeof item === 'string' ? item : item.name || item.slug))
     .join(', ');
-  return `<strong>${escapeHtml(entity.name)}</strong><br>Status: ${escapeHtml(entity.status)}<br>Category: ${escapeHtml(categories || entity.entityType || '—')}<br>Programmes: ${escapeHtml(programmes || 'Unassigned')}<br>Location: ${escapeHtml([values(entity, 'city'), values(entity, 'region'), values(entity, 'country')].filter(Boolean).join(', ') || '—')}`;
+  return `<div style="background:#fff;color:#142b2d"><strong>${escapeHtml(entity.name)}</strong><br>Status: ${escapeHtml(entity.status)}<br>Category: ${escapeHtml(categories || entity.entityType || '—')}<br>Programmes: ${escapeHtml(programmes || 'Unassigned')}<br>Location: ${escapeHtml([values(entity, 'city'), values(entity, 'region'), values(entity, 'country')].filter(Boolean).join(', ') || '—')}</div>`;
 }
 function feature(entity: GeoEntity): any {
   return {
