@@ -2063,9 +2063,20 @@ async function verifyImportObjectStoreRecovery() {
         state.rows[0]?.status === 'QUEUED' && state.rows[0]?.attempt_count === 3
       );
     }, 'Geodata did not retain the import through three source-store failures');
+    await worker.onModuleDestroy();
+    worker = undefined;
     runDocker('start', container);
     objectStoreStopped = false;
-    await waitForSeaweedFS(endpoint);
+    await waitForSeaweedFS(storage, bucket, objectKey);
+    worker = new GeodataWorkerService(
+      new GeodataWorkRepository(pool),
+      new GeodataPromotionRepository(pool, new GeodataPromotionScoring()),
+      new GeodataEnrichmentRepository(pool),
+      new GeodataDeletionRepository(pool),
+      new GeodataRetentionRepository(pool),
+      pool,
+    );
+    await worker.onModuleInit();
 
     await waitForRecovery(async () => {
       const state = await pool.query<{
@@ -2118,7 +2129,7 @@ async function verifyImportObjectStoreRecovery() {
   if (objectStoreStopped) {
     try {
       runDocker('start', container);
-      await waitForSeaweedFS(endpoint);
+      await waitForSeaweedFS(storage, bucket, objectKey);
       objectStoreStopped = false;
     } catch (error) {
       cleanupError = error;
@@ -3816,16 +3827,22 @@ function runDocker(command: 'start' | 'stop', container: string) {
     );
 }
 
-async function waitForSeaweedFS(endpoint: string) {
+async function waitForSeaweedFS(
+  storage: S3Client,
+  bucket: string,
+  key: string,
+) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(new URL('/status', endpoint), {
-        signal: AbortSignal.timeout(1000),
-      });
-      if (response.ok) return;
+      const response = await storage.send(
+        new GetObjectCommand({ Bucket: bucket, Key: key }),
+      );
+      if (!response.Body) throw new Error('Recovery fixture object is empty');
+      await response.Body.transformToByteArray();
+      return;
     } catch {
-      // Retry while SeaweedFS restarts.
+      // Retry until the persisted object can be read like the worker reads it.
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }

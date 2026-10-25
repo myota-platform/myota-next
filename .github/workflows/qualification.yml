@@ -39,6 +39,7 @@ jobs:
             --tag local/myota-nats:qualification .
           docker run --detach --name myota-qualification-geodata-db \
             --publish 5432:5432 \
+            --cpus=1 --memory=2g --memory-swap=2g \
             --env POSTGRES_DB=myota_geo \
             --env POSTGRES_USER=myota \
             --env POSTGRES_PASSWORD=myota \
@@ -46,6 +47,7 @@ jobs:
             local/myota-postgis:qualification
           docker run --detach --name myota-qualification-nats \
             --publish 14222:4222 --publish 18222:8222 \
+            --cpus=1 --memory=2g --memory-swap=2g \
             local/myota-nats:qualification -js -p 4222 -m 8222
           for attempt in $(seq 1 60); do
             if docker exec myota-qualification-geodata-db pg_isready -U myota -d myota_geo >/dev/null \
@@ -57,6 +59,17 @@ jobs:
           docker logs myota-qualification-geodata-db
           docker logs myota-qualification-nats
           exit 1
+      - name: Install pinned NATS server for process-level tests
+        run: |
+          container_id="$(docker create local/myota-nats:qualification)"
+          trap 'docker rm -f "$container_id" >/dev/null 2>&1 || true' EXIT
+          docker cp "$container_id:/usr/local/bin/nats-server" \
+            "$RUNNER_TEMP/nats-server"
+          docker rm "$container_id"
+          trap - EXIT
+          chmod 0755 "$RUNNER_TEMP/nats-server"
+          "$RUNNER_TEMP/nats-server" --version
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
@@ -67,7 +80,8 @@ jobs:
           -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
           && sudo timeout 6m apt-get -o Acquire::Retries=3
           -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install
-          --no-install-recommends --yes osmium-tool postgresql-client-16
+          --no-install-recommends --yes osmium-tool
+          postgresql-client-16
       - name: Select PostgreSQL 16 client tools
         run: echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
       - run: npm ci
@@ -83,8 +97,8 @@ jobs:
         run: npm run provision:jetstream
         env:
           NATS_TOPOLOGY_APPLY: '1'
-          NATS_EVENTS_MAX_BYTES: '16777216'
-          NATS_EVENTS_MAX_MESSAGES: '10000'
+          NATS_EVENTS_MAX_BYTES: '134217728'
+          NATS_EVENTS_MAX_MESSAGES: '50000'
           NATS_EVENTS_MAX_MESSAGE_BYTES: '1048576'
           NATS_ACTIVITY_WORK_MAX_AGE_SECONDS: '86400'
           NATS_ACTIVITY_WORK_MAX_BYTES: '16777216'
@@ -102,6 +116,29 @@ jobs:
       - run: npm run migrate:db -- --owner=core
       - run: npm run migrate:db -- --owner=activity
       - run: npm run migrate:db -- --owner=geo
+      - name: Qualify Activity capacity under bounded resources
+        run: |
+          docker run --rm --network host \
+            --cpus=1 --memory=1g --memory-swap=1g \
+            --user "$(id -u):$(id -g)" --env HOME=/tmp \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            --env ACTIVITY_DATABASE_URL \
+            --env NATS_URL \
+            --env MYOTA_ACTIVITY_CAPACITY_ENFORCE_LIMITS=1 \
+            node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 \
+            npm run test:activity-capacity
+      - name: Qualify Geodata synchronous mutation bounds
+        run: |
+          docker run --rm --network host \
+            --cpus=1 --memory=1g --memory-swap=1g \
+            --user "$(id -u):$(id -g)" --env HOME=/tmp \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            --env GEO_DATABASE_URL \
+            --env NATS_URL \
+            node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 \
+            npm run test:geodata-capacity
       - name: Rehearse three-owner backup and restore
         run: npm run test:db-backup-restore
         env:

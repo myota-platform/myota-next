@@ -561,12 +561,34 @@ export class ActivityService {
 }
 
 function decodeBase64(value: string) {
+  // Validate with a linear scan. A single large regular-expression match can
+  // overflow the JS regexp engine's stack on uploads near the configured size
+  // limit, even though Buffer can safely decode them.
+  if (value.length % 4 !== 0)
+    throw new BadRequestException('contentBase64 must be valid base64');
+  const paddingStart = value.indexOf('=');
+  const contentLength = paddingStart === -1 ? value.length : paddingStart;
+  const paddingLength = value.length - contentLength;
   if (
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-      value,
-    )
+    paddingLength > 2 ||
+    (paddingLength > 0 && contentLength < value.length - 2)
   )
     throw new BadRequestException('contentBase64 must be valid base64');
+  for (let index = 0; index < contentLength; index++) {
+    const code = value.charCodeAt(index);
+    if (!(
+      (code >= 65 && code <= 90) ||
+      (code >= 97 && code <= 122) ||
+      (code >= 48 && code <= 57) ||
+      code === 43 ||
+      code === 47
+    ))
+      throw new BadRequestException('contentBase64 must be valid base64');
+  }
+  for (let index = contentLength; index < value.length; index++) {
+    if (value.charCodeAt(index) !== 61)
+      throw new BadRequestException('contentBase64 must be valid base64');
+  }
   return Buffer.from(value, 'base64');
 }
 

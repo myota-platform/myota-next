@@ -710,6 +710,13 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           return false;
         }
       }, 'Activity work stream did not elect a replacement leader');
+      await waitForConsumerLeaderReplacement(
+        manager,
+        registry.activityWorkStream,
+        qsoWork.durable,
+        failedLeader,
+        'Activity QSO consumer did not elect a replacement leader',
+      );
 
       releaseDeadLetter();
       releaseInvalidDeadLetter = undefined;
@@ -976,6 +983,13 @@ describe.skipIf(!enabled)('Activity worker connection recovery', () => {
           return false;
         }
       }, 'Activity work stream did not elect a leader for terminal settlement');
+      await waitForConsumerLeaderReplacement(
+        manager,
+        registry.activityWorkStream,
+        statisticsWork.durable,
+        failedLeader,
+        'Activity statistics consumer did not elect a leader for terminal settlement',
+      );
 
       releaseCommittedFailure();
       releaseSettlement = undefined;
@@ -1380,6 +1394,29 @@ async function waitForConsumerAckPending(
     },
     `Activity durable ${durable} did not release pending deliveries`,
     timeoutMs,
+  );
+}
+
+async function waitForConsumerLeaderReplacement(
+  manager: Awaited<ReturnType<typeof jetstreamManager>>,
+  stream: string,
+  durable: string,
+  failedLeader: string,
+  message: string,
+) {
+  await waitFor(
+    async () => {
+      try {
+        const consumer = await manager.consumers.info(stream, durable);
+        return Boolean(
+          consumer.cluster?.leader && consumer.cluster.leader !== failedLeader,
+        );
+      } catch {
+        return false;
+      }
+    },
+    message,
+    30_000,
   );
 }
 
