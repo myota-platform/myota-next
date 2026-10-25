@@ -1,7 +1,7 @@
 # Public, non-secret test deployment settings. Create the referenced Kubernetes
 # Secrets separately; see README.md.
 environment: testing
-buildVersion: e2dd79d8e8589d3ca5f069fb6c906dd537c20fd3
+buildVersion: 16d5cc3e451b03db37714d4e00614433ed7bb653
 imagePullPolicy: IfNotPresent
 
 images:
@@ -48,7 +48,7 @@ images:
   geodata-worker:
     {
       repository: ghcr.io/myota-platform/myota-next-geodata-worker,
-      digest: sha256:a447724869b3d7acc620c151888e592ddb9304b60fe9bbaa977a4ed954d8756c,
+      digest: sha256:672b124e80898e6beabb304f645b723aba5328679b5b009ba2b6800c87b970f6,
     }
   geodata-importer:
     {

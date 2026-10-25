@@ -13,7 +13,7 @@ if (
   throw new Error('GEO_DATABASE_URL must point to local test Postgres');
 
 const image =
-  'chrislusf/seaweedfs:latest@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882';
+  'chrislusf/seaweedfs:latest@sha256:c2658820e763294a9e9de7b36c81e59b879e3459148351aee4e31a126ca64860';
 if (!readFileSync('deploy/compose.yaml', 'utf8').includes(image))
   throw new Error('storage recovery image must match the pinned Compose image');
 

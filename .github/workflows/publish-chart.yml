@@ -19,13 +19,14 @@ concurrency:
 
 jobs:
   package:
+    name: Package and publish Helm chart
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      contents: write
-      pages: write
-      id-token: write
-      actions: read
+      contents: write # Required to push the versioned chart repository commit.
+      pages: write # Required to publish the chart repository site.
+      id-token: write # Required by GitHub Pages deployment.
+      actions: read # Required by the Pages deployment action.
     steps:
       - name: Resolve release tag
         id: release
@@ -38,19 +39,22 @@ jobs:
           test -n "$tag"
           printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'release' && steps.release.outputs.tag || github.ref_name }}
           persist-credentials: false
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v4.3.0
 
       - name: Validate Helm charts
         run: |
           helm lint deploy/helm/myota-next -f deploy/helm/myota-next/values-testing.yaml
-          helm lint deploy/helm/myota-infrastructure --set objectStorage.enabled=true
+          helm lint deploy/helm/myota-infrastructure \
+            --values deploy/helm/myota-infrastructure/values-example.yaml \
+            --set objectStorage.enabled=true \
+            --set objectStorage.provisionerImage=ghcr.io/myota-platform/myota-next-tools:ci
 
       - name: Prepare versioned chart repository
         env:
@@ -116,10 +120,10 @@ jobs:
           rm -rf chart-repository/.git
           echo "Published chart version ${next} for application release ${RELEASE_TAG}." >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: chart-repository
 
-      - uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

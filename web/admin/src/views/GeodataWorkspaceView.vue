@@ -18,6 +18,8 @@ import { dirtyEditorSections } from '../lib/entityEditor';
 import type { EntityCategory, GeoEntity } from '../types';
 
 const props = defineProps<{ mode: 'review' | 'management' }>();
+const isPendingDeletionStatus = (status: unknown) =>
+  pendingDeletionStatuses.has(String(status).toUpperCase());
 const store = useAppStore();
 const pendingDeletionKeys = createPendingIdempotencyKeys(
   'myota_admin_pending_geodata_deletions',
@@ -2532,9 +2534,7 @@ onMounted(async () => {
           deleting
             ? 'Processing deletion jobs…'
             : deletionModal.kind === 'single'
-              ? pendingDeletionStatuses.has(
-                  String(deletionModal.job.status).toUpperCase(),
-                )
+              ? isPendingDeletionStatus(deletionModal.job.status)
                 ? 'Check deletion status'
                 : String(deletionModal.job.status).toUpperCase() === 'FAILED'
                   ? 'Deletion failed'
@@ -2544,9 +2544,7 @@ onMounted(async () => {
                 : bulkPreparationFailed
                   ? 'Resolve preparation errors first'
                   : deletionModal.items.some((item) =>
-                        pendingDeletionStatuses.has(
-                          String(item.job.status).toUpperCase(),
-                        ),
+                        isPendingDeletionStatus(item.job.status),
                       )
                     ? 'Check deletion status'
                     : `Permanently delete ${deletionModal.items.length} entities`

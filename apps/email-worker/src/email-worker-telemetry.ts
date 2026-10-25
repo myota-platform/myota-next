@@ -23,10 +23,7 @@ import {
   MeterProvider,
   PeriodicExportingMetricReader,
 } from '@opentelemetry/sdk-metrics';
-import {
-  BasicTracerProvider,
-  BatchSpanProcessor,
-} from '@opentelemetry/sdk-trace-base';
+import { TracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace';
 
 const OUTCOMES = [
   'delivered',
@@ -74,7 +71,7 @@ export class EmailWorkerTelemetry {
   private otelAttempts?: Counter;
   private otelDuration?: Histogram;
   private otelSmtpDuration?: Histogram;
-  private traceProvider?: BasicTracerProvider;
+  private traceProvider?: TracerProvider;
   private meterProvider?: MeterProvider;
   private loggerProvider?: LoggerProvider;
 
@@ -94,10 +91,12 @@ export class EmailWorkerTelemetry {
         'service.instance.id': process.env.HOSTNAME ?? 'local',
       });
 
-      this.traceProvider = new BasicTracerProvider({
+      this.traceProvider = new TracerProvider({
         resource,
         spanProcessors: [
-          new BatchSpanProcessor(new OTLPTraceExporter({ url: endpoint })),
+          new BatchSpanProcessor({
+            exporter: new OTLPTraceExporter({ url: endpoint }),
+          }),
         ],
       });
       trace.setGlobalTracerProvider(this.traceProvider);

@@ -37,6 +37,7 @@
     "redrive:email": "node --experimental-strip-types apps/email-worker/src/redrive-email.ts",
     "redrive:activity-notification": "node --experimental-strip-types apps/activity-notifications/src/redrive-notification.ts",
     "test": "vitest run",
+    "audit:dependencies": "npm audit --audit-level=low && npm audit --audit-level=low --prefix web/admin",
     "test:watch": "vitest",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "test:browser": "playwright test",
@@ -64,7 +65,7 @@
     "@nats-io/transport-node": "^3.4.0",
     "@nestjs/common": "12.2.0",
     "@nestjs/core": "12.2.0",
-    "@nestjs/observe": "^0.3.16",
+    "@nestjs/observe": "^0.3.17",
     "@nestjs/platform-express": "12.2.0",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.223.0",
@@ -75,7 +76,7 @@
     "@opentelemetry/resources": "^2.12.0",
     "@opentelemetry/sdk-logs": "^0.223.0",
     "@opentelemetry/sdk-metrics": "^2.12.0",
-    "@opentelemetry/sdk-trace-base": "^2.12.0",
+    "@opentelemetry/sdk-trace": "^2.12.0",
     "@streamparser/json": "^0.0.26",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -87,15 +88,14 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "sax": "^1.6.1",
-    "shapefile": "^0.6.6",
+    "shapefile": "file:vendor/shapefile",
     "sharp": "^0.35.5",
     "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
-    "@nestjs/cli": "12.0.8",
-    "@nestjs/mau": "^0.2.6",
-    "@nestjs/schematics": "12.0.7",
+    "@nestjs/cli": "12.0.10",
+    "@nestjs/schematics": "12.0.10",
     "@nestjs/testing": "12.2.0",
     "@playwright/test": "^1.64.1",
     "@rspack/core": "^2.2.9",
@@ -117,5 +117,12 @@
     "vite": "^8.0.0",
     "vitest": "^4.1.2",
     "webpack-node-externals": "^3.0.0"
+  },
+  "overrides": {
+    "@nestjs/platform-express": {
+      "multer": "^2.5.0"
+    },
+    "body-parser": "^2.4.0",
+    "fast-uri": "^3.1.9"
   }
 }

@@ -35,6 +35,7 @@ import {
   pythonTruthy,
 } from '@app/platform/python-truthiness.js';
 import { comparePythonStrings } from '@app/platform/python-string.js';
+import { geodataImportMaxAttempts } from '@app/platform/geodata-consumer-policy.js';
 import { streamShapefileFeatures } from './geodata-shapefile-stream.js';
 import {
   readGeoJsonDocumentMetadata,
@@ -783,7 +784,7 @@ export class GeodataWorkRepository {
       await client.query(
         "SELECT set_config('myota.geodata_writer','row-v1',true)",
       );
-      const exhausted = run.attempt_count >= 3;
+      const exhausted = run.attempt_count >= geodataImportMaxAttempts();
       if (exhausted)
         await client.query(
           'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1',

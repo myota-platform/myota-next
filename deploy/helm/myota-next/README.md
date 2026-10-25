@@ -137,6 +137,10 @@ durable.
 The legacy aggregate import limit can be set with
 `geodataWorker.legacyConcurrency.import`; it applies across preprocessing and
 promotion when native import concurrency settings are absent.
+`geodataWorker.importMaxAttempts` controls how many times an import run may be
+claimed before a processing failure makes it terminal. The default is `10`,
+allowing recovery from short object-store restarts while preserving a finite
+failure limit.
 `components.geodata.legacyConcurrency.upload` sets the per-process limit for
 multipart upload finalization in the Geodata API.
 

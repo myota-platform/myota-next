@@ -2,7 +2,9 @@ name: Node CI
 
 on:
   push:
+    branches: [main, testing]
   pull_request:
+    branches: [main, testing]
   workflow_dispatch:
 
 permissions:
@@ -14,22 +16,9 @@ concurrency:
 
 jobs:
   checks:
+    name: Build, test, and scan
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    services:
-      geo-db:
-        image: postgis/postgis:16-3.4
-        env:
-          POSTGRES_DB: myota_geo
-          POSTGRES_USER: myota
-          POSTGRES_PASSWORD: myota
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U myota -d myota_geo"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    timeout-minutes: 35
     env:
       CORE_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_core
       ACTIVITY_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_activity
@@ -39,11 +28,61 @@ jobs:
       NATS_TEST_URL: nats://127.0.0.1:14222
       ACTIVITY_NOTIFICATION_METRICS_PORT: '0'
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm
+      - name: Validate Helm chart and testing routes
+        run: |
+          helm lint deploy/helm/myota-next -f deploy/helm/myota-next/values-testing.yaml
+          helm lint deploy/helm/myota-infrastructure \
+            --values deploy/helm/myota-infrastructure/values-example.yaml \
+            --set objectStorage.enabled=true \
+            --set objectStorage.provisionerImage=ghcr.io/myota-platform/myota-next-tools:ci
+          helm template myota-test deploy/helm/myota-next \
+            --namespace myota-test \
+            -f deploy/helm/myota-next/values-testing.yaml \
+            > "$RUNNER_TEMP/myota-test-rendered.yaml"
+          grep -F 'Host(`myota-test.spainip.es`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
+          grep -F 'Host(`myota-admin-test.spainip.es`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
+          grep -F 'Host(`myota-participant-test.spainip.es`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
+          grep -F 'certResolver: "acmeresolver"' "$RUNNER_TEMP/myota-test-rendered.yaml"
+      - name: Build and start hardened test dependencies
+        run: |
+          docker buildx build --load \
+            --file deploy/images/database/Dockerfile \
+            --target postgis \
+            --tag local/myota-postgis:ci .
+          docker buildx build --load \
+            --file deploy/images/nats/Dockerfile \
+            --tag local/myota-nats:ci .
+          docker run --detach --name myota-ci-geodata-db \
+            --publish 5432:5432 \
+            --env POSTGRES_DB=myota_geo \
+            --env POSTGRES_USER=myota \
+            --env POSTGRES_PASSWORD=myota \
+            --env MYOTA_APP_PASSWORD=myota \
+            local/myota-postgis:ci
+          docker run --detach --name myota-ci-nats \
+            --publish 14222:4222 --publish 18222:8222 \
+            local/myota-nats:ci -js -p 4222 -m 8222
+          for attempt in $(seq 1 60); do
+            if docker exec myota-ci-geodata-db pg_isready -U myota -d myota_geo >/dev/null \
+              && curl --fail --silent http://127.0.0.1:18222/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs myota-ci-geodata-db
+          docker logs myota-ci-nats
+          exit 1
       - name: Install OSM PBF decoder for correctness fixtures
         run: >-
           sudo timeout 6m apt-get -o Acquire::Retries=3
@@ -51,20 +90,32 @@ jobs:
           && sudo timeout 6m apt-get -o Acquire::Retries=3
           -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install
           --no-install-recommends --yes osmium-tool
-      - name: Start isolated JetStream
-        run: |
-          docker run --detach --name myota-ci-nats \
-            --publish 14222:4222 --publish 18222:8222 \
-            nats:2-alpine -js -p 4222 -m 8222
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:18222/healthz >/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          docker logs myota-ci-nats
-          exit 1
       - run: npm ci
+      - run: npm run audit:dependencies
+      - name: Scan tracked source and production dependencies
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      - name: Scan rendered Helm charts for high and critical misconfigurations
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          scan-type: config
+          scan-ref: deploy/helm
+          trivy-config: .github/trivy.yaml
+          scanners: misconfig
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - name: Audit GitHub Actions workflows
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-cache-dir zizmor==1.31.1
+          zizmor .github/workflows
       - name: Provision bounded JetStream topology for CI
         run: npm run provision:jetstream
         env:

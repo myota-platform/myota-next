@@ -1,0 +1,10 @@
+misconfiguration:
+  scanners:
+    - helm
+  helm:
+    values:
+      - deploy/helm/myota-infrastructure/values-example.yaml
+      - deploy/helm/myota-next/values-testing.yaml
+    set:
+      - objectStorage.enabled=true
+      - objectStorage.provisionerImage=ghcr.io/myota-platform/myota-next-tools:ci

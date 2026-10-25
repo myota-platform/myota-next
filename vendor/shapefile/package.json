@@ -1,0 +1,34 @@
+{
+  "name": "shapefile",
+  "version": "0.6.6+myota.1",
+  "description": "An implementation of the shapefile (.shp) spatial data format.",
+  "keywords": [
+    "geojson",
+    "shapefile"
+  ],
+  "homepage": "https://github.com/mbostock/shapefile",
+  "license": "BSD-3-Clause",
+  "author": {
+    "name": "Mike Bostock",
+    "url": "https://bost.ocks.org/mike"
+  },
+  "unpkg": "dist/shapefile.js",
+  "jsdelivr": "dist/shapefile.js",
+  "main": "dist/shapefile.node.js",
+  "module": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mbostock/shapefile.git"
+  },
+  "bin": {
+    "dbf2json": "bin/dbf2json",
+    "shp2json": "bin/shp2json"
+  },
+  "dependencies": {
+    "array-source": "0.0",
+    "commander": "2",
+    "path-source": "0.1",
+    "slice-source": "0.4",
+    "stream-source": "0.3"
+  }
+}
