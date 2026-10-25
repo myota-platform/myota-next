@@ -100,12 +100,36 @@ monitoring endpoint listed all six configured monorepo clients: Core,
 Activity, and Geodata outbox relays, Activity worker, Activity notifications,
 and Geodata worker.
 
+The same qualification interrupted an actual `QSO_INGESTION` job during its
+database transaction. A test-only trigger paused the targeted QSO insert after
+the deployed Activity worker had claimed the job. Replacing the Activity
+PostgreSQL pod rolled back that insert: the job remained `RUNNING` on attempt 1,
+the activation had no QSO, and the JetStream delivery remained unacknowledged
+(`ack_pending=1`). After the lease expired, the durable redelivered the command
+with delivery count 2. The worker reclaimed the same job, committed exactly
+one QSO and one `activity.qso.recorded.v1` outbox event, and completed the job
+on attempt 2. The activation QSO count was 1; the durable ended with both
+pending counts at zero. The worker logged that it could not persist retry state
+while PostgreSQL was unavailable; it did not ACK that message, so JetStream
+retained it until lease recovery. The trigger intentionally paused each insert
+for 90 seconds; the observed end-to-end duration is test-induced and is not a
+recovery SLO.
+
+A deployed broad award recalculation for the test programme then completed
+with no explicit subject list, selected the programme's persisted subject
+aggregate, and wrote progress with `qsoCount=1` and `conditionMet=false` for a
+two-QSO threshold. The test activation, QSO, jobs, award definition, progress,
+outbox rows, trigger, and trigger function were removed. The QSO-ingestion and
+award-recalculation durables both had zero pending and acknowledgement-pending
+messages after cleanup.
+
 These checks establish owner-database transaction outcomes, deployed NestJS
 connection recovery, readiness signals, NATS redelivery, and Core outbox
-recovery. They do not yet exercise an in-flight Activity or Geodata business
-job through a deployed broker/database interruption, or prove its owner-state
-commit precedes ACK. Object-store outage recovery across all consumers and
-deployed notification/Email retry exhaustion and redrive also remain open.
+recovery, and Activity QSO recovery after owner-database loss. They do not yet
+exercise an in-flight Activity or Geodata business job through a deployed NATS
+process interruption, or a Geodata business job through owner-database loss.
+Object-store outage recovery across all consumers and deployed
+notification/Email retry exhaustion and redrive also remain open.
 The Email worker is explicitly disabled in this test release, so CI Email
 recovery checks are not deployment evidence. See [Activity recovery](../parity/workers-operations.md)
 and the [remaining work ledger](../remaining-work-ledger.md) for those gaps.

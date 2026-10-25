@@ -65,10 +65,12 @@ an accepted scope decision is recorded in the dispositions section.
   interruption for all six work kinds, and ACK retry through JetStream leader
   change, passed in
   [operational qualification run 40093916289](https://github.com/myota-platform/myota-next/actions/runs/40093916289).
-- **Missing evidence:** Retry exhaustion and operator redrive under the deployed
-  topology, and recovery under the deployed topology, are still open. Terminal
-  dead-letter persistence followed by process loss before settlement is covered
-  by the existing CI check.
+- **Missing evidence:** Deployed recovery currently covers QSO ingestion through
+  Activity PostgreSQL replacement and broad award recalculation. Retry
+  exhaustion and operator redrive under the deployed topology remain open, as
+  do deployed notification and Email recovery; Email is disabled in the current
+  test release. Terminal dead-letter persistence followed by process loss
+  before settlement is covered by the existing CI check.
 - **Risk:** A restart could duplicate or lose a QSO/award side effect, strand a
   job, or leave a terminal message unsettled.
 - **Next check:** Exercise retry exhaustion and audited operator redrive in the
@@ -333,9 +335,9 @@ an accepted scope decision is recorded in the dispositions section.
   endpoint subsequently listed all six configured NestJS relay/worker clients.
   See [single-instance restart recovery](operations/single-instance-restart-recovery.md).
 - **Missing evidence:** Exercise an actual in-flight Activity or Geodata
-  business job through deployed NATS interruption and verify durable owner
-  state before ACK, including no duplicate side effect. Deployed notification
-  retry exhaustion and audited redrive remain open.
+  business job through deployed NATS process interruption and verify durable
+  owner state before ACK, including no duplicate side effect. Deployed
+  notification retry exhaustion and audited redrive remain open.
 - **Risk:** A deployed single-instance broker failure may stop APIs/workers,
   cause duplicate publication, or leave acknowledged work unsettled.
 - **Next check:** Exercise a real Activity and Geodata work item through broker
@@ -364,17 +366,18 @@ an accepted scope decision is recorded in the dispositions section.
   readiness while the new database endpoints recovered, then returned Ready;
   owner-specific transition timings and relay-pool `SELECT 1` checks are in
   [single-instance restart recovery](operations/single-instance-restart-recovery.md).
-- **Missing evidence:** Exercise a deployed Activity or Geodata transaction
-  carrying actual business work across owner-database connection loss, then
-  verify durable final records, redelivery/settlement order, no duplicate side
-  effect, and recovery timing. The infrastructure transaction probes do not
-  establish those application-level outcomes.
+- **Missing evidence:** Activity QSO ingestion through an owner-database restart
+  is now covered in the deployment. Exercise Geodata business work across its
+  owner-database connection loss and verify durable final records,
+  redelivery/settlement order, no duplicate side effect, and recovery timing.
+  The infrastructure transaction probes alone do not establish those
+  application-level outcomes.
 - **Risk:** An instance restart can interrupt transactions or strand work across
   one or more of the three database owners.
-- **Next check:** Run one deployed Activity or Geodata work item through owner
-  database connection loss; verify commit/rollback, redelivery, settlement
-  order, idempotency, and health recovery. Repeatable database restart steps,
-  current NestJS readiness evidence, and timings are in
+- **Next check:** Run one deployed Geodata work item through owner database
+  connection loss; verify commit/rollback, redelivery, settlement order,
+  idempotency, and health recovery. Repeatable database restart steps, current
+  NestJS readiness evidence, and timings are in
   [single-instance restart recovery](operations/single-instance-restart-recovery.md).
   HA failover and multi-instance scaling are deferred to standalone low-priority
   [myota-next#24](https://github.com/myota-platform/myota-next/issues/24).
