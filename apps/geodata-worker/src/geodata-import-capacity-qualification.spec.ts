@@ -26,7 +26,7 @@ const enabled = process.env.MYOTA_GEODATA_CAPACITY_QUALIFICATION === '1';
 const targetFeatureCount = 5_000;
 const databasePoolMaximum = 10;
 const workStream = 'MYOTA_GEODATA_WORK';
-const workDurable = 'geodata-import-preprocess-v1';
+const workDurable = 'geodata-preprocessing-v1';
 
 describe('Geodata asynchronous import capacity qualification', () => {
   it.skipIf(!enabled)(
