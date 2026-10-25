@@ -270,7 +270,9 @@ describe('Activity launch capacity qualification', () => {
         const adifImportStatus = await activity.getAdifImport(
           String(adifImport.id),
         );
-        expect(adifImportStatus.status).toBe('COMPLETED');
+        expect(adifImportStatus.status, JSON.stringify(adifImportStatus)).toBe(
+          'COMPLETED',
+        );
         expect(Number(adifImportStatus.recordsAccepted)).toBe(targetQsoCount);
 
         const adifAwardJob = await oldestQueuedAwardJob(apiPool, programmeSlug);
@@ -700,16 +702,12 @@ function maximumAdifDocument(qsoCount: number) {
     const timeOn = String(index % 86_400).padStart(6, '0');
     return `<CALL:${callsign.length}>${callsign}<QSO_DATE:8>20260102<TIME_ON:6>${timeOn}<BAND:3>20M<MODE:3>SSB<EOR>\n`;
   }).join('');
-  let paddingLength = adifUploadLimitBytes;
-  let content = '';
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const prefix = `<ADIF_VER:5>3.1.0<APP_CAPACITY_PAD:${paddingLength}>`;
-    content = `${prefix}${'X'.repeat(paddingLength)}<EOH>\n${records}`;
-    const difference = adifUploadLimitBytes - Buffer.byteLength(content);
-    if (difference === 0) return Buffer.from(content);
-    paddingLength += difference;
-  }
-  throw new Error('could not size the ADIF qualification document');
+  const prefix = '<ADIF_VER:5>3.1.0<EOH>\n';
+  const content = `${prefix}${records}`;
+  const paddingLength = adifUploadLimitBytes - Buffer.byteLength(content);
+  if (paddingLength < 0)
+    throw new Error('ADIF records exceed the configured upload limit');
+  return Buffer.from(`${content}${' '.repeat(paddingLength)}`);
 }
 
 async function removeCapacityFixtures(
