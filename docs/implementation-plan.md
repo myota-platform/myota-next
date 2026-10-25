@@ -88,8 +88,9 @@ fixtures do not cover an important outcome.
   full selection before writing so the operation has all-or-nothing behavior. Preserve
   idempotency and concurrency checks. Transactional outbox events may publish after the
   mutation commits; the API result must not depend on broker delivery. Also complete
-  fixtures for outstanding PBF inputs above the qualified size, less common OSM
-  geometries, remaining geometry/CRS cases, and datum-grid-dependent transformations.
+  correctness fixtures for less common OSM geometries within the 25,000-feature
+  launch RSS ceiling, remaining geometry/CRS cases, and datum-grid-dependent
+  transformations. Do not require a PBF RSS workload above 25,000 features.
   Verify any confirmed differences against the pinned importer before changing behavior.
 - **Email:** keep bulk delivery asynchronous and verify SMTP delivery, TLS, failure,
   retry, deduplication, and notification outcomes in the deployment environment, using

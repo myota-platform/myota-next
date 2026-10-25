@@ -220,6 +220,62 @@ describe('OSM PBF reference parity', () => {
     ]);
   });
 
+  it('assembles split, reversed, and unordered multipolygon members', async () => {
+    const source = await readFile(
+      new URL(
+        './fixtures/python-osm-multipolygon-split-ways.osm.pbf',
+        import.meta.url,
+      ),
+    );
+    async function* chunks() {
+      yield source;
+    }
+    const features = [];
+    for await (const feature of decodeOsmPbfStream(
+      chunks(),
+      'python-osm-multipolygon-split-ways.osm.pbf',
+      10,
+      '',
+    )) {
+      features.push(feature);
+    }
+
+    expect(features).toHaveLength(1);
+    expect(features[0]).toMatchObject({
+      id: 'relation/401',
+      properties: {
+        boundary: 'protected_area',
+        name: 'Split member protected area',
+        id: 'relation/401',
+        osm_id: 'relation/401',
+        sourceRef: 'relation/401',
+        featureType: 'relation',
+      },
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: [
+          [
+            [
+              [-6, 37],
+              [-5, 37],
+              [-5, 38],
+              [-6, 38],
+              [-6, 37],
+            ],
+            [
+              [-5.8, 37.2],
+              [-5.8, 37.8],
+              [-5.2, 37.8],
+              [-5.2, 37.2],
+              [-5.8, 37.2],
+            ],
+          ],
+        ],
+      },
+    });
+    expect(sourceFeatureHashOverride(features[0]!)).toMatch(/^[a-f0-9]{64}$/);
+  });
+
   it('matches the Python importer for every required OSM tag family', async () => {
     const source = await readFile(
       new URL('./fixtures/python-osm-tag-matrix.osm.pbf', import.meta.url),

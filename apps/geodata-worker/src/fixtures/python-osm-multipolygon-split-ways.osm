@@ -1,0 +1,48 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<osm version='0.6' generator='MyOTA parity fixture'>
+  <node id='1' lat='37.0000000' lon='-6.0000000' />
+  <node id='2' lat='37.0000000' lon='-5.0000000' />
+  <node id='3' lat='38.0000000' lon='-5.0000000' />
+  <node id='4' lat='38.0000000' lon='-6.0000000' />
+  <node id='11' lat='37.2000000' lon='-5.8000000' />
+  <node id='12' lat='37.2000000' lon='-5.2000000' />
+  <node id='13' lat='37.8000000' lon='-5.2000000' />
+  <node id='14' lat='37.8000000' lon='-5.8000000' />
+  <way id='201'>
+    <nd ref='2' /><nd ref='1' />
+  </way>
+  <way id='202'>
+    <nd ref='3' /><nd ref='2' />
+  </way>
+  <way id='203'>
+    <nd ref='3' /><nd ref='4' />
+  </way>
+  <way id='204'>
+    <nd ref='1' /><nd ref='4' />
+  </way>
+  <way id='211'>
+    <nd ref='11' /><nd ref='12' />
+  </way>
+  <way id='212'>
+    <nd ref='13' /><nd ref='12' />
+  </way>
+  <way id='213'>
+    <nd ref='14' /><nd ref='13' />
+  </way>
+  <way id='214'>
+    <nd ref='14' /><nd ref='11' />
+  </way>
+  <relation id='401'>
+    <member type='way' ref='203' role='outer' />
+    <member type='way' ref='213' role='inner' />
+    <member type='way' ref='201' role='outer' />
+    <member type='way' ref='212' role='inner' />
+    <member type='way' ref='204' role='outer' />
+    <member type='way' ref='202' role='outer' />
+    <member type='way' ref='214' role='inner' />
+    <member type='way' ref='211' role='inner' />
+    <tag k='type' v='multipolygon' />
+    <tag k='boundary' v='protected_area' />
+    <tag k='name' v='Split member protected area' />
+  </relation>
+</osm>
