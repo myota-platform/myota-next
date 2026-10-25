@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import {
   AbortMultipartUploadCommand,
   DeleteObjectCommand,
+  HeadBucketCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -2065,7 +2066,7 @@ async function verifyImportObjectStoreRecovery() {
     }, 'Geodata did not retain the import through three source-store failures');
     runDocker('start', container);
     objectStoreStopped = false;
-    await waitForSeaweedFS(endpoint);
+    await waitForSeaweedFS(storage, bucket);
 
     await waitForRecovery(async () => {
       const state = await pool.query<{
@@ -2118,7 +2119,7 @@ async function verifyImportObjectStoreRecovery() {
   if (objectStoreStopped) {
     try {
       runDocker('start', container);
-      await waitForSeaweedFS(endpoint);
+      await waitForSeaweedFS(storage, bucket);
       objectStoreStopped = false;
     } catch (error) {
       cleanupError = error;
@@ -3816,16 +3817,14 @@ function runDocker(command: 'start' | 'stop', container: string) {
     );
 }
 
-async function waitForSeaweedFS(endpoint: string) {
+async function waitForSeaweedFS(storage: S3Client, bucket: string) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(new URL('/status', endpoint), {
-        signal: AbortSignal.timeout(1000),
-      });
-      if (response.ok) return;
+      await storage.send(new HeadBucketCommand({ Bucket: bucket }));
+      return;
     } catch {
-      // Retry while SeaweedFS restarts.
+      // Retry until the S3 API and the existing bucket are ready.
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
