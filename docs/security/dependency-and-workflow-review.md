@@ -101,11 +101,13 @@ zlib packages; the CRITICAL zlib finding is marked `will_not_fix` by the current
 Debian vulnerability metadata. These results are not an image-wide unique
 finding count; the same base-image findings repeat across images.
 
-This changes the next remediation step: refresh or replace the pinned Node
-Bookworm base, or otherwise remove the affected OS packages from the runtime
-images where safe, then rerun the release-image matrix. Do not treat the
-PostgreSQL/PostGIS/NATS remediation as complete until the final composed image
-scan passes, and do not weaken the gate or silently suppress the zlib result.
+The current remediation moves the pinned Node build and runtime stages to the
+official Node 24 Trixie slim image, which is an upstream-supported Debian
+variant. The base digest is pinned. This retains Node.js 24 while avoiding the
+Debian 12 package set reported by the failed scan. The full release-image matrix
+must confirm that the composed images pass; do not weaken the gate or silently
+suppress the zlib result. If findings remain, review the exact packages and
+select a supported fix before release.
 Track the outstanding app/tool image remediation in [issue #28](https://github.com/myota-platform/myota-next/issues/28), under parent [issue #31](https://github.com/myota-platform/myota-next/issues/31).
 
 The browser images and rebuilt infrastructure images passed this PR scan, but
