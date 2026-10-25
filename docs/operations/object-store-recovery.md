@@ -45,11 +45,14 @@ Identity and Geodata failures returned HTTP 500 but preserved database state;
 caller retry succeeded after storage recovered. Activity ADIF API upload
 returned HTTP 503 and a retried worker accepted exactly one QSO. A transient
 Geodata S3 source-read refusal recovered on attempt 2 with one candidate, zero
-errors, and one completion event. A full SeaweedFS pod stop exceeded the
-Geodata worker's then-configured three-attempt limit and ended that probe in
-`FAILED`; see the [single-instance recovery
-guide](single-instance-restart-recovery.md) for the result and the planned
-retry-budget follow-up.
+errors, and one completion event. After deploying the configurable
+10-attempt retry budget, a tagged Geodata import survived a complete SeaweedFS
+pod stop and PVC-preserving restart: it recorded five failed source reads,
+then completed as `PREPROCESSED` on attempt 6 with one candidate, zero errors,
+one completion event, and a settled durable. The exact source, run, candidate,
+and event fixtures were removed. See the [single-instance recovery
+guide](single-instance-restart-recovery.md) for the release, digest, and
+operator steps.
 
 For PDF rendering, an in-cluster proxy allowed the certificate asset reads and
 returned three `503 ServiceUnavailable` responses for the artifact `PutObject`.
@@ -70,4 +73,6 @@ The profile-image unit test passed in [Node CI run
 
 The object-store recovery guide does not yet qualify clustered storage
 failover, backup/restore, recovery after permanent volume loss in the deployed
-topology, or operator recovery procedures.
+topology, or production recovery procedures. The deployed test release
+qualifies pod stop/restart with the existing PVC; its local-path PV reclaim
+policy is `Delete`, so operators must not delete that claim as recovery.

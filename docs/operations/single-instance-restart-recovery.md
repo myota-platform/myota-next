@@ -214,14 +214,24 @@ durable returned to zero pending and acknowledgement-pending messages. The
 source object and exact run, candidate, upload-session, and outbox rows were
 removed.
 
-A separate full SeaweedFS pod stop did not recover within the deployed
-Geodata worker image's three-attempt budget: the pod took longer to become
-Ready than the retry window, and the probe run reached `FAILED` on attempt 3
-with S3 connection refusals. The pod was restored and the probe was cleaned
-up. The Geodata source now exposes a configurable retry limit whose default
-is 10; this code change is not yet deployed or qualified. The controlled
-Service-endpoint probe above verifies recovery when storage returns before the
-deployed image's limit.
+A full SeaweedFS stop was repeated after publishing release
+[`testing-16d5cc3`](https://github.com/myota-platform/myota-next/releases/tag/testing-16d5cc3)
+and deploying chart `myota-next` version `1.0.1` to `myota-test`. The
+Geodata worker image was pinned to digest
+`sha256:672b124e80898e6beabb304f645b723aba5328679b5b009ba2b6800c87b970f6`
+and the chart configured `GEODATA_IMPORT_MAX_ATTEMPTS=10`. With a tagged,
+one-feature import queued, SeaweedFS was scaled to zero while preserving its
+bound 20 GiB `local-path` PVC. The worker recorded five failed source reads
+while storage was unavailable. After SeaweedFS returned, that same run reached
+`PREPROCESSED` on attempt 6 with one staged candidate, zero errors, and exactly
+one `geodata.import.preprocessed.v1` outbox event. The
+`geodata-preprocessing-v1` durable had zero pending and acknowledgement-pending
+messages. The tagged source object, import, candidate, and events were removed
+using the load-test cleanup endpoint; the temporary cleanup setting was
+disabled and the normal `MYOTA_ENV=testing` configuration restored. This
+qualifies automatic recovery through a complete object-store pod stop and
+restart with the retained PVC; permanent PVC loss and backup/restore remain
+outside this check. It replaces the earlier three-attempt failure evidence.
 
 The deployed Activity PDF renderer was qualified at the artifact-write step.
 A temporary in-cluster S3 proxy allowed the background and signature reads,
