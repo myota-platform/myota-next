@@ -349,7 +349,8 @@ describe('Activity launch capacity qualification', () => {
            WHERE award_id=$1 AND category='HUNTER'`,
           [hunterAwardId],
         );
-        expect(Number(awardProgress.rows[0]?.count)).toBe(targetQsoCount);
+        // The operator also receives a zero-QSO hunter progress row.
+        expect(Number(awardProgress.rows[0]?.count)).toBe(targetQsoCount + 1);
 
         const syncQsoDurations: number[] = [];
         for (let index = 0; index < 20; index++) {
