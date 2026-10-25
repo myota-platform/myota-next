@@ -27,9 +27,9 @@ spec:
           command: ["sh", "-ec"]
           args:
             - >-
-              node --experimental-strip-types tools/db-migrate.ts --owner=core &&
-              node --experimental-strip-types tools/db-migrate.ts --owner=activity &&
-              node --experimental-strip-types tools/db-migrate.ts --owner=geo
+              /nodejs/bin/node --experimental-strip-types tools/db-migrate.ts --owner=core &&
+              /nodejs/bin/node --experimental-strip-types tools/db-migrate.ts --owner=activity &&
+              /nodejs/bin/node --experimental-strip-types tools/db-migrate.ts --owner=geo
           env:
             - name: CORE_DATABASE_URL
               valueFrom:

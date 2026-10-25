@@ -19,8 +19,9 @@ storage, secrets, and ports at runtime. Do not build a combined image that
 starts multiple database owners in one process.
 
 The tools image uses the pinned Distroless Node 24 debug variant because the
-migration job sequences its commands with `sh`. Other application images have
-no shell.
+migration job sequences its commands with `sh`. Invoke Node as
+`/nodejs/bin/node`; the Distroless image does not put the executable on `PATH`.
+Other application images have no shell.
 
 Publishing, immutable registry tags, image scanning, deployment manifests, and
 rollout verification remain separate release gates.
