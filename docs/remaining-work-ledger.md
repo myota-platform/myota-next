@@ -384,8 +384,10 @@ an accepted scope decision is recorded in the dispositions section.
   1-CPU/1-GiB Node limits, 1-CPU/2-GiB PostgreSQL and JetStream limits, pool maxima of
   10 (Geodata) and 12 (Activity), two API replicas, and one worker. Full measurements
   and scope are recorded in the Activity and Geodata parity pages. Object storage was
-  mocked; one Geodata telemetry sampler produced unreliable instantaneous broker and
-  connection maxima, which are excluded from operating bounds.
+  mocked. The first Geodata sampler queried a stale durable and its maxima were
+  excluded; the corrected [repeat run 40240895206](https://github.com/myota-platform/myota-next/actions/runs/40240895206)
+  passed with 83 successful telemetry samples, no sampling errors, and measured import,
+  database-connection, and JetStream backlog values.
 - **Missing evidence:** The live test deployment still has unbounded PostgreSQL/NATS
   pods. Verify explicit resource limits in its rendered Helm configuration before
   calling the deployed topology bounded. Source allowlists, licenses, outages,
@@ -393,10 +395,9 @@ an accepted scope decision is recorded in the dispositions section.
   scopes are not always directly comparable.
 - **Risk:** Production load can exhaust memory, pools, or broker capacity,
   producing slow or failed user workflows and unsafe retry backlogs.
-- **Next check:** Rerun the bounded qualification with the Geodata telemetry sampler
-  reporting successful and failed samples. Add explicit PostgreSQL and NATS resource
-  settings to the isolated test Helm releases; review source allowlists, licenses,
-  outages, scheduling, and safe retry before enabling live scheduled fetching.
+- **Next check:** Apply and verify explicit PostgreSQL and NATS resource settings in the
+  isolated Helm releases; review source allowlists, licenses, outages, scheduling, and
+  safe retry before enabling live scheduled fetching.
 - **Tracked by:** [Issue #18](https://github.com/myota-platform/myota-next/issues/18)
   and [Issue #19](https://github.com/myota-platform/myota-next/issues/19).
 - **Sources:** [completion criteria, lines 15–17](parity/completion-criteria.md#L15);

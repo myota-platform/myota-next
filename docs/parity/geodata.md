@@ -262,6 +262,16 @@ the live deployment's rendered values before treating them as deployed limits. S
 allowlists, licensing, outages, scheduling, and safe retries remain unreviewed, so
 scheduled live-source fetching must stay disabled.
 
+The repeat qualification in [run 40240895206](https://github.com/myota-platform/myota-next/actions/runs/40240895206)
+passed with 83 successful Geodata telemetry samples and no sampling errors. Its 5,000-
+feature import completed in 5.34 seconds (937 features/s), with 43,528,192 bytes process
+RSS growth, 3 peak active database connections, one peak work-stream message, zero
+pending work messages, one pending acknowledgement, and no pending outbox events. The
+100-entity validation and promotion/approval operations measured 3.68 ms and 520.91 ms.
+This confirms the telemetry sampler is now querying the registered
+`geodata-preprocessing-v1` durable; the earlier run's zero backlog/connection maxima
+are superseded.
+
 Shapefile and PBF working directories use `MYOTA_UPLOAD_SPOOL_DIR` when set, and
 otherwise use the OS temporary directory. PBF source bytes stream to disk with checksum
 verification. API admission and worker decoding share the same configured upload cap,
