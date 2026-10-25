@@ -108,6 +108,7 @@ jobs:
         run: |
           docker run --rm --network host \
             --cpus=1 --memory=1g --memory-swap=1g \
+            --user "$(id -u):$(id -g)" --env HOME=/tmp \
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --workdir /workspace \
             --env ACTIVITY_DATABASE_URL \
@@ -119,6 +120,7 @@ jobs:
         run: |
           docker run --rm --network host \
             --cpus=1 --memory=1g --memory-swap=1g \
+            --user "$(id -u):$(id -g)" --env HOME=/tmp \
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --workdir /workspace \
             --env GEO_DATABASE_URL \
