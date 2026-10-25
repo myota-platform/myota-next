@@ -58,3 +58,15 @@ geodataImporter:
   pollSeconds: 60
   sourceAllowlist:
     - data.example.org
+ingress:
+  enabled: true
+  entryPoints: [websecure]
+  apiHost: api.example.org
+  adminHost: admin.example.org
+  participantHost: www.example.org
+  objectStorageHost: s3.example.org
+  objectStorageService: myota-s3
+  objectStoragePort: 8333
+  tls:
+    certResolver: acmeresolver
+    secretName: ''

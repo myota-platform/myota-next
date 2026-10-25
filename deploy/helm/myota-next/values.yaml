@@ -341,11 +341,45 @@ components:
     env: {}
 ingress:
   enabled: false
-  className: ''
-  host: api.myota.top
+  entryPoints:
+    - websecure
+  apiHost: api.myota.top
   adminHost: ''
   participantHost: ''
-  tlsSecretName: ''
+  objectStorageHost: ''
+  objectStorageService: ''
+  objectStoragePort: 8333
+  tls:
+    certResolver: acmeresolver
+    secretName: ''
+  middlewares: []
+  priority: 0
+imagePullSecrets: []
+serviceAccountName: ''
+podAnnotations: {}
+podLabels: {}
+podSecurityContext: {}
+containerSecurityContext: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+deploymentStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
+probes:
+  liveness:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
 commonResources:
   requests: { cpu: 100m, memory: 128Mi }
   limits: { cpu: '1', memory: 1Gi }

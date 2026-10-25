@@ -1,0 +1,70 @@
+{{- if .Values.ingress.enabled }}
+{{- $admin := index .Values.components "admin-web" }}
+{{- $participant := index .Values.components "participant-web" }}
+{{- if not .Values.ingress.apiHost }}
+{{- fail "ingress.apiHost is required when ingress is enabled" }}
+{{- end }}
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ include "myota-next.name" . }}
+  labels:
+    {{- include "myota-next.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    {{- toYaml .Values.ingress.entryPoints | nindent 4 }}
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.apiHost }}`)
+      {{- if .Values.ingress.priority }}
+      priority: {{ .Values.ingress.priority }}
+      {{- end }}
+      {{- with .Values.ingress.middlewares }}
+      middlewares:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      services:
+        - name: {{ printf "%s-gateway" (include "myota-next.name" .) }}
+          port: {{ .Values.components.gateway.port }}
+    {{- if and .Values.ingress.adminHost $admin.enabled }}
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.adminHost }}`)
+      {{- with .Values.ingress.middlewares }}
+      middlewares:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      services:
+        - name: {{ printf "%s-admin-web" (include "myota-next.name" .) }}
+          port: {{ $admin.port }}
+    {{- end }}
+    {{- if and .Values.ingress.participantHost $participant.enabled }}
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.participantHost }}`)
+      {{- with .Values.ingress.middlewares }}
+      middlewares:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      services:
+        - name: {{ printf "%s-participant-web" (include "myota-next.name" .) }}
+          port: {{ $participant.port }}
+    {{- end }}
+    {{- if .Values.ingress.objectStorageHost }}
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.objectStorageHost }}`)
+      {{- with .Values.ingress.middlewares }}
+      middlewares:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      services:
+        - name: {{ required "ingress.objectStorageService is required when ingress.objectStorageHost is set" .Values.ingress.objectStorageService | quote }}
+          port: {{ .Values.ingress.objectStoragePort }}
+    {{- end }}
+  {{- if or .Values.ingress.tls.certResolver .Values.ingress.tls.secretName }}
+  tls:
+    {{- if .Values.ingress.tls.secretName }}
+    secretName: {{ .Values.ingress.tls.secretName | quote }}
+    {{- else if .Values.ingress.tls.certResolver }}
+    certResolver: {{ .Values.ingress.tls.certResolver | quote }}
+    {{- end }}
+  {{- end }}
+{{- end }}

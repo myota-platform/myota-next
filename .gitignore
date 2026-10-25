@@ -7,5 +7,6 @@ backups/
 .env
 .env.*
 !.env.example
+runtime-secrets/
 *.tsbuildinfo
 .DS_Store

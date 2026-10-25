@@ -119,6 +119,7 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}-${{ matrix.app }}
+          flavor: latest=false
           tags: |
             type=sha,format=long,prefix=sha-
             type=ref,event=tag

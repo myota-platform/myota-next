@@ -1,0 +1,125 @@
+name: Publish Helm chart
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: GitHub release tag whose source should be packaged
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-helm-chart-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Resolve release tag
+        id: release
+        env:
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.release_tag }}
+        run: |
+          tag="$EVENT_TAG"
+          if [ -z "$tag" ]; then tag="$INPUT_TAG"; fi
+          test -n "$tag"
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'release' && steps.release.outputs.tag || github.ref_name }}
+          persist-credentials: false
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.3.0
+
+      - name: Validate Helm charts
+        run: |
+          helm lint deploy/helm/myota-next -f deploy/helm/myota-next/values-testing.yaml
+          helm lint deploy/helm/myota-infrastructure --set objectStorage.enabled=true
+
+      - name: Prepare versioned chart repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          auth_url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          mkdir chart-repository
+          git -C chart-repository init --initial-branch=gh-pages
+          git -C chart-repository remote add origin "$auth_url"
+          git -C chart-repository config user.name github-actions[bot]
+          git -C chart-repository config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          if git ls-remote --exit-code origin refs/heads/gh-pages >/dev/null 2>&1; then
+            git -C chart-repository fetch --depth=1 origin gh-pages
+            git -C chart-repository reset --hard FETCH_HEAD
+          else
+            touch chart-repository/.nojekyll
+            git -C chart-repository add .nojekyll
+            git -C chart-repository commit -m 'Initialize Helm repository'
+            git -C chart-repository push origin HEAD:gh-pages
+          fi
+
+          version_file=chart-repository/chart-version.txt
+          if [ -f "$version_file" ]; then
+            current="$(cat "$version_file")"
+            if [[ ! "$current" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "Invalid existing chart version: $current" >&2
+              exit 1
+            fi
+            next="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
+          else
+            next="$(awk '$1 == "version:" {print $2; exit}' deploy/helm/myota-next/Chart.yaml)"
+          fi
+          printf '%s\n' "$next" > "$version_file"
+          helm package deploy/helm/myota-next \
+            --version "$next" \
+            --app-version "$RELEASE_TAG" \
+            --destination chart-repository
+          if [ -f chart-repository/index.yaml ]; then
+            helm repo index chart-repository \
+              --url "https://myota-platform.github.io/myota-next" \
+              --merge chart-repository/index.yaml
+          else
+            helm repo index chart-repository \
+              --url "https://myota-platform.github.io/myota-next"
+          fi
+          cat > chart-repository/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en"><meta charset="utf-8"><title>MyOTA Helm repository</title>
+          <h1>MyOTA Helm repository</h1>
+          <p>Rancher catalog and Helm repository: <a href="index.yaml">index.yaml</a>.</p>
+          <p>Install with <code>helm repo add myota https://myota-platform.github.io/myota-next</code>.</p>
+          </html>
+          HTML
+          touch chart-repository/.nojekyll
+          git -C chart-repository config user.name github-actions[bot]
+          git -C chart-repository config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git -C chart-repository add .
+          git -C chart-repository commit -m "Publish myota-next chart ${next} for ${RELEASE_TAG}"
+          git -C chart-repository push origin HEAD:gh-pages
+          rm -rf chart-repository/.git
+          echo "Published chart version ${next} for application release ${RELEASE_TAG}." >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: chart-repository
+
+      - uses: actions/deploy-pages@v4

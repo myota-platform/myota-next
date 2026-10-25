@@ -9,6 +9,16 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
 {{- end -}}
 
+{{- define "myota-next.podLabels" -}}
+{{- $name := include "myota-next.name" . -}}
+{{- $reserved := dict
+  "app.kubernetes.io/instance" .Release.Name
+  "app.kubernetes.io/component" .component
+  "app.kubernetes.io/name" $name
+}}
+{{- toYaml (mergeOverwrite (dict) .Values.podLabels $reserved) -}}
+{{- end -}}
+
 {{- define "myota-next.image" -}}
 {{- $image := .image -}}
 {{- $name := .name -}}

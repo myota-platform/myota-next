@@ -7,6 +7,28 @@ databases, a NATS server, or object storage. Configure those services
 independently. An opt-in Job can provision the registered streams and durable
 consumers on the configured NATS server.
 
+## Configurable values
+
+`values.yaml` provides the main deployment controls:
+
+- `images` selects each component image by immutable digest or tag.
+- `components` controls API and worker enablement, replica counts, ports,
+  environment, resource requests/limits, and health checks.
+- `ingress` configures Traefik entry points, API/Admin/Participant/S3
+  hostnames, middleware references, TLS certificate resolver, and optional
+  TLS Secret. The test cluster uses `websecure` with `acmeresolver`.
+- `secrets`, `dependencies`, `migrations`, `observe`, and
+  `jetstreamProvisioner` configure secret references, external endpoints,
+  schema setup, Observe reporting, and NATS topology provisioning.
+- Pod-level values control image pull secrets, annotations/labels, security
+  contexts, scheduling, topology spread, rollout strategy, and probes.
+- `commonResources` sets default CPU and memory requests/limits; a component
+  may override them with its own `resources` value.
+
+Use `values-testing.yaml` as the non-secret reference configuration for the
+current K3s testing deployment. Keep credentials in Kubernetes Secrets, never
+in chart values or release artifacts.
+
 ## Images and install
 
 Build and publish a per-application image with the root `Dockerfile`. Configure
@@ -59,8 +81,36 @@ Configure repository and tag or digest for each enabled component image and
 
 ```sh
 helm upgrade --install myota-next deploy/helm/myota-next \
-  --namespace myota --create-namespace -f values-production.yaml
+  --namespace myota-test --create-namespace -f values-testing.yaml
 ```
+
+## Rancher catalog and versioning
+
+The public chart repository is
+`https://myota-platform.github.io/myota-next`. Add it as a Rancher Cluster
+Repository / Helm repository to make the chart visible under Applications. The
+initial chart version is `1.0.0`; the release workflow keeps each `.tgz` and
+updates `index.yaml` on GitHub Pages for every published GitHub Release. Each
+subsequent GitHub release increments the chart patch version, while `appVersion`
+records the GitHub release tag used to package the chart.
+
+To add the repository with Helm:
+
+```sh
+helm repo add myota https://myota-platform.github.io/myota-next
+helm repo update
+helm search repo myota/myota-next --versions
+```
+
+The workflow has a manual dispatch input for bootstrapping the first chart
+from the current repository branch. Subsequent chart versions are published
+automatically when a GitHub Release is published.
+
+The app chart emits a Traefik `IngressRoute` (`traefik.io/v1alpha1`) rather
+than a generic Ingress, matching this K3s server's `websecure` entry point and
+`acmeresolver`. Set `ingress.apiHost`, `ingress.adminHost`,
+`ingress.participantHost`, and optionally `ingress.objectStorageHost` for the
+four public endpoints.
 
 `migrations.enabled` runs the checked-in owner migrations as a Helm
 pre-install/pre-upgrade Job against all three databases. The Job is a release

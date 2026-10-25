@@ -14,22 +14,57 @@ metadata:
     app.kubernetes.io/component: {{ $name }}
 spec:
   replicas: {{ default 1 $component.replicas }}
+  strategy:
+    {{- toYaml $.Values.deploymentStrategy | nindent 4 }}
   selector:
     matchLabels:
       app.kubernetes.io/instance: {{ $.Release.Name }}
       app.kubernetes.io/component: {{ $name }}
   template:
     metadata:
+      {{- with $.Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       labels:
-        app.kubernetes.io/instance: {{ $.Release.Name }}
-        app.kubernetes.io/component: {{ $name }}
-        app.kubernetes.io/name: {{ include "myota-next.name" $ }}
+        {{- include "myota-next.podLabels" (dict "Values" $.Values "Release" $.Release "Chart" $.Chart "component" $name) | nindent 8 }}
     spec:
       terminationGracePeriodSeconds: {{ default 30 $component.terminationGracePeriodSeconds }}
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.serviceAccountName }}
+      serviceAccountName: {{ . | quote }}
+      {{- end }}
+      {{- with $.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ $name }}
           image: {{ include "myota-next.image" (dict "image" (index $.Values.images $imageName) "name" $imageName) | quote }}
           imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          {{- with $.Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- if $component.port }}
           ports:
             - name: http
@@ -53,18 +88,12 @@ spec:
             httpGet:
               path: {{ default "/healthz" $component.livenessPath }}
               port: {{ ternary "http" "health" (hasKey $component "port") }}
-            initialDelaySeconds: 10
-            periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 3
+            {{- toYaml $.Values.probes.liveness | nindent 12 }}
           readinessProbe:
             httpGet:
               path: {{ default "/readyz" $component.readinessPath }}
               port: {{ ternary "health" "http" (hasKey $component "healthPort") }}
-            initialDelaySeconds: 5
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 3
+            {{- toYaml $.Values.probes.readiness | nindent 12 }}
           {{- end }}
 ---
 {{- end }}

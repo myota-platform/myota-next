@@ -1,0 +1,151 @@
+{{- if .Values.objectStorage.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "myota-infrastructure.name" . }}-seaweedfs
+  labels:
+    {{- include "myota-infrastructure.labels" . | nindent 4 }}
+    app.kubernetes.io/component: object-storage
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: object-storage
+  ports:
+    - name: s3
+      port: 8333
+      targetPort: s3
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "myota-infrastructure.name" . }}-seaweedfs
+  labels:
+    {{- include "myota-infrastructure.labels" . | nindent 4 }}
+    app.kubernetes.io/component: object-storage
+spec:
+  serviceName: {{ include "myota-infrastructure.name" . }}-seaweedfs
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: object-storage
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: myota-infrastructure
+        app.kubernetes.io/component: object-storage
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: seaweedfs
+          image: {{ .Values.objectStorage.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: [weed]
+          args:
+            - mini
+            - -dir=/data
+            - -ip.bind=0.0.0.0
+            - -metricsPort=9324
+            - -s3.config=/etc/seaweedfs-auth/s3.json
+          ports:
+            - name: s3
+              containerPort: 8333
+              protocol: TCP
+            - name: filer
+              containerPort: 8888
+              protocol: TCP
+            - name: metrics
+              containerPort: 9324
+              protocol: TCP
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.objectStorage.credentialsSecretName }}
+                  key: access-key
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.objectStorage.credentialsSecretName }}
+                  key: secret-key
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: s3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: s3
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.objectStorage.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: s3-config
+              mountPath: /etc/seaweedfs-auth
+              readOnly: true
+      volumes:
+        - name: s3-config
+          secret:
+            secretName: {{ .Values.objectStorage.configSecretName }}
+            items:
+              - key: s3.json
+                path: s3.json
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- $storageClass := default .Values.storageClassName .Values.objectStorage.storageClassName }}
+        {{- if $storageClass }}
+        storageClassName: {{ $storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.objectStorage.storage | quote }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "myota-infrastructure.name" . }}-object-buckets
+  labels:
+    {{- include "myota-infrastructure.labels" . | nindent 4 }}
+    app.kubernetes.io/component: object-bucket-provisioning
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: create-buckets
+          image: public.ecr.aws/aws-cli/aws-cli:2.27.41
+          command: [/bin/sh, -ec]
+          args:
+            - >-
+              until aws s3api list-buckets --endpoint-url http://{{ include "myota-infrastructure.name" . }}-seaweedfs:8333 >/dev/null 2>&1; do sleep 2; done;
+              {{- range .Values.objectStorage.buckets }}
+              aws s3api head-bucket --bucket {{ . | quote }} --endpoint-url http://{{ include "myota-infrastructure.name" $ }}-seaweedfs:8333 >/dev/null 2>&1 || aws s3api create-bucket --bucket {{ . | quote }} --endpoint-url http://{{ include "myota-infrastructure.name" $ }}-seaweedfs:8333 >/dev/null;
+              {{- end }}
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.objectStorage.credentialsSecretName }}
+                  key: access-key
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.objectStorage.credentialsSecretName }}
+                  key: secret-key
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+{{- end }}

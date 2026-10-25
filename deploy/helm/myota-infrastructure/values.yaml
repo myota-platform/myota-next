@@ -2,6 +2,23 @@ imagePullPolicy: IfNotPresent
 postgresSecret: myota-postgres-auth
 storageClassName: ''
 resources: {}
+objectStorage:
+  enabled: false
+  image: chrislusf/seaweedfs:latest@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+  configSecretName: myota-seaweedfs-s3-config
+  credentialsSecretName: myota-object-storage
+  storage: 20Gi
+  storageClassName: ''
+  buckets:
+    - myota-user-profile-images
+    - myota-adif
+    - myota-award-assets
+    - myota-award-signatures
+    - myota-certificates
+    - myota-geodata-imports
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: '2', memory: 2Gi }
 
 # Keep exactly these three databases. Email delivery is owned by Core.
 databases:

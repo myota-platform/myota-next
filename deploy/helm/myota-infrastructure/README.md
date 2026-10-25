@@ -4,6 +4,14 @@ This chart creates exactly three single-instance PostgreSQL StatefulSets:
 Core (`myota_core`), Activity (`myota_activity`), and Geodata (`myota_geo`,
 with PostGIS). Email delivery remains in Core. It creates no fourth database.
 
+It can also provision an isolated SeaweedFS S3-compatible endpoint by setting
+`objectStorage.enabled=true`. That option requires two Kubernetes Secrets:
+`myota-object-storage` with `access-key`, `secret-key`,
+`profile-image-access-key`, and `profile-image-secret-key`; and
+`myota-seaweedfs-s3-config` with the generated `s3.json` key. The latter is
+created from `tools/render-seaweedfs-s3-config.ts`. The chart creates the
+standard MyOTA buckets after SeaweedFS becomes ready.
+
 The chart is optional. Use it for a small single-cluster deployment or point
 the NestJS chart at externally managed database services instead. The
 StatefulSets are not replicated and do not provide high availability or
