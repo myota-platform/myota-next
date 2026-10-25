@@ -29,7 +29,7 @@ spec:
         - name: provisioner
           image: {{ include "myota-next.image" (dict "image" .Values.jetstreamProvisioner.image "name" "jetstreamProvisioner") | quote }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
-          command: ["node", "--experimental-strip-types", "tools/provision-jetstream.ts"]
+          command: ["/nodejs/bin/node", "--experimental-strip-types", "tools/provision-jetstream.ts"]
           env:
             - name: NATS_URL
               valueFrom:
