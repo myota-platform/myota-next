@@ -78,11 +78,11 @@ database DNS/endpoints were being restored, then returned HTTP 200. The
 application readiness transitions after each new PostgreSQL pod was created
 were:
 
-| Owner database | NestJS API / worker readiness |
-| --- | --- |
-| Core | Identity 17 s; Programmes 14 s; Core outbox 18 s |
-| Activity | Activity API 16 s; worker 15 s; notifications 16 s; Activity outbox 32 s |
-| Geodata | Geodata API 16 s; worker 12 s; Geodata outbox 16 s |
+| Owner database | NestJS API / worker readiness                                            |
+| -------------- | ------------------------------------------------------------------------ |
+| Core           | Identity 17 s; Programmes 14 s; Core outbox 18 s                         |
+| Activity       | Activity API 16 s; worker 15 s; notifications 16 s; Activity outbox 32 s |
+| Geodata        | Geodata API 16 s; worker 12 s; Geodata outbox 16 s                       |
 
 Database health warnings and outbox polling errors were emitted during each
 interruption. After the replacement endpoints stabilized, the API and worker
@@ -214,13 +214,37 @@ durable returned to zero pending and acknowledgement-pending messages. The
 source object and exact run, candidate, upload-session, and outbox rows were
 removed.
 
-A separate full SeaweedFS pod stop did not recover within the Geodata worker's
-three-attempt budget: the pod took longer to become Ready than the retry
-window, and the probe run reached `FAILED` on attempt 3 with S3 connection
-refusals. The pod was restored, the probe was cleaned up, and this result is
-evidence of the current retry-budget limit rather than successful automatic
-recovery across a full storage-pod restart. The controlled Service-endpoint
-probe above verifies recovery when storage returns before that limit.
+A separate full SeaweedFS pod stop did not recover within the deployed
+Geodata worker image's three-attempt budget: the pod took longer to become
+Ready than the retry window, and the probe run reached `FAILED` on attempt 3
+with S3 connection refusals. The pod was restored and the probe was cleaned
+up. The Geodata source now exposes a configurable retry limit whose default
+is 10; this code change is not yet deployed or qualified. The controlled
+Service-endpoint probe above verifies recovery when storage returns before the
+deployed image's limit.
+
+The deployed Activity PDF renderer was qualified at the artifact-write step.
+A temporary in-cluster S3 proxy allowed the background and signature reads,
+then returned `503 ServiceUnavailable` for the first three PDF `PutObject`
+requests. The worker logged the failed first `PDF_RENDER` attempt and retried
+the same durable job; the second job attempt completed after the proxy passed
+the write through. The persisted job was `SUCCEEDED` on attempt 2, the issuance
+was `READY` with `downloadReady=true`, the 524,360-byte artifact began with
+`%PDF`, and exactly one `awards.rendered.v1` event existed. The PDF durable had
+zero pending and acknowledgement-pending messages. The temporary proxy was
+removed, the SeaweedFS Service selector and target port were restored, and all
+fixture objects, rows, and retained event messages were deleted.
+
+The deployed SeaweedFS persistent-volume path was also checked. A unique
+58-byte object was written to the Geodata import bucket, the SeaweedFS pod was
+deleted, and its replacement received a different pod UID. The same object was
+read afterward with an identical SHA-256 digest. PVC
+`data-myota-test-seaweedfs-0` remained `Bound` to the `local-path` StorageClass
+at 20 GiB, and the probe object was deleted after verification. The
+StatefulSet retains its PVC when scaled or deleted. This qualifies pod
+replacement with the existing volume; it does not qualify node loss, permanent
+PVC loss, backup, or restore. The `local-path` PV reclaim policy is `Delete`,
+so operators must not delete the claim as a recovery step.
 
 An Email worker was temporarily enabled against an in-cluster SMTP sink using
 STARTTLS and a temporary CA trusted only by that worker. The sink first returned
@@ -253,11 +277,12 @@ Activity QSO recovery after owner-database loss, and in-flight Activity and
 Geodata job settlement across NATS process interruption. Deployed storage
 outage and retry checks now cover Activity ADIF, Identity profile-image, the
 Activity ADIF worker, Geodata multipart upload, and Geodata preprocessing
-source reads. The HTTP 500 mapping gaps and Geodata's retry-budget limit for a
-full SeaweedFS pod restart are described above.
+source reads, and Activity PDF artifact writes. The HTTP 500 mapping gaps and
+Geodata's retry-budget limit for a full SeaweedFS pod restart are described
+above.
 Activity notification and Email retry exhaustion and audited redrive now have
-deployed evidence. Deployed PDF artifact-write recovery and production SMTP
-trust-root qualification remain open. Email is disabled again in this test
-release. See [Activity
+deployed evidence. Permanent-volume-loss recovery, production SMTP trust-root
+qualification, and recovery after SeaweedFS node loss remain open. Email is
+disabled again in this test release. See [Activity
 recovery](../parity/workers-operations.md) and the [remaining work
 ledger](../remaining-work-ledger.md) for the remaining gaps.

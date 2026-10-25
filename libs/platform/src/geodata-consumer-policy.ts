@@ -76,6 +76,14 @@ export function geodataConsumerPolicy(
   };
 }
 
+export function geodataImportMaxAttempts(
+  environment: NodeJS.ProcessEnv = process.env,
+): number {
+  return (
+    optionalPositiveSetting('GEODATA_IMPORT_MAX_ATTEMPTS', environment) ?? 10
+  );
+}
+
 export function geodataImportConcurrency(
   environment: NodeJS.ProcessEnv = process.env,
 ): number {

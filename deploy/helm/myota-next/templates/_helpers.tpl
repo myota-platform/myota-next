@@ -49,6 +49,11 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
 {{- end }}
 {{- end -}}
 
+{{- define "myota-next.geodata-worker-attempt-env" -}}
+- name: GEODATA_IMPORT_MAX_ATTEMPTS
+  value: {{ .Values.geodataWorker.importMaxAttempts | toString | quote }}
+{{- end -}}
+
 {{- define "myota-next.env" -}}
 {{- $root := .root -}}
 {{- range $key, $value := .env }}

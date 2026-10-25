@@ -103,19 +103,20 @@ an accepted scope decision is recorded in the dispositions section.
   Service had no endpoints; after its selector was restored, the same
   preprocessing run completed on attempt 2 with one candidate, zero errors,
   one completion event, and no pending or acknowledgement-pending work. A
-  separate full SeaweedFS pod stop took longer than the worker's three-attempt
-  retry budget and ended `FAILED` on attempt 3. Both probes were cleaned up.
-- **Missing evidence:** Full SeaweedFS pod-restart recovery within the current
+  separate full SeaweedFS pod stop took longer than the deployed image's
+  three-attempt retry budget and ended `FAILED` on attempt 3. Both probes were
+  cleaned up. The source now exposes a configurable import retry limit with a
+  default of 10, but this image has not yet been deployed and qualified.
+- **Missing evidence:** Full SeaweedFS pod-restart recovery with the updated
   retry budget is not qualified; the deployed restart probe reached terminal
   failure before the pod became Ready. The local SeaweedFS volume-loss case is
   covered under L-13, but does not qualify the deployed storage topology. Some
   broker settlement checks still stub successful reprocessing.
 - **Risk:** Import, promotion, deletion, enrichment, or retention work may be
   stranded or repeated after a crash or database outage.
-- **Next check:** Decide whether to increase or otherwise tune the Geodata
-  worker's retry budget for full storage-pod recovery, then repeat the deployed
-  pod-restart check. Qualify other relevant consumers, including deployed PDF
-  artifact writes.
+- **Next check:** Deploy the configurable 10-attempt Geodata import retry
+  default and repeat the full storage-pod restart check. Other consumer checks
+  now include deployed PDF artifact writes.
 - **Tracked by:** [Issue #16](https://github.com/myota-platform/myota-next/issues/16).
 - **Sources:** [Geodata parity, lines 18–25](parity/geodata.md#L18);
   [workers and operations, lines 168–190](parity/workers-operations.md#L168).
@@ -270,16 +271,27 @@ an accepted scope decision is recorded in the dispositions section.
   its selector was restored before the retry limit. The same run completed on
   attempt 2 with one feature, one candidate, zero errors, and one completion
   event; the durable had zero pending and acknowledgement-pending messages.
-  A separate test that stopped the SeaweedFS pod reached Geodata's three-attempt
-  limit before storage became Ready and ended `FAILED`; the exact probe was
-  removed after recording this retry-budget limitation.
+  A separate test that stopped the SeaweedFS pod reached the deployed image's
+  three-attempt limit before storage became Ready and ended `FAILED`; the exact
+  probe was removed after recording this retry-budget limitation. The Geodata
+  source now has a configurable retry limit defaulting to 10, but that image
+  has not been deployed and qualified yet. The deployed Activity
+  PDF renderer then received three injected S3 `503 ServiceUnavailable`
+  responses for the artifact write after source assets had been read. The same
+  job retried and succeeded on attempt 2; the artifact was `READY`, began with
+  `%PDF`, and exactly one rendered event was recorded. The PDF durable settled
+  with no pending or acknowledgement-pending messages, and all probe data was
+  removed. A deployed SeaweedFS persistent-volume check wrote a unique Geodata
+  object, replaced the SeaweedFS pod (new pod UID), then read the same bytes and
+  checksum from the still-Bound 20 GiB `local-path` PVC before deleting the
+  object. StatefulSet PVC retention and the local-path reclaim policy were
+  recorded in the recovery guide.
 - **Additional consumer check:** Node CI verifies a failed Identity profile-image
   S3 write rolls back without replacing the existing image reference; the test
   uses mocked database and object-store clients. See [Node CI run 40098386128](https://github.com/myota-platform/myota-next/actions/runs/40098386128).
 - **Missing evidence:** Recovery of a deployed Geodata run after full SeaweedFS
-  pod restart within its current retry budget, deployed PDF artifact-write
-  recovery, clustered failover, recovery after
-  permanent volume loss in the deployed storage topology, and production
+  pod restart with the updated retry budget, clustered failover, recovery
+  after permanent volume loss in the deployed storage topology, and production
   recovery procedures are not covered. The deployed Identity and Geodata
   outages preserved database state and succeeded after caller retry, but both
   surfaced storage connection errors as HTTP 500. Deployed Activity ADIF recovery
@@ -287,9 +299,9 @@ an accepted scope decision is recorded in the dispositions section.
   retry the failed HTTP upload request.
 - **Risk:** Uploaded or generated objects can be lost or orphaned while their
   database references remain, or recovery may require undocumented manual work.
-- **Next check:** Rehearse backup, restore, failover, permanent-volume-loss
-  recovery, and safe retry against the selected deployment storage; qualify
-  deployed PDF artifact writes and fix or disposition the HTTP 500 error
+- **Next check:** Deploy and qualify the expanded Geodata retry budget, rehearse
+  backup, restore, failover, and permanent-volume-loss recovery against the
+  selected deployment storage, and fix or disposition the HTTP 500 error
   mapping for Identity and Geodata uploads.
 - **Tracked by:** [Activity issue #15](https://github.com/myota-platform/myota-next/issues/15)
   and [Geodata issue #16](https://github.com/myota-platform/myota-next/issues/16).

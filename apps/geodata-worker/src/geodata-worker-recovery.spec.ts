@@ -1931,7 +1931,8 @@ async function verifyImportObjectStoreRecovery() {
     GEODATA_WORKER_MAX_ACK_PENDING: '1',
     GEODATA_WORKER_ACK_WAIT_SECONDS: '2',
     GEODATA_WORKER_MAX_DELIVERIES: '10',
-    GEODATA_WORKER_RETRY_DELAY_SECONDS: '10',
+    GEODATA_WORKER_RETRY_DELAY_SECONDS: '1',
+    GEODATA_IMPORT_MAX_ATTEMPTS: '4',
   })) {
     environment.set(name, process.env[name]);
     process.env[name] = value;
@@ -2059,9 +2060,9 @@ async function verifyImportObjectStoreRecovery() {
         attempt_count: number;
       }>('SELECT status,attempt_count FROM import_run WHERE id=$1', [runId]);
       return (
-        state.rows[0]?.status === 'QUEUED' && state.rows[0]?.attempt_count === 1
+        state.rows[0]?.status === 'QUEUED' && state.rows[0]?.attempt_count === 3
       );
-    }, 'Geodata did not persist the source-store outage for retry');
+    }, 'Geodata did not retain the import through three source-store failures');
     runDocker('start', container);
     objectStoreStopped = false;
     await waitForSeaweedFS(endpoint);
@@ -2073,9 +2074,9 @@ async function verifyImportObjectStoreRecovery() {
       }>('SELECT status,attempt_count FROM import_run WHERE id=$1', [runId]);
       return (
         state.rows[0]?.status === 'PREPROCESSED' &&
-        state.rows[0]?.attempt_count === 2
+        state.rows[0]?.attempt_count === 4
       );
-    }, 'Geodata import did not retry after the object store recovered');
+    }, 'Geodata import did not recover after the object store returned');
 
     const result = await pool.query<{
       status: string;
@@ -2093,7 +2094,7 @@ async function verifyImportObjectStoreRecovery() {
     );
     expect(result.rows[0]).toMatchObject({
       status: 'PREPROCESSED',
-      attempt_count: 2,
+      attempt_count: 4,
       candidates: 1,
       distinct_ordinals: 1,
     });

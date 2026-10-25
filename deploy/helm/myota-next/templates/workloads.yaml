@@ -80,6 +80,7 @@ spec:
             {{- include "myota-next.env" (dict "root" $ "env" $component.env "observe" (and $.Values.observe.enabled $usesObserve)) | nindent 12 }}
             {{- if eq $name "geodata-worker" }}
             {{- include "myota-next.geodata-worker-policy-env" $ | nindent 12 }}
+            {{- include "myota-next.geodata-worker-attempt-env" $ | nindent 12 }}
             {{- end }}
           resources:
             {{- toYaml (default $.Values.commonResources $component.resources) | nindent 12 }}
