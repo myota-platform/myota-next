@@ -202,6 +202,26 @@ object and all rows and retained event messages for this isolated probe were
 removed. This confirms automatic deployed worker retry after a transient
 object-store outage without a partial or duplicate QSO.
 
+The deployed Geodata preprocessing worker's source-object read was tested with
+a one-feature GeoJSON import. With the worker paused, the API stored and queued
+the source object. The SeaweedFS Service was briefly given a selector with no
+matching pods, producing an S3 connection refusal without restarting the
+storage pod. The worker recorded the failure on attempt 1; after the original
+Service selector and endpoint were restored, the same run completed as
+`PREPROCESSED` on attempt 2. It had one feature, one candidate, zero errors,
+and exactly one `geodata.import.preprocessed.v1` outbox event. The Geodata
+durable returned to zero pending and acknowledgement-pending messages. The
+source object and exact run, candidate, upload-session, and outbox rows were
+removed.
+
+A separate full SeaweedFS pod stop did not recover within the Geodata worker's
+three-attempt budget: the pod took longer to become Ready than the retry
+window, and the probe run reached `FAILED` on attempt 3 with S3 connection
+refusals. The pod was restored, the probe was cleaned up, and this result is
+evidence of the current retry-budget limit rather than successful automatic
+recovery across a full storage-pod restart. The controlled Service-endpoint
+probe above verifies recovery when storage returns before that limit.
+
 An Email worker was temporarily enabled against an in-cluster SMTP sink using
 STARTTLS and a temporary CA trusted only by that worker. The sink first returned
 SMTP 451. The durable retried through attempt 8, persisted a terminal
@@ -231,9 +251,10 @@ These checks establish owner-database transaction outcomes, deployed NestJS
 connection recovery, readiness signals, NATS redelivery, Core outbox recovery,
 Activity QSO recovery after owner-database loss, and in-flight Activity and
 Geodata job settlement across NATS process interruption. Deployed storage
-outage and caller-retry checks now cover Activity ADIF, Identity profile-image,
-the Activity ADIF worker, and Geodata multipart upload, with the HTTP 500
-mapping gaps described above.
+outage and retry checks now cover Activity ADIF, Identity profile-image, the
+Activity ADIF worker, Geodata multipart upload, and Geodata preprocessing
+source reads. The HTTP 500 mapping gaps and Geodata's retry-budget limit for a
+full SeaweedFS pod restart are described above.
 Activity notification and Email retry exhaustion and audited redrive now have
 deployed evidence. Deployed PDF artifact-write recovery and production SMTP
 trust-root qualification remain open. Email is disabled again in this test
