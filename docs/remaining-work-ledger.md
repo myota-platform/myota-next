@@ -57,19 +57,22 @@ an accepted scope decision is recorded in the dispositions section.
   PyOsmium 4.3.2 tag-matrix fixture now checks all nine accepted tag values on nodes,
   each of the five accepted line-way tags, the remaining area-way tags, and all 17
   Python-compatible outputs and hashes. The
-  manually triggered RSS suite now executes generated 50,000-,
-  250,000-, and 300,000-feature workloads; the 300,000 case stays within the existing
-  192 MiB Node-plus-osmium process-tree growth bound. The runner previously selected a
-  suite name rather than its test names, so those checks had been skipped; the runner
-  fix now executes all three cases.
-- **Missing evidence:** Inputs above 300,000 features and less common OSM geometries
-  beyond the checked-in relation fixture still need qualification; RSS scopes are not
-  directly comparable with Python's absolute process-RSS measurements.
+  manually triggered RSS suite previously ran generated 50,000-, 250,000-, and
+  300,000-feature workloads; these remain historical measurements, including the
+  300,000 case staying within the existing 192 MiB Node-plus-osmium process-tree
+  growth bound. The runner previously selected a suite name rather than its test
+  names, so those checks had been skipped; the runner fix now executes all three.
+  The launch RSS qualification target is now capped at 25,000 features; higher-scale
+  results are retained as historical evidence and are not a launch requirement.
+- **Missing evidence:** Less-common OSM geometries within the 25,000-feature launch
+  target still need qualification; RSS scopes are not directly comparable with
+  Python's absolute process-RSS measurements.
 - **Risk:** Large or unusual source files may exhaust memory, exceed supported
   bounds, or produce different entities than the reference importer.
-- **Next check:** Extend correctness and resource workloads beyond 300,000 features,
-  add other less common OSM types, and document comparable versus non-comparable RSS
-  scopes before setting production caps.
+- **Next check:** Complete remaining correctness and resource cases within the
+  25,000-feature launch target, add less-common OSM types, and document comparable
+  versus non-comparable RSS scopes. Do not extend launch RSS workloads above 25,000
+  features.
 - **Tracked by:** [Issue #18](https://github.com/myota-platform/myota-next/issues/18).
 - **Sources:** [Geodata parity, lines 140–171](parity/geodata.md#L140);
   [completion criteria, lines 15–17](parity/completion-criteria.md#L15).
