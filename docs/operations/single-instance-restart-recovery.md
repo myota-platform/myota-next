@@ -164,16 +164,79 @@ and function were removed and their absence verified, the next delivery
 committed one notification and one processed-event marker, then acknowledged
 the event. Pending and acknowledgement-pending counts returned to zero. The
 notification and processed-event fixture rows were removed. This verifies a
-transient deployed notification retry; it does not qualify retry exhaustion
-or audited redrive.
+transient deployed notification retry.
+
+## Object-store outage checks across deployed consumers
+
+On 2026-10-25, SeaweedFS was briefly scaled to zero only in the isolated
+`myota-test` namespace. It was restored to one Ready pod immediately after each
+failure observation. The Activity ADIF API rejected an upload with HTTP 503
+and left the activation's QSO count and import table unchanged. Resubmitting
+the same valid one-record ADIF after storage recovered returned HTTP 202; the
+import completed with one accepted QSO and one QSO count. A test-only fixture
+timestamp correction was made before processing so that the QSO fell within
+the activation window. The object, import, job, QSO, activation, and exact
+outbox rows were removed afterward.
+
+The Identity profile-image API returned HTTP 500 on an S3 connection refusal.
+The profile image reference remained null. Repeating the upload after
+SeaweedFS recovered succeeded with HTTP 200 and wrote one image object; the
+image was then deleted through the API and both the database reference and
+object were confirmed absent. The Geodata multipart session endpoint also
+returned HTTP 500 during storage unavailability and created no session. A
+retry with the same idempotency key after recovery created one upload session;
+the session was explicitly aborted, then its exact test rows were removed.
+These checks show safe caller retry and no partial database state. Identity and
+Geodata currently expose the raw storage outage as HTTP 500, which remains an
+error-mapping gap; only the Activity ADIF route returned HTTP 503.
+
+The deployed Activity worker's ADIF object read was also tested independently
+of the upload request. The worker was paused while the API stored a valid
+one-record file and queued its job. SeaweedFS was then stopped before the
+worker resumed. The job retried after S3 connection refusals while the import
+remained `PROCESSING` with zero records accepted and no QSO. After SeaweedFS
+returned, the same durable job completed on attempt 10 with one accepted QSO;
+the activation count and QSO table each showed exactly one. The ADIF durable
+settled with zero pending and acknowledgement-pending deliveries. The source
+object and all rows and retained event messages for this isolated probe were
+removed. This confirms automatic deployed worker retry after a transient
+object-store outage without a partial or duplicate QSO.
+
+An Email worker was temporarily enabled against an in-cluster SMTP sink using
+STARTTLS and a temporary CA trusted only by that worker. The sink first returned
+SMTP 451. The durable retried through attempt 8, persisted a terminal
+`delivery_exhausted` dead letter, and settled with zero pending and
+acknowledgement-pending messages. An audited operator redrive replayed the
+command; after the sink accepted mail, attempt 9 delivered successfully and
+resolved the dead letter. The exact delivery, attempt, dead-letter, redrive,
+and outbox rows were removed. Email was disabled again, and the temporary SMTP
+worker, Service, TLS objects, and secret were removed. This qualifies deployed
+Email retry exhaustion and audited recovery with an isolated SMTP sink, not
+delivery through production SMTP trust roots.
+
+The deployed notification durable was then given a separate registered
+account-created event while a trigger rejected only its notification insert.
+After eight failed deliveries, PostgreSQL contained one
+`delivery_attempts_exhausted` dead-letter row; no notification or
+processed-event marker existed, and the worker metric counted one
+dead-letter. The event was replayed with the deployed audited redrive command.
+The audit row reached `PUBLISHED`, the worker committed exactly one
+notification and processed-event marker, and the dead letter received its
+resolution timestamp. JetStream advanced the acknowledgement floor with zero
+pending and acknowledgement-pending deliveries. The test event, replay event,
+notification, processed marker, audit row, and dead-letter row were removed.
+This qualifies deployed notification retry exhaustion and audited recovery.
 
 These checks establish owner-database transaction outcomes, deployed NestJS
-connection recovery, readiness signals, NATS redelivery, and Core outbox
-recovery, Activity QSO recovery after owner-database loss, and in-flight
-Activity and Geodata job settlement across NATS process interruption, and
-Geodata preprocessing recovery after owner-database loss. Object-store outage
-recovery across all consumers and deployed notification retry exhaustion/
-redrive remain open.
-The Email worker is explicitly disabled in this test release, so CI Email
-recovery checks are not deployment evidence. See [Activity recovery](../parity/workers-operations.md)
-and the [remaining work ledger](../remaining-work-ledger.md) for those gaps.
+connection recovery, readiness signals, NATS redelivery, Core outbox recovery,
+Activity QSO recovery after owner-database loss, and in-flight Activity and
+Geodata job settlement across NATS process interruption. Deployed storage
+outage and caller-retry checks now cover Activity ADIF, Identity profile-image,
+the Activity ADIF worker, and Geodata multipart upload, with the HTTP 500
+mapping gaps described above.
+Activity notification and Email retry exhaustion and audited redrive now have
+deployed evidence. Deployed PDF artifact-write recovery and production SMTP
+trust-root qualification remain open. Email is disabled again in this test
+release. See [Activity
+recovery](../parity/workers-operations.md) and the [remaining work
+ledger](../remaining-work-ledger.md) for the remaining gaps.
