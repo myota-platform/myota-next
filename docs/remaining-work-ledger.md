@@ -39,69 +39,6 @@ an accepted scope decision is recorded in the dispositions section.
 - **Sources:** [Identity and Programmes, lines 22–25](parity/identity-programmes.md#L22);
   [parity matrix, lines 48–52](parity-matrix.md#L48).
 
-### L-04 — Qualify Activity worker process-loss windows
-
-- **Owner:** Activity worker (`apps/activity-worker/` and
-  `tools/run-activity-worker-recovery.mjs`).
-- **Class:** Recovery/operations qualification.
-- **Reference behavior:** Leases, durable job state, side effects, dead-letter
-  persistence, and JetStream settlement remain safe when a process stops at
-  every consequential point.
-- **Current implementation and evidence:** Recovery checks kill workers after
-  lease acquisition and before processing starts for all six work kinds.
-  Process-loss checks now interrupt side effects for every kind: statistics
-  snapshot writes, direct and broad award progress, QSO ingestion, ADIF QSO
-  writes, and PDF artifact storage after the object is written but before its
-  database transaction commits. They verify rollback of database effects,
-  lease reclaim, successful retry, deterministic artifact overwrite, and a
-  single render event. The checks also cover selected three-node leader
-  changes. A child-process check persists a terminal failed job and dead-letter,
-  kills the worker while its delivery is still pending, then verifies redelivery
-  settles without reprocessing. Activity leader-failover checks retry ACK
-  confirmation while extending the pending delivery. Isolated CI exercises Activity
-  notification retry exhaustion and audited redrive, plus Email retry
-  exhaustion followed by audited command replay; the Email dead-letter resolves
-  only after delivery succeeds. The full checks, including ADIF side-effect
-  interruption for all six work kinds, and ACK retry through JetStream leader
-  change, passed in
-  [operational qualification run 40093916289](https://github.com/myota-platform/myota-next/actions/runs/40093916289).
-- **Missing evidence:** Retry exhaustion and operator redrive under the deployed
-  topology, and recovery under the deployed topology, are still open. Terminal
-  dead-letter persistence followed by process loss before settlement is covered
-  by the existing CI check.
-- **Risk:** A restart could duplicate or lose a QSO/award side effect, strand a
-  job, or leave a terminal message unsettled.
-- **Next check:** Exercise retry exhaustion and audited operator redrive in the
-  isolated deployment when its recovery topology is available; verify terminal
-  state, metrics, alerts, and operator recovery actions.
-- **Tracked by:** [Issue #15](https://github.com/myota-platform/myota-next/issues/15).
-- **Sources:** [Activity parity, lines 255–264](parity/activity.md#L255);
-  [workers and operations, lines 35–57](parity/workers-operations.md#L35).
-
-### L-05 — Qualify Activity notification retry exhaustion in deployment
-
-- **Owner:** Activity notifications and Email (`apps/activity-notifications/`,
-  `apps/email-worker/`).
-- **Class:** Recovery/operations qualification.
-- **Reference behavior:** Broker-side retry exhaustion, terminal persistence,
-  acknowledgement, and redrive follow the configured deployment topology.
-- **Current implementation and evidence:** CI covers PostgreSQL interruption,
-  terminal dead-letter persistence, replica sharing, restart recovery, and a
-  three-node JetStream leader change. Isolated CI also verifies Activity
-  notification retry exhaustion and audited redrive, plus Email retry
-  exhaustion followed by audited command replay; successful delivery resolves
-  the Email dead-letter. These checks passed in
-  [operational qualification run 40089452267](https://github.com/myota-platform/myota-next/actions/runs/40089452267).
-- **Missing evidence:** Broker-side retry exhaustion under the deployment
-  conditions is explicitly unqualified.
-- **Risk:** A sustained consumer or broker failure may lose notifications or
-  leave dead letters without a verified operator recovery path.
-- **Next check:** Exercise retry exhaustion and recovery against the isolated
-  deployment's broker topology and settings; record terminal state, metrics,
-  alerting, and audited redrive evidence.
-- **Tracked by:** [Issue #15](https://github.com/myota-platform/myota-next/issues/15).
-- **Sources:** [workers and operations, lines 90–95](parity/workers-operations.md#L90).
-
 ### L-07 — Qualify large PBF imports and less common OSM geometry
 
 - **Owner:** Geodata importer and worker (`apps/geodata-importer/`,
@@ -157,15 +94,29 @@ an accepted scope decision is recorded in the dispositions section.
   post-commit checks verify actual entity creation and deletion. The full
   operational qualification passed in
   [run 40084571566](https://github.com/myota-platform/myota-next/actions/runs/40084571566).
-- **Missing evidence:** Object-store outage/recovery for consumers beyond the
-  preprocessing path and deployment recovery remain unqualified. The local
-  SeaweedFS volume-loss case is now covered under L-13, but does not qualify the
-  deployed storage topology. Some broker settlement checks still stub
-  successful reprocessing.
+  Deployed Geodata preprocessing also completed once through a NATS process
+  restart and once through a Geodata PostgreSQL replacement. The latter
+  redelivered after its 900-second owner lease, completed on attempt 2 with one
+  candidate and one completion event, and settled with zero pending messages;
+  the restart evidence and limits are in the linked recovery guide. On
+  2026-10-25, a deployed source-object read failed once while the SeaweedFS
+  Service had no endpoints; after its selector was restored, the same
+  preprocessing run completed on attempt 2 with one candidate, zero errors,
+  one completion event, and no pending or acknowledgement-pending work. A
+  separate full SeaweedFS pod stop took longer than the deployed image's
+  three-attempt retry budget and ended `FAILED` on attempt 3. Both probes were
+  cleaned up. The source now exposes a configurable import retry limit with a
+  default of 10, but this image has not yet been deployed and qualified.
+- **Missing evidence:** Full SeaweedFS pod-restart recovery with the updated
+  retry budget is not qualified; the deployed restart probe reached terminal
+  failure before the pod became Ready. The local SeaweedFS volume-loss case is
+  covered under L-13, but does not qualify the deployed storage topology. Some
+  broker settlement checks still stub successful reprocessing.
 - **Risk:** Import, promotion, deletion, enrichment, or retention work may be
   stranded or repeated after a crash or database outage.
-- **Next check:** Extend object-store outage and retry checks to relevant
-  consumers, then repeat the recovery scenarios against the isolated deployment.
+- **Next check:** Deploy the configurable 10-attempt Geodata import retry
+  default and repeat the full storage-pod restart check. Other consumer checks
+  now include deployed PDF artifact writes.
 - **Tracked by:** [Issue #16](https://github.com/myota-platform/myota-next/issues/16).
 - **Sources:** [Geodata parity, lines 18–25](parity/geodata.md#L18);
   [workers and operations, lines 168–190](parity/workers-operations.md#L168).
@@ -296,81 +247,66 @@ an accepted scope decision is recorded in the dispositions section.
   outage and retention repeats safe deletion after a database interruption.
   Activity ADIF and certificate rendering retry temporary object-store failures;
   checks verify no partial QSO or ready-artifact effect is committed before the
-  successful retry.
+  successful retry. In the deployed test release, a source object survived a
+  SeaweedFS pod replacement. A run that had already exhausted its configured
+  retries stayed terminally failed; an operator resubmitted it through the
+  Geodata API after storage recovered, and the new run persisted one candidate.
+  On 2026-10-25, deployed Activity ADIF upload returned HTTP 503 while
+  SeaweedFS was unavailable and created no import or QSO; the same content was
+  submitted after recovery and completed with one accepted QSO. A deployed
+  Identity profile-image upload returned HTTP 500 while storage was unavailable
+  and left the profile reference unchanged; retry after recovery succeeded,
+  then the exact image and reference were removed. A deployed Geodata multipart
+  session request returned HTTP 500 during the same isolated storage outage and
+  created no session; retry with the same idempotency key succeeded and was
+  explicitly aborted after verification. The Geodata and Identity 500 responses
+  expose error-mapping gaps even though their state remained safe. A deployed
+  Activity ADIF worker was also resumed while SeaweedFS was unavailable: it
+  retried its queued job without accepting any records, then completed on
+  attempt 10 after storage recovered, with exactly one accepted QSO and zero
+  pending/acknowledgement-pending messages. The source object and exact test
+  rows, outbox events, and retained messages were removed. On 2026-10-25, a
+  deployed Geodata preprocessing run also recovered from an S3 connection
+  refusal: the SeaweedFS Service temporarily had no matching endpoints, then
+  its selector was restored before the retry limit. The same run completed on
+  attempt 2 with one feature, one candidate, zero errors, and one completion
+  event; the durable had zero pending and acknowledgement-pending messages.
+  A separate test that stopped the SeaweedFS pod reached the deployed image's
+  three-attempt limit before storage became Ready and ended `FAILED`; the exact
+  probe was removed after recording this retry-budget limitation. The Geodata
+  source now has a configurable retry limit defaulting to 10, but that image
+  has not been deployed and qualified yet. The deployed Activity
+  PDF renderer then received three injected S3 `503 ServiceUnavailable`
+  responses for the artifact write after source assets had been read. The same
+  job retried and succeeded on attempt 2; the artifact was `READY`, began with
+  `%PDF`, and exactly one rendered event was recorded. The PDF durable settled
+  with no pending or acknowledgement-pending messages, and all probe data was
+  removed. A deployed SeaweedFS persistent-volume check wrote a unique Geodata
+  object, replaced the SeaweedFS pod (new pod UID), then read the same bytes and
+  checksum from the still-Bound 20 GiB `local-path` PVC before deleting the
+  object. StatefulSet PVC retention and the local-path reclaim policy were
+  recorded in the recovery guide.
 - **Additional consumer check:** Node CI verifies a failed Identity profile-image
   S3 write rolls back without replacing the existing image reference; the test
   uses mocked database and object-store clients. See [Node CI run 40098386128](https://github.com/myota-platform/myota-next/actions/runs/40098386128).
-- **Missing evidence:** Clustered failover, recovery after permanent volume loss
-  in the deployed storage topology, production recovery procedures, and outage
-  behavior for remaining object-store consumers, including integrated and
-  deployed Identity profile-image recovery, are not covered by those checks. A
-  focused profile-image unit test verifies a failed S3 write rolls back without
-  replacing the existing image reference.
+- **Missing evidence:** Recovery of a deployed Geodata run after full SeaweedFS
+  pod restart with the updated retry budget, clustered failover, recovery
+  after permanent volume loss in the deployed storage topology, and production
+  recovery procedures are not covered. The deployed Identity and Geodata
+  outages preserved database state and succeeded after caller retry, but both
+  surfaced storage connection errors as HTTP 500. Deployed Activity ADIF recovery
+  returned HTTP 503 and completed after resubmission; it did not automatically
+  retry the failed HTTP upload request.
 - **Risk:** Uploaded or generated objects can be lost or orphaned while their
   database references remain, or recovery may require undocumented manual work.
-- **Next check:** Rehearse backup, restore, failover, permanent-volume-loss
-  recovery, and safe retry against the selected deployment storage; exercise
-  remaining consumer outage paths and document operator actions and evidence.
+- **Next check:** Deploy and qualify the expanded Geodata retry budget, rehearse
+  backup, restore, failover, and permanent-volume-loss recovery against the
+  selected deployment storage, and fix or disposition the HTTP 500 error
+  mapping for Identity and Geodata uploads.
 - **Tracked by:** [Activity issue #15](https://github.com/myota-platform/myota-next/issues/15)
   and [Geodata issue #16](https://github.com/myota-platform/myota-next/issues/16).
 - **Sources:** [workers and operations, lines 192–196](parity/workers-operations.md#L192);
   [object-store recovery guide, lines 10–15](operations/object-store-recovery.md#L10).
-
-### L-14 — Qualify deployment-level NATS recovery
-
-- **Owner:** NATS and owner-scoped outbox/worker operations.
-- **Class:** Recovery/operations qualification.
-- **Reference behavior:** APIs, relays, and workers recover from interruption of
-  the currently configured single NATS/JetStream instance and settle durable
-  messages only after owner-database state changes.
-- **Current implementation and evidence:** CI covers process restart with a
-  retained local file store and three-node JetStream leader changes for several
-  worker and relay paths. The 2026-10-24 isolated deployment rehearsal restarted
-  the configured NATS instance, verified durable redelivery/settlement, and
-  verified the Core relay retries and publishes one retained event after
-  recovery. The deployed services and workers are legacy Python images.
-- **Missing evidence:** Repeat relay, API, and worker reconnect/settlement checks
-  with the NestJS monorepo images deployed. The current deployment evidence does
-  not prove behavior of those target images.
-- **Risk:** A deployed single-instance broker failure may stop APIs/workers,
-  cause duplicate publication, or leave acknowledged work unsettled.
-- **Next check:** After deploying the NestJS monorepo images, repeat the broker
-  restart and outbox retry check; verify API/worker reconnect, settlement,
-  relay idempotency, health signals, and operator recovery. Current measurements
-  and steps are in [single-instance restart recovery](operations/single-instance-restart-recovery.md).
-  Clustered NATS failover is deferred to standalone low-priority
-  [myota-next#24](https://github.com/myota-platform/myota-next/issues/24).
-- **Tracked by:** [Issue #17](https://github.com/myota-platform/myota-next/issues/17).
-- **Sources:** [workers and operations, lines 230–235](parity/workers-operations.md#L230);
-  [outbox recovery guide, lines 33–38](operations/outbox-recovery.md#L33).
-
-### L-15 — Qualify single-instance PostgreSQL recovery in deployment
-
-- **Owner:** Core, Activity, and Geodata database operations.
-- **Class:** Recovery/operations qualification.
-- **Reference behavior:** Each API, relay, and worker recovers when its
-  currently configured owner-database instance restarts or loses connectivity,
-  without cross-owner transactions, lost committed writes, or duplicate effects.
-- **Current implementation and evidence:** CI covers transient PostgreSQL
-  connection loss and process restart for selected worker and outbox paths. On
-  2026-10-24, each configured isolated PostgreSQL pod restarted with a committed
-  probe row preserved and an interrupted transaction rolled back. Replacement
-  pods became Ready about 11 seconds after creation. The deployed APIs and
-  workers are legacy Python images.
-- **Missing evidence:** Repeat application-level reconnect and transaction
-  outcome checks with the NestJS monorepo images deployed; the current pod-level
-  probe does not establish target-runtime behavior.
-- **Risk:** An instance restart can interrupt transactions or strand work across
-  one or more of the three database owners.
-- **Next check:** After deploying the NestJS monorepo images, repeat one-at-a-time
-  instance restart and connection loss for Core, Activity, and Geodata; verify
-  transaction results, reconnect, worker/relay recovery, health signals, and
-  operator steps in [single-instance restart recovery](operations/single-instance-restart-recovery.md).
-  HA failover and multi-instance scaling are deferred to standalone low-priority
-  [myota-next#24](https://github.com/myota-platform/myota-next/issues/24).
-- **Tracked by:** [Issue #17](https://github.com/myota-platform/myota-next/issues/17).
-- **Sources:** [workers and operations, lines 237–245](parity/workers-operations.md#L237);
-  [completion criteria, lines 15–17](parity/completion-criteria.md#L15).
 
 ### L-16 — Rehearse database backup and restore in the target deployment
 
@@ -449,6 +385,32 @@ an accepted scope decision is recorded in the dispositions section.
   [workers and operations, lines 143–145](parity/workers-operations.md#L143);
   [implementation plan, Step 5](implementation-plan.md#L154).
 
+## Completed during deployed recovery qualification
+
+### Activity worker and notification recovery — Issue #15
+
+The deployed NestJS `myota-test` release completed the Activity QSO, broad
+award, notification, and Email retry checks. PostgreSQL and NATS interruption
+checks preserve one QSO and one broad award result; notification exhaustion
+persisted an eight-delivery dead letter and the audited redrive committed one
+notification before ACK. Email exhausted, was audited and replayed, delivered on
+retry, and resolved its dead letter against an isolated STARTTLS sink. CI also
+covers worker process loss before settlement and PDF object-write recovery.
+Production SMTP trust-root qualification remains open under L-02. Full evidence
+is in the [single-instance recovery guide](operations/single-instance-restart-recovery.md)
+and [Issue #15](https://github.com/myota-platform/myota-next/issues/15).
+
+### Single-instance NATS and database recovery — Issue #17
+
+The deployed file-backed JetStream consumer redelivered an unacknowledged
+message after NATS restart; Core outbox retry published once after NATS
+returned. Activity QSO and Geodata preprocessing jobs completed and settled
+across NATS process interruption. A Geodata transaction rolled back across
+owner PostgreSQL replacement, then completed after lease expiry on attempt 2.
+The single-instance recovery guide records readiness and transaction evidence.
+Clustered NATS, HA PostgreSQL, and multi-instance behavior remain deferred under
+[Issue #24](https://github.com/myota-platform/myota-next/issues/24).
+
 ## Accepted limitations and explicit dispositions
 
 ### D-10 — Defer HA and multi-instance deployment beyond launch readiness
@@ -465,8 +427,9 @@ an accepted scope decision is recorded in the dispositions section.
   Phases 1–6 or parent issue #4. These improvements are tracked as the
   unparented, unphased low-priority task
   [myota-next#24](https://github.com/myota-platform/myota-next/issues/24).
-  This defers topology-level availability and scale-out guarantees; single-
-  instance restart/reconnect recovery remains required under L-14/L-15.
+  This defers topology-level availability and scale-out guarantees. The
+  required single-instance restart/reconnect checks are completed under
+  [Issue #17](https://github.com/myota-platform/myota-next/issues/17).
 - **Next check:** Reopen as a launch gate only if product or operations adopts
   an HA or multi-instance requirement for the initial release. Otherwise plan
   it independently under issue #24.
@@ -508,8 +471,9 @@ an accepted scope decision is recorded in the dispositions section.
 - **Disposition and impact:** The common workflows and shared authorization,
   validation, conflict, and failure-order outcomes satisfy the functional
   parity criteria. Exhaustive combinations are not individually qualified
-  without a concrete material mismatch. Process-loss, deployment retry, and
-  capacity qualification remain separately open under L-04, L-05, and #19.
+  without a concrete material mismatch. Activity process-loss and deployed
+  retry evidence is complete under Issues #15 and #17; remaining object-store
+  and capacity qualification stays open under L-13, L-16, and #19.
 - **Next check:** Reopen for a specific reference mismatch; retain recovery and
   capacity evidence in the owning launch issues.
 - **Sources:** [Activity parity](parity/activity.md);
@@ -610,18 +574,19 @@ duplicated as separate work.
   D-01, D-02, D-04, D-05, and D-06.
 - [HTTP compatibility](parity/http.md): D-01.
 - [Identity and Programmes](parity/identity-programmes.md): L-02, D-04.
-- [Activity](parity/activity.md): L-04, L-05, D-01, D-03, D-05.
+- [Activity](parity/activity.md): completed Issue #15, D-01, D-03, D-05.
 - [Geodata](parity/geodata.md): D-06, L-07, L-09, L-10, L-13, and L-18.
 - [Web applications](parity/web-applications.md): L-11, L-12, L-17.
-- [Workers and operations](parity/workers-operations.md): L-04, L-05,
-  L-09, L-13 through L-15, L-18.
+- [Workers and operations](parity/workers-operations.md): completed Issues #15
+  and #17, L-09, L-13, L-16, and L-18.
 - [Completion criteria](parity/completion-criteria.md): L-07, L-11, L-12,
-  L-15 through L-18, D-02, D-04, D-05, and D-06.
+  L-16 through L-18, D-02, D-04, D-05, and D-06.
 - [Database backup and restore](operations/database-backup-restore.md):
   L-16, D-02.
 - [Geodata source importer](operations/geodata-importer.md): L-10.
 - [Object-store recovery](operations/object-store-recovery.md): L-13.
-- [Outbox dead-letter recovery](operations/outbox-recovery.md): L-14.
+- [Outbox dead-letter recovery](operations/outbox-recovery.md): completed
+  Issue #17.
 
 The ledger excludes verified behavior statements that have no open or
 qualification status. For example, the documented MultiPatch Shapefile error

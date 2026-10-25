@@ -40,10 +40,24 @@ jobs:
       ACTIVITY_NOTIFICATION_METRICS_PORT: '0'
     steps:
       - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.3.0
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
+      - name: Validate Helm chart and testing routes
+        run: |
+          helm lint deploy/helm/myota-next -f deploy/helm/myota-next/values-testing.yaml
+          helm template myota-test deploy/helm/myota-next \
+            --namespace myota-test \
+            -f deploy/helm/myota-next/values-testing.yaml \
+            > "$RUNNER_TEMP/myota-test-rendered.yaml"
+          grep -F 'Host(`myota-test.spainip.es`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
+          grep -F 'Host(`myota-admin-test.spainip.es`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
+          grep -F 'Host(`myota-participant-test.spainip.es`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
+          grep -F 'certResolver: "acmeresolver"' "$RUNNER_TEMP/myota-test-rendered.yaml"
       - name: Install OSM PBF decoder for correctness fixtures
         run: >-
           sudo timeout 6m apt-get -o Acquire::Retries=3

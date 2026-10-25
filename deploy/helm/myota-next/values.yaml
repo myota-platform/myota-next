@@ -24,6 +24,7 @@ jetstreamProvisioner:
     emailWorkMaxMessages: ''
     emailWorkMaxMessageBytes: ''
 geodataWorker:
+  importMaxAttempts: 10
   maxAckPending:
     preprocessing: ''
     promotion: ''

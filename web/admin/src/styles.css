@@ -760,8 +760,12 @@ select:focus-visible {
   background: var(--white);
   color: var(--ink);
 }
-.myota-entity-popup .leaflet-popup-content {
-  color: var(--ink);
+.leaflet-container .leaflet-popup.myota-entity-popup .leaflet-popup-content,
+.leaflet-container
+  .leaflet-popup.myota-entity-popup
+  .leaflet-popup-content
+  > strong {
+  color: #142b2d;
 }
 .map-panel {
   overflow: hidden;
