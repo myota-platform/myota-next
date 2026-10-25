@@ -39,7 +39,7 @@ jobs:
 
   verify-images:
     name: Build and scan ${{ matrix.app }} image
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'release' && github.event.action == 'published')
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
@@ -47,6 +47,9 @@ jobs:
       max-parallel: 4
       matrix:
         app:
+          - postgres
+          - postgis
+          - nats
           - gateway
           - identity
           - identity-maintenance
@@ -67,18 +70,32 @@ jobs:
         with:
           persist-credentials: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - name: Set application build argument
-        id: app-build-arg
-        if: matrix.app != 'tools' && matrix.app != 'admin-web' && matrix.app != 'participant-web'
+      - name: Set image build arguments
+        id: image-build-args
         env:
-          APP_NAME: ${{ matrix.app }}
-        run: printf 'value=APP_NAME=%s\n' "$APP_NAME" >> "$GITHUB_OUTPUT"
+          IMAGE_NAME: ${{ matrix.app }}
+        run: |
+          case "$IMAGE_NAME" in
+            postgres|postgis|nats|tools|admin-web|participant-web) ;;
+            *) printf 'value=APP_NAME=%s\n' "$IMAGE_NAME" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - name: Select image build target
+        id: image-target
+        env:
+          IMAGE_NAME: ${{ matrix.app }}
+        run: |
+          case "$IMAGE_NAME" in
+            postgres|postgis) printf 'value=%s\n' "$IMAGE_NAME" >> "$GITHUB_OUTPUT" ;;
+            geodata-worker) printf 'value=geodata-worker\n' >> "$GITHUB_OUTPUT" ;;
+            *) printf 'value=\n' >> "$GITHUB_OUTPUT" ;;
+          esac
       - name: Build image without publishing
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ matrix.app == 'admin-web' && './web/admin' || matrix.app == 'participant-web' && './web/participant' || '.' }}
-          file: ${{ matrix.app == 'tools' && 'deploy/Dockerfile.tools' || matrix.app == 'admin-web' && 'web/admin/Dockerfile' || matrix.app == 'participant-web' && 'web/participant/Dockerfile' || 'Dockerfile' }}
-          build-args: ${{ steps.app-build-arg.outputs.value }}
+          file: ${{ (matrix.app == 'postgres' || matrix.app == 'postgis') && 'deploy/images/database/Dockerfile' || matrix.app == 'nats' && 'deploy/images/nats/Dockerfile' || matrix.app == 'tools' && 'deploy/Dockerfile.tools' || matrix.app == 'admin-web' && 'web/admin/Dockerfile' || matrix.app == 'participant-web' && 'web/participant/Dockerfile' || 'Dockerfile' }}
+          build-args: ${{ steps.image-build-args.outputs.value }}
+          target: ${{ steps.image-target.outputs.value }}
           push: false
           load: true
           tags: local/myota-${{ matrix.app }}:ci
@@ -91,13 +108,13 @@ jobs:
           image-ref: local/myota-${{ matrix.app }}:ci
           scanners: vuln
           severity: HIGH,CRITICAL
-          ignore-unfixed: true
+          ignore-unfixed: false
           exit-code: '1'
 
   publish:
     name: Publish ${{ matrix.app }} release image
     if: github.event_name == 'release' && github.event.action == 'published'
-    needs: quality
+    needs: [quality, verify-images]
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
@@ -110,6 +127,9 @@ jobs:
       max-parallel: 4
       matrix:
         app:
+          - postgres
+          - postgis
+          - nats
           - gateway
           - identity
           - identity-maintenance
@@ -144,19 +164,33 @@ jobs:
           tags: |
             type=sha,format=long,prefix=sha-
             type=ref,event=tag
-      - name: Set application build argument
-        id: app-build-arg
-        if: matrix.app != 'tools' && matrix.app != 'admin-web' && matrix.app != 'participant-web'
+      - name: Set image build arguments
+        id: image-build-args
         env:
-          APP_NAME: ${{ matrix.app }}
-        run: printf 'value=APP_NAME=%s\n' "$APP_NAME" >> "$GITHUB_OUTPUT"
+          IMAGE_NAME: ${{ matrix.app }}
+        run: |
+          case "$IMAGE_NAME" in
+            postgres|postgis|nats|tools|admin-web|participant-web) ;;
+            *) printf 'value=APP_NAME=%s\n' "$IMAGE_NAME" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - name: Select image build target
+        id: image-target
+        env:
+          IMAGE_NAME: ${{ matrix.app }}
+        run: |
+          case "$IMAGE_NAME" in
+            postgres|postgis) printf 'value=%s\n' "$IMAGE_NAME" >> "$GITHUB_OUTPUT" ;;
+            geodata-worker) printf 'value=geodata-worker\n' >> "$GITHUB_OUTPUT" ;;
+            *) printf 'value=\n' >> "$GITHUB_OUTPUT" ;;
+          esac
       - name: Build and publish image
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ matrix.app == 'admin-web' && './web/admin' || matrix.app == 'participant-web' && './web/participant' || '.' }}
-          file: ${{ matrix.app == 'tools' && 'deploy/Dockerfile.tools' || matrix.app == 'admin-web' && 'web/admin/Dockerfile' || matrix.app == 'participant-web' && 'web/participant/Dockerfile' || 'Dockerfile' }}
-          build-args: ${{ steps.app-build-arg.outputs.value }}
+          file: ${{ (matrix.app == 'postgres' || matrix.app == 'postgis') && 'deploy/images/database/Dockerfile' || matrix.app == 'nats' && 'deploy/images/nats/Dockerfile' || matrix.app == 'tools' && 'deploy/Dockerfile.tools' || matrix.app == 'admin-web' && 'web/admin/Dockerfile' || matrix.app == 'participant-web' && 'web/participant/Dockerfile' || 'Dockerfile' }}
+          build-args: ${{ steps.image-build-args.outputs.value }}
+          target: ${{ steps.image-target.outputs.value }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

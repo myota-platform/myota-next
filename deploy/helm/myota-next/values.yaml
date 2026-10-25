@@ -327,6 +327,16 @@ components:
     service: true
     livenessPath: /
     readinessPath: /
+    extraVolumeMounts:
+      - name: nginx-cache
+        mountPath: /var/cache/nginx
+      - name: nginx-config
+        mountPath: /etc/nginx/conf.d
+    extraVolumes:
+      - name: nginx-cache
+        emptyDir: {}
+      - name: nginx-config
+        emptyDir: {}
     env:
       MYOTA_GATEWAY_UPSTREAM: '{{ default (printf "%s-gateway:8080" .Release.Name) .Values.dependencies.gatewayUpstream }}'
       MYOTA_GRAFANA_UPSTREAM: '{{ .Values.dependencies.grafanaUpstream }}'
@@ -339,6 +349,16 @@ components:
     service: true
     livenessPath: /
     readinessPath: /
+    extraVolumeMounts:
+      - name: nginx-cache
+        mountPath: /var/cache/nginx
+      - name: nginx-config
+        mountPath: /etc/nginx/conf.d
+    extraVolumes:
+      - name: nginx-cache
+        emptyDir: {}
+      - name: nginx-config
+        emptyDir: {}
     env: {}
 ingress:
   enabled: false
@@ -359,8 +379,18 @@ imagePullSecrets: []
 serviceAccountName: ''
 podAnnotations: {}
 podLabels: {}
-podSecurityContext: {}
-containerSecurityContext: {}
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
 nodeSelector: {}
 tolerations: []
 affinity: {}
