@@ -14,21 +14,7 @@ jobs:
   qualification:
     name: Runtime qualification
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    services:
-      geo-db:
-        image: postgis/postgis:16-3.6-alpine@sha256:a8ae5aac22bfe4b734c1fa0644ca18039a1e6bd7105c5aa9308cd24bfa1b2ef7
-        env:
-          POSTGRES_DB: myota_geo
-          POSTGRES_USER: myota
-          POSTGRES_PASSWORD: myota
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U myota -d myota_geo"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    timeout-minutes: 40
     env:
       CORE_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_core
       ACTIVITY_DATABASE_URL: postgresql://myota:myota@127.0.0.1:5432/myota_activity
@@ -41,6 +27,36 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build and start hardened PostGIS and JetStream
+        run: |
+          docker buildx build --load \
+            --file deploy/images/database/Dockerfile \
+            --target postgis \
+            --tag local/myota-postgis:qualification .
+          docker buildx build --load \
+            --file deploy/images/nats/Dockerfile \
+            --tag local/myota-nats:qualification .
+          docker run --detach --name myota-qualification-geodata-db \
+            --publish 5432:5432 \
+            --env POSTGRES_DB=myota_geo \
+            --env POSTGRES_USER=myota \
+            --env POSTGRES_PASSWORD=myota \
+            --env MYOTA_APP_PASSWORD=myota \
+            local/myota-postgis:qualification
+          docker run --detach --name myota-qualification-nats \
+            --publish 14222:4222 --publish 18222:8222 \
+            local/myota-nats:qualification -js -p 4222 -m 8222
+          for attempt in $(seq 1 60); do
+            if docker exec myota-qualification-geodata-db pg_isready -U myota -d myota_geo >/dev/null \
+              && curl --fail --silent http://127.0.0.1:18222/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs myota-qualification-geodata-db
+          docker logs myota-qualification-nats
+          exit 1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
@@ -51,22 +67,9 @@ jobs:
           -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
           && sudo timeout 6m apt-get -o Acquire::Retries=3
           -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install
-          --no-install-recommends --yes osmium-tool nats-server postgresql-client-16
+          --no-install-recommends --yes osmium-tool postgresql-client-16
       - name: Select PostgreSQL 16 client tools
         run: echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
-      - name: Start isolated JetStream
-        run: |
-          sudo systemctl stop nats-server || true
-          sudo systemctl disable nats-server || true
-          nohup nats-server -js -p 14222 -m 18222 > "$RUNNER_TEMP/nats-server.log" 2>&1 &
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:18222/healthz >/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          cat "$RUNNER_TEMP/nats-server.log"
-          exit 1
       - run: npm ci
       - name: Export PostgreSQL service container ID for process recovery checks
         run: |

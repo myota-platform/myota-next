@@ -10,12 +10,17 @@ x-node-app: &node-app
 
 services:
   core-db:
-    image: postgres:16-alpine3.24@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36
+    image: myota-next-postgres:local
+    build:
+      context: ..
+      dockerfile: deploy/images/database/Dockerfile
+      target: postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: myota
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-myota-dev-only}
       POSTGRES_DB: myota_core
+      MYOTA_APP_PASSWORD: ${MYOTA_APP_PASSWORD:-myota-dev-only}
     ports:
       - '127.0.0.1:5432:5432'
     volumes:
@@ -27,12 +32,17 @@ services:
       retries: 20
 
   activity-db:
-    image: postgres:16-alpine3.24@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36
+    image: myota-next-postgres:local
+    build:
+      context: ..
+      dockerfile: deploy/images/database/Dockerfile
+      target: postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: myota
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-myota-dev-only}
       POSTGRES_DB: myota_activity
+      MYOTA_APP_PASSWORD: ${MYOTA_APP_PASSWORD:-myota-dev-only}
     volumes:
       - activity-data:/var/lib/postgresql/data
     healthcheck:
@@ -42,12 +52,17 @@ services:
       retries: 20
 
   geo-db:
-    image: postgis/postgis:16-3.6-alpine@sha256:a8ae5aac22bfe4b734c1fa0644ca18039a1e6bd7105c5aa9308cd24bfa1b2ef7
+    image: myota-next-postgis:local
+    build:
+      context: ..
+      dockerfile: deploy/images/database/Dockerfile
+      target: postgis
     restart: unless-stopped
     environment:
       POSTGRES_USER: myota
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-myota-dev-only}
       POSTGRES_DB: myota_geo
+      MYOTA_APP_PASSWORD: ${MYOTA_APP_PASSWORD:-myota-dev-only}
     volumes:
       - geo-data:/var/lib/postgresql/data
     healthcheck:
@@ -78,7 +93,10 @@ services:
       geo-db: { condition: service_healthy }
 
   nats:
-    image: nats:2.14.8-alpine3.22@sha256:fce5fbf8b29ee0baa790e67bcd4abafebdd97363aa025f7d46a17489df002e30
+    image: myota-next-nats:local
+    build:
+      context: ..
+      dockerfile: deploy/images/nats/Dockerfile
     restart: unless-stopped
     command: [-js, -sd, /data, -m, '8222']
     volumes:

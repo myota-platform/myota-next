@@ -52,6 +52,7 @@ jobs:
         run: |
           helm lint deploy/helm/myota-next -f deploy/helm/myota-next/values-testing.yaml
           helm lint deploy/helm/myota-infrastructure \
+            --values deploy/helm/myota-infrastructure/values-example.yaml \
             --set objectStorage.enabled=true \
             --set objectStorage.provisionerImage=ghcr.io/myota-platform/myota-next-tools:ci
 

@@ -4,6 +4,17 @@ This chart creates exactly three single-instance PostgreSQL StatefulSets:
 Core (`myota_core`), Activity (`myota_activity`), and Geodata (`myota_geo`,
 with PostGIS). Email delivery remains in Core. It creates no fourth database.
 
+Set each database `image` to the matching MyOTA image from the same GitHub
+release before installing this chart. The release workflow publishes
+`myota-next-postgres`, `myota-next-postgis`, and `myota-next-nats` images. The
+database images rebuild the upstream `gosu` utility with the patched Go
+toolchain, and the PostGIS image upgrades Alpine's patched `brotli-libs`.
+This chart requires database image values so it cannot silently fall back to
+the upstream database images. The values example uses `<release-tag>` as a
+placeholder; replace it with the GitHub release tag. NATS is supplied by an
+external broker deployment; configure that deployment with the same release's
+`myota-next-nats` image.
+
 It can also provision an isolated SeaweedFS S3-compatible endpoint by setting
 `objectStorage.enabled=true`. That option requires two Kubernetes Secrets:
 `myota-object-storage` with `access-key`, `secret-key`,

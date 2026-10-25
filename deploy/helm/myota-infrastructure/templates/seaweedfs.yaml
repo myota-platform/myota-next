@@ -38,10 +38,26 @@ spec:
         app.kubernetes.io/component: object-storage
     spec:
       terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: seaweedfs
           image: {{ .Values.objectStorage.image | quote }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
           command: [weed]
           args:
             - mini
@@ -85,12 +101,16 @@ spec:
           resources:
             {{- toYaml .Values.objectStorage.resources | nindent 12 }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             - name: data
               mountPath: /data
             - name: s3-config
               mountPath: /etc/seaweedfs-auth
               readOnly: true
       volumes:
+        - name: tmp
+          emptyDir: {}
         - name: s3-config
           secret:
             secretName: {{ .Values.objectStorage.configSecretName }}
@@ -125,16 +145,32 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: create-buckets
           image: {{ required "objectStorage.provisionerImage must identify a MyOTA tools image containing the bucket provisioner" .Values.objectStorage.provisionerImage | quote }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
           command: [node, tools/ensure-object-storage-buckets.mjs]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           env:
             - name: AWS_ENDPOINT_URL
               value: http://{{ include "myota-infrastructure.name" . }}-seaweedfs:8333
             - name: OBJECT_STORAGE_BUCKETS
               value: {{ .Values.objectStorage.buckets | toJson | quote }}
-          env:
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
@@ -147,4 +183,7 @@ spec:
                   key: secret-key
             - name: AWS_DEFAULT_REGION
               value: us-east-1
+      volumes:
+        - name: tmp
+          emptyDir: {}
 {{- end }}

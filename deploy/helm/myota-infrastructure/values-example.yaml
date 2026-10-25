@@ -6,13 +6,13 @@ resources: {}
 databases:
   core:
     name: myota_core
-    image: postgres:16-alpine3.24@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36
+    image: 'ghcr.io/myota-platform/myota-next-postgres:<release-tag>'
     storage: 10Gi
   activity:
     name: myota_activity
-    image: postgres:16-alpine3.24@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36
+    image: 'ghcr.io/myota-platform/myota-next-postgres:<release-tag>'
     storage: 20Gi
   geo:
     name: myota_geo
-    image: postgis/postgis:16-3.6-alpine@sha256:a8ae5aac22bfe4b734c1fa0644ca18039a1e6bd7105c5aa9308cd24bfa1b2ef7
+    image: 'ghcr.io/myota-platform/myota-next-postgis:<release-tag>'
     storage: 50Gi

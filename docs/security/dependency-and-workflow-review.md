@@ -16,16 +16,15 @@ npm run audit:dependencies
 npm ci --prefix web/admin
 npm audit --audit-level=low --prefix web/admin
 trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 .
-trivy config --severity HIGH,CRITICAL deploy/helm
+trivy config --config .github/trivy.yaml --severity HIGH,CRITICAL --exit-code 1 deploy/helm
 zizmor .github/workflows
 ```
 
-The pull-request workflows now run dependency audits and Trivy filesystem
-scanning. The image workflow builds each application image without publishing
-it and scans the result. Image scans currently fail on fixable HIGH and
-CRITICAL findings; upstream findings without a usable image fix are listed
-below. Workflow security is checked with zizmor. The infrastructure chart is
-linted with object storage enabled.
+The pull-request workflows run dependency audits, source and secret scanning,
+rendered Helm misconfiguration scanning, and image build/scans without
+publishing. The same build-and-scan gate must pass for a GitHub release before
+release images are published. Helm scans render both charts with representative
+values, including enabled object storage.
 
 ## Results
 
@@ -44,32 +43,47 @@ linted with object storage enabled.
   and documenting elevated token permissions.
 - The pinned SeaweedFS and unprivileged Nginx images had no HIGH or CRITICAL
   findings in the initial image review. The Node runtime images remove npm and
-  npx after installation. The Node image CI scan uses `ignore-unfixed` for
-  upstream OS packages that have no available patched image build.
-- NATS was updated to
-  `nats:2.14.8-alpine3.22@sha256:fce5fbf8b29ee0baa790e67bcd4abafebdd97363aa025f7d46a17489df002e30`.
-  A direct Trivy scan found one HIGH Go standard-library finding (CVE-2026-111943,
-  fixed upstream in Go 1.26.10 or 1.27.3); the previous pinned image had 19
-  HIGH findings.
+  npx after installation. Final image scans include fixed and unfixed HIGH or
+  CRITICAL findings; any remaining result blocks release publication.
+- The pinned PostgreSQL 16 image contains `gosu` 1.19, built with Go 1.24.6.
+  Current Trivy data reports 26 HIGH/CRITICAL Go standard-library findings;
+  binary-level `govulncheck` additionally finds GO-2026-6686 in the bundled
+  `moby/sys/user` 0.1.0 parser. The release-built MyOTA PostgreSQL images now
+  replace `gosu` with a build from upstream commit
+  `29b939aa5bd4dc588af765b8248f6e39150d2565` (gosu 1.20), using the pinned Go
+  1.26.10 builder. The rebuilt binary uses `moby/sys/user` 0.4.1, and
+  `govulncheck -mode=binary` reports no vulnerabilities for it.
+- The pinned PostGIS 16 image has the same old `gosu` plus HIGH CVE-2026-111497
+  in `brotli-libs` 1.2.0-r1. The MyOTA PostGIS image updates that package to
+  Alpine's fixed 1.2.1-r0 and replaces `gosu` as above.
+- NATS 2.14.8 had 19 HIGH findings; 2.15.1 reduced this to one HIGH,
+  CVE-2026-111943 (GO-2026-6809), reachable through
+  `crypto/x509.Certificate.Verify` in the current NATS binary. The release-built
+  MyOTA NATS image rebuilds upstream NATS 2.15.1 commit
+  `b2fd3efc7456b11b06a54877ad6f6ccfb911edb4` with Go 1.26.10, which contains
+  the upstream fix. Runtime smoke verification of that binary returned NATS
+  health status `ok`. `govulncheck` also reports the unmaintained OpenPGP
+  package advisory from the `golang.org/x/crypto` module; NATS does not import
+  `golang.org/x/crypto/openpgp` (`go mod why` reports that the root module does
+  not need that package), and the final Trivy image scan remains the release
+  gate.
 - The AWS CLI image used only for bucket initialization had 15 HIGH findings.
   The Helm hook and Compose service now use the MyOTA tools image and an
   idempotent S3 SDK helper, removing that image from the runtime inputs.
-- The pinned PostgreSQL image has one CRITICAL and 25 HIGH findings in the
-  bundled `gosu` binary, built with Go 1.24.6. The pinned PostGIS image has the
-  same Go findings plus one HIGH Alpine `brotli-libs` finding. Trivy reports
-  upstream fixed Go versions, but the pinned upstream PostgreSQL/PostGIS image
-  digests still contain the old binary. These findings require an upstream
-  rebuild or a reviewed MyOTA-derived database image. They remain open and are
-  not hidden by the CI `ignore-unfixed` setting.
-- Trivy configuration findings are hardening recommendations, not package CVEs.
-  The app chart scan reported 42 HIGH findings: 14 missing
-  `readOnlyRootFilesystem` settings (KSV-0014) and 28 default security-context
-  findings (KSV-0118). The infrastructure chart scan with object storage
-  enabled reported 13 HIGH findings: four KSV-0014, eight KSV-0118, and one
-  KSV-0109 false positive caused by a password environment-variable name in
-  the database init command. No secret value was found in the ConfigMap.
-  Track these configuration changes separately from the dependency/image
-  vulnerability gate.
+- Trivy Helm configuration findings are addressed. Application containers now
+  use explicit non-root, read-only-root-filesystem, dropped-capability,
+  no-privilege-escalation, and RuntimeDefault seccomp settings, with writable
+  temporary and Nginx paths mounted as `emptyDir`. Database and object-storage
+  workloads use explicit non-root identities and read-only root filesystems.
+  The database role-init script is baked into the release-built database image
+  instead of rendered as a ConfigMap; this removes the KSV-0109 false positive
+  on the SQL keyword `PASSWORD` (the ConfigMap contained no secret value).
+  `trivy config --config .github/trivy.yaml` reports zero HIGH or CRITICAL
+  findings across both rendered charts.
+- The infrastructure chart requires release-built database image references;
+  its values example points at same-release MyOTA images. Compose and CI use
+  the pinned-source MyOTA images. NATS remains external for Helm deployments;
+  its operator must use the matching release-built image.
 - GitHub reported no open Dependabot alerts at review time. Code scanning had
   no completed analysis, and repository secret scanning was disabled. Neither
   status is treated as evidence of a clean scan. Dependabot now covers the
@@ -77,12 +91,11 @@ linted with object storage enabled.
 
 ## Follow-up
 
-Issue [#28](https://github.com/myota-platform/myota-next/issues/28) remains
-open for the PostgreSQL and PostGIS base-image findings and the Helm hardening
-review. The owning team is `myota-platform` maintainers; recheck upstream
-images by 2026-11-25. Do not promote an image with the database findings to
-production without a patched upstream digest or an explicit, time-limited
-security acceptance recorded in that issue.
+The upstream images remain unchanged and still report findings, but deployable
+references are replaced by MyOTA-derived images built from pinned source and
+patched inputs. Pull-request and release workflows build and scan the final
+images before release publication. The PR image scan is still required to
+complete this review; release outputs include immutable digests and provenance.
 
 ## References
 
