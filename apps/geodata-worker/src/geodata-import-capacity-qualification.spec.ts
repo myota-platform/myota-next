@@ -59,6 +59,7 @@ describe('Geodata asynchronous import capacity qualification', () => {
       let sampling = false;
       let successfulSamples = 0;
       let failedSamples = 0;
+      let lastSamplingError = '';
       const maxima = {
         workStreamMessages: 0,
         workStreamBytes: 0,
@@ -168,8 +169,16 @@ describe('Geodata asynchronous import capacity qualification', () => {
             Number(connections.rows[0]?.count ?? 0),
           );
           successfulSamples++;
-        } catch {
+        } catch (error) {
           failedSamples++;
+          lastSamplingError =
+            error instanceof Error
+              ? `${error.name}: ${error.message}`
+              : String(error);
+          lastSamplingError = lastSamplingError.replace(
+            /(postgres(?:ql)?:\/\/|nats:\/\/)[^@\s]+@/g,
+            '$1[redacted]@',
+          );
         } finally {
           sampling = false;
         }
@@ -203,7 +212,10 @@ describe('Geodata asynchronous import capacity qualification', () => {
         const completed = await waitForPreprocessing(apiPool, importId, sample);
         await waitForPendingOutbox(apiPool, importId);
         await sample();
-        expect(successfulSamples).toBeGreaterThan(0);
+        expect(
+          successfulSamples,
+          `Capacity telemetry never sampled successfully (${lastSamplingError || 'unknown error'})`,
+        ).toBeGreaterThan(0);
         const staged = await apiPool.query<{ count: string }>(
           `SELECT count(*)::text AS count FROM geodata_import_candidate
            WHERE import_run_id=$1`,
@@ -261,7 +273,11 @@ describe('Geodata asynchronous import capacity qualification', () => {
               pendingOutboxEventsAtFinish: Number(pendingOutbox.rows[0]?.count),
             },
             jetstream: maxima,
-            telemetrySampling: { successfulSamples, failedSamples },
+            telemetrySampling: {
+              successfulSamples,
+              failedSamples,
+              lastError: lastSamplingError || undefined,
+            },
             peakProcessRssGrowthBytes: Math.max(
               0,
               rssAfterBytes - rssBeforeBytes,
