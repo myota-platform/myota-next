@@ -41,7 +41,7 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event_name == 'release' && steps.release.outputs.tag || github.ref_name }}
+          ref: ${{ steps.release.outputs.tag }}
           persist-credentials: false
 
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
@@ -79,20 +79,13 @@ jobs:
             git -C chart-repository push origin HEAD:gh-pages
           fi
 
-          version_file=chart-repository/chart-version.txt
-          if [ -f "$version_file" ]; then
-            current="$(cat "$version_file")"
-            if [[ ! "$current" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-              echo "Invalid existing chart version: $current" >&2
-              exit 1
-            fi
-            next="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
-          else
-            next="$(awk '$1 == "version:" {print $2; exit}' deploy/helm/myota-next/Chart.yaml)"
+          chart_version="${RELEASE_TAG#v}"
+          if [[ ! "$chart_version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Release tag must be vMAJOR.MINOR.PATCH (for example v1.1.0): $RELEASE_TAG" >&2
+            exit 1
           fi
-          printf '%s\n' "$next" > "$version_file"
           helm package deploy/helm/myota-next \
-            --version "$next" \
+            --version "$chart_version" \
             --app-version "$RELEASE_TAG" \
             --destination chart-repository
           if [ -f chart-repository/index.yaml ]; then
@@ -115,10 +108,10 @@ jobs:
           git -C chart-repository config user.name github-actions[bot]
           git -C chart-repository config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git -C chart-repository add .
-          git -C chart-repository commit -m "Publish myota-next chart ${next} for ${RELEASE_TAG}"
+          git -C chart-repository commit -m "Publish myota-next chart ${chart_version} for ${RELEASE_TAG}"
           git -C chart-repository push origin HEAD:gh-pages
           rm -rf chart-repository/.git
-          echo "Published chart version ${next} for application release ${RELEASE_TAG}." >> "$GITHUB_STEP_SUMMARY"
+          echo "Published chart version ${chart_version} for application release ${RELEASE_TAG}." >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
