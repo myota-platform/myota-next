@@ -2,8 +2,18 @@ apiVersion: v1
 entries:
   myota-next:
   - apiVersion: v2
+    appVersion: testing-16d5cc3
+    created: "2026-10-25T15:26:44.361435926Z"
+    description: NestJS MyOTA APIs and background processes
+    digest: 8adda0a892bac617a80fa07e1964607d464fe080ae2265ee439be3ccc12c7297
+    name: myota-next
+    type: application
+    urls:
+    - https://myota-platform.github.io/myota-next/myota-next-1.0.1.tgz
+    version: 1.0.1
+  - apiVersion: v2
     appVersion: testing
-    created: "2026-10-25T11:17:43.329880009Z"
+    created: "2026-10-25T15:26:44.360244368Z"
     description: NestJS MyOTA APIs and background processes
     digest: d91be4a59fb3dcac5f88ad4107b5eac75381cdc7360135ed9fe841124b4a9601
     name: myota-next
@@ -11,4 +21,4 @@ entries:
     urls:
     - https://myota-platform.github.io/myota-next/myota-next-1.0.0.tgz
     version: 1.0.0
-generated: "2026-10-25T11:17:43.328077109Z"
+generated: "2026-10-25T15:26:44.358754161Z"
