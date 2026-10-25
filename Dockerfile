@@ -22,7 +22,12 @@ RUN apt-get update \
     | awk '$2 == "=>" && $3 ~ /^\// { print $3 } $1 ~ /^\// { print $1 }' \
     | sort -u \
     | while IFS= read -r library; do \
-        destination="/out$library"; \
+        case "$library" in \
+          /lib64/ld-linux*|*/libc.so.6|*/libgcc_s.so.1|*/libm.so.6|*/libpthread.so.0|*/libdl.so.2|*/librt.so.1|*/libstdc++.so.6|*/libz.so.1|*/libzstd.so.1) continue ;; \
+          /lib/*) destination="/out/usr$library" ;; \
+          /usr/lib/*) destination="/out$library" ;; \
+          *) continue ;; \
+        esac; \
         mkdir -p "$(dirname "$destination")"; \
         cp -L "$library" "$destination"; \
       done
