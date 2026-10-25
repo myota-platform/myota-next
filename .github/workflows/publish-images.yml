@@ -79,13 +79,14 @@ jobs:
             postgres|postgis|nats|tools|admin-web|participant-web) ;;
             *) printf 'value=APP_NAME=%s\n' "$IMAGE_NAME" >> "$GITHUB_OUTPUT" ;;
           esac
-      - name: Select database build target
+      - name: Select image build target
         id: image-target
         env:
           IMAGE_NAME: ${{ matrix.app }}
         run: |
           case "$IMAGE_NAME" in
             postgres|postgis) printf 'value=%s\n' "$IMAGE_NAME" >> "$GITHUB_OUTPUT" ;;
+            geodata-worker) printf 'value=geodata-worker\n' >> "$GITHUB_OUTPUT" ;;
             *) printf 'value=\n' >> "$GITHUB_OUTPUT" ;;
           esac
       - name: Build image without publishing
@@ -172,13 +173,14 @@ jobs:
             postgres|postgis|nats|tools|admin-web|participant-web) ;;
             *) printf 'value=APP_NAME=%s\n' "$IMAGE_NAME" >> "$GITHUB_OUTPUT" ;;
           esac
-      - name: Select database build target
+      - name: Select image build target
         id: image-target
         env:
           IMAGE_NAME: ${{ matrix.app }}
         run: |
           case "$IMAGE_NAME" in
             postgres|postgis) printf 'value=%s\n' "$IMAGE_NAME" >> "$GITHUB_OUTPUT" ;;
+            geodata-worker) printf 'value=geodata-worker\n' >> "$GITHUB_OUTPUT" ;;
             *) printf 'value=\n' >> "$GITHUB_OUTPUT" ;;
           esac
       - name: Build and publish image

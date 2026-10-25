@@ -11,26 +11,49 @@ RUN test -n "$APP_NAME" \
   && npx nest build "$APP_NAME" \
   && test -f "dist/apps/$APP_NAME/main.js"
 
-FROM node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS runtime
+FROM node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS osmium-build
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends osmium-tool \
+  && rm -rf /var/lib/apt/lists/* \
+  && mkdir -p /out/usr/bin \
+  && cp "$(command -v osmium)" /out/usr/bin/osmium \
+  && ldd "$(command -v osmium)" \
+    | awk '$2 == "=>" && $3 ~ /^\// { print $3 } $1 ~ /^\// { print $1 }' \
+    | sort -u \
+    | while IFS= read -r library; do \
+        destination="/out$library"; \
+        mkdir -p "$(dirname "$destination")"; \
+        cp -L "$library" "$destination"; \
+      done
+
+FROM node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS production-dependencies
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY vendor/shapefile ./vendor/shapefile
+RUN npm ci --omit=dev \
+  && npm cache clean --force
+
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:cb606325b7ec4af55462cb0b424a53b452a5b4a894ffe841fcf1048d216fb9f8 AS runtime
 
 ARG APP_NAME
 ENV APP_NAME=${APP_NAME}
 ENV NODE_ENV=production
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-COPY vendor/shapefile ./vendor/shapefile
-RUN npm ci --omit=dev \
-  && npm cache clean --force \
-  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
-RUN if [ "$APP_NAME" = "geodata-worker" ]; then \
-      apt-get update \
-      && apt-get install -y --no-install-recommends osmium-tool \
-      && rm -rf /var/lib/apt/lists/*; \
-    fi
+COPY --from=production-dependencies /app/package.json ./package.json
+COPY --from=production-dependencies /app/package-lock.json ./package-lock.json
+COPY --from=production-dependencies /app/node_modules ./node_modules
+COPY --from=production-dependencies /app/vendor ./vendor
 COPY --from=build /workspace/dist/apps/${APP_NAME}/ ./dist/apps/${APP_NAME}/
 COPY --from=build /workspace/contracts ./contracts
 COPY --from=build /workspace/libs/geodata-domain/data/es_ign_SPED2ETV2.tif ./libs/geodata-domain/data/es_ign_SPED2ETV2.tif
+COPY --from=build /workspace/tools/start-app.mjs ./tools/start-app.mjs
 
-USER node
-CMD ["sh", "-c", "exec node dist/apps/${APP_NAME}/main.js"]
+CMD ["tools/start-app.mjs"]
+
+FROM runtime AS geodata-worker
+COPY --from=osmium-build /out/ /
+
+FROM runtime AS app

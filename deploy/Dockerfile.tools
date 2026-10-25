@@ -1,4 +1,4 @@
-FROM node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea
+FROM node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS dependencies
 
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -6,9 +6,15 @@ COPY vendor/shapefile ./vendor/shapefile
 RUN npm ci --omit=dev \
   && npm cache clean --force \
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
+FROM gcr.io/distroless/nodejs24-debian13:debug-nonroot@sha256:33449ee136aa2fa6a768dc63f0f852a33d5c8977913e0fec2e3b50d4920e5a97
+WORKDIR /app
+COPY --from=dependencies /app/package.json ./package.json
+COPY --from=dependencies /app/package-lock.json ./package-lock.json
+COPY --from=dependencies /app/node_modules ./node_modules
 COPY contracts ./contracts
 COPY deploy/db/migrations ./deploy/db/migrations
 COPY tools ./tools
 COPY libs/platform/src/geodata-consumer-policy.ts ./libs/platform/src/geodata-consumer-policy.ts
 
-USER node
+ENTRYPOINT []

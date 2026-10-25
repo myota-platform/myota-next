@@ -393,6 +393,7 @@ services:
         context: ..,
         dockerfile: Dockerfile,
         args: { APP_NAME: geodata-worker },
+        target: geodata-worker,
       }
     environment:
       <<: *observe-env

@@ -42,9 +42,11 @@ both charts with representative values, including enabled object storage.
   disabling setup-node package-manager caching in the release-quality job,
   and documenting elevated token permissions.
 - The pinned SeaweedFS and unprivileged Nginx images had no HIGH or CRITICAL
-  findings in the initial image review. The Node runtime images remove npm and
-  npx after installation. Final image scans include fixed and unfixed HIGH or
-  CRITICAL findings; any remaining result blocks release publication.
+  findings in the initial image review. Application runtimes now use Distroless
+  Node images without package managers or shells; only the tools image uses the
+  debug shell variant for migration sequencing. Final image scans include fixed
+  and unfixed HIGH or CRITICAL findings; any remaining result blocks release
+  publication.
 - The pinned PostgreSQL 16 image contains `gosu` 1.19, built with Go 1.24.6.
   Current Trivy data reports 26 HIGH/CRITICAL Go standard-library findings;
   binary-level `govulncheck` additionally finds GO-2026-6686 in the bundled
@@ -101,13 +103,17 @@ zlib packages; the CRITICAL zlib finding is marked `will_not_fix` by the current
 Debian vulnerability metadata. These results are not an image-wide unique
 finding count; the same base-image findings repeat across images.
 
-The current remediation moves the pinned Node build and runtime stages to the
-official Node 24 Trixie slim image, which is an upstream-supported Debian
-variant. The base digest is pinned. This retains Node.js 24 while avoiding the
-Debian 12 package set reported by the failed scan. The full release-image matrix
-must confirm that the composed images pass; do not weaken the gate or silently
-suppress the zlib result. If findings remain, review the exact packages and
-select a supported fix before release.
+Moving the Node stages from Bookworm to the official Node 24 Trixie slim image
+reduced the repeated finding count to 43 HIGH and zero CRITICAL, but did not
+clear the image matrix (run 40220532269). A direct Trivy 0.76.1 scan of the
+official Distroless Node 24 Debian 13 `nonroot` and `debug-nonroot` base images
+reported zero HIGH/CRITICAL findings. The current remediation uses those
+Distroless images as the final Node runtime, while retaining a pinned Node 24
+Trixie builder. The tools image uses the debug variant for its migration shell;
+the Geodata worker target copies in the `osmium` executable and its shared
+libraries for PBF imports. The full release-image matrix must confirm the final
+images, especially the Geodata worker, pass. Do not weaken the gate or silently
+suppress findings.
 Track the outstanding app/tool image remediation in [issue #28](https://github.com/myota-platform/myota-next/issues/28), under parent [issue #31](https://github.com/myota-platform/myota-next/issues/31).
 
 The browser images and rebuilt infrastructure images passed this PR scan, but
@@ -120,3 +126,5 @@ digests and provenance after all scan gates pass.
 - [zizmor workflow security audits](https://docs.zizmor.sh/audits/)
 - [Trivy filesystem scanner](https://trivy.dev/latest/docs/target/filesystem/)
 - [Trivy image scanner](https://trivy.dev/latest/docs/target/container_image/)
+- [Distroless Node.js images and supported versions](https://github.com/GoogleContainerTools/distroless/tree/main/nodejs)
+- [Distroless support policy](https://github.com/GoogleContainerTools/distroless/blob/main/SUPPORT_POLICY.md)
