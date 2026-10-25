@@ -103,17 +103,17 @@ const selectedCounts = computed(() =>
 const showReview = computed(() =>
   Boolean(
     selectedRun.value &&
-      selectedRun.value.status !== 'PROCESSED' &&
-      !isPreprocessing(selectedRun.value) &&
-      (isReviewable(selectedRun.value) || totalCandidates.value),
+    selectedRun.value.status !== 'PROCESSED' &&
+    !isPreprocessing(selectedRun.value) &&
+    (isReviewable(selectedRun.value) || totalCandidates.value),
   ),
 );
 const canFinalize = computed(() =>
   Boolean(
     selectedRun.value &&
-      selectedRun.value.status !== 'PROCESSED' &&
-      !isPreprocessing(selectedRun.value) &&
-      !actionBusy.value,
+    selectedRun.value.status !== 'PROCESSED' &&
+    !isPreprocessing(selectedRun.value) &&
+    !actionBusy.value,
   ),
 );
 const uploadPercent = computed(() =>

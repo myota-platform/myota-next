@@ -127,14 +127,13 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: create-buckets
-          image: public.ecr.aws/aws-cli/aws-cli:2.27.41
-          command: [/bin/sh, -ec]
-          args:
-            - >-
-              until aws s3api list-buckets --endpoint-url http://{{ include "myota-infrastructure.name" . }}-seaweedfs:8333 >/dev/null 2>&1; do sleep 2; done;
-              {{- range .Values.objectStorage.buckets }}
-              aws s3api head-bucket --bucket {{ . | quote }} --endpoint-url http://{{ include "myota-infrastructure.name" $ }}-seaweedfs:8333 >/dev/null 2>&1 || aws s3api create-bucket --bucket {{ . | quote }} --endpoint-url http://{{ include "myota-infrastructure.name" $ }}-seaweedfs:8333 >/dev/null;
-              {{- end }}
+          image: {{ required "objectStorage.provisionerImage must identify a MyOTA tools image containing the bucket provisioner" .Values.objectStorage.provisionerImage | quote }}
+          command: [node, tools/ensure-object-storage-buckets.mjs]
+          env:
+            - name: AWS_ENDPOINT_URL
+              value: http://{{ include "myota-infrastructure.name" . }}-seaweedfs:8333
+            - name: OBJECT_STORAGE_BUCKETS
+              value: {{ .Values.objectStorage.buckets | toJson | quote }}
           env:
             - name: AWS_ACCESS_KEY_ID
               valueFrom:

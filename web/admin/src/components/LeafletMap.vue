@@ -139,10 +139,10 @@ function entityMarkerIcon(entity: GeoEntity, selected: boolean): any {
 function isClusteredPoint(entity: GeoEntity): boolean {
   return Boolean(
     props.showClusters &&
-      pointCluster &&
-      pointCluster !== geometryLayers &&
-      entity.geometry?.type === 'Point' &&
-      entity.id !== props.editableId,
+    pointCluster &&
+    pointCluster !== geometryLayers &&
+    entity.geometry?.type === 'Point' &&
+    entity.id !== props.editableId,
   );
 }
 

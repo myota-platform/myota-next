@@ -1,0 +1,98 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '08:00'
+      timezone: Europe/Madrid
+    groups:
+      npm-minor-and-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: npm
+    directory: /web/admin
+    schedule:
+      interval: weekly
+      day: monday
+      time: '08:00'
+      timezone: Europe/Madrid
+    groups:
+      admin-npm-minor-and-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '08:00'
+      timezone: Europe/Madrid
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '08:00'
+      timezone: Europe/Madrid
+    groups:
+      container-images:
+        patterns:
+          - '*'
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: weekly
+      day: monday
+      time: '08:00'
+      timezone: Europe/Madrid
+    groups:
+      deployment-images:
+        patterns:
+          - '*'
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: docker
+    directory: /web/admin
+    schedule:
+      interval: weekly
+      day: monday
+      time: '08:00'
+      timezone: Europe/Madrid
+    groups:
+      admin-web-images:
+        patterns:
+          - '*'
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: docker
+    directory: /web/participant
+    schedule:
+      interval: weekly
+      day: monday
+      time: '08:00'
+      timezone: Europe/Madrid
+    groups:
+      participant-web-images:
+        patterns:
+          - '*'
+    open-pull-requests-limit: 10

@@ -15,15 +15,18 @@ concurrency:
 
 jobs:
   quality:
+    name: Release source quality checks
     if: github.event_name == 'release' && github.event.action == 'published'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
-          cache: npm
+          package-manager-cache: false
       - run: npm ci
       - run: npm run format:check
       - run: npm run lint
@@ -35,6 +38,7 @@ jobs:
       - run: npm run build --prefix web/admin
 
   verify-images:
+    name: Build and scan ${{ matrix.app }} image
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
@@ -59,8 +63,10 @@ jobs:
           - admin-web
           - participant-web
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Set application build argument
         id: app-build-arg
         if: matrix.app != 'tools' && matrix.app != 'admin-web' && matrix.app != 'participant-web'
@@ -68,24 +74,37 @@ jobs:
           APP_NAME: ${{ matrix.app }}
         run: printf 'value=APP_NAME=%s\n' "$APP_NAME" >> "$GITHUB_OUTPUT"
       - name: Build image without publishing
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ matrix.app == 'admin-web' && './web/admin' || matrix.app == 'participant-web' && './web/participant' || '.' }}
           file: ${{ matrix.app == 'tools' && 'deploy/Dockerfile.tools' || matrix.app == 'admin-web' && 'web/admin/Dockerfile' || matrix.app == 'participant-web' && 'web/participant/Dockerfile' || 'Dockerfile' }}
           build-args: ${{ steps.app-build-arg.outputs.value }}
           push: false
+          load: true
+          tags: local/myota-${{ matrix.app }}:ci
           cache-from: type=gha,scope=${{ matrix.app }}
+      - name: Scan built image for fixable high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          scan-type: image
+          image-ref: local/myota-${{ matrix.app }}:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
 
   publish:
+    name: Publish ${{ matrix.app }} release image
     if: github.event_name == 'release' && github.event.action == 'published'
     needs: quality
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
       contents: read
-      packages: write
-      attestations: write
-      id-token: write
+      packages: write # Required to publish the release images to GHCR.
+      attestations: write # Required to record provenance attestations.
+      id-token: write # Required by the build action for keyless provenance.
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -107,16 +126,18 @@ jobs:
           - admin-web
           - participant-web
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Image metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/${{ github.repository }}-${{ matrix.app }}
           flavor: latest=false
@@ -131,7 +152,7 @@ jobs:
         run: printf 'value=APP_NAME=%s\n' "$APP_NAME" >> "$GITHUB_OUTPUT"
       - name: Build and publish image
         id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ matrix.app == 'admin-web' && './web/admin' || matrix.app == 'participant-web' && './web/participant' || '.' }}
           file: ${{ matrix.app == 'tools' && 'deploy/Dockerfile.tools' || matrix.app == 'admin-web' && 'web/admin/Dockerfile' || matrix.app == 'participant-web' && 'web/participant/Dockerfile' || 'Dockerfile' }}

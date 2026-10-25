@@ -10,7 +10,7 @@ x-node-app: &node-app
 
 services:
   core-db:
-    image: postgres:16-alpine
+    image: postgres:16-alpine3.24@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36
     restart: unless-stopped
     environment:
       POSTGRES_USER: myota
@@ -27,7 +27,7 @@ services:
       retries: 20
 
   activity-db:
-    image: postgres:16-alpine
+    image: postgres:16-alpine3.24@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f616992061141b5f15ac36
     restart: unless-stopped
     environment:
       POSTGRES_USER: myota
@@ -42,7 +42,7 @@ services:
       retries: 20
 
   geo-db:
-    image: postgis/postgis:16-3.4
+    image: postgis/postgis:16-3.6-alpine@sha256:a8ae5aac22bfe4b734c1fa0644ca18039a1e6bd7105c5aa9308cd24bfa1b2ef7
     restart: unless-stopped
     environment:
       POSTGRES_USER: myota
@@ -78,7 +78,7 @@ services:
       geo-db: { condition: service_healthy }
 
   nats:
-    image: nats:2.10-alpine
+    image: nats:2.14.8-alpine3.22@sha256:fce5fbf8b29ee0baa790e67bcd4abafebdd97363aa025f7d46a17489df002e30
     restart: unless-stopped
     command: [-js, -sd, /data, -m, '8222']
     volumes:
@@ -88,7 +88,7 @@ services:
       - '127.0.0.1:8222:8222'
 
   object-store:
-    image: chrislusf/seaweedfs:latest@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    image: chrislusf/seaweedfs:latest@sha256:c2658820e763294a9e9de7b36c81e59b879e3459148351aee4e31a126ca64860
     restart: unless-stopped
     command:
       [
@@ -117,6 +117,7 @@ services:
       retries: 20
 
   seaweedfs-s3-config-init:
+    image: myota-next-tools:local
     build:
       context: ..
       dockerfile: deploy/Dockerfile.tools
@@ -136,18 +137,21 @@ services:
       - seaweedfs-s3-config:/config
 
   object-buckets:
-    image: public.ecr.aws/aws-cli/aws-cli:2.27.41
+    image: myota-next-tools:local
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.tools
     restart: on-failure
-    entrypoint: [/bin/sh, -ec]
-    command: >-
-      until aws s3api list-buckets --endpoint-url "$AWS_ENDPOINT_URL" >/dev/null 2>&1; do sleep 2; done;
-      for bucket in myota-user-profile-images myota-adif myota-award-assets myota-award-signatures myota-certificates myota-geodata-imports;
-      do aws s3api create-bucket --bucket "$bucket" --endpoint-url "$AWS_ENDPOINT_URL" >/dev/null 2>&1 || true; done
+    command: [node, tools/ensure-object-storage-buckets.mjs]
     environment:
       AWS_ACCESS_KEY_ID: ${MYOTA_OBJECT_STORAGE_ACCESS_KEY:-myota-s3}
       AWS_SECRET_ACCESS_KEY: ${MYOTA_OBJECT_STORAGE_SECRET_KEY:-myota-s3-dev-only}
       AWS_DEFAULT_REGION: us-east-1
       AWS_ENDPOINT_URL: http://object-store:8333
+      OBJECT_STORAGE_BUCKETS: '["myota-user-profile-images","myota-adif","myota-award-assets","myota-award-signatures","myota-certificates","myota-geodata-imports"]'
+    depends_on:
+      object-store:
+        condition: service_healthy
     depends_on:
       object-store: { condition: service_healthy }
 
