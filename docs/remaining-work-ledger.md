@@ -378,20 +378,25 @@ an accepted scope decision is recorded in the dispositions section.
   (50,000 each, 2.5 s combined, 49.7 MiB), Shapefile (50,000 records, 4.1 s,
   30.0 MiB), and OSM PBF (25,000 tagged nodes, 1.2 s, 51.6 MiB process-tree
   growth). The PBF launch runner no longer schedules historical 50,000+ cases.
-  These tests cover parsing only, not database staging or deployment load.
-- **Missing evidence:** Representative Activity log/QSO ingestion, broad award
-  calculation, Geodata synchronous mutation transaction latency, database load,
-  broker backlog, and recovery still need measurements under explicit runtime,
-  database, and pool bounds. The live test deployment currently has unbounded
-  PostgreSQL/NATS pods and Helm does not configure database pool maxima. Existing
-  Python/Nest RSS scopes are not always directly comparable.
+  The [bounded qualification run 40237130907](https://github.com/myota-platform/myota-next/actions/runs/40237130907)
+  also measured Activity ingestion and award workloads, synchronous QSO/award requests,
+  Geodata import and synchronous selection sizes, and worker restart recovery under
+  1-CPU/1-GiB Node limits, 1-CPU/2-GiB PostgreSQL and JetStream limits, pool maxima of
+  10 (Geodata) and 12 (Activity), two API replicas, and one worker. Full measurements
+  and scope are recorded in the Activity and Geodata parity pages. Object storage was
+  mocked; one Geodata telemetry sampler produced unreliable instantaneous broker and
+  connection maxima, which are excluded from operating bounds.
+- **Missing evidence:** The live test deployment still has unbounded PostgreSQL/NATS
+  pods. Verify explicit resource limits in its rendered Helm configuration before
+  calling the deployed topology bounded. Source allowlists, licenses, outages,
+  scheduling, and safe retry behavior also remain unreviewed. Existing Python/Nest RSS
+  scopes are not always directly comparable.
 - **Risk:** Production load can exhaust memory, pools, or broker capacity,
   producing slow or failed user workflows and unsafe retry backlogs.
-- **Next check:** Complete format correctness coverage and source-cap documentation;
-  add explicit Helm pool and infrastructure resource settings; measure Activity
-  log/QSO ingestion and award recalculation, Geodata synchronous command/selection
-  bounds, broker backlog, and recovery under those limits; set and document
-  operating bounds from results.
+- **Next check:** Rerun the bounded qualification with the Geodata telemetry sampler
+  reporting successful and failed samples. Add explicit PostgreSQL and NATS resource
+  settings to the isolated test Helm releases; review source allowlists, licenses,
+  outages, scheduling, and safe retry before enabling live scheduled fetching.
 - **Tracked by:** [Issue #18](https://github.com/myota-platform/myota-next/issues/18)
   and [Issue #19](https://github.com/myota-platform/myota-next/issues/19).
 - **Sources:** [completion criteria, lines 15–17](parity/completion-criteria.md#L15);

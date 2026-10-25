@@ -375,3 +375,18 @@ includes `activationCount`, while its `activity.entity.cascade-deleted.v1` event
 that field, matching the reference's separate response and event payloads. Award
 lifecycle, request, issuance, asset, activation-evaluation, and ADIF import timestamps
 preserve the reference's six fractional-second digits using independent UTC clock reads.
+
+### Capacity qualification
+
+The [bounded capacity qualification run 40237130907](https://github.com/myota-platform/myota-next/actions/runs/40237130907)
+used Node 24.21.0 with 1 CPU/1 GiB, PostgreSQL and JetStream with 1 CPU/2 GiB each,
+the configured target of two API replicas and one worker, and Activity pool maximum 12.
+The API and worker classes ran in the same bounded test process, so this did not measure
+multiple live replicas or Kubernetes overhead. It measured a 25 MiB
+ADIF upload with 5,000 QSOs at 188 ms admission and 1.02 seconds end-to-end; a separate
+5,000-QSO ingestion completed in 10.58 seconds. Broad award calculation over 5,000
+subjects took 44.30 seconds. Twenty synchronous QSO writes measured 216 ms p50, 280 ms
+p95, and 308 ms maximum; 100 synchronous award requests measured 3 ms p50/p95 and 6 ms
+maximum. Worker restart recovery took 30.55 seconds. Peak process RSS growth was
+330,186,752 bytes, and peak active database connections were 3. The object store was
+mocked, and these measurements are bounded-run evidence rather than production SLOs.

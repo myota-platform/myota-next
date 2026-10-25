@@ -156,8 +156,10 @@ These higher-scale runs are retained as historical resource measurements. The la
 RSS qualification target is now capped at 25,000 features; no additional OSM PBF RSS
 workload above that size is required for launch. The checked-in correctness fixtures
 cover a hiking route way without a highway tag, a closed way emitted as both a linear
-and area feature, and a multipolygon with two disjoint outer components and an inner
-ring. These fixtures are small correctness cases, not additional RSS workloads.
+and area feature, a multipolygon with two disjoint outer components and an inner ring,
+and a relation whose split outer and inner ways are reversed and unordered. The final
+relation fixture matches the Python importer's `MultiPolygon` coordinates and source
+properties. These fixtures are small correctness cases, not additional RSS workloads.
 
 The 50,000-feature case matches the Python stress fixture's count and limit, but
 measures a different RSS scope; the values are not directly comparable. The 300,000
@@ -170,11 +172,9 @@ nine required tag values on nodes and the five accepted linear-way tags, plus
 the remaining area-tag values on closed ways. All 17 emitted Point,
 LineString, and MultiPolygon features match the Python importer in order,
 source reference, properties, geometry type, and SHA-256 feature hash.
-Less common OSM relation/member patterns within the 25,000-feature launch target
-still need qualification; no higher-scale RSS testing is required. Area and way vertex
-limits use the reference errors; the CLI decoder checks after osmium emits a record,
-bounded by the decoded feature-size cap, while PyOsmium checks areas before GeoJSON
-materialization.
+Area and way vertex limits use the reference errors; the CLI decoder checks after
+osmium emits a record, bounded by the decoded feature-size cap, while PyOsmium checks
+areas before GeoJSON materialization.
 
 The same manually triggered workflow streams a generated 300,000-feature GeoJSON
 FeatureCollection through the metadata scan and feature pass, with Node RSS growth under
@@ -222,13 +222,45 @@ limit.
 The RSS commands do not exercise WFS or ArcGIS network sources; their JSON decoder is
 covered by correctness fixtures, while their live host, licensing, outage, and retry
 review remains a separate gate. Scheduled source fetching is disabled by default and no
-live source host is allowlisted. The test deployment currently gives application
-containers 50m CPU/96Mi memory requests and 1 CPU/1Gi memory limits, but its PostgreSQL
-and NATS pods have no resource requests or limits. Database pool maxima also remain code
-defaults (10 for Core/Geodata and 12 for Activity), not chart-configured values. The
-end-to-end CPU, memory, database-load, backlog, recovery, and synchronous mutation
-qualification therefore remains open until the test stack has explicit database,
-broker, and pool bounds.
+live source host is allowlisted.
+
+### End-to-end capacity qualification
+
+The manually triggered [qualification run 40237130907](https://github.com/myota-platform/myota-next/actions/runs/40237130907)
+measured Activity and Geodata under bounded CI resources on Node 24.21.0. Each Node
+qualification process was limited to 1 CPU and 1 GiB; PostgreSQL and JetStream were each
+limited to 1 CPU and 2 GiB. The configured launch topology target was two API replicas
+and one worker, with database pool maxima of 10 for Geodata and 12 for Activity. The
+harness invoked API and worker services in the same bounded test process; it did not
+measure multiple live replicas or Kubernetes overhead. Object storage was mocked, so
+these figures do not qualify S3 throughput or deployed-pod resource use.
+
+- Geodata staged 5,000 GeoJSON features (959,372 source bytes) in 7.99 seconds at 626
+  features/s, with 40,177,664 bytes process RSS growth and no preprocessing errors.
+  PostgreSQL recorded 9,870 committed transactions, 4,802 inserts, and 52 updates; the
+  outbox drained before completion. Import admission took 53 ms. Instantaneous database
+  connection and JetStream backlog maxima were not reliable in this run and should not
+  be used as operating limits.
+- Geodata synchronous validation and promotion/approval measured 1, 10, 50, and 100
+  selected entities. At 100, validation took 4.98 ms and promotion/approval took
+  630.65 ms. An edit plus approval took 5.35 ms and 3.99 ms respectively. The existing
+  all-or-nothing 100-entity request limit is retained.
+- Activity accepted a 25 MiB, 5,000-QSO ADIF import in 188 ms; end-to-end admission and
+  worker completion took 1.02 seconds, and award recalculation took 19.86 seconds.
+  A separate 5,000-QSO ingestion completed in 10.58 seconds; broad awards across 5,000
+  subjects completed in 44.30 seconds. Twenty synchronous QSO writes had 216 ms p50,
+  280 ms p95, and 308 ms maximum latency. One hundred synchronous award requests had
+  3 ms p50/p95 and 6 ms maximum latency. Worker restart recovery took 30.55 seconds.
+  Peak process RSS growth was 330,186,752 bytes; observed peak active database
+  connections were 3. These Activity figures use a mocked object store.
+
+These runs establish representative workload timings at the stated CI limits, not
+production service-level objectives. The K3s test deployment still needs explicit
+PostgreSQL and NATS resource requests/limits before it can be described as a bounded
+deployed topology. Keep the recorded pool defaults configurable through Helm and verify
+the live deployment's rendered values before treating them as deployed limits. Source
+allowlists, licensing, outages, scheduling, and safe retries remain unreviewed, so
+scheduled live-source fetching must stay disabled.
 
 Shapefile and PBF working directories use `MYOTA_UPLOAD_SPOOL_DIR` when set, and
 otherwise use the OS temporary directory. PBF source bytes stream to disk with checksum

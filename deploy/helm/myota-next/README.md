@@ -89,10 +89,10 @@ helm upgrade --install myota-next deploy/helm/myota-next \
 The public chart repository is
 `https://myota-platform.github.io/myota-next`. Add it as a Rancher Cluster
 Repository / Helm repository to make the chart visible under Applications. The
-initial chart version is `1.0.0`; the release workflow keeps each `.tgz` and
-updates `index.yaml` on GitHub Pages for every published GitHub Release. Each
-subsequent GitHub release increments the chart patch version, while `appVersion`
-records the GitHub release tag used to package the chart.
+first public chart version is `1.1.0`; the release workflow keeps each `.tgz`
+and updates `index.yaml` on GitHub Pages for every published GitHub Release. A
+release tag such as `v1.1.0` determines the chart's semantic version (`1.1.0`),
+while `appVersion` records the full GitHub release tag.
 
 To add the repository with Helm:
 
@@ -102,9 +102,9 @@ helm repo update
 helm search repo myota/myota-next --versions
 ```
 
-The workflow has a manual dispatch input for bootstrapping the first chart
-from the current repository branch. Subsequent chart versions are published
-automatically when a GitHub Release is published.
+The workflow has a manual dispatch input for publishing a tagged release chart.
+Subsequent chart versions are published automatically when a GitHub Release is
+published.
 
 The app chart emits a Traefik `IngressRoute` (`traefik.io/v1alpha1`) rather
 than a generic Ingress, matching this K3s server's `websecure` entry point and

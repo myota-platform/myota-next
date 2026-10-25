@@ -57,6 +57,8 @@ describe('Geodata asynchronous import capacity qualification', () => {
       let storedSource: Buffer | undefined;
       let importId: string | undefined;
       let sampling = false;
+      let successfulSamples = 0;
+      let failedSamples = 0;
       const maxima = {
         workStreamMessages: 0,
         workStreamBytes: 0,
@@ -165,8 +167,9 @@ describe('Geodata asynchronous import capacity qualification', () => {
             maxima.activeDatabaseConnections,
             Number(connections.rows[0]?.count ?? 0),
           );
+          successfulSamples++;
         } catch {
-          // The NATS durable may still be starting during initial sampling.
+          failedSamples++;
         } finally {
           sampling = false;
         }
@@ -200,6 +203,7 @@ describe('Geodata asynchronous import capacity qualification', () => {
         const completed = await waitForPreprocessing(apiPool, importId, sample);
         await waitForPendingOutbox(apiPool, importId);
         await sample();
+        expect(successfulSamples).toBeGreaterThan(0);
         const staged = await apiPool.query<{ count: string }>(
           `SELECT count(*)::text AS count FROM geodata_import_candidate
            WHERE import_run_id=$1`,
@@ -257,6 +261,7 @@ describe('Geodata asynchronous import capacity qualification', () => {
               pendingOutboxEventsAtFinish: Number(pendingOutbox.rows[0]?.count),
             },
             jetstream: maxima,
+            telemetrySampling: { successfulSamples, failedSamples },
             peakProcessRssGrowthBytes: Math.max(
               0,
               rssAfterBytes - rssBeforeBytes,
