@@ -1,0 +1,5 @@
+# Bounded resource profile for isolated capacity measurements only.
+# It does not change the infrastructure chart defaults.
+resources:
+  requests: { cpu: 100m, memory: 512Mi }
+  limits: { cpu: '1', memory: 2Gi }

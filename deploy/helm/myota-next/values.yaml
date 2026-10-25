@@ -37,6 +37,13 @@ geodataWorker:
 geodataImporter:
   pollSeconds: 60
   sourceAllowlist: []
+databasePools:
+  core: 10
+  activity: 12
+  geodata: 10
+activityLimits:
+  maxBatchQsos: 5000
+  uploadMaxBytes: 26214400
 images:
   gateway: { repository: '', tag: '', digest: '' }
   identity: { repository: '', tag: '', digest: '' }
@@ -116,6 +123,7 @@ components:
     env:
       PORT: '8001'
       CORE_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
+      MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.core }}'
       MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
       MYOTA_EMAIL_SERVICE_CLIENT_SECRET:
         { secret: auth, key: email-service-client-secret }
@@ -137,6 +145,7 @@ components:
     replicas: 1
     env:
       CORE_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
+      MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.core }}'
       MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'
       MYOTA_OBJECT_STORAGE_ACCESS_KEY:
         { secret: objectStorage, key: access-key }
@@ -156,6 +165,7 @@ components:
     env:
       PORT: '8002'
       CORE_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
+      MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.core }}'
       MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
   activity:
     enabled: true
@@ -167,6 +177,7 @@ components:
       PORT: '8004'
       ACTIVITY_DATABASE_URL:
         { secret: databaseUrls, key: activity-database-url }
+      MYOTA_ACTIVITY_DB_POOL_MAX: '{{ .Values.databasePools.activity }}'
       MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
       MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'
       MYOTA_OBJECT_STORAGE_PUBLIC_ENDPOINT: '{{ default .Values.dependencies.objectStorageEndpoint .Values.dependencies.objectStoragePublicEndpoint }}'
@@ -176,6 +187,8 @@ components:
       MYOTA_OBJECT_STORAGE_SECRET_KEY:
         { secret: objectStorage, key: secret-key }
       MYOTA_ADIF_BUCKET: '{{ .Values.dependencies.adifBucket }}'
+      MYOTA_UPLOAD_MAX_BYTES: '{{ .Values.activityLimits.uploadMaxBytes }}'
+      MYOTA_MAX_BATCH_QSOS: '{{ .Values.activityLimits.maxBatchQsos }}'
       MYOTA_MAX_BODY_BYTES: '41943040'
       MYOTA_AWARD_ASSET_BUCKET: '{{ .Values.dependencies.awardAssetBucket }}'
       MYOTA_AWARD_SIGNATURE_BUCKET: '{{ .Values.dependencies.awardSignatureBucket }}'
@@ -189,6 +202,7 @@ components:
     env:
       ACTIVITY_DATABASE_URL:
         { secret: databaseUrls, key: activity-database-url }
+      MYOTA_ACTIVITY_DB_POOL_MAX: '{{ .Values.databasePools.activity }}'
       NATS_URL: { secret: nats, key: url }
       MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'
       MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: path
@@ -208,6 +222,7 @@ components:
     env:
       ACTIVITY_DATABASE_URL:
         { secret: databaseUrls, key: activity-database-url }
+      MYOTA_ACTIVITY_DB_POOL_MAX: '{{ .Values.databasePools.activity }}'
       NATS_URL: { secret: nats, key: url }
       ACTIVITY_NOTIFICATION_METRICS_PORT: '9110'
   geodata:
@@ -221,6 +236,7 @@ components:
     env:
       PORT: '8003'
       GEO_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }
+      MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.geodata }}'
       MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
       MYOTA_ACTIVITY_URL: '{{ default (printf "http://%s-activity:8004" .Release.Name) .Values.dependencies.activityUrl }}'
       MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'
@@ -242,6 +258,7 @@ components:
     terminationGracePeriodSeconds: 60
     env:
       GEO_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }
+      MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.geodata }}'
       NATS_URL: { secret: nats, key: url }
       MYOTA_ACTIVITY_URL: '{{ default (printf "http://%s-activity:8004" .Release.Name) .Values.dependencies.activityUrl }}'
       MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
@@ -272,6 +289,7 @@ components:
     terminationGracePeriodSeconds: 75
     env:
       CORE_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
+      MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.core }}'
       NATS_URL: { secret: nats, key: url }
       MYOTA_IDENTITY_URL: '{{ default (printf "http://%s-identity:8001" .Release.Name) .Values.dependencies.identityUrl }}'
       MYOTA_EMAIL_SERVICE_CLIENT_SECRET:
@@ -294,6 +312,7 @@ components:
       OUTBOX_OWNER: core
       OUTBOX_WORKER: core-outbox
       OUTBOX_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
+      MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.core }}'
       NATS_URL: { secret: nats, key: url }
       OUTBOX_METRICS_PORT: '9108'
   outbox-activity:
@@ -305,6 +324,7 @@ components:
       OUTBOX_OWNER: activity
       OUTBOX_WORKER: activity-outbox
       OUTBOX_DATABASE_URL: { secret: databaseUrls, key: activity-database-url }
+      MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.activity }}'
       NATS_URL: { secret: nats, key: url }
       OUTBOX_METRICS_PORT: '9108'
   outbox-geodata:
@@ -316,6 +336,7 @@ components:
       OUTBOX_OWNER: geodata
       OUTBOX_WORKER: geodata-outbox
       OUTBOX_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }
+      MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.geodata }}'
       NATS_URL: { secret: nats, key: url }
       OUTBOX_METRICS_PORT: '9108'
   admin-web:

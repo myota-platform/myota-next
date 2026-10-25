@@ -2,8 +2,10 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint.js';
 import {
   readGeoJsonDocumentMetadata,
   streamGeoJsonFeatures,
@@ -74,6 +76,7 @@ describe('GeoJSON streaming reference parity', () => {
           createWriteStream(sourcePath, { flags: 'wx', mode: 0o600 }),
         );
         const beforeMaxRssKb = process.resourceUsage().maxRSS;
+        const startedAt = performance.now();
         const metadata = await readGeoJsonDocumentMetadata(
           createReadStream(sourcePath),
           async () => undefined,
@@ -95,10 +98,23 @@ describe('GeoJSON streaming reference parity', () => {
         }
         const rssGrowthBytes =
           Math.max(0, process.resourceUsage().maxRSS - beforeMaxRssKb) * 1024;
+        const elapsedMilliseconds = performance.now() - startedAt;
 
         expect(metadata.rootType).toBe('FeatureCollection');
         expect(decoded).toBe(featureCount);
         expect(rssGrowthBytes).toBeLessThanOrEqual(160 * 1024 * 1024);
+        console.info(
+          stringifyJsonWithBigInts({
+            qualification: 'geojson-rss',
+            featureCount: decoded,
+            elapsedMilliseconds: Math.round(elapsedMilliseconds),
+            featuresPerSecond: Math.round(
+              (decoded * 1000) / elapsedMilliseconds,
+            ),
+            rssGrowthBytes,
+            rssLimitBytes: 160 * 1024 * 1024,
+          }),
+        );
       } finally {
         await rm(directory, { recursive: true, force: true });
       }

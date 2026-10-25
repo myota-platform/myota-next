@@ -108,11 +108,27 @@ jetstreamProvisioner:
     emailWorkMaxMessages: '500000'
     emailWorkMaxMessageBytes: '4194304'
 
+databasePools:
+  core: 10
+  activity: 12
+  geodata: 10
+activityLimits:
+  maxBatchQsos: 5000
+  uploadMaxBytes: 26214400
+
 components:
   email-worker:
     enabled: false
   geodata-importer:
     enabled: false
+  activity-worker:
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { cpu: '1', memory: 1Gi }
+  geodata-worker:
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { cpu: '1', memory: 1Gi }
 
 dependencies:
   objectStorageEndpoint: http://myota-test-seaweedfs:8333

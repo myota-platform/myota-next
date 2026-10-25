@@ -57,22 +57,20 @@ an accepted scope decision is recorded in the dispositions section.
   PyOsmium 4.3.2 tag-matrix fixture now checks all nine accepted tag values on nodes,
   each of the five accepted line-way tags, the remaining area-way tags, and all 17
   Python-compatible outputs and hashes. The
-  manually triggered RSS suite previously ran generated 50,000-, 250,000-, and
-  300,000-feature workloads; these remain historical measurements, including the
-  300,000 case staying within the existing 192 MiB Node-plus-osmium process-tree
-  growth bound. The runner previously selected a suite name rather than its test
-  names, so those checks had been skipped; the runner fix now executes all three.
-  The launch RSS qualification target is now capped at 25,000 features; higher-scale
-  results are retained as historical evidence and are not a launch requirement.
-- **Missing evidence:** Less-common OSM geometries within the 25,000-feature launch
-  target still need qualification; RSS scopes are not directly comparable with
+  earlier RSS runs exercised generated 50,000-, 250,000-, and 300,000-feature workloads;
+  those are historical evidence. The launch runner now executes only the 25,000-feature
+  workload, with a measured 49.3 MiB Node-plus-osmium process-tree RSS increase and
+  20,078 features/s on Node 24.21.0 Linux. RSS scopes are not directly comparable with
   Python's absolute process-RSS measurements.
+- **Missing evidence:** Full end-to-end import throughput and transaction staging under
+  explicit deployment CPU, memory, PostgreSQL pool, and JetStream bounds; source-host
+  approval also remains intentionally unset.
 - **Risk:** Large or unusual source files may exhaust memory, exceed supported
   bounds, or produce different entities than the reference importer.
-- **Next check:** Complete remaining correctness and resource cases within the
-  25,000-feature launch target, add less-common OSM types, and document comparable
-  versus non-comparable RSS scopes. Do not extend launch RSS workloads above 25,000
-  features.
+- **Next check:** Run the full PBF correctness fixtures, retain the uncommon hiking-way,
+  dual line/area closed-way, and multipart multipolygon cases, and keep launch RSS
+  workloads at or below 25,000 features. Qualify full import throughput separately from
+  decoder-only RSS.
 - **Tracked by:** [Issue #18](https://github.com/myota-platform/myota-next/issues/18).
 - **Sources:** [Geodata parity, lines 140–171](parity/geodata.md#L140);
   [completion criteria, lines 15–17](parity/completion-criteria.md#L15).
@@ -375,20 +373,25 @@ an accepted scope decision is recorded in the dispositions section.
 - **Reference behavior:** Supported upload and computation workloads remain
   within documented resource, latency, concurrency, and recovery bounds under
   explicit CPU, memory, configured launch replica counts, and database-pool limits.
-- **Current implementation and evidence:** Geodata has manually triggered RSS
-  checks for selected GeoJSON, Shapefile, and PBF inputs; worker concurrency,
-  database-pool defaults, and source limits are configurable.
-- **Missing evidence:** Completion criteria leave production throughput open;
-  representative Activity log/QSO ingestion, broad award calculation, and
-  cross-service capacity bounds still need measurements comparable to the
-  intended deployment. Existing Python/Nest RSS scopes are not always directly
-  comparable.
+- **Current implementation and evidence:** Node 24.21.0 Linux parser qualification
+  measured GeoJSON (300,000 features, 9.6 s, 107.8 MiB RSS growth), KML/GPX
+  (50,000 each, 2.5 s combined, 49.7 MiB), Shapefile (50,000 records, 4.1 s,
+  30.0 MiB), and OSM PBF (25,000 tagged nodes, 1.2 s, 51.6 MiB process-tree
+  growth). The PBF launch runner no longer schedules historical 50,000+ cases.
+  These tests cover parsing only, not database staging or deployment load.
+- **Missing evidence:** Representative Activity log/QSO ingestion, broad award
+  calculation, Geodata synchronous mutation transaction latency, database load,
+  broker backlog, and recovery still need measurements under explicit runtime,
+  database, and pool bounds. The live test deployment currently has unbounded
+  PostgreSQL/NATS pods and Helm does not configure database pool maxima. Existing
+  Python/Nest RSS scopes are not always directly comparable.
 - **Risk:** Production load can exhaust memory, pools, or broker capacity,
   producing slow or failed user workflows and unsafe retry backlogs.
-- **Next check:** Measure Geodata formats and source caps, Activity log/QSO
-  ingestion and award recalculation, synchronous command/selection bounds,
-  broker backlog, and recovery under stated limits; set and document operating
-  bounds from results.
+- **Next check:** Complete format correctness coverage and source-cap documentation;
+  add explicit Helm pool and infrastructure resource settings; measure Activity
+  log/QSO ingestion and award recalculation, Geodata synchronous command/selection
+  bounds, broker backlog, and recovery under those limits; set and document
+  operating bounds from results.
 - **Tracked by:** [Issue #18](https://github.com/myota-platform/myota-next/issues/18)
   and [Issue #19](https://github.com/myota-platform/myota-next/issues/19).
 - **Sources:** [completion criteria, lines 15–17](parity/completion-criteria.md#L15);
