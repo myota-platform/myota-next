@@ -2,7 +2,7 @@ name: Publish NestJS images
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, testing]
   release:
     types: [published]
 
@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   quality:
+    if: github.event_name == 'release' && github.event.action == 'published'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -35,7 +36,6 @@ jobs:
 
   verify-images:
     if: github.event_name == 'pull_request'
-    needs: quality
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
