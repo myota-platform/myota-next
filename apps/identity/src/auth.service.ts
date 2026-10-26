@@ -334,7 +334,7 @@ export class IdentityAuthService {
                   'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS profile_image_updated_at
            FROM public.account a
            LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
-          WHERE a.id = $1 AND a.status = 'ACTIVE' AND a.email_verified = true
+          WHERE a.id = $1 AND a.email_verified = true
           FOR UPDATE OF a`,
         [claims.sub],
       );
