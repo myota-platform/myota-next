@@ -53,6 +53,7 @@ jobs:
           grep -F 'Host(`myota-test.spainip.es`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
           grep -F 'Host(`myota-admin-test.spainip.es`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
           grep -F 'Host(`myota-participant-test.spainip.es`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
+          grep -F 'Host(`myota-participant-test.spainip.es`) && PathPrefix(`/v1/`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
           grep -F 'certResolver: "acmeresolver"' "$RUNNER_TEMP/myota-test-rendered.yaml"
           grep -A1 -F 'name: MYOTA_UPLOAD_MAX_BYTES' "$RUNNER_TEMP/myota-test-rendered.yaml" | grep -F 'value: "26214400"'
           participant_deployment="$(awk -v RS='---' '/kind: Deployment/ && /name: myota-test-participant-web/ { print }' "$RUNNER_TEMP/myota-test-rendered.yaml")"
