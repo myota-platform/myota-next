@@ -96,6 +96,7 @@ jobs:
           -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install
           --no-install-recommends --yes osmium-tool
       - run: npm ci
+      - run: npm run check:nest-observe-workspaces
       - run: npm run audit:dependencies
       - name: Scan tracked source and production dependencies
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
