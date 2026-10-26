@@ -117,6 +117,9 @@ activityLimits:
   uploadMaxBytes: 26214400
 
 components:
+  geodata:
+    env:
+      MYOTA_LOAD_TEST_CLEANUP_ENABLED: '1'
   email-worker:
     enabled: false
   geodata-importer:

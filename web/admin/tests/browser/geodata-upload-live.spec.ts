@@ -19,6 +19,28 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
     'requires the isolated Core and Geodata parity databases',
   );
   if (!databaseUrl || !coreDatabaseUrl) return;
+  const configuredFeatureCount = Number(
+    process.env.MYOTA_BROWSER_GEODATA_FEATURE_COUNT ?? '1',
+  );
+  if (
+    !Number.isInteger(configuredFeatureCount) ||
+    configuredFeatureCount < 1 ||
+    configuredFeatureCount > 5000
+  )
+    throw new Error(
+      'MYOTA_BROWSER_GEODATA_FEATURE_COUNT must be an integer from 1 to 5000',
+    );
+  const useLoadTestCleanup =
+    process.env.MYOTA_BROWSER_GEODATA_LOAD_TEST_CLEANUP === '1';
+  const geodataPodUrls = (process.env.MYOTA_BROWSER_GEODATA_POD_URLS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (useLoadTestCleanup && geodataPodUrls.length !== 2)
+    throw new Error(
+      'live Geodata qualification requires exactly two MYOTA_BROWSER_GEODATA_POD_URLS',
+    );
+  const loadTestRunId = `lt-${randomUUID()}`;
 
   const pool = new Pool({ connectionString: databaseUrl, max: 1 });
   const corePool = new Pool({ connectionString: coreDatabaseUrl, max: 1 });
@@ -45,13 +67,22 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
       featureName: `Uploaded GeoJSON ${suffix}`,
       content: JSON.stringify({
         type: 'FeatureCollection',
-        features: [
-          {
+        features: Array.from(
+          { length: configuredFeatureCount },
+          (_, index) => ({
             type: 'Feature',
-            properties: { name: `Uploaded GeoJSON ${suffix}` },
-            geometry: { type: 'Point', coordinates: [7.123456, 46.234567] },
-          },
-        ],
+            properties: {
+              name:
+                index === 0
+                  ? `Uploaded GeoJSON ${suffix}`
+                  : `Uploaded GeoJSON ${suffix} ${index + 1}`,
+            },
+            geometry: {
+              type: 'Point',
+              coordinates: [7.123456 + index / 100000, 46.234567],
+            },
+          }),
+        ),
       }),
     },
     {
@@ -165,6 +196,8 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
       'minimumCandidates' in source ? source.minimumCandidates : 1,
   }));
   const uploadSessionIds: string[] = [];
+  const uploadRequestsPerPod = geodataPodUrls.map(() => 0);
+  let nextGeodataPod = 0;
   let simulatedPartFailures = 0;
 
   try {
@@ -184,6 +217,36 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
       );
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page).toHaveURL(/\/master-data$/);
+    if (geodataPodUrls.length) {
+      await page.route('**/v1/geodata/**', async (route) => {
+        const requestUrl = new URL(route.request().url());
+        const podIndex = nextGeodataPod++ % geodataPodUrls.length;
+        const upstreamUrl = new URL(
+          `${requestUrl.pathname}${requestUrl.search}`,
+          geodataPodUrls[podIndex],
+        ).toString();
+        if (requestUrl.pathname.includes('/import-uploads'))
+          uploadRequestsPerPod[podIndex] += 1;
+        await route.fulfill({
+          response: await route.fetch({ url: upstreamUrl }),
+        });
+      });
+    }
+    if (useLoadTestCleanup) {
+      const cleanupGateStatus = await page.evaluate(async () => {
+        const token = localStorage.getItem('myota_admin_access') ?? '';
+        const response = await fetch('/v1/geodata/load-test-runs/invalid', {
+          method: 'DELETE',
+          headers: {
+            authorization: `Bearer ${token}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ confirmation: 'invalid' }),
+        });
+        return response.status;
+      });
+      expect(cleanupGateStatus).toBe(400);
+    }
     await page.route(
       '**/v1/geodata/import-uploads/*/parts/1',
       async (route) => {
@@ -195,7 +258,7 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
           });
           return;
         }
-        await route.continue();
+        await route.fallback();
       },
     );
     await page.getByRole('button', { name: 'New category' }).click();
@@ -219,6 +282,7 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
     await expect(page.getByText('Category saved.')).toBeVisible();
 
     for (const source of sources) {
+      const sourceStartedAt = performance.now();
       await page.goto('/geodata-imports');
       await expect(page).toHaveURL(/\/geodata-imports$/);
       await page
@@ -359,54 +423,120 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
       expect(persisted.rows[0]?.candidate_count).toBeGreaterThanOrEqual(
         source.minimumCandidates ?? 1,
       );
+      if (useLoadTestCleanup) {
+        if (source.format === 'GEOJSON') {
+          expect(uploadRequestsPerPod.every((count) => count > 0)).toBe(true);
+          console.log(
+            JSON.stringify({
+              qualification: 'live-geodata-import',
+              testRunId: loadTestRunId,
+              format: source.format,
+              uploadedBytes: source.bytes.length,
+              expectedFeatures: configuredFeatureCount,
+              preprocessedCandidates: persisted.rows[0]?.candidate_count,
+              uploadRequestsPerPod,
+              elapsedMilliseconds: Math.round(
+                performance.now() - sourceStartedAt,
+              ),
+            }),
+          );
+        }
+      }
     }
   } finally {
     try {
       if (uploadSessionIds.length) {
-        await fixture.query('BEGIN');
-        await fixture.query(
-          "SELECT set_config('myota.geodata_writer','row-v1',true)",
-        );
-        for (const uploadSessionId of uploadSessionIds) {
-          const linkedImport = await fixture.query<{
-            import_run_id: string | null;
-          }>(
-            'SELECT import_run_id::text FROM geodata_upload_session WHERE id=$1::uuid',
-            [uploadSessionId],
-          );
-          const importRunId = linkedImport.rows[0]?.import_run_id;
+        if (useLoadTestCleanup) {
+          await fixture.query('BEGIN');
           await fixture.query(
-            `DELETE FROM outbox_event
-             WHERE aggregate_id=$1 OR aggregate_id IN (
-               SELECT id::text FROM geodata_import_processing_queue
-               WHERE import_run_id=$1::uuid
-             )`,
-            [importRunId ?? uploadSessionId],
+            "SELECT set_config('myota.geodata_writer','row-v1',true)",
           );
-          if (importRunId) {
+          for (const uploadSessionId of uploadSessionIds) {
             await fixture.query(
-              'DELETE FROM source_snapshot_manifest WHERE import_run_id=$1::uuid',
-              [importRunId],
+              `UPDATE geodata_upload_session
+               SET metadata=jsonb_set(metadata,'{source,loadTestRunId}',to_jsonb($2::text),true)
+               WHERE id=$1::uuid`,
+              [uploadSessionId, loadTestRunId],
             );
             await fixture.query(
-              'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1::uuid',
-              [importRunId],
+              `UPDATE import_run run
+               SET source_metadata=jsonb_set(run.source_metadata,'{source,loadTestRunId}',to_jsonb($2::text),true)
+               FROM geodata_upload_session upload
+               WHERE upload.id=$1::uuid AND run.id=upload.import_run_id`,
+              [uploadSessionId, loadTestRunId],
             );
-            await fixture.query('DELETE FROM import_run WHERE id=$1::uuid', [
-              importRunId,
-            ]);
           }
+          await fixture.query('COMMIT');
+          const cleanup = await page.evaluate(async (testRunId) => {
+            const token = localStorage.getItem('myota_admin_access') ?? '';
+            const response = await fetch(
+              `/v1/geodata/load-test-runs/${encodeURIComponent(testRunId)}`,
+              {
+                method: 'DELETE',
+                headers: {
+                  authorization: `Bearer ${token}`,
+                  'content-type': 'application/json',
+                },
+                body: JSON.stringify({
+                  confirmation: `DELETE LOAD TEST DATA ${testRunId}`,
+                }),
+              },
+            );
+            return {
+              status: response.status,
+              body: await response.json().catch(() => ({})),
+            };
+          }, loadTestRunId);
+          if (cleanup.status !== 200 || cleanup.body.cleaned !== true)
+            throw new Error(
+              `isolated load-test cleanup failed with HTTP ${cleanup.status}`,
+            );
+        } else {
+          await fixture.query('BEGIN');
           await fixture.query(
-            `DELETE FROM idempotency_record
-             WHERE service='geodata-service' AND response->>'uploadId'=$1`,
-            [uploadSessionId],
+            "SELECT set_config('myota.geodata_writer','row-v1',true)",
           );
-          await fixture.query(
-            'DELETE FROM geodata_upload_session WHERE id=$1::uuid',
-            [uploadSessionId],
-          );
+          for (const uploadSessionId of uploadSessionIds) {
+            const linkedImport = await fixture.query<{
+              import_run_id: string | null;
+            }>(
+              'SELECT import_run_id::text FROM geodata_upload_session WHERE id=$1::uuid',
+              [uploadSessionId],
+            );
+            const importRunId = linkedImport.rows[0]?.import_run_id;
+            await fixture.query(
+              `DELETE FROM outbox_event
+               WHERE aggregate_id=$1 OR aggregate_id IN (
+                 SELECT id::text FROM geodata_import_processing_queue
+                 WHERE import_run_id=$1::uuid
+               )`,
+              [importRunId ?? uploadSessionId],
+            );
+            if (importRunId) {
+              await fixture.query(
+                'DELETE FROM source_snapshot_manifest WHERE import_run_id=$1::uuid',
+                [importRunId],
+              );
+              await fixture.query(
+                'DELETE FROM geodata_import_candidate_stage WHERE import_run_id=$1::uuid',
+                [importRunId],
+              );
+              await fixture.query('DELETE FROM import_run WHERE id=$1::uuid', [
+                importRunId,
+              ]);
+            }
+            await fixture.query(
+              `DELETE FROM idempotency_record
+               WHERE service='geodata-service' AND response->>'uploadId'=$1`,
+              [uploadSessionId],
+            );
+            await fixture.query(
+              'DELETE FROM geodata_upload_session WHERE id=$1::uuid',
+              [uploadSessionId],
+            );
+          }
+          await fixture.query('COMMIT');
         }
-        await fixture.query('COMMIT');
       }
     } finally {
       await fixture.query('ROLLBACK').catch(() => undefined);
