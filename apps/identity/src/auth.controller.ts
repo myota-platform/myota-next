@@ -136,10 +136,15 @@ export class AuthController {
   resolveEmailRecipient(
     @Headers('authorization') authorization: string | undefined,
     @Param('accountId') accountId: string,
+    @Query('templateId') templateId: string | undefined,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
-    return this.credentials.resolveEmailRecipient(authorization, accountId);
+    return this.credentials.resolveEmailRecipient(
+      authorization,
+      accountId,
+      templateId,
+    );
   }
 
   @Post('auth/logout')

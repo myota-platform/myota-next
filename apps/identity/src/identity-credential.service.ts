@@ -135,6 +135,7 @@ export class IdentityCredentialService {
   async resolveEmailRecipient(
     authorization: string,
     accountId: string,
+    templateId?: string,
   ): Promise<{ deliverableAddress: string }> {
     const claims = this.auth.verifyServiceToken(authorization);
     const client = await this.connect();
@@ -160,8 +161,16 @@ export class IdentityCredentialService {
       const result = await client.query<{ email: string | null }>(
         `SELECT email::text AS email
            FROM public.account
-          WHERE id = $1 AND status = 'ACTIVE'`,
-        [normalizedAccountId],
+          WHERE id = $1
+            AND (
+              status = 'ACTIVE'
+              OR (
+                status = 'PENDING_SETUP'
+                AND email_verified = false
+                AND $2::text = 'participant-email-verification.v1'
+              )
+            )`,
+        [normalizedAccountId, templateId ?? null],
       );
       const email = result.rows[0]?.email;
       if (!email || !trimPythonWhitespace(email)) {
