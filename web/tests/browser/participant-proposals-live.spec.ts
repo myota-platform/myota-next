@@ -134,7 +134,7 @@ test('submits and reviews participant location proposals through live services',
     await page.locator('#award-password').fill(password);
     await activateByKeyboard(
       page,
-      page.locator('#award-login button[type="submit"]'),
+      page.locator('#participant-login button[type="submit"]'),
     );
     await expect(page.locator('#profile-status')).toHaveText('Profile loaded.');
 

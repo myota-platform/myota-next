@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/myota-platform/myota-next/contracts/schemas/events/identity-account-email-verified-v1.schema.json",
+  "title": "identity.account.email-verified.v1 envelope v1",
+  "allOf": [
+    { "$ref": "../event-envelope.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": { "const": "identity.account.email-verified.v1" },
+        "payload": {
+          "type": "object",
+          "properties": { "accountId": { "type": "string", "format": "uuid" } },
+          "required": ["accountId"],
+          "additionalProperties": false
+        }
+      }
+    }
+  ],
+  "x-payload-evidence": "Identity email-verification lifecycle",
+  "x-data-classification": "personal"
+}

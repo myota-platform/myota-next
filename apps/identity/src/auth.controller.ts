@@ -5,7 +5,6 @@ import {
   Param,
   Get,
   Header,
-  ForbiddenException,
   Headers,
   HttpCode,
   Post,
@@ -38,6 +37,7 @@ import { IdentityCallsignService } from './identity-callsign.service.js';
 import { IdentityIntegrationService } from './identity-integration.service.js';
 import { IdentityCredentialService } from './identity-credential.service.js';
 import { IdentityProfileImageService } from './identity-profile-image.service.js';
+import { IdentityRegistrationService } from './identity-registration.service.js';
 
 @Controller('identity')
 export class AuthController {
@@ -49,13 +49,31 @@ export class AuthController {
     private readonly integrations: IdentityIntegrationService,
     private readonly credentials: IdentityCredentialService,
     private readonly profileImages: IdentityProfileImageService,
+    private readonly registration: IdentityRegistrationService,
   ) {}
 
   @Post('auth/register')
-  register(): never {
-    throw new ForbiddenException(
-      'public participant registration is unavailable until email verification and abuse controls are deployed',
+  @HttpCode(200)
+  register(@Body() body: unknown, @Req() request: Request) {
+    return this.registration.register(
+      body,
+      this.requestContext(request).remoteAddr,
     );
+  }
+
+  @Post('auth/register/resend')
+  @HttpCode(200)
+  resendRegistration(@Body() body: unknown, @Req() request: Request) {
+    return this.registration.resend(
+      body,
+      this.requestContext(request).remoteAddr,
+    );
+  }
+
+  @Post('auth/register/verify')
+  @HttpCode(200)
+  verifyRegistration(@Body() body: unknown) {
+    return this.registration.verify(body);
   }
 
   @Post('auth/login')
@@ -196,6 +214,27 @@ export class AuthController {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
     return this.auth.listAdminAccounts(authorization, query);
+  }
+
+  @Get('admin/participants')
+  listAdminParticipants(
+    @Headers('authorization') authorization: string | undefined,
+    @Query() query: AdminAccountsQueryDto,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.listParticipants(authorization, query);
+  }
+
+  @Patch('admin/participants/:accountId')
+  updateAdminParticipant(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('accountId') accountId: string,
+    @Body() body: unknown,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.accounts.updateParticipant(authorization, accountId, body);
   }
 
   @Get('admin/security-events')

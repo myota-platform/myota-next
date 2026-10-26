@@ -36,7 +36,10 @@ const escapeHtml = (value) =>
   );
 async function api(path, options = {}) {
   const res = await fetch(path, options);
-  if (!res.ok) throw new Error((await res.json()).message || res.statusText);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || body.message || res.statusText);
+  }
   return res.json();
 }
 async function awardApi(path, options = {}) {
@@ -152,6 +155,7 @@ function clearParticipantSession() {
   }
   localStorage.removeItem('myota_public_access');
   localStorage.removeItem('myota_public_refresh');
+  renderParticipantSession();
   if ($('activation-start-form')) $('activation-start-form').hidden = true;
   if ($('qso-form')) $('qso-form').hidden = true;
   if ($('activations-list')) $('activations-list').replaceChildren();
@@ -168,6 +172,19 @@ function clearParticipantSession() {
     $('profile-status').textContent = 'Sign in below to manage your profile.';
   if (typeof revokeProfileSource === 'function') revokeProfileSource();
   if (typeof clearProfileImage === 'function') clearProfileImage();
+}
+function renderParticipantSession() {
+  const signedIn = Boolean(awardAccount && awardAccessToken);
+  if ($('participant-session-status'))
+    $('participant-session-status').textContent = signedIn
+      ? `Signed in as ${awardAccount.displayName} (${awardAccount.email || 'participant'}).`
+      : 'Sign in or create a participant account to manage activations and your profile.';
+  if ($('participant-login')) $('participant-login').hidden = signedIn;
+  if ($('participant-register-details'))
+    $('participant-register-details').hidden = signedIn;
+  if ($('participant-resend-details'))
+    $('participant-resend-details').hidden = signedIn;
+  if ($('participant-signout')) $('participant-signout').hidden = !signedIn;
 }
 async function refreshParticipantSession() {
   if (!awardRefreshToken) return false;
@@ -1160,6 +1177,7 @@ async function signInForAward() {
   localStorage.setItem('myota_public_access', awardAccessToken);
   localStorage.setItem('myota_public_refresh', awardRefreshToken);
   awardAccount = await awardApi('/v1/identity/me');
+  renderParticipantSession();
   renderOperatorCallsigns();
   await loadActivations();
   await loadMyAwardRequests();
@@ -1202,18 +1220,99 @@ async function requestPublicAward(awardId, levelId) {
     $('award-status').textContent = error.message;
   }
 }
-$('award-login').onsubmit = (event) => {
+$('participant-login').onsubmit = (event) => {
   event.preventDefault();
+  $('participant-auth-status').textContent = 'Signing in…';
   signInForAward()
     .then(async () => {
+      $('participant-auth-status').textContent = '';
       $('award-request-status').textContent =
-        'Signed in. Choose an eligible award level to request it.';
+        'Choose an eligible award level to request it.';
       await loadProfile();
     })
     .catch((error) => {
-      $('award-status').textContent = error.message;
+      $('participant-auth-status').textContent = error.message;
     });
 };
+$('participant-register').onsubmit = async (event) => {
+  event.preventDefault();
+  const button = $('participant-register').querySelector(
+    'button[type="submit"]',
+  );
+  button.disabled = true;
+  $('participant-auth-status').textContent = 'Submitting registration…';
+  try {
+    const result = await api('/v1/identity/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        displayName: $('register-display-name').value,
+        email: $('register-email').value,
+        password: $('register-password').value,
+        participationType: $('register-participation-type').value,
+      }),
+    });
+    $('resend-email').value = $('register-email').value;
+    $('participant-register').reset();
+    $('participant-auth-status').textContent = result.message;
+  } catch (error) {
+    $('participant-auth-status').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+$('participant-resend').onsubmit = async (event) => {
+  event.preventDefault();
+  const button = $('participant-resend').querySelector('button[type="submit"]');
+  button.disabled = true;
+  $('participant-auth-status').textContent = 'Requesting another email…';
+  try {
+    const result = await api('/v1/identity/auth/register/resend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('resend-email').value }),
+    });
+    $('participant-auth-status').textContent = result.message;
+  } catch (error) {
+    $('participant-auth-status').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+$('participant-signout').onclick = async () => {
+  $('participant-auth-status').textContent = 'Signing out…';
+  try {
+    if (awardRefreshToken)
+      await awardApi('/v1/identity/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken: awardRefreshToken }),
+      });
+  } catch {
+    // Clear local credentials even when the API is temporarily unavailable.
+  }
+  clearParticipantSession();
+  $('participant-auth-status').textContent = 'You have signed out.';
+};
+
+async function verifyRegistrationFromLink() {
+  const token = new URLSearchParams(window.location.search).get('token');
+  if (!token) return;
+  $('participant-auth-status').textContent = 'Verifying your email address…';
+  try {
+    const result = await api('/v1/identity/auth/register/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    $('participant-auth-status').textContent = result.message;
+  } catch (error) {
+    $('participant-auth-status').textContent = error.message;
+  } finally {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('token');
+    window.history.replaceState({}, '', url);
+  }
+}
 
 let profileCrop = null;
 let profileSourceUrl = null;
@@ -1266,12 +1365,14 @@ async function loadProfile() {
     $('profile-image-editor').hidden = true;
     revokeProfileSource();
     clearProfileImage();
-    $('profile-status').textContent = 'Sign in below to manage your profile.';
+    $('profile-status').textContent = 'Sign in above to manage your profile.';
+    renderParticipantSession();
     return;
   }
   try {
     const account = await profileApi('/v1/identity/me');
     awardAccount = account;
+    renderParticipantSession();
     renderOperatorCallsigns();
     renderEntities();
     await loadActivations();
@@ -1793,4 +1894,6 @@ $('profile-image-delete').onclick = async () => {
   }
 };
 
+renderParticipantSession();
 loadProfile();
+void verifyRegistrationFromLink();

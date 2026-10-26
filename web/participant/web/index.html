@@ -117,7 +117,7 @@
           <h4>Suggest a new point location</h4>
           <p class="small">
             Proposals enter community review and are not active until approved.
-            Sign in below before submitting.
+            Sign in from Your account before submitting.
           </p>
           <label
             >Location name
@@ -161,12 +161,118 @@
           <button type="submit">Submit location proposal</button>
         </form>
       </section>
+      <section
+        class="panel participant-account-panel"
+        aria-labelledby="participant-account-heading"
+      >
+        <div class="panel-head">
+          <div>
+            <h3 id="participant-account-heading">Your account</h3>
+            <p
+              id="participant-session-status"
+              class="small"
+              role="status"
+              aria-live="polite"
+            >
+              Sign in or create a participant account to manage activations and
+              your profile.
+            </p>
+          </div>
+          <button
+            id="participant-signout"
+            type="button"
+            class="secondary"
+            hidden
+          >
+            Sign out
+          </button>
+        </div>
+        <form id="participant-login" class="profile-form">
+          <h4>Sign in</h4>
+          <label
+            >Email<input
+              id="award-email"
+              type="email"
+              autocomplete="username"
+              required
+              maxlength="254"
+          /></label>
+          <label
+            >Password<input
+              id="award-password"
+              type="password"
+              autocomplete="current-password"
+              required
+              maxlength="128"
+          /></label>
+          <button type="submit">Sign in</button>
+        </form>
+        <p
+          id="participant-auth-status"
+          class="small"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <details id="participant-register-details">
+          <summary>Create a participant account</summary>
+          <form id="participant-register" class="profile-form">
+            <label
+              >Display name<input
+                id="register-display-name"
+                autocomplete="name"
+                required
+                maxlength="120"
+            /></label>
+            <label
+              >Email<input
+                id="register-email"
+                type="email"
+                autocomplete="email"
+                required
+                maxlength="254"
+            /></label>
+            <label
+              >Password<input
+                id="register-password"
+                type="password"
+                autocomplete="new-password"
+                required
+                minlength="12"
+                maxlength="128"
+            /></label>
+            <label
+              >Participant type<select id="register-participation-type">
+                <option value="OPERATOR">Operator</option>
+                <option value="SWL">SWL</option>
+              </select></label
+            >
+            <button type="submit">
+              Create account and send verification email
+            </button>
+          </form>
+        </details>
+        <details id="participant-resend-details">
+          <summary>Resend verification email</summary>
+          <form id="participant-resend" class="profile-form">
+            <label
+              >Email<input
+                id="resend-email"
+                type="email"
+                autocomplete="email"
+                required
+                maxlength="254"
+            /></label>
+            <button type="submit">Resend verification email</button>
+          </form>
+        </details>
+      </section>
       <section class="panel profile-panel">
         <div class="panel-head">
           <div>
             <h3>Your profile</h3>
             <p class="small">
-              Sign in to edit the private profile on your Identity account.
+              Sign in above to edit the private profile on your Identity
+              account.
             </p>
           </div>
           <span
@@ -383,21 +489,6 @@
           ></span>
         </div>
         <div id="public-awards"></div>
-        <form id="award-login" class="award-login">
-          <label
-            >Email<input
-              id="award-email"
-              type="email"
-              autocomplete="username"
-              required /></label
-          ><label
-            >Password<input
-              id="award-password"
-              type="password"
-              autocomplete="current-password"
-              required /></label
-          ><button type="submit">Sign in</button>
-        </form>
         <div
           id="award-request-status"
           class="small"
@@ -415,7 +506,8 @@
           <div>
             <h3>Field activations</h3>
             <p class="small">
-              Sign in above to start an activation and record contacts.
+              Sign in from Your account above to start an activation and record
+              contacts.
             </p>
           </div>
           <span

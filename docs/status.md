@@ -80,6 +80,13 @@ Participant eligible-level requests, now cross live Identity and Activity APIs a
 verify persisted request facts and issuance records. Public catalogue loading uses live
 services as well.
 
+Participant registration with email verification and delegated Participant account
+management are implemented in the current Phase 6 work branch, including the
+`PARTICIPANT_ADMIN` role, Identity API authorization, Admin account workflow, and
+Participant registration/resend/verification UI. The local service and browser checks
+pass; real email delivery and authenticated workflow evidence in `myota-test` remain open
+under Phase 6 issues #91 and #96–#100.
+
 Public Activity activation history, leaderboard, and JSON/CSV result exports are also
 checked through the live Gateway. Participants can read their own request status, while
 cross-account reads are denied. Admin can queue certificate PDF rendering, and

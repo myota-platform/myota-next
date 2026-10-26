@@ -141,6 +141,15 @@ export const adminPages: AdminPage[] = [
     ),
   },
   {
+    path: '/participants',
+    title: 'Participant accounts',
+    group: 'People',
+    icon: '♙',
+    description:
+      'Search, review, and manage participant accounts within the delegated participant-only scope.',
+    allowed: scope('identity.participants.manage'),
+  },
+  {
     path: '/activity',
     title: 'Activations & QSOs',
     group: 'Activity',

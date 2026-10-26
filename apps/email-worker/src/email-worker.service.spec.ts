@@ -22,7 +22,12 @@ function command(
     workType: 'email.send.v1',
     createdAt: '2026-10-14t12:00:00Z',
     producer: 'myota-identity',
-    payload: { recipientAccountId, templateId, templateData },
+    payload: {
+      requestId: workId,
+      recipientAccountId,
+      templateId,
+      templateData,
+    },
   };
 }
 
@@ -53,6 +58,7 @@ type WorkerHarness = {
     ): void;
   };
   transporter: { sendMail(message: unknown): Promise<void> };
+  sentMessages: unknown[];
   sender: { address: string; displayName: string };
   logger: { warn(message: string): void; error(message: string): void };
 };
@@ -67,6 +73,7 @@ function createWorker(
     identityToken?: string;
   } = {},
 ) {
+  const sentMessages: unknown[] = [];
   const worker = Object.assign(
     Object.create(EmailWorkerService.prototype) as WorkerHarness,
     {
@@ -93,7 +100,8 @@ function createWorker(
         recordLog: () => undefined,
       },
       transporter: {
-        sendMail: async (_message: unknown) => {
+        sendMail: async (message: unknown) => {
+          sentMessages.push(message);
           events.push('smtp');
           if (options.smtpError) throw options.smtpError;
         },
@@ -103,6 +111,7 @@ function createWorker(
       identityTokenExpiresAt: Date.now() + 60_000,
       identityClientSecret: 'email-service-secret-for-tests',
       identityUrl: 'https://identity.example.test',
+      sentMessages,
       logger: {
         warn: (message: string) => events.push(`warn:${message}`),
         error: (message: string) => events.push(`error:${message}`),
@@ -150,7 +159,7 @@ afterEach(() => {
 });
 
 describe('email worker Python compatibility', () => {
-  it('parses allowlisted participant and administrator commands', () => {
+  it('parses allowlisted participant, administrator, and verification commands', () => {
     const participant = parseEmailCommand(
       Buffer.from(JSON.stringify(command())),
     );
@@ -164,6 +173,17 @@ describe('email worker Python compatibility', () => {
         ),
       ),
     );
+    const verification = parseEmailCommand(
+      Buffer.from(
+        JSON.stringify(
+          command('participant-email-verification.v1', {
+            displayName: 'New Participant',
+            verificationUrl:
+              'https://participant.example.test/verify-email?token=abc',
+          }),
+        ),
+      ),
+    );
 
     expect(participant).toEqual({
       workId,
@@ -172,6 +192,29 @@ describe('email worker Python compatibility', () => {
       templateData: { displayName: '<Alice & Bob>' },
     });
     expect(administrator.templateId).toBe('account-created-administrator.v1');
+    expect(verification.templateId).toBe('participant-email-verification.v1');
+    expect(renderEmailMessage(verification).html).toContain(
+      'href="https://participant.example.test/verify-email?token=abc"',
+    );
+  });
+
+  it('rejects mismatched email work IDs and unsafe verification URLs', () => {
+    const invalidId = command('participant-email-verification.v1', {
+      displayName: 'New Participant',
+      verificationUrl:
+        'https://participant.example.test/verify-email?token=abc',
+    });
+    invalidId.payload.requestId = recipientAccountId;
+    expect(() =>
+      parseEmailCommand(Buffer.from(JSON.stringify(invalidId))),
+    ).toThrow('invalid email command payload');
+    const invalidUrl = command('participant-email-verification.v1', {
+      displayName: 'New Participant',
+      verificationUrl: 'javascript:alert(1)',
+    });
+    expect(() =>
+      parseEmailCommand(Buffer.from(JSON.stringify(invalidUrl))),
+    ).toThrow('invalid participant verification email data');
   });
 
   it('rejects arbitrary recipient data, unknown templates, and BOM JSON', () => {
@@ -229,6 +272,33 @@ describe('email worker Python compatibility', () => {
     await worker.handle(deliveryMessage(events));
 
     expect(events).toEqual(['claim', 'identity', 'smtp', 'delivered', 'ack']);
+  });
+
+  it('delivers the participant email verification link through the SMTP transport', async () => {
+    const events: string[] = [];
+    const worker = createWorker(events);
+    const verificationCommand = command('participant-email-verification.v1', {
+      displayName: 'Casey Participant',
+      verificationUrl:
+        'https://participant.example.test/verify-email?token=opaque-test-token',
+    });
+    const message = {
+      ...deliveryMessage(events),
+      data: Buffer.from(JSON.stringify(verificationCommand)),
+    } as JsMsg;
+
+    await worker.handle(message);
+
+    expect(worker.sentMessages).toHaveLength(1);
+    expect(worker.sentMessages[0]).toMatchObject({
+      to: 'alice@example.test',
+      subject: 'Verify your MyOTA email address',
+      text: expect.stringContaining(
+        'https://participant.example.test/verify-email?token=opaque-test-token',
+      ),
+      html: expect.stringContaining('Verify email address'),
+    });
+    expect(events.at(-1)).toBe('ack');
   });
 
   it('acks completed work without resolving a recipient or sending again', async () => {

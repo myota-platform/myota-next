@@ -334,6 +334,209 @@ export class IdentityAccountService {
     }
   }
 
+  async listParticipants(
+    authorization: string,
+    query: { q?: string; page?: string; pageSize?: string },
+  ): Promise<Record<string, unknown>> {
+    const actor = await this.auth.currentAccount(authorization);
+    const scopes = new Set(actor.scopes as string[]);
+    if (!scopes.has('*') && !scopes.has('identity.participants.manage'))
+      throw new ForbiddenException(
+        'identity.participants.manage scope is required',
+      );
+    const page = parsePageInteger(query.page, 1);
+    const pageSize = parsePageInteger(query.pageSize, 50, 100);
+    const search = query.q?.trim() ?? '';
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const count = await client.query<{ total: string }>(
+        `SELECT count(*)::text AS total
+           FROM public.account a
+          WHERE EXISTS (
+                  SELECT 1 FROM public.account_role participant_role
+                   WHERE participant_role.account_id = a.id
+                     AND participant_role.role_code = 'PARTICIPANT'
+                     AND participant_role.valid_to IS NULL)
+            AND NOT EXISTS (
+                  SELECT 1 FROM public.account_role elevated_role
+                   WHERE elevated_role.account_id = a.id
+                     AND elevated_role.role_code <> 'PARTICIPANT'
+                     AND elevated_role.valid_to IS NULL)
+            AND ($1 = '' OR a.display_name ILIKE '%' || $1 || '%'
+                         OR a.email::text ILIKE '%' || $1 || '%')`,
+        [search],
+      );
+      const result = await client.query<{
+        id: string;
+        display_name: string;
+        email: string | null;
+        status: string;
+        email_verified: boolean;
+        created_at: string;
+        updated_at: string;
+      }>(
+        `SELECT a.id, a.display_name, a.email::text AS email, a.status,
+                a.email_verified,
+                to_char(a.created_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                to_char(a.updated_at AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at
+           FROM public.account a
+          WHERE EXISTS (
+                  SELECT 1 FROM public.account_role participant_role
+                   WHERE participant_role.account_id = a.id
+                     AND participant_role.role_code = 'PARTICIPANT'
+                     AND participant_role.valid_to IS NULL)
+            AND NOT EXISTS (
+                  SELECT 1 FROM public.account_role elevated_role
+                   WHERE elevated_role.account_id = a.id
+                     AND elevated_role.role_code <> 'PARTICIPANT'
+                     AND elevated_role.valid_to IS NULL)
+            AND ($1 = '' OR a.display_name ILIKE '%' || $1 || '%'
+                         OR a.email::text ILIKE '%' || $1 || '%')
+          ORDER BY a.created_at DESC, a.id
+          LIMIT $2 OFFSET $3`,
+        [search, pageSize, pageOffset(page, pageSize)],
+      );
+      await client.query('COMMIT');
+      const total = parsePageTotal(count.rows[0]?.total ?? '0');
+      return {
+        items: result.rows.map((row) => ({
+          id: row.id,
+          displayName: row.display_name,
+          email: row.email,
+          status: row.status,
+          emailVerified: row.email_verified,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
+        page,
+        pageSize,
+        total,
+        nextPage: nextPageIfMore(page, pageSize, total),
+      };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateParticipant(
+    authorization: string,
+    accountId: string,
+    rawBody: unknown,
+  ): Promise<Record<string, unknown>> {
+    const actor = await this.auth.currentAccount(authorization);
+    const scopes = new Set(actor.scopes as string[]);
+    if (!scopes.has('*') && !scopes.has('identity.participants.manage'))
+      throw new ForbiddenException(
+        'identity.participants.manage scope is required',
+      );
+    this.validateAccountPathId(accountId);
+    const body =
+      rawBody !== null && typeof rawBody === 'object' && !Array.isArray(rawBody)
+        ? (rawBody as Record<string, unknown>)
+        : {};
+    const unknownFields = Object.keys(body).filter(
+      (field) => !['displayName', 'status'].includes(field),
+    );
+    if (unknownFields.length)
+      throw new BadRequestException('unsupported participant update fields');
+    const displayName =
+      typeof body.displayName === 'string'
+        ? trimPythonWhitespace(body.displayName)
+        : undefined;
+    if (
+      displayName !== undefined &&
+      (!displayName || Array.from(displayName).length > 120)
+    )
+      throw new BadRequestException(
+        'displayName must contain between 1 and 120 characters',
+      );
+    const status = body.status;
+    if (status !== undefined && status !== 'ACTIVE' && status !== 'SUSPENDED')
+      throw new BadRequestException(
+        'participant status must be ACTIVE or SUSPENDED',
+      );
+    if (displayName === undefined && status === undefined)
+      throw new BadRequestException('participant update must include a field');
+
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      const updated = await client.query<{
+        id: string;
+        display_name: string;
+        email: string | null;
+        status: string;
+        email_verified: boolean;
+        created_at: string;
+        updated_at: string;
+      }>(
+        `UPDATE public.account a
+            SET display_name = coalesce($2, a.display_name),
+                status = coalesce($3, a.status),
+                updated_at = clock_timestamp()
+          WHERE a.id = $1
+            AND EXISTS (
+                  SELECT 1 FROM public.account_role participant_role
+                   WHERE participant_role.account_id = a.id
+                     AND participant_role.role_code = 'PARTICIPANT'
+                     AND participant_role.valid_to IS NULL)
+            AND NOT EXISTS (
+                  SELECT 1 FROM public.account_role elevated_role
+                   WHERE elevated_role.account_id = a.id
+                     AND elevated_role.role_code <> 'PARTICIPANT'
+                     AND elevated_role.valid_to IS NULL)
+          RETURNING a.id, a.display_name, a.email::text AS email, a.status,
+                    a.email_verified,
+                    to_char(a.created_at AT TIME ZONE 'UTC',
+                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                    to_char(a.updated_at AT TIME ZONE 'UTC',
+                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
+        [accountId, displayName ?? null, status ?? null],
+      );
+      const participant = updated.rows[0];
+      if (!participant)
+        throw new NotFoundException(pythonKeyErrorDetail(accountId));
+      if (status === 'SUSPENDED') {
+        await client.query(
+          `UPDATE public.auth_session
+              SET revoked_at = coalesce(revoked_at, clock_timestamp())
+            WHERE account_id = $1`,
+          [accountId],
+        );
+      }
+      await writeSecurityEvent(client, 'identity.account.admin-updated.v1', {
+        accountId,
+        actorId: actor.id,
+        fields: [
+          ...(displayName === undefined ? [] : ['displayName']),
+          ...(status === undefined ? [] : ['status']),
+        ],
+        status: participant.status,
+      });
+      await client.query('COMMIT');
+      return {
+        id: participant.id,
+        displayName: participant.display_name,
+        email: participant.email,
+        status: participant.status,
+        emailVerified: participant.email_verified,
+        createdAt: participant.created_at,
+        updatedAt: participant.updated_at,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async listSecurityEvents(
     authorization: string,
     query: { page?: string; pageSize?: string },

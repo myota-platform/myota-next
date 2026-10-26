@@ -62,13 +62,19 @@ entity (`&#x27;`) when escaping user-provided names.
 
 ## Identity
 
-Identity currently implements disabled public registration, password login, refresh
-rotation, logout revocation, recovery request/reset, current-account reads, owner-only
-profile updates, account creation, and administrator account listing, owner/global
-account reads and account role reads in NestJS. A live Gateway-to-Identity check also
-confirms public registration remains disabled with the Python reference's response
-detail; `auth.controller.compatibility.spec.ts` pins the 403 status and exact denial
-detail at the Nest controller boundary.
+Identity implements password login, refresh rotation, logout revocation, recovery
+request/reset, current-account reads, owner-only profile updates, account creation,
+administrator account listing, owner/global account reads, and account role reads in
+NestJS. Public self-registration now creates only a base `PARTICIPANT` account in an
+unverified state, sends a single-use verification link through the Email work flow,
+and prevents login until verification succeeds. Responses for registration and resend
+are generic; verification tokens are stored hashed, expire after 24 hours, and are
+invalidated after use or resend. Requests are rate-limited. `PARTICIPANT_ADMIN` is a
+separate system role with participant-account management scope, and its API list/update
+operations filter to Participant accounts and revoke sessions on suspension. Focused
+Identity and Email worker tests cover these paths. The isolated deployment workflow,
+real email route, and browser qualification remain tracked by Phase 6 issues #91 and
+#96–#100; implementation in source is not deployment evidence.
 
 The role catalogue endpoint returns built-in and persisted custom roles under the
 existing authorized scopes; custom role creation and partial updates are backed by Core
