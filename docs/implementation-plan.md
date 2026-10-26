@@ -189,6 +189,24 @@ recovery. Open failures are documented rather than inferred from process restart
   schedule behavior, and safe retry before enabling it outside the isolated environment.
 - Set worker concurrency, upload, feature, and timeout defaults from measured limits.
 
+The current launch candidate documents two API replicas and one worker replica per
+workload, app pod limits of 1 CPU/1 GiB, PostgreSQL and single-server JetStream limits of
+1 CPU/2 GiB, and database pool maxima of 10 for Geodata and 12 for Activity. Geodata
+imports are capped at 5,000 features, 16 MiB per feature, 250,000 vertices, and 100
+features/32 MiB per staging batch. Uploads default to 1 GiB with format-specific
+overrides; scheduled JSON sources default to 32 MiB and may set lower byte and feature
+limits. Activity caps ADIF uploads at 25 MiB and QSO batches at 5,000 records. The
+measurements and limits are recorded in the [Geodata](parity/geodata.md) and
+[Activity](parity/activity.md) parity notes.
+
+The live test cluster now has bounded PostgreSQL and JetStream containers. A direct
+read-only probe reached each of the two Geodata API pods and confirmed the live database
+read path. This is supporting evidence only: the import, QSO, award, backlog, and recovery
+qualification still needs to exercise a real multi-replica deployment before claiming
+replica-qualified heavy-workload capacity. The scheduled importer remains disabled with
+an empty source allowlist until a specific source's licensing and outage behavior have
+been reviewed.
+
 **Exit:** Supported formats and limits have correctness fixtures, resource measurements,
 and documented operating bounds. Source selection and outage behavior are reviewed
 before scheduled fetching is enabled.

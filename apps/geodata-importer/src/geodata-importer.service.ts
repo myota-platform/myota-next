@@ -9,7 +9,7 @@ import {
 import { signAccessToken } from '@app/platform/access-token.js';
 import { abortableDelay } from '@app/platform/async-timers.js';
 import {
-  MAX_GEOJSON_UPLOAD_BYTES,
+  MAX_GEODATA_SOURCE_FETCH_BYTES,
   MAX_IMPORT_FEATURES,
 } from '@app/platform/import-limits.js';
 import { scheduledFeatureHashOverrides } from '../../geodata/src/geodata-request-fingerprint.js';
@@ -151,18 +151,27 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async runSchedule(schedule: RefreshSchedule) {
+    requireSourceLicenseMetadata(schedule.source);
+    const maximumBytes = sourceLimit(
+      schedule.source,
+      'maxBytes',
+      MAX_GEODATA_SOURCE_FETCH_BYTES,
+    );
+    const maximumFeatures = sourceLimit(
+      schedule.source,
+      'maxFeatures',
+      MAX_IMPORT_FEATURES,
+    );
     const sourceUrl = schedule.source.url;
     if (typeof sourceUrl !== 'string')
       throw new Error('schedule source.url must be a string');
-    const { document } = await this.fetchSource(sourceUrl);
+    const { document } = await this.fetchSource(sourceUrl, maximumBytes);
     const formatValue = schedule.source.format;
     const format =
       typeof formatValue === 'string' ? formatValue.toUpperCase() : 'GEOJSON';
     const features = featuresFromDocument(document, format);
-    if (features.length > MAX_IMPORT_FEATURES)
-      throw new Error(
-        `source exceeds the ${MAX_IMPORT_FEATURES} feature limit`,
-      );
+    if (features.length > maximumFeatures)
+      throw new Error(`source exceeds the ${maximumFeatures} feature limit`);
     const sourceFeatureHashOverrides = scheduledFeatureHashOverrides(features);
 
     const base = this.apiBase();
@@ -190,18 +199,27 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
       throw new Error('GEODATA_IMPORT_SPEC must contain a source object');
     const spec = value;
     const source = spec.source;
+    requireSourceLicenseMetadata(source);
+    const maximumBytes = sourceLimit(
+      source,
+      'maxBytes',
+      MAX_GEODATA_SOURCE_FETCH_BYTES,
+    );
+    const maximumFeatures = sourceLimit(
+      source,
+      'maxFeatures',
+      MAX_IMPORT_FEATURES,
+    );
     if (typeof source.url !== 'string')
       throw new Error('GEODATA_IMPORT_SPEC source.url must be a string');
-    const { document } = await this.fetchSource(source.url);
+    const { document } = await this.fetchSource(source.url, maximumBytes);
     const format =
       typeof source.format === 'string' && source.format
         ? source.format.toUpperCase()
         : 'GEOJSON';
     const features = featuresFromDocument(document, format);
-    if (features.length > MAX_IMPORT_FEATURES)
-      throw new Error(
-        `source exceeds the ${MAX_IMPORT_FEATURES} feature limit`,
-      );
+    if (features.length > maximumFeatures)
+      throw new Error(`source exceeds the ${maximumFeatures} feature limit`);
 
     const rawApiUrl = Object.hasOwn(spec, 'geodataUrl')
       ? spec.geodataUrl
@@ -250,7 +268,10 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     return parseJsonWithExactIntegers(await response.text());
   }
 
-  private async fetchSource(rawUrl: string): Promise<{
+  private async fetchSource(
+    rawUrl: string,
+    maximumBytes = MAX_GEODATA_SOURCE_FETCH_BYTES,
+  ): Promise<{
     document: unknown;
   }> {
     const url = new URL(rawUrl);
@@ -283,6 +304,11 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
     if (!response.ok)
       throw new Error(`source returned HTTP ${response.status}`);
     if (!response.body) throw new Error('source returned an empty response');
+    const declaredLength = Number(response.headers.get('content-length'));
+    if (Number.isSafeInteger(declaredLength) && declaredLength > maximumBytes) {
+      await response.body.cancel().catch(() => undefined);
+      throw sourceSizeError(maximumBytes);
+    }
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
     let sourceBytes = 0;
@@ -290,11 +316,9 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
       const { done, value } = await reader.read();
       if (done) break;
       sourceBytes += value.byteLength;
-      if (sourceBytes > MAX_GEOJSON_UPLOAD_BYTES) {
+      if (sourceBytes > maximumBytes) {
         await reader.cancel().catch(() => undefined);
-        throw new Error(
-          `source exceeds the configured upload limit of ${MAX_GEOJSON_UPLOAD_BYTES} bytes`,
-        );
+        throw sourceSizeError(maximumBytes);
       }
       chunks.push(value);
     }
@@ -327,6 +351,35 @@ export class GeodataImporterService implements OnModuleInit, OnModuleDestroy {
   private accessToken() {
     return signAccessToken(SERVICE_SUBJECT, IMPORT_SCOPES, [], 300);
   }
+}
+
+function requireSourceLicenseMetadata(source: Record<string, unknown>) {
+  for (const field of ['license', 'attribution'] as const) {
+    if (typeof source[field] !== 'string' || !source[field].trim())
+      throw new Error(`source requires ${field} metadata`);
+  }
+}
+
+function sourceLimit(
+  source: Record<string, unknown>,
+  field: 'maxBytes' | 'maxFeatures',
+  globalLimit: number,
+) {
+  const requested = source[field];
+  if (requested === undefined) return globalLimit;
+  if (
+    typeof requested !== 'number' ||
+    !Number.isSafeInteger(requested) ||
+    requested < 1
+  )
+    throw new Error(`source.${field} must be a positive integer`);
+  return Math.min(requested, globalLimit);
+}
+
+function sourceSizeError(maximumBytes: number) {
+  return new Error(
+    `source exceeds the configured fetch limit of ${maximumBytes} bytes`,
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, any> {

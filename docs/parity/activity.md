@@ -390,3 +390,21 @@ p95, and 308 ms maximum; 100 synchronous award requests measured 3 ms p50/p95 an
 maximum. Worker restart recovery took 30.55 seconds. Peak process RSS growth was
 330,186,752 bytes, and peak active database connections were 3. The object store was
 mocked, and these measurements are bounded-run evidence rather than production SLOs.
+
+### Launch operating bounds
+
+The launch Activity profile uses two API replicas and one worker, each app pod limited to
+one CPU/1 GiB, with Activity's database pool capped at 12 per API or worker process. The
+Activity PostgreSQL instance and single-server JetStream use one CPU/2 GiB limits. These
+are bounded single-instance test/launch values, not HA guarantees or a production SLO.
+Keep the resource and pool values configurable in Helm and remeasure after changing the
+replica count or limits.
+
+ADIF uploads are capped at 25 MiB and ingestion batches at 5,000 QSOs. QSO ingestion,
+log imports, and broad award calculation use durable asynchronous jobs with status reads;
+single-QSO writes and individual award decisions remain synchronous. Current UI commands
+do not submit multi-entity synchronous selections. If one is added, it must remain
+all-or-nothing and bounded by measured limits. The capacity run used a mocked object
+store and one in-process API/worker harness; it does not qualify S3 throughput or prove
+multi-replica scaling. Activity workers use a 120-second job lease, a 30-second idle
+wait, and at most eight deliveries before terminal handling.
