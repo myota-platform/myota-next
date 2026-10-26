@@ -34,7 +34,9 @@ if (
 
 const candidatePattern = /^1\.1\.6-testing\.[0-9a-f]{12}\.1$/;
 if (!candidatePattern.test(chartVersion))
-  fail('MYOTA_TEST_CHART_VERSION is not a valid immutable testing chart version.');
+  fail(
+    'MYOTA_TEST_CHART_VERSION is not a valid immutable testing chart version.',
+  );
 
 const expectedValues = JSON.parse(await readFile(valuesPath, 'utf8'));
 const expectedDeployments = JSON.parse(await readFile(expectedPath, 'utf8'));
@@ -109,7 +111,9 @@ const indexUrl = await waitFor(
   },
   (result) => ({
     done: Boolean(result.index),
-    description: result.index ? 'index link is ready' : 'index link unavailable',
+    description: result.index
+      ? 'index link is ready'
+      : 'index link unavailable',
   }),
 );
 
@@ -192,13 +196,15 @@ await waitFor(
   (operation) => {
     const conditions = operation.status?.conditions ?? [];
     const ready = conditions.find((condition) => condition.type === 'Ready');
-    const stalled = conditions.find((condition) => condition.type === 'Stalled');
+    const stalled = conditions.find(
+      (condition) => condition.type === 'Stalled',
+    );
     return {
       done: ready?.status === 'True',
       failed: stalled?.status === 'True',
       description:
         stalled?.status === 'True'
-          ? stalled.reason ?? 'operation stalled'
+          ? (stalled.reason ?? 'operation stalled')
           : ready?.status === 'True'
             ? 'upgrade completed'
             : 'operation is still running',
