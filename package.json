@@ -31,6 +31,8 @@
     "migrate:db": "node --experimental-strip-types tools/db-migrate.ts",
     "db:backup": "node --experimental-strip-types tools/db-backup.ts",
     "db:restore": "node --experimental-strip-types tools/db-restore.ts",
+    "object-store:backup": "node tools/s3-backup.mjs backup",
+    "object-store:restore": "node tools/s3-backup.mjs restore",
     "test:db-backup-restore": "node tools/run-db-backup-restore.mjs",
     "provision:jetstream": "node --experimental-strip-types tools/provision-jetstream.ts",
     "outbox:admin": "node --experimental-strip-types tools/outbox-admin.ts",
