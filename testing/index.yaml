@@ -3,7 +3,7 @@ entries:
   myota-next:
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-26T21:28:23.091788386Z"
+    created: "2026-10-26T21:42:11.806974817Z"
     description: NestJS MyOTA APIs and background processes
     digest: d27a7847313645fe52dfb0e7c4a8729834ecf2c862a1817166f2aa39c0141e75
     name: myota-next
@@ -13,7 +13,7 @@ entries:
     version: 1.1.6-testing.cbb0fbfccd58.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-26T21:28:23.090055508Z"
+    created: "2026-10-26T21:42:11.804465394Z"
     description: NestJS MyOTA APIs and background processes
     digest: d2a5ae6a7960d3bc8c8a3e812b91ddcc41c4379dfeca0dd8d88dbd5f838ea842
     name: myota-next
@@ -23,7 +23,7 @@ entries:
     version: 1.1.6-testing.5081fd9a67ff.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-26T21:28:23.088289841Z"
+    created: "2026-10-26T21:42:11.802086535Z"
     description: NestJS MyOTA APIs and background processes
     digest: 0ea469c592edfad082869346e1ba56c61cbbf47d4d8432ff984ce02653a72579
     name: myota-next
@@ -33,7 +33,7 @@ entries:
     version: 1.1.6-testing.43abfa561b61.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-26T21:28:23.086570874Z"
+    created: "2026-10-26T21:42:11.799661647Z"
     description: NestJS MyOTA APIs and background processes
     digest: ced3f008f20a1473746ff29c1e6d5faa5b14c83c27a5e839b308bfccceba4d9f
     name: myota-next
@@ -41,4 +41,14 @@ entries:
     urls:
     - https://myota-platform.github.io/myota-next/testing/myota-next-1.1.6-testing.36ef48af4c8c.1.tgz
     version: 1.1.6-testing.36ef48af4c8c.1
-generated: "2026-10-26T21:28:23.084554158Z"
+  - apiVersion: v2
+    appVersion: testing-f270f1f
+    created: "2026-10-26T21:42:11.796715856Z"
+    description: NestJS MyOTA APIs and background processes
+    digest: b85dd2c0dd7d6827458c087370d2a6765e50651086a475833c837be1c9e16771
+    name: myota-next
+    type: application
+    urls:
+    - https://myota-platform.github.io/myota-next/testing/myota-next-1.1.6-testing.0e4eb202bda2.1.tgz
+    version: 1.1.6-testing.0e4eb202bda2.1
+generated: "2026-10-26T21:42:11.795013945Z"
