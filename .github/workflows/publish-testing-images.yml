@@ -66,6 +66,15 @@ jobs:
               deploy/images/database/*) printf '%s\n' postgres postgis ;;
               deploy/images/nats/*) printf '%s\n' nats ;;
               deploy/Dockerfile.tools) printf '%s\n' tools ;;
+              contracts/openapi.yaml) printf '%s\n' geodata admin-web ;;
+              contracts/schemas/events/geodata-*|contracts/schemas/work/geodata-*)
+                printf '%s\n' geodata geodata-worker geodata-importer
+                ;;
+              contracts/schemas/events/activity-*|contracts/schemas/work/activity-*)
+                printf '%s\n' activity activity-worker activity-notifications
+                ;;
+              contracts/schemas/events/identity-*) printf '%s\n' identity identity-maintenance ;;
+              contracts/schemas/events/programme-*) printf '%s\n' programmes ;;
               contracts/*|packages/*|Dockerfile|package.json|package-lock.json|nx.json|tsconfig*.json)
                 printf '%s\n' postgres postgis nats gateway identity identity-maintenance programmes activity activity-worker activity-notifications geodata geodata-worker geodata-importer email-worker outbox-worker tools admin-web participant-web
                 ;;
