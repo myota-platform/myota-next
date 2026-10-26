@@ -63,6 +63,8 @@ Create Kubernetes Secrets before installation:
   `bootstrap-email` and `bootstrap-password` for initial Identity setup.
 - `myota-object-storage`: `access-key`, `secret-key`,
   `profile-image-access-key`, `profile-image-secret-key`.
+- `myota-geodata-enrichment`: `api-key` for BigDataCloud reverse geocoding;
+  optional until location enrichment is configured.
 - `myota-smtp`: `password` when enabling `email-worker`.
 - `myota-nats-credentials`: `url`, the configured NATS connection URL,
   including credentials when authentication is enabled.
@@ -72,6 +74,17 @@ Database URLs must point to three distinct databases. Core is shared by
 Identity and Programmes; Activity and Geodata have their own URLs. Use runtime
 database credentials for services and migration credentials for the migration
 Job where permissions differ. Keep all credentials in Secrets, not Helm values.
+
+The `geodata-worker` reads the BigDataCloud key from
+`secrets.geodataEnrichment` (default Secret `myota-geodata-enrichment`, key
+`api-key`). The endpoint, locality language, and timeout are non-secret values
+under `geodataWorker.locationEnrichment`; defaults are
+`https://api-bdc.net/data/reverse-geocode`, `en`, and 10 seconds. The key is
+optional so deployments without a provider credential remain available and
+record enrichment as `NOT_CONFIGURED`. Use a provider plan that permits
+server-side lookups of stored entity coordinates. Keep the key out of chart
+values and Git. See the [location enrichment guide](https://github.com/myota-platform/myota-docs/blob/main/docs/geodata/location-enrichment.md)
+for safe provisioning, rotation, and qualification steps.
 
 For the optional single-instance PostgreSQL StatefulSets, install
 [`myota-infrastructure`](../myota-infrastructure/README.md) first and wait for
