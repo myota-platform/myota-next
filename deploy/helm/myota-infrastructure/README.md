@@ -3,6 +3,8 @@
 This chart creates exactly three single-instance PostgreSQL StatefulSets:
 Core (`myota_core`), Activity (`myota_activity`), and Geodata (`myota_geo`,
 with PostGIS). Email delivery remains in Core. It creates no fourth database.
+Each database has a different runtime login and password: `myota_core_app`,
+`myota_activity_app`, and `myota_geo_app`.
 
 Set each database `image` to the matching MyOTA image from the same GitHub
 release before installing this chart. The release workflow publishes
@@ -31,6 +33,13 @@ objectStorage:
   enabled: true
   provisionerImage: ghcr.io/myota-platform/myota-next-tools:<release-tag>
 ```
+
+The `postgresSecret` (default `myota-postgres-auth`) supplies `username` and
+`password` for the PostgreSQL owner/migration account, plus the distinct
+`core-app-password`, `activity-app-password`, and `geo-app-password` runtime
+passwords. Use independently generated values of at least 32 characters for
+the runtime passwords. The runtime roles can read and modify application
+tables, but cannot create schemas, roles, databases, or migrations.
 
 The chart is optional. Use it for a small single-cluster deployment or point
 the NestJS chart at externally managed database services instead. The

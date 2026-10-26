@@ -72,6 +72,7 @@ migrations:
 secrets:
   databaseUrls: myota-database-urls
   databaseMigrations: myota-database-migration-urls
+  databaseRuntimeCredentials: myota-postgres-auth
   auth: myota-auth
   objectStorage: myota-object-storage
   geodataEnrichment: myota-geodata-enrichment
