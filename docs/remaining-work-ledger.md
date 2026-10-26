@@ -16,7 +16,7 @@ an accepted scope decision is recorded in the dispositions section.
 
 ## Open work
 
-### L-02 — Verify real SMTP delivery with deployment trust roots
+### L-02 — Qualify isolated SMTP delivery and recovery
 
 - **Owner:** Email worker and Identity integration
   (`apps/email-worker/`, `apps/identity/`).
@@ -26,15 +26,20 @@ an accepted scope decision is recorded in the dispositions section.
   the documented retry and deduplication behavior.
 - **Current implementation and evidence:** Unit and local SMTP fixtures cover
   templates, escaping, state persistence, retry, deduplication, and failed
-  STARTTLS behavior. These are summarized in
-  [Identity and Programmes parity](parity/identity-programmes.md).
-- **Missing evidence:** A successful delivery using the deployment's actual
-  SMTP trust roots has not been qualified.
+  STARTTLS behavior. Deployed evidence covers SMTP 451 retry exhaustion and
+  audited redrive, successful allowlisted delivery over STARTTLS using a
+  test-only CA mounted from a Kubernetes Secret, and same-work-ID replay without
+  a second delivery. See [Identity and Programmes parity](parity/identity-programmes.md)
+  and [deployed recovery evidence](operations/single-instance-restart-recovery.md).
+- **Missing evidence:** The account-creation producer-to-outbox workflow and a
+  production SMTP provider's trust chain have not been qualified. Connection
+  refusal and notification outcomes are also not covered by the deployed SMTP
+  run.
 - **Risk:** Account setup and recovery messages may fail despite passing local
   tests, or use an untrusted TLS chain.
-- **Next check:** Send an allowlisted message through the isolated deployment,
-  verify TLS trust and the delivered message, then exercise configured failure
-  and retry outcomes without exposing credentials.
+- **Next check:** Qualify the account-creation producer path, connection-refusal
+  handling, and notification outcomes when the relevant launch configuration is
+  available; verify a production relay separately before production cutover.
 - **Tracked by:** [Issue #13](https://github.com/myota-platform/myota-next/issues/13).
 - **Sources:** [Identity and Programmes, lines 22–25](parity/identity-programmes.md#L22);
   [parity matrix, lines 48–52](parity-matrix.md#L48).
