@@ -283,10 +283,10 @@ rejected rather than partially applied or moved to a background job.
 
 Geodata and Activity PostgreSQL pools default to 10 and 12 connections per process. One
 Geodata worker replica handles one preprocessing job and one promotion job at a time;
-their JetStream acknowledgement wait is 300 seconds. Import leases default to 900 seconds
-with 30-second heartbeats, and the worker has 10 delivery attempts. Refresh schedules are
-polled every 60 seconds, source requests time out after 30 seconds, and API submission
-times out after 60 seconds.
+their JetStream acknowledgement wait is 300 seconds and maximum delivery count is 100.
+Import runs default to 10 processing attempts, with 900-second leases and 30-second
+heartbeats. Refresh schedules are polled every 60 seconds, source requests time out after
+30 seconds, and API submission times out after 60 seconds.
 
 The repeat qualification in [run 40240895206](https://github.com/myota-platform/myota-next/actions/runs/40240895206)
 passed with 83 successful Geodata telemetry samples and no sampling errors. Its 5,000-
