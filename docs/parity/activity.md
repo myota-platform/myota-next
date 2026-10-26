@@ -390,3 +390,41 @@ p95, and 308 ms maximum; 100 synchronous award requests measured 3 ms p50/p95 an
 maximum. Worker restart recovery took 30.55 seconds. Peak process RSS growth was
 330,186,752 bytes, and peak active database connections were 3. The object store was
 mocked, and these measurements are bounded-run evidence rather than production SLOs.
+
+The later [bounded capacity qualification run 40248099930](https://github.com/myota-platform/myota-next/actions/runs/40248099930)
+used Node 24.21.0 with enforced limits of one CPU and 1 GiB for the application process,
+one CPU and 2 GiB each for PostgreSQL and JetStream, an Activity pool maximum of 12, and
+a configured target of two API replicas and one worker. The harness ran the API and
+worker in one bounded process, so it does not measure independently running live
+replicas or Kubernetes overhead. The object store was mocked.
+
+- A 5,000-QSO ingestion completed in 15.579 seconds end-to-end; broad award calculation
+  over 5,000 subjects completed in 48.387 seconds. The run recorded 5,001 award progress
+  rows and 46.617 seconds for worker restart recovery with one queued job.
+- Twenty synchronous QSO writes measured 372 ms p50, 611 ms p95, and 612 ms maximum.
+  One hundred individual award requests measured 3 ms p50, 8 ms p95, and 36 ms maximum.
+- Peak process RSS growth was 323,907,584 bytes and peak active database connections
+  were 5. At the final JetStream sample, QSO and award consumers each had zero pending
+  messages and one acknowledgement pending; the outbox had no pending events.
+
+These measurements are a repeat under the same configured CPU, memory, pool, and
+replica-count bounds. They do not replace live multi-pod scaling, object-store
+throughput, or recovery qualification.
+
+### Launch operating bounds
+
+The launch Activity profile uses two API replicas and one worker, each app pod limited to
+one CPU/1 GiB, with Activity's database pool capped at 12 per API or worker process. The
+Activity PostgreSQL instance and single-server JetStream use one CPU/2 GiB limits. These
+are bounded single-instance test/launch values, not HA guarantees or a production SLO.
+Keep the resource and pool values configurable in Helm and remeasure after changing the
+replica count or limits.
+
+ADIF uploads are capped at 25 MiB and ingestion batches at 5,000 QSOs. QSO ingestion,
+log imports, and broad award calculation use durable asynchronous jobs with status reads;
+single-QSO writes and individual award decisions remain synchronous. Current UI commands
+do not submit multi-entity synchronous selections. If one is added, it must remain
+all-or-nothing and bounded by measured limits. The capacity run used a mocked object
+store and one in-process API/worker harness; it does not qualify S3 throughput or prove
+multi-replica scaling. Activity workers use a 120-second job lease, a 30-second idle
+wait, and at most eight deliveries before terminal handling.

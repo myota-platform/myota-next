@@ -220,9 +220,17 @@ RSS workload qualifies decoder memory only and does not raise the 5,000-feature 
 limit.
 
 The RSS commands do not exercise WFS or ArcGIS network sources; their JSON decoder is
-covered by correctness fixtures, while their live host, licensing, outage, and retry
-review remains a separate gate. Scheduled source fetching is disabled by default and no
-live source host is allowlisted.
+covered by correctness fixtures. Source fetching requires HTTPS, an exact allowlisted
+host or its subdomain, a declared license and attribution, and a JSON response no larger
+than 32 MiB by default. Redirects fail closed and source requests time out after 30
+seconds. Scheduled fetching is disabled by default and the launch allowlist is empty.
+Each schedule may set lower `maxBytes` and `maxFeatures` bounds, but cannot raise the
+global 32 MiB and 5,000-feature ceilings; invalid bounds fail before network access.
+Failed scheduled requests retry after 60 seconds in-process. The stable idempotency key
+uses the schedule's due time, so a process restart may repeat a request but cannot create
+a second run for the same due time. The retry delay itself is volatile. No live source
+has been approved, so the importer must remain disabled until operators review a
+specific host, license, outage response, and retry behavior.
 
 ### End-to-end capacity qualification
 
@@ -255,12 +263,30 @@ these figures do not qualify S3 throughput or deployed-pod resource use.
   connections were 3. These Activity figures use a mocked object store.
 
 These runs establish representative workload timings at the stated CI limits, not
-production service-level objectives. The K3s test deployment still needs explicit
-PostgreSQL and NATS resource requests/limits before it can be described as a bounded
-deployed topology. Keep the recorded pool defaults configurable through Helm and verify
-the live deployment's rendered values before treating them as deployed limits. Source
-allowlists, licensing, outages, scheduling, and safe retries remain unreviewed, so
-scheduled live-source fetching must stay disabled.
+production service-level objectives. The API and workers target two API replicas and one
+worker replica per workload. Each app pod requests 100 millicores/128 MiB and is limited
+to one CPU/1 GiB. The launch database profile requests 100 millicores/512 MiB and limits
+each PostgreSQL instance to one CPU/2 GiB; the matching single-server JetStream profile
+uses the same bounds. These are single-instance limits, not HA configuration or
+production sizing advice. Helm keeps the Core, Activity, Geodata, and JetStream settings
+configurable. The `myota-test` app release overrides app requests to 50 millicores/96 MiB
+while retaining the same limits. Verify live rendered resources before treating a profile
+as deployed.
+
+The launch import bounds are 5,000 features per import, 16 MiB per decoded feature,
+250,000 vertices per feature, 100 staged features/32 MiB per batch, and 1 GiB maximum
+upload size (with optional format-specific upload overrides). Shapefile expanded data is
+also capped at 1 GiB. OSM PBF parser RSS qualification is capped at 25,000 features; that
+does not raise the 5,000-feature import limit. A Geodata API request can validate or
+promote up to 100 entities synchronously and atomically. Larger selections must be
+rejected rather than partially applied or moved to a background job.
+
+Geodata and Activity PostgreSQL pools default to 10 and 12 connections per process. One
+Geodata worker replica handles one preprocessing job and one promotion job at a time;
+their JetStream acknowledgement wait is 300 seconds and maximum delivery count is 100.
+Import runs default to 10 processing attempts, with 900-second leases and 30-second
+heartbeats. Refresh schedules are polled every 60 seconds, source requests time out after
+30 seconds, and API submission times out after 60 seconds.
 
 The repeat qualification in [run 40240895206](https://github.com/myota-platform/myota-next/actions/runs/40240895206)
 passed with 83 successful Geodata telemetry samples and no sampling errors. Its 5,000-
@@ -271,6 +297,49 @@ pending work messages, one pending acknowledgement, and no pending outbox events
 This confirms the telemetry sampler is now querying the registered
 `geodata-preprocessing-v1` durable; the earlier run's zero backlog/connection maxima
 are superseded.
+
+The later bounded [qualification run 40248099930](https://github.com/myota-platform/myota-next/actions/runs/40248099930)
+ran on Node 24.21.0 with enforced limits of one CPU and 1 GiB for the application
+process, one CPU and 2 GiB each for PostgreSQL and JetStream, Geodata pool maximum 10,
+two API replicas and one worker as the configured topology target, and import
+concurrency one. The APIs, worker, and database measurements used the bounded
+qualification harness; they do not prove performance across concurrently running live
+Kubernetes replicas.
+
+- Scheduled-source parser capacity used the configured 5,000-feature and 32 MiB global
+  limits. GeoJSON parsed 5,000 features from 598,931 bytes in 85 ms; WFS parsed 5,000
+  from 578,931 bytes in 39 ms; ArcGIS FeatureServer parsed 5,000 from 472,797 bytes in
+  73 ms. Peak process RSS growth across the qualification was 22,470,656 bytes. These
+  were bounded documents passed through the parsers, not requests to live external
+  sources.
+- The end-to-end 5,000-feature GeoJSON import staged all features without errors from a
+  959,372-byte source in 9.016 seconds (555 features/s), including 69 ms API admission
+  and 8.338 seconds of worker latency. Peak process RSS growth was 52,781,056 bytes;
+  PostgreSQL peak active connections were 4, the work stream ended with zero pending
+  messages and one acknowledgement pending, and no outbox events remained. The
+  qualification sampled Geodata telemetry 124 times successfully with no failed
+  samples.
+- Synchronous multi-entity promotion and approval measured 36.51 ms for one entity,
+  104.92 ms for 10, 449.64 ms for 50, and 874.98 ms for 100. The selection limit
+  therefore remains 100, with larger commands rejected synchronously.
+- The 25,000-feature tagged-node OSM PBF workload decoded in 1.182 seconds at 21,146
+  features/s, with 52,649,984 bytes RSS growth across the Node and `osmium` process
+  tree against the 96 MiB limit.
+
+Activity capacity and recovery checks also passed in this run; the corresponding
+measurement record is in [Activity parity](activity.md). The scheduled-source host
+allowlist remains empty and scheduled fetching remains disabled pending review of a
+specific source's license, outage behavior, and retry policy.
+
+On 2026-10-26, a read-only probe targeted each of the two live Geodata API pods in
+`myota-test` directly. Each pod returned HTTP 200 for 200 requests to
+`GET /v1/geodata/entities?page=1&pageSize=100` at concurrency 12: 349 and 370 requests/s,
+with p50 11 ms, p95 140/103 ms, maximum 280/276 ms, and no errors. The response body was
+62 bytes, so this only confirms the live two-replica route and database path under a small
+read workload. After the probe, `kubectl top` showed 76 MiB per Geodata pod, 29 MiB for
+Geodata PostgreSQL, and 9 MiB for JetStream; these are post-run snapshots, not peak RSS.
+This does not replace a multi-replica import/worker backlog test and is not used to raise
+the documented import bounds.
 
 Shapefile and PBF working directories use `MYOTA_UPLOAD_SPOOL_DIR` when set, and
 otherwise use the OS temporary directory. PBF source bytes stream to disk with checksum

@@ -56,6 +56,7 @@ jetstreamProvisioner:
 # Configure and explicitly enable components.geodata-importer before deployment.
 geodataImporter:
   pollSeconds: 60
+  sourceMaxBytes: 33554432
   sourceAllowlist:
     - data.example.org
 ingress:

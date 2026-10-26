@@ -1,7 +1,10 @@
 imagePullPolicy: IfNotPresent
 postgresSecret: myota-postgres-auth
 storageClassName: ''
-resources: {}
+# Bounded single-instance PostgreSQL profile used by the launch topology.
+resources:
+  requests: { cpu: 100m, memory: 512Mi }
+  limits: { cpu: '1', memory: 2Gi }
 objectStorage:
   enabled: false
   image: chrislusf/seaweedfs:latest@sha256:c2658820e763294a9e9de7b36c81e59b879e3459148351aee4e31a126ca64860

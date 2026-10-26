@@ -1,5 +1,11 @@
 # JetStream topology
 
+For the launch single-instance broker, apply
+[`values-launch-bounds.yaml`](values-launch-bounds.yaml) to the NATS Helm
+release. It requests 100 millicores and 512 MiB and limits the server to one
+CPU and 2 GiB. This is the same bounded broker profile used in capacity
+qualification; it does not provide high availability.
+
 The monorepo includes a create-only provisioner for the streams and durable
 consumers described by `contracts/event-registry.json`:
 
