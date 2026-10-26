@@ -29,6 +29,8 @@
     "start:email-worker": "nest start email-worker",
     "start:outbox-worker:dev": "nest start outbox-worker --watch",
     "migrate:db": "node --experimental-strip-types tools/db-migrate.ts",
+    "db:sync-runtime-roles": "node --experimental-strip-types tools/sync-database-runtime-roles.ts",
+    "db:check-runtime-role-isolation": "node --experimental-strip-types tools/check-database-runtime-role-isolation.ts",
     "db:backup": "node --experimental-strip-types tools/db-backup.ts",
     "db:restore": "node --experimental-strip-types tools/db-restore.ts",
     "object-store:backup": "node tools/s3-backup.mjs backup",
@@ -61,7 +63,7 @@
     "lint": "oxlint --type-aware apps libs tools && node tools/check-nest-observability.mjs && node tools/check-database-ownership.mjs && node tools/check-openapi-nest-routes.mjs && node tools/check-gateway-openapi-routes.mjs && node tools/check-exact-json-integers.mjs && node tools/generate-api-operation-traceability.mjs --check",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.{ts,mjs}\" playwright.config.mjs tsconfig.playwright.json \"web/admin/*.{ts,html,json}\" \"web/admin/tests/**/*.ts\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
     "format:check": "prettier --check \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.{ts,mjs}\" playwright.config.mjs tsconfig.playwright.json \"web/admin/*.{ts,html,json}\" \"web/admin/tests/**/*.ts\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
-    "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --allowImportingTsExtensions --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-owner-config.ts tools/db-migrate.ts tools/db-backup.ts tools/db-restore.ts tools/provision-jetstream.ts tools/outbox-admin.ts tools/render-seaweedfs-s3-config.ts && tsc --project tsconfig.playwright.json --pretty false",
+    "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --allowImportingTsExtensions --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-owner-config.ts tools/db-migrate.ts tools/sync-database-runtime-roles.ts tools/check-database-runtime-role-isolation.ts tools/db-backup.ts tools/db-restore.ts tools/provision-jetstream.ts tools/outbox-admin.ts tools/render-seaweedfs-s3-config.ts && tsc --project tsconfig.playwright.json --pretty false",
     "check:nest-observe-workspaces": "node tools/check-nest-observe-workspaces.mjs"
   },
   "dependencies": {

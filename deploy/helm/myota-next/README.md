@@ -57,8 +57,13 @@ GitHub releases.
 Create Kubernetes Secrets before installation:
 
 - `myota-database-urls`: `core-database-url`, `activity-database-url`,
-  `geo-database-url`.
-- `myota-database-migration-urls`: the same keys with migration credentials.
+  `geo-database-url`, each using only its owner-specific runtime role.
+- `myota-database-migration-urls`: the same keys using database-owner
+  credentials; this Secret is mounted only into the migration Job.
+- `myota-postgres-auth`: `core-app-password`, `activity-app-password`, and
+  `geo-app-password` for the runtime roles. The PostgreSQL owner `username` and
+  `password` are used only by database pods; the migration Secret supplies
+  admin connection URLs.
 - `myota-auth`: `signing-key`, `email-service-client-secret`; optionally
   `bootstrap-email` and `bootstrap-password` for initial Identity setup.
 - `myota-object-storage`: `access-key`, `secret-key`,
@@ -71,9 +76,44 @@ Create Kubernetes Secrets before installation:
 - `myota-observe`: `app-key` and `app-secret` when enabling Observe reporting.
 
 Database URLs must point to three distinct databases. Core is shared by
-Identity and Programmes; Activity and Geodata have their own URLs. Use runtime
-database credentials for services and migration credentials for the migration
-Job where permissions differ. Keep all credentials in Secrets, not Helm values.
+Identity and Programmes; Activity and Geodata have their own URLs. Use the
+runtime roles `myota_core_app`, `myota_activity_app`, and `myota_geo_app` for
+the corresponding URLs. Keep superuser or database-owner URLs only in the
+`databaseMigrations` Secret; application Deployments receive runtime URLs only.
+
+The migration hook synchronizes the owner-specific roles before applying SQL
+migrations and refreshes their application-table privileges afterward. It reads
+the corresponding passwords from the `databaseRuntimeCredentials` Secret
+(default `myota-postgres-auth`) using the `core-app-password`,
+`activity-app-password`, and `geo-app-password` keys. These credentials are
+available only to the migration Job and the database bootstrap containers.
+
+## Rotating credentials on initialized databases
+
+The database init scripts run only for empty data volumes. For the existing
+test databases, the migration hook safely creates the three owner-specific
+roles without deleting or copying data. Use this sequence:
+
+1. Generate three independent random passwords of at least 32 characters.
+   Update the three runtime password keys in `myota-postgres-auth`, then update
+   the three URLs in `myota-database-urls` to use their matching role and
+   password. Keep `myota_app` enabled during this transition.
+2. Upgrade the chart. Its pre-upgrade migration Job creates or updates the
+   owner-specific roles, applies schema migrations using the separate
+   `databaseMigrations` URLs, and refreshes runtime table grants.
+3. Wait for every application Deployment and worker to become Ready. Run
+   `npm run db:check-runtime-role-isolation` with the three runtime URLs in a
+   controlled environment. It checks owner access and cross-owner login denial
+   without reading application rows.
+4. After that evidence passes, run
+   `npm run db:sync-runtime-roles -- --retire-legacy` once with the three
+   migration/admin URLs and the runtime password variables available. This
+   disables the old shared `myota_app` role, revokes its database and object
+   grants, and terminates its remaining sessions. Run the isolation check again.
+
+Do not retire `myota_app` before the application rollout and the first
+successful isolation check. The role-retirement command is intentionally
+separate from the automatic migration hook to keep rollback possible.
 
 The `geodata-worker` reads the BigDataCloud key from
 `secrets.geodataEnrichment` (default Secret `myota-geodata-enrichment`, key

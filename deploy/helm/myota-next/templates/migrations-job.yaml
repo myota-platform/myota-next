@@ -27,9 +27,11 @@ spec:
           command: ["sh", "-ec"]
           args:
             - >-
+              /nodejs/bin/node --experimental-strip-types tools/sync-database-runtime-roles.ts &&
               /nodejs/bin/node --experimental-strip-types tools/db-migrate.ts --owner=core &&
               /nodejs/bin/node --experimental-strip-types tools/db-migrate.ts --owner=activity &&
-              /nodejs/bin/node --experimental-strip-types tools/db-migrate.ts --owner=geo
+              /nodejs/bin/node --experimental-strip-types tools/db-migrate.ts --owner=geo &&
+              /nodejs/bin/node --experimental-strip-types tools/sync-database-runtime-roles.ts
           env:
             - name: CORE_DATABASE_URL
               valueFrom:
@@ -46,4 +48,19 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.secrets.databaseMigrations }}
                   key: geo-database-url
+            - name: CORE_RUNTIME_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.databaseRuntimeCredentials }}
+                  key: core-app-password
+            - name: ACTIVITY_RUNTIME_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.databaseRuntimeCredentials }}
+                  key: activity-app-password
+            - name: GEO_RUNTIME_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.databaseRuntimeCredentials }}
+                  key: geo-app-password
 {{- end }}

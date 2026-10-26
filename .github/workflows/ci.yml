@@ -74,6 +74,7 @@ jobs:
             --env POSTGRES_USER=myota \
             --env POSTGRES_PASSWORD=myota \
             --env MYOTA_APP_PASSWORD=myota \
+            --env MYOTA_APP_ROLE=myota_geo_app \
             local/myota-postgis:ci
           docker run --detach --name myota-ci-nats \
             --publish 14222:4222 --publish 18222:8222 \
@@ -145,6 +146,17 @@ jobs:
       - run: npm run migrate:db -- --owner=core
       - run: npm run migrate:db -- --owner=activity
       - run: npm run migrate:db -- --owner=geo
+      - name: Verify runtime database role isolation
+        run: |
+          set -eu
+          export CORE_RUNTIME_DB_PASSWORD="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+          export ACTIVITY_RUNTIME_DB_PASSWORD="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+          export GEO_RUNTIME_DB_PASSWORD="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+          npm run db:sync-runtime-roles
+          export CORE_DATABASE_URL="postgresql://myota_core_app:${CORE_RUNTIME_DB_PASSWORD}@127.0.0.1:5432/myota_core"
+          export ACTIVITY_DATABASE_URL="postgresql://myota_activity_app:${ACTIVITY_RUNTIME_DB_PASSWORD}@127.0.0.1:5432/myota_activity"
+          export GEO_DATABASE_URL="postgresql://myota_geo_app:${GEO_RUNTIME_DB_PASSWORD}@127.0.0.1:5432/myota_geo"
+          npm run db:check-runtime-role-isolation
       - run: npm run test:geodata-maidenhead
       - run: npm run format:check
       - run: npm run lint
