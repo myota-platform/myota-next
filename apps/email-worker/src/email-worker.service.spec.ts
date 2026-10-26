@@ -34,7 +34,7 @@ function command(
 type WorkerHarness = {
   handle(message: JsMsg): Promise<void>;
   claim(parsed: EmailCommand): Promise<string>;
-  resolveRecipient(accountId: string): Promise<string>;
+  resolveRecipient(accountId: string, templateId: string): Promise<string>;
   markDelivered(id: string): Promise<void>;
   retry(id: string): Promise<number>;
   deadLetter(id: string | null, code: string): Promise<void>;
@@ -369,12 +369,18 @@ describe('email worker Python compatibility', () => {
       });
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(worker.resolveRecipient(recipientAccountId)).resolves.toBe(
-      'alice@example.test',
-    );
-    await expect(worker.resolveRecipient(recipientAccountId)).resolves.toBe(
-      'alice@example.test',
-    );
+    await expect(
+      worker.resolveRecipient(
+        recipientAccountId,
+        'participant-email-verification.v1',
+      ),
+    ).resolves.toBe('alice@example.test');
+    await expect(
+      worker.resolveRecipient(
+        recipientAccountId,
+        'participant-email-verification.v1',
+      ),
+    ).resolves.toBe('alice@example.test');
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
@@ -387,6 +393,9 @@ describe('email worker Python compatibility', () => {
     expect(fetchMock.mock.calls[1]?.[1]?.headers).toEqual({
       authorization: 'Bearer identity-token',
     });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      `https://identity.example.test/v1/identity/internal/email-recipients/${recipientAccountId}?templateId=participant-email-verification.v1`,
+    );
   });
 
   it('dead-letters unavailable recipients before terminating delivery', async () => {

@@ -194,7 +194,10 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
     );
     let spanEnded = false;
     try {
-      const address = await this.resolveRecipient(command.recipientAccountId);
+      const address = await this.resolveRecipient(
+        command.recipientAccountId,
+        command.templateId,
+      );
       const content = renderEmailMessage(command);
       stage = 'smtp';
       smtpStartedAt = Date.now();
@@ -339,7 +342,10 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async resolveRecipient(accountId: string): Promise<string> {
+  private async resolveRecipient(
+    accountId: string,
+    templateId: string,
+  ): Promise<string> {
     const tokenCheckTime = performance.now();
     if (!this.identityToken || tokenCheckTime >= this.identityTokenExpiresAt) {
       const tokenResponse = await fetch(
@@ -364,7 +370,7 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
         tokenCheckTime + identityTokenCacheSeconds(tokenBody.expiresIn) * 1000;
     }
     const response = await fetch(
-      `${this.identityUrl}/v1/identity/internal/email-recipients/${accountId}`,
+      `${this.identityUrl}/v1/identity/internal/email-recipients/${accountId}?templateId=${encodeURIComponent(templateId)}`,
       {
         headers: { authorization: `Bearer ${this.identityToken}` },
         signal: AbortSignal.timeout(5000),
