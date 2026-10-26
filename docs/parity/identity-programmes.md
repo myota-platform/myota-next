@@ -21,8 +21,14 @@ Identity failure, unavailable recipients, and SMTP configuration validation.
 
 SMTP/TLS handshake behavior is exercised against a local SMTP server: the client
 requests STARTTLS, begins the TLS handshake, and sends no AUTH command when that
-handshake fails. A successful SMTP delivery against deployment trust roots remains an
-operational qualification gate. Identity recipient token expiry uses a monotonic clock
+handshake fails. On 2026-10-26, the deployed Email worker also delivered an
+allowlisted participant message to an in-cluster STARTTLS sink using a short-lived
+CA mounted from a Kubernetes Secret. Replaying the same work ID resulted in one
+captured message and one persisted attempt. The test used a synthetic account and
+did not contact an external relay; the direct durable publish did not qualify the
+account-creation producer workflow or a production SMTP provider's trust chain.
+See [deployed SMTP evidence](../operations/single-instance-restart-recovery.md).
+Identity recipient token expiry uses a monotonic clock
 measured from before token acquisition, matching the reference cache timing. The cached
 lifetime applies Python integer conversion to `expiresIn`, subtracts a 30-second margin,
 and clamps the result to 30–270 seconds, matching the Python worker even when Identity
