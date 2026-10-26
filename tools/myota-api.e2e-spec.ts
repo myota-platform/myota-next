@@ -115,6 +115,8 @@ describeWithDatabases(
               sourceKey: randomUUID(),
               url: scheduleSourceUrl,
               format: 'GEOJSON',
+              license: 'CC0-1.0',
+              attribution: 'MyOTA API integration fixture',
             },
           })
           .expect(201);
