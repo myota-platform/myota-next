@@ -268,6 +268,29 @@ worker, Service, TLS objects, and secret were removed. This qualifies deployed
 Email retry exhaustion and audited recovery with an isolated SMTP sink, not
 delivery through production SMTP trust roots.
 
+On 2026-10-26, the Email worker was enabled again for a focused STARTTLS
+qualification against an in-cluster Mailpit sink. Helm release `myota-test`
+used chart `1.1.4` and the existing Email worker image digest
+`sha256:5a0d367578b8c7808d02d817d971a2a430e4c68f6c0b8f33ff2e7e10e71298c8`.
+A short-lived CA, server certificate, and synthetic SMTP password were stored
+in Kubernetes Secrets; only the public CA certificate was mounted into the
+worker through `NODE_EXTRA_CA_CERTS`. The sink required STARTTLS and accepted
+the synthetic SMTP login. A single allowlisted participant template was
+published to the deployed email durable for a synthetic account. Mailpit
+captured one message with subject `Your MyOTA account is ready`; Core recorded
+`DELIVERED` with one attempt. Republishing the same work ID produced no second
+message and did not change delivery attempts. The JetStream durable settled
+with zero pending and acknowledgement-pending messages.
+
+The test used a synthetic address and did not contact an external mail relay.
+The command was published directly to the email durable, so it verifies the
+deployed worker, Identity recipient lookup, SMTP TLS trust, and same-work-ID
+deduplication; it does not qualify the account-creation producer workflow or
+any production SMTP provider's trust chain. The synthetic account and delivery
+rows were removed, then Helm was rolled back and the temporary worker, sink,
+Services, and Secrets were removed. The local manifest and secret values are
+kept only in the ignored `runtime-secrets/issue10-smtp-qualification.yaml` file.
+
 The deployed notification durable was then given a separate registered
 account-created event while a trigger rejected only its notification insert.
 After eight failed deliveries, PostgreSQL contained one
@@ -290,9 +313,10 @@ Activity ADIF worker, Geodata multipart upload, and Geodata preprocessing
 source reads, and Activity PDF artifact writes. The HTTP 500 mapping gaps and
 Geodata's retry-budget limit for a full SeaweedFS pod restart are described
 above.
-Activity notification and Email retry exhaustion and audited redrive now have
-deployed evidence. Permanent-volume-loss recovery, production SMTP trust-root
-qualification, and recovery after SeaweedFS node loss remain open. Email is
-disabled again in this test release. See [Activity
+Activity notification and Email retry exhaustion, audited redrive, STARTTLS
+delivery, and same-work-ID replay now have deployed evidence. Permanent-volume-
+loss recovery, production SMTP provider qualification, and recovery after
+SeaweedFS node loss remain open. Email is disabled again in this test release.
+See [Activity
 recovery](../parity/workers-operations.md) and the [remaining work
 ledger](../remaining-work-ledger.md) for the remaining gaps.
