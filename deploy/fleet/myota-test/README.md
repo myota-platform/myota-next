@@ -6,6 +6,9 @@ in `values.yaml`. A separate protected workflow reads those reviewed values,
 publishes an immutable testing chart, and invokes Rancher's catalog upgrade
 action; it does not run `helm upgrade` directly. Fleet does not manage the
 catalog `App`, because Rancher owns that object as part of the Helm release.
+The protected workflow can recreate missing App metadata by running the
+ClusterRepo upgrade action and verifies that the App returns at the new chart
+revision before accepting the rollout.
 
 The values file was seeded from the current release's non-secret overrides and
 references Kubernetes Secrets by name and key; no secret payload belongs in

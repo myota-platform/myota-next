@@ -63,7 +63,7 @@ if (!expectedDeployments || Object.keys(expectedDeployments).length === 0)
 
 const apiUrl = (path) => new URL(path, rancherUrl);
 
-async function request(url, options = {}) {
+async function request(url, options = {}, allowNotFound = false) {
   const response = await fetch(url, {
     ...options,
     redirect: 'error',
@@ -75,13 +75,18 @@ async function request(url, options = {}) {
     },
     signal: AbortSignal.timeout(30_000),
   });
-  if (!response.ok)
+  if (!response.ok && !(allowNotFound && response.status === 404))
     fail(`Rancher returned HTTP ${response.status} for ${url.pathname}.`);
   return response;
 }
 
 async function getJson(url) {
   return (await request(url)).json();
+}
+
+async function getJsonIfPresent(url) {
+  const response = await request(url, {}, true);
+  return response.status === 404 ? null : response.json();
 }
 
 const sleep = (milliseconds) =>
@@ -149,10 +154,16 @@ await waitFor(
   }),
 );
 
-const currentApp = await getJson(apiUrl(appPath));
-const previousRevision = Number(currentApp.spec?.version);
-if (!Number.isSafeInteger(previousRevision) || previousRevision < 1)
-  fail('Rancher did not return a valid current Helm release revision.');
+const currentApp = await getJsonIfPresent(apiUrl(appPath));
+const previousRevision = currentApp ? Number(currentApp.spec?.version) : 0;
+if (!Number.isSafeInteger(previousRevision) || previousRevision < 0)
+  fail('Rancher returned an invalid current Helm release revision.');
+if (currentApp)
+  console.log(`Upgrading current Rancher App revision ${previousRevision}.`);
+else
+  console.log(
+    'Rancher App metadata is absent; the catalog upgrade will recreate it for the existing Helm release.',
+  );
 console.log(
   `Requesting Rancher catalog upgrade of ${releaseName} to chart ${chartVersion}.`,
 );
