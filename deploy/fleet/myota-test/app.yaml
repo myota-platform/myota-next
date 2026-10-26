@@ -1,0 +1,167 @@
+apiVersion: catalog.cattle.io/v1
+kind: App
+metadata:
+  name: myota-test
+  namespace: myota-test
+spec:
+  values:
+    activityLimits:
+      maxBatchQsos: 5000
+      uploadMaxBytes: 26214400
+    buildVersion: testing-492a44b
+    commonResources:
+      limits:
+        cpu: "1"
+        memory: 1Gi
+      requests:
+        cpu: 50m
+        memory: 96Mi
+    components:
+      activity-worker:
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+      email-worker:
+        enabled: true
+        env:
+          NODE_EXTRA_CA_CERTS: /run/myota-smtp-ca/ca.crt
+        extraVolumeMounts:
+          - mountPath: /run/myota-smtp-ca
+            name: smtp-ca
+            readOnly: true
+        extraVolumes:
+          - name: smtp-ca
+            secret:
+              items:
+                - key: ca.crt
+                  path: ca.crt
+              secretName: myota-smtp-qualification-server
+      geodata:
+        env:
+          MYOTA_LOAD_TEST_CLEANUP_ENABLED: "1"
+      geodata-importer:
+        enabled: false
+      geodata-worker:
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+      identity:
+        env:
+          MYOTA_PARTICIPANT_PUBLIC_URL: https://myota-participant-test.spainip.es
+      participant-web: {}
+    databasePools:
+      activity: 12
+      core: 10
+      geodata: 10
+    dependencies:
+      clamavUrl: ""
+      grafanaUpstream: kube-prometheus-stack-grafana.cattle-monitoring-system.svc.cluster.local:80
+      objectStorageEndpoint: http://myota-test-seaweedfs:8333
+      objectStoragePublicEndpoint: https://myota-s3-test.spainip.es
+      smtp:
+        host: myota-test-smtp-sink.myota-test.svc.cluster.local
+        port: "1025"
+        senderAddress: qualification@myota.test
+        senderDisplayName: MyOTA SMTP Qualification
+        timeoutSeconds: "10"
+        tlsMode: starttls
+        username: qualification
+    environment: testing
+    geodataImporter:
+      sourceAllowlist: []
+      sourceMaxBytes: 33554432
+    geodataWorker:
+      importMaxAttempts: 10
+    imagePullPolicy: IfNotPresent
+    images:
+      activity:
+        digest: sha256:400ed4408bbe8272b8182a9371b703f1874751cf03dac0a1d6f5d019d3815ea7
+        repository: ghcr.io/myota-platform/myota-next-activity
+      activity-notifications:
+        digest: sha256:c3af97f6acd52933b8fdb85916f72487399d63d08e6cc4659e8a0a98595c0a92
+        repository: ghcr.io/myota-platform/myota-next-activity-notifications
+      activity-worker:
+        digest: sha256:d0531ae99e469c5a0a380b479f6477309634b8bcdbb0ee26b656304da78054ec
+        repository: ghcr.io/myota-platform/myota-next-activity-worker
+      admin-web:
+        digest: sha256:1754ce1aed937e41a8aaded08955e345092374b4284e5cd1107c9384529d6ccf
+        repository: ghcr.io/myota-platform/myota-next-admin-web
+      email-worker:
+        digest: sha256:bb82de8680f8800339ee10978e8161e2c0f8815477ae3da69b497e39ef95b795
+        repository: ghcr.io/myota-platform/myota-next-email-worker
+      gateway:
+        digest: sha256:30db49135c8d5e35f81746883864b42faa9418d5f5f1e82364de5a123a2ad4c1
+        repository: ghcr.io/myota-platform/myota-next-gateway
+      geodata:
+        digest: sha256:9134c5bda774d3fe5a7194441df14429bc6a127cddf804414bec13975df6d911
+        repository: ghcr.io/myota-platform/myota-next-geodata
+      geodata-importer:
+        digest: sha256:24cc31023ec672b61a9969f488915c21feb2b6e2bf62555254cfe8a214e67508
+        repository: ghcr.io/myota-platform/myota-next-geodata-importer
+      geodata-worker:
+        digest: sha256:811881097dac428ba2c6bfcbae2252a144ddaff754d824e310e50f24b5607057
+        repository: ghcr.io/myota-platform/myota-next-geodata-worker
+      identity:
+        digest: sha256:847976766742f709203bc92ffdc29f21e92b021f5159dadb25af1840fe1add48
+        repository: ghcr.io/myota-platform/myota-next-identity
+      identity-maintenance:
+        digest: sha256:1d87ad910e565cb8e901a441a75281997a8d47259829495bc2c738c899dcd72e
+        repository: ghcr.io/myota-platform/myota-next-identity-maintenance
+      outbox-worker:
+        digest: sha256:60d9a6a9dee1eee3e0be846159cabbe92da756520850442eab7b5b4cb1523b57
+        repository: ghcr.io/myota-platform/myota-next-outbox-worker
+      participant-web:
+        digest: sha256:87f3d162473b4a2efac7f17a99b37920e1b7ae1640977a221b89d775b9dae73c
+        repository: ghcr.io/myota-platform/myota-next-participant-web
+      programmes:
+        digest: sha256:e4fa03fc949bd3f3c654f6b4d7d967c00b6ce7985dc5d54c0700c7dc9d3de5dc
+        repository: ghcr.io/myota-platform/myota-next-programmes
+    ingress:
+      adminHost: myota-admin-test.spainip.es
+      apiHost: myota-test.spainip.es
+      enabled: true
+      entryPoints:
+        - websecure
+      middlewares: []
+      objectStorageHost: myota-s3-test.spainip.es
+      objectStoragePort: 8333
+      objectStorageService: myota-test-seaweedfs
+      participantHost: myota-participant-test.spainip.es
+      tls:
+        certResolver: acmeresolver
+        secretName: ""
+    jetstreamProvisioner:
+      capacity:
+        activityWorkMaxAgeSeconds: "604800"
+        activityWorkMaxBytes: "536870912"
+        activityWorkMaxMessageBytes: "4194304"
+        activityWorkMaxMessages: "100000"
+        emailWorkMaxAgeSeconds: "2592000"
+        emailWorkMaxBytes: "536870912"
+        emailWorkMaxMessageBytes: "4194304"
+        emailWorkMaxMessages: "500000"
+        eventsMaxBytes: "1073741824"
+        eventsMaxMessageBytes: "4194304"
+        eventsMaxMessages: "1000000"
+        geodataWorkMaxAgeSeconds: "604800"
+        geodataWorkMaxBytes: "1073741824"
+        geodataWorkMaxMessageBytes: "4194304"
+        geodataWorkMaxMessages: "50000"
+      confirmedCapacityReview: true
+      enabled: true
+      image:
+        digest: sha256:b8328c646625d2be4deefc32d028e6192d12ef4866161190e7c3eb698a1ae51f
+        repository: ghcr.io/myota-platform/myota-next-tools
+    migrations:
+      enabled: true
+      image:
+        digest: sha256:b8328c646625d2be4deefc32d028e6192d12ef4866161190e7c3eb698a1ae51f
+        repository: ghcr.io/myota-platform/myota-next-tools

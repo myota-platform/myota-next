@@ -1,0 +1,4 @@
+namespace: myota-test
+keepResources: true
+correctDrift:
+  enabled: true
