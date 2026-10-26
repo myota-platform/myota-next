@@ -59,12 +59,14 @@ Before installation, create `myota-postgres-auth` (or set
 
 - `username`: PostgreSQL owner and migration role name; use `myota_admin`.
 - `password`: password for the owner and migration role.
-- `app-password`: password for the restricted runtime role `myota_app`.
+- `core-app-password`, `activity-app-password`, and `geo-app-password`:
+  independently generated passwords for the owner-specific runtime roles.
 
-The init script creates the runtime role on first initialization of each empty
-volume and grants it access to that database's public schema. It does not
-modify credentials or roles on an existing volume. Do not reuse an existing
-volume with different role credentials without a reviewed recovery procedure.
+The init script creates the owner-specific role on first initialization of each
+empty volume. It grants application-table DML and sequence privileges, but not
+schema creation or administrative privileges. For existing volumes, the app
+chart's migration hook synchronizes these roles without relying on init scripts
+or changing application data.
 
 Create the app chart's `myota-database-urls` and
 `myota-database-migration-urls` Secrets using URLs that point to the three
@@ -72,9 +74,9 @@ services from this release. For example, if the infrastructure release is
 `myota-data`:
 
 ```text
-postgresql://myota_app:<url-encoded-app-password>@myota-data-core-postgres:5432/myota_core
-postgresql://myota_app:<url-encoded-app-password>@myota-data-activity-postgres:5432/myota_activity
-postgresql://myota_app:<url-encoded-app-password>@myota-data-geo-postgres:5432/myota_geo
+postgresql://myota_core_app:<url-encoded-core-password>@myota-data-core-postgres:5432/myota_core
+postgresql://myota_activity_app:<url-encoded-activity-password>@myota-data-activity-postgres:5432/myota_activity
+postgresql://myota_geo_app:<url-encoded-geo-password>@myota-data-geo-postgres:5432/myota_geo
 ```
 
 Use `myota_admin` and the owner password in the migration URLs. Keep these

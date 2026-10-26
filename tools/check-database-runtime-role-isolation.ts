@@ -3,22 +3,37 @@ import { Client } from 'pg';
 const owners = ['core', 'activity', 'geo'] as const;
 type Owner = (typeof owners)[number];
 
-const envByOwner = {
-  core: 'CORE_DATABASE_URL',
-  activity: 'ACTIVITY_DATABASE_URL',
-  geo: 'GEO_DATABASE_URL',
-} satisfies Record<Owner, string>;
+const ownerConfig = {
+  core: {
+    url: 'CORE_DATABASE_URL',
+    database: 'myota_core',
+    role: 'myota_core_app',
+  },
+  activity: {
+    url: 'ACTIVITY_DATABASE_URL',
+    database: 'myota_activity',
+    role: 'myota_activity_app',
+  },
+  geo: {
+    url: 'GEO_DATABASE_URL',
+    database: 'myota_geo',
+    role: 'myota_geo_app',
+  },
+} satisfies Record<Owner, { url: string; database: string; role: string }>;
 
 async function main(): Promise<void> {
   const urls = Object.fromEntries(
-    owners.map((owner) => [owner, parseUrl(requiredEnv(envByOwner[owner]))]),
+    owners.map((owner) => [
+      owner,
+      parseUrl(requiredEnv(ownerConfig[owner].url)),
+    ]),
   ) as Record<Owner, URL>;
 
   for (const credentialOwner of owners) {
     for (const databaseOwner of owners) {
       const url = new URL(urls[databaseOwner]);
-      url.username = urls[credentialOwner].username;
-      url.password = urls[credentialOwner].password;
+      url.username = decodeURIComponent(urls[credentialOwner].username);
+      url.password = decodeURIComponent(urls[credentialOwner].password);
       const client = new Client({
         connectionString: url.toString(),
         connectionTimeoutMillis: 5000,
@@ -62,6 +77,9 @@ async function main(): Promise<void> {
           role: string;
           isSuperuser: boolean;
           canCreateRoles: boolean;
+          canCreateDatabase: boolean;
+          canReplicate: boolean;
+          canBypassRls: boolean;
           canCreateSchema: boolean;
           applicationTable: string | null;
           canSelect: boolean | null;
@@ -73,6 +91,9 @@ async function main(): Promise<void> {
                   current_user AS role,
                   r.rolsuper AS "isSuperuser",
                   r.rolcreaterole AS "canCreateRoles",
+                  r.rolcreatedb AS "canCreateDatabase",
+                  r.rolreplication AS "canReplicate",
+                  r.rolbypassrls AS "canBypassRls",
                   has_schema_privilege(current_user, 'public', 'CREATE') AS "canCreateSchema",
                   app_table.oid::regclass::text AS "applicationTable",
                   has_table_privilege(current_user, app_table.oid, 'SELECT') AS "canSelect",
@@ -95,9 +116,20 @@ async function main(): Promise<void> {
         const actual = result.rows[0];
         if (!actual)
           throw new Error(`No runtime role found for ${databaseOwner}`);
+        if (actual.database !== ownerConfig[databaseOwner].database)
+          throw new Error(
+            `${databaseOwner} URL reached an unexpected database`,
+          );
+        if (actual.role !== ownerConfig[databaseOwner].role)
+          throw new Error(
+            `${databaseOwner} URL used an unexpected runtime role`,
+          );
         if (
           actual.isSuperuser ||
           actual.canCreateRoles ||
+          actual.canCreateDatabase ||
+          actual.canReplicate ||
+          actual.canBypassRls ||
           actual.canCreateSchema
         )
           throw new Error(

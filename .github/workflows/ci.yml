@@ -74,6 +74,7 @@ jobs:
             --env POSTGRES_USER=myota \
             --env POSTGRES_PASSWORD=myota \
             --env MYOTA_APP_PASSWORD=myota \
+            --env MYOTA_APP_ROLE=myota_geo_app \
             local/myota-postgis:ci
           docker run --detach --name myota-ci-nats \
             --publish 14222:4222 --publish 18222:8222 \
