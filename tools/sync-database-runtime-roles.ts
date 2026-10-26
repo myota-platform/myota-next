@@ -122,14 +122,14 @@ async function syncOwner(
     const defaults = await client.query<{ sql: string }>(
       `SELECT format(
          'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %I',
-         current_user, $1) AS sql`,
+         current_user, $1::text) AS sql`,
       [config.role],
     );
     await client.query(defaults.rows[0]!.sql);
     const sequenceDefaults = await client.query<{ sql: string }>(
       `SELECT format(
          'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO %I',
-         current_user, $1) AS sql`,
+         current_user, $1::text) AS sql`,
       [config.role],
     );
     await client.query(sequenceDefaults.rows[0]!.sql);
@@ -214,8 +214,11 @@ async function executeFormatted(
   statement: string,
   values: string[],
 ): Promise<void> {
+  const formatArguments = values
+    .map((_, index) => `$${index + 2}::text`)
+    .join(', ');
   const formatted = await client.query<{ sql: string }>(
-    `SELECT format($1, ${values.map((_, index) => `$${index + 2}`).join(', ')}) AS sql`,
+    `SELECT format($1::text, ${formatArguments}) AS sql`,
     [statement, ...values],
   );
   await client.query(formatted.rows[0]!.sql);
