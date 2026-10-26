@@ -1,11 +1,13 @@
 # Rancher test-release values
 
 This raw Fleet bundle owns the declarative `spec.values` for Rancher's existing
-`myota-test` catalog App. Rancher remains the controller that upgrades the
-catalog chart; Fleet reconciles the values from the protected `testing` branch.
+`myota-test` catalog App. Fleet uses a separate `myota-test-values` control
+release to reconcile that App resource from the protected `testing` branch;
+Rancher remains the controller that upgrades the catalog chart and its
+workloads.
 
 The manifest intentionally contains only `spec.values`. It preserves the live
-App's chart reference, release metadata, and ownership fields. Values were
+App's chart reference, release metadata, and owner reference. Values were
 seeded from the current release's non-secret overrides and reference
 Kubernetes Secrets by name and key; no secret payload belongs in this bundle.
 
