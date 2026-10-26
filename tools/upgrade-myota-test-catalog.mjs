@@ -17,6 +17,22 @@ function fail(message) {
   throw new Error(message);
 }
 
+function catalogContainsChartVersion(indexText) {
+  try {
+    const parsedIndex = JSON.parse(indexText);
+    const charts = parsedIndex?.entries?.[chartName];
+    if (Array.isArray(charts))
+      return charts.some((chart) => chart.version === chartVersion);
+  } catch {
+    // Helm repositories serve YAML; Rancher's catalog API serializes it as JSON.
+  }
+
+  const escapedVersion = chartVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    `(?:^|\\n)\\s*version:\\s*["']?${escapedVersion}["']?\\s*(?:\\r?\\n|$)`,
+  ).test(indexText);
+}
+
 if (!apiBase || !token || !chartVersion || !valuesPath || !expectedPath)
   fail(
     'Set MYOTA_TEST_RANCHER_URL, MYOTA_TEST_RANCHER_TOKEN, MYOTA_TEST_CHART_VERSION, and pass values and expected-deployments JSON paths.',
@@ -126,8 +142,8 @@ await waitFor(
     return response.text();
   },
   (index) => ({
-    done: index.includes(`version: ${chartVersion}`),
-    description: index.includes(`version: ${chartVersion}`)
+    done: catalogContainsChartVersion(index),
+    description: catalogContainsChartVersion(index)
       ? 'candidate chart is available'
       : 'candidate chart is not indexed yet',
   }),
