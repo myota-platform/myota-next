@@ -22,6 +22,23 @@ const terminalUploadStates = new Set([
   'FAILED',
   'EXPIRED',
 ]);
+const loadTestCleanupEnvironments = new Set([
+  'development',
+  'test',
+  'testing',
+  'staging',
+  'production',
+]);
+
+export function isLoadTestCleanupEnabled(
+  environment: string,
+  enabled: string | undefined,
+) {
+  return (
+    enabled === '1' &&
+    loadTestCleanupEnvironments.has(environment.toLowerCase())
+  );
+}
 
 type TaggedObject = { bucket: string; key: string };
 
@@ -251,8 +268,10 @@ export class GeodataLoadTestCleanupService {
   private verifyEnvironment() {
     const environment = (process.env.MYOTA_ENV ?? '').toLowerCase();
     if (
-      process.env.MYOTA_LOAD_TEST_CLEANUP_ENABLED !== '1' ||
-      !['development', 'test', 'staging', 'production'].includes(environment)
+      !isLoadTestCleanupEnabled(
+        environment,
+        process.env.MYOTA_LOAD_TEST_CLEANUP_ENABLED,
+      )
     )
       throw new ForbiddenException(
         'load-test cleanup is disabled unless explicitly enabled in a declared environment',
