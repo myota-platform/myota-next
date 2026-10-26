@@ -77,7 +77,7 @@ async function syncOwner(
     );
     const roleStatement = await client.query<{ sql: string }>(
       `SELECT format(
-         CASE WHEN $3 THEN
+         CASE WHEN $3::boolean THEN
            'ALTER ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT'
          ELSE
            'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT'
