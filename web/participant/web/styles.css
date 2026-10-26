@@ -13,6 +13,11 @@
 [hidden] {
   display: none !important;
 }
+details > summary {
+  cursor: pointer;
+  min-height: 36px;
+  padding-block: 7px;
+}
 body {
   margin: 0;
   background: #f8fbfa;

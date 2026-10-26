@@ -96,7 +96,7 @@ test('uploads and processes an ADIF import from Participant through Activity wor
     await expect(page.locator('#programme-select')).toHaveValue(programmeSlug);
     await page.locator('#award-email').fill(email);
     await page.locator('#award-password').fill(password);
-    await page.locator('#award-login button[type="submit"]').click();
+    await page.locator('#participant-login button[type="submit"]').click();
     await expect(page.locator('#qso-form')).toBeVisible();
     await expect(page.locator('#adif-import-form')).toBeVisible();
 

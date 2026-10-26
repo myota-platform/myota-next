@@ -107,7 +107,7 @@ test('lets an operator manage callsigns, evidence, and primary retirement', asyn
   await page.goto('http://127.0.0.1:8091');
   await page.locator('#award-email').fill('operator@example.test');
   await page.locator('#award-password').fill('test-password');
-  await page.locator('#award-login button[type="submit"]').click();
+  await page.locator('#participant-login button[type="submit"]').click();
   await expect(page.locator('#profile-callsigns')).toBeVisible();
 
   await page.locator('#profile-callsign-value').fill('DL1NEW');
@@ -285,7 +285,7 @@ test('keeps a successful callsign save distinct from a failed profile refresh', 
   await page.goto('http://127.0.0.1:8091');
   await page.locator('#award-email').fill('operator2@example.test');
   await page.locator('#award-password').fill('test-password');
-  await page.locator('#award-login button[type="submit"]').click();
+  await page.locator('#participant-login button[type="submit"]').click();
   await expect(page.locator('#profile-callsigns')).toBeVisible();
 
   await page.locator('#profile-callsign-value').fill('DL2NEW');

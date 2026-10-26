@@ -87,7 +87,7 @@ test('crops and uploads a profile picture as bounded WebP', async ({
   await page.goto('http://127.0.0.1:8091');
   await page.locator('#award-email').fill('operator@example.test');
   await page.locator('#award-password').fill('test-password');
-  await page.locator('#award-login button[type="submit"]').click();
+  await page.locator('#participant-login button[type="submit"]').click();
   await expect(page.locator('#profile-image-editor')).toBeVisible();
 
   const imageDataUrl = await page.evaluate(async () => {

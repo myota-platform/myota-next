@@ -232,7 +232,10 @@ before scheduled fetching is enabled.
   using immutable image digests. Keep testing and production image sources separate.
 - Exercise primary Admin and Participant workflows against that release. Verify logs,
   metrics, traces, alerts, NATS and database recovery, object-store recovery, backup, and
-  restore using the deployment configuration.
+  restore using the deployment configuration. Phase 6 issue #91 coordinates the Admin
+  and Participant journeys; #96 covers the minimum Participant workspace and #100 its
+  email-verified self-registration, while #97 coordinates delegated Participant
+  administration with the role in #98 and Admin workflow in #99.
 - Verify rollback to the previous digest and confirm that migrations and persisted work
   remain compatible with the rollback procedure.
 

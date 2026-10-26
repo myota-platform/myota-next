@@ -195,7 +195,7 @@ test('signs in, records an activation contact, and closes the activation', async
   await expect(page.locator('#qso-form')).toBeHidden();
   await page.locator('#award-email').fill('operator@example.test');
   await page.locator('#award-password').fill('test-password');
-  await page.locator('#award-login button[type="submit"]').click();
+  await page.locator('#participant-login button[type="submit"]').click();
 
   await expect(page.locator('#activation-start-form')).toBeVisible();
   await page.locator('#activation-entity').selectOption('summit-1');

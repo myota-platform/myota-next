@@ -16,6 +16,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
+            "requestId",
             "recipientAccountId",
             "templateId",
             "templateData"
@@ -30,12 +31,18 @@
               "type": "string",
               "enum": [
                 "account-created-participant.v1",
-                "account-created-administrator.v1"
+                "account-created-administrator.v1",
+                "participant-email-verification.v1"
               ],
               "maxLength": 40
             },
             "templateData": {
               "type": "object"
+            },
+            "requestId": {
+              "type": "string",
+              "format": "uuid",
+              "maxLength": 36
             }
           },
           "allOf": [
@@ -49,9 +56,7 @@
                     "templateData": {
                       "type": "object",
                       "additionalProperties": false,
-                      "required": [
-                        "displayName"
-                      ],
+                      "required": ["displayName"],
                       "properties": {
                         "displayName": {
                           "type": "string",
@@ -70,10 +75,7 @@
                     "templateData": {
                       "type": "object",
                       "additionalProperties": false,
-                      "required": [
-                        "createdAccountName",
-                        "createdAccountRole"
-                      ],
+                      "required": ["createdAccountName", "createdAccountRole"],
                       "properties": {
                         "createdAccountName": {
                           "type": "string",
@@ -82,11 +84,33 @@
                         },
                         "createdAccountRole": {
                           "type": "string",
-                          "enum": [
-                            "PARTICIPANT",
-                            "ADMINISTRATOR"
-                          ],
+                          "enum": ["PARTICIPANT", "ADMINISTRATOR"],
                           "maxLength": 20
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "templateId": {
+                      "const": "participant-email-verification.v1"
+                    },
+                    "templateData": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["displayName", "verificationUrl"],
+                      "properties": {
+                        "displayName": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "verificationUrl": {
+                          "type": "string",
+                          "format": "uri",
+                          "minLength": 1,
+                          "maxLength": 2048
                         }
                       }
                     }
@@ -100,13 +124,9 @@
     }
   ],
   "x-payload-evidence": "proposed-versioned-allowlisted-template-reference; approved by email workstream decisions",
-  "x-work-id-source": "myota_identity.email_delivery_intent.id",
-  "x-producer-sources": [
-    "apps/identity/identity.py"
-  ],
-  "x-consumer-sources": [
-    "apps/email/email_worker.py"
-  ],
+  "x-work-id-source": "email.send.v1 payload requestId, matched to outbox aggregate ID",
+  "x-producer-sources": ["apps/identity/src/identity-registration.service.ts"],
+  "x-consumer-sources": ["apps/email/email_worker.py"],
   "x-max-payload-bytes": 8192,
   "x-delivery-semantics": "at-least-once; explicit acknowledgement after durable outcome; unknown version/template is never success-acked; transient failures retry under deployment-bounded policy; ambiguous SMTP acceptance can duplicate"
 }

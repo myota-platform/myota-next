@@ -34,49 +34,31 @@
             "type": "string"
           },
           "entityType": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "jurisdiction": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "operatorId": {
             "type": "string"
           },
           "operatorCallsign": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "startedAt": {
             "type": "string"
           },
           "endedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "validityExpiresAt": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "status": {
             "type": "string"
           },
           "location": {
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": ["object", "null"]
           },
           "programmeRules": {
             "type": "object"
@@ -149,49 +131,31 @@
             "type": "string"
           },
           "entityType": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "jurisdiction": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "operatorId": {
             "type": "string"
           },
           "operatorCallsign": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "startedAt": {
             "type": "string"
           },
           "endedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "validityExpiresAt": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "status": {
             "type": "string"
           },
           "location": {
-            "type": [
-              "object",
-              "null"
-            ]
+            "type": ["object", "null"]
           },
           "programmeRules": {
             "type": "object"
@@ -317,9 +281,7 @@
         ],
         "additionalProperties": true
       },
-      "producerSources": [
-        "apps/activity/activity_repository.py"
-      ]
+      "producerSources": ["apps/activity/activity_repository.py"]
     },
     {
       "eventType": "activity.entity.cascade-deleted.v1",
@@ -361,9 +323,7 @@
         ],
         "additionalProperties": true
       },
-      "producerSources": [
-        "apps/activity/activity_repository.py"
-      ]
+      "producerSources": ["apps/activity/activity_repository.py"]
     },
     {
       "eventType": "activity.qso.recorded.v1",
@@ -391,22 +351,13 @@
             "type": "string"
           },
           "operatorCallsign": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "hunterId": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "hunterCallsign": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "workedCallsign": {
             "type": "string"
@@ -415,31 +366,19 @@
             "type": "string"
           },
           "workedEntityId": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "timestamp": {
             "type": "string"
           },
           "band": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "mode": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "rst": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "source": {
             "type": "string"
@@ -451,10 +390,7 @@
             "type": "string"
           },
           "createdAt": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
         "required": [
@@ -592,9 +528,7 @@
         ],
         "additionalProperties": true
       },
-      "producerSources": [
-        "apps/activity/awards.py"
-      ]
+      "producerSources": ["apps/activity/awards.py"]
     },
     {
       "eventType": "awards.definition.saved.v1",
@@ -716,9 +650,7 @@
         ],
         "additionalProperties": true
       },
-      "producerSources": [
-        "apps/activity/awards.py"
-      ]
+      "producerSources": ["apps/activity/awards.py"]
     },
     {
       "eventType": "awards.issued.v1",
@@ -808,9 +740,7 @@
         ],
         "additionalProperties": true
       },
-      "producerSources": [
-        "apps/activity/awards.py"
-      ]
+      "producerSources": ["apps/activity/awards.py"]
     },
     {
       "eventType": "awards.rendered.v1",
@@ -900,9 +830,7 @@
         ],
         "additionalProperties": true
       },
-      "producerSources": [
-        "apps/activity/awards.py"
-      ]
+      "producerSources": ["apps/activity/awards.py"]
     },
     {
       "eventType": "awards.request.created.v1",
@@ -964,9 +892,7 @@
         ],
         "additionalProperties": true
       },
-      "producerSources": [
-        "apps/activity/awards.py"
-      ]
+      "producerSources": ["apps/activity/awards.py"]
     },
     {
       "eventType": "geodata.conflation.resolved.v1",
@@ -977,9 +903,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-review-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1001,12 +925,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "id",
-          "resolution",
-          "resolutionHistory",
-          "updatedAt"
-        ],
+        "required": ["id", "resolution", "resolutionHistory", "updatedAt"],
         "additionalProperties": true
       }
     },
@@ -1019,9 +938,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "personal-and-operational-data",
       "payloadSchema": {
         "type": "object",
@@ -1084,9 +1001,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "personal-and-operational-data",
       "payloadSchema": {
         "type": "object",
@@ -1139,9 +1054,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-operational-data",
       "payloadSchema": {
         "type": "object",
@@ -1159,12 +1072,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "entityId",
-          "status",
-          "importRunId",
-          "actor"
-        ],
+        "required": ["entityId", "status", "importRunId", "actor"],
         "additionalProperties": true
       }
     },
@@ -1177,9 +1085,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-review-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1188,23 +1094,13 @@
             "type": "string"
           },
           "deletedBy": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "previousStatus": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
-        "required": [
-          "entityId",
-          "deletedBy",
-          "previousStatus"
-        ],
+        "required": ["entityId", "deletedBy", "previousStatus"],
         "additionalProperties": true
       }
     },
@@ -1217,9 +1113,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-review-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1243,10 +1137,7 @@
             }
           },
           "note": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
         "required": [
@@ -1268,9 +1159,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-review-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1288,10 +1177,7 @@
             "type": "string"
           },
           "note": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
         "required": [
@@ -1313,9 +1199,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-review-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1327,22 +1211,14 @@
             "type": "string"
           },
           "note": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "geometry": {
             "type": "object",
             "additionalProperties": true
           }
         },
-        "required": [
-          "entityId",
-          "editorId",
-          "note",
-          "geometry"
-        ],
+        "required": ["entityId", "editorId", "note", "geometry"],
         "additionalProperties": true
       }
     },
@@ -1355,9 +1231,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-operational-data",
       "payloadSchema": {
         "type": "object",
@@ -1375,12 +1249,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "entityId",
-          "status",
-          "importRunId",
-          "actor"
-        ],
+        "required": ["entityId", "status", "importRunId", "actor"],
         "additionalProperties": true
       }
     },
@@ -1393,9 +1262,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-operational-data",
       "payloadSchema": {
         "type": "object",
@@ -1413,12 +1280,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "entityId",
-          "status",
-          "importRunId",
-          "actor"
-        ],
+        "required": ["entityId", "status", "importRunId", "actor"],
         "additionalProperties": true
       }
     },
@@ -1431,9 +1293,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-review-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1473,9 +1333,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-review-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1493,18 +1351,10 @@
             }
           },
           "note": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
-        "required": [
-          "entityId",
-          "editorId",
-          "manualFields",
-          "note"
-        ],
+        "required": ["entityId", "editorId", "manualFields", "note"],
         "additionalProperties": true
       }
     },
@@ -1517,9 +1367,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-review-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1536,39 +1384,22 @@
               "type": "object",
               "properties": {
                 "previous": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
+                  "type": ["string", "null"]
                 },
                 "value": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
+                  "type": ["string", "null"]
                 }
               },
-              "required": [
-                "previous",
-                "value"
-              ],
+              "required": ["previous", "value"],
               "additionalProperties": false
             },
             "minProperties": 1
           },
           "note": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
-        "required": [
-          "entityId",
-          "editorId",
-          "changes",
-          "note"
-        ],
+        "required": ["entityId", "editorId", "changes", "note"],
         "additionalProperties": true
       }
     },
@@ -1581,9 +1412,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-review-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1601,19 +1430,10 @@
             "type": "string"
           },
           "note": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
-        "required": [
-          "entityId",
-          "editorId",
-          "previousName",
-          "name",
-          "note"
-        ],
+        "required": ["entityId", "editorId", "previousName", "name", "note"],
         "additionalProperties": true
       }
     },
@@ -1623,14 +1443,10 @@
       "class": "domain-fact",
       "subject": "myota.events.geodata.entity.reviewed.v1",
       "schema": "schemas/events/geodata-entity-reviewed-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-review-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1699,9 +1515,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-operational-data",
       "payloadSchema": {
         "type": "object",
@@ -1716,11 +1530,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "entityId",
-          "policy",
-          "previousStatus"
-        ],
+        "required": ["entityId", "policy", "previousStatus"],
         "additionalProperties": true
       }
     },
@@ -1730,14 +1540,10 @@
       "class": "domain-fact",
       "subject": "myota.events.geodata.entity.status-changed.v1",
       "schema": "schemas/events/geodata-entity-status-changed-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-review-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1755,10 +1561,7 @@
             "type": "string"
           },
           "note": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
         "required": [
@@ -1780,9 +1583,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "internal-operational-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1794,10 +1595,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "importRunId",
-          "requestedBy"
-        ],
+        "required": ["importRunId", "requestedBy"],
         "additionalProperties": true
       }
     },
@@ -1810,9 +1608,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "internal-operational-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1821,9 +1617,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "importRunId"
-        ],
+        "required": ["importRunId"],
         "additionalProperties": true
       }
     },
@@ -1836,9 +1630,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-review-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1856,11 +1648,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "importRunId",
-          "candidateIds",
-          "reviewerId"
-        ],
+        "required": ["importRunId", "candidateIds", "reviewerId"],
         "additionalProperties": true
       }
     },
@@ -1873,9 +1661,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-review-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1893,11 +1679,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "importRunId",
-          "candidateIds",
-          "reviewerId"
-        ],
+        "required": ["importRunId", "candidateIds", "reviewerId"],
         "additionalProperties": true
       }
     },
@@ -1910,9 +1692,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "internal-operational-metadata",
       "payloadSchema": {
         "type": "object",
@@ -1924,10 +1704,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "importRunId",
-          "error"
-        ],
+        "required": ["importRunId", "error"],
         "additionalProperties": true
       }
     },
@@ -1940,9 +1717,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-source-data",
       "payloadSchema": {
         "type": "object",
@@ -2025,9 +1800,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "internal-operational-metadata",
       "payloadSchema": {
         "type": "object",
@@ -2063,9 +1836,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "geospatial-and-operational-data",
       "payloadSchema": {
         "type": "object",
@@ -2116,9 +1887,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "internal-operational-metadata",
       "payloadSchema": {
         "type": "object",
@@ -2158,9 +1927,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-geodata-callsite",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
       "dataClassification": "internal-configuration-and-source-metadata",
       "payloadSchema": {
         "type": "object",
@@ -2169,10 +1936,7 @@
             "type": "string"
           },
           "programmeSlug": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "entityType": {
             "type": "string"
@@ -2200,10 +1964,7 @@
             "type": "boolean"
           },
           "lastRunAt": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "nextRunAt": {
             "type": "string"
@@ -2235,14 +1996,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.account.admin-updated.v1",
       "schema": "schemas/events/identity-account-admin-updated-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2256,10 +2013,7 @@
             }
           }
         },
-        "required": [
-          "accountId",
-          "fields"
-        ],
+        "required": ["accountId", "fields"],
         "additionalProperties": true
       },
       "dataClassification": "personal"
@@ -2270,14 +2024,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.account.created.v1",
       "schema": "schemas/events/identity-account-created-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2291,10 +2041,7 @@
                 "type": "string"
               },
               "email": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "participationType": {
                 "type": "string"
@@ -2320,28 +2067,16 @@
                       "type": "string"
                     },
                     "verificationSource": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "verifiedAt": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "validFrom": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "validTo": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "evidenceIds": {
                       "type": "array",
@@ -2373,10 +2108,7 @@
                 }
               },
               "primaryCallsignId": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "createdAt": {
                 "type": "string"
@@ -2402,9 +2134,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "account"
-        ],
+        "required": ["account"],
         "additionalProperties": true
       },
       "dataClassification": "personal"
@@ -2415,14 +2145,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.account.deactivated.v1",
       "schema": "schemas/events/identity-account-deactivated-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2433,13 +2159,33 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "accountId",
-          "anonymized"
-        ],
+        "required": ["accountId", "anonymized"],
         "additionalProperties": true
       },
       "dataClassification": "personal"
+    },
+    {
+      "eventType": "identity.account.email-verified.v1",
+      "owner": "identity-service",
+      "class": "domain-fact",
+      "subject": "myota.events.identity.account.email-verified.v1",
+      "schema": "schemas/events/identity-account-email-verified-v1.schema.json",
+      "consumerGroups": [],
+      "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
+      "payloadEvidence": "Identity email-verification lifecycle",
+      "producerSources": ["apps/identity/src/identity-registration.service.ts"],
+      "dataClassification": "personal",
+      "payloadSchema": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": ["accountId"],
+        "additionalProperties": false
+      }
     },
     {
       "eventType": "identity.bootstrap-admin.created.v1",
@@ -2447,14 +2193,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.bootstrap-admin.created.v1",
       "schema": "schemas/events/identity-bootstrap-admin-created-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2465,10 +2207,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "accountId",
-          "email"
-        ],
+        "required": ["accountId", "email"],
         "additionalProperties": true
       },
       "dataClassification": "personal"
@@ -2479,14 +2218,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.callsign.added.v1",
       "schema": "schemas/events/identity-callsign-added-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2506,28 +2241,16 @@
             "type": "string"
           },
           "verificationSource": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "verifiedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "validFrom": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "validTo": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "evidenceIds": {
             "type": "array",
@@ -2566,14 +2289,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.callsign.evidence-submitted.v1",
       "schema": "schemas/events/identity-callsign-evidence-submitted-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2593,10 +2312,7 @@
             "type": "string"
           },
           "checksum": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "metadata": {
             "type": "object",
@@ -2632,14 +2348,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.callsign.primary-changed.v1",
       "schema": "schemas/events/identity-callsign-primary-changed-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2647,9 +2359,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "callsignId"
-        ],
+        "required": ["callsignId"],
         "additionalProperties": true
       },
       "dataClassification": "personal"
@@ -2660,14 +2370,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.callsign.retired.v1",
       "schema": "schemas/events/identity-callsign-retired-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2684,28 +2390,16 @@
             "type": "string"
           },
           "verificationSource": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "verifiedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "validFrom": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "validTo": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "evidenceIds": {
             "type": "array",
@@ -2743,14 +2437,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.callsign.verified.v1",
       "schema": "schemas/events/identity-callsign-verified-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2767,28 +2457,16 @@
             "type": "string"
           },
           "verificationSource": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "verifiedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "validFrom": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "validTo": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "evidenceIds": {
             "type": "array",
@@ -2826,14 +2504,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.login.failed.v1",
       "schema": "schemas/events/identity-login-failed-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2841,16 +2515,10 @@
             "type": "string"
           },
           "remoteAddr": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
-        "required": [
-          "email",
-          "remoteAddr"
-        ],
+        "required": ["email", "remoteAddr"],
         "additionalProperties": true
       },
       "dataClassification": "personal-and-security"
@@ -2861,14 +2529,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.login.succeeded.v1",
       "schema": "schemas/events/identity-login-succeeded-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2876,16 +2540,10 @@
             "type": "string"
           },
           "remoteAddr": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
-        "required": [
-          "accountId",
-          "remoteAddr"
-        ],
+        "required": ["accountId", "remoteAddr"],
         "additionalProperties": true
       },
       "dataClassification": "personal-and-security"
@@ -2896,14 +2554,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.oidc.mapping.updated.v1",
       "schema": "schemas/events/identity-oidc-mapping-updated-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2955,14 +2609,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.recovery.completed.v1",
       "schema": "schemas/events/identity-recovery-completed-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2970,9 +2620,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "accountId"
-        ],
+        "required": ["accountId"],
         "additionalProperties": true
       },
       "dataClassification": "personal-and-security"
@@ -2983,14 +2631,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.recovery.requested.v1",
       "schema": "schemas/events/identity-recovery-requested-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -2998,9 +2642,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "accountId"
-        ],
+        "required": ["accountId"],
         "additionalProperties": true
       },
       "dataClassification": "personal-and-security"
@@ -3011,14 +2653,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.role-definition.created.v1",
       "schema": "schemas/events/identity-role-definition-created-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -3066,14 +2704,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.role-definition.updated.v1",
       "schema": "schemas/events/identity-role-definition-updated-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -3121,14 +2755,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.role.assigned.v1",
       "schema": "schemas/events/identity-role-assigned-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -3142,22 +2772,13 @@
             "type": "string"
           },
           "programmeSlug": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "jurisdiction": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "entityType": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "scopes": {
             "type": "array",
@@ -3169,10 +2790,7 @@
             "type": "string"
           },
           "validTo": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         },
         "required": [
@@ -3196,14 +2814,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.roles.replaced.v1",
       "schema": "schemas/events/identity-roles-replaced-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -3225,22 +2839,13 @@
                   "type": "string"
                 },
                 "programmeSlug": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
+                  "type": ["string", "null"]
                 },
                 "jurisdiction": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
+                  "type": ["string", "null"]
                 },
                 "entityType": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
+                  "type": ["string", "null"]
                 },
                 "scopes": {
                   "type": "array",
@@ -3252,10 +2857,7 @@
                   "type": "string"
                 },
                 "validTo": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
+                  "type": ["string", "null"]
                 }
               },
               "required": [
@@ -3273,10 +2875,7 @@
             }
           }
         },
-        "required": [
-          "accountId",
-          "roles"
-        ],
+        "required": ["accountId", "roles"],
         "additionalProperties": true
       },
       "dataClassification": "personal-and-security"
@@ -3287,14 +2886,10 @@
       "class": "domain-fact",
       "subject": "myota.events.identity.service-token.issued.v1",
       "schema": "schemas/events/identity-service-token-issued-v1.schema.json",
-      "consumerGroups": [
-        "activity-notifications-v1"
-      ],
+      "consumerGroups": ["activity-notifications-v1"],
       "disposition": "Activity notification projection; current broad durable will be narrowed to registered event families",
       "payloadEvidence": "source-derived-identity-callsite",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
+      "producerSources": ["apps/identity/identity.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -3308,10 +2903,7 @@
             }
           }
         },
-        "required": [
-          "service",
-          "scopes"
-        ],
+        "required": ["service", "scopes"],
         "additionalProperties": true
       },
       "dataClassification": "security-sensitive"
@@ -3325,9 +2917,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-programme-callsite",
-      "producerSources": [
-        "apps/programmes/programmes.py"
-      ],
+      "producerSources": ["apps/programmes/programmes.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -3335,9 +2925,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "slug"
-        ],
+        "required": ["slug"],
         "additionalProperties": true
       },
       "dataClassification": "internal-configuration"
@@ -3351,9 +2939,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-programme-callsite",
-      "producerSources": [
-        "apps/programmes/programmes.py"
-      ],
+      "producerSources": ["apps/programmes/programmes.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -3371,10 +2957,7 @@
           },
           "value": {},
           "fallbackLocale": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "status": {
             "type": "string"
@@ -3401,10 +2984,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "action",
-                "occurredAt"
-              ],
+              "required": ["action", "occurredAt"],
               "additionalProperties": true
             }
           },
@@ -3458,9 +3038,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-programme-callsite",
-      "producerSources": [
-        "apps/programmes/programmes.py"
-      ],
+      "producerSources": ["apps/programmes/programmes.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -3478,10 +3056,7 @@
           },
           "value": {},
           "fallbackLocale": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "status": {
             "type": "string"
@@ -3508,10 +3083,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "action",
-                "occurredAt"
-              ],
+              "required": ["action", "occurredAt"],
               "additionalProperties": true
             }
           },
@@ -3565,9 +3137,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-programme-callsite",
-      "producerSources": [
-        "apps/programmes/programmes.py"
-      ],
+      "producerSources": ["apps/programmes/programmes.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -3585,10 +3155,7 @@
           },
           "value": {},
           "fallbackLocale": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "status": {
             "type": "string"
@@ -3615,10 +3182,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "action",
-                "occurredAt"
-              ],
+              "required": ["action", "occurredAt"],
               "additionalProperties": true
             }
           },
@@ -3672,9 +3236,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-programme-callsite",
-      "producerSources": [
-        "apps/programmes/programmes.py"
-      ],
+      "producerSources": ["apps/programmes/programmes.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -3692,10 +3254,7 @@
           },
           "value": {},
           "fallbackLocale": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "status": {
             "type": "string"
@@ -3722,10 +3281,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "action",
-                "occurredAt"
-              ],
+              "required": ["action", "occurredAt"],
               "additionalProperties": true
             }
           },
@@ -3779,9 +3335,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-programme-callsite",
-      "producerSources": [
-        "apps/programmes/programmes.py"
-      ],
+      "producerSources": ["apps/programmes/programmes.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -3836,9 +3390,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "code"
-              ],
+              "required": ["code"],
               "additionalProperties": true
             }
           },
@@ -3886,9 +3438,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-programme-callsite",
-      "producerSources": [
-        "apps/programmes/programmes.py"
-      ],
+      "producerSources": ["apps/programmes/programmes.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -3899,10 +3449,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "programmeSlug",
-          "code"
-        ],
+        "required": ["programmeSlug", "code"],
         "additionalProperties": true
       },
       "dataClassification": "internal-configuration"
@@ -3916,9 +3463,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-programme-callsite",
-      "producerSources": [
-        "apps/programmes/programmes.py"
-      ],
+      "producerSources": ["apps/programmes/programmes.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -4006,10 +3551,7 @@
             ]
           }
         },
-        "required": [
-          "entityType",
-          "previous"
-        ],
+        "required": ["entityType", "previous"],
         "additionalProperties": true
       },
       "dataClassification": "internal-configuration-and-user-metadata"
@@ -4023,9 +3565,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-programme-callsite",
-      "producerSources": [
-        "apps/programmes/programmes.py"
-      ],
+      "producerSources": ["apps/programmes/programmes.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -4036,10 +3576,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "programmeSlug",
-          "code"
-        ],
+        "required": ["programmeSlug", "code"],
         "additionalProperties": true
       },
       "dataClassification": "internal-configuration"
@@ -4053,9 +3590,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-programme-callsite",
-      "producerSources": [
-        "apps/programmes/programmes.py"
-      ],
+      "producerSources": ["apps/programmes/programmes.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -4093,10 +3628,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "action",
-                    "occurredAt"
-                  ],
+                  "required": ["action", "occurredAt"],
                   "additionalProperties": true
                 }
               },
@@ -4116,10 +3648,7 @@
                 "additionalProperties": true
               },
               "effectiveFrom": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "updatedAt": {
                 "type": "string"
@@ -4205,9 +3734,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "code"
-                  ],
+                  "required": ["code"],
                   "additionalProperties": true
                 }
               },
@@ -4245,10 +3772,7 @@
             "additionalProperties": true
           }
         },
-        "required": [
-          "draft",
-          "programme"
-        ],
+        "required": ["draft", "programme"],
         "additionalProperties": true
       },
       "dataClassification": "internal-configuration-and-user-metadata"
@@ -4262,9 +3786,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-programme-callsite",
-      "producerSources": [
-        "apps/programmes/programmes.py"
-      ],
+      "producerSources": ["apps/programmes/programmes.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -4299,10 +3821,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "action",
-                "occurredAt"
-              ],
+              "required": ["action", "occurredAt"],
               "additionalProperties": true
             }
           },
@@ -4322,10 +3841,7 @@
             "additionalProperties": true
           },
           "effectiveFrom": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "updatedAt": {
             "type": "string"
@@ -4368,9 +3884,7 @@
       "consumerGroups": [],
       "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
       "payloadEvidence": "source-derived-programme-callsite",
-      "producerSources": [
-        "apps/programmes/programmes.py"
-      ],
+      "producerSources": ["apps/programmes/programmes.py"],
       "payloadSchema": {
         "type": "object",
         "properties": {
@@ -4425,9 +3939,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "code"
-              ],
+              "required": ["code"],
               "additionalProperties": true
             }
           },
@@ -4480,9 +3992,7 @@
       "payloadSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "jobId"
-        ],
+        "required": ["jobId"],
         "properties": {
           "jobId": {
             "type": "string",
@@ -4497,9 +4007,7 @@
         "apps/activity/activity_repository.py",
         "apps/activity/awards.py"
       ],
-      "consumerSources": [
-        "apps/activity/activity_worker.py"
-      ]
+      "consumerSources": ["apps/activity/activity_worker.py"]
     },
     {
       "workType": "activity.adif-import.v1",
@@ -4513,9 +4021,7 @@
       "payloadSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "jobId"
-        ],
+        "required": ["jobId"],
         "properties": {
           "jobId": {
             "type": "string",
@@ -4530,9 +4036,7 @@
         "apps/activity/activity_repository.py",
         "apps/activity/awards.py"
       ],
-      "consumerSources": [
-        "apps/activity/activity_worker.py"
-      ]
+      "consumerSources": ["apps/activity/activity_worker.py"]
     },
     {
       "workType": "activity.award-recalculate.v1",
@@ -4546,9 +4050,7 @@
       "payloadSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "jobId"
-        ],
+        "required": ["jobId"],
         "properties": {
           "jobId": {
             "type": "string",
@@ -4563,9 +4065,7 @@
         "apps/activity/activity_repository.py",
         "apps/activity/awards.py"
       ],
-      "consumerSources": [
-        "apps/activity/activity_worker.py"
-      ]
+      "consumerSources": ["apps/activity/activity_worker.py"]
     },
     {
       "workType": "activity.award-evaluation.v1",
@@ -4579,9 +4079,7 @@
       "payloadSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "jobId"
-        ],
+        "required": ["jobId"],
         "properties": {
           "jobId": {
             "type": "string",
@@ -4596,9 +4094,7 @@
         "apps/activity/activity_repository.py",
         "apps/activity/awards.py"
       ],
-      "consumerSources": [
-        "apps/activity/activity_worker.py"
-      ]
+      "consumerSources": ["apps/activity/activity_worker.py"]
     },
     {
       "workType": "activity.pdf-render.v1",
@@ -4612,9 +4108,7 @@
       "payloadSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "jobId"
-        ],
+        "required": ["jobId"],
         "properties": {
           "jobId": {
             "type": "string",
@@ -4629,9 +4123,7 @@
         "apps/activity/activity_repository.py",
         "apps/activity/awards.py"
       ],
-      "consumerSources": [
-        "apps/activity/activity_worker.py"
-      ]
+      "consumerSources": ["apps/activity/activity_worker.py"]
     },
     {
       "workType": "activity.statistics-rebuild.v1",
@@ -4645,9 +4137,7 @@
       "payloadSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "jobId"
-        ],
+        "required": ["jobId"],
         "properties": {
           "jobId": {
             "type": "string",
@@ -4662,9 +4152,7 @@
         "apps/activity/activity_repository.py",
         "apps/activity/awards.py"
       ],
-      "consumerSources": [
-        "apps/activity/activity_worker.py"
-      ]
+      "consumerSources": ["apps/activity/activity_worker.py"]
     },
     {
       "workType": "geodata.import-preprocess.v1",
@@ -4683,9 +4171,7 @@
       "payloadSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "importRunId"
-        ],
+        "required": ["importRunId"],
         "properties": {
           "importRunId": {
             "type": "string",
@@ -4695,12 +4181,8 @@
         }
       },
       "workIdSource": "myota_geo.import_run.id",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
-      "consumerSources": [
-        "apps/geodata/geodata_import_worker.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
+      "consumerSources": ["apps/geodata/geodata_import_worker.py"],
       "legacySubject": "myota.geodata.import.preprocess.v1"
     },
     {
@@ -4720,9 +4202,7 @@
       "payloadSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "queueId"
-        ],
+        "required": ["queueId"],
         "properties": {
           "queueId": {
             "type": "string",
@@ -4732,12 +4212,8 @@
         }
       },
       "workIdSource": "myota_geo.geodata_import_processing_queue.id",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
-      "consumerSources": [
-        "apps/geodata/geodata_import_worker.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
+      "consumerSources": ["apps/geodata/geodata_import_worker.py"],
       "legacySubject": "myota.geodata.import.process.v1"
     },
     {
@@ -4750,15 +4226,11 @@
       "durable": "geodata-entity-deletion-v1",
       "schema": "schemas/work/geodata-entity-delete-v1.schema.json",
       "payloadEvidence": "proposed-database-row-reference; checked against current handler sources",
-      "sourceEventTypes": [
-        "geodata.entity-deletion-job.queued.v1"
-      ],
+      "sourceEventTypes": ["geodata.entity-deletion-job.queued.v1"],
       "payloadSchema": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "jobId"
-        ],
+        "required": ["jobId"],
         "properties": {
           "jobId": {
             "type": "string",
@@ -4768,19 +4240,15 @@
         }
       },
       "workIdSource": "myota_geo.service_state.entityDeletionJobs[jobId]",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
-      "consumerSources": [
-        "apps/geodata/geodata_import_worker.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
+      "consumerSources": ["apps/geodata/geodata_import_worker.py"],
       "legacySubject": "myota.geodata.entity.delete.v1"
     },
     {
       "workType": "email.send.v1",
       "owner": "identity-service",
       "class": "work-command",
-      "status": "consumer-implemented-producer-pending",
+      "status": "consumer-implemented-producer-in-progress",
       "subject": "myota.work.email.send.v1",
       "stream": "MYOTA_EMAIL_WORK",
       "durable": "email-delivery-v1",
@@ -4792,6 +4260,7 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "requestId",
           "recipientAccountId",
           "templateId",
           "templateData"
@@ -4806,12 +4275,18 @@
             "type": "string",
             "enum": [
               "account-created-participant.v1",
-              "account-created-administrator.v1"
+              "account-created-administrator.v1",
+              "participant-email-verification.v1"
             ],
             "maxLength": 40
           },
           "templateData": {
             "type": "object"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "maxLength": 36
           }
         },
         "allOf": [
@@ -4859,18 +4334,39 @@
                     }
                   }
                 }
+              },
+              {
+                "properties": {
+                  "templateId": {
+                    "const": "participant-email-verification.v1"
+                  },
+                  "templateData": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["displayName", "verificationUrl"],
+                    "properties": {
+                      "displayName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "verificationUrl": {
+                        "type": "string",
+                        "format": "uri",
+                        "minLength": 1,
+                        "maxLength": 2048
+                      }
+                    }
+                  }
+                }
               }
             ]
           }
         ]
       },
-      "workIdSource": "myota_identity.email_delivery_intent.id",
-      "producerSources": [
-        "apps/identity/identity.py"
-      ],
-      "consumerSources": [
-        "apps/email/email_worker.py"
-      ]
+      "workIdSource": "identity outbox_event.payload.requestId",
+      "producerSources": ["apps/identity/src/identity-registration.service.ts"],
+      "consumerSources": ["apps/email-worker/src/email-command.ts"]
     },
     {
       "workType": "geodata.location-enrichment.v1",
@@ -4882,9 +4378,7 @@
       "durable": "geodata-location-enrichment-v1",
       "schema": "schemas/work/geodata-location-enrichment-v1.schema.json",
       "payloadEvidence": "proposed-database-row-reference; checked against current handler sources",
-      "sourceEventTypes": [
-        "geodata.entity.location-enrichment-requested.v1"
-      ],
+      "sourceEventTypes": ["geodata.entity.location-enrichment-requested.v1"],
       "payloadSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -4923,98 +4417,52 @@
         }
       },
       "workIdSource": "myota_geo.geodata_entity.locationEnrichmentRequestId",
-      "producerSources": [
-        "apps/geodata/geodata.py"
-      ],
-      "consumerSources": [
-        "apps/geodata/geodata_import_worker.py"
-      ],
+      "producerSources": ["apps/geodata/geodata.py"],
+      "consumerSources": ["apps/geodata/geodata_import_worker.py"],
       "legacySubject": "myota.geodata.entity.location-enrichment.v1"
     }
   ],
   "producerNamesByOwner": {
-    "identity-service": [
-      "identity"
-    ],
-    "programme-service": [
-      "programmes"
-    ],
-    "activity-service": [
-      "activity",
-      "activity-service",
-      "awards"
-    ],
-    "geodata-service": [
-      "geodata",
-      "geodata-service",
-      "geodata-worker"
-    ]
+    "identity-service": ["identity"],
+    "programme-service": ["programmes"],
+    "activity-service": ["activity", "activity-service", "awards"],
+    "geodata-service": ["geodata", "geodata-service", "geodata-worker"]
   },
-  "legacyWorkRoutes":   {
+  "legacyWorkRoutes": {
     "geodata.import.queued.v1": {
       "subject": "myota.geodata.import.preprocess.v1",
       "workType": "geodata.import-preprocess.v1",
       "workIdField": "importRunId",
-      "payloadFields": [
-        "importRunId"
-      ],
-      "producers": [
-        "geodata",
-        "geodata-service",
-        "geodata-worker"
-      ]
+      "payloadFields": ["importRunId"],
+      "producers": ["geodata", "geodata-service", "geodata-worker"]
     },
     "geodata.import.recovered.v1": {
       "subject": "myota.geodata.import.preprocess.v1",
       "workType": "geodata.import-preprocess.v1",
       "workIdField": "importRunId",
-      "payloadFields": [
-        "importRunId"
-      ],
-      "producers": [
-        "geodata",
-        "geodata-service",
-        "geodata-worker"
-      ]
+      "payloadFields": ["importRunId"],
+      "producers": ["geodata", "geodata-service", "geodata-worker"]
     },
     "geodata.import.processing.queued.v1": {
       "subject": "myota.geodata.import.process.v1",
       "workType": "geodata.import-promotion.v1",
       "workIdField": "queueId",
-      "payloadFields": [
-        "queueId"
-      ],
-      "producers": [
-        "geodata",
-        "geodata-service",
-        "geodata-worker"
-      ]
+      "payloadFields": ["queueId"],
+      "producers": ["geodata", "geodata-service", "geodata-worker"]
     },
     "geodata.import.processing.recovered.v1": {
       "subject": "myota.geodata.import.process.v1",
       "workType": "geodata.import-promotion.v1",
       "workIdField": "queueId",
-      "payloadFields": [
-        "queueId"
-      ],
-      "producers": [
-        "geodata",
-        "geodata-service",
-        "geodata-worker"
-      ]
+      "payloadFields": ["queueId"],
+      "producers": ["geodata", "geodata-service", "geodata-worker"]
     },
     "geodata.entity-deletion-job.queued.v1": {
       "subject": "myota.geodata.entity.delete.v1",
       "workType": "geodata.entity-delete.v1",
       "workIdField": "jobId",
-      "payloadFields": [
-        "jobId"
-      ],
-      "producers": [
-        "geodata",
-        "geodata-service",
-        "geodata-worker"
-      ]
+      "payloadFields": ["jobId"],
+      "producers": ["geodata", "geodata-service", "geodata-worker"]
     },
     "geodata.entity.location-enrichment-requested.v1": {
       "subject": "myota.geodata.entity.location-enrichment.v1",
@@ -5027,121 +4475,75 @@
         "onlyMissing",
         "reason"
       ],
-      "producers": [
-        "geodata",
-        "geodata-service",
-        "geodata-worker"
-      ]
+      "producers": ["geodata", "geodata-service", "geodata-worker"]
     }
   },
-  "targetWorkRoutes":   {
+  "targetWorkRoutes": {
     "activity.qso-ingestion.v1": {
       "subject": "myota.work.activity.qso-ingestion.v1",
       "stream": "MYOTA_ACTIVITY_WORK",
       "durable": "activity-qso-ingestion-v1",
-      "producers": [
-        "activity",
-        "activity-service",
-        "awards"
-      ]
+      "producers": ["activity", "activity-service", "awards"]
     },
     "activity.adif-import.v1": {
       "subject": "myota.work.activity.adif-import.v1",
       "stream": "MYOTA_ACTIVITY_WORK",
       "durable": "activity-adif-import-v1",
-      "producers": [
-        "activity",
-        "activity-service",
-        "awards"
-      ]
+      "producers": ["activity", "activity-service", "awards"]
     },
     "activity.award-recalculate.v1": {
       "subject": "myota.work.activity.award-recalculate.v1",
       "stream": "MYOTA_ACTIVITY_WORK",
       "durable": "activity-award-recalculate-v1",
-      "producers": [
-        "activity",
-        "activity-service",
-        "awards"
-      ]
+      "producers": ["activity", "activity-service", "awards"]
     },
     "activity.award-evaluation.v1": {
       "subject": "myota.work.activity.award-evaluation.v1",
       "stream": "MYOTA_ACTIVITY_WORK",
       "durable": "activity-award-evaluation-v1",
-      "producers": [
-        "activity",
-        "activity-service",
-        "awards"
-      ]
+      "producers": ["activity", "activity-service", "awards"]
     },
     "activity.pdf-render.v1": {
       "subject": "myota.work.activity.pdf-render.v1",
       "stream": "MYOTA_ACTIVITY_WORK",
       "durable": "activity-pdf-render-v1",
-      "producers": [
-        "activity",
-        "activity-service",
-        "awards"
-      ]
+      "producers": ["activity", "activity-service", "awards"]
     },
     "activity.statistics-rebuild.v1": {
       "subject": "myota.work.activity.statistics-rebuild.v1",
       "stream": "MYOTA_ACTIVITY_WORK",
       "durable": "activity-statistics-rebuild-v1",
-      "producers": [
-        "activity",
-        "activity-service",
-        "awards"
-      ]
+      "producers": ["activity", "activity-service", "awards"]
     },
     "geodata.import-preprocess.v1": {
       "subject": "myota.work.geodata.import-preprocess.v1",
       "stream": "MYOTA_GEODATA_WORK",
       "durable": "geodata-preprocessing-v1",
-      "producers": [
-        "geodata",
-        "geodata-service",
-        "geodata-worker"
-      ]
+      "producers": ["geodata", "geodata-service", "geodata-worker"]
     },
     "geodata.import-promotion.v1": {
       "subject": "myota.work.geodata.import-promotion.v1",
       "stream": "MYOTA_GEODATA_WORK",
       "durable": "geodata-import-promotion-v1",
-      "producers": [
-        "geodata",
-        "geodata-service",
-        "geodata-worker"
-      ]
+      "producers": ["geodata", "geodata-service", "geodata-worker"]
     },
     "geodata.entity-delete.v1": {
       "subject": "myota.work.geodata.entity-delete.v1",
       "stream": "MYOTA_GEODATA_WORK",
       "durable": "geodata-entity-deletion-v1",
-      "producers": [
-        "geodata",
-        "geodata-service",
-        "geodata-worker"
-      ]
+      "producers": ["geodata", "geodata-service", "geodata-worker"]
     },
     "email.send.v1": {
       "subject": "myota.work.email.send.v1",
       "stream": "MYOTA_EMAIL_WORK",
       "durable": "email-delivery-v1",
-      "producers": [
-        "identity"
-      ]
+      "producers": ["identity"]
     },
     "geodata.location-enrichment.v1": {
       "subject": "myota.work.geodata.location-enrichment.v1",
       "stream": "MYOTA_GEODATA_WORK",
       "durable": "geodata-location-enrichment-v1",
-      "producers": [
-        "geodata",
-        "geodata-service",
-        "geodata-worker"
-      ]
+      "producers": ["geodata", "geodata-service", "geodata-worker"]
     }
   }
 }

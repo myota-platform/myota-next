@@ -67,6 +67,7 @@ interface AccountRow {
   password_hash: string | null;
   failed_attempts: number;
   locked_until: Date | null;
+  email_verified?: boolean;
   website_url?: string | null;
   biography_markdown?: string | null;
   profile_image_id?: string | null;
@@ -172,7 +173,8 @@ export class IdentityAuthService {
                 (SELECT primary_call.callsign_id
                    FROM public.account_primary_callsign primary_call
                   WHERE primary_call.account_id = a.id) AS primary_callsign_id,
-                a.participation_type, a.status, c.password_hash,
+                a.participation_type, a.status, a.email_verified,
+                c.password_hash,
                 coalesce(c.failed_attempts, 0) AS failed_attempts, c.locked_until,
                 p.website_url, p.biography_markdown, p.profile_image_id,
                 p.profile_image_media_type,
@@ -231,6 +233,7 @@ export class IdentityAuthService {
       const passwordOk =
         !failure &&
         account?.status === 'ACTIVE' &&
+        account.email_verified !== false &&
         account.password_hash !== null &&
         account.password_hash !== undefined &&
         (await verifyPassword(input.password, account.password_hash));
@@ -331,7 +334,7 @@ export class IdentityAuthService {
                   'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS profile_image_updated_at
            FROM public.account a
            LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
-          WHERE a.id = $1
+          WHERE a.id = $1 AND a.email_verified = true
           FOR UPDATE OF a`,
         [claims.sub],
       );
@@ -564,7 +567,8 @@ export class IdentityAuthService {
                   'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS profile_image_updated_at
            FROM public.account a
            LEFT JOIN public.identity_account_profile p ON p.account_id = a.id
-          WHERE a.id = $1 AND a.status = 'ACTIVE'`,
+          WHERE a.id = $1 AND a.status = 'ACTIVE'
+            AND a.email_verified = true`,
         [claims.sub],
       );
       const account = accountResult.rows[0];

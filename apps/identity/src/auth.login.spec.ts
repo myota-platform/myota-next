@@ -10,7 +10,11 @@ describe('IdentityAuthService.login rate limits', () => {
     passwordHash = await hashPassword(password);
   });
 
-  function harness(globalOperator: boolean, credentialHash = passwordHash) {
+  function harness(
+    globalOperator: boolean,
+    credentialHash = passwordHash,
+    emailVerified = true,
+  ) {
     const statements: Array<{ sql: string; values: unknown[] }> = [];
     let rateCount = 0;
     let globalOperatorChecks = 0;
@@ -20,6 +24,7 @@ describe('IdentityAuthService.login rate limits', () => {
       email: 'standard@example.test',
       participation_type: 'OPERATOR',
       status: 'ACTIVE',
+      email_verified: emailVerified,
       created_at: new Date('2025-01-01T00:00:00Z'),
       updated_at: new Date('2025-01-01T00:00:00Z'),
       primary_callsign_id: null,
@@ -117,6 +122,21 @@ describe('IdentityAuthService.login rate limits', () => {
 
     expect(fixture.rateCount).toBe(0);
     expect(fixture.globalOperatorChecks).toBe(12);
+  });
+
+  it('denies valid credentials while participant email verification is pending', async () => {
+    const fixture = harness(false, passwordHash, false);
+    await expect(
+      fixture.service.login(
+        { email: 'standard@example.test', password },
+        { userAgent: null, remoteAddr: '192.0.2.10' },
+      ),
+    ).rejects.toThrow('invalid credentials');
+    expect(
+      fixture.statements.some((entry) =>
+        entry.sql.includes('INSERT INTO public.auth_session'),
+      ),
+    ).toBe(false);
   });
 
   it('still locks a global operator after five bad passwords', async () => {

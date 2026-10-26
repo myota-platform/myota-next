@@ -139,6 +139,7 @@ describe.skipIf(!enabled)('Email worker JetStream recovery', () => {
         createdAt: new Date().toISOString(),
         producer: 'myota-identity',
         payload: {
+          requestId: workId,
           recipientAccountId,
           templateId: 'account-created-participant.v1',
           templateData: { displayName: 'Recovery Test' },
