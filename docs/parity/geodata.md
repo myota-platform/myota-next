@@ -234,6 +234,30 @@ specific host, license, outage response, and retry behavior.
 
 ### End-to-end capacity qualification
 
+For a live two-replica API check, use the browser upload qualification against
+the isolated Helm deployment. Set `MYOTA_BROWSER_BASE_URL` to its Admin host,
+`MYOTA_BROWSER_GEODATA_POD_URLS` to two port-forwarded Geodata API pods,
+`CORE_DATABASE_URL` and `GEO_DATABASE_URL` to the corresponding port-forwarded
+databases, `MYOTA_BROWSER_GEODATA_FEATURE_COUNT=5000`, and
+`MYOTA_BROWSER_GEODATA_LOAD_TEST_CLEANUP=1`. Supply the isolated bootstrap
+administrator credentials through `MYOTA_BOOTSTRAP_ADMIN_EMAIL` and
+`MYOTA_BOOTSTRAP_ADMIN_PASSWORD`, then run:
+
+```sh
+npm exec playwright -- test web/admin/tests/browser/geodata-upload-live.spec.ts
+```
+
+The test alternates Geodata API requests between both pods, uploads one
+5,000-feature GeoJSON document, and exercises the remaining format fixtures.
+It reports upload-request counts per pod and the GeoJSON preprocessing duration.
+The test deployment must explicitly enable
+`MYOTA_LOAD_TEST_CLEANUP_ENABLED`; cleanup tags the run, requires a global
+operator and exact confirmation, verifies that work is terminal and has no
+Activity impact, and deletes only objects in the Geodata import bucket.
+Production values leave this setting disabled. Capture pod, database, and
+JetStream resource/backlog measurements during the run; this browser check does
+not infer them from parser-only RSS tests.
+
 The manually triggered [qualification run 40237130907](https://github.com/myota-platform/myota-next/actions/runs/40237130907)
 measured Activity and Geodata under bounded CI resources on Node 24.21.0. Each Node
 qualification process was limited to 1 CPU and 1 GiB; PostgreSQL and JetStream were each
