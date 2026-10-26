@@ -59,13 +59,19 @@ function findChild(start, parentIndent, key) {
 function replacePath(path, digest) {
   let parentLine = findChild(-1, -2, 'spec');
   for (const key of path.split('.')) {
-    parentLine = findChild(parentLine, parentLine < 0 ? -2 : lines[parentLine].match(/^ */)[0].length, key);
+    parentLine = findChild(
+      parentLine,
+      parentLine < 0 ? -2 : lines[parentLine].match(/^ */)[0].length,
+      key,
+    );
     if (parentLine < 0) {
       throw new Error(`Could not find values path ${path} in ${manifestPath}.`);
     }
   }
   const indent = lines[parentLine].match(/^ */)[0].length;
-  const match = lines[parentLine].match(/^(\s*digest:\s*)sha256:[0-9a-f]{64}(\s*)$/);
+  const match = lines[parentLine].match(
+    /^(\s*digest:\s*)sha256:[0-9a-f]{64}(\s*)$/,
+  );
   if (path.endsWith('.digest') && match) {
     lines[parentLine] = `${match[1]}${digest}${match[2]}`;
     return;
@@ -76,9 +82,13 @@ function replacePath(path, digest) {
 
 for (const [path, digest] of digestTargets) replacePath(path, digest);
 
-const buildVersionLine = lines.findIndex((line) => /^    buildVersion:\s*/.test(line));
+const buildVersionLine = lines.findIndex((line) =>
+  /^    buildVersion:\s*/.test(line),
+);
 if (buildVersionLine < 0) {
-  throw new Error(`Could not find spec.values.buildVersion in ${manifestPath}.`);
+  throw new Error(
+    `Could not find spec.values.buildVersion in ${manifestPath}.`,
+  );
 }
 lines[buildVersionLine] = `    buildVersion: testing-${sourceSha.slice(0, 7)}`;
 
