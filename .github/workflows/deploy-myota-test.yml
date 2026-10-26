@@ -59,8 +59,8 @@ jobs:
           import re
           import yaml
 
-          with open("deploy/fleet/myota-test/app.yaml", encoding="utf-8") as source:
-              values = yaml.safe_load(source)["spec"]["values"]
+          with open("deploy/fleet/myota-test/values.yaml", encoding="utf-8") as source:
+              values = yaml.safe_load(source)
           if not re.fullmatch(r"testing-[0-9a-f]{7,40}", values["buildVersion"]):
               raise SystemExit("buildVersion must identify a testing image build")
           images = values["images"]

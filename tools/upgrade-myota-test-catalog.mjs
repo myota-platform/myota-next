@@ -149,33 +149,10 @@ await waitFor(
   }),
 );
 
-const desiredApp = await waitFor(
-  'Fleet desired App values',
-  () => getJson(apiUrl(appPath)),
-  (app) => {
-    const values = app.spec?.values;
-    const expectedImageNames = Object.keys(expectedValues.images ?? {}).sort();
-    const actualImageNames = Object.keys(values?.images ?? {}).sort();
-    const imagesMatch =
-      JSON.stringify(expectedImageNames) === JSON.stringify(actualImageNames) &&
-      expectedImageNames.every(
-        (name) =>
-          values.images[name]?.repository ===
-            expectedValues.images[name]?.repository &&
-          values.images[name]?.digest === expectedValues.images[name]?.digest,
-      );
-    const valuesMatch =
-      values?.buildVersion === expectedValues.buildVersion && imagesMatch;
-    return {
-      done: valuesMatch,
-      description: valuesMatch
-        ? 'approved build and image digests are reconciled'
-        : 'waiting for Fleet to apply the approved build and image digests',
-    };
-  },
-);
-
-const previousRevision = desiredApp.spec.version;
+const currentApp = await getJson(apiUrl(appPath));
+const previousRevision = Number(currentApp.spec?.version);
+if (!Number.isSafeInteger(previousRevision) || previousRevision < 1)
+  fail('Rancher did not return a valid current Helm release revision.');
 console.log(
   `Requesting Rancher catalog upgrade of ${releaseName} to chart ${chartVersion}.`,
 );
@@ -192,7 +169,7 @@ const action = await request(apiUrl(`${repoPath}?action=upgrade`), {
         chartName,
         version: chartVersion,
         releaseName,
-        values: desiredApp.spec.values,
+        values: expectedValues,
       },
     ],
   }),
