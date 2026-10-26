@@ -216,7 +216,7 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
           'browser-e2e-password-7!Q',
       );
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page).toHaveURL(/\/master-data$/);
+    await page.waitForURL((url) => url.pathname === '/master-data');
     if (geodataPodUrls.length) {
       await page.route('**/v1/geodata/**', async (route) => {
         const requestUrl = new URL(route.request().url());
@@ -360,7 +360,7 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
         timeout: 60_000,
       });
       await expect(
-        page.getByRole('button', { name: source.featureName }),
+        page.getByRole('button', { name: source.featureName, exact: true }),
       ).toBeVisible();
       if (source.format === 'GEOJSON')
         await expectResponsiveAccessible(
