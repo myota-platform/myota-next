@@ -9,21 +9,24 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: publish-helm-chart-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
-  upgrade:
-    name: Publish test chart and upgrade the Rancher catalog release
+  package:
+    name: Package immutable testing chart
     if: github.ref == 'refs/heads/testing'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    environment: myota-test
+    timeout-minutes: 20
     permissions:
       contents: write
+      actions: write
+    outputs:
+      version: ${{ steps.chart.outputs.version }}
+      app_version: ${{ steps.chart.outputs.app_version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -33,18 +36,6 @@ jobs:
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v4.3.0
-
-      - name: Validate protected rollout inputs
-        env:
-          RANCHER_TOKEN: ${{ secrets.MYOTA_TEST_RANCHER_TOKEN }}
-          SOURCE_REF: ${{ github.ref }}
-        run: |
-          set -euo pipefail
-          test "$SOURCE_REF" = refs/heads/testing
-          if [ -z "$RANCHER_TOKEN" ]; then
-            echo "Configure the scoped MYOTA_TEST_RANCHER_TOKEN secret in the myota-test Actions environment." >&2
-            exit 1
-          fi
 
       - name: Build and render the exact test chart
         id: chart
@@ -96,6 +87,7 @@ jobs:
               documents = [doc for doc in yaml.safe_load_all(source) if doc]
           workload_kinds = {"Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob", "Pod"}
           workload_count = 0
+
           def pod_spec(doc):
               spec = doc.get("spec", {})
               if doc.get("kind") == "CronJob":
@@ -145,11 +137,9 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           app_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["buildVersion"])' "$values_json")"
           echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
-          echo "values_json=$values_json" >> "$GITHUB_OUTPUT"
-          echo "expected_json=$expected_json" >> "$GITHUB_OUTPUT"
           echo "Candidate chart: $version" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Publish immutable test chart to the testing catalog index
+      - name: Publish chart archive and index to the testing branch of the chart repository
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -185,15 +175,76 @@ jobs:
             git -C chart-repository commit -m "Publish isolated test chart ${CHART_VERSION}"
             git -C chart-repository push origin HEAD:gh-pages
           fi
+          rm -rf chart-repository/.git
+
+      - name: Upload the complete Helm repository site
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: chart-repository
+
+      - name: Upload rollout verification inputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: myota-test-rollout-inputs-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/myota-test-values.json
+            ${{ runner.temp }}/myota-test-expected-deployments.json
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy-pages:
+    name: Deploy Helm repository to GitHub Pages
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+      actions: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy the chart repository site
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  upgrade:
+    name: Upgrade the Rancher catalog release
+    needs: [package, deploy-pages]
+    if: github.ref == 'refs/heads/testing'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: myota-test
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6.0.0
+        with:
+          node-version: 24
+
+      - name: Download rendered rollout inputs
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: myota-test-rollout-inputs-${{ github.sha }}
+          path: ${{ runner.temp }}/rollout-inputs
 
       - name: Upgrade and verify the Rancher catalog release
         env:
           MYOTA_TEST_RANCHER_URL: https://rancher.spainip.es/
           MYOTA_TEST_RANCHER_TOKEN: ${{ secrets.MYOTA_TEST_RANCHER_TOKEN }}
-          MYOTA_TEST_CHART_VERSION: ${{ steps.chart.outputs.version }}
-          VALUES_JSON: ${{ steps.chart.outputs.values_json }}
-          EXPECTED_JSON: ${{ steps.chart.outputs.expected_json }}
+          MYOTA_TEST_CHART_VERSION: ${{ needs.package.outputs.version }}
+          VALUES_JSON: ${{ runner.temp }}/rollout-inputs/myota-test-values.json
+          EXPECTED_JSON: ${{ runner.temp }}/rollout-inputs/myota-test-expected-deployments.json
         run: |
+          set -euo pipefail
+          test -n "$MYOTA_TEST_RANCHER_TOKEN"
           node tools/upgrade-myota-test-catalog.mjs \
             "$VALUES_JSON" \
             "$EXPECTED_JSON"
