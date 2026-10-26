@@ -6,7 +6,7 @@ const [manifestPath, digestPath, sourceSha] = process.argv.slice(2);
 
 if (!manifestPath || !digestPath || !sourceSha) {
   console.error(
-    'Usage: node tools/update-myota-test-image-digests.mjs <app.yaml> <digests.tsv> <testing-sha>',
+    'Usage: node tools/update-myota-test-image-digests.mjs <values.yaml> <digests.tsv> <testing-sha>',
   );
   process.exit(2);
 }
@@ -29,10 +29,10 @@ const digestRows = (await readFile(digestPath, 'utf8'))
 const digestTargets = new Map();
 for (const { app, digest } of digestRows) {
   if (app === 'tools') {
-    digestTargets.set('values.migrations.image.digest', digest);
-    digestTargets.set('values.jetstreamProvisioner.image.digest', digest);
+    digestTargets.set('migrations.image.digest', digest);
+    digestTargets.set('jetstreamProvisioner.image.digest', digest);
   } else if (app !== 'postgres' && app !== 'postgis' && app !== 'nats') {
-    digestTargets.set(`values.images.${app}.digest`, digest);
+    digestTargets.set(`images.${app}.digest`, digest);
   }
 }
 
@@ -57,7 +57,7 @@ function findChild(start, parentIndent, key) {
 }
 
 function replacePath(path, digest) {
-  let parentLine = findChild(-1, -2, 'spec');
+  let parentLine = -1;
   for (const key of path.split('.')) {
     parentLine = findChild(
       parentLine,
@@ -82,15 +82,13 @@ function replacePath(path, digest) {
 
 for (const [path, digest] of digestTargets) replacePath(path, digest);
 
-const buildVersionLine = lines.findIndex((line) =>
-  /^    buildVersion:\s*/.test(line),
-);
+const buildVersionLine = lines.findIndex((line) => /^buildVersion:\s*/.test(line));
 if (buildVersionLine < 0) {
   throw new Error(
-    `Could not find spec.values.buildVersion in ${manifestPath}.`,
+    `Could not find buildVersion in ${manifestPath}.`,
   );
 }
-lines[buildVersionLine] = `    buildVersion: testing-${sourceSha.slice(0, 7)}`;
+lines[buildVersionLine] = `buildVersion: testing-${sourceSha.slice(0, 7)}`;
 
 await writeFile(manifestPath, lines.join('\n'));
 console.log(`Updated ${digestTargets.size} immutable image digest value(s).`);

@@ -1,21 +1,23 @@
 # Rancher test-release values
 
-This Fleet bundle owns the desired values for Rancher's `myota-test` catalog
-App and provisions a dedicated test chart repository and operation identity.
-Fleet reconciles the App values from the protected `testing` branch. A separate
-protected workflow publishes an immutable testing chart and invokes Rancher's
-catalog upgrade action for that chart; it does not run `helm upgrade` directly.
+This Fleet bundle provisions a dedicated test chart repository and operation
+identity. The protected `testing` branch contains the non-secret Helm overrides
+in `values.yaml`. A separate protected workflow reads those reviewed values,
+publishes an immutable testing chart, and invokes Rancher's catalog upgrade
+action; it does not run `helm upgrade` directly. Fleet does not manage the
+catalog `App`, because Rancher owns that object as part of the Helm release.
 
-The manifest intentionally contains only `spec.values`. It preserves the live
-App's chart reference, release metadata, and owner reference. Values were
-seeded from the current release's non-secret overrides and reference
-Kubernetes Secrets by name and key; no secret payload belongs in this bundle.
+The values file was seeded from the current release's non-secret overrides and
+references Kubernetes Secrets by name and key; no secret payload belongs in
+this bundle. The workflow applies the exact values from the reviewed commit as
+part of the catalog upgrade.
 
 Image updates must use immutable digests. Review and merge each values change
 through a pull request to `testing`; Fleet must target only the Rancher `local`
 cluster and the `myota-test` namespace. Check Fleet bundle readiness, the
 Rancher App status, Helm revision, pod readiness, and health endpoints after
-reconciliation. A failed sync must be resolved before accepting the deployment.
+the catalog workflow completes. A failed sync must be resolved before
+accepting the deployment.
 
 The `myota-next-testing` ClusterRepo reads only the `/testing` chart index and
 runs chart operations as `myota-test-catalog-upgrader` in the explicitly set
@@ -44,11 +46,11 @@ gh run download <run-id> --name myota-test-image-digests-<commit-sha> \
   --dir /tmp/myota-test-image-digests
 git switch -c deploy/myota-test-image-digests-<commit-sha>
 node tools/update-myota-test-image-digests.mjs \
-  deploy/fleet/myota-test/app.yaml \
+  deploy/fleet/myota-test/values.yaml \
   /tmp/myota-test-image-digests/myota-test-image-digests.tsv \
   <full-source-commit-sha>
 git diff --check
-git diff -- deploy/fleet/myota-test/app.yaml
+git diff -- deploy/fleet/myota-test/values.yaml
 ```
 
 Open a pull request to `testing` with the proposed values. Reviewers should
