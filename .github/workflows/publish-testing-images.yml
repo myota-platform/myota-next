@@ -33,6 +33,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and publish images changed by this testing push
+        id: build
         env:
           BASE_SHA: ${{ github.event.before }}
           IMAGE_REGISTRY: ghcr.io/${{ github.repository }}
@@ -83,8 +84,13 @@ jobs:
 
           if [[ -z "$selected_apps" ]]; then
             echo "No runtime image inputs changed; nothing to publish."
+            echo "has_images=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          echo "has_images=true" >> "$GITHUB_OUTPUT"
+          digest_file="$RUNNER_TEMP/myota-test-image-digests.tsv"
+          : > "$digest_file"
 
           while IFS= read -r app; do
             context=.
@@ -137,5 +143,15 @@ jobs:
               echo "Unexpected digest for $app: $digest" >&2
               exit 1
             fi
+            printf '%s\t%s\t%s\n' "$app" "$image" "$digest" >> "$digest_file"
             printf '%s %s@%s\n' "$app" "$image" "$digest" >> "$GITHUB_STEP_SUMMARY"
           done <<< "$selected_apps"
+
+      - name: Upload immutable testing image digests
+        if: steps.build.outputs.has_images == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: myota-test-image-digests-${{ github.sha }}
+          path: ${{ runner.temp }}/myota-test-image-digests.tsv
+          if-no-files-found: error
+          retention-days: 30
