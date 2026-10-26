@@ -155,3 +155,29 @@ jobs:
           path: ${{ runner.temp }}/myota-test-image-digests.tsv
           if-no-files-found: error
           retention-days: 30
+
+  update-myota-test-source:
+    name: Advance MyOTA test deployment source
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Point Fleet at the successfully published testing commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tag='myota-test-deploy'
+          ref="refs/tags/$tag"
+          if gh api --silent "repos/$REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            gh api --silent --method PATCH "repos/$REPOSITORY/git/refs/tags/$tag" \
+              -f sha="$SOURCE_SHA" -F force=true
+          else
+            gh api --silent --method POST "repos/$REPOSITORY/git/refs" \
+              -f ref="$ref" -f sha="$SOURCE_SHA"
+          fi
+          printf 'Fleet deployment source now points to %s (%s).\n' "$SOURCE_SHA" "$ref"
