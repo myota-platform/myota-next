@@ -298,6 +298,39 @@ This confirms the telemetry sampler is now querying the registered
 `geodata-preprocessing-v1` durable; the earlier run's zero backlog/connection maxima
 are superseded.
 
+The later bounded [qualification run 40248099930](https://github.com/myota-platform/myota-next/actions/runs/40248099930)
+ran on Node 24.21.0 with enforced limits of one CPU and 1 GiB for the application
+process, one CPU and 2 GiB each for PostgreSQL and JetStream, Geodata pool maximum 10,
+two API replicas and one worker as the configured topology target, and import
+concurrency one. The APIs, worker, and database measurements used the bounded
+qualification harness; they do not prove performance across concurrently running live
+Kubernetes replicas.
+
+- Scheduled-source parser capacity used the configured 5,000-feature and 32 MiB global
+  limits. GeoJSON parsed 5,000 features from 598,931 bytes in 85 ms; WFS parsed 5,000
+  from 578,931 bytes in 39 ms; ArcGIS FeatureServer parsed 5,000 from 472,797 bytes in
+  73 ms. Peak process RSS growth across the qualification was 22,470,656 bytes. These
+  were bounded documents passed through the parsers, not requests to live external
+  sources.
+- The end-to-end 5,000-feature GeoJSON import staged all features without errors from a
+  959,372-byte source in 9.016 seconds (555 features/s), including 69 ms API admission
+  and 8.338 seconds of worker latency. Peak process RSS growth was 52,781,056 bytes;
+  PostgreSQL peak active connections were 4, the work stream ended with zero pending
+  messages and one acknowledgement pending, and no outbox events remained. The
+  qualification sampled Geodata telemetry 124 times successfully with no failed
+  samples.
+- Synchronous multi-entity promotion and approval measured 36.51 ms for one entity,
+  104.92 ms for 10, 449.64 ms for 50, and 874.98 ms for 100. The selection limit
+  therefore remains 100, with larger commands rejected synchronously.
+- The 25,000-feature tagged-node OSM PBF workload decoded in 1.182 seconds at 21,146
+  features/s, with 52,649,984 bytes RSS growth across the Node and `osmium` process
+  tree against the 96 MiB limit.
+
+Activity capacity and recovery checks also passed in this run; the corresponding
+measurement record is in [Activity parity](activity.md). The scheduled-source host
+allowlist remains empty and scheduled fetching remains disabled pending review of a
+specific source's license, outage behavior, and retry policy.
+
 On 2026-10-26, a read-only probe targeted each of the two live Geodata API pods in
 `myota-test` directly. Each pod returned HTTP 200 for 200 requests to
 `GET /v1/geodata/entities?page=1&pageSize=100` at concurrency 12: 349 and 370 requests/s,
