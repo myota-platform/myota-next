@@ -48,8 +48,11 @@ also builds the Admin and Participant images from their own Docker contexts.
 Image names in `values-example.yaml` match the repository workflow. Publishing
 a GitHub release builds and publishes per-image SHA and release tags after the
 quality job passes. Pull requests run the quality checks and build all container
-images without publishing. Use the digest printed in the workflow summary for
-deployment values.
+images without publishing. A successful push to `testing` publishes only the
+runtime images affected by that change under both `testing` and
+`testing-<commit-sha>` tags. Use the immutable digest printed in that workflow's
+summary for the isolated `myota-test` rollout; production images remain tied to
+GitHub releases.
 
 Create Kubernetes Secrets before installation:
 
