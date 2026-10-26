@@ -1,0 +1,10 @@
+apiVersion: catalog.cattle.io/v1
+kind: ClusterRepo
+metadata:
+  name: myota-next-testing
+spec:
+  enabled: true
+  refreshInterval: 60
+  serviceAccount: myota-test-catalog-upgrader
+  serviceAccountNamespace: myota-test
+  url: https://myota-platform.github.io/myota-next/testing
