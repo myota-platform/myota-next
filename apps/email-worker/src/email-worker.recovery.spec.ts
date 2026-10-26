@@ -116,7 +116,10 @@ describe.skipIf(!enabled)('Email worker JetStream recovery', () => {
       const worker = new EmailWorkerService(pool);
       const internals = worker as unknown as {
         handle(message: JsMsg): Promise<void>;
-        resolveRecipient(accountId: string): Promise<string>;
+        resolveRecipient(
+          accountId: string,
+          templateId: string,
+        ): Promise<string>;
         transporter: {
           sendMail(message: unknown): Promise<void>;
           close(): void;

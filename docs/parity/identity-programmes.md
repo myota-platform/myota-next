@@ -76,6 +76,11 @@ Identity and Email worker tests cover these paths. The isolated deployment workf
 real email route, and browser qualification remain tracked by Phase 6 issues #91 and
 #96–#100; implementation in source is not deployment evidence.
 
+The Email worker supplies its validated template ID when resolving an account's
+deliverable address. Identity permits an unverified `PENDING_SETUP` account only for
+`participant-email-verification.v1`; other pending, deactivated, missing, and
+unaddressable accounts continue to share the same unavailable-recipient outcome.
+
 The role catalogue endpoint returns built-in and persisted custom roles under the
 existing authorized scopes; custom role creation and partial updates are backed by Core
 transactions and security/outbox events. Logout compatibility is covered through the

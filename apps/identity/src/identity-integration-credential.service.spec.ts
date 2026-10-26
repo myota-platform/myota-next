@@ -193,16 +193,29 @@ describe('Identity integration and credential services', () => {
     expect(db.events.at(-1)?.type).toBe('identity.service-token.issued.v1');
   });
 
-  it('resolves an active account email only for the verified email service identity', async () => {
+  it('resolves active accounts and permits pending setup only for verification mail', async () => {
     const db = database();
     const authFixture = auth();
     const service = new IdentityCredentialService(db.pool, authFixture.service);
     await expect(
-      service.resolveEmailRecipient('Bearer service-token', accountId),
+      service.resolveEmailRecipient(
+        'Bearer service-token',
+        accountId,
+        'account-created-participant.v1',
+      ),
     ).resolves.toEqual({ deliverableAddress: 'operator@example.test' });
-    expect(
-      db.queries.find(({ sql }) => sql.includes('FROM public.account'))?.values,
-    ).toEqual([accountId]);
+    const recipientQuery = db.queries.find(({ sql }) =>
+      sql.includes('FROM public.account'),
+    );
+    expect(recipientQuery?.values).toEqual([
+      accountId,
+      'account-created-participant.v1',
+    ]);
+    expect(recipientQuery?.sql).toContain("status = 'PENDING_SETUP'");
+    expect(recipientQuery?.sql).toContain('email_verified = false');
+    expect(recipientQuery?.sql).toContain(
+      "'participant-email-verification.v1'",
+    );
 
     authFixture.verified.sub = 'service:other';
     await expect(

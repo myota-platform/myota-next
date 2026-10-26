@@ -1534,13 +1534,28 @@ paths:
         Internal service-to-service route. Only an `email-service` token with
         the fixed `identity.email.resolve` scope and Identity audience is
         accepted; revoked service tokens are rejected. The public Gateway
-        rejects `/v1/identity/internal/` paths. Only active accounts are
-        eligible. Malformed identifiers, missing, pending-setup, deactivated,
-        and unaddressable accounts share the same 404.
+        rejects `/v1/identity/internal/` paths. Active accounts are eligible
+        for configured email templates. A pending-setup account is eligible
+        only when `templateId` is `participant-email-verification.v1` and its
+        address remains unverified. Malformed identifiers, missing, other
+        pending-setup, deactivated, and unaddressable accounts share the same 404.
         Returns only the deliverable address; no account object or profile
         fields are returned. The address must not be logged or placed in NATS.
       operationId: getEmailRecipientAddress
-      parameters: [{ $ref: '#/components/parameters/AccountId' }]
+      parameters:
+        - { $ref: '#/components/parameters/AccountId' }
+        - in: query
+          name: templateId
+          required: false
+          description: >-
+            Email template being delivered. Required to resolve an unverified
+            pending-setup account for its verification message.
+          schema:
+            type: string
+            enum:
+              - account-created-participant.v1
+              - account-created-administrator.v1
+              - participant-email-verification.v1
       responses:
         '200':
           description: Current deliverable address for this account
