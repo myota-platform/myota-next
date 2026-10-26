@@ -262,7 +262,10 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
         await this.retryDatabase(message, 'settling failed work', async () => {
           if (!job) {
             message.nak(delaySeconds * 1000);
-          } else if (delivery >= MAX_DELIVERIES) {
+          } else if (
+            delivery >= MAX_DELIVERIES ||
+            job.attempts >= MAX_DELIVERIES
+          ) {
             await this.repository.failWorkJob(
               job,
               error,

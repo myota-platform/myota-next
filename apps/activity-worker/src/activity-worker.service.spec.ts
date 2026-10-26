@@ -107,6 +107,72 @@ describe('ActivityWorkerService work command metadata', () => {
 });
 
 describe('ActivityWorkerService terminal settlement recovery', () => {
+  it('dead-letters work after the durable job attempt limit', async () => {
+    const workId = 'd4cb7610-6077-4b33-93d7-fefdd3c4a2a1';
+    const subject = 'myota.work.activity.adif-import.v1';
+    const repository = {
+      claimWorkJob: vi.fn().mockResolvedValue({
+        id: workId,
+        kind: 'ADIF_IMPORT',
+        payload: { importId: 'test-import' },
+        attempts: 8,
+        leaseToken: 'lease-8',
+      }),
+      process: vi.fn().mockRejectedValue(new Error('invalid ADIF data')),
+      failWorkJob: vi.fn().mockResolvedValue(undefined),
+      retryWorkJob: vi.fn(),
+    };
+    const service = new ActivityWorkerService(
+      repository as never,
+      {} as never,
+      null,
+    );
+    const workType = 'activity.adif-import.v1';
+    const message = {
+      subject,
+      data: new TextEncoder().encode(
+        JSON.stringify({
+          envelopeVersion: 1,
+          workId,
+          workType,
+          createdAt: '2026-10-21T00:00:00Z',
+          producer: 'activity-service',
+          aggregate: { type: 'activity_job', id: workId },
+          payload: { jobId: workId },
+        }),
+      ),
+      info: { deliveryCount: 1 },
+      ackAck: vi.fn().mockResolvedValue(true),
+      nak: vi.fn(),
+      working: vi.fn(),
+    };
+    const definition = {
+      kind: 'ADIF_IMPORT',
+      workType,
+      subject,
+      durable: 'activity-adif-import-v1',
+      consumer: {},
+      maxPending: 4,
+    };
+
+    await (
+      service as unknown as {
+        handle: (definition: unknown, message: unknown) => Promise<void>;
+      }
+    ).handle(definition, message);
+
+    expect(repository.failWorkJob).toHaveBeenCalledWith(
+      expect.objectContaining({ id: workId, attempts: 8 }),
+      expect.any(Error),
+      subject,
+      workType,
+      1,
+    );
+    expect(repository.retryWorkJob).not.toHaveBeenCalled();
+    expect(message.ackAck).toHaveBeenCalledOnce();
+    expect(message.nak).not.toHaveBeenCalled();
+  });
+
   it('retries an unconfirmed terminal ACK and safely handles redelivery', async () => {
     const workId = 'd4cb7610-6077-4b33-93d7-fefdd3c4a2a1';
     const subject = 'myota.work.activity.statistics-rebuild.v1';
