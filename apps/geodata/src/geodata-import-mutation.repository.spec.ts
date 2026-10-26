@@ -342,7 +342,7 @@ describe('GeodataImportMutationRepository candidate validation parity', () => {
 
   it('rejects a selection above the synchronous limit before opening a transaction', async () => {
     const fixture = harness([]);
-    const candidateIds = Array.from({ length: 101 }, (_, index) => {
+    const candidateIds = Array.from({ length: 301 }, (_, index) => {
       const suffix = String(index + 1).padStart(12, '0');
       return `00000000-0000-4000-8000-${suffix}`;
     });
@@ -358,7 +358,7 @@ describe('GeodataImportMutationRepository candidate validation parity', () => {
         },
         { sub: 'reviewer-1', scp: ['geodata.import'] } as never,
       ),
-    ).rejects.toThrow('at most 100 candidates');
+    ).rejects.toThrow('at most 300 candidates');
     expect(fixture.queries).toEqual([]);
   });
 
@@ -378,7 +378,7 @@ describe('GeodataImportMutationRepository candidate validation parity', () => {
       runId,
       undefined,
       {
-        candidateIds: Array.from({ length: 101 }, () => firstId),
+        candidateIds: Array.from({ length: 301 }, () => firstId),
         targetStatus: 'CANDIDATE',
         processorId: 'reviewer-1',
       },
@@ -408,7 +408,7 @@ describe('GeodataImportMutationRepository candidate validation parity', () => {
     expect(malformedList.queries).toEqual([]);
 
     const overLimit = harness([]);
-    const candidateIds = Array.from({ length: 101 }, (_, index) => {
+    const candidateIds = Array.from({ length: 301 }, (_, index) => {
       const suffix = String(index + 1).padStart(12, '0');
       return `00000000-0000-4000-8000-${suffix}`;
     });

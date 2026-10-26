@@ -27,6 +27,8 @@ import {
   requestResponse,
 } from './geodata-request-idempotency.js';
 
+const MAX_SYNCHRONOUS_IMPORT_CANDIDATES = 300;
+
 @Injectable()
 export class GeodataImportMutationRepository {
   constructor(
@@ -407,9 +409,9 @@ export class GeodataImportMutationRepository {
     const rawIds = body.candidateIds;
     if (!Array.isArray(rawIds) || !rawIds.length)
       throw new BadRequestException('candidateIds must be a non-empty list');
-    if (rawIds.length > 100)
+    if (rawIds.length > MAX_SYNCHRONOUS_IMPORT_CANDIDATES)
       throw new BadRequestException(
-        'at most 100 candidates can be validated in one synchronous request',
+        `at most ${MAX_SYNCHRONOUS_IMPORT_CANDIDATES} candidates can be validated in one synchronous request`,
       );
     const candidateIds = rawIds.map(pythonString);
     const uniqueCandidateIds = [...new Set(candidateIds)];
@@ -560,9 +562,9 @@ export class GeodataImportMutationRepository {
     const candidateIds = [...new Set(rawIds.map(pythonString))].sort(
       (left, right) => (left < right ? -1 : left > right ? 1 : 0),
     );
-    if (candidateIds.length > 100)
+    if (candidateIds.length > MAX_SYNCHRONOUS_IMPORT_CANDIDATES)
       throw new BadRequestException(
-        'at most 100 candidates can be promoted in one synchronous request',
+        `at most ${MAX_SYNCHRONOUS_IMPORT_CANDIDATES} candidates can be promoted in one synchronous request`,
       );
     const invalidId = candidateIds.find(
       (id) => !isUuid(id) || id !== id.toLowerCase(),

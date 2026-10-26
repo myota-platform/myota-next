@@ -45,7 +45,7 @@ interface CandidatePage {
   total?: number;
   nextPage?: number | null;
 }
-const maxSynchronousCandidateSelection = 100;
+const maxSynchronousCandidateSelection = 300;
 
 const store = useAppStore();
 const categories = ref<EntityCategory[]>([]);
