@@ -80,11 +80,11 @@ describeWithDatabases(
 
         await request(gatewayUrl)
           .post('/v1/identity/auth/register')
-          .send({ email: `disabled-${randomUUID()}@example.test` })
-          .expect(403)
+          .send({ email: `incomplete-${randomUUID()}@example.test` })
+          .expect(400)
           .expect(({ body }) => {
-            expect(body.detail).toBe(
-              'public participant registration is unavailable until email verification and abuse controls are deployed',
+            expect(JSON.stringify(body)).toContain(
+              'registration details are invalid',
             );
           });
 
