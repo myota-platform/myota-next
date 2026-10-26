@@ -238,7 +238,8 @@ For a live two-replica API check, use the browser upload qualification against
 the isolated Helm deployment. Set `MYOTA_BROWSER_BASE_URL` to its Admin host,
 `MYOTA_BROWSER_GEODATA_POD_URLS` to two port-forwarded Geodata API pods,
 `CORE_DATABASE_URL` and `GEO_DATABASE_URL` to the corresponding port-forwarded
-databases, `MYOTA_BROWSER_GEODATA_FEATURE_COUNT=5000`, and
+databases, `MYOTA_BROWSER_GEODATA_FEATURE_COUNT=5000`,
+`MYOTA_BROWSER_GEODATA_PBF_FEATURE_COUNT=5000`, and
 `MYOTA_BROWSER_GEODATA_LOAD_TEST_CLEANUP=1`. Supply the isolated bootstrap
 administrator credentials through `MYOTA_BOOTSTRAP_ADMIN_EMAIL` and
 `MYOTA_BOOTSTRAP_ADMIN_PASSWORD`, then run:
@@ -248,8 +249,11 @@ npm exec playwright -- test web/admin/tests/browser/geodata-upload-live.spec.ts
 ```
 
 The test alternates Geodata API requests between both pods, uploads one
-5,000-feature GeoJSON document, and exercises the remaining format fixtures.
-It reports upload-request counts per pod and the GeoJSON preprocessing duration.
+5,000-feature GeoJSON document and, when configured, builds and uploads a tagged-node
+OSM PBF workload with `osmium`; it also exercises the remaining format fixtures. Both
+feature-count settings are capped at the 5,000-feature import limit. It reports
+upload-request counts per pod, candidate counts, bytes, and elapsed duration for the
+large-format uploads.
 The test deployment must explicitly enable
 `MYOTA_LOAD_TEST_CLEANUP_ENABLED`; cleanup tags the run, requires a global
 operator and exact confirmation, verifies that work is terminal and has no
@@ -351,9 +355,13 @@ Kubernetes replicas.
   tree against the 96 MiB limit.
 
 Activity capacity and recovery checks also passed in this run; the corresponding
-measurement record is in [Activity parity](activity.md). The scheduled-source host
-allowlist remains empty and scheduled fetching remains disabled pending review of a
-specific source's license, outage behavior, and retry policy.
+measurement record is in [Activity parity](activity.md). The launch review selected no
+live scheduled source. The host allowlist remains empty and the importer stays disabled;
+the parser and fixture results do not imply source-license or endpoint approval. Importer
+tests cover fail-closed allowlisting, required license and attribution metadata, bounded
+responses, outage backoff, and idempotent retries. Review a specific source's license,
+attribution, hosts, outage behavior, and retry policy before adding it or enabling
+scheduled fetching.
 
 On 2026-10-26, a read-only probe targeted each of the two live Geodata API pods in
 `myota-test` directly. Each pod returned HTTP 200 for 200 requests to
@@ -364,6 +372,25 @@ read workload. After the probe, `kubectl top` showed 76 MiB per Geodata pod, 29 
 Geodata PostgreSQL, and 9 MiB for JetStream; these are post-run snapshots, not peak RSS.
 This does not replace a multi-replica import/worker backlog test and is not used to raise
 the documented import bounds.
+
+Also on 2026-10-26, the live resumable-upload browser workflow completed all supported
+format fixtures against the Helm-backed `myota-test` release. It uploaded a synthetic
+5,000-feature GeoJSON document (824,562 bytes) and a generated 5,000-tagged-node OSM PBF
+(22,274 bytes); both produced 5,000 persisted candidates. The GeoJSON path took 12.449
+seconds and its upload requests were distributed 2/3 across the two directly addressed
+API pods. The PBF path took 10.310 seconds, with upload requests distributed 2/2 across
+the pods. These timings include browser interaction, resumable upload, preprocessing, and
+candidate visibility; they are single-run qualification results, not latency SLOs. The
+25,000-feature OSM PBF parser RSS cap remains a separate parser qualification and does
+not change the 5,000-feature import ceiling.
+
+During the browser run, repeated `kubectl top pods` samples showed maxima of 6m CPU and
+81/82 MiB for the two Geodata API pods, 189m CPU and 121 MiB for the Geodata worker, 244m
+CPU and 88 MiB for Geodata PostgreSQL, and 7m CPU and 20 MiB for JetStream. The metrics
+API reports a rolling sample, so these values are observed maxima rather than
+instantaneous peaks. The test's tagged import runs and upload sessions were deleted by
+the isolated cleanup endpoint; a post-run database query found zero rows for its run ID.
+All Geodata deployments remained ready (two API replicas and one worker).
 
 Shapefile and PBF working directories use `MYOTA_UPLOAD_SPOOL_DIR` when set, and
 otherwise use the OS temporary directory. PBF source bytes stream to disk with checksum

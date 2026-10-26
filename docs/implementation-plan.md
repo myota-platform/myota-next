@@ -199,13 +199,22 @@ limits. Activity caps ADIF uploads at 25 MiB and QSO batches at 5,000 records. T
 measurements and limits are recorded in the [Geodata](parity/geodata.md) and
 [Activity](parity/activity.md) parity notes.
 
-The live test cluster now has bounded PostgreSQL and JetStream containers. A direct
-read-only probe reached each of the two Geodata API pods and confirmed the live database
-read path. This is supporting evidence only: the import, QSO, award, backlog, and recovery
-qualification still needs to exercise a real multi-replica deployment before claiming
-replica-qualified heavy-workload capacity. The scheduled importer remains disabled with
-an empty source allowlist until a specific source's licensing and outage behavior have
-been reviewed.
+The isolated `myota-test` release has bounded PostgreSQL and JetStream containers,
+two Geodata API replicas, two Activity API replicas, and one worker per workload.
+Capacity evidence includes a live 5,000-feature Geodata import through both API pods,
+a live 5,000-feature OSM PBF upload that persisted 5,000 candidates across both pods,
+a live 5,000-QSO Activity ingestion and 5,001-subject award recalculation through the
+two Activity API pods and one worker, and read-path probes against both Geodata pods.
+The Activity database reached 938m CPU during the broad award job under its 1 CPU
+limit, so the documented workload bound and worker concurrency remain unchanged. The
+live Geodata PBF run took 10.310 seconds end to end for a 22,274-byte synthetic file;
+observed `kubectl top` maxima were 189m CPU/121 MiB for its worker and 244m CPU/88 MiB
+for Geodata PostgreSQL. The parser-only OSM PBF RSS qualification remains capped at
+25,000 features and does not raise the 5,000-feature import limit. These are single-run
+observations, not SLOs. The
+scheduled importer remains disabled with an empty source allowlist because no live
+source was selected for launch. Review a candidate's license, attribution, hosts,
+outage behavior, and retries before adding it or enabling fetching.
 
 **Exit:** Supported formats and limits have correctness fixtures, resource measurements,
 and documented operating bounds. Source selection and outage behavior are reviewed

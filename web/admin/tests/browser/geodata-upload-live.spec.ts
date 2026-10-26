@@ -1,13 +1,19 @@
+import { execFile } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
 import { Pool } from 'pg';
 import { expect, test } from '@playwright/test';
 import { expectResponsiveAccessible } from '../../../a11y';
 
+const execFileAsync = promisify(execFile);
+
 test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, and ParkServe through the resumable live workflow', async ({
   page,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(300_000);
   test.skip(
     process.env.MYOTA_BROWSER_GEODATA_WORKERS !== '1',
     'requires the CI Geodata workers and JetStream topology',
@@ -22,6 +28,9 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
   const configuredFeatureCount = Number(
     process.env.MYOTA_BROWSER_GEODATA_FEATURE_COUNT ?? '1',
   );
+  const configuredPbfFeatureCount = Number(
+    process.env.MYOTA_BROWSER_GEODATA_PBF_FEATURE_COUNT ?? '1',
+  );
   if (
     !Number.isInteger(configuredFeatureCount) ||
     configuredFeatureCount < 1 ||
@@ -29,6 +38,14 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
   )
     throw new Error(
       'MYOTA_BROWSER_GEODATA_FEATURE_COUNT must be an integer from 1 to 5000',
+    );
+  if (
+    !Number.isInteger(configuredPbfFeatureCount) ||
+    configuredPbfFeatureCount < 1 ||
+    configuredPbfFeatureCount > 5000
+  )
+    throw new Error(
+      'MYOTA_BROWSER_GEODATA_PBF_FEATURE_COUNT must be an integer from 1 to 5000',
     );
   const useLoadTestCleanup =
     process.env.MYOTA_BROWSER_GEODATA_LOAD_TEST_CLEANUP === '1';
@@ -53,12 +70,15 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
       import.meta.url,
     ),
   );
-  const osmPbf = await readFile(
-    new URL(
-      '../../../../apps/geodata-worker/src/fixtures/python-osm-parity.osm.pbf',
-      import.meta.url,
-    ),
-  );
+  const osmPbf =
+    configuredPbfFeatureCount === 1
+      ? await readFile(
+          new URL(
+            '../../../../apps/geodata-worker/src/fixtures/python-osm-parity.osm.pbf',
+            import.meta.url,
+          ),
+        )
+      : await createOsmPbfWorkload(configuredPbfFeatureCount);
   const sources = [
     {
       format: 'GEOJSON',
@@ -163,9 +183,11 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
       filename: `browser-${suffix}.osm.pbf`,
       mimeType: 'application/octet-stream',
       adapter: 'OSM',
-      featureName: 'Node Park',
+      featureName:
+        configuredPbfFeatureCount === 1 ? 'Node Park' : 'Node Park 1',
       content: osmPbf,
-      minimumCandidates: 2,
+      minimumCandidates:
+        configuredPbfFeatureCount === 1 ? 2 : configuredPbfFeatureCount,
     },
     {
       format: 'SHAPEFILE',
@@ -217,6 +239,13 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
       );
     await page.getByRole('button', { name: 'Sign in' }).click();
     await page.waitForURL((url) => url.pathname === '/master-data');
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Boolean(localStorage.getItem('myota_admin_access')),
+        ),
+      )
+      .toBe(true);
     if (geodataPodUrls.length) {
       await page.route('**/v1/geodata/**', async (route) => {
         const requestUrl = new URL(route.request().url());
@@ -283,6 +312,7 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
 
     for (const source of sources) {
       const sourceStartedAt = performance.now();
+      const uploadRequestCountsBefore = [...uploadRequestsPerPod];
       await page.goto('/geodata-imports');
       await expect(page).toHaveURL(/\/geodata-imports$/);
       await page
@@ -441,6 +471,25 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
             }),
           );
         }
+        if (source.format === 'OSM_PBF') {
+          console.log(
+            JSON.stringify({
+              qualification: 'live-geodata-import',
+              testRunId: loadTestRunId,
+              format: source.format,
+              uploadedBytes: source.bytes.length,
+              expectedFeatures: configuredPbfFeatureCount,
+              preprocessedCandidates: persisted.rows[0]?.candidate_count,
+              uploadRequestsPerPod: uploadRequestsPerPod.map(
+                (count, index) =>
+                  count - (uploadRequestCountsBefore[index] ?? 0),
+              ),
+              elapsedMilliseconds: Math.round(
+                performance.now() - sourceStartedAt,
+              ),
+            }),
+          );
+        }
       }
     }
   } finally {
@@ -549,3 +598,33 @@ test('uploads and preprocesses GeoJSON, OSM, WFS, ArcGIS, KML, GPX, Shapefile, a
     }
   }
 });
+
+async function createOsmPbfWorkload(featureCount: number) {
+  const directory = await mkdtemp(join(tmpdir(), 'myota-live-pbf-'));
+  const xmlPath = join(directory, 'many-parks.osm');
+  const pbfPath = join(directory, 'many-parks.osm.pbf');
+  try {
+    const nodes = Array.from({ length: featureCount }, (_, index) => {
+      const id = 1_000_000_000 + index;
+      const latitude = 37.39 + (index % 100) / 100_000;
+      const longitude = -5.99 + Math.floor(index / 100) / 100_000;
+      return `<node id="${id}" lat="${latitude}" lon="${longitude}"><tag k="leisure" v="park"/><tag k="name" v="Node Park ${index + 1}"/></node>`;
+    }).join('');
+    await writeFile(
+      xmlPath,
+      `<?xml version="1.0" encoding="UTF-8"?><osm version="0.6" generator="myota-live-qualification">${nodes}</osm>`,
+      { mode: 0o600 },
+    );
+    await execFileAsync('osmium', [
+      'cat',
+      xmlPath,
+      '--output',
+      pbfPath,
+      '--output-format',
+      'pbf',
+    ]);
+    return await readFile(pbfPath);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
