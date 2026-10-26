@@ -38,6 +38,11 @@ StatefulSets are not replicated and do not provide high availability or
 backups. Configure persistent-volume sizes and storage class for the actual
 dataset, and take verified off-cluster backups before production use.
 
+The default PostgreSQL resources request 100 millicores and 512 MiB, with a
+limit of one CPU and 2 GiB per database. These bounds match the deployment
+profile used for launch-capacity qualification; they are not HA guarantees or
+production sizing advice for a different workload.
+
 ## Credentials
 
 Before installation, create `myota-postgres-auth` (or set

@@ -98,23 +98,19 @@ requirePattern(
 );
 requirePattern(
   'apps/geodata-importer/src/geodata-importer.service.ts',
-  /features\.length > MAX_IMPORT_FEATURES/,
-  'Scheduled importer must use the shared Python-compatible Geodata feature limit',
+  /const maximumFeatures = sourceLimit\(\s*schedule\.source,\s*'maxFeatures',\s*MAX_IMPORT_FEATURES,\s*\)[\s\S]*features\.length > maximumFeatures/,
+  'Scheduled importer must cap source feature overrides at the shared Python-compatible Geodata limit',
 );
-if (
-  /MAX_SOURCE_BYTES/.test(
-    fs.readFileSync(
-      path.join(
-        repositoryRoot,
-        'apps/geodata-importer/src/geodata-importer.service.ts',
-      ),
-      'utf8',
-    ),
-  )
-)
-  errors.push(
-    'Scheduled importer must not impose a smaller source response cap',
-  );
+requirePattern(
+  'apps/geodata-importer/src/geodata-importer.service.ts',
+  /sourceLimit\(\s*schedule\.source,\s*'maxBytes',\s*MAX_GEODATA_SOURCE_FETCH_BYTES,\s*\)[\s\S]*fetchSource\(sourceUrl, maximumBytes\)/,
+  'Scheduled importer must apply the configured bounded source byte limit',
+);
+requirePattern(
+  'apps/geodata-importer/src/geodata-importer.service.ts',
+  /sourceLimit\(\s*source,\s*'maxBytes',\s*MAX_GEODATA_SOURCE_FETCH_BYTES,\s*\)[\s\S]*fetchSource\(source\.url, maximumBytes\)/,
+  'One-shot importer must apply the configured bounded source byte limit',
+);
 requirePattern(
   'apps/geodata/src/geodata-imports.controller.ts',
   /parseImportPartNumber\(partNumber\)/,

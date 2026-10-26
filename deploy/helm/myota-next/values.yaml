@@ -37,6 +37,7 @@ geodataWorker:
 geodataImporter:
   pollSeconds: 60
   sourceAllowlist: []
+  sourceMaxBytes: 33554432
 databasePools:
   core: 10
   activity: 12
@@ -279,6 +280,7 @@ components:
       GEODATA_IMPORTER_ENABLED: 'false'
       GEODATA_IMPORTER_POLL_SECONDS: '{{ .Values.geodataImporter.pollSeconds }}'
       GEODATA_SOURCE_ALLOWLIST: '{{ join "," .Values.geodataImporter.sourceAllowlist }}'
+      GEODATA_SOURCE_MAX_BYTES: '{{ .Values.geodataImporter.sourceMaxBytes }}'
       MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
       MYOTA_GEODATA_URL: '{{ default (printf "http://%s-geodata:8003" .Release.Name) .Values.dependencies.geodataUrl }}'
   email-worker:

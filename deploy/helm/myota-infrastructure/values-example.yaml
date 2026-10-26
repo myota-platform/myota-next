@@ -2,7 +2,10 @@
 imagePullPolicy: IfNotPresent
 postgresSecret: myota-postgres-auth
 storageClassName: ''
-resources: {}
+# Bounded single-instance PostgreSQL profile; increase only after measurement.
+resources:
+  requests: { cpu: 100m, memory: 512Mi }
+  limits: { cpu: '1', memory: 2Gi }
 databases:
   core:
     name: myota_core

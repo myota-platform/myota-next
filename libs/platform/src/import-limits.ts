@@ -16,6 +16,11 @@ export const MAX_SHAPEFILE_UPLOAD_BYTES = integerSetting(
   process.env.MYOTA_SHAPEFILE_MAX_UPLOAD_BYTES,
   MAX_UPLOAD_BYTES,
 );
+/** Scheduled source fetching buffers and parses the whole JSON response. */
+export const MAX_GEODATA_SOURCE_FETCH_BYTES = integerSetting(
+  process.env.GEODATA_SOURCE_MAX_BYTES,
+  32 * 1024 * 1024,
+);
 export const MAX_IMPORT_FEATURE_BYTES = integerSetting(
   process.env.MYOTA_IMPORT_MAX_FEATURE_BYTES,
   16 * 1024 * 1024,
