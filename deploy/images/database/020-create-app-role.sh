@@ -7,6 +7,7 @@ psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   --set=database_name="$POSTGRES_DB" \
   --set=owner_role="$POSTGRES_USER" <<'SQL'
 CREATE ROLE :"app_role" LOGIN PASSWORD :'app_password';
+REVOKE CONNECT ON DATABASE :"database_name" FROM PUBLIC;
 GRANT CONNECT ON DATABASE :"database_name" TO :"app_role";
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO :"app_role";

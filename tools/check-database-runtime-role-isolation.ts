@@ -57,14 +57,14 @@ async function main(): Promise<void> {
             typeof error === 'object' && error !== null && 'code' in error
               ? error.code
               : undefined;
-          if (code !== '28P01' && code !== '28000')
+          if (code !== '28P01' && code !== '28000' && code !== '42501')
             throw new Error(
-              `Cross-owner connection did not fail with an authentication denial: ${credentialOwner} -> ${databaseOwner}`,
+              `Cross-owner access did not fail with an authentication or database permission denial: ${credentialOwner} -> ${databaseOwner}`,
               { cause: error },
             );
           await client.end().catch(() => undefined);
           process.stdout.write(
-            `Cross-owner authentication denied: ${credentialOwner} -> ${databaseOwner}\n`,
+            `Cross-owner database access denied: ${credentialOwner} -> ${databaseOwner}\n`,
           );
         }
         continue;

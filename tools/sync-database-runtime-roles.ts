@@ -92,6 +92,11 @@ async function syncOwner(
       'REVOKE ALL PRIVILEGES ON DATABASE %I FROM %I',
       [admin.database, config.role],
     );
+    await executeFormatted(
+      client,
+      'REVOKE CONNECT ON DATABASE %I FROM PUBLIC',
+      [admin.database],
+    );
     await executeFormatted(client, 'GRANT CONNECT ON DATABASE %I TO %I', [
       admin.database,
       config.role,
