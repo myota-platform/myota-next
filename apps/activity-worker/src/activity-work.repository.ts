@@ -1018,6 +1018,35 @@ export class ActivityWorkRepository {
       );
       if (!failed.rowCount)
         throw new Error('worker lease was lost before dead-lettering');
+      if (job.kind === 'ADIF_IMPORT') {
+        const importId = String(job.payload.importId ?? '');
+        if (importId) {
+          const reason = 'ADIF import failed after exhausting retries';
+          const failedImport = await client.query<{ activation_id: string }>(
+            `UPDATE activity_import
+             SET status='FAILED',records_rejected=GREATEST(records_rejected,1),
+                 errors=$2::jsonb,completed_at=now()
+             WHERE id=$1 AND status NOT IN ('COMPLETED','FAILED')
+             RETURNING activation_id`,
+            [importId, stringifyJsonWithBigInts([reason])],
+          );
+          const activationId = failedImport.rows[0]?.activation_id;
+          if (activationId) {
+            await client.query(
+              `INSERT INTO activity_notification
+                (id,recipient_id,notification_type,payload,status,delivered_at,deduplication_key)
+               VALUES ($1,$2,'ADIF_IMPORT_FAILED',$3::jsonb,'DELIVERED',now(),$4)
+               ON CONFLICT DO NOTHING`,
+              [
+                randomUUID(),
+                activationId,
+                stringifyJsonWithBigInts({ importId, reason }),
+                `adif:${importId}:failed`,
+              ],
+            );
+          }
+        }
+      }
       await client.query(
         `INSERT INTO activity_work_dead_letter
           (id,work_id,work_type,subject,delivery_count,error_category)
