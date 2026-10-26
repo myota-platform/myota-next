@@ -25,6 +25,10 @@ jetstreamProvisioner:
     emailWorkMaxMessageBytes: ''
 geodataWorker:
   importMaxAttempts: 10
+  locationEnrichment:
+    reverseGeocodeUrl: https://api-bdc.net/data/reverse-geocode
+    localityLanguage: en
+    timeoutSeconds: '10'
   maxAckPending:
     preprocessing: ''
     promotion: ''
@@ -70,6 +74,7 @@ secrets:
   databaseMigrations: myota-database-migration-urls
   auth: myota-auth
   objectStorage: myota-object-storage
+  geodataEnrichment: myota-geodata-enrichment
   smtp: myota-smtp
   nats: myota-nats-credentials
 observe:
@@ -272,6 +277,11 @@ components:
         { secret: objectStorage, key: secret-key }
       MYOTA_GEODATA_IMPORT_BUCKET: '{{ .Values.dependencies.geodataImportBucket }}'
       MYOTA_CLAMAV_URL: '{{ .Values.dependencies.clamavUrl }}'
+      BIGDATACLOUD_API_KEY:
+        { secret: geodataEnrichment, key: api-key, optional: true }
+      BIGDATACLOUD_REVERSE_GEOCODE_URL: '{{ .Values.geodataWorker.locationEnrichment.reverseGeocodeUrl }}'
+      BIGDATACLOUD_LOCALITY_LANGUAGE: '{{ .Values.geodataWorker.locationEnrichment.localityLanguage }}'
+      BIGDATACLOUD_TIMEOUT_SECONDS: '{{ .Values.geodataWorker.locationEnrichment.timeoutSeconds }}'
       GEODATA_WORKER_HEALTH_PORT: '9113'
   geodata-importer:
     enabled: false
