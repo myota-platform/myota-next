@@ -212,16 +212,22 @@ await waitFor(
   (operation) => {
     const conditions = operation.status?.conditions ?? [];
     const ready = conditions.find((condition) => condition.type === 'Ready');
+    const reconciling = conditions.find(
+      (condition) => condition.type === 'Reconciling',
+    );
     const stalled = conditions.find(
       (condition) => condition.type === 'Stalled',
     );
+    const completed =
+      ready?.status === 'True' ||
+      (reconciling?.status === 'False' && stalled?.status === 'False');
     return {
-      done: ready?.status === 'True',
+      done: completed,
       failed: stalled?.status === 'True',
       description:
         stalled?.status === 'True'
           ? (stalled.reason ?? 'operation stalled')
-          : ready?.status === 'True'
+          : completed
             ? 'upgrade completed'
             : 'operation is still running',
     };
