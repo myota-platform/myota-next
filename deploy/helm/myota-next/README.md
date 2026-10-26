@@ -115,6 +115,11 @@ than a generic Ingress, matching this K3s server's `websecure` entry point and
 `ingress.participantHost`, and optionally `ingress.objectStorageHost` for the
 four public endpoints.
 
+On the Participant hostname, Traefik routes `/v1/` requests to Gateway and
+serves all other paths from the Participant web application. This keeps the
+browser API calls same-origin while preserving the separate web and API
+processes.
+
 `migrations.enabled` runs the checked-in owner migrations as a Helm
 pre-install/pre-upgrade Job against all three databases. The Job is a release
 gate; review migration compatibility with currently running versions before
