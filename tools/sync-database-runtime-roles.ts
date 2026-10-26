@@ -82,7 +82,7 @@ async function syncOwner(
          ELSE
            'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT'
          END,
-         $1, $2) AS sql`,
+         $1::text, $2::text) AS sql`,
       [config.role, password, exists.rowCount === 1],
     );
     await client.query(roleStatement.rows[0]!.sql);
