@@ -515,6 +515,59 @@ describe('ActivityWorkRepository retry dispatch', () => {
   });
 });
 
+describe('ActivityWorkRepository terminal ADIF failures', () => {
+  it('fails the import and records one failure notification when dead-lettering', async () => {
+    const queries: { sql: string; values: unknown[] }[] = [];
+    const client = {
+      query: vi.fn(async (sql: string, values: unknown[] = []) => {
+        queries.push({ sql, values });
+        if (sql.startsWith('UPDATE activity_job'))
+          return { rowCount: 1, rows: [{ id: 'job-1' }] };
+        if (sql.startsWith('UPDATE activity_import'))
+          return { rowCount: 1, rows: [{ activation_id: 'activation-1' }] };
+        return { rowCount: 1, rows: [] };
+      }),
+      release: vi.fn(),
+    };
+    const pool = { connect: vi.fn().mockResolvedValue(client) };
+    const repository = new ActivityWorkRepository(pool as unknown as Pool);
+
+    await repository.failWorkJob(
+      {
+        id: 'job-1',
+        kind: 'ADIF_IMPORT',
+        payload: { importId: 'import-1' },
+        attempts: 8,
+        leaseToken: 'lease-8',
+      },
+      new Error('invalid ADIF record'),
+      'myota.work.activity.adif-import.v1',
+      'activity.adif-import.v1',
+      1,
+    );
+
+    const failedImport = queries.find(({ sql }) =>
+      sql.startsWith('UPDATE activity_import'),
+    );
+    expect(failedImport?.sql).toContain("status='FAILED'");
+    expect(failedImport?.values).toEqual([
+      'import-1',
+      JSON.stringify(['ADIF import failed after exhausting retries']),
+    ]);
+    const notification = queries.find(({ sql }) =>
+      sql.includes("'ADIF_IMPORT_FAILED'"),
+    );
+    expect(notification?.values[1]).toBe('activation-1');
+    expect(JSON.parse(String(notification?.values[2]))).toEqual({
+      importId: 'import-1',
+      reason: 'ADIF import failed after exhausting retries',
+    });
+    expect(notification?.values[3]).toBe('adif:import-1:failed');
+    expect(queries.at(-1)?.sql).toBe('COMMIT');
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+});
+
 describe('ActivityWorkRepository QSO ingestion compatibility', () => {
   it('normalizes the full batch before checking activation state or writing QSOs', async () => {
     const queries: string[] = [];
