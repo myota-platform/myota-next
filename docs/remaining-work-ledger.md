@@ -366,44 +366,49 @@ an accepted scope decision is recorded in the dispositions section.
   [implementation plan, Step 6](implementation-plan.md#L185);
   [Web applications, lines 261–265](parity/web-applications.md#L261).
 
+## Completed during capacity qualification
+
 ### L-18 — Measure representative production capacity and operating bounds
 
 - **Owner:** Activity, Geodata, and deployment operations.
 - **Class:** Performance qualification.
-- **Reference behavior:** Supported upload and computation workloads remain
-  within documented resource, latency, concurrency, and recovery bounds under
-  explicit CPU, memory, configured launch replica counts, and database-pool limits.
-- **Current implementation and evidence:** Node 24.21.0 Linux parser qualification
-  measured GeoJSON (300,000 features, 9.6 s, 107.8 MiB RSS growth), KML/GPX
-  (50,000 each, 2.5 s combined, 49.7 MiB), Shapefile (50,000 records, 4.1 s,
-  30.0 MiB), and OSM PBF (25,000 tagged nodes, 1.2 s, 51.6 MiB process-tree
-  growth). The PBF launch runner no longer schedules historical 50,000+ cases.
-  The [bounded qualification run 40237130907](https://github.com/myota-platform/myota-next/actions/runs/40237130907)
-  also measured Activity ingestion and award workloads, synchronous QSO/award requests,
-  Geodata import and synchronous selection sizes, and worker restart recovery under
-  1-CPU/1-GiB Node limits, 1-CPU/2-GiB PostgreSQL and JetStream limits, pool maxima of
-  10 (Geodata) and 12 (Activity), two API replicas, and one worker. Full measurements
-  and scope are recorded in the Activity and Geodata parity pages. Object storage was
-  mocked. The first Geodata sampler queried a stale durable and its maxima were
-  excluded; the corrected [repeat run 40240895206](https://github.com/myota-platform/myota-next/actions/runs/40240895206)
-  passed with 83 successful telemetry samples, no sampling errors, and measured import,
-  database-connection, and JetStream backlog values.
-- **Missing evidence:** The live test deployment still has unbounded PostgreSQL/NATS
-  pods. Verify explicit resource limits in its rendered Helm configuration before
-  calling the deployed topology bounded. Source allowlists, licenses, outages,
-  scheduling, and safe retry behavior also remain unreviewed. Existing Python/Nest RSS
-  scopes are not always directly comparable.
-- **Risk:** Production load can exhaust memory, pools, or broker capacity,
-  producing slow or failed user workflows and unsafe retry backlogs.
-- **Next check:** Apply and verify explicit PostgreSQL and NATS resource settings in the
-  isolated Helm releases; review source allowlists, licenses, outages, scheduling, and
-  safe retry before enabling live scheduled fetching.
+- **Evidence:** Parser RSS measurements cover GeoJSON, KML, GPX, Shapefile,
+  and OSM PBF; OSM PBF launch RSS remains capped at 25,000 features. WFS and
+  ArcGIS source parsing are measured at the configured 5,000-feature import
+  ceiling. The corrected [bounded qualification run 40240895206](https://github.com/myota-platform/myota-next/actions/runs/40240895206)
+  measured Geodata import and synchronous selection sizes, Activity QSO
+  ingestion, broad awards, synchronous QSO and award requests, recovery,
+  database connections, and JetStream backlog. It used 1-CPU/1-GiB application
+  limits, 1-CPU/2-GiB PostgreSQL and JetStream limits, pool maxima of 10
+  (Geodata) and 12 (Activity), and the configured two-API/one-worker topology.
+  Object storage was mocked in this run.
+- **Live deployment evidence:** The Helm-backed `myota-test` release has two
+  Activity and Geodata API replicas and one worker per workload. A live
+  5,000-feature GeoJSON and OSM PBF uploads each persisted 5,000 candidates
+  through both Geodata pods; the PBF fixture was 22,274 bytes and completed in
+  10.310 seconds. The repeatable
+  [Activity live runner](../tools/run-live-activity-capacity.mjs) submitted a
+  5,000-QSO batch through one Activity pod and polled it through the other;
+  the deployed worker completed ingestion and a 5,001-row broad award job. A
+  one-second sample recorded maximum Activity PostgreSQL use of 938m CPU and
+  117 MiB, within its 1-CPU/2-GiB limit. The Activity and Geodata parity pages
+  contain the full timings, resource samples, scope, and cleanup verification.
+- **Launch source disposition:** No live scheduled source was selected. The
+  importer remains disabled with an empty host allowlist. Tests cover
+  fail-closed allowlisting, required license and attribution metadata, bounded
+  responses, outage backoff, and idempotent retry. A source-specific license,
+  host, and outage review remains a prerequisite before adding a source or
+  enabling scheduled fetching.
+- **Result:** Documented parser, upload, feature, worker, pool, replica, timeout,
+  and synchronous-selection bounds now have supporting correctness or resource
+  evidence. The Python and Nest RSS scopes are not directly comparable for every
+  workload.
 - **Tracked by:** [Issue #18](https://github.com/myota-platform/myota-next/issues/18)
   and [Issue #19](https://github.com/myota-platform/myota-next/issues/19).
-- **Sources:** [completion criteria, lines 15–17](parity/completion-criteria.md#L15);
-  [Geodata parity, lines 122–151](parity/geodata.md#L122);
-  [workers and operations, lines 143–145](parity/workers-operations.md#L143);
-  [implementation plan, Step 5](implementation-plan.md#L154).
+- **Sources:** [Activity parity](parity/activity.md#capacity-qualification);
+  [Geodata parity](parity/geodata.md#capacity-qualification);
+  [implementation plan, Step 5](implementation-plan.md#step-5-set-and-verify-workload-capacity-and-source-limits);
+  [Geodata importer operations](operations/geodata-importer.md).
 
 ## Completed during deployed recovery qualification
 
