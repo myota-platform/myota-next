@@ -82,11 +82,11 @@ function replacePath(path, digest) {
 
 for (const [path, digest] of digestTargets) replacePath(path, digest);
 
-const buildVersionLine = lines.findIndex((line) => /^buildVersion:\s*/.test(line));
+const buildVersionLine = lines.findIndex((line) =>
+  /^buildVersion:\s*/.test(line),
+);
 if (buildVersionLine < 0) {
-  throw new Error(
-    `Could not find buildVersion in ${manifestPath}.`,
-  );
+  throw new Error(`Could not find buildVersion in ${manifestPath}.`);
 }
 lines[buildVersionLine] = `buildVersion: testing-${sourceSha.slice(0, 7)}`;
 
