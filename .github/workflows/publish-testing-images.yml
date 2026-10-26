@@ -1,0 +1,132 @@
+name: Publish changed testing images
+
+on:
+  push:
+    branches: [testing]
+    paths-ignore:
+      - '**/*.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-testing-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish changed testing images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish images changed by this testing push
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          IMAGE_REGISTRY: ghcr.io/${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            BASE_SHA="$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || true)"
+          fi
+          if [[ -z "$BASE_SHA" ]]; then
+            echo "Could not determine the testing push base commit" >&2
+            exit 1
+          fi
+
+          changed_files="$(git diff --name-only "$BASE_SHA" "$GITHUB_SHA")"
+          selected_apps="$(while IFS= read -r file; do
+            case "$file" in
+              apps/identity/*) printf '%s\n' identity identity-maintenance ;;
+              apps/programmes/*) printf '%s\n' programmes ;;
+              apps/activity/*) printf '%s\n' activity ;;
+              apps/activity-worker/*) printf '%s\n' activity-worker ;;
+              apps/activity-notifications/*) printf '%s\n' activity-notifications ;;
+              apps/geodata/*) printf '%s\n' geodata ;;
+              apps/geodata-worker/*) printf '%s\n' geodata-worker ;;
+              apps/geodata-importer/*) printf '%s\n' geodata-importer ;;
+              apps/email-worker/*) printf '%s\n' email-worker ;;
+              apps/outbox-worker/*) printf '%s\n' outbox-worker ;;
+              apps/gateway/*) printf '%s\n' gateway ;;
+              web/admin/*) printf '%s\n' admin-web ;;
+              web/participant/*) printf '%s\n' participant-web ;;
+              deploy/images/database/*) printf '%s\n' postgres postgis ;;
+              deploy/images/nats/*) printf '%s\n' nats ;;
+              deploy/Dockerfile.tools) printf '%s\n' tools ;;
+              contracts/*|packages/*|Dockerfile|package.json|package-lock.json|nx.json|tsconfig*.json)
+                printf '%s\n' postgres postgis nats gateway identity identity-maintenance programmes activity activity-worker activity-notifications geodata geodata-worker geodata-importer email-worker outbox-worker tools admin-web participant-web
+                ;;
+            esac
+          done <<< "$changed_files" | sort -u)"
+
+          if [[ -z "$selected_apps" ]]; then
+            echo "No runtime image inputs changed; nothing to publish."
+            exit 0
+          fi
+
+          while IFS= read -r app; do
+            context=.
+            dockerfile=Dockerfile
+            target=
+            build_arg=
+            case "$app" in
+              postgres|postgis)
+                dockerfile=deploy/images/database/Dockerfile
+                target="$app"
+                ;;
+              nats)
+                dockerfile=deploy/images/nats/Dockerfile
+                ;;
+              tools)
+                dockerfile=deploy/Dockerfile.tools
+                ;;
+              admin-web)
+                context=web/admin
+                dockerfile=web/admin/Dockerfile
+                ;;
+              participant-web)
+                context=web/participant
+                dockerfile=web/participant/Dockerfile
+                ;;
+              *)
+                build_arg="APP_NAME=$app"
+                if [[ "$app" == geodata-worker ]]; then
+                  target=geodata-worker
+                fi
+                ;;
+            esac
+
+            image="$IMAGE_REGISTRY-$app"
+            tags=(--tag "$image:testing" --tag "$image:testing-$GITHUB_SHA")
+            args=(buildx build --push --file "$dockerfile" "${tags[@]}"
+              --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY"
+              --label "org.opencontainers.image.revision=$GITHUB_SHA"
+              --label "org.opencontainers.image.ref.name=testing"
+              --provenance=mode=max --sbom=true
+              --cache-from "type=gha,scope=$app"
+              --cache-to "type=gha,mode=max,scope=$app")
+            if [[ -n "$target" ]]; then args+=(--target "$target"); fi
+            if [[ -n "$build_arg" ]]; then args+=(--build-arg "$build_arg"); fi
+            metadata_file="$RUNNER_TEMP/${app}-metadata.json"
+            args+=(--metadata-file "$metadata_file" "$context")
+            docker "${args[@]}"
+            digest="$(jq -r '.["containerimage.digest"]' "$metadata_file")"
+            if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Unexpected digest for $app: $digest" >&2
+              exit 1
+            fi
+            printf '%s %s@%s\n' "$app" "$image" "$digest" >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$selected_apps"
