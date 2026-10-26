@@ -59,7 +59,8 @@
     "lint": "oxlint --type-aware apps libs tools && node tools/check-nest-observability.mjs && node tools/check-database-ownership.mjs && node tools/check-openapi-nest-routes.mjs && node tools/check-gateway-openapi-routes.mjs && node tools/check-exact-json-integers.mjs && node tools/generate-api-operation-traceability.mjs --check",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.{ts,mjs}\" playwright.config.mjs tsconfig.playwright.json \"web/admin/*.{ts,html,json}\" \"web/admin/tests/**/*.ts\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
     "format:check": "prettier --check \"apps/**/*.ts\" \"libs/**/*.ts\" \"tools/**/*.{ts,mjs}\" playwright.config.mjs tsconfig.playwright.json \"web/admin/*.{ts,html,json}\" \"web/admin/tests/**/*.ts\" \"web/participant/web/**/*.{js,css,html}\" \".github/workflows/**/*.yml\" \"docs/**/*.md\" \"deploy/**/*.md\" \"web/**/*.md\" README.md",
-    "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --allowImportingTsExtensions --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-owner-config.ts tools/db-migrate.ts tools/db-backup.ts tools/db-restore.ts tools/provision-jetstream.ts tools/outbox-admin.ts tools/render-seaweedfs-s3-config.ts && tsc --project tsconfig.playwright.json --pretty false"
+    "typecheck": "tsc --build --pretty false && tsc --ignoreConfig --noEmit --allowImportingTsExtensions --target ES2023 --module NodeNext --moduleResolution NodeNext --strict --skipLibCheck --types node tools/db-owner-config.ts tools/db-migrate.ts tools/db-backup.ts tools/db-restore.ts tools/provision-jetstream.ts tools/outbox-admin.ts tools/render-seaweedfs-s3-config.ts && tsc --project tsconfig.playwright.json --pretty false",
+    "check:nest-observe-workspaces": "node tools/check-nest-observe-workspaces.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",
@@ -127,5 +128,8 @@
     },
     "body-parser": "^2.4.0",
     "fast-uri": "^3.1.9"
-  }
+  },
+  "workspaces": [
+    "apps/*"
+  ]
 }
