@@ -6,6 +6,7 @@ on:
     paths:
       - deploy/fleet/myota-test/**
       - deploy/helm/myota-next/**
+      - .github/workflows/deploy-myota-test.yml
   workflow_dispatch:
 
 permissions:
