@@ -4,6 +4,7 @@ metadata:
   name: myota-next-testing
 spec:
   enabled: true
+  forceUpdate: "2026-10-26T21:01:50Z"
   refreshInterval: 60
   serviceAccount: myota-test-catalog-upgrader
   serviceAccountNamespace: myota-test
