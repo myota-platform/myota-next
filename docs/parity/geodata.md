@@ -350,7 +350,15 @@ Kubernetes replicas.
   samples.
 - Synchronous multi-entity promotion and approval measured 36.51 ms for one entity,
   104.92 ms for 10, 449.64 ms for 50, and 874.98 ms for 100. This run measured the
-  previous 100-entity limit; the 259- and 300-entity batches are pending requalification.
+  previous 100-entity limit; the later 259- and 300-entity measurements are recorded
+  below.
+- The [2026-10-26 runtime qualification run 40310446551](https://github.com/myota-platform/myota-next/actions/runs/40310446551)
+  passed with a 1 CPU, 1 GiB Node process limit, a 10-connection database pool, two
+  Geodata API replicas, and one worker. Synchronous validation took 8.32 ms at 259
+  candidates and 23.58 ms at 300; promotion and approval took 1,707.66 ms and 1,961.27 ms
+  respectively. This qualifies the 300-candidate all-or-nothing synchronous limit. The
+  same run passed the full Activity/Geodata, backup/restore, parser RSS, and recovery
+  qualification steps.
 - The 25,000-feature tagged-node OSM PBF workload decoded in 1.182 seconds at 21,146
   features/s, with 52,649,984 bytes RSS growth across the Node and `osmium` process
   tree against the 96 MiB limit.
@@ -708,8 +716,9 @@ ineligible, or over-limit selection is rejected without partial promotion. The 3
 request bound preserves bounded synchronous behavior while covering the 259-pending
 record import reported in issue #94; larger selections are rejected clearly rather than
 backgrounded or partially applied. The capacity qualification now exercises both 259-
-and 300-record batches; its results must pass before this limit is deployed. Large import
-intake and preprocessing remain asynchronous. Automated community-proposal imports may still use the internal
+and 300-record batches and passed on 2026-10-26 (run 40310446551; see the measurements
+above). Large import intake and preprocessing remain asynchronous. Automated
+community-proposal imports may still use the internal
 worker promotion queue. A candidate linked to a prior promotion queue can be retried
 synchronously only when that queue is failed and records that candidate as failed; the
 API locks the prior queue before candidate rows, clears the stale association in the same
