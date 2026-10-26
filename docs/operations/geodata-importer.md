@@ -30,7 +30,10 @@ limits. Keep one replica unless duplicate source fetching is acceptable; API
 idempotency prevents duplicate schedule submissions from applying twice.
 
 The chart defaults keep the component disabled, use a 60-second poll interval,
-and allow no source hosts. Qualify the selected live sources, source licenses,
-allowlist, worker behavior during source outages, and production recovery
-procedures before enabling it in production. See [Geodata parity](../parity/geodata.md)
-for current behavioral coverage.
+and allow no source hosts. The launch review selected no live source: the
+`myota-test` release keeps the component disabled and the host allowlist empty.
+No source-specific license or endpoint approval is implied by parser or fixture
+tests. Before adding a source or enabling scheduled fetching, review that
+source's license and attribution, exact hosts, response limits, outage and retry
+behavior, and production recovery procedures. See
+[Geodata parity](../parity/geodata.md) for current behavioral coverage.

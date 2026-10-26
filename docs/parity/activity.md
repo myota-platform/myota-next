@@ -411,6 +411,30 @@ These measurements are a repeat under the same configured CPU, memory, pool, and
 replica-count bounds. They do not replace live multi-pod scaling, object-store
 throughput, or recovery qualification.
 
+On 2026-10-26, `npm run test:activity-capacity-live` qualified the deployed
+`myota-test` topology: two Activity API pods and one Activity worker, each with
+1 CPU/1 GiB limits, Activity PostgreSQL with 1 CPU/2 GiB, and a database pool
+maximum of 12. The runner sent activation creation and award-job polling to one
+API pod and the 5,000-QSO ingestion request to the other. The live worker
+completed ingestion in 625 ms total (82 ms worker processing) and the resulting
+broad award job completed 5,001 Hunter progress rows in 54.005 seconds. The
+extra progress row is the operator's zero-QSO Hunter result. The run peaked at
+3 active Activity database connections. A one-second `kubectl top` sample
+recorded maxima of 262m CPU/142 MiB and 42m CPU/102 MiB for the two API pods,
+151m/140 MiB for the worker, 938m/117 MiB for Activity PostgreSQL, and
+22m/32 MiB for JetStream. The database reached about 94% of its 1 CPU limit
+during award calculation; keep the measured 5,000-subject job bound and worker
+concurrency at one. JetStream held at most one Activity work message (565
+bytes), with no pending deliveries and at most one acknowledgement pending.
+
+The live run used a synthetic JSON QSO batch and did not qualify concurrent
+large uploads or S3 throughput. The bounded qualification remains the evidence
+for a maximum-size ADIF upload and its mocked object-store path. The live
+runner removes its tagged activation, jobs, award, QSOs, progress, subject
+aggregates, notifications, and outbox rows; post-run SQL checks found no tagged
+fixtures, the Activity work stream had no pending or acknowledgement-pending
+messages, and the deployment remained Ready.
+
 ### Launch operating bounds
 
 The launch Activity profile uses two API replicas and one worker, each app pod limited to
