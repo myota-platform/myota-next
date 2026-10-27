@@ -89,6 +89,9 @@ request-throttle checks. The expired link returned HTTP 400 without changing the
 account password; six requests to a nonexistent address returned the same generic response
 and reached the server-side limiter. Email-change initiation, dual delivery to the test
 Mailpit sink, and cancellation with the original address retained are also verified.
+In an API qualification, simultaneous old- and new-address confirmations changed the
+email exactly once; the new address authenticated, the old one did not, and a cancelled
+change could not be completed with its remaining token.
 Reset concurrency/session-security and complete email-change confirmation criteria remain
 open under #10, #91, #114, and #115; see
 [Identity and Programme parity](parity/identity-programmes.md).
