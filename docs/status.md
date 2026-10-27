@@ -157,6 +157,9 @@ against the isolated deployment remains under Phase 6 issue #10.
   under #116: dashboard/query requests succeed, while unauthorized requests
   redirect to sign-in. This does not substitute for Observe delivery or
   cross-service trace correlation.
+  Geodata's optional BigDataCloud key is also absent. Its worker remains Ready
+  without the key, but provider-backed enrichment and catalogue backfill remain
+  open under #110/#111; see [location enrichment operations](operations/location-enrichment.md).
 - **Geodata performance:** larger datasets and full worker throughput remain
   unqualified. `MYOTA_UPLOAD_WORKERS` caps multipart finalization per Geodata
   API process. `MYOTA_IMPORT_WORKERS` caps preprocessing and promotion together
