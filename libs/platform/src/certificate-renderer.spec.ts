@@ -143,4 +143,27 @@ describe('certificate print profiles', () => {
       'certificate background must be a valid PNG or JPEG image',
     );
   });
+
+  it('rejects backgrounds above the processing pixel limit before resizing', async () => {
+    const source = await sharp({
+      create: {
+        width: 4096,
+        height: 4096,
+        channels: 3,
+        background: { r: 24, g: 92, b: 132 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    await expect(
+      resizeCertificateBackground(source, {
+        page: 'A4',
+        orientation: 'PORTRAIT',
+        dpi: 300,
+      }),
+    ).rejects.toThrow(
+      'certificate background exceeds the 16 million pixel processing limit',
+    );
+  });
 });

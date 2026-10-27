@@ -62,6 +62,9 @@ jobs:
               apps/email-worker/*) printf '%s\n' email-worker ;;
               apps/outbox-worker/*) printf '%s\n' outbox-worker ;;
               apps/gateway/*) printf '%s\n' gateway ;;
+              libs/platform/*)
+                printf '%s\n' gateway identity identity-maintenance programmes activity activity-worker activity-notifications geodata geodata-worker geodata-importer email-worker outbox-worker
+                ;;
               web/admin/*) printf '%s\n' admin-web ;;
               web/participant/*) printf '%s\n' participant-web ;;
               deploy/images/database/*) printf '%s\n' postgres postgis ;;
