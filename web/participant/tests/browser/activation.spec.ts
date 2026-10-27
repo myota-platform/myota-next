@@ -316,3 +316,153 @@ test('signs in, records an activation contact, and closes the activation', async
     'Participant activation, QSO, and profile workflow',
   );
 });
+
+test('shows the participant their activation QSOs and ADIF outcomes', async ({
+  page,
+}) => {
+  const detailRequests: string[] = [];
+  await page.route('**/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              slug: 'alpine',
+              name: 'Alpine Summits',
+              description: 'Radio from the high country.',
+              rules: { minimumQsos: { activation: 1, hunter: 1 } },
+              entityTypes: [{ code: 'SOTA', name: 'Summit' }],
+            },
+          ],
+          nextPage: null,
+        },
+      });
+      return;
+    }
+    if (url.pathname.endsWith('/content')) {
+      await route.fulfill({ json: { items: [] } });
+      return;
+    }
+    if (url.pathname === '/v1/geodata/entities') {
+      await route.fulfill({
+        json: { items: [], page: 1, total: 0, nextPage: null },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/identity/auth/login') {
+      await route.fulfill({
+        json: {
+          accessToken: 'participant-detail-access-token',
+          refreshToken: 'participant-detail-refresh-token',
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/identity/me') {
+      await route.fulfill({
+        json: {
+          id: 'participant-1',
+          email: 'operator@example.test',
+          roles: [{ role: 'PARTICIPANT' }],
+          callsigns: [
+            { id: 'callsign-1', value: 'DL1ABC', status: 'VERIFIED' },
+          ],
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/activations' && request.method() === 'GET') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              id: 'activation-1',
+              programmeSlug: 'alpine',
+              operatorId: 'participant-1',
+              operatorCallsign: 'DL1ABC',
+              status: 'CLOSED',
+              qsoCount: 1,
+              startedAt: '2026-10-27T06:00:00Z',
+            },
+          ],
+          nextPage: null,
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/activations/activation-1') {
+      detailRequests.push(request.headers().authorization || '');
+      await route.fulfill({
+        json: {
+          id: 'activation-1',
+          programmeSlug: 'alpine',
+          entityType: 'SOTA',
+          operatorId: 'participant-1',
+          operatorCallsign: 'DL1ABC',
+          status: 'CLOSED',
+          qsoCount: 1,
+          startedAt: '2026-10-27T06:00:00Z',
+          endedAt: '2026-10-27T07:00:00Z',
+          qsos: [
+            {
+              id: 'qso-1',
+              workedCallsign: 'F4XYZ',
+              timestamp: '2026-10-27T06:30:00Z',
+              band: '20M',
+              mode: 'SSB',
+              source: 'ADIF',
+              sourceImportId: 'import-1',
+              status: 'ACTIVE',
+            },
+          ],
+          imports: [
+            {
+              id: 'import-1',
+              filename: 'contacts<operator>.adi',
+              status: 'COMPLETED',
+              recordsSeen: 1,
+              recordsAccepted: 1,
+              recordsRejected: 0,
+            },
+          ],
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: { items: [], nextPage: null, total: 0 } });
+  });
+
+  await page.goto('http://127.0.0.1:8091');
+  await page.locator('#award-email').fill('operator@example.test');
+  await page.locator('#award-password').fill('test-password');
+  await page.locator('#participant-login button[type="submit"]').click();
+  await expect(page.locator('#activations-list')).toContainText('1 QSOs');
+  const details = page.locator(
+    'details.activation-history-detail[data-activation-id="activation-1"]',
+  );
+  await expect(details).toHaveCount(1);
+  await expect(details.locator('.activation-history-content')).toContainText(
+    'Open to load activation and QSO details.',
+  );
+  expect(detailRequests).toHaveLength(0);
+
+  await details.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  const detailPanel = details.locator('.activation-history-content');
+  await expect(detailPanel).toContainText('F4XYZ');
+  await expect(detailPanel).toContainText('20M · SSB');
+  await expect(detailPanel).toContainText('ADIF · contacts<operator>.adi');
+  await expect(detailPanel).toContainText('COMPLETED');
+  await expect(detailPanel).toContainText(
+    '1 accepted · 0 rejected of 1 records',
+  );
+  await expect(detailPanel.locator('script, img')).toHaveCount(0);
+  await expect(details.locator('summary')).toHaveAttribute('aria-controls');
+  expect(detailRequests).toEqual(['Bearer participant-detail-access-token']);
+  await expectResponsiveAccessible(
+    page,
+    'Participant activation history details',
+  );
+});

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
@@ -100,8 +101,26 @@ export class ActivityService {
   }
 
   async get(authorization: string | undefined, id: string) {
-    this.authorize(authorization, ['activity.read', 'activity.admin']);
-    return this.repository.get(id);
+    const claims = this.authorize(authorization, [
+      'activity.read',
+      'activity.admin',
+      'identity.me',
+    ]);
+    const canReadAll = claims.scp.some((scope) =>
+      ['*', 'activity.read', 'activity.admin'].includes(scope),
+    );
+    if (canReadAll) return this.repository.get(id);
+
+    try {
+      const activation = await this.repository.get(id);
+      if (activation.operatorId !== claims.sub)
+        throw new NotFoundException('Activation not found');
+      return activation;
+    } catch (error) {
+      if (error instanceof NotFoundException)
+        throw new NotFoundException('Activation not found');
+      throw error;
+    }
   }
 
   async entityDeletionImpact(

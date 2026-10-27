@@ -1209,9 +1209,16 @@ paths:
     get:
       tags: [Activity]
       security: [{ bearerAuth: [] }]
-      summary: Get an activation and its normalized QSOs
+      summary: Get an authorized activation and its normalized QSOs and import outcomes
       parameters: [{ $ref: '#/components/parameters/ActivationId' }]
-      responses: { '200': { description: Activation } }
+      responses:
+        '200':
+          description: Activation details for its owner or an authorized Activity administrator
+          content:
+            application/json:
+              { schema: { $ref: '#/components/schemas/ActivationDetail' } }
+        '403': { description: Caller lacks Participant or Activity read scope }
+        '404': { description: Activation is missing or not owned by the caller }
     patch:
       tags: [Activity]
       security: [{ bearerAuth: [] }]
@@ -4351,6 +4358,8 @@ components:
       type: object
       required: [workedCallsign, timestamp]
       properties:
+        id: { type: string, format: uuid }
+        activationId: { type: string, format: uuid }
         workedCallsign: { type: string }
         timestamp: { type: string, format: date-time }
         band: { type: string }
@@ -4359,6 +4368,38 @@ components:
         hunterId: { type: string, format: uuid }
         workedEntityId: { type: string, format: uuid }
         source: { type: string }
+        sourceImportId: { type: [string, 'null'], format: uuid }
+        status: { type: string }
+    ActivationDetail:
+      allOf:
+        - { $ref: '#/components/schemas/Activation' }
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            operatorCallsign: { type: [string, 'null'] }
+            status: { type: string }
+            endedAt: { type: [string, 'null'], format: date-time }
+            qsoCount: { type: integer }
+            qsos:
+              type: array
+              items: { $ref: '#/components/schemas/Qso' }
+            imports:
+              type: array
+              items: { $ref: '#/components/schemas/AdifImportSummary' }
+    AdifImportSummary:
+      type: object
+      required:
+        [id, filename, status, recordsSeen, recordsAccepted, recordsRejected]
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        status: { type: string }
+        recordsSeen: { type: integer }
+        recordsAccepted: { type: integer }
+        recordsRejected: { type: integer }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
     QsoIngestionRequest:
       type: object
       required: [activationId, qsos]
