@@ -41,6 +41,23 @@ describe('IdentityEmailChangeService', () => {
           tokenSides.set(String(values[0]), String(values[2]) as 'old' | 'new');
           return { rows: [], rowCount: 1 };
         }
+        if (
+          sql.includes('SELECT change_id') &&
+          sql.includes('FROM public.identity_email_change_token')
+        ) {
+          return {
+            rows: tokenSides.has(String(values[0]))
+              ? [{ change_id: changeId }]
+              : [],
+            rowCount: tokenSides.has(String(values[0])) ? 1 : 0,
+          };
+        }
+        if (
+          sql.includes('SELECT id') &&
+          sql.includes('FROM public.identity_email_change') &&
+          sql.includes('FOR UPDATE')
+        )
+          return { rows: [{ id: changeId }], rowCount: 1 };
         if (sql.includes('SELECT t.token_hash AS token_id')) {
           const side = tokenSides.get(String(values[0]));
           return side
@@ -125,5 +142,150 @@ describe('IdentityEmailChangeService', () => {
     expect(
       queries.filter((sql) => sql.includes('UPDATE public.account')),
     ).toHaveLength(1);
+  });
+
+  it('serializes simultaneous confirmations and completes the pending change once', async () => {
+    const tokens = new Map<
+      string,
+      { addressKind: 'old' | 'new'; used: boolean }
+    >();
+    const statements: string[] = [];
+    let oldVerifiedAt: Date | null = null;
+    let newVerifiedAt: Date | null = null;
+    let canceled = false;
+    let completed = false;
+    let accountUpdates = 0;
+    let changeLocked = false;
+    const lockWaiters: Array<() => void> = [];
+
+    const acquireChangeLock = async () => {
+      if (!changeLocked) {
+        changeLocked = true;
+        return;
+      }
+      await new Promise<void>((resolve) => lockWaiters.push(resolve));
+    };
+    const releaseChangeLock = () => {
+      const next = lockWaiters.shift();
+      if (next) next();
+      else changeLocked = false;
+    };
+
+    for (const [token, addressKind] of [
+      ['A'.repeat(43), 'old'],
+      ['B'.repeat(43), 'new'],
+    ] as const) {
+      tokens.set(createHash('sha256').update(token).digest('hex'), {
+        addressKind,
+        used: false,
+      });
+    }
+
+    const pool = {
+      connect: async () => {
+        let ownsChangeLock = false;
+        const client = {
+          query: async (sql: string, values: unknown[] = []) => {
+            statements.push(sql);
+            if (sql.includes('SELECT change_id')) {
+              const row = tokens.get(String(values[0]));
+              return {
+                rows: row ? [{ change_id: changeId }] : [],
+                rowCount: row ? 1 : 0,
+              };
+            }
+            if (sql.includes('SELECT id') && sql.includes('FOR UPDATE')) {
+              await acquireChangeLock();
+              ownsChangeLock = true;
+              const active = !canceled && !completed;
+              return {
+                rows: active ? [{ id: changeId }] : [],
+                rowCount: active ? 1 : 0,
+              };
+            }
+            if (sql.includes('SELECT t.token_hash AS token_id')) {
+              const row = tokens.get(String(values[0]));
+              const active = row && !row.used && values[1] === changeId;
+              return {
+                rows: active
+                  ? [
+                      {
+                        token_id: values[0],
+                        change_id: changeId,
+                        address_kind: row.addressKind,
+                        account_id: accountId,
+                        old_verified_at: oldVerifiedAt,
+                        new_verified_at: newVerifiedAt,
+                        display_name: 'Casey Participant',
+                        old_email_key: 'old@example.test',
+                        new_email: 'new@example.test',
+                        new_email_key: 'new@example.test',
+                      },
+                    ]
+                  : [],
+                rowCount: active ? 1 : 0,
+              };
+            }
+            if (sql.includes('UPDATE public.identity_email_change_token')) {
+              const row = tokens.get(String(values[0]));
+              if (row) row.used = true;
+              return { rows: [], rowCount: row ? 1 : 0 };
+            }
+            if (sql.includes('SET old_verified_at =')) {
+              oldVerifiedAt ??= new Date();
+              return { rows: [], rowCount: 1 };
+            }
+            if (sql.includes('SET new_verified_at =')) {
+              newVerifiedAt ??= new Date();
+              return { rows: [], rowCount: 1 };
+            }
+            if (sql.includes('UPDATE public.account')) {
+              accountUpdates += 1;
+              return { rows: [], rowCount: 1 };
+            }
+            if (sql.includes('SET completed_at =')) {
+              completed = true;
+              return { rows: [], rowCount: 1 };
+            }
+            if (sql.includes('INSERT INTO public.security_event'))
+              return {
+                rows: [{ occurred_at: new Date().toISOString() }],
+                rowCount: 1,
+              };
+            if (sql.includes('INSERT INTO public.outbox_event'))
+              return { rows: [], rowCount: 1 };
+            return { rows: [], rowCount: 0 };
+          },
+          release: () => {
+            if (ownsChangeLock) releaseChangeLock();
+          },
+        };
+        return client as unknown as PoolClient;
+      },
+    } as unknown as Pool;
+    const service = new IdentityEmailChangeService(pool, {} as never);
+
+    const outcomes = await Promise.all([
+      service.confirm({ token: 'A'.repeat(43) }),
+      service.confirm({ token: 'B'.repeat(43) }),
+    ]);
+
+    expect(outcomes.map((outcome) => outcome.status).sort()).toEqual([
+      'email_changed',
+      'one_address_verified',
+    ]);
+    expect(accountUpdates).toBe(1);
+    expect([...tokens.values()].every((token) => token.used)).toBe(true);
+    const referenceRead = statements.findIndex((sql) =>
+      sql.includes('SELECT change_id'),
+    );
+    const sharedLock = statements.findIndex(
+      (sql) => sql.includes('SELECT id') && sql.includes('FOR UPDATE'),
+    );
+    const tokenLock = statements.findIndex((sql) =>
+      sql.includes('SELECT t.token_hash AS token_id'),
+    );
+    expect(referenceRead).toBeLessThan(sharedLock);
+    expect(sharedLock).toBeLessThan(tokenLock);
   });
 });
