@@ -34,6 +34,8 @@ describeWithDatabases(
         'MYOTA_ACTIVITY_URL',
         'MYOTA_GEODATA_URL',
         'MYOTA_ENV',
+        'MYOTA_PARTICIPANT_PUBLIC_URL',
+        'MYOTA_EXPOSE_DEV_TOKENS',
         'MYOTA_EMAIL_SERVICE_CLIENT_SECRET',
         'MYOTA_AUTH_SIGNING_KEY',
         'GEODATA_SOURCE_ALLOWLIST',
@@ -53,6 +55,9 @@ describeWithDatabases(
       process.env.MYOTA_AUTH_SIGNING_KEY = `gateway-e2e-${randomUUID()}-signing-key`;
       process.env.GEODATA_SOURCE_ALLOWLIST = 'example.test';
       process.env.MYOTA_ENV = 'test';
+      process.env.MYOTA_PARTICIPANT_PUBLIC_URL =
+        'https://participant.example.test/';
+      process.env.MYOTA_EXPOSE_DEV_TOKENS = '1';
       process.env.PORT = '0';
 
       let identityApp: INestApplication | undefined;
