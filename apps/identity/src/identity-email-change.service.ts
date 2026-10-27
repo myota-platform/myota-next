@@ -254,6 +254,34 @@ export class IdentityEmailChangeService {
     try {
       await client.query('BEGIN');
       const tokenHash = createHash('sha256').update(token).digest('hex');
+      const tokenReference = await client.query<{ change_id: string }>(
+        `SELECT change_id
+           FROM public.identity_email_change_token
+          WHERE token_hash = $1`,
+        [tokenHash],
+      );
+      const changeId = tokenReference.rows[0]?.change_id;
+      if (!changeId)
+        throw new BadRequestException(
+          'email verification token is invalid or expired',
+        );
+
+      // Both address tokens belong to the same change row. Lock that shared
+      // row before the individual token rows so simultaneous old/new
+      // confirmations serialize and the second transaction sees the first
+      // address verification before deciding whether it can complete.
+      const lockedChange = await client.query<{ id: string }>(
+        `SELECT id
+           FROM public.identity_email_change
+          WHERE id = $1 AND expires_at > clock_timestamp()
+            AND canceled_at IS NULL AND completed_at IS NULL
+          FOR UPDATE`,
+        [changeId],
+      );
+      if (!lockedChange.rows[0])
+        throw new BadRequestException(
+          'email verification token is invalid or expired',
+        );
       const result = await client.query<{
         token_id: string;
         change_id: string;
@@ -273,12 +301,12 @@ export class IdentityEmailChangeService {
            FROM public.identity_email_change_token t
            JOIN public.identity_email_change c ON c.id = t.change_id
            JOIN public.account a ON a.id = c.account_id
-          WHERE t.token_hash = $1 AND t.used_at IS NULL
+          WHERE t.token_hash = $1 AND t.change_id = $2 AND t.used_at IS NULL
             AND t.expires_at > clock_timestamp()
             AND c.expires_at > clock_timestamp() AND c.canceled_at IS NULL
             AND c.completed_at IS NULL
-          FOR UPDATE OF t, c`,
-        [tokenHash],
+          FOR UPDATE OF t`,
+        [tokenHash, changeId],
       );
       const verification = result.rows[0];
       if (!verification)
