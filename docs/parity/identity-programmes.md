@@ -322,10 +322,26 @@ rejected it, left the current account and pending operation unchanged, and accep
 new operation's own two confirmations. These tests used separate synthetic participants;
 their account rows and all generated Mailpit messages were removed and verified absent.
 
-The deployed browser path now covers successful double confirmation, partial state,
-expiry, and replay; the API path covers cancellation, mismatched-operation tokens, and
-concurrent confirmation. Address-conflict behavior is recorded in issue #115. Recovery
-from delivery failure still needs qualification. See
+On 2026-10-27, the deployed email-change API flow was exercised across a temporary
+SMTP outage. The test-only Mailpit sink was scaled to zero before requesting the change.
+Identity accepted the request, both addresses remained unverified, and the old address
+remained authoritative. The Email worker recorded two retryable failures for the
+current-address verification message; after the sink was restored, that message was
+delivered on attempt three. The proposed-address verification message was delivered on
+its first attempt. The participant confirmed the current address first and remained on
+the old address; the proposed address could not sign in until its own link was confirmed.
+After both confirmations, the new address became authoritative, the old address could
+no longer sign in, and completion notices reached both addresses.
+
+The synthetic account, its Core delivery/outbox/security rows, Activity notifications,
+and all Mailpit messages were removed after the run. The SMTP sink returned to 1/1 and
+all chart-owned `myota-test` Deployments were ready. This qualifies recovery from a
+transient SMTP connection outage in the deployed Identity-to-Email path; it does not
+replace the separate retry-exhaustion and audited-redrive evidence in
+[SMTP operations](../operations/single-instance-restart-recovery.md). The deployed
+browser path covers successful double confirmation, partial state, expiry, and replay;
+the API path also covers cancellation, mismatched-operation tokens, and concurrent
+confirmation. Address-conflict behavior is recorded in issue #115. See
 [Participant email change](https://github.com/myota-platform/myota-next/issues/115).
 
 It then adds a callsign, submits verification evidence, and verifies the callsign
