@@ -9,6 +9,8 @@ commonResources:
   requests:
     cpu: 50m
     memory: 96Mi
+observe:
+  enabled: true
 components:
   activity-worker:
     resources:
