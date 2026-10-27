@@ -42,3 +42,24 @@ cluster still had no Observe Secret, Observe workload environment, Loki, Tempo,
 or OpenTelemetry Collector. This verifies metrics scraping and worker dependency
 availability only; it does not provide Observe delivery or deployed log/trace
 correlation.
+
+## Authenticated Grafana dashboard proxy
+
+Issue [#116](https://github.com/myota-platform/myota-next/issues/116) records the
+deployed Admin-browser qualification for the Grafana proxy at `/observability/`.
+A signed-in Admin opened the default dashboard with six panels; 13 dashboard,
+search, and query API responses and 49 CSS, JavaScript, and image assets returned
+HTTP 200. Grafana's health endpoint reported database status `ok`, and the
+dashboard catalogue returned 52 dashboards. The shared Grafana Service remains
+ClusterIP-only.
+
+Unauthenticated access and access by a signed-in Participant without
+`observability.view` redirected to the Admin login (HTTP 302). That is the
+expected authorization boundary; a direct unauthenticated request to the
+subpath should not be used as a dashboard availability check. Grafana
+user/profile and star APIs returned HTTP 401 under the existing anonymous
+dashboard mode, while dashboard viewing and query APIs succeeded. The dashboard
+proxy is qualified for authorized viewing, but this does not qualify Observe
+collector delivery or cross-service log/trace correlation; those remain open
+under [#90](https://github.com/myota-platform/myota-next/issues/90) and
+[#91](https://github.com/myota-platform/myota-next/issues/91).
