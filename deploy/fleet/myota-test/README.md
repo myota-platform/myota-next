@@ -26,7 +26,7 @@ The `myota-next-testing` ClusterRepo reads only the `/testing` chart index and
 runs chart operations as `myota-test-catalog-upgrader` in the explicitly set
 `myota-test` namespace. Its Kubernetes Role is confined to that namespace and
 the resources required by this chart, including namespaced `get`, `list`,
-`create`, `update`, `patch`, and `delete` access to Prometheus Operator
+`watch`, `create`, `update`, `patch`, and `delete` access to Prometheus Operator
 ServiceMonitors. The release workflow uses a separate
 Rancher API user whose custom GlobalRole grants access only to the
 `myota-next-testing` ClusterRepo and read-only qualification data in
