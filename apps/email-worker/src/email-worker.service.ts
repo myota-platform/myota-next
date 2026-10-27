@@ -34,6 +34,10 @@ const MAX_DELIVERIES = 8;
 const LEASE_SECONDS = 60;
 
 type Sender = { address: string; displayName: string };
+type ResolvedRecipient = {
+  address: string;
+  templateData?: Record<string, unknown>;
+};
 
 @Injectable()
 export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
@@ -194,16 +198,22 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
     );
     let spanEnded = false;
     try {
-      const address = await this.resolveRecipient(
+      const recipient = await this.resolveRecipient(
         command.recipientAccountId,
         command.templateId,
+        command.templateData,
+        command.workId,
       );
-      const content = renderEmailMessage(command);
+      const deliveryCommand = {
+        ...command,
+        templateData: { ...command.templateData, ...recipient.templateData },
+      };
+      const content = renderEmailMessage(deliveryCommand);
       stage = 'smtp';
       smtpStartedAt = Date.now();
       await this.transporter?.sendMail({
         from: { name: this.sender.displayName, address: this.sender.address },
-        to: address,
+        to: recipient.address,
         subject: content.subject,
         text: content.text,
         html: content.html,
@@ -345,7 +355,9 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
   private async resolveRecipient(
     accountId: string,
     templateId: string,
-  ): Promise<string> {
+    commandData: Record<string, unknown> = {},
+    workId?: string,
+  ): Promise<ResolvedRecipient> {
     const tokenCheckTime = performance.now();
     if (!this.identityToken || tokenCheckTime >= this.identityTokenExpiresAt) {
       const tokenResponse = await fetch(
@@ -369,8 +381,13 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
       this.identityTokenExpiresAt =
         tokenCheckTime + identityTokenCacheSeconds(tokenBody.expiresIn) * 1000;
     }
+    const query = new URLSearchParams({ templateId });
+    if (typeof commandData.changeId === 'string')
+      query.set('contextId', commandData.changeId);
+    else if (templateId === 'password-reset.v1' && workId)
+      query.set('contextId', workId);
     const response = await fetch(
-      `${this.identityUrl}/v1/identity/internal/email-recipients/${accountId}?templateId=${encodeURIComponent(templateId)}`,
+      `${this.identityUrl}/v1/identity/internal/email-recipients/${accountId}?${query}`,
       {
         headers: { authorization: `Bearer ${this.identityToken}` },
         signal: AbortSignal.timeout(5000),
@@ -381,9 +398,16 @@ export class EmailWorkerService implements OnModuleInit, OnModuleDestroy {
     if (!response.ok) throw new Error('Identity recipient lookup failed');
     const body: unknown = await response.json();
     if (response.status !== 200) throw new RecipientUnavailable();
-    if (!isRecord(body) || typeof body.deliverableAddress !== 'string')
+    if (
+      !isRecord(body) ||
+      typeof body.deliverableAddress !== 'string' ||
+      (body.templateData !== undefined && !isRecord(body.templateData))
+    )
       throw new RecipientUnavailable();
-    return validateEmail(body.deliverableAddress);
+    return {
+      address: validateEmail(body.deliverableAddress),
+      templateData: isRecord(body.templateData) ? body.templateData : undefined,
+    };
   }
 
   private async claim(command: EmailCommand) {

@@ -109,7 +109,13 @@ paths:
   /v1/identity/auth/recovery/request:
     post:
       tags: [Identity]
-      summary: Request password recovery without disclosing account existence
+      summary: Request a password reset email without disclosing account existence
+      description: >-
+        The response is generic for unknown, unverified, inactive, and eligible
+        accounts. Eligible accounts receive a single-use link that expires
+        after 30 minutes. Requests are limited by normalized email and client
+        address. Reset tokens are hashed at rest and never returned by the
+        public API in production.
       requestBody:
         required: true
         content:
@@ -117,7 +123,13 @@ paths:
             application/json:
               { schema: { $ref: '#/components/schemas/RecoveryRequest' } },
           }
-      responses: { '200': { description: Recovery request accepted } }
+      responses:
+        '200':
+          {
+            description: Generic acceptance response; does not disclose account existence,
+          }
+        '400': { description: Invalid email address }
+        '503': { description: Recovery email delivery is not configured }
   /v1/identity/auth/recovery/reset:
     post:
       tags: [Identity]
@@ -130,6 +142,67 @@ paths:
               { schema: { $ref: '#/components/schemas/RecoveryReset' } },
           }
       responses: { '200': { description: Password reset } }
+  /v1/identity/me/email-change:
+    get:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Read the authenticated participant's pending email change
+      responses:
+        '200':
+          description: Pending change and both verification states
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailChangeStatus' }
+    post:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Request an email change requiring current-password and dual-email verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailChangeRequest' }
+      responses:
+        '200':
+          description: Verification request accepted
+          content:
+            application/json:
+              schema:
+                { $ref: '#/components/schemas/EmailChangeRequestAccepted' }
+        '400':
+          {
+            description: Invalid details,
+            incorrect current password,
+            or unavailable address,
+          }
+    delete:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Cancel the authenticated participant's pending email change
+      responses:
+        '200':
+          description: Pending change cancelled or absent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailChangeCancellation' }
+  /v1/identity/auth/email-change/verify:
+    post:
+      tags: [Identity]
+      summary: Confirm one address for a pending email change
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailChangeVerify' }
+      responses:
+        '200':
+          description: Address confirmed or email change completed
+          content:
+            application/json:
+              schema:
+                { $ref: '#/components/schemas/EmailChangeVerificationOutcome' }
+        '400':
+          { description: Invalid, expired, cancelled, or already used link }
   /v1/identity/me:
     get:
       tags: [Identity]
@@ -1537,7 +1610,11 @@ paths:
         rejects `/v1/identity/internal/` paths. Active accounts are eligible
         for configured email templates. A pending-setup account is eligible
         only when `templateId` is `participant-email-verification.v1` and its
-        address remains unverified. Malformed identifiers, missing, other
+        address remains unverified. `password-reset.v1` can resolve only an
+        active account with a verified address. Password reset tokens are
+        created only for the authenticated delivery attempt, stored as a hash,
+        and returned transiently to the email worker. Malformed identifiers,
+        missing, other
         pending-setup, deactivated, and unaddressable accounts share the same 404.
         Returns only the deliverable address; no account object or profile
         fields are returned. The address must not be logged or placed in NATS.
@@ -1556,6 +1633,19 @@ paths:
               - account-created-participant.v1
               - account-created-administrator.v1
               - participant-email-verification.v1
+              - password-reset.v1
+              - participant-email-change-old.v1
+              - participant-email-change-new.v1
+              - participant-email-change-complete-old.v1
+              - participant-email-change-complete-new.v1
+        - in: query
+          name: contextId
+          required: false
+          description: >-
+            Required for password-reset delivery and email-change notices. It
+            binds transient link creation to the still-current recovery request
+            or pending email-change operation.
+          schema: { type: string, format: uuid }
       responses:
         '200':
           description: Current deliverable address for this account
@@ -2905,6 +2995,82 @@ components:
       required: [deliverableAddress]
       properties:
         deliverableAddress: { type: string, format: email, maxLength: 254 }
+        templateData:
+          type: object
+          additionalProperties: false
+          oneOf:
+            - required: [resetUrl]
+              properties:
+                resetUrl:
+                  { type: string, format: uri, minLength: 1, maxLength: 2048 }
+            - required: [confirmationUrl]
+              properties:
+                displayName: { type: string, minLength: 1, maxLength: 120 }
+                confirmationUrl:
+                  { type: string, format: uri, minLength: 1, maxLength: 2048 }
+            - required: [displayName]
+              properties:
+                displayName: { type: string, minLength: 1, maxLength: 120 }
+              description: Completion notification without a bearer link.
+    EmailChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newEmail]
+      properties:
+        currentPassword:
+          { type: string, minLength: 1, maxLength: 128, writeOnly: true }
+        newEmail: { type: string, format: email, maxLength: 254 }
+    EmailChangeVerify:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token: { type: string, minLength: 40, maxLength: 60, writeOnly: true }
+    EmailChangeStatus:
+      type: object
+      additionalProperties: false
+      required: [pending]
+      properties:
+        pending:
+          oneOf:
+            - type: 'null'
+            - type: object
+              additionalProperties: false
+              required:
+                [
+                  id,
+                  currentEmail,
+                  newEmail,
+                  oldAddressVerified,
+                  newAddressVerified,
+                  expiresAt,
+                ]
+              properties:
+                id: { type: string, format: uuid }
+                currentEmail: { type: string, format: email, maxLength: 254 }
+                newEmail: { type: string, format: email, maxLength: 254 }
+                oldAddressVerified: { type: boolean }
+                newAddressVerified: { type: boolean }
+                expiresAt: { type: string, format: date-time }
+    EmailChangeRequestAccepted:
+      type: object
+      additionalProperties: false
+      required: [status, expiresIn]
+      properties:
+        status: { const: verification_required }
+        expiresIn: { type: integer, const: 86400 }
+    EmailChangeVerificationOutcome:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [one_address_verified, email_changed] }
+    EmailChangeCancellation:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [cancelled, no_pending_change] }
     JetStreamConsumer:
       type: object
       required:
@@ -3119,8 +3285,9 @@ components:
       type: object
       required: [token, newPassword]
       properties:
-        token: { type: string }
-        newPassword: { type: string, minLength: 12, format: password }
+        token: { type: string, minLength: 40, maxLength: 60 }
+        newPassword:
+          { type: string, minLength: 12, maxLength: 128, format: password }
     CallsignEvidence:
       type: object
       required: [evidenceType, source]

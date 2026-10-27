@@ -18,6 +18,7 @@ describe('AuthController registration delegation', () => {
       {} as never,
       {} as never,
       registration as never,
+      {} as never,
     );
     const body = {
       displayName: 'Casey Operator',
@@ -35,5 +36,34 @@ describe('AuthController registration delegation', () => {
         'If registration can proceed, a verification email will be sent.',
     });
     expect(registration.register).toHaveBeenCalledWith(body, '192.0.2.10');
+  });
+
+  it('passes the recovery request address to the abuse limiter', async () => {
+    const auth = {
+      requestRecovery: vi.fn().mockResolvedValue({ status: 'accepted' }),
+    };
+    const controller = new AuthController(
+      auth as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const request = {
+      get: () => undefined,
+      socket: { remoteAddress: '192.0.2.11' },
+    } as never;
+
+    await expect(
+      controller.requestRecovery({ email: 'casey@example.test' }, request),
+    ).resolves.toEqual({ status: 'accepted' });
+    expect(auth.requestRecovery).toHaveBeenCalledWith(
+      'casey@example.test',
+      '192.0.2.11',
+    );
   });
 });

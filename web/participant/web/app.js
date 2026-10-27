@@ -1,5 +1,9 @@
 const $ = (id) => document.getElementById(id);
 const profileUtils = window.MyotaProfileUtils;
+let participantPasswordResetToken = window.myotaPasswordResetToken || '';
+window.myotaPasswordResetToken = '';
+let participantEmailChangeToken = window.myotaEmailChangeToken || '';
+window.myotaEmailChangeToken = '';
 let programmes = [];
 let entities = [];
 let entityPage = 1;
@@ -1283,6 +1287,104 @@ $('participant-resend').onsubmit = async (event) => {
     button.disabled = false;
   }
 };
+function preparePasswordResetFromLink() {
+  if (!participantPasswordResetToken) return;
+  $('participant-recovery-request-details').hidden = true;
+  $('participant-recovery-reset').hidden = false;
+  $('participant-recovery-status').textContent =
+    'Choose a new password to finish resetting your account.';
+}
+
+$('participant-recovery-request').onsubmit = async (event) => {
+  event.preventDefault();
+  const button = $('participant-recovery-request').querySelector(
+    'button[type="submit"]',
+  );
+  button.disabled = true;
+  $('participant-recovery-status').textContent = 'Requesting a reset email…';
+  try {
+    await api('/v1/identity/auth/recovery/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('recovery-email').value }),
+    });
+    $('participant-recovery-status').textContent =
+      'If an account matches that address, a password reset link will be sent by email.';
+  } catch {
+    $('participant-recovery-status').textContent =
+      'We could not submit the request. Please try again later.';
+  } finally {
+    button.disabled = false;
+  }
+};
+
+$('participant-recovery-reset').onsubmit = async (event) => {
+  event.preventDefault();
+  const token = participantPasswordResetToken;
+  const button = $('participant-recovery-reset').querySelector(
+    'button[type="submit"]',
+  );
+  if (!token) {
+    $('participant-recovery-request-details').hidden = false;
+    $('participant-recovery-request-details').open = true;
+    $('participant-recovery-reset').hidden = true;
+    $('participant-recovery-status').textContent =
+      'This reset link is no longer available. Request a new link by email.';
+    return;
+  }
+  button.disabled = true;
+  $('participant-recovery-status').textContent = 'Updating your password…';
+  try {
+    await api('/v1/identity/auth/recovery/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token,
+        newPassword: $('recovery-new-password').value,
+      }),
+    });
+    participantPasswordResetToken = '';
+    $('participant-recovery-reset').reset();
+    $('participant-recovery-reset').hidden = true;
+    $('participant-recovery-request-details').hidden = true;
+    $('participant-login').hidden = false;
+    $('participant-auth-status').textContent =
+      'Password updated. Sign in with your new password.';
+    $('participant-recovery-status').textContent = '';
+  } catch (error) {
+    $('participant-recovery-request-details').hidden = false;
+    $('participant-recovery-request-details').open = true;
+    $('participant-recovery-status').textContent =
+      /invalid|expired|token/i.test(error.message)
+        ? 'This reset link is invalid or expired. Request a new link by email.'
+        : error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+preparePasswordResetFromLink();
+if (participantEmailChangeToken) {
+  const token = participantEmailChangeToken;
+  participantEmailChangeToken = '';
+  $('participant-email-change-link-status').textContent =
+    'Confirming this email address…';
+  api('/v1/identity/auth/email-change/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  })
+    .then((result) => {
+      $('participant-email-change-link-status').textContent =
+        result.status === 'email_changed'
+          ? 'Both addresses are verified. Your email address has been changed.'
+          : 'This address is confirmed. The email change will finish after the other address is confirmed.';
+      if (awardAccessToken) void loadEmailChangeStatus();
+    })
+    .catch(() => {
+      $('participant-email-change-link-status').textContent =
+        'This email confirmation link is invalid, expired, or already used. Your current address remains active.';
+    });
+}
 $('participant-signout').onclick = async () => {
   $('participant-auth-status').textContent = 'Signing out…';
   try {
@@ -1367,6 +1469,7 @@ async function loadProfile() {
     $('profile-form').hidden = true;
     $('profile-callsigns').hidden = true;
     $('profile-image-editor').hidden = true;
+    $('profile-email-change').hidden = true;
     revokeProfileSource();
     clearProfileImage();
     $('profile-status').textContent = 'Sign in above to manage your profile.';
@@ -1385,6 +1488,8 @@ async function loadProfile() {
     $('profile-callsigns').hidden = false;
     renderProfileCallsigns(account);
     $('profile-image-editor').hidden = false;
+    $('profile-email-change').hidden = false;
+    await loadEmailChangeStatus();
     $('profile-website').value = account.websiteUrl || '';
     $('profile-biography').value = account.biographyMarkdown || '';
     $('profile-biography-preview').innerHTML = profileUtils.renderSafeMarkdown(
@@ -1402,11 +1507,25 @@ async function loadProfile() {
     $('profile-form').hidden = true;
     $('profile-callsigns').hidden = true;
     $('profile-image-editor').hidden = true;
+    $('profile-email-change').hidden = true;
     revokeProfileSource();
     clearProfileImage();
     if (/401|403|authentication|token/i.test(error.message)) {
       clearParticipantSession();
     }
+  }
+}
+
+async function loadEmailChangeStatus() {
+  try {
+    const result = await profileApi('/v1/identity/me/email-change');
+    const pending = result.pending;
+    $('profile-email-change-status').textContent = pending
+      ? `Pending change to ${pending.newEmail}. Current address confirmed: ${pending.oldAddressVerified ? 'yes' : 'no'}; new address confirmed: ${pending.newAddressVerified ? 'yes' : 'no'}. Expires ${new Date(pending.expiresAt).toLocaleString()}.`
+      : 'No email change is pending.';
+    $('profile-email-change-cancel').hidden = !pending;
+  } catch (error) {
+    $('profile-email-change-status').textContent = error.message;
   }
 }
 
@@ -1743,6 +1862,45 @@ $('profile-form').onsubmit = async (event) => {
     $('profile-status').textContent = 'Profile saved.';
   } catch (error) {
     $('profile-status').textContent = error.message;
+  }
+};
+
+$('profile-email-change-form').onsubmit = async (event) => {
+  event.preventDefault();
+  const form = $('profile-email-change-form');
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  $('profile-email-change-status').textContent = 'Requesting email change…';
+  try {
+    await profileApi('/v1/identity/me/email-change', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        currentPassword: $('email-change-password').value,
+        newEmail: $('email-change-new-email').value,
+      }),
+    });
+    form.reset();
+    $('profile-email-change-status').textContent =
+      'Confirmation emails were requested. Your current address remains active until both links are confirmed.';
+    await loadEmailChangeStatus();
+  } catch (error) {
+    $('profile-email-change-status').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+
+$('profile-email-change-cancel').onclick = async () => {
+  const button = $('profile-email-change-cancel');
+  button.disabled = true;
+  try {
+    await profileApi('/v1/identity/me/email-change', { method: 'DELETE' });
+    await loadEmailChangeStatus();
+  } catch (error) {
+    $('profile-email-change-status').textContent = error.message;
+  } finally {
+    button.disabled = false;
   }
 };
 

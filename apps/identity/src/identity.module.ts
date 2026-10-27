@@ -15,6 +15,7 @@ import { IdentityCredentialService } from './identity-credential.service.js';
 import { IdentityProfileImageService } from './identity-profile-image.service.js';
 import { IdentityBootstrapService } from './identity-bootstrap.service.js';
 import { IdentityRegistrationService } from './identity-registration.service.js';
+import { IdentityEmailChangeService } from './identity-email-change.service.js';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { IdentityRegistrationService } from './identity-registration.service.js'
     IdentityProfileImageService,
     IdentityBootstrapService,
     IdentityRegistrationService,
+    IdentityEmailChangeService,
   ],
 })
 export class IdentityModule {}

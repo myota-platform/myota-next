@@ -38,6 +38,7 @@ import { IdentityIntegrationService } from './identity-integration.service.js';
 import { IdentityCredentialService } from './identity-credential.service.js';
 import { IdentityProfileImageService } from './identity-profile-image.service.js';
 import { IdentityRegistrationService } from './identity-registration.service.js';
+import { IdentityEmailChangeService } from './identity-email-change.service.js';
 
 @Controller('identity')
 export class AuthController {
@@ -50,6 +51,7 @@ export class AuthController {
     private readonly credentials: IdentityCredentialService,
     private readonly profileImages: IdentityProfileImageService,
     private readonly registration: IdentityRegistrationService,
+    private readonly emailChanges: IdentityEmailChangeService,
   ) {}
 
   @Post('auth/register')
@@ -96,8 +98,14 @@ export class AuthController {
 
   @Post('auth/recovery/request')
   @HttpCode(200)
-  requestRecovery(@Body() body: Record<string, unknown>) {
-    return this.auth.requestRecovery(body.email as string);
+  requestRecovery(
+    @Body() body: Record<string, unknown>,
+    @Req() request: Request,
+  ) {
+    return this.auth.requestRecovery(
+      body.email as string,
+      this.requestContext(request).remoteAddr,
+    );
   }
 
   @Post('auth/recovery/reset')
@@ -107,6 +115,42 @@ export class AuthController {
       body.token as string,
       body.newPassword as string,
     );
+  }
+
+  @Post('auth/email-change/verify')
+  @HttpCode(200)
+  confirmEmailChange(@Body() body: unknown) {
+    return this.emailChanges.confirm(body);
+  }
+
+  @Get('me/email-change')
+  getEmailChangeStatus(
+    @Headers('authorization') authorization: string | undefined,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.emailChanges.status(authorization);
+  }
+
+  @Post('me/email-change')
+  @HttpCode(200)
+  requestEmailChange(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.emailChanges.request(authorization, body);
+  }
+
+  @Delete('me/email-change')
+  @HttpCode(200)
+  cancelEmailChange(
+    @Headers('authorization') authorization: string | undefined,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.emailChanges.cancel(authorization);
   }
 
   @Post('oidc/providers')
@@ -137,6 +181,7 @@ export class AuthController {
     @Headers('authorization') authorization: string | undefined,
     @Param('accountId') accountId: string,
     @Query('templateId') templateId: string | undefined,
+    @Query('contextId') contextId: string | undefined,
   ) {
     if (!authorization)
       throw new UnauthorizedException('Bearer authentication is required');
@@ -144,6 +189,7 @@ export class AuthController {
       authorization,
       accountId,
       templateId,
+      contextId,
     );
   }
 

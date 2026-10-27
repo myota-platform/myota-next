@@ -4,6 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>MyOTA · Outdoor Activation Platform</title>
+    <script>
+      const initialUrl = new URL(window.location.href);
+      const resetHash = new URLSearchParams(initialUrl.hash.slice(1));
+      const hasResetToken = resetHash.has('resetToken');
+      const hasEmailChangeToken = resetHash.has('emailChangeToken');
+      window.myotaPasswordResetToken = resetHash.get('resetToken') || '';
+      window.myotaEmailChangeToken = resetHash.get('emailChangeToken') || '';
+      if (hasResetToken || hasEmailChangeToken) {
+        initialUrl.hash = '';
+        window.history.replaceState({}, '', initialUrl);
+      }
+    </script>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -265,6 +277,45 @@
             <button type="submit">Resend verification email</button>
           </form>
         </details>
+        <details id="participant-recovery-request-details">
+          <summary>Forgot your password?</summary>
+          <form id="participant-recovery-request" class="profile-form">
+            <label
+              >Email<input
+                id="recovery-email"
+                type="email"
+                autocomplete="email"
+                required
+                maxlength="254"
+            /></label>
+            <button type="submit">Email me a reset link</button>
+          </form>
+        </details>
+        <form id="participant-recovery-reset" class="profile-form" hidden>
+          <h4>Choose a new password</h4>
+          <label
+            >New password<input
+              id="recovery-new-password"
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="12"
+              maxlength="128"
+          /></label>
+          <button type="submit">Set new password</button>
+        </form>
+        <p
+          id="participant-email-change-link-status"
+          class="small"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <p
+          id="participant-recovery-status"
+          class="small"
+          role="status"
+          aria-live="polite"
+        ></p>
       </section>
       <section class="panel profile-panel">
         <div class="panel-head">
@@ -307,6 +358,45 @@
           </div>
           <button type="submit">Save profile details</button>
         </form>
+        <section id="profile-email-change" class="profile-form" hidden>
+          <h4>Change your email address</h4>
+          <p class="small">
+            Your current address remains active until you confirm links sent to
+            both your current and new addresses.
+          </p>
+          <p class="small">
+            Requesting a new change replaces earlier pending confirmation links.
+            You can cancel a pending change at any time.
+          </p>
+          <form id="profile-email-change-form" class="profile-form">
+            <label
+              >Current password<input
+                id="email-change-password"
+                type="password"
+                autocomplete="current-password"
+                required
+                maxlength="128"
+            /></label>
+            <label
+              >New email address<input
+                id="email-change-new-email"
+                type="email"
+                autocomplete="email"
+                required
+                maxlength="254"
+            /></label>
+            <button type="submit">Send confirmation emails</button>
+          </form>
+          <p
+            id="profile-email-change-status"
+            class="small"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <button id="profile-email-change-cancel" type="button" hidden>
+            Cancel pending email change
+          </button>
+        </section>
         <section id="profile-callsigns" class="profile-callsigns" hidden>
           <h4>Your callsigns</h4>
           <p class="small">
