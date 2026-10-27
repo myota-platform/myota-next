@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine3.24@sha256:27f2d3b83cfc5803c8078f8e730af0f7c431bf067afaec8f60a36fb763187cba AS gosu-build
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS gosu-build
 ARG TARGETOS
 ARG TARGETARCH
 ARG GOSU_COMMIT=29b939aa5bd4dc588af765b8248f6e39150d2565
@@ -17,7 +17,7 @@ FROM postgres:16-alpine3.24@sha256:f4610795587492cd4fb887c2dc3de301b813278bb6f61
 COPY --from=gosu-build --chmod=0755 /out/gosu /usr/local/bin/gosu
 COPY --chmod=0555 deploy/images/database/020-create-app-role.sh /docker-entrypoint-initdb.d/020-create-app-role.sh
 
-FROM postgis/postgis:16-3.6-alpine@sha256:a8ae5aac22bfe4b734c1fa0644ca18039a1e6bd7105c5aa9308cd24bfa1b2ef7 AS postgis
+FROM postgis/postgis:18-3.6-alpine@sha256:fd143c649af607c6872a1e59ccb3e43c299f207ab975a4c286fbb204b6e6f7b7 AS postgis
 COPY --from=gosu-build --chmod=0755 /out/gosu /usr/local/bin/gosu
 COPY --chmod=0555 deploy/images/database/020-create-app-role.sh /docker-entrypoint-initdb.d/020-create-app-role.sh
 RUN apk add --no-cache --upgrade brotli-libs=1.2.1-r0
