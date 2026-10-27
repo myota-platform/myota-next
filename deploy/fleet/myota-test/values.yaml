@@ -1,7 +1,7 @@
 activityLimits:
   maxBatchQsos: 5000
   uploadMaxBytes: 26214400
-buildVersion: testing-5519181f8d5526e65b946eb189bb044e41d536c1
+buildVersion: testing-917efb2d8abb6144d92b72cf38290e619ce7b8ba
 commonResources:
   limits:
     cpu: '1'
@@ -112,7 +112,7 @@ images:
     digest: sha256:1782c25b138c3fb89912531e20f799bfd3a353e38fa24ad2df4643a91c03c814
     repository: ghcr.io/myota-platform/myota-next-outbox-worker
   participant-web:
-    digest: sha256:8777645271f6d0382d3281660918a233c023184735a6a5cc16be4b53f6a8e101
+    digest: sha256:b748c37054d3563d371207300ced4251f419c274194f050b096a16ecba739959
     repository: ghcr.io/myota-platform/myota-next-participant-web
   programmes:
     digest: sha256:c2188951f407c224f9cc99164657bdb4aba0c6ea1771323705680422685d599d
