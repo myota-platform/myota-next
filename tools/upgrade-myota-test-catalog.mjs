@@ -113,7 +113,9 @@ function releaseMatchesSnapshot(list, snapshot) {
 }
 
 async function readReleaseValues(chartVersion) {
-  const match = /^1\.1\.6-testing\.([0-9a-f]{12})\.1$/.exec(chartVersion);
+  const match = /^1\.1\.6-testing\.([0-9a-f]{12})\.[1-9][0-9]*$/.exec(
+    chartVersion,
+  );
   if (!match)
     fail(
       `Previous chart ${chartVersion} does not identify an immutable source commit.`,
@@ -190,7 +192,7 @@ if (
 )
   fail(`MYOTA_TEST_RANCHER_URL must be https://${rancherHost}/`);
 
-const candidatePattern = /^1\.1\.6-testing\.[0-9a-f]{12}\.1$/;
+const candidatePattern = /^1\.1\.6-testing\.[0-9a-f]{12}\.[1-9][0-9]*$/;
 if (!candidatePattern.test(chartVersion))
   fail(
     'MYOTA_TEST_CHART_VERSION is not a valid immutable testing chart version.',
@@ -198,10 +200,21 @@ if (!candidatePattern.test(chartVersion))
 
 const expectedValues = JSON.parse(await readFile(valuesPath, 'utf8'));
 const expectedDeployments = JSON.parse(await readFile(expectedPath, 'utf8'));
+const simulateRecoveryFailure =
+  process.env.MYOTA_TEST_SIMULATE_RECOVERY_FAILURE === 'true';
 if (!expectedValues.buildVersion || !expectedValues.images)
   fail('Deployment values must include buildVersion and images.');
 if (!expectedDeployments || Object.keys(expectedDeployments).length === 0)
   fail('The rendered chart contains no expected deployments.');
+if (simulateRecoveryFailure) {
+  const participantWeb = expectedValues.images['participant-web'];
+  if (!participantWeb?.repository)
+    fail('Recovery qualification requires the participant-web image.');
+  participantWeb.digest = `sha256:${'0'.repeat(64)}`;
+  console.log(
+    'Recovery qualification enabled: using a deliberately nonexistent participant-web image digest.',
+  );
+}
 
 const apiUrl = (path) => new URL(path, rancherUrl);
 
@@ -422,6 +435,13 @@ try {
   );
   await requestCatalogUpgrade(chartVersion, expectedValues);
   candidateOperationCompleted = true;
+  if (simulateRecoveryFailure) {
+    const error = new Error(
+      'Recovery qualification did not produce a terminal Rancher failure; restoring the previous release after an unexpected candidate success.',
+    );
+    error.safeToRollback = true;
+    throw error;
+  }
 
   await waitFor(
     'Rancher App chart revision',

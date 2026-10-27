@@ -10,6 +10,14 @@ on:
       - tools/upgrade-myota-test-catalog.mjs
       - tools/myota-test-catalog-recovery.mjs
   workflow_dispatch:
+    inputs:
+      simulate_recovery_failure:
+        description: >-
+          Deliberately use a nonexistent Participant web image digest to verify
+          Rancher failure detection and restoration of the previous release.
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -44,12 +52,18 @@ jobs:
         id: chart
         env:
           SOURCE_SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+          SIMULATE_RECOVERY_FAILURE: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_recovery_failure }}
         run: |
           set -euo pipefail
           python3 -m venv "$RUNNER_TEMP/yaml-env"
           "$RUNNER_TEMP/yaml-env/bin/pip" install --disable-pip-version-check PyYAML==6.0.2
           short_sha="${SOURCE_SHA:0:12}"
-          version="1.1.6-testing.${short_sha}.1"
+          if [ "$SIMULATE_RECOVERY_FAILURE" = "true" ]; then
+            version="1.1.6-testing.${short_sha}.${RUN_NUMBER}"
+          else
+            version="1.1.6-testing.${short_sha}.1"
+          fi
           values_json="$RUNNER_TEMP/myota-test-values.json"
           expected_json="$RUNNER_TEMP/myota-test-expected-deployments.json"
           rendered_yaml="$RUNNER_TEMP/myota-test-rendered.yaml"
@@ -70,6 +84,13 @@ jobs:
           for name, image in images.items():
               if not re.fullmatch(r"sha256:[0-9a-f]{64}", image["digest"]):
                   raise SystemExit(f"{name} is not pinned by sha256 digest")
+          simulate_failure = os.environ["SIMULATE_RECOVERY_FAILURE"].lower()
+          if simulate_failure not in {"true", "false"}:
+              raise SystemExit("SIMULATE_RECOVERY_FAILURE must be true or false")
+          if simulate_failure == "true":
+              if "participant-web" not in images:
+                  raise SystemExit("participant-web image is required for recovery qualification")
+              images["participant-web"]["digest"] = "sha256:" + "0" * 64
           fd = os.open(os.environ["VALUES_JSON"], os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
           with os.fdopen(fd, "w", encoding="utf-8") as target:
               json.dump(values, target)
@@ -141,6 +162,9 @@ jobs:
           app_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["buildVersion"])' "$values_json")"
           echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
           echo "Candidate chart: $version" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$SIMULATE_RECOVERY_FAILURE" = "true" ]; then
+            echo "Recovery qualification mode: enabled; the Participant web image digest is intentionally nonexistent. The run is expected to fail after the previous release is restored." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Publish chart archive and index to the testing branch of the chart repository
         env:
@@ -253,9 +277,13 @@ jobs:
           MYOTA_TEST_CHART_VERSION: ${{ needs.package.outputs.version }}
           VALUES_JSON: ${{ runner.temp }}/rollout-inputs/myota-test-values.json
           EXPECTED_JSON: ${{ runner.temp }}/rollout-inputs/myota-test-expected-deployments.json
+          MYOTA_TEST_SIMULATE_RECOVERY_FAILURE: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_recovery_failure }}
         run: |
           set -euo pipefail
           test -n "$MYOTA_TEST_RANCHER_TOKEN"
+          if [ "$MYOTA_TEST_SIMULATE_RECOVERY_FAILURE" = "true" ]; then
+            echo "Controlled recovery qualification enabled; expect a terminal Rancher failure followed by prior-release restoration." >> "$GITHUB_STEP_SUMMARY"
+          fi
           node tools/upgrade-myota-test-catalog.mjs \
             "$VALUES_JSON" \
             "$EXPECTED_JSON"
