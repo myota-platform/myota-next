@@ -8,6 +8,7 @@ on:
       - deploy/helm/myota-next/**
       - .github/workflows/deploy-myota-test.yml
       - tools/upgrade-myota-test-catalog.mjs
+      - tools/myota-test-catalog-recovery.mjs
   workflow_dispatch:
 
 permissions:
@@ -237,10 +238,18 @@ jobs:
           name: myota-test-rollout-inputs-${{ github.sha }}
           path: ${{ runner.temp }}/rollout-inputs
 
+      - name: Install the pinned YAML parser for recovery values
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/yaml-env"
+          "$RUNNER_TEMP/yaml-env/bin/pip" install --disable-pip-version-check PyYAML==6.0.2
+          echo "MYOTA_TEST_PYTHON=$RUNNER_TEMP/yaml-env/bin/python" >> "$GITHUB_ENV"
+
       - name: Upgrade and verify the Rancher catalog release
         env:
           MYOTA_TEST_RANCHER_URL: https://rancher.spainip.es/
           MYOTA_TEST_RANCHER_TOKEN: ${{ secrets.MYOTA_TEST_RANCHER_TOKEN }}
+          MYOTA_TEST_GITHUB_TOKEN: ${{ github.token }}
           MYOTA_TEST_CHART_VERSION: ${{ needs.package.outputs.version }}
           VALUES_JSON: ${{ runner.temp }}/rollout-inputs/myota-test-values.json
           EXPECTED_JSON: ${{ runner.temp }}/rollout-inputs/myota-test-expected-deployments.json
