@@ -5,10 +5,10 @@ import { IdentityAccountService } from './identity-account.service.js';
 
 const accountId = '566b8475-bda2-4a2d-8ab8-d7a9a93c0041';
 
-function fixture(scopes: string[]) {
+function fixture(scopes: string[], actorId = 'support-1') {
   const statements: Array<{ sql: string; values: unknown[] }> = [];
   const auth = {
-    currentAccount: vi.fn().mockResolvedValue({ id: 'support-1', scopes }),
+    currentAccount: vi.fn().mockResolvedValue({ id: actorId, scopes }),
   };
   const client = {
     query: vi.fn(async (sql: string, values: unknown[] = []) => {
@@ -67,6 +67,21 @@ function fixture(scopes: string[]) {
 }
 
 describe('Identity participant account administration', () => {
+  it('does not let a Participant Administrator assign roles to their own account', async () => {
+    const harness = fixture(['identity.participants.manage'], accountId);
+    await expect(
+      harness.service.updateAccount(
+        'Bearer token',
+        accountId,
+        {
+          roles: [{ code: 'PARTICIPANT' }, { code: 'PARTICIPANT_ADMIN' }],
+        },
+        true,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(harness.statements).toEqual([]);
+  });
+
   it('requires the participant-specific scope instead of broad Identity scopes', async () => {
     const denied = fixture(['identity.admin']);
     await expect(
