@@ -560,6 +560,15 @@ export class IdentityAuthService {
         [recovery.account_id],
       );
       await client.query(
+        `INSERT INTO public.auth_revocation (jti, expires_at)
+         SELECT access_jti, expires_at FROM public.auth_session
+          WHERE account_id = $1 AND expires_at > now()
+         ON CONFLICT (jti) DO UPDATE SET
+           expires_at = greatest(public.auth_revocation.expires_at, EXCLUDED.expires_at),
+           revoked_at = clock_timestamp()`,
+        [recovery.account_id],
+      );
+      await client.query(
         `UPDATE public.auth_session SET revoked_at = clock_timestamp()
           WHERE account_id = $1`,
         [recovery.account_id],

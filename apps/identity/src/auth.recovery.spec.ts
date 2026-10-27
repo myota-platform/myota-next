@@ -209,6 +209,15 @@ describe('IdentityAuthService recovery compatibility', () => {
       item.sql.includes('UPDATE public.auth_session SET revoked_at'),
     );
     expect(sessionUpdate?.sql).not.toContain('revoked_at IS NULL');
+    const accessTokenRevocations = fixture.queries.find(
+      (item) =>
+        item.sql.includes('INSERT INTO public.auth_revocation') &&
+        item.sql.includes('SELECT access_jti'),
+    );
+    expect(accessTokenRevocations?.sql).toContain(
+      'WHERE account_id = $1 AND expires_at > now()',
+    );
+    expect(accessTokenRevocations?.values).toEqual([accountId]);
 
     await expect(
       fixture.service.resetRecovery(
