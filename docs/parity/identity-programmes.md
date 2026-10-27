@@ -261,8 +261,26 @@ fixture are local test artifacts and are not committed.
 
 This verifies the request UI and delivery to the local test sink, plus API password/session
 behavior for the deployed Identity service. It does not qualify deployed token expiry,
-request throttling, or the complete set-password browser journey; those security and
-browser criteria remain open under [Participant password reset](https://github.com/myota-platform/myota-next/issues/114).
+or request-throttling behavior. A deployed browser check submitted an invalid reset
+token: Identity returned HTTP 400, the token was absent from the URL and app asset
+`Referer`, and the UI presented a recoverable message with the reset-request form
+available. A full valid-link browser journey also passed: the browser requested a reset,
+opened the actual Mailpit-delivered link in a fresh page, cleared the token fragment,
+accepted a new password, and signed in with it. A second delivered link restored the
+original password, which then authenticated successfully. Both generated reset messages
+were removed. Deployed token-expiry and throttling checks remain open under
+[Participant password reset](https://github.com/myota-platform/myota-next/issues/114).
+
+### Phase 6 deployed Participant email-change UI checks — 2026-10-27
+
+The signed-in Participant UI started a double-verification change in `myota-test`; the
+test Mailpit sink received one message for the current address and one for the proposed
+address. The participant cancelled the pending change, the original address remained
+authoritative, and a follow-up mailbox query found no messages for the synthetic test
+alias after cleanup. This verifies the deployed request, dual-delivery, and cancellation
+path. It does not verify valid confirmation links through the browser or the complete
+expiry, conflict, replay, and concurrency matrix; those criteria remain open under
+[Participant email change](https://github.com/myota-platform/myota-next/issues/115).
 
 It then adds a callsign, submits verification evidence, and verifies the callsign
 through the live Identity API. The same browser workflow exports the resulting account
