@@ -83,6 +83,7 @@ observe:
   secretName: myota-observe
   appKeyKey: app-key
   appSecretKey: app-secret
+  endpoint: ''
 prometheus:
   serviceMonitor:
     enabled: false

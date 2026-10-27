@@ -30,6 +30,11 @@ Use `values-testing.yaml` as the non-secret reference configuration for the
 current K3s testing deployment. Keep credentials in Kubernetes Secrets, never
 in chart values or release artifacts.
 
+`observe.endpoint` optionally overrides the hosted Observe collector URL for a
+configured self-hosted endpoint. The app key and secret remain in the Secret
+named by `observe.secretName`; reporting and log forwarding are enabled only
+when both credential keys contain non-empty values.
+
 When the Prometheus Operator CRDs are installed, set
 `prometheus.serviceMonitor.enabled: true` to scrape `/metrics` from the Gateway,
 Identity, Programmes, Activity, and Geodata APIs, plus the Activity notification,
