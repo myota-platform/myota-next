@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -40,23 +41,7 @@ export class ActivityAwardsRepository {
     eventType?: string,
   ): Promise<JsonRecord> {
     return this.mutate(key, async (client) => {
-      await client.query(
-        `INSERT INTO activity_award_definition(id,programme_slug,code,version,status,effective_from,retired_at,definition)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
-         ON CONFLICT (id) DO UPDATE SET programme_slug=EXCLUDED.programme_slug,code=EXCLUDED.code,
-         version=EXCLUDED.version,status=EXCLUDED.status,effective_from=EXCLUDED.effective_from,
-         retired_at=EXCLUDED.retired_at,definition=EXCLUDED.definition,updated_at=now()`,
-        [
-          record.id,
-          record.programmeSlug,
-          record.code,
-          Number(record.version ?? 1),
-          record.status ?? 'DRAFT',
-          record.effectiveFrom ? new Date(record.effectiveFrom) : null,
-          record.retiredAt ? new Date(record.retiredAt) : null,
-          stringifyJsonWithMetadata(record),
-        ],
-      );
+      await this.upsertAwardDefinition(client, record);
       if (eventType)
         await this.event(
           client,
@@ -66,6 +51,59 @@ export class ActivityAwardsRepository {
           record,
           'awards',
         );
+      return record;
+    });
+  }
+
+  async createPublishedAwardRevision(
+    sourceId: string,
+    expectedVersion: number,
+    record: JsonRecord,
+    key?: string,
+  ): Promise<JsonRecord> {
+    return this.mutate(key, async (client) => {
+      const selected = await client.query(
+        'SELECT definition::text AS definition_text FROM activity_award_definition WHERE id=$1 FOR UPDATE',
+        [sourceId],
+      );
+      if (!selected.rows[0])
+        throw new NotFoundException(pythonKeyErrorDetail(sourceId));
+      const current = parseJsonWithExactIntegers(
+        String(selected.rows[0].definition_text),
+      ) as JsonRecord;
+      if (
+        current.status !== 'PUBLISHED' ||
+        Number(current.version ?? 1) !== expectedVersion
+      )
+        throw new ConflictException(
+          'award changed since it was loaded; reload before creating a new version',
+        );
+      if (
+        current.programmeSlug !== record.programmeSlug ||
+        current.code !== record.code ||
+        record.revisionOf !== sourceId ||
+        Number(record.version) !== expectedVersion + 1
+      )
+        throw new BadRequestException(
+          'a published award revision must retain its programme and code and increment its version',
+        );
+      try {
+        await this.insertAwardDefinition(client, record);
+      } catch (error) {
+        if ((error as { code?: string })?.code === '23505')
+          throw new ConflictException(
+            'this award version already exists; reload the award list',
+          );
+        throw error;
+      }
+      await this.event(
+        client,
+        'awards.definition.saved.v1',
+        'award',
+        String(record.id),
+        record,
+        'awards',
+      );
       return record;
     });
   }
@@ -83,13 +121,26 @@ export class ActivityAwardsRepository {
       const values: unknown[] = [];
       if (programme) {
         values.push(programme);
-        filters.push(`programme_slug=$${values.length}`);
+        filters.push(`award.programme_slug=$${values.length}`);
       }
       if (category) {
         values.push(category);
-        filters.push(`definition->>'category'=$${values.length}`);
+        filters.push(`award.definition->>'category'=$${values.length}`);
       }
-      if (publishedOnly) filters.push("status='PUBLISHED'");
+      if (publishedOnly)
+        filters.push(
+          `award.status='PUBLISHED' AND award.effective_from IS NOT NULL
+           AND award.effective_from <= now()
+           AND NOT EXISTS (
+             SELECT 1 FROM activity_award_definition newer
+             WHERE newer.programme_slug=award.programme_slug
+               AND newer.code=award.code
+               AND newer.status='PUBLISHED'
+               AND newer.effective_from IS NOT NULL
+               AND newer.effective_from <= now()
+               AND newer.version > award.version
+           )`,
+        );
       const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
       const offsetParameter = values.length + 1;
       values.push(offset.toString());
@@ -99,13 +150,13 @@ export class ActivityAwardsRepository {
         `SELECT total.value,page_rows.definition::text AS definition_text
          FROM (
            SELECT count(*) AS value
-           FROM activity_award_definition
+           FROM activity_award_definition award
            ${where}
          ) total
          LEFT JOIN LATERAL (
-           SELECT definition FROM activity_award_definition
+           SELECT award.definition FROM activity_award_definition award
            ${where}
-           ORDER BY programme_slug,code,version
+           ORDER BY award.programme_slug,award.code,award.version
            LIMIT $${limitParameter} OFFSET $${offsetParameter}::bigint
          ) page_rows ON TRUE`,
         values,
@@ -138,6 +189,33 @@ export class ActivityAwardsRepository {
       return parseJsonWithExactIntegers(
         String(result.rows[0].definition_text),
       ) as JsonRecord;
+    } finally {
+      client.release();
+    }
+  }
+
+  async isActivePublishedAward(id: string): Promise<boolean> {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT EXISTS (
+           SELECT 1 FROM activity_award_definition current
+           WHERE current.id=$1 AND current.status='PUBLISHED'
+             AND current.effective_from IS NOT NULL
+             AND current.effective_from <= now()
+             AND NOT EXISTS (
+               SELECT 1 FROM activity_award_definition newer
+               WHERE newer.programme_slug=current.programme_slug
+                 AND newer.code=current.code
+                 AND newer.status='PUBLISHED'
+                 AND newer.effective_from IS NOT NULL
+                 AND newer.effective_from <= now()
+                 AND newer.version > current.version
+             )
+         ) AS active`,
+        [id],
+      );
+      return Boolean(result.rows[0]?.active);
     } finally {
       client.release();
     }
@@ -454,6 +532,43 @@ export class ActivityAwardsRepository {
     } catch {
       throw new ServiceUnavailableException('Activity database is unavailable');
     }
+  }
+
+  private async upsertAwardDefinition(client: PoolClient, record: JsonRecord) {
+    await client.query(
+      `INSERT INTO activity_award_definition(id,programme_slug,code,version,status,effective_from,retired_at,definition)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+       ON CONFLICT (id) DO UPDATE SET programme_slug=EXCLUDED.programme_slug,code=EXCLUDED.code,
+       version=EXCLUDED.version,status=EXCLUDED.status,effective_from=EXCLUDED.effective_from,
+       retired_at=EXCLUDED.retired_at,definition=EXCLUDED.definition,updated_at=now()`,
+      [
+        record.id,
+        record.programmeSlug,
+        record.code,
+        Number(record.version ?? 1),
+        record.status ?? 'DRAFT',
+        record.effectiveFrom ? new Date(record.effectiveFrom) : null,
+        record.retiredAt ? new Date(record.retiredAt) : null,
+        stringifyJsonWithMetadata(record),
+      ],
+    );
+  }
+
+  private async insertAwardDefinition(client: PoolClient, record: JsonRecord) {
+    await client.query(
+      `INSERT INTO activity_award_definition(id,programme_slug,code,version,status,effective_from,retired_at,definition)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
+      [
+        record.id,
+        record.programmeSlug,
+        record.code,
+        Number(record.version ?? 1),
+        record.status ?? 'DRAFT',
+        record.effectiveFrom ? new Date(record.effectiveFrom) : null,
+        record.retiredAt ? new Date(record.retiredAt) : null,
+        stringifyJsonWithMetadata(record),
+      ],
+    );
   }
 
   private async mutate<T>(
