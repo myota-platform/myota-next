@@ -126,3 +126,26 @@ test('participant registration, resend, verification, sign-in, and sign-out are 
     requests.some((request) => request.path === '/v1/identity/auth/logout'),
   ).toBe(true);
 });
+
+test('reports an invalid verification link and removes its token from the URL', async ({
+  page,
+}) => {
+  await page.route('**/v1/programmes**', async (route) => {
+    await route.fulfill({
+      json: { items: [], page: 1, total: 0, nextPage: null },
+    });
+  });
+  await page.route('**/v1/identity/auth/register/verify', async (route) => {
+    await route.fulfill({
+      status: 400,
+      json: { message: 'verification token is invalid or expired' },
+    });
+  });
+
+  await page.goto('http://127.0.0.1:8091/?token=expired-or-replayed-token');
+
+  await expect(page.locator('#participant-auth-status')).toHaveText(
+    'verification token is invalid or expired',
+  );
+  await expect(page).toHaveURL('http://127.0.0.1:8091/');
+});
