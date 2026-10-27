@@ -51,6 +51,10 @@ export async function resizeCertificateBackground(
     !['png', 'jpeg'].includes(metadata.format ?? '')
   )
     throw new Error('certificate background must be a valid PNG or JPEG image');
+  if (metadata.width * metadata.height > 16_000_000)
+    throw new Error(
+      'certificate background exceeds the 16 million pixel processing limit',
+    );
 
   try {
     const resized = source.resize(dimensions.widthPx, dimensions.heightPx, {
