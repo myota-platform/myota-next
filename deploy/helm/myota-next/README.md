@@ -32,10 +32,12 @@ in chart values or release artifacts.
 
 When the Prometheus Operator CRDs are installed, set
 `prometheus.serviceMonitor.enabled: true` to scrape `/metrics` from the Gateway,
-Identity, Programmes, Activity, and Geodata APIs inside the release namespace.
-The ServiceMonitor stays disabled by default. This Prometheus scrape path is
-complementary to `@nestjs/observe`; it does not verify Observe telemetry
-delivery or cover background workers.
+Identity, Programmes, Activity, and Geodata APIs, plus the Activity notification,
+Email, and outbox workers inside the release namespace. The worker endpoints are
+exposed only through ClusterIP Services. The ServiceMonitor stays disabled by
+default. This Prometheus scrape path is complementary to `@nestjs/observe`; it
+does not verify Observe telemetry delivery or cover the Activity and Geodata
+workers, which currently expose health endpoints only.
 
 ## Images and install
 
