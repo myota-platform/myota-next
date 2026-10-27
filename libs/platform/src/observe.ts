@@ -13,15 +13,26 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule({
   },
 });
 
-export function observeRoot(serviceId: string) {
-  const appKey = process.env.OBSERVE_APP_KEY ?? '';
-  const appSecret = process.env.OBSERVE_APP_SECRET ?? '';
-  return ObserveModule.forRoot({
+export function observeOptions(
+  serviceId: string,
+  environment: Record<string, string | undefined> = process.env,
+) {
+  const appKey = environment.OBSERVE_APP_KEY ?? '';
+  const appSecret = environment.OBSERVE_APP_SECRET ?? '';
+  const endpoint = environment.OBSERVE_ENDPOINT?.trim();
+  return {
     enabled: Boolean(appKey.trim() && appSecret.trim()),
     appKey,
     appSecret,
     serviceId,
+    forwardLogs: true,
+    redaction: { enabled: true },
+    ...(endpoint ? { endpoint } : {}),
     serviceVersion:
-      process.env.MYOTA_BUILD_VERSION ?? process.env.GIT_SHA ?? undefined,
-  });
+      environment.MYOTA_BUILD_VERSION ?? environment.GIT_SHA ?? undefined,
+  };
+}
+
+export function observeRoot(serviceId: string) {
+  return ObserveModule.forRoot(observeOptions(serviceId));
 }

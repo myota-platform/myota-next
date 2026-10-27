@@ -89,5 +89,9 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
       name: {{ $root.Values.observe.secretName }}
       key: {{ $root.Values.observe.appSecretKey }}
       optional: true
+{{- if $root.Values.observe.endpoint }}
+- name: OBSERVE_ENDPOINT
+  value: {{ $root.Values.observe.endpoint | quote }}
+{{- end }}
 {{- end }}
 {{- end -}}

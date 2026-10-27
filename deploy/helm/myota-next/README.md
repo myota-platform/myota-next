@@ -30,14 +30,20 @@ Use `values-testing.yaml` as the non-secret reference configuration for the
 current K3s testing deployment. Keep credentials in Kubernetes Secrets, never
 in chart values or release artifacts.
 
+`observe.endpoint` optionally overrides the hosted Observe collector URL for a
+configured self-hosted endpoint. The app key and secret remain in the Secret
+named by `observe.secretName`; reporting and log forwarding are enabled only
+when both credential keys contain non-empty values.
+
 When the Prometheus Operator CRDs are installed, set
 `prometheus.serviceMonitor.enabled: true` to scrape `/metrics` from the Gateway,
 Identity, Programmes, Activity, and Geodata APIs, plus the Activity notification,
-Email, and outbox workers inside the release namespace. The worker endpoints are
-exposed only through ClusterIP Services. The ServiceMonitor stays disabled by
+Activity, Geodata, Email, and outbox workers inside the release namespace. The
+worker endpoints are exposed only through ClusterIP Services. The Activity and
+Geodata worker metrics include bounded work-type outcomes and durations, plus
+NATS and PostgreSQL dependency state. The ServiceMonitor stays disabled by
 default. This Prometheus scrape path is complementary to `@nestjs/observe`; it
-does not verify Observe telemetry delivery or cover the Activity and Geodata
-workers, which currently expose health endpoints only.
+does not verify Observe telemetry delivery or log/trace correlation.
 
 ## Images and install
 
