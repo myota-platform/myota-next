@@ -2,8 +2,18 @@ apiVersion: v1
 entries:
   myota-next:
   - apiVersion: v2
+    appVersion: testing-8ac4b99e762c11e2651bcbc8afd42ad531a309c0
+    created: "2026-10-27T01:34:08.019260823Z"
+    description: NestJS MyOTA APIs and background processes
+    digest: 4fa5b09dbe8a74a7370978e8c5d73458373522fcffffe74258a8f4512d8e03a6
+    name: myota-next
+    type: application
+    urls:
+    - https://myota-platform.github.io/myota-next/testing/myota-next-1.1.6-testing.fad505d1badd.1.tgz
+    version: 1.1.6-testing.fad505d1badd.1
+  - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-27T01:15:15.960520339Z"
+    created: "2026-10-27T01:34:08.016909663Z"
     description: NestJS MyOTA APIs and background processes
     digest: d27a7847313645fe52dfb0e7c4a8729834ecf2c862a1817166f2aa39c0141e75
     name: myota-next
@@ -13,7 +23,7 @@ entries:
     version: 1.1.6-testing.cbb0fbfccd58.1
   - apiVersion: v2
     appVersion: testing-8ac4b99e762c11e2651bcbc8afd42ad531a309c0
-    created: "2026-10-27T01:15:15.95868666Z"
+    created: "2026-10-27T01:34:08.014275585Z"
     description: NestJS MyOTA APIs and background processes
     digest: 6113027abf32dc9302f254983b74cdb1aa619a17baf7cac0c7d65e082842501c
     name: myota-next
@@ -23,7 +33,7 @@ entries:
     version: 1.1.6-testing.c10df2f22479.1
   - apiVersion: v2
     appVersion: testing-8ac4b99e762c11e2651bcbc8afd42ad531a309c0
-    created: "2026-10-27T01:15:15.956793138Z"
+    created: "2026-10-27T01:34:08.012502372Z"
     description: NestJS MyOTA APIs and background processes
     digest: 0cf65653fe81b1f9473604064ed3a8fadbdf42e85442eaa5f4c2ef7d8213de04
     name: myota-next
@@ -33,7 +43,7 @@ entries:
     version: 1.1.6-testing.a8e9325feaaa.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-27T01:15:15.953317256Z"
+    created: "2026-10-27T01:34:08.010328481Z"
     description: NestJS MyOTA APIs and background processes
     digest: 27d68d65c3eeb9bc937522d7b0e71ad28a4bcebd48b246f96d6bd65a490b0e24
     name: myota-next
@@ -43,7 +53,7 @@ entries:
     version: 1.1.6-testing.6fc64541f37f.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-27T01:15:15.951376205Z"
+    created: "2026-10-27T01:34:08.006897339Z"
     description: NestJS MyOTA APIs and background processes
     digest: d2a5ae6a7960d3bc8c8a3e812b91ddcc41c4379dfeca0dd8d88dbd5f838ea842
     name: myota-next
@@ -53,7 +63,7 @@ entries:
     version: 1.1.6-testing.5081fd9a67ff.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-27T01:15:15.949485439Z"
+    created: "2026-10-27T01:34:08.005102405Z"
     description: NestJS MyOTA APIs and background processes
     digest: 0ea469c592edfad082869346e1ba56c61cbbf47d4d8432ff984ce02653a72579
     name: myota-next
@@ -63,7 +73,7 @@ entries:
     version: 1.1.6-testing.43abfa561b61.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-27T01:15:15.947509051Z"
+    created: "2026-10-27T01:34:08.003324633Z"
     description: NestJS MyOTA APIs and background processes
     digest: ced3f008f20a1473746ff29c1e6d5faa5b14c83c27a5e839b308bfccceba4d9f
     name: myota-next
@@ -73,7 +83,7 @@ entries:
     version: 1.1.6-testing.36ef48af4c8c.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-27T01:15:15.943344593Z"
+    created: "2026-10-27T01:34:08.001488693Z"
     description: NestJS MyOTA APIs and background processes
     digest: 8f315928e64637419e20fb4bb57ef37d9387c8c10986114930c5b2dbcd0c25a3
     name: myota-next
@@ -83,7 +93,7 @@ entries:
     version: 1.1.6-testing.2c9dd63c61de.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-27T01:15:15.940192379Z"
+    created: "2026-10-27T01:34:07.998486509Z"
     description: NestJS MyOTA APIs and background processes
     digest: b85dd2c0dd7d6827458c087370d2a6765e50651086a475833c837be1c9e16771
     name: myota-next
@@ -91,4 +101,4 @@ entries:
     urls:
     - https://myota-platform.github.io/myota-next/testing/myota-next-1.1.6-testing.0e4eb202bda2.1.tgz
     version: 1.1.6-testing.0e4eb202bda2.1
-generated: "2026-10-27T01:15:15.936374798Z"
+generated: "2026-10-27T01:34:07.994664699Z"
