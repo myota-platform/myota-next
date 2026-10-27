@@ -91,11 +91,14 @@ and reached the server-side limiter. Email-change initiation, dual delivery to t
 Mailpit sink, and cancellation with the original address retained are also verified.
 Two concurrent submissions of one reset token changed the password exactly once, and
 only the winning password authenticated.
-In an API qualification, simultaneous old- and new-address confirmations changed the
-email exactly once; the new address authenticated, the old one did not, and a cancelled
-change could not be completed with its remaining token.
+Participant email change now has deployed browser evidence for partial confirmation,
+successful verification at both addresses, token replay rejection, and expired-link
+handling. API checks show that a canceled operation's token cannot affect a later
+pending change, simultaneous confirmations apply one transition, and both completion
+notices are sent. The old address remained authoritative on expiry and after only one
+confirmation; the new address became authoritative only after both confirmations.
 Coordinated multi-source throttling and remaining session-security checks, along with
-complete email-change confirmation criteria, remain open under #10, #91, #114, and #115; see
+email-change delivery-failure recovery, remain open under #10, #91, #114, and #115; see
 [Identity and Programme parity](parity/identity-programmes.md).
 
 Public Activity activation history, leaderboard, and JSON/CSV result exports are also
