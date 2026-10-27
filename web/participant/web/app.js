@@ -203,6 +203,8 @@ async function refreshParticipantSession() {
       if (!response.ok) {
         if ([401, 403].includes(response.status)) {
           clearParticipantSession();
+          $('participant-auth-status').textContent =
+            'Your session has expired. Please sign in again to continue.';
           return false;
         }
         throw new Error(
@@ -212,6 +214,8 @@ async function refreshParticipantSession() {
       const session = await response.json().catch(() => null);
       if (!session?.accessToken || !session?.refreshToken) {
         clearParticipantSession();
+        $('participant-auth-status').textContent =
+          'Your session is no longer valid. Please sign in again to continue.';
         return false;
       }
       awardAccessToken = session.accessToken;
