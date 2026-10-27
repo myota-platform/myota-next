@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { ActivityRepository } from './activity.repository.js';
@@ -71,6 +72,58 @@ describe('Activity activation authorization compatibility', () => {
       expect.objectContaining(body),
       undefined,
     );
+  });
+
+  it('allows a participant to read their own activation and QSOs', async () => {
+    const { service, get } = fixture();
+    const authorization = `Bearer ${signAccessToken('operator-1', ['identity.me'])}`;
+
+    await expect(
+      service.get(authorization, 'activation-1'),
+    ).resolves.toMatchObject({
+      id: 'activation-1',
+      operatorId: 'operator-1',
+    });
+    expect(get).toHaveBeenCalledWith('activation-1');
+  });
+
+  it('hides another participant activation behind the same not-found response', async () => {
+    const { service, get } = fixture();
+    const authorization = `Bearer ${signAccessToken('other-user', ['identity.me'])}`;
+
+    await expect(service.get(authorization, 'activation-1')).rejects.toThrow(
+      new NotFoundException('Activation not found'),
+    );
+    expect(get).toHaveBeenCalledWith('activation-1');
+
+    get.mockRejectedValueOnce(
+      new NotFoundException('internal missing ID detail'),
+    );
+    await expect(
+      service.get(authorization, 'missing-activation'),
+    ).rejects.toThrow(new NotFoundException('Activation not found'));
+  });
+
+  it('keeps activation detail reads restricted to Activity scopes for other callers', async () => {
+    const { service, get } = fixture();
+    const authorization = `Bearer ${signAccessToken('user-without-activity-scope', [])}`;
+
+    await expect(service.get(authorization, 'activation-1')).rejects.toThrow(
+      new ForbiddenException('required activity scope is missing'),
+    );
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it('preserves Activity administrator access to other activation details', async () => {
+    const { service, get } = fixture();
+    const authorization = `Bearer ${signAccessToken('admin-1', ['activity.read'])}`;
+
+    await expect(
+      service.get(authorization, 'activation-1'),
+    ).resolves.toMatchObject({
+      operatorId: 'operator-1',
+    });
+    expect(get).toHaveBeenCalledWith('activation-1');
   });
 
   it('rejects a non-owner QSO write before repository mutation', async () => {

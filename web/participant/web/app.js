@@ -931,15 +931,7 @@ async function loadActivations() {
       .join('');
     $('qso-form').hidden = !open.length;
     $('adif-import-form').hidden = !open.length;
-    $('activations-list').innerHTML = activations.length
-      ? `<ul>${activations
-          .slice(0, 20)
-          .map(
-            (activation) =>
-              `<li>${escapeHtml(activation.operatorCallsign || 'Activation')} · ${escapeHtml(activation.status)} · ${Number(activation.qsoCount || 0)} QSOs · ${escapeHtml(activation.startedAt)}</li>`,
-          )
-          .join('')}</ul>`
-      : '<p class="small">No activations recorded for this programme yet.</p>';
+    $('activations-list').replaceChildren(renderActivationHistory(activations));
     if (activeAdifImportId) void refreshAdifImportStatus();
     return true;
   } catch (error) {
@@ -947,6 +939,149 @@ async function loadActivations() {
     return false;
   }
 }
+
+function renderActivationHistory(items) {
+  if (!items.length) {
+    const empty = document.createElement('p');
+    empty.className = 'small';
+    empty.textContent = 'No activations recorded for this programme yet.';
+    return empty;
+  }
+
+  const list = document.createElement('ul');
+  list.className = 'activation-history';
+  for (const activation of items.slice(0, 20)) {
+    const id = String(activation.id);
+    const detailId = `activation-detail-${id}`;
+    const item = document.createElement('li');
+    const details = document.createElement('details');
+    details.className = 'activation-history-detail';
+    details.dataset.activationId = id;
+
+    const summary = document.createElement('summary');
+    summary.setAttribute('aria-controls', detailId);
+    summary.append(
+      document.createTextNode(
+        `${activation.operatorCallsign || 'Activation'} · ${activation.status} · ${Number(activation.qsoCount || 0)} QSOs · ${activation.startedAt} `,
+      ),
+    );
+    const hint = document.createElement('span');
+    hint.className = 'small';
+    hint.textContent = '· View details';
+    summary.append(hint);
+
+    const panel = document.createElement('div');
+    panel.id = detailId;
+    panel.className = 'activation-history-content';
+    panel.setAttribute('role', 'status');
+    panel.setAttribute('aria-live', 'polite');
+    panel.textContent = 'Open to load activation and QSO details.';
+
+    details.append(summary, panel);
+    details.addEventListener('toggle', () => {
+      if (details.open) void loadActivationDetails(details);
+    });
+    item.append(details);
+    list.append(item);
+  }
+  return list;
+}
+
+async function loadActivationDetails(details) {
+  if (details.dataset.loaded === 'true') return;
+  const activationId = details.dataset.activationId;
+  const panel = details.querySelector('.activation-history-content');
+  if (!activationId || !panel) return;
+  panel.setAttribute('role', 'status');
+  panel.textContent = 'Loading activation details…';
+  try {
+    const activation = await awardApi(
+      `/v1/activations/${encodeURIComponent(activationId)}`,
+    );
+    const qsos = Array.isArray(activation.qsos) ? activation.qsos : [];
+    const imports = Array.isArray(activation.imports) ? activation.imports : [];
+    const importsById = new Map(imports.map((item) => [item.id, item]));
+    const metadata = document.createElement('p');
+    metadata.textContent = [
+      `Entity type: ${activation.entityType || 'Unavailable'}`,
+      `Started: ${activation.startedAt || 'Unavailable'}`,
+      ...(activation.endedAt ? [`Ended: ${activation.endedAt}`] : []),
+    ].join(' · ');
+    const qsoHeading = document.createElement('h4');
+    qsoHeading.textContent = `QSOs (${qsos.length})`;
+    const qsoList = document.createElement('ul');
+    qsoList.className = 'activation-detail-list';
+    if (qsos.length) {
+      for (const qso of qsos) {
+        const item = document.createElement('li');
+        const callsign = document.createElement('strong');
+        callsign.textContent = qso.workedCallsign || 'Unknown callsign';
+        item.append(callsign);
+        for (const value of [
+          qso.timestamp || '',
+          [qso.band, qso.mode].filter(Boolean).join(' · ') ||
+            'Band/mode unavailable',
+        ]) {
+          const line = document.createElement('span');
+          line.textContent = value;
+          item.append(line);
+        }
+        const source = importsById.get(qso.sourceImportId);
+        const sourceLabel = source
+          ? `ADIF · ${source.filename}`
+          : qso.source || 'Manual';
+        const origin = document.createElement('span');
+        origin.textContent = `${sourceLabel} · ${qso.status || 'Unknown status'}`;
+        item.append(origin);
+        qsoList.append(item);
+      }
+    } else {
+      const empty = document.createElement('li');
+      empty.textContent = 'No QSOs have been recorded for this activation.';
+      qsoList.append(empty);
+    }
+
+    const importHeading = document.createElement('h4');
+    importHeading.textContent = 'ADIF imports';
+    const importList = document.createElement('ul');
+    importList.className = 'activation-detail-list';
+    if (imports.length) {
+      for (const imported of imports) {
+        const item = document.createElement('li');
+        const filename = document.createElement('strong');
+        filename.textContent = imported.filename || 'ADIF log';
+        item.append(filename);
+        for (const value of [
+          imported.status || 'Unknown status',
+          `${Number(imported.recordsAccepted || 0)} accepted · ${Number(imported.recordsRejected || 0)} rejected of ${Number(imported.recordsSeen || 0)} records`,
+        ]) {
+          const line = document.createElement('span');
+          line.textContent = value;
+          item.append(line);
+        }
+        importList.append(item);
+      }
+    } else {
+      const empty = document.createElement('li');
+      empty.textContent =
+        'No ADIF imports are associated with this activation.';
+      importList.append(empty);
+    }
+    panel.replaceChildren(
+      metadata,
+      qsoHeading,
+      qsoList,
+      importHeading,
+      importList,
+    );
+    panel.dataset.loaded = 'true';
+    details.dataset.loaded = 'true';
+  } catch (error) {
+    panel.setAttribute('role', 'alert');
+    panel.textContent = `Unable to load activation details. ${error.message}`;
+  }
+}
+
 function renderOperatorCallsigns() {
   const callsigns = awardAccount?.callsigns || [];
   $('activation-callsign').innerHTML = callsigns
