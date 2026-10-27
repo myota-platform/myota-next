@@ -515,14 +515,23 @@ test('creates a version from a published award and derives landscape print dimen
   await page.getByRole('button', { name: /Alpine Ten/ }).click();
   await expect(page.getByText(/This award version is read-only/)).toBeVisible();
   await page.getByRole('button', { name: 'Create editable version' }).click();
+  const awardForm = page.locator('form.form-grid').first();
+  const pageSize = awardForm.locator('select').nth(3);
+  const orientation = awardForm.locator('select').nth(4);
+  const backgroundWidth = page.getByLabel('Print background width (pixels)');
+  const backgroundHeight = page.getByLabel('Print background height (pixels)');
+  await expect(backgroundWidth).toHaveValue('2481');
+  await expect(backgroundHeight).toHaveValue('3508');
+  await pageSize.selectOption('LETTER');
+  await expect(backgroundWidth).toHaveValue('2550');
+  await expect(backgroundHeight).toHaveValue('3300');
+  await orientation.selectOption('LANDSCAPE');
+  await expect(backgroundWidth).toHaveValue('3300');
+  await expect(backgroundHeight).toHaveValue('2550');
+  await pageSize.selectOption('A4');
+  await expect(backgroundWidth).toHaveValue('3508');
+  await expect(backgroundHeight).toHaveValue('2481');
   await page.getByLabel('Award Text').fill('For ten successful contacts');
-  await page.getByLabel('Orientation').selectOption('LANDSCAPE');
-  await expect(page.getByLabel('Print background width (pixels)')).toHaveValue(
-    '3508',
-  );
-  await expect(page.getByLabel('Print background height (pixels)')).toHaveValue(
-    '2481',
-  );
   const saveButton = page.getByRole('button', {
     name: 'Save new version as draft',
   });
