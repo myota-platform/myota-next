@@ -86,6 +86,9 @@ async function main(): Promise<void> {
           canInsert: boolean | null;
           canUpdate: boolean | null;
           canDelete: boolean | null;
+          migrationLedger: string | null;
+          canReadMigrationLedger: boolean | null;
+          canWriteMigrationLedger: boolean | null;
         }>(
           `SELECT current_database() AS database,
                   current_user AS role,
@@ -99,7 +102,15 @@ async function main(): Promise<void> {
                   has_table_privilege(current_user, app_table.oid, 'SELECT') AS "canSelect",
                   has_table_privilege(current_user, app_table.oid, 'INSERT') AS "canInsert",
                   has_table_privilege(current_user, app_table.oid, 'UPDATE') AS "canUpdate",
-                  has_table_privilege(current_user, app_table.oid, 'DELETE') AS "canDelete"
+                  has_table_privilege(current_user, app_table.oid, 'DELETE') AS "canDelete",
+                  migration_table.oid::regclass::text AS "migrationLedger",
+                  has_table_privilege(current_user, migration_table.oid, 'SELECT') AS "canReadMigrationLedger",
+                  (has_table_privilege(current_user, migration_table.oid, 'INSERT') OR
+                   has_table_privilege(current_user, migration_table.oid, 'UPDATE') OR
+                   has_table_privilege(current_user, migration_table.oid, 'DELETE') OR
+                   has_table_privilege(current_user, migration_table.oid, 'TRUNCATE') OR
+                   has_table_privilege(current_user, migration_table.oid, 'REFERENCES') OR
+                   has_table_privilege(current_user, migration_table.oid, 'TRIGGER')) AS "canWriteMigrationLedger"
              FROM pg_catalog.pg_roles AS r
              LEFT JOIN LATERAL (
                SELECT c.oid
@@ -111,6 +122,15 @@ async function main(): Promise<void> {
                 ORDER BY c.relname
                 LIMIT 1
              ) AS app_table ON true
+             LEFT JOIN LATERAL (
+               SELECT c.oid
+                 FROM pg_catalog.pg_class AS c
+                 JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public'
+                  AND c.relname = 'myota_nest_schema_migration'
+                  AND c.relkind IN ('r', 'p')
+                LIMIT 1
+             ) AS migration_table ON true
             WHERE r.rolname = current_user`,
         );
         const actual = result.rows[0];
@@ -144,6 +164,14 @@ async function main(): Promise<void> {
         )
           throw new Error(
             `${databaseOwner} runtime role lacks required application-table privileges`,
+          );
+        if (!actual.migrationLedger)
+          throw new Error(
+            `${databaseOwner} migration ledger was not found for access verification`,
+          );
+        if (actual.canReadMigrationLedger || actual.canWriteMigrationLedger)
+          throw new Error(
+            `${databaseOwner} runtime role can access its migration ledger`,
           );
         process.stdout.write(
           `Owner access verified: ${databaseOwner} as ${actual.role}; no rows read\n`,
