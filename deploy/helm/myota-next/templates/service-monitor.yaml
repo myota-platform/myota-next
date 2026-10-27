@@ -21,11 +21,6 @@ spec:
           - programmes
           - activity
           - geodata
-          - activity-notifications
-          - email-worker
-          - outbox-core
-          - outbox-activity
-          - outbox-geodata
   endpoints:
     - port: http
       path: /metrics
@@ -50,7 +45,9 @@ spec:
         operator: In
         values:
           - activity-notifications
+          - activity-worker
           - email-worker
+          - geodata-worker
           - outbox-core
           - outbox-activity
           - outbox-geodata
