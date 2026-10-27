@@ -83,6 +83,11 @@ observe:
   secretName: myota-observe
   appKeyKey: app-key
   appSecretKey: app-secret
+prometheus:
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
 dependencies:
   objectStorageEndpoint: http://myota-s3:8333
   objectStoragePublicEndpoint: ''
@@ -227,6 +232,7 @@ components:
     app: activity-notifications
     replicas: 1
     healthPort: 9110
+    service: true
     env:
       ACTIVITY_DATABASE_URL:
         { secret: databaseUrls, key: activity-database-url }
@@ -300,6 +306,7 @@ components:
     app: email-worker
     replicas: 1
     healthPort: 9108
+    service: true
     terminationGracePeriodSeconds: 75
     env:
       CORE_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
@@ -322,6 +329,7 @@ components:
     app: outbox-worker
     replicas: 1
     healthPort: 9108
+    service: true
     env:
       OUTBOX_OWNER: core
       OUTBOX_WORKER: core-outbox
@@ -334,6 +342,7 @@ components:
     app: outbox-worker
     replicas: 1
     healthPort: 9108
+    service: true
     env:
       OUTBOX_OWNER: activity
       OUTBOX_WORKER: activity-outbox
@@ -346,6 +355,7 @@ components:
     app: outbox-worker
     replicas: 1
     healthPort: 9108
+    service: true
     env:
       OUTBOX_OWNER: geodata
       OUTBOX_WORKER: geodata-outbox
