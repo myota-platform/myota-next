@@ -4369,6 +4369,7 @@ components:
         backgroundAsset: { $ref: '#/components/schemas/AwardAsset' }
         signatureAssetId: { type: string, format: uuid }
         managerName: { type: string, maxLength: 200 }
+        awardText: { type: string, maxLength: 200 }
         printSpec: { $ref: '#/components/schemas/AwardPrintSpec' }
         template: { $ref: '#/components/schemas/AwardTemplate' }
       description: Registered artwork only, or blank paper when backgroundAsset is omitted; preview resolution is bounded to 150–300 DPI.
@@ -4396,6 +4397,7 @@ components:
                 DATE_OBTAINED,
                 MANAGER_NAME,
                 MANAGER_SIGNATURE,
+                AWARD_TEXT,
                 CUSTOM_TEXT,
               ],
           }
@@ -4426,7 +4428,7 @@ components:
         page: { type: string, enum: [A4, LETTER], default: A4 }
         orientation:
           { type: string, enum: [PORTRAIT, LANDSCAPE], default: PORTRAIT }
-        dpi: { type: integer, minimum: 150, default: 300 }
+        dpi: { type: integer, minimum: 150, maximum: 300, default: 300 }
     AwardDefinition:
       type: object
       required:
@@ -4446,6 +4448,15 @@ components:
         code: { type: string }
         name: { type: string }
         description: { type: string }
+        awardText: { type: string, maxLength: 200, default: '' }
+        version: { type: integer, minimum: 1, readOnly: true }
+        revisionOf: { type: string, format: uuid, readOnly: true }
+        expectedVersion:
+          {
+            type: integer,
+            minimum: 1,
+            description: Required when creating a draft from a published award version.,
+          }
         category: { type: string, enum: [HUNTER, ACTIVATOR] }
         achievementMetric:
           {

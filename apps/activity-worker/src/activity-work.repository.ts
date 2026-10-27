@@ -727,6 +727,7 @@ export class ActivityWorkRepository {
     );
     const values: Record<string, string> = {
       AWARD_NAME: pythonString(issuance.awardName),
+      AWARD_TEXT: pythonString(spec.awardText ?? ''),
       CALLSIGN: pythonString(issuance.callsign),
       PERSON_NAME: pythonString(issuance.personName),
       DATE_OBTAINED: pythonString(issuance.dateObtained),

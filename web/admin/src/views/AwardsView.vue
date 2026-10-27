@@ -25,6 +25,7 @@ interface Award {
   code: string;
   name: string;
   description?: string;
+  awardText?: string;
   category?: string;
   status?: string;
   version?: number;
@@ -68,6 +69,7 @@ const programme = ref(
 );
 const items = ref<Award[]>([]);
 const selected = ref<Award | null>(null);
+const editingPublished = ref(false);
 const assets = ref<any[]>([]);
 const requests = ref<any[]>([]);
 const issuances = ref<any[]>([]);
@@ -108,7 +110,8 @@ const editable = computed(
     (!selected.value ||
       ['DRAFT', 'CHANGES_REQUESTED'].includes(
         selected.value.status || 'DRAFT',
-      )),
+      ) ||
+      (editingPublished.value && selected.value.status === 'PUBLISHED')),
 );
 const assetFile = ref<File | null>(null);
 const dragState = ref<{ index: number; x: number; y: number } | null>(null);
@@ -116,6 +119,7 @@ const form = reactive({
   code: '',
   name: '',
   description: '',
+  awardText: '',
   category: 'HUNTER',
   achievementMetric: 'QSO_COUNT',
   effectiveFrom: '',
@@ -151,6 +155,25 @@ const canvasAspectRatio = computed(() => {
     ? `${height} / ${width}`
     : `${width} / ${height}`;
 });
+function requiredBackgroundDimensions() {
+  const [pageWidth, pageHeight] = pageSizesMm[form.page] || pageSizesMm.A4;
+  const widthMm = form.orientation === 'LANDSCAPE' ? pageHeight : pageWidth;
+  const heightMm = form.orientation === 'LANDSCAPE' ? pageWidth : pageHeight;
+  const dpi = Number(form.dpi) || 300;
+  return {
+    width: Math.ceil((widthMm / 25.4) * dpi),
+    height: Math.ceil((heightMm / 25.4) * dpi),
+  };
+}
+function updateBackgroundDimensions(): void {
+  const dimensions = requiredBackgroundDimensions();
+  form.width = dimensions.width;
+  form.height = dimensions.height;
+}
+watch(
+  [() => form.page, () => form.orientation, () => form.dpi],
+  updateBackgroundDimensions,
+);
 watch(
   [() => form.page, () => form.orientation],
   () => {
@@ -262,6 +285,14 @@ function defaultElements(): TemplateElement[] {
       height: 0.08,
     },
     {
+      kind: 'AWARD_TEXT',
+      label: 'Award text',
+      x: 0.2,
+      y: 0.21,
+      width: 0.6,
+      height: 0.07,
+    },
+    {
       kind: 'CALLSIGN',
       label: 'Callsign',
       x: 0.35,
@@ -303,8 +334,9 @@ function defaultElements(): TemplateElement[] {
     },
   ];
 }
-function edit(item: Award | null): void {
+function edit(item: Award | null, createPublishedVersion = false): void {
   selected.value = item;
+  editingPublished.value = createPublishedVersion;
   const background: any = item?.backgroundAsset || {};
   const print: any = item?.printSpec || {};
   templateElements.value = JSON.parse(
@@ -329,6 +361,7 @@ function edit(item: Award | null): void {
     code: item?.code || '',
     name: item?.name || '',
     description: item?.description || '',
+    awardText: item?.awardText || '',
     category: item?.category || 'HUNTER',
     achievementMetric: item?.achievementMetric || 'QSO_COUNT',
     effectiveFrom: utcInput(item?.effectiveFrom),
@@ -355,11 +388,16 @@ function edit(item: Award | null): void {
     signatureAssetId: item?.signatureAssetId || '',
     managerName: item?.managerName || '',
   });
+  updateBackgroundDimensions();
+}
+function beginPublishedVersionEdit(): void {
+  if (!canManage.value || selected.value?.status !== 'PUBLISHED') return;
+  edit(selected.value, true);
 }
 function restoreDefaults(): void {
   if (
     window.confirm(
-      'Restore the six default fields? Save the draft to persist this layout.',
+      'Restore the default certificate fields? Save the draft to persist this layout.',
     )
   )
     templateElements.value = defaultElements();
@@ -381,6 +419,7 @@ function removeTemplateElement(index: number): void {
 function elementText(element: TemplateElement): string {
   const values: Record<string, string> = {
     AWARD_NAME: form.name || 'Award name',
+    AWARD_TEXT: form.awardText || 'Award text',
     CALLSIGN: 'EA7TEST',
     PERSON_NAME: 'Demo Radio Operator',
     DATE_OBTAINED: new Date().toISOString().slice(0, 10),
@@ -393,10 +432,9 @@ function chooseBackground(): void {
   const asset = selectedBackground.value;
   if (asset)
     Object.assign(form, {
-      width: asset.widthPx,
-      height: asset.heightPx,
       backgroundType: asset.mediaType,
     });
+  updateBackgroundDimensions();
 }
 async function selectAward(item: Award): Promise<void> {
   try {
@@ -469,6 +507,7 @@ async function previewPdf(): Promise<void> {
       contentBase64: string;
     }>({
       name: form.name || 'Award preview',
+      awardText: form.awardText,
       ...(form.backgroundKey
         ? {
             backgroundAsset: selectedBackground.value || {
@@ -698,6 +737,7 @@ async function save(): Promise<void> {
       code: form.code,
       name: form.name,
       description: form.description,
+      awardText: form.awardText,
       category: form.category,
       achievementMetric: form.achievementMetric,
       condition: JSON.parse(form.condition),
@@ -728,6 +768,9 @@ async function save(): Promise<void> {
         form.effectiveFrom,
         selected.value?.effectiveFrom,
       ),
+      ...(editingPublished.value
+        ? { expectedVersion: selected.value?.version }
+        : {}),
     };
     let saved: Award;
     if (selected.value?.id) {
@@ -763,7 +806,11 @@ async function save(): Promise<void> {
       });
       await pendingAwardMutationKeys.complete(fingerprint);
     }
-    message.value = 'Award draft saved.';
+    editingPublished.value = false;
+    message.value =
+      saved.status === 'DRAFT' && saved.version && saved.version > 1
+        ? `Award version ${saved.version} saved as a draft.`
+        : 'Award draft saved.';
     await load(saved.id);
   } catch (cause) {
     error.value =
@@ -938,8 +985,8 @@ onMounted(() => {
           <span
             ><strong>{{ item.name }}</strong
             ><small
-              >{{ item.code }} · {{ item.category }} ·
-              {{ item.programmeSlug }}</small
+              >{{ item.code }} · v{{ item.version ?? 1 }} ·
+              {{ item.category }} · {{ item.programmeSlug }}</small
             ></span
           ><span
             class="status-pill"
@@ -968,10 +1015,21 @@ onMounted(() => {
     <article class="panel">
       <div class="panel-heading">
         <h2>{{ selected ? selected.name : 'New award draft' }}</h2>
+        <button
+          v-if="canManage && selected?.status === 'PUBLISHED'"
+          class="secondary"
+          type="button"
+          :disabled="saving"
+          @click="beginPublishedVersionEdit"
+        >
+          {{
+            editingPublished ? 'Editing new version' : 'Create editable version'
+          }}
+        </button>
       </div>
       <p v-if="!editable" class="read-only-note">
-        This award is read-only. Only drafts can be changed by users with award
-        administration permission.
+        This award version is read-only. Create an editable version to preserve
+        the published definition while you make and review changes.
       </p>
       <section
         v-if="canManage && selected?.id && selected.status === 'PUBLISHED'"
@@ -1090,6 +1148,17 @@ onMounted(() => {
             v-model="form.description"
             :readonly="!editable"
           ></textarea></label
+        ><label class="wide"
+          >Award Text<textarea
+            v-model="form.awardText"
+            :readonly="!editable"
+            maxlength="200"
+            rows="3"
+          ></textarea
+          ><small class="field-help"
+            >Shown below the award name by default. Drag its layout element to
+            reposition it.</small
+          ></label
         ><label
           >Effective from (UTC)<input
             v-model="form.effectiveFrom"
@@ -1119,15 +1188,15 @@ onMounted(() => {
             </option>
           </select></label
         ><label
-          >Background width<input
+          >Print background width (pixels)<input
             v-model.number="form.width"
-            :readonly="!editable"
+            readonly
             type="number"
             min="1" /></label
         ><label
-          >Background height<input
+          >Print background height (pixels)<input
             v-model.number="form.height"
-            :readonly="!editable"
+            readonly
             type="number"
             min="1" /></label
         ><label
@@ -1145,7 +1214,14 @@ onMounted(() => {
             v-model.number="form.dpi"
             :readonly="!editable"
             type="number"
-            min="150" /></label
+            min="150"
+            max="300"
+        /></label>
+        <p class="field-help wide">
+          Backgrounds are resized to these page dimensions with a centered crop;
+          the registered source remains unchanged. The cropped source must
+          retain at least 150 DPI of detail to publish.
+        </p>
         ><label class="wide"
           >Award manager name<input
             v-model="form.managerName"
@@ -1189,7 +1265,13 @@ onMounted(() => {
             :disabled="saving || !editable || !programme"
             type="submit"
           >
-            {{ saving ? 'Saving…' : 'Save award draft' }}</button
+            {{
+              saving
+                ? 'Saving…'
+                : editingPublished
+                  ? 'Save new version as draft'
+                  : 'Save award draft'
+            }}</button
           ><button
             v-if="
               selected &&
