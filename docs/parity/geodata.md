@@ -795,9 +795,9 @@ field under the Admin's eligibility rules, and reported
 `myota-geodata-enrichment` Secret was absent. No backfill requests were
 submitted during this inventory.
 
-After provisioning a test-only provider key through the documented Kubernetes
-Secret procedure in the [Helm chart operator guide](../../deploy/helm/myota-next/README.md),
-first verify one entity reaches `COMPLETED` / `ENRICHED`. Then run the Admin
+After provisioning a test-only provider key using the [location enrichment
+operations guide](../operations/location-enrichment.md), first verify one
+entity reaches `COMPLETED` / `ENRICHED`. Then run the Admin
 backfill, review its queued/skipped/failed summary, and confirm completion with
 a fresh catalogue read. Track provider configuration and live backfill evidence
 under [#110](https://github.com/myota-platform/myota-next/issues/110),
