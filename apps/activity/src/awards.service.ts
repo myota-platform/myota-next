@@ -173,6 +173,10 @@ export class AwardsService {
     if (existing.status === 'PUBLISHED') {
       this.authorizeHeader(authorization, ['awards.admin']);
       const expectedVersion = Number(patch.expectedVersion);
+      // The Admin editor includes awardId in its normal save payload. For a
+      // published source that ID identifies the version being revised, not
+      // the new draft's identity; validateAwardDraft must generate a fresh ID.
+      delete patch.awardId;
       delete patch.expectedVersion;
       if (
         !Number.isSafeInteger(expectedVersion) ||
