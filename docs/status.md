@@ -142,6 +142,10 @@ against the isolated deployment remains under Phase 6 issue #10.
   test sink returned. The old address remained authoritative until both links
   were confirmed. See the [Identity parity evidence](parity/identity-programmes.md)
   and Phase 6 issue #115.
+  Prometheus also retained matching Email worker counters: two old-address SMTP
+  failures and one delivery for each address template. These template/outcome
+  counters do not identify a work item, so full request-level correlation and
+  centralized traces remain open under #90 and #91.
   The local Observe SDK delivery smoke test and its limits are documented in
   [Observe delivery smoke test](operations/observe-delivery-smoke.md); live
   test-namespace credentials and telemetry correlation are still required.
