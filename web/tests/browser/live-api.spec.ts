@@ -1128,6 +1128,7 @@ test('reviews a live QSO correction in Admin and verifies the updated QSO', asyn
 });
 
 async function activateByKeyboard(page: Page, button: Locator) {
+  await expect(button).toBeEnabled();
   await button.focus();
   await expect(button).toBeFocused();
   await page.keyboard.press('Enter');
