@@ -248,6 +248,22 @@ browser flow also creates a participant through Gateway, verifies the returned a
 and pending setup message, grants an additional permitted Activity role, and confirms
 the account appears in the refreshed list.
 
+### Phase 6 deployed Participant password-reset checks — 2026-10-27
+
+The Participant password-reset request form was exercised against `myota-test` using a
+synthetic account and the test-only Mailpit SMTP sink. The browser displayed the generic
+“If an account matches that address” response, one reset email reached the configured
+test mailbox, and the test removed that message afterward. A separate API check completed
+the reset flow, confirmed the previous access and refresh credentials were rejected
+(HTTP 403), signed in with the replacement password, and restored the synthetic account's
+original password. Its generated Mailpit messages were removed. The scripts and account
+fixture are local test artifacts and are not committed.
+
+This verifies the request UI and delivery to the local test sink, plus API password/session
+behavior for the deployed Identity service. It does not qualify deployed token expiry,
+request throttling, or the complete set-password browser journey; those security and
+browser criteria remain open under [Participant password reset](https://github.com/myota-platform/myota-next/issues/114).
+
 It then adds a callsign, submits verification evidence, and verifies the callsign
 through the live Identity API. The same browser workflow exports the resulting account
 and checks that its security events retain role-replacement and account-update order.
