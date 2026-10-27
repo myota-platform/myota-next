@@ -260,16 +260,30 @@ original password. Its generated Mailpit messages were removed. The scripts and 
 fixture are local test artifacts and are not committed.
 
 This verifies the request UI and delivery to the local test sink, plus API password/session
-behavior for the deployed Identity service. It does not qualify deployed token expiry,
-or request-throttling behavior. A deployed browser check submitted an invalid reset
-token: Identity returned HTTP 400, the token was absent from the URL and app asset
+behavior for the deployed Identity service. A deployed browser check submitted an invalid
+reset token: Identity returned HTTP 400, the token was absent from the URL and app asset
 `Referer`, and the UI presented a recoverable message with the reset-request form
 available. A full valid-link browser journey also passed: the browser requested a reset,
 opened the actual Mailpit-delivered link in a fresh page, cleared the token fragment,
 accepted a new password, and signed in with it. A second delivered link restored the
 original password, which then authenticated successfully. Both generated reset messages
-were removed. Deployed token-expiry and throttling checks remain open under
-[Participant password reset](https://github.com/myota-platform/myota-next/issues/114).
+were removed.
+
+On 2026-10-27, the expired-link path was verified with the actual Mailpit-delivered link
+for the synthetic account. The corresponding Core recovery-token row alone was expired in
+the test database to avoid waiting through the configured token lifetime. The browser
+received HTTP 400, showed the invalid-or-expired message and recovery-request form,
+removed the token fragment, and did not include the token in the app asset `Referer`.
+Login with the synthetic account's original password still succeeded afterward; the
+temporary verification session was logged out. The generated Mailpit message was removed.
+
+The same day, six sequential reset requests from one test source to a unique nonexistent
+`example.test` address all returned HTTP 200 with the same generic `accepted` response
+and no development token. The Core limiter recorded six attempts in its 15-minute window;
+no recovery request or email was created. The temporary limiter row was removed. This
+checks generic behavior and the deployed counter, but does not qualify coordinated
+requests from multiple source addresses. Remaining reset concurrency and session-security
+coverage stays open under [Participant password reset](https://github.com/myota-platform/myota-next/issues/114).
 
 ### Phase 6 deployed Participant email-change UI checks — 2026-10-27
 

@@ -83,12 +83,14 @@ services as well.
 Participant registration with email verification and delegated Participant account
 management are implemented, including the `PARTICIPANT_ADMIN` role, Identity API
 authorization, Admin account workflow, and Participant registration/resend/verification
-UI. `myota-test` qualification now includes authenticated reset-request and invalid-link
-browser checks, and a complete valid reset-link journey with replacement-password login
-and restoration of the synthetic account's original password. It also covers email-change
-initiation, dual delivery to the test Mailpit sink, and cancellation with the original
-address retained. Deployed token-expiry/throttling behavior and remaining account security
-criteria stay open under #10, #91, #114, and #115; see
+UI. `myota-test` qualification includes authenticated reset-request and invalid-link
+browser checks, a complete valid reset-link journey, and deployed expired-link and
+request-throttle checks. The expired link returned HTTP 400 without changing the synthetic
+account password; six requests to a nonexistent address returned the same generic response
+and reached the server-side limiter. Email-change initiation, dual delivery to the test
+Mailpit sink, and cancellation with the original address retained are also verified.
+Reset concurrency/session-security and complete email-change confirmation criteria remain
+open under #10, #91, #114, and #115; see
 [Identity and Programme parity](parity/identity-programmes.md).
 
 Public Activity activation history, leaderboard, and JSON/CSV result exports are also
