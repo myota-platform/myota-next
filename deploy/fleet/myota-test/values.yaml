@@ -82,7 +82,7 @@ images:
     digest: sha256:62575d4b7132071755fcad311d9887f1157e807f935e4dc3fc3d22471bc3dd78
     repository: ghcr.io/myota-platform/myota-next-activity-notifications
   activity-worker:
-    digest: sha256:07b206434addf75a4c1ee33cc47214e63e70c94cf679653c93abf5bf83c54597
+    digest: sha256:eb1e4bc419b2ee459e40734f99ce0465e9a3a824bb2751cc8564516e5e871411
     repository: ghcr.io/myota-platform/myota-next-activity-worker
   admin-web:
     digest: sha256:b92eb97b09bc91b47cbeb09340536e3aa97115d0f65428e0418759a985192a90
