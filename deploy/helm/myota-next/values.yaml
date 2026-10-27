@@ -211,6 +211,7 @@ components:
     app: activity-worker
     replicas: 1
     healthPort: 9112
+    service: true
     terminationGracePeriodSeconds: 60
     env:
       ACTIVITY_DATABASE_URL:
@@ -269,6 +270,7 @@ components:
     app: geodata-worker
     replicas: 1
     healthPort: 9113
+    service: true
     terminationGracePeriodSeconds: 60
     env:
       GEO_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }

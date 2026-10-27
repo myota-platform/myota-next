@@ -18,6 +18,10 @@ import {
   WorkerProbeServer,
   workerProbePort,
 } from '@app/platform/worker-probes.js';
+import {
+  WorkerMetrics,
+  type WorkerWorkOutcome,
+} from '@app/platform/worker-metrics.js';
 import { loadOutboxRegistry } from '@app/platform/outbox-routing.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
 import { retryTransientDatabaseOperation } from '@app/platform/database-retry.js';
@@ -58,6 +62,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
   private connection?: Awaited<ReturnType<typeof connect>>;
   private loops: Promise<void>[] = [];
   private readonly probes = new WorkerProbeServer();
+  private readonly metrics = new WorkerMetrics('activity-worker');
   private natsUp = false;
 
   constructor(
@@ -102,6 +107,7 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
         });
       }
       this.natsUp = true;
+      this.metrics.setDependency('nats', true);
       void this.monitorNats();
       await this.probes.listen(
         workerProbePort(
@@ -111,9 +117,16 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
         ),
         async () => {
           if (this.stopping || !this.natsUp || !this.pool) return false;
-          await this.pool.query('SELECT 1');
-          return true;
+          try {
+            await this.pool.query('SELECT 1');
+            this.metrics.setDependency('postgres', true);
+            return true;
+          } catch (error) {
+            this.metrics.setDependency('postgres', false);
+            throw error;
+          }
         },
+        () => this.metrics.render(),
       );
       this.loops = [
         ...definitions.flatMap((definition) =>
@@ -143,10 +156,13 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
       for await (const status of this.connection!.status()) {
         if (status.type === 'disconnect' || status.type === 'reconnecting') {
           this.natsUp = false;
+          this.metrics.setDependency('nats', false);
         } else if (status.type === 'reconnect') {
           this.natsUp = true;
+          this.metrics.setDependency('nats', true);
         } else if (status.type === 'close') {
           this.natsUp = false;
+          this.metrics.setDependency('nats', false);
           return;
         }
       }
@@ -209,6 +225,8 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
     definition: WorkDefinition,
     message: JsMsg,
   ): Promise<void> {
+    const startedAt = performance.now();
+    let outcome: WorkerWorkOutcome = 'settlement_error';
     const delivery = Math.max(1, message.info.deliveryCount);
     let envelope: Record<string, unknown>;
     try {
@@ -229,17 +247,25 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
             'invalid_envelope',
           ),
         );
-        await this.acknowledge(
+        outcome = (await this.acknowledge(
           message,
           'settling invalid Activity work envelope',
-        );
+        ))
+          ? 'dead_lettered'
+          : 'settlement_error';
       } catch (persistError) {
+        outcome = 'settlement_error';
         this.logger.error(
           `Could not persist invalid Activity work delivery: ${safeError(persistError)}`,
         );
       }
       this.logger.error(
         `Invalid ${definition.durable} message: ${safeError(error)}`,
+      );
+      this.metrics.recordWork(
+        definition.workType,
+        outcome,
+        (performance.now() - startedAt) / 1000,
       );
       return;
     }
@@ -250,18 +276,26 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
       job = await this.retryDatabase(message, 'claiming work', () =>
         this.claimUntilReady(definition, message, workId, delivery),
       );
-      if (!job) return;
+      if (!job) {
+        outcome = 'not_claimed';
+        return;
+      }
       await this.processWithHeartbeats(job, message);
-      if (await this.acknowledge(message, `completed Activity work ${workId}`))
+      if (
+        await this.acknowledge(message, `completed Activity work ${workId}`)
+      ) {
+        outcome = 'completed';
         this.logger.log(
           `Completed Activity work ${workId} (${definition.kind})`,
         );
+      }
     } catch (error) {
       const delaySeconds = Math.min(300, 2 ** Math.min(delivery, 8));
       try {
         await this.retryDatabase(message, 'settling failed work', async () => {
           if (!job) {
             message.nak(delaySeconds * 1000);
+            outcome = 'retried';
           } else if (
             delivery >= MAX_DELIVERIES ||
             job.attempts >= MAX_DELIVERIES
@@ -273,19 +307,24 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
               definition.workType,
               delivery,
             );
-            await this.acknowledge(
+            outcome = (await this.acknowledge(
               message,
               `persisting terminal Activity failure ${job.id}`,
-            );
+            ))
+              ? 'failed'
+              : 'settlement_error';
           } else {
             await this.repository.retryWorkJob(job, error, delaySeconds);
             if (
-              !(await this.acknowledge(
+              await this.acknowledge(
                 message,
                 `persisting queued Activity retry ${job.id}`,
-              ))
+              )
             ) {
+              outcome = 'retried';
+            } else {
               message.nak(delaySeconds * 1000);
+              outcome = 'retried';
             }
           }
         });
@@ -296,6 +335,12 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
       }
       this.logger.error(
         `Activity work ${workId} (${definition.kind}) failed: ${safeError(error)}`,
+      );
+    } finally {
+      this.metrics.recordWork(
+        definition.workType,
+        outcome,
+        (performance.now() - startedAt) / 1000,
       );
     }
   }
