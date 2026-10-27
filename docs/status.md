@@ -140,6 +140,10 @@ against the isolated deployment remains under Phase 6 issue #10.
   The local Observe SDK delivery smoke test and its limits are documented in
   [Observe delivery smoke test](operations/observe-delivery-smoke.md); live
   test-namespace credentials and telemetry correlation are still required.
+  Authenticated Admin access to the embedded Grafana dashboard is qualified
+  under #116: dashboard/query requests succeed, while unauthorized requests
+  redirect to sign-in. This does not substitute for Observe delivery or
+  cross-service trace correlation.
 - **Geodata performance:** larger datasets and full worker throughput remain
   unqualified. `MYOTA_UPLOAD_WORKERS` caps multipart finalization per Geodata
   API process. `MYOTA_IMPORT_WORKERS` caps preprocessing and promotion together
