@@ -34,3 +34,11 @@ visibility, alerting, or cross-service workflow correlation. Provision
 approved test credentials through the secret store and complete the deployed
 checks tracked by [issue #90](https://github.com/myota-platform/myota-next/issues/90)
 and [issue #91](https://github.com/myota-platform/myota-next/issues/91).
+
+A live recheck at 18:57 UTC found all 21 requested `myota-test` replicas ready,
+all 17 discovered Prometheus targets `up=1`, and all four Activity/Geodata NATS
+and PostgreSQL dependency gauges healthy; no namespace alerts were firing. The
+cluster still had no Observe Secret, Observe workload environment, Loki, Tempo,
+or OpenTelemetry Collector. This verifies metrics scraping and worker dependency
+availability only; it does not provide Observe delivery or deployed log/trace
+correlation.
