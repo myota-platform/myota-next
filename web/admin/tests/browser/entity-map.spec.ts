@@ -97,6 +97,16 @@ test('explores paged entities and shows the selected map feature details', async
   await expect(page).toHaveURL(/\/entity-map$/);
   await expect(page.getByText('100 of 101 entities loaded')).toBeVisible();
   await page.locator('.leaflet-marker-icon[title="Summit Alpha"]').click();
+  const popupContent = page
+    .locator('.leaflet-popup-content > div:visible')
+    .filter({ hasText: 'Summit Alpha' })
+    .last();
+  await expect(popupContent).toBeVisible();
+  await expect(popupContent).toHaveCSS('color', 'rgb(20, 43, 45)');
+  await expect(popupContent).toHaveCSS(
+    'background-color',
+    'rgb(255, 255, 255)',
+  );
   await expect(
     page.getByRole('heading', { name: 'Summit Alpha' }),
   ).toBeVisible();
