@@ -17,9 +17,10 @@ consumers on the configured NATS server.
 - `ingress` configures Traefik entry points, API/Admin/Participant/S3
   hostnames, middleware references, TLS certificate resolver, and optional
   TLS Secret. The test cluster uses `websecure` with `acmeresolver`.
-- `secrets`, `dependencies`, `migrations`, `observe`, and
-  `jetstreamProvisioner` configure secret references, external endpoints,
-  schema setup, Observe reporting, and NATS topology provisioning.
+- `secrets`, `dependencies`, `migrations`, `observe`, `prometheus.serviceMonitor`,
+  and `jetstreamProvisioner` configure secret references, external endpoints,
+  schema setup, Observe reporting, Prometheus API scraping, and NATS topology
+  provisioning.
 - Pod-level values control image pull secrets, annotations/labels, security
   contexts, scheduling, topology spread, rollout strategy, and probes.
 - `commonResources` sets default CPU and memory requests/limits; a component
@@ -28,6 +29,13 @@ consumers on the configured NATS server.
 Use `values-testing.yaml` as the non-secret reference configuration for the
 current K3s testing deployment. Keep credentials in Kubernetes Secrets, never
 in chart values or release artifacts.
+
+When the Prometheus Operator CRDs are installed, set
+`prometheus.serviceMonitor.enabled: true` to scrape `/metrics` from the Gateway,
+Identity, Programmes, Activity, and Geodata APIs inside the release namespace.
+The ServiceMonitor stays disabled by default. This Prometheus scrape path is
+complementary to `@nestjs/observe`; it does not verify Observe telemetry
+delivery or cover background workers.
 
 ## Images and install
 

@@ -158,3 +158,6 @@ migrations:
   image:
     digest: sha256:b0167e81b787ef0e0a7eea1cbd0954020a02faebc8b3549ee91f864c7de1ea65
     repository: ghcr.io/myota-platform/myota-next-tools
+prometheus:
+  serviceMonitor:
+    enabled: true

@@ -83,6 +83,11 @@ observe:
   secretName: myota-observe
   appKeyKey: app-key
   appSecretKey: app-secret
+prometheus:
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
 dependencies:
   objectStorageEndpoint: http://myota-s3:8333
   objectStoragePublicEndpoint: ''
