@@ -135,8 +135,12 @@ against the isolated deployment remains under Phase 6 issue #10.
   evidence; the broader clean-install, authenticated workflow, backup/restore,
   observability, and rollback gates remain tracked by issue #10. The current
   `myota-test` topology has 21/21 requested replicas ready and 17/17 Prometheus
-  targets up, but no Observe destination or centralized logs/traces backend;
-  workflow signal correlation remains open under #90 and #91.
+  targets up. Helm enables optional Observe credential wiring, but the
+  `myota-observe` Secret is absent; the application enables reporting only when
+  both credentials are non-empty, so no authenticated Observe receipt is
+  verified. There is also no centralized logs/traces backend; workflow signal
+  correlation remains open under #90 and #91. See the current live recheck in
+  [Observe delivery](operations/observe-delivery-smoke.md).
   A deployed Participant email-change request recovered from a temporary SMTP
   outage: the current-address message retried twice and delivered after the
   test sink returned. The old address remained authoritative until both links

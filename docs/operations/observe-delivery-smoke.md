@@ -43,6 +43,17 @@ or OpenTelemetry Collector. This verifies metrics scraping and worker dependency
 availability only; it does not provide Observe delivery or deployed log/trace
 correlation.
 
+A further live recheck at 23:23 UTC on 2026-10-27 found all 16 Helm-managed
+Deployments available (21/21 requested replicas) and all 17 `myota-test`
+Prometheus targets up. Helm now has `observe.enabled: true`, but the configured
+`myota-observe` Secret is absent and its app-key/app-secret references are
+optional. The service bootstrap enables reporting only when both credentials
+are non-empty, so the current deployment is expected to keep reporting disabled;
+this follows from the rendered configuration and bootstrap predicate, not a
+direct read of environment values inside the distroless containers. The Helm
+endpoint override is empty, no Loki/Tempo/OpenTelemetry Collector Deployment was
+found, and authenticated delivery to a real Observe account remains unqualified.
+
 ## Authenticated Grafana dashboard proxy
 
 Issue [#116](https://github.com/myota-platform/myota-next/issues/116) records the
