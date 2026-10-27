@@ -137,6 +137,11 @@ against the isolated deployment remains under Phase 6 issue #10.
   `myota-test` topology has 21/21 requested replicas ready and 17/17 Prometheus
   targets up, but no Observe destination or centralized logs/traces backend;
   workflow signal correlation remains open under #90 and #91.
+  A deployed Participant email-change request recovered from a temporary SMTP
+  outage: the current-address message retried twice and delivered after the
+  test sink returned. The old address remained authoritative until both links
+  were confirmed. See the [Identity parity evidence](parity/identity-programmes.md)
+  and Phase 6 issue #115.
   The local Observe SDK delivery smoke test and its limits are documented in
   [Observe delivery smoke test](operations/observe-delivery-smoke.md); live
   test-namespace credentials and telemetry correlation are still required.
