@@ -32,7 +32,12 @@
               "enum": [
                 "account-created-participant.v1",
                 "account-created-administrator.v1",
-                "participant-email-verification.v1"
+                "participant-email-verification.v1",
+                "password-reset.v1",
+                "participant-email-change-old.v1",
+                "participant-email-change-new.v1",
+                "participant-email-change-complete-old.v1",
+                "participant-email-change-complete-new.v1"
               ],
               "maxLength": 40
             },
@@ -94,6 +99,25 @@
                 {
                   "properties": {
                     "templateId": {
+                      "const": "password-reset.v1"
+                    },
+                    "templateData": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["displayName"],
+                      "properties": {
+                        "displayName": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "templateId": {
                       "const": "participant-email-verification.v1"
                     },
                     "templateData": {
@@ -115,6 +139,102 @@
                       }
                     }
                   }
+                },
+                {
+                  "properties": {
+                    "templateId": {
+                      "const": "participant-email-change-old.v1"
+                    },
+                    "templateData": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["displayName", "changeId"],
+                      "properties": {
+                        "displayName": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "changeId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "maxLength": 36
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "templateId": {
+                      "const": "participant-email-change-new.v1"
+                    },
+                    "templateData": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["displayName", "changeId"],
+                      "properties": {
+                        "displayName": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "changeId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "maxLength": 36
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "templateId": {
+                      "const": "participant-email-change-complete-old.v1"
+                    },
+                    "templateData": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["displayName", "changeId"],
+                      "properties": {
+                        "displayName": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "changeId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "maxLength": 36
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "templateId": {
+                      "const": "participant-email-change-complete-new.v1"
+                    },
+                    "templateData": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["displayName", "changeId"],
+                      "properties": {
+                        "displayName": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "changeId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "maxLength": 36
+                        }
+                      }
+                    }
+                  }
                 }
               ]
             }
@@ -125,8 +245,11 @@
   ],
   "x-payload-evidence": "proposed-versioned-allowlisted-template-reference; approved by email workstream decisions",
   "x-work-id-source": "email.send.v1 payload requestId, matched to outbox aggregate ID",
-  "x-producer-sources": ["apps/identity/src/identity-registration.service.ts"],
-  "x-consumer-sources": ["apps/email/email_worker.py"],
+  "x-producer-sources": [
+    "apps/identity/src/auth.service.ts",
+    "apps/identity/src/identity-registration.service.ts"
+  ],
+  "x-consumer-sources": ["apps/email-worker/src/email-command.ts"],
   "x-max-payload-bytes": 8192,
   "x-delivery-semantics": "at-least-once; explicit acknowledgement after durable outcome; unknown version/template is never success-acked; transient failures retry under deployment-bounded policy; ambiguous SMTP acceptance can duplicate"
 }

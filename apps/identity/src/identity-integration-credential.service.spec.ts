@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import type { IdentityAuthService } from './auth.service.js';
 import { IdentityCredentialService } from './identity-credential.service.js';
@@ -7,7 +12,7 @@ import { IdentityIntegrationService } from './identity-integration.service.js';
 describe('Identity integration and credential services', () => {
   const accountId = '77777777-7777-4777-8777-777777777777';
 
-  function database() {
+  function database(activeRecoveryRequestId: string | null = null) {
     const queries: Array<{ sql: string; values: unknown[] }> = [];
     const events: Array<{ type: string; payload: Record<string, unknown> }> =
       [];
@@ -43,6 +48,10 @@ describe('Identity integration and credential services', () => {
         }
         if (sql.includes('FROM public.auth_revocation')) {
           return { rows: [], rowCount: 0 };
+        }
+        if (sql.includes('FROM public.identity_password_recovery_request')) {
+          const active = values[0] === activeRecoveryRequestId;
+          return { rows: active ? [{}] : [], rowCount: active ? 1 : 0 };
         }
         if (sql.includes('FROM public.account')) {
           return { rows: [{ email: 'operator@example.test' }], rowCount: 1 };
@@ -221,5 +230,62 @@ describe('Identity integration and credential services', () => {
     await expect(
       service.resolveEmailRecipient('Bearer service-token', accountId),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('creates a reset token only for authenticated email delivery and stores its hash', async () => {
+    const requestId = '88888888-8888-4888-8888-888888888888';
+    const db = database(requestId);
+    const originalUrl = process.env.MYOTA_PARTICIPANT_PUBLIC_URL;
+    process.env.MYOTA_PARTICIPANT_PUBLIC_URL =
+      'https://participant.example.test/';
+    try {
+      const service = new IdentityCredentialService(db.pool, auth().service);
+      const result = await service.resolveEmailRecipient(
+        'Bearer service-token',
+        accountId,
+        'password-reset.v1',
+        requestId,
+      );
+      const resetUrl = new URL(result.templateData?.resetUrl ?? '');
+      const token = new URLSearchParams(resetUrl.hash.slice(1)).get(
+        'resetToken',
+      );
+      expect(resetUrl.origin).toBe('https://participant.example.test');
+      expect(resetUrl.searchParams.has('resetToken')).toBe(false);
+      expect(token).toMatch(/^[A-Za-z0-9_-]{40,60}$/);
+      const insertedToken = db.queries.find(({ sql }) =>
+        sql.includes('INSERT INTO public.account_recovery_token'),
+      );
+      expect(insertedToken?.values).toEqual([
+        createHash('sha256').update(token!).digest('hex'),
+        accountId,
+        1800,
+        requestId,
+      ]);
+      expect(insertedToken?.values).not.toContain(token);
+      expect(db.queries.some(({ sql }) => sql === 'COMMIT')).toBe(true);
+    } finally {
+      if (originalUrl === undefined)
+        delete process.env.MYOTA_PARTICIPANT_PUBLIC_URL;
+      else process.env.MYOTA_PARTICIPANT_PUBLIC_URL = originalUrl;
+    }
+  });
+
+  it('rejects a stale queued recovery request before minting a reset token', async () => {
+    const db = database('99999999-9999-4999-8999-999999999999');
+    const service = new IdentityCredentialService(db.pool, auth().service);
+    await expect(
+      service.resolveEmailRecipient(
+        'Bearer service-token',
+        accountId,
+        'password-reset.v1',
+        '88888888-8888-4888-8888-888888888888',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(
+      db.queries.some(({ sql }) =>
+        sql.includes('INSERT INTO public.account_recovery_token'),
+      ),
+    ).toBe(false);
   });
 });

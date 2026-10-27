@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "registryVersion": 1,
-  "status": "68 source-derived fact schemas and 11 bounded work-command schemas; email.send.v1 has a consumer implementation, while the Identity producer and runtime deployment remain gated",
+  "status": "68 source-derived fact schemas and 11 bounded work-command schemas; email.send.v1 has Identity producer and Email worker implementations",
   "factStream": "MYOTA_EVENTS",
   "factSubjectPrefix": "myota.events.",
   "activityWorkStream": "MYOTA_ACTIVITY_WORK",
@@ -4248,7 +4248,7 @@
       "workType": "email.send.v1",
       "owner": "identity-service",
       "class": "work-command",
-      "status": "consumer-implemented-producer-in-progress",
+      "status": "consumer-and-producer-implemented",
       "subject": "myota.work.email.send.v1",
       "stream": "MYOTA_EMAIL_WORK",
       "durable": "email-delivery-v1",
@@ -4276,7 +4276,12 @@
             "enum": [
               "account-created-participant.v1",
               "account-created-administrator.v1",
-              "participant-email-verification.v1"
+              "participant-email-verification.v1",
+              "password-reset.v1",
+              "participant-email-change-old.v1",
+              "participant-email-change-new.v1",
+              "participant-email-change-complete-old.v1",
+              "participant-email-change-complete-new.v1"
             ],
             "maxLength": 40
           },
@@ -4359,13 +4364,132 @@
                     }
                   }
                 }
+              },
+              {
+                "properties": {
+                  "templateId": {
+                    "const": "password-reset.v1"
+                  },
+                  "templateData": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["displayName"],
+                    "properties": {
+                      "displayName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "templateId": {
+                    "const": "participant-email-change-old.v1"
+                  },
+                  "templateData": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["displayName", "changeId"],
+                    "properties": {
+                      "displayName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "changeId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "maxLength": 36
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "templateId": {
+                    "const": "participant-email-change-new.v1"
+                  },
+                  "templateData": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["displayName", "changeId"],
+                    "properties": {
+                      "displayName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "changeId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "maxLength": 36
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "templateId": {
+                    "const": "participant-email-change-complete-old.v1"
+                  },
+                  "templateData": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["displayName", "changeId"],
+                    "properties": {
+                      "displayName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "changeId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "maxLength": 36
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "templateId": {
+                    "const": "participant-email-change-complete-new.v1"
+                  },
+                  "templateData": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["displayName", "changeId"],
+                    "properties": {
+                      "displayName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "changeId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "maxLength": 36
+                      }
+                    }
+                  }
+                }
               }
             ]
           }
         ]
       },
       "workIdSource": "identity outbox_event.payload.requestId",
-      "producerSources": ["apps/identity/src/identity-registration.service.ts"],
+      "producerSources": [
+        "apps/identity/src/auth.service.ts",
+        "apps/identity/src/identity-registration.service.ts",
+        "apps/identity/src/identity-email-change.service.ts"
+      ],
       "consumerSources": ["apps/email-worker/src/email-command.ts"]
     },
     {

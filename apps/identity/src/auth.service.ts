@@ -30,7 +30,7 @@ import {
 } from '@app/platform/python-strings.js';
 import { unicodeCaseFold } from '@app/platform/unicode-casefold.js';
 import { DEFAULT_ROLE_SCOPES } from './role-catalog.js';
-import { writeSecurityEvent } from '@app/platform/outbox.js';
+import { writeOutboxEvent, writeSecurityEvent } from '@app/platform/outbox.js';
 
 const ACCESS_SECONDS = integerSetting(
   process.env.MYOTA_ACCESS_TOKEN_SECONDS,
@@ -356,43 +356,141 @@ export class IdentityAuthService {
     }
   }
 
-  async requestRecovery(email: string): Promise<Record<string, unknown>> {
+  async requestRecovery(
+    email: string,
+    remoteAddr: string | null = null,
+  ): Promise<Record<string, unknown>> {
     requireIdentityFields({ email }, ['email']);
     const normalizedEmail = unicodeCaseFold(trimPythonWhitespace(email));
+    if (
+      !normalizedEmail ||
+      normalizedEmail.length > 254 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)
+    )
+      throw new BadRequestException('email is invalid');
+    const participantUrl = process.env.MYOTA_PARTICIPANT_PUBLIC_URL?.trim();
+    let participantBase: URL;
+    try {
+      participantBase = new URL(participantUrl ?? '');
+    } catch {
+      throw new ServiceUnavailableException(
+        'Participant recovery email is not configured',
+      );
+    }
+    if (
+      participantBase.protocol !== 'https:' &&
+      !(
+        participantBase.protocol === 'http:' &&
+        ['localhost', '127.0.0.1', '[::1]'].includes(participantBase.hostname)
+      )
+    )
+      throw new ServiceUnavailableException(
+        'Participant recovery email is not configured',
+      );
     const client = await this.connect();
     try {
       await client.query('BEGIN');
+      const rateLimitKey = createHash('sha256')
+        .update(`recovery:${normalizedEmail}:${remoteAddr ?? 'unknown'}`)
+        .digest('hex');
+      const rateLimit = await client.query<{ request_count: number }>(
+        `INSERT INTO public.identity_registration_rate_limit
+           (key_hash, window_started_at, request_count, expires_at)
+         VALUES ($1, clock_timestamp(), 1,
+                 clock_timestamp() + interval '15 minutes')
+         ON CONFLICT (key_hash) DO UPDATE SET
+           window_started_at = CASE
+             WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
+               THEN clock_timestamp()
+             ELSE identity_registration_rate_limit.window_started_at END,
+           request_count = CASE
+             WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
+               THEN 1
+             ELSE identity_registration_rate_limit.request_count + 1 END,
+           expires_at = CASE
+             WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
+               THEN clock_timestamp() + interval '15 minutes'
+             ELSE identity_registration_rate_limit.expires_at END,
+           updated_at = clock_timestamp()
+         RETURNING request_count`,
+        [rateLimitKey],
+      );
+      if ((rateLimit.rows[0]?.request_count ?? 0) > 5) {
+        await client.query('COMMIT');
+        return { status: 'accepted' };
+      }
       await client.query(
         `DELETE FROM public.account_recovery_token
           WHERE used_at IS NOT NULL OR expires_at <= now()`,
       );
-      const accountResult = await client.query<{ id: string }>(
-        `SELECT id FROM public.account
-          WHERE identity_email_key = $1`,
+      const accountResult = await client.query<{
+        id: string;
+        display_name: string;
+      }>(
+        `SELECT id, display_name FROM public.account
+          WHERE identity_email_key = $1
+            AND status = 'ACTIVE'
+            AND email_verified = true
+          FOR UPDATE`,
         [normalizedEmail],
       );
       const account = accountResult.rows[0];
       let devResetToken: string | undefined;
       if (account) {
-        const token = randomBytes(32).toString('base64url');
         await client.query(
-          `INSERT INTO public.account_recovery_token (token_hash, account_id, expires_at)
-           VALUES ($1, $2, now() + ($3 * interval '1 second'))`,
-          [
-            createHash('sha256').update(token).digest('hex'),
-            account.id,
-            integerSetting(process.env.MYOTA_RECOVERY_TOKEN_SECONDS, 1800),
-          ],
+          `UPDATE public.identity_password_recovery_request
+              SET invalidated_at = clock_timestamp()
+            WHERE account_id = $1 AND invalidated_at IS NULL
+              AND expires_at > clock_timestamp()`,
+          [account.id],
         );
+        await client.query(
+          `UPDATE public.account_recovery_token
+              SET used_at = clock_timestamp()
+            WHERE account_id = $1 AND used_at IS NULL`,
+          [account.id],
+        );
+        const requestId = randomUUID();
+        await client.query(
+          `INSERT INTO public.identity_password_recovery_request
+             (id, account_id, expires_at)
+           VALUES ($1, $2, clock_timestamp() + interval '24 hours')`,
+          [requestId, account.id],
+        );
+        if (
+          process.env.MYOTA_ENV === 'test' &&
+          process.env.MYOTA_EXPOSE_DEV_TOKENS === '1'
+        ) {
+          const token = randomBytes(32).toString('base64url');
+          await client.query(
+            `INSERT INTO public.account_recovery_token
+               (token_hash, account_id, expires_at, request_id)
+             VALUES ($1, $2, now() + ($3 * interval '1 second'), $4)`,
+            [
+              createHash('sha256').update(token).digest('hex'),
+              account.id,
+              integerSetting(process.env.MYOTA_RECOVERY_TOKEN_SECONDS, 1800),
+              requestId,
+            ],
+          );
+          devResetToken = token;
+        }
         await this.writeAudit(client, 'identity.recovery.requested.v1', {
           accountId: account.id,
         });
-        if (
-          process.env.MYOTA_ENV !== 'production' ||
-          process.env.MYOTA_EXPOSE_DEV_TOKENS === '1'
-        ) {
-          devResetToken = token;
-        }
+        await writeOutboxEvent(client, {
+          eventType: 'email.send.v1',
+          aggregateType: 'email_delivery_intent',
+          aggregateId: requestId,
+          payload: {
+            requestId,
+            recipientAccountId: account.id,
+            templateId: 'password-reset.v1',
+            templateData: {
+              displayName: account.display_name,
+            },
+          },
+        });
       }
       await client.query('COMMIT');
       return {
@@ -412,14 +510,22 @@ export class IdentityAuthService {
     newPassword: string,
   ): Promise<{ status: string }> {
     requireIdentityFields({ token, newPassword }, ['token', 'newPassword']);
+    if (!/^[A-Za-z0-9_-]{40,60}$/.test(token))
+      throw new BadRequestException('recovery token is invalid or expired');
     const client = await this.connect();
     try {
       await client.query('BEGIN');
       const tokenHash = createHash('sha256').update(token).digest('hex');
       const recoveryResult = await client.query<{ account_id: string }>(
-        `SELECT account_id FROM public.account_recovery_token
-          WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
-          FOR UPDATE`,
+        `SELECT r.account_id FROM public.account_recovery_token r
+          JOIN public.account a ON a.id = r.account_id
+          JOIN public.identity_password_recovery_request q
+            ON q.id = r.request_id AND q.account_id = r.account_id
+          WHERE r.token_hash = $1 AND r.used_at IS NULL
+            AND r.expires_at > now() AND q.invalidated_at IS NULL
+            AND q.expires_at > now()
+            AND a.status = 'ACTIVE' AND a.email_verified = true
+          FOR UPDATE OF r, q, a`,
         [tokenHash],
       );
       const recovery = recoveryResult.rows[0];
@@ -429,6 +535,11 @@ export class IdentityAuthService {
       if (Array.from(newPassword).length < 12) {
         throw new BadRequestException(
           'password must contain at least 12 characters',
+        );
+      }
+      if (Array.from(newPassword).length > 128) {
+        throw new BadRequestException(
+          'password must contain no more than 128 characters',
         );
       }
       const passwordHash = await hashPassword(newPassword);
@@ -445,8 +556,8 @@ export class IdentityAuthService {
       );
       await client.query(
         `UPDATE public.account_recovery_token SET used_at = now()
-          WHERE token_hash = $1`,
-        [tokenHash],
+          WHERE account_id = $1 AND used_at IS NULL`,
+        [recovery.account_id],
       );
       await client.query(
         `UPDATE public.auth_session SET revoked_at = clock_timestamp()
@@ -1132,7 +1243,7 @@ export function validateWebsiteUrl(
   }
 }
 
-async function verifyPassword(
+export async function verifyPassword(
   password: string,
   encoded: string,
 ): Promise<boolean> {
