@@ -540,8 +540,16 @@ test('does not render another participant activation when details are denied', a
     'details.activation-history-detail[data-activation-id="activation-owned-by-someone-else"]',
   );
   await expect(details).toHaveCount(1);
-  await details.locator('summary').focus();
-  await page.keyboard.press('Enter');
+  const deniedResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === '/v1/activations/activation-owned-by-someone-else' &&
+      response.status() === 404
+    );
+  });
+  await details.locator('summary').click();
+  await expect(details).toHaveAttribute('open', '');
+  expect((await deniedResponse).status()).toBe(404);
 
   const detailPanel = details.locator('.activation-history-content');
   await expect(detailPanel).toContainText(
