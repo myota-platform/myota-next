@@ -221,4 +221,31 @@ describe('AwardsService synchronous and asynchronous boundaries', () => {
     ).rejects.toThrow('award scope is required');
     expect(createPublishedAwardRevision).not.toHaveBeenCalled();
   });
+
+  it('rejects invalid award image data before sending it to object storage', async () => {
+    const saveAwardAsset = vi.fn();
+    const service = new AwardsService(
+      {} as ActivityRepository,
+      {
+        getAwardAsset: vi.fn(async () => ({
+          id: 'asset-1',
+          kind: 'BACKGROUND',
+          objectKey: 'test/background.png',
+          bucket: 'test-award-assets',
+        })),
+        saveAwardAsset,
+      } as unknown as ActivityAwardsRepository,
+    );
+    const authorization = `Bearer ${signAccessToken('admin-1', ['awards.admin'])}`;
+
+    await expect(
+      service.putAssetContent(
+        authorization,
+        'asset-1',
+        'image/png',
+        Buffer.from('not an image'),
+      ),
+    ).rejects.toThrow('image content is invalid');
+    expect(saveAwardAsset).not.toHaveBeenCalled();
+  });
 });

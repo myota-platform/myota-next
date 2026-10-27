@@ -69,6 +69,49 @@ describe('certificate print profiles', () => {
     expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
   });
 
+  it.each([
+    ['A4', 'PORTRAIT', 1241, 1754],
+    ['A4', 'LANDSCAPE', 1754, 1241],
+    ['LETTER', 'PORTRAIT', 1275, 1650],
+    ['LETTER', 'LANDSCAPE', 1650, 1275],
+  ])(
+    'resizes a mismatched source for %s %s at 150 DPI without modifying it',
+    async (page, orientation, widthPx, heightPx) => {
+      const source = await sharp({
+        create: {
+          width: 640,
+          height: 480,
+          channels: 3,
+          background: { r: 24, g: 92, b: 132 },
+        },
+      })
+        .png()
+        .toBuffer();
+      const resized = await resizeCertificateBackground(source, {
+        page,
+        orientation,
+        dpi: 150,
+      });
+      const sourceMetadata = await sharp(source).metadata();
+      const outputMetadata = await sharp(resized).metadata();
+
+      expect({
+        width: sourceMetadata.width,
+        height: sourceMetadata.height,
+      }).toEqual({
+        width: 640,
+        height: 480,
+      });
+      expect({
+        width: outputMetadata.width,
+        height: outputMetadata.height,
+      }).toEqual({
+        width: widthPx,
+        height: heightPx,
+      });
+    },
+  );
+
   it('rejects unsupported print profiles', () => {
     expect(() =>
       certificatePixelDimensions({
@@ -77,5 +120,27 @@ describe('certificate print profiles', () => {
         dpi: 300,
       }),
     ).toThrow('certificate print profile is invalid');
+  });
+
+  it.each([149, 301])('rejects %i DPI outside the supported range', (dpi) => {
+    expect(() =>
+      certificatePixelDimensions({
+        page: 'A4',
+        orientation: 'PORTRAIT',
+        dpi,
+      }),
+    ).toThrow('certificate print profile is invalid');
+  });
+
+  it('returns a clear error for invalid background data', async () => {
+    await expect(
+      resizeCertificateBackground(Buffer.from('not an image'), {
+        page: 'A4',
+        orientation: 'PORTRAIT',
+        dpi: 300,
+      }),
+    ).rejects.toThrow(
+      'certificate background must be a valid PNG or JPEG image',
+    );
   });
 });

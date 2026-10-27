@@ -34,7 +34,17 @@ export async function resizeCertificateBackground(
     limitInputPixels: 16_000_000,
     failOn: 'error',
   }).rotate();
-  const metadata = await source.metadata();
+  let metadata: Awaited<ReturnType<typeof source.metadata>>;
+  try {
+    metadata = await source.metadata();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : '';
+    if (/pixel limit/i.test(detail))
+      throw new Error(
+        'certificate background exceeds the 16 million pixel processing limit',
+      );
+    throw new Error('certificate background must be a valid PNG or JPEG image');
+  }
   if (
     !metadata.width ||
     !metadata.height ||
@@ -42,13 +52,19 @@ export async function resizeCertificateBackground(
   )
     throw new Error('certificate background must be a valid PNG or JPEG image');
 
-  const resized = source.resize(dimensions.widthPx, dimensions.heightPx, {
-    fit: 'cover',
-    position: 'centre',
-  });
-  return metadata.format === 'jpeg'
-    ? resized.jpeg({ quality: 90, mozjpeg: true }).toBuffer()
-    : resized.png({ compressionLevel: 9 }).toBuffer();
+  try {
+    const resized = source.resize(dimensions.widthPx, dimensions.heightPx, {
+      fit: 'cover',
+      position: 'centre',
+    });
+    return metadata.format === 'jpeg'
+      ? await resized.jpeg({ quality: 90, mozjpeg: true }).toBuffer()
+      : await resized.png({ compressionLevel: 9 }).toBuffer();
+  } catch {
+    throw new Error(
+      'certificate background could not be resized for the selected print profile',
+    );
+  }
 }
 
 export async function renderCertificatePdf(input: {
