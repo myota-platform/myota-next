@@ -466,3 +466,91 @@ test('shows the participant their activation QSOs and ADIF outcomes', async ({
     'Participant activation history details',
   );
 });
+
+test('does not render another participant activation when details are denied', async ({
+  page,
+}) => {
+  const detailRequests: string[] = [];
+  await page.route('**/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({ json: { items: [], nextPage: null } });
+      return;
+    }
+    if (url.pathname.endsWith('/content')) {
+      await route.fulfill({ json: { items: [] } });
+      return;
+    }
+    if (url.pathname === '/v1/identity/auth/login') {
+      await route.fulfill({
+        json: {
+          accessToken: 'other-participant-access-token',
+          refreshToken: 'other-participant-refresh-token',
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/identity/me') {
+      await route.fulfill({
+        json: {
+          id: 'participant-2',
+          email: 'other@example.test',
+          roles: [{ role: 'PARTICIPANT' }],
+          callsigns: [],
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/activations' && request.method() === 'GET') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              id: 'activation-owned-by-someone-else',
+              programmeSlug: 'alpine',
+              operatorId: 'participant-1',
+              operatorCallsign: 'DL1ABC',
+              status: 'CLOSED',
+              qsoCount: 1,
+              startedAt: '2026-10-27T06:00:00Z',
+            },
+          ],
+          nextPage: null,
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/activations/activation-owned-by-someone-else') {
+      detailRequests.push(request.headers().authorization || '');
+      await route.fulfill({
+        status: 404,
+        json: { statusCode: 404, detail: 'Activation not found' },
+      });
+      return;
+    }
+    await route.fulfill({ json: { items: [], nextPage: null } });
+  });
+
+  await page.goto('http://127.0.0.1:8091');
+  await page.locator('#award-email').fill('other@example.test');
+  await page.locator('#award-password').fill('test-password');
+  await page.locator('#participant-login button[type="submit"]').click();
+  const details = page.locator(
+    'details.activation-history-detail[data-activation-id="activation-owned-by-someone-else"]',
+  );
+  await expect(details).toHaveCount(1);
+  await details.locator('summary').focus();
+  await page.keyboard.press('Enter');
+
+  const detailPanel = details.locator('.activation-history-content');
+  await expect(detailPanel).toContainText(
+    'Unable to load activation details. Activation not found',
+  );
+  await expect(detailPanel).not.toContainText('F4XYZ');
+  expect(detailRequests).toEqual(['Bearer other-participant-access-token']);
+  await expectResponsiveAccessible(
+    page,
+    'Denied Participant activation history details',
+  );
+});
