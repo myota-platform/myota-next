@@ -139,7 +139,7 @@ under `geodataWorker.locationEnrichment`; defaults are
 optional so deployments without a provider credential remain available and
 record enrichment as `NOT_CONFIGURED`. Use a provider plan that permits
 server-side lookups of stored entity coordinates. Keep the key out of chart
-values and Git. See the [location enrichment guide](https://github.com/myota-platform/myota-docs/blob/main/docs/geodata/location-enrichment.md)
+values and Git. See the [location enrichment operations guide](../../../docs/operations/location-enrichment.md)
 for safe provisioning, rotation, and qualification steps.
 
 For the optional single-instance PostgreSQL StatefulSets, install
