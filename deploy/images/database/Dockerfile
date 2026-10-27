@@ -20,4 +20,7 @@ COPY --chmod=0555 deploy/images/database/020-create-app-role.sh /docker-entrypoi
 FROM postgis/postgis:18-3.6-alpine@sha256:fd143c649af607c6872a1e59ccb3e43c299f207ab975a4c286fbb204b6e6f7b7 AS postgis
 COPY --from=gosu-build --chmod=0755 /out/gosu /usr/local/bin/gosu
 COPY --chmod=0555 deploy/images/database/020-create-app-role.sh /docker-entrypoint-initdb.d/020-create-app-role.sh
-RUN apk add --no-cache --upgrade brotli-libs=1.2.1-r0
+RUN apk add --no-cache --upgrade \
+    brotli-libs=1.2.1-r0 \
+    curl=8.23.0-r0 \
+    libcurl=8.23.0-r0

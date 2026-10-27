@@ -1,0 +1,7 @@
+defaultNamespace: myota-test
+keepResources: true
+correctDrift:
+  enabled: true
+helm:
+  releaseName: myota-test-values
+  takeOwnership: true

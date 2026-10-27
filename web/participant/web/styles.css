@@ -13,6 +13,11 @@
 [hidden] {
   display: none !important;
 }
+details > summary {
+  cursor: pointer;
+  min-height: 36px;
+  padding-block: 7px;
+}
 body {
   margin: 0;
   background: #f8fbfa;
@@ -531,6 +536,53 @@ a {
 .awards-panel .small {
   color: var(--muted);
   font-size: 12px;
+}
+.activation-history {
+  display: grid;
+  gap: 0.6rem;
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+.activation-history-detail {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-width: 0;
+  padding: 0.25rem 0.75rem;
+}
+.activation-history-detail summary {
+  overflow-wrap: anywhere;
+}
+.activation-history-detail summary .small {
+  color: var(--primary);
+  font-weight: 700;
+}
+.activation-history-content {
+  border-top: 1px solid var(--line);
+  margin-top: 0.5rem;
+  overflow-wrap: anywhere;
+  padding: 0.75rem 0;
+}
+.activation-history-content h4 {
+  margin: 0.75rem 0 0.35rem;
+}
+.activation-detail-list {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.activation-detail-list li {
+  border-left: 3px solid var(--line);
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+  padding: 0.3rem 0.6rem;
+}
+.activation-detail-list li span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 @media (max-width: 760px) {
   .public-award {

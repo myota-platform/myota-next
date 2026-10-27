@@ -68,10 +68,10 @@ parsing, geometry normalization, and deduplication run asynchronously, so large
 pasted FeatureCollections do not hold the browser request open. Reverse
 geocoding occurs after an entity is materialized or its geometry changes, not
 during import preprocessing. The run first reaches `PREPROCESSED`; records are shown in a
-compact paged validation queue in the import summary modal. Confirm up to 100
+compact paged validation queue in the import summary modal. Confirm up to 300
 selected records, then choose `CANDIDATE` or `APPROVED` to apply their final
 state synchronously. Bulk import intake and preprocessing stay asynchronous.
-Larger candidate sets are handled as separate bounded actions. The run remains
+Selections above 300 records are rejected before mutation; the run remains
 visible after the page is refreshed.
 
 Click a pre-processed record's name to open a Leaflet map preview centered on

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   HttpException,
   Injectable,
@@ -80,9 +81,19 @@ export class AwardsService {
   async get(authorization: string | undefined, id: string) {
     const award = await this.awardsRepository.getAwardDefinition(id);
     const claims = authorization ? verifyAccessToken(authorization) : null;
-    if (!claims && award.status !== 'PUBLISHED')
-      throw new ForbiddenException('only published awards are public');
-    if (claims) this.authorize(claims.scp, ['awards.read', 'awards.admin']);
+    const active = await this.awardsRepository.isActivePublishedAward(id);
+    if (!claims && !active)
+      throw new ForbiddenException('only the active published award is public');
+    if (claims) {
+      this.authorize(claims.scp, ['awards.read', 'awards.admin']);
+      const canManageVersions = claims.scp.some(
+        (scope) => scope === '*' || scope === 'awards.admin',
+      );
+      if (award.status === 'PUBLISHED' && !active && !canManageVersions)
+        throw new ForbiddenException(
+          'only the active published award is available',
+        );
+    }
     return award;
   }
 
@@ -102,7 +113,23 @@ export class AwardsService {
       if (existing && !['DRAFT', 'CHANGES_REQUESTED'].includes(existing.status))
         throw new BadRequestException('only draft awards can be edited');
     }
-    const record = validateAwardDraft(body, existing);
+    const requestedBackground = asRecord(
+      body.backgroundAsset,
+      'backgroundAsset',
+    );
+    const objectKey =
+      typeof requestedBackground.objectKey === 'string'
+        ? requestedBackground.objectKey
+        : '';
+    const registeredBackground = objectKey
+      ? await this.awardsRepository.findAwardAsset('BACKGROUND', objectKey)
+      : null;
+    if (objectKey && !registeredBackground)
+      throw new BadRequestException('choose a registered background asset');
+    const record = validateAwardDraft(
+      { ...body, backgroundAsset: registeredBackground ?? requestedBackground },
+      existing,
+    );
     const updatedAt = await this.awardsRepository.utcTimestamp();
     const createdAt = await this.awardsRepository.utcTimestamp();
     record.updatedAt = updatedAt;
@@ -143,6 +170,59 @@ export class AwardsService {
       return this.publish(authorization, id, patch, key);
     if (status === 'RETIRED') return this.retire(authorization, id, patch, key);
     const existing = await this.getAwardDefinitionOrThrow(id);
+    if (existing.status === 'PUBLISHED') {
+      this.authorizeHeader(authorization, ['awards.admin']);
+      const expectedVersion = Number(patch.expectedVersion);
+      // The Admin editor includes awardId in its normal save payload. For a
+      // published source that ID identifies the version being revised, not
+      // the new draft's identity; validateAwardDraft must generate a fresh ID.
+      delete patch.awardId;
+      delete patch.expectedVersion;
+      if (
+        !Number.isSafeInteger(expectedVersion) ||
+        expectedVersion !== Number(existing.version ?? 1)
+      )
+        throw new ConflictException(
+          'award changed since it was loaded; reload before editing',
+        );
+      if (
+        (patch.programmeSlug !== undefined &&
+          patch.programmeSlug !== existing.programmeSlug) ||
+        (patch.code !== undefined && patch.code !== existing.code)
+      )
+        throw new BadRequestException(
+          'a published award revision must retain its programme and code',
+        );
+      const requestedBackground = asRecord(
+        patch.backgroundAsset ?? existing.backgroundAsset,
+        'backgroundAsset',
+      );
+      const objectKey =
+        typeof requestedBackground.objectKey === 'string'
+          ? requestedBackground.objectKey
+          : '';
+      const registeredBackground = objectKey
+        ? await this.awardsRepository.findAwardAsset('BACKGROUND', objectKey)
+        : null;
+      if (objectKey && !registeredBackground)
+        throw new BadRequestException('choose a registered background asset');
+      const record = validateAwardDraft({
+        ...existing,
+        ...patch,
+        version: Number(existing.version ?? 1) + 1,
+        backgroundAsset: registeredBackground ?? requestedBackground,
+      });
+      const timestamp = await this.awardsRepository.utcTimestamp();
+      record.createdAt = timestamp;
+      record.updatedAt = timestamp;
+      record.revisionOf = id;
+      return this.awardsRepository.createPublishedAwardRevision(
+        id,
+        expectedVersion,
+        record,
+        key,
+      );
+    }
     const saved = await this.save(authorization, key, {
       ...existing,
       ...patch,
@@ -200,9 +280,13 @@ export class AwardsService {
       );
     if (award.status !== 'APPROVED')
       throw new BadRequestException('only approved awards can be published');
+    if (!pythonTruthy((award.backgroundAsset as JsonRecord)?.objectKey))
+      throw new BadRequestException(
+        'select a registered PNG or JPEG background before publishing',
+      );
     if (!award.printReadiness?.printReady)
       throw new BadRequestException(
-        'background image does not meet the selected A4/Letter print profile',
+        'background image needs at least 150 DPI of source detail after the selected print-profile crop; choose a higher-resolution image',
       );
     const effectiveFrom = new Date(body.effectiveFrom);
     if (!Number.isFinite(effectiveFrom.getTime()))
@@ -262,6 +346,13 @@ export class AwardsService {
       facts = null;
     }
     const award = await this.getAwardDefinitionOrThrow(body.awardId);
+    if (
+      award.status === 'PUBLISHED' &&
+      !(await this.awardsRepository.isActivePublishedAward(String(award.id)))
+    )
+      throw new BadRequestException(
+        'only the active published award can be evaluated',
+      );
     const payload = {
       awardId: award.id,
       subjectId: body.subjectId,
@@ -297,6 +388,13 @@ export class AwardsService {
     if (!awardId || !participantId)
       throw new BadRequestException('awardId and participantId are required');
     const award = await this.getAwardDefinitionOrThrow(awardId);
+    if (
+      award.status === 'PUBLISHED' &&
+      !(await this.awardsRepository.isActivePublishedAward(awardId))
+    )
+      throw new BadRequestException(
+        'only the active published award can be evaluated',
+      );
     const facts = await this.repository.subjectFacts(
       award.programmeSlug,
       participantId,
@@ -371,8 +469,10 @@ export class AwardsService {
     else this.authorize(claims.scp, ['awards.request', 'awards.admin']);
 
     const award = await this.getAwardDefinitionOrThrow(body.awardId);
-    if (award.status !== 'PUBLISHED')
-      throw new BadRequestException('only published awards can be requested');
+    if (!(await this.awardsRepository.isActivePublishedAward(String(award.id))))
+      throw new BadRequestException(
+        'only the active published award can be requested',
+      );
     const facts = await this.repository.subjectFacts(
       award.programmeSlug,
       body.subjectId,
@@ -491,6 +591,7 @@ export class AwardsService {
         backgroundAsset: award.backgroundAsset,
         printSpec: award.printSpec,
         elements: (award.template as JsonRecord).elements,
+        awardText: award.awardText ?? '',
         signatureAsset: signature,
       },
     };
@@ -668,6 +769,9 @@ export class AwardsService {
 
       const mockData = {
         AWARD_NAME: Array.from(name).slice(0, 200).join(''),
+        AWARD_TEXT: Array.from(pythonString(body.awardText ?? ''))
+          .slice(0, 200)
+          .join(''),
         CALLSIGN: 'EA7TEST',
         PERSON_NAME: 'Demo Radio Operator',
         DATE_OBTAINED: new Date().toISOString().slice(0, 10),

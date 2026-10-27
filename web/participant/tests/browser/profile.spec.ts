@@ -93,7 +93,7 @@ test('edits profile details and renders biography Markdown safely', async ({
   await page.goto('http://127.0.0.1:8091');
   await page.locator('#award-email').fill('operator@example.test');
   await page.locator('#award-password').fill('test-password');
-  await page.locator('#award-login button[type="submit"]').click();
+  await page.locator('#participant-login button[type="submit"]').click();
   await expect(page.locator('#profile-form')).toBeVisible();
   await expect(page.locator('#profile-website')).toHaveValue(
     'https://old.example.test',

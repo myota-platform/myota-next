@@ -20,7 +20,8 @@ services:
       POSTGRES_USER: myota
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-myota-dev-only}
       POSTGRES_DB: myota_core
-      MYOTA_APP_PASSWORD: ${MYOTA_APP_PASSWORD:-myota-dev-only}
+      MYOTA_APP_ROLE: myota_core_app
+      MYOTA_APP_PASSWORD: ${CORE_APP_PASSWORD:-myota-local-core-runtime-password-change-me-32chars}
     ports:
       - '127.0.0.1:5432:5432'
     volumes:
@@ -42,7 +43,8 @@ services:
       POSTGRES_USER: myota
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-myota-dev-only}
       POSTGRES_DB: myota_activity
-      MYOTA_APP_PASSWORD: ${MYOTA_APP_PASSWORD:-myota-dev-only}
+      MYOTA_APP_ROLE: myota_activity_app
+      MYOTA_APP_PASSWORD: ${ACTIVITY_APP_PASSWORD:-myota-local-activity-runtime-password-change-me-32chars}
     volumes:
       - activity-data:/var/lib/postgresql/data
     healthcheck:
@@ -62,7 +64,8 @@ services:
       POSTGRES_USER: myota
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-myota-dev-only}
       POSTGRES_DB: myota_geo
-      MYOTA_APP_PASSWORD: ${MYOTA_APP_PASSWORD:-myota-dev-only}
+      MYOTA_APP_ROLE: myota_geo_app
+      MYOTA_APP_PASSWORD: ${GEO_APP_PASSWORD:-myota-local-geodata-runtime-password-change-me-32chars}
     volumes:
       - geo-data:/var/lib/postgresql/data
     healthcheck:
@@ -80,13 +83,18 @@ services:
       - sh
       - -ec
       - >-
+        node --experimental-strip-types tools/sync-database-runtime-roles.ts &&
         node --experimental-strip-types tools/db-migrate.ts --owner=core &&
         node --experimental-strip-types tools/db-migrate.ts --owner=activity &&
-        node --experimental-strip-types tools/db-migrate.ts --owner=geo
+        node --experimental-strip-types tools/db-migrate.ts --owner=geo &&
+        node --experimental-strip-types tools/sync-database-runtime-roles.ts
     environment:
       CORE_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@core-db:5432/myota_core
       ACTIVITY_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@activity-db:5432/myota_activity
       GEO_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@geo-db:5432/myota_geo
+      CORE_RUNTIME_DB_PASSWORD: ${CORE_APP_PASSWORD:-myota-local-core-runtime-password-change-me-32chars}
+      ACTIVITY_RUNTIME_DB_PASSWORD: ${ACTIVITY_APP_PASSWORD:-myota-local-activity-runtime-password-change-me-32chars}
+      GEO_RUNTIME_DB_PASSWORD: ${GEO_APP_PASSWORD:-myota-local-geodata-runtime-password-change-me-32chars}
     depends_on:
       core-db: { condition: service_healthy }
       activity-db: { condition: service_healthy }
@@ -248,7 +256,7 @@ services:
     build: { context: .., dockerfile: Dockerfile, args: { APP_NAME: identity } }
     environment:
       <<: *observe-env
-      CORE_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@core-db:5432/myota_core
+      CORE_DATABASE_URL: postgresql://myota_core_app:${CORE_APP_PASSWORD:-myota-local-core-runtime-password-change-me-32chars}@core-db:5432/myota_core
       MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
       MYOTA_EMAIL_SERVICE_CLIENT_SECRET: ${MYOTA_EMAIL_SERVICE_CLIENT_SECRET:-myota-local-email-service-secret-32-chars-minimum}
       MYOTA_BOOTSTRAP_ADMIN_EMAIL: ${MYOTA_BOOTSTRAP_ADMIN_EMAIL:-}
@@ -274,7 +282,7 @@ services:
       }
     environment:
       <<: *observe-env
-      CORE_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@core-db:5432/myota_core
+      CORE_DATABASE_URL: postgresql://myota_core_app:${CORE_APP_PASSWORD:-myota-local-core-runtime-password-change-me-32chars}@core-db:5432/myota_core
       MYOTA_OBJECT_STORAGE_ENDPOINT: http://object-store:8333
       MYOTA_OBJECT_STORAGE_ACCESS_KEY: ${MYOTA_OBJECT_STORAGE_ACCESS_KEY:-myota-s3}
       MYOTA_OBJECT_STORAGE_SECRET_KEY: ${MYOTA_OBJECT_STORAGE_SECRET_KEY:-myota-s3-dev-only}
@@ -292,7 +300,7 @@ services:
       { context: .., dockerfile: Dockerfile, args: { APP_NAME: programmes } }
     environment:
       <<: *observe-env
-      CORE_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@core-db:5432/myota_core
+      CORE_DATABASE_URL: postgresql://myota_core_app:${CORE_APP_PASSWORD:-myota-local-core-runtime-password-change-me-32chars}@core-db:5432/myota_core
       MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
       MYOTA_ENV: development
     depends_on:
@@ -303,7 +311,7 @@ services:
     build: { context: .., dockerfile: Dockerfile, args: { APP_NAME: activity } }
     environment:
       <<: *observe-env
-      ACTIVITY_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@activity-db:5432/myota_activity
+      ACTIVITY_DATABASE_URL: postgresql://myota_activity_app:${ACTIVITY_APP_PASSWORD:-myota-local-activity-runtime-password-change-me-32chars}@activity-db:5432/myota_activity
       MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
       MYOTA_ENV: development
       MYOTA_OBJECT_STORAGE_ENDPOINT: http://object-store:8333
@@ -325,7 +333,7 @@ services:
     build: { context: .., dockerfile: Dockerfile, args: { APP_NAME: geodata } }
     environment:
       <<: *observe-env
-      GEO_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@geo-db:5432/myota_geo
+      GEO_DATABASE_URL: postgresql://myota_geo_app:${GEO_APP_PASSWORD:-myota-local-geodata-runtime-password-change-me-32chars}@geo-db:5432/myota_geo
       MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
       MYOTA_ENV: development
       MYOTA_ACTIVITY_URL: http://activity:8004
@@ -356,7 +364,7 @@ services:
       }
     environment:
       <<: *observe-env
-      ACTIVITY_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@activity-db:5432/myota_activity
+      ACTIVITY_DATABASE_URL: postgresql://myota_activity_app:${ACTIVITY_APP_PASSWORD:-myota-local-activity-runtime-password-change-me-32chars}@activity-db:5432/myota_activity
       NATS_URL: nats://nats:4222
       MYOTA_OBJECT_STORAGE_ENDPOINT: http://object-store:8333
       MYOTA_OBJECT_STORAGE_ADDRESSING_STYLE: path
@@ -380,7 +388,7 @@ services:
       }
     environment:
       <<: *observe-env
-      ACTIVITY_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@activity-db:5432/myota_activity
+      ACTIVITY_DATABASE_URL: postgresql://myota_activity_app:${ACTIVITY_APP_PASSWORD:-myota-local-activity-runtime-password-change-me-32chars}@activity-db:5432/myota_activity
       NATS_URL: nats://nats:4222
     depends_on:
       migrations: { condition: service_completed_successfully }
@@ -397,7 +405,7 @@ services:
       }
     environment:
       <<: *observe-env
-      GEO_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@geo-db:5432/myota_geo
+      GEO_DATABASE_URL: postgresql://myota_geo_app:${GEO_APP_PASSWORD:-myota-local-geodata-runtime-password-change-me-32chars}@geo-db:5432/myota_geo
       NATS_URL: nats://nats:4222
       MYOTA_ACTIVITY_URL: http://activity:8004
       MYOTA_AUTH_SIGNING_KEY: ${MYOTA_AUTH_SIGNING_KEY:-myota-local-development-signing-key-change-me}
@@ -448,7 +456,7 @@ services:
       { context: .., dockerfile: Dockerfile, args: { APP_NAME: email-worker } }
     environment:
       <<: *observe-env
-      CORE_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@core-db:5432/myota_core
+      CORE_DATABASE_URL: postgresql://myota_core_app:${CORE_APP_PASSWORD:-myota-local-core-runtime-password-change-me-32chars}@core-db:5432/myota_core
       NATS_URL: nats://nats:4222
       MYOTA_IDENTITY_URL: http://identity:8001
       MYOTA_EMAIL_SERVICE_CLIENT_SECRET: ${MYOTA_EMAIL_SERVICE_CLIENT_SECRET:-myota-local-email-service-secret-32-chars-minimum}
@@ -476,7 +484,7 @@ services:
       <<: *observe-env
       OUTBOX_OWNER: core
       OUTBOX_WORKER: core-outbox
-      OUTBOX_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@core-db:5432/myota_core
+      OUTBOX_DATABASE_URL: postgresql://myota_core_app:${CORE_APP_PASSWORD:-myota-local-core-runtime-password-change-me-32chars}@core-db:5432/myota_core
       NATS_URL: nats://nats:4222
     depends_on:
       migrations: { condition: service_completed_successfully }
@@ -490,7 +498,7 @@ services:
       <<: *observe-env
       OUTBOX_OWNER: activity
       OUTBOX_WORKER: activity-outbox
-      OUTBOX_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@activity-db:5432/myota_activity
+      OUTBOX_DATABASE_URL: postgresql://myota_activity_app:${ACTIVITY_APP_PASSWORD:-myota-local-activity-runtime-password-change-me-32chars}@activity-db:5432/myota_activity
       NATS_URL: nats://nats:4222
     depends_on:
       migrations: { condition: service_completed_successfully }
@@ -504,7 +512,7 @@ services:
       <<: *observe-env
       OUTBOX_OWNER: geodata
       OUTBOX_WORKER: geodata-outbox
-      OUTBOX_DATABASE_URL: postgresql://myota:${POSTGRES_PASSWORD:-myota-dev-only}@geo-db:5432/myota_geo
+      OUTBOX_DATABASE_URL: postgresql://myota_geo_app:${GEO_APP_PASSWORD:-myota-local-geodata-runtime-password-change-me-32chars}@geo-db:5432/myota_geo
       NATS_URL: nats://nats:4222
     depends_on:
       migrations: { condition: service_completed_successfully }

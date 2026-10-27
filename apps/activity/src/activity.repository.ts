@@ -1050,7 +1050,12 @@ export class ActivityRepository {
        FROM activity_qso WHERE activation_id=$1 AND status<>'VOID' ORDER BY occurred_at`,
       [id],
     );
-    return activationRecord(result.rows[0], qsos.rows);
+    const imports = await client.query(
+      `SELECT *, ${importTimestampProjection}
+       FROM activity_import WHERE activation_id=$1 ORDER BY created_at`,
+      [id],
+    );
+    return activationRecord(result.rows[0], qsos.rows, imports.rows);
   }
 
   private async mutate<T>(
@@ -1244,7 +1249,7 @@ export class ActivityRepository {
   }
 }
 
-function activationRecord(row: any, qsos?: any[]) {
+function activationRecord(row: any, qsos?: any[], imports?: any[]) {
   const record = {
     id: String(row.id),
     programmeSlug: row.programme_slug,
@@ -1277,7 +1282,11 @@ function activationRecord(row: any, qsos?: any[]) {
     createdAt: timestamp(row.created_at_iso ?? row.created_at),
     updatedAt: timestamp(row.updated_at_iso ?? row.updated_at),
   };
-  return qsos ? { ...record, qsos: qsos.map(qsoRecord) } : record;
+  return {
+    ...record,
+    ...(qsos ? { qsos: qsos.map(qsoRecord) } : {}),
+    ...(imports ? { imports: imports.map(importRecord) } : {}),
+  };
 }
 
 function qsoRecord(row: any) {
@@ -1297,9 +1306,24 @@ function qsoRecord(row: any) {
     mode: row.mode,
     rst: row.rst,
     source: row.source,
+    sourceImportId: row.source_import_id,
     status: row.status,
     deduplicationKey: row.deduplication_key,
     createdAt: timestamp(row.created_at_iso ?? row.created_at),
+  };
+}
+
+function importRecord(row: any) {
+  return {
+    id: String(row.id),
+    filename: row.filename,
+    status: row.status,
+    recordsSeen: row.records_seen,
+    recordsAccepted: row.records_accepted,
+    recordsRejected: row.records_rejected,
+    createdAt: timestamp(row.created_at_iso ?? row.created_at),
+    startedAt: timestamp(row.started_at_iso ?? row.started_at),
+    completedAt: timestamp(row.completed_at_iso ?? row.completed_at),
   };
 }
 

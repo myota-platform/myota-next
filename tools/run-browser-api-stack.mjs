@@ -168,6 +168,9 @@ const baseEnvironment = {
   MYOTA_AWARD_SIGNATURE_BUCKET: 'browser-award-signatures',
   MYOTA_AUTH_SIGNING_KEY:
     process.env.MYOTA_AUTH_SIGNING_KEY ?? 'browser-integration-signing-key',
+  MYOTA_ENV: 'test',
+  MYOTA_PARTICIPANT_PUBLIC_URL: 'http://127.0.0.1:8091/',
+  MYOTA_EXPOSE_DEV_TOKENS: '1',
   MYOTA_BOOTSTRAP_ADMIN_EMAIL:
     process.env.MYOTA_BOOTSTRAP_ADMIN_EMAIL ?? 'browser-e2e-admin@example.test',
   MYOTA_BOOTSTRAP_ADMIN_PASSWORD:

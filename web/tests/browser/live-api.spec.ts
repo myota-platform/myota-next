@@ -613,7 +613,7 @@ test('manages participant-owned callsigns through the live Identity API', async 
   await page.locator('#award-password').fill(password);
   await activateByKeyboard(
     page,
-    page.locator('#award-login button[type="submit"]'),
+    page.locator('#participant-login button[type="submit"]'),
   );
   await expect(page.locator('#profile-callsigns')).toBeVisible();
   await expectResponsiveAccessible(
@@ -902,7 +902,7 @@ test('records and closes an activation in Participant through live Activity APIs
   await page.goto('http://127.0.0.1:8091');
   await page.locator('#award-email').fill(adminEmail);
   await page.locator('#award-password').fill(adminPassword);
-  await page.locator('#award-login button[type="submit"]').click();
+  await page.locator('#participant-login button[type="submit"]').click();
   await expect(page.locator('#activation-start-form')).toBeVisible();
   await page.locator('#programme-select').selectOption(programmeSlug);
   await page.locator('#activation-entity').selectOption(entityId);
@@ -1128,6 +1128,7 @@ test('reviews a live QSO correction in Admin and verifies the updated QSO', asyn
 });
 
 async function activateByKeyboard(page: Page, button: Locator) {
+  await expect(button).toBeEnabled();
   await button.focus();
   await expect(button).toBeFocused();
   await page.keyboard.press('Enter');

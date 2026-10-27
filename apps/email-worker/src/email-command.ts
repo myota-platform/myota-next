@@ -3,6 +3,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TEMPLATES = new Set([
   'account-created-participant.v1',
   'account-created-administrator.v1',
+  'participant-email-verification.v1',
+  'password-reset.v1',
+  'participant-email-change-old.v1',
+  'participant-email-change-new.v1',
+  'participant-email-change-complete-old.v1',
+  'participant-email-change-complete-new.v1',
 ]);
 
 export type EmailCommand = {
@@ -47,7 +53,15 @@ export function parseEmailCommand(raw: Uint8Array): EmailCommand {
     throw new Error('invalid email command envelope');
   const payload = envelope.payload;
   if (
-    !hasOnly(payload, ['recipientAccountId', 'templateId', 'templateData']) ||
+    !hasOnly(payload, [
+      'requestId',
+      'recipientAccountId',
+      'templateId',
+      'templateData',
+    ]) ||
+    !UUID.test(String(payload.requestId)) ||
+    String(payload.requestId).toLowerCase() !==
+      String(envelope.workId).toLowerCase() ||
     !UUID.test(String(payload.recipientAccountId)) ||
     typeof payload.templateId !== 'string' ||
     !TEMPLATES.has(payload.templateId) ||
@@ -58,12 +72,36 @@ export function parseEmailCommand(raw: Uint8Array): EmailCommand {
   if (payload.templateId === 'account-created-participant.v1') {
     if (!hasOnly(data, ['displayName']) || !validText(data.displayName, 120))
       throw new Error('invalid participant email data');
+  } else if (payload.templateId === 'account-created-administrator.v1') {
+    if (
+      !hasOnly(data, ['createdAccountName', 'createdAccountRole']) ||
+      !validText(data.createdAccountName, 120) ||
+      !['PARTICIPANT', 'ADMINISTRATOR'].includes(
+        String(data.createdAccountRole),
+      )
+    )
+      throw new Error('invalid administrator email data');
+  } else if (payload.templateId === 'participant-email-verification.v1') {
+    if (
+      !hasOnly(data, ['displayName', 'verificationUrl']) ||
+      !validText(data.displayName, 120) ||
+      !validText(data.verificationUrl, 2048) ||
+      !isSafeVerificationUrl(data.verificationUrl)
+    )
+      throw new Error('invalid participant verification email data');
+  } else if (payload.templateId === 'password-reset.v1') {
+    if (!hasOnly(data, ['displayName']) || !validText(data.displayName, 120))
+      throw new Error('invalid password reset email data');
   } else if (
-    !hasOnly(data, ['createdAccountName', 'createdAccountRole']) ||
-    !validText(data.createdAccountName, 120) ||
-    !['PARTICIPANT', 'ADMINISTRATOR'].includes(String(data.createdAccountRole))
-  )
-    throw new Error('invalid administrator email data');
+    String(payload.templateId).startsWith('participant-email-change-')
+  ) {
+    if (
+      !hasOnly(data, ['displayName', 'changeId']) ||
+      !validText(data.displayName, 120) ||
+      !UUID.test(String(data.changeId))
+    )
+      throw new Error('invalid participant email change data');
+  }
   return {
     workId: String(envelope.workId).toLowerCase(),
     recipientAccountId: String(payload.recipientAccountId).toLowerCase(),
@@ -81,6 +119,52 @@ export function renderEmailMessage(command: EmailCommand) {
       html: `<p>Hello ${escapeHtml(name)},</p><p>Your MyOTA participant account has been created.</p>`,
     };
   }
+  if (command.templateId === 'participant-email-verification.v1') {
+    const name = String(command.templateData.displayName);
+    const verificationUrl = String(command.templateData.verificationUrl);
+    return {
+      subject: 'Verify your MyOTA email address',
+      text: `Hello ${name},\n\nVerify your email address to activate your MyOTA participant account:\n${verificationUrl}\n\nThis link expires after 24 hours and can only be used once. If you did not request this account, you can ignore this message.\n`,
+      html: `<p>Hello ${escapeHtml(name)},</p><p>Verify your email address to activate your MyOTA participant account:</p><p><a href="${escapeHtml(verificationUrl)}">Verify email address</a></p><p>This link expires after 24 hours and can only be used once. If you did not request this account, you can ignore this message.</p>`,
+    };
+  }
+  if (command.templateId === 'password-reset.v1') {
+    const name = String(command.templateData.displayName);
+    const resetUrl = String(command.templateData.resetUrl);
+    if (!validText(resetUrl, 2048) || !isSafeVerificationUrl(resetUrl))
+      throw new Error('invalid password reset email data');
+    return {
+      subject: 'Reset your MyOTA password',
+      text: `Hello ${name},\n\nUse this link to choose a new password for your MyOTA account:\n${resetUrl}\n\nThis link expires after 30 minutes and can only be used once. If you did not request a reset, you can ignore this message.\n`,
+      html: `<p>Hello ${escapeHtml(name)},</p><p>Use this link to choose a new password for your MyOTA account:</p><p><a href="${escapeHtml(resetUrl)}">Reset password</a></p><p>This link expires after 30 minutes and can only be used once. If you did not request a reset, you can ignore this message.</p>`,
+    };
+  }
+  if (command.templateId.startsWith('participant-email-change-')) {
+    const name = String(command.templateData.displayName);
+    const isOld = command.templateId.includes('-old.v1');
+    const completed = command.templateId.includes('-complete-');
+    if (completed) {
+      return {
+        subject: 'Your MyOTA email address was changed',
+        text: `Hello ${name},\n\nThe email address on your MyOTA account was changed after verification at both addresses. If you did not request this, contact MyOTA support.\n`,
+        html: `<p>Hello ${escapeHtml(name)},</p><p>The email address on your MyOTA account was changed after verification at both addresses. If you did not request this, contact MyOTA support.</p>`,
+      };
+    }
+    const confirmationUrl = String(command.templateData.confirmationUrl);
+    if (
+      !validText(confirmationUrl, 2048) ||
+      !isSafeVerificationUrl(confirmationUrl)
+    )
+      throw new Error('invalid email change confirmation data');
+    const purpose = isOld
+      ? 'confirm your current email address'
+      : 'confirm this new email address';
+    return {
+      subject: 'Confirm a MyOTA email address change',
+      text: `Hello ${name},\n\nA request was made to change the email address on your MyOTA account. Please ${purpose} using this link:\n${confirmationUrl}\n\nThe change is applied only after both addresses are confirmed. This link expires after 30 minutes. If you did not request this, ignore this message; your current email remains active.\n`,
+      html: `<p>Hello ${escapeHtml(name)},</p><p>A request was made to change the email address on your MyOTA account. Please ${purpose} using this link:</p><p><a href="${escapeHtml(confirmationUrl)}">Confirm email address</a></p><p>The change is applied only after both addresses are confirmed. This link expires after 30 minutes. If you did not request this, ignore this message; your current email remains active.</p>`,
+    };
+  }
   const name = String(command.templateData.createdAccountName);
   const role = String(command.templateData.createdAccountRole).toLowerCase();
   return {
@@ -88,6 +172,21 @@ export function renderEmailMessage(command: EmailCommand) {
     text: `Hello,\n\nA ${role} account for ${name} was created.\n`,
     html: `<p>Hello,</p><p>A ${escapeHtml(role)} account for ${escapeHtml(name)} was created.</p>`,
   };
+}
+
+function isSafeVerificationUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return (
+      url.username === '' &&
+      url.password === '' &&
+      (url.protocol === 'https:' ||
+        (url.protocol === 'http:' &&
+          ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isValidUtcDateTime(value: string) {

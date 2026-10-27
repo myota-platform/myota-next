@@ -11,6 +11,7 @@ import {
   pythonFloat,
   type JsonRecord,
 } from './activity-domain.js';
+import { certificatePixelDimensions } from '@app/platform/certificate-renderer.js';
 
 const REQUIRED_ELEMENTS = [
   'AWARD_NAME',
@@ -20,6 +21,7 @@ const REQUIRED_ELEMENTS = [
   'MANAGER_NAME',
   'MANAGER_SIGNATURE',
 ];
+const OPTIONAL_ELEMENTS = ['AWARD_TEXT'];
 
 export function validateAwardDraft(body: JsonRecord, existing?: JsonRecord) {
   for (const field of [
@@ -65,6 +67,18 @@ export function validateAwardDraft(body: JsonRecord, existing?: JsonRecord) {
   if (!printSpec || typeof printSpec !== 'object' || Array.isArray(printSpec))
     throw new BadRequestException('printSpec must be an object');
   const printReadiness = calculatePrintReadiness(backgroundAsset, printSpec);
+  const normalizedBackgroundAsset = {
+    ...backgroundAsset,
+    widthPx: (printReadiness.recommended as JsonRecord).widthPx,
+    heightPx: (printReadiness.recommended as JsonRecord).heightPx,
+  };
+  const awardText = pythonString(
+    Object.hasOwn(body, 'awardText')
+      ? body.awardText
+      : (existing?.awardText ?? ''),
+  );
+  if (Array.from(awardText).length > 200)
+    throw new BadRequestException('awardText must be at most 200 characters');
   const now = new Date().toISOString();
   const versionValue = Object.hasOwn(body, 'version')
     ? body.version
@@ -78,6 +92,7 @@ export function validateAwardDraft(body: JsonRecord, existing?: JsonRecord) {
     code: body.code,
     name: body.name,
     description: Object.hasOwn(body, 'description') ? body.description : '',
+    awardText,
     category,
     version: integerValue(versionValue, 'version'),
     achievementMetric: Object.hasOwn(body, 'achievementMetric')
@@ -85,7 +100,7 @@ export function validateAwardDraft(body: JsonRecord, existing?: JsonRecord) {
       : 'QSO_COUNT',
     condition: body.condition,
     levels: body.levels,
-    backgroundAsset,
+    backgroundAsset: normalizedBackgroundAsset,
     printSpec,
     template,
     status: existing?.status ?? 'DRAFT',
@@ -107,7 +122,11 @@ export function validateAwardDraft(body: JsonRecord, existing?: JsonRecord) {
 export function validateTemplate(elements: unknown) {
   if (!Array.isArray(elements))
     throw new BadRequestException('template elements must be an array');
-  const allowed = new Set([...REQUIRED_ELEMENTS, 'CUSTOM_TEXT']);
+  const allowed = new Set([
+    ...REQUIRED_ELEMENTS,
+    ...OPTIONAL_ELEMENTS,
+    'CUSTOM_TEXT',
+  ]);
   const seen = new Set<string>();
   for (const item of elements) {
     if (!item || typeof item !== 'object' || Array.isArray(item))
@@ -332,35 +351,76 @@ function calculatePrintReadiness(
     throw new BadRequestException(
       'print page must be A4 or LETTER and orientation must be PORTRAIT or LANDSCAPE',
     );
-  let [widthMm, heightMm] = page === 'A4' ? [210, 297] : [215.9, 279.4];
-  if (orientation === 'LANDSCAPE') [widthMm, heightMm] = [heightMm, widthMm];
   const dpi = Number(Object.hasOwn(spec, 'dpi') ? spec.dpi : 300);
-  if (!Number.isFinite(dpi) || dpi < 150)
+  if (!Number.isFinite(dpi) || dpi < 150 || dpi > 300)
     throw new BadRequestException(
-      'print.dpi must be at least 150 for a printable certificate',
+      'print.dpi must be between 150 and 300 for a printable certificate',
     );
-  const recommended = {
-    widthPx: Math.ceil((widthMm / 25.4) * dpi),
-    heightPx: Math.ceil((heightMm / 25.4) * dpi),
-  };
+  const recommended = certificatePixelDimensions({ page, orientation, dpi });
+  const portraitDimensions = page === 'A4' ? [210, 297] : [215.9, 279.4];
+  const pageWidthMm =
+    orientation === 'LANDSCAPE' ? portraitDimensions[1] : portraitDimensions[0];
+  const pageHeightMm =
+    orientation === 'LANDSCAPE' ? portraitDimensions[0] : portraitDimensions[1];
+  if (!pythonTruthy(background.objectKey))
+    return {
+      page,
+      orientation,
+      dpi,
+      pageWidthMm,
+      pageHeightMm,
+      recommended,
+      source: null,
+      actual: recommended,
+      resize: { fit: 'COVER', position: 'CENTER', applied: false },
+      printReady: false,
+    };
   const widthPx = Number(background.widthPx ?? 0);
   const heightPx = Number(background.heightPx ?? 0);
-  if (widthPx <= 0 || heightPx <= 0)
+  const mediaType = pythonString(background.mediaType ?? '').toLowerCase();
+  if (
+    !Number.isInteger(widthPx) ||
+    !Number.isInteger(heightPx) ||
+    widthPx <= 0 ||
+    heightPx <= 0 ||
+    widthPx * heightPx > 16_000_000
+  )
     throw new BadRequestException(
-      'background image dimensions are required for print readiness',
+      'background image must have valid dimensions within the 16 million pixel limit',
     );
-  const expectedRatio = recommended.widthPx / recommended.heightPx;
-  const actualRatio = widthPx / heightPx;
-  const ratioDelta = Math.abs(actualRatio - expectedRatio) / expectedRatio;
+  if (!['image/png', 'image/jpeg'].includes(mediaType))
+    throw new BadRequestException('background image must be PNG or JPEG');
+  const minimumSource = certificatePixelDimensions({
+    page,
+    orientation,
+    dpi: 150,
+  });
+  const targetRatio = recommended.widthPx / recommended.heightPx;
+  const sourceRatio = widthPx / heightPx;
+  const usableSourceWidth =
+    sourceRatio > targetRatio ? heightPx * targetRatio : widthPx;
+  const usableSourceHeight =
+    sourceRatio > targetRatio ? heightPx : widthPx / targetRatio;
+  const sourcePrintReady =
+    usableSourceWidth >= minimumSource.widthPx &&
+    usableSourceHeight >= minimumSource.heightPx;
+  const resized =
+    widthPx !== recommended.widthPx || heightPx !== recommended.heightPx;
   return {
     page,
     orientation,
     dpi,
-    pageWidthMm: widthMm,
-    pageHeightMm: heightMm,
+    pageWidthMm,
+    pageHeightMm,
     recommended,
-    actual: { widthPx, heightPx },
-    aspectRatioDelta: Number(ratioDelta.toFixed(5)),
-    printReady: ratioDelta <= 0.03 && widthPx >= recommended.widthPx * 0.9,
+    minimumSource,
+    source: { widthPx, heightPx },
+    usableSource: {
+      widthPx: Math.floor(usableSourceWidth),
+      heightPx: Math.floor(usableSourceHeight),
+    },
+    actual: recommended,
+    resize: { fit: 'COVER', position: 'CENTER', applied: resized },
+    printReady: sourcePrintReady,
   };
 }

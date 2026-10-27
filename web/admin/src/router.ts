@@ -7,6 +7,7 @@ import PoliciesView from './views/PoliciesView.vue';
 import ContentView from './views/ContentView.vue';
 import MasterDataView from './views/MasterDataView.vue';
 import IdentityView from './views/IdentityView.vue';
+import ParticipantsView from './views/ParticipantsView.vue';
 import ActivityView from './views/ActivityView.vue';
 import AwardsView from './views/AwardsView.vue';
 import GeodataImportsView from './views/GeodataImportsView.vue';
@@ -52,6 +53,11 @@ const routes = [
     path: '/identity',
     component: IdentityView,
     meta: { title: 'Users & roles' },
+  },
+  {
+    path: '/participants',
+    component: ParticipantsView,
+    meta: { title: 'Participant accounts' },
   },
   {
     path: '/activity',

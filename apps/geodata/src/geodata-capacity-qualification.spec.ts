@@ -13,7 +13,7 @@ import { GeodataPromotionRepository } from '../../geodata-worker/src/geodata-pro
 const enabled = process.env.MYOTA_GEODATA_CAPACITY_QUALIFICATION === '1';
 const databasePoolMaximum = 10;
 const entityTypeCode = `CAPACITY_${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`;
-const batchSizes = [1, 10, 50, 100];
+const batchSizes = [1, 10, 50, 100, 259, 300];
 
 describe('Geodata synchronous mutation capacity qualification', () => {
   it.skipIf(!enabled)(

@@ -163,7 +163,7 @@ test('selects a programme and renders its public content and entity catalogue', 
 
   await page.locator('#award-email').fill('operator@example.test');
   await page.locator('#award-password').fill('test-password');
-  await page.locator('#award-login button[type="submit"]').click();
+  await page.locator('#participant-login button[type="submit"]').click();
   await expect(page.locator('#profile-status')).toHaveText('Profile loaded.');
   await page.locator('button.propose[data-id="coast-entity-2"]').click();
   await expect(page.locator('#proposal-status')).toHaveText(

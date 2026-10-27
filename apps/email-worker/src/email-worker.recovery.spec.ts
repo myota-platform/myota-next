@@ -116,7 +116,10 @@ describe.skipIf(!enabled)('Email worker JetStream recovery', () => {
       const worker = new EmailWorkerService(pool);
       const internals = worker as unknown as {
         handle(message: JsMsg): Promise<void>;
-        resolveRecipient(accountId: string): Promise<string>;
+        resolveRecipient(
+          accountId: string,
+          templateId: string,
+        ): Promise<string>;
         transporter: {
           sendMail(message: unknown): Promise<void>;
           close(): void;
@@ -139,6 +142,7 @@ describe.skipIf(!enabled)('Email worker JetStream recovery', () => {
         createdAt: new Date().toISOString(),
         producer: 'myota-identity',
         payload: {
+          requestId: workId,
           recipientAccountId,
           templateId: 'account-created-participant.v1',
           templateData: { displayName: 'Recovery Test' },

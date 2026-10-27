@@ -28,13 +28,19 @@ objectStorage:
 databases:
   core:
     name: myota_core
+    appRole: myota_core_app
+    appPasswordKey: core-app-password
     image: ''
     storage: 10Gi
   activity:
     name: myota_activity
+    appRole: myota_activity_app
+    appPasswordKey: activity-app-password
     image: ''
     storage: 20Gi
   geo:
     name: myota_geo
+    appRole: myota_geo_app
+    appPasswordKey: geo-app-password
     image: ''
     storage: 50Gi

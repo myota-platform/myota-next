@@ -764,6 +764,9 @@ select:focus-visible {
   background: #fff !important;
   color: #142b2d !important;
 }
+.myota-entity-popup .leaflet-popup-content > div strong {
+  color: #142b2d !important;
+}
 .map-panel {
   overflow: hidden;
 }
@@ -1390,7 +1393,8 @@ select:focus-visible {
 .award-canvas-background img {
   width: 100%;
   height: 100%;
-  object-fit: fill;
+  object-fit: cover;
+  object-position: center;
 }
 .award-canvas-element {
   touch-action: none;

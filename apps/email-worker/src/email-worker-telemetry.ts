@@ -37,6 +37,12 @@ const OUTCOMES = [
 const TEMPLATES = [
   'account-created-participant.v1',
   'account-created-administrator.v1',
+  'participant-email-verification.v1',
+  'password-reset.v1',
+  'participant-email-change-old.v1',
+  'participant-email-change-new.v1',
+  'participant-email-change-complete-old.v1',
+  'participant-email-change-complete-new.v1',
   'unknown',
 ] as const;
 const BUCKETS = [0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30];

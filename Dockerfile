@@ -4,6 +4,18 @@ ARG APP_NAME
 WORKDIR /workspace
 
 COPY package.json package-lock.json ./
+COPY apps/activity/package.json ./apps/activity/package.json
+COPY apps/activity-notifications/package.json ./apps/activity-notifications/package.json
+COPY apps/activity-worker/package.json ./apps/activity-worker/package.json
+COPY apps/email-worker/package.json ./apps/email-worker/package.json
+COPY apps/gateway/package.json ./apps/gateway/package.json
+COPY apps/geodata/package.json ./apps/geodata/package.json
+COPY apps/geodata-importer/package.json ./apps/geodata-importer/package.json
+COPY apps/geodata-worker/package.json ./apps/geodata-worker/package.json
+COPY apps/identity/package.json ./apps/identity/package.json
+COPY apps/identity-maintenance/package.json ./apps/identity-maintenance/package.json
+COPY apps/outbox-worker/package.json ./apps/outbox-worker/package.json
+COPY apps/programmes/package.json ./apps/programmes/package.json
 COPY vendor/shapefile ./vendor/shapefile
 RUN npm ci
 COPY . .

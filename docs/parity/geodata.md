@@ -279,8 +279,8 @@ these figures do not qualify S3 throughput or deployed-pod resource use.
   be used as operating limits.
 - Geodata synchronous validation and promotion/approval measured 1, 10, 50, and 100
   selected entities. At 100, validation took 4.98 ms and promotion/approval took
-  630.65 ms. An edit plus approval took 5.35 ms and 3.99 ms respectively. The existing
-  all-or-nothing 100-entity request limit is retained.
+  630.65 ms. An edit plus approval took 5.35 ms and 3.99 ms respectively. At the time
+  of this run, the all-or-nothing request limit was 100 entities.
 - Activity accepted a 25 MiB, 5,000-QSO ADIF import in 188 ms; end-to-end admission and
   worker completion took 1.02 seconds, and award recalculation took 19.86 seconds.
   A separate 5,000-QSO ingestion completed in 10.58 seconds; broad awards across 5,000
@@ -306,8 +306,9 @@ The launch import bounds are 5,000 features per import, 16 MiB per decoded featu
 upload size (with optional format-specific upload overrides). Shapefile expanded data is
 also capped at 1 GiB. OSM PBF parser RSS qualification is capped at 25,000 features; that
 does not raise the 5,000-feature import limit. A Geodata API request can validate or
-promote up to 100 entities synchronously and atomically. Larger selections must be
-rejected rather than partially applied or moved to a background job.
+promote up to 300 entities synchronously and atomically. Larger selections must be
+rejected rather than partially applied or moved to a background job. This bound covers
+the 259-record pending import found during issue #94 and retains a firm synchronous cap.
 
 Geodata and Activity PostgreSQL pools default to 10 and 12 connections per process. One
 Geodata worker replica handles one preprocessing job and one promotion job at a time;
@@ -348,8 +349,16 @@ Kubernetes replicas.
   qualification sampled Geodata telemetry 124 times successfully with no failed
   samples.
 - Synchronous multi-entity promotion and approval measured 36.51 ms for one entity,
-  104.92 ms for 10, 449.64 ms for 50, and 874.98 ms for 100. The selection limit
-  therefore remains 100, with larger commands rejected synchronously.
+  104.92 ms for 10, 449.64 ms for 50, and 874.98 ms for 100. This run measured the
+  previous 100-entity limit; the later 259- and 300-entity measurements are recorded
+  below.
+- The [2026-10-26 runtime qualification run 40310446551](https://github.com/myota-platform/myota-next/actions/runs/40310446551)
+  passed with a 1 CPU, 1 GiB Node process limit, a 10-connection database pool, two
+  Geodata API replicas, and one worker. Synchronous validation took 8.32 ms at 259
+  candidates and 23.58 ms at 300; promotion and approval took 1,707.66 ms and 1,961.27 ms
+  respectively. This qualifies the 300-candidate all-or-nothing synchronous limit. The
+  same run passed the full Activity/Geodata, backup/restore, parser RSS, and recovery
+  qualification steps.
 - The 25,000-feature tagged-node OSM PBF workload decoded in 1.182 seconds at 21,146
   features/s, with 52,649,984 bytes RSS growth across the Node and `osmium` process
   tree against the 96 MiB limit.
@@ -696,17 +705,20 @@ write.
 
 Promotion selection applies required-field checks, validates that the candidate list
 is nonempty, then validates `targetStatus`, matching the Python handler's error
-precedence. IDs are then sorted and deduplicated before the synchronous 100-candidate
+precedence. IDs are then sorted and deduplicated before the synchronous 300-candidate
 limit is applied, so repeated IDs do not count as additional entity mutations. Admin
-promotion of up to 100 candidates is synchronous:
+promotion of up to 300 candidates is synchronous:
 the service walks sorted, distinct IDs and checks existence, review coverage, then
 promotion eligibility in the Python handler's order, while deferring writes until every
 candidate passes. It applies entity, category, source-link, audit, and outbox writes in
 one Geodata transaction and returns the final created and updated IDs. Any invalid,
-ineligible, or over-limit selection is rejected without partial promotion. The 100-record
-request bound is an initial safety cap; production
-capacity qualification must confirm or revise it. Large import intake and preprocessing
-remain asynchronous. Automated community-proposal imports may still use the internal
+ineligible, or over-limit selection is rejected without partial promotion. The 300-record
+request bound preserves bounded synchronous behavior while covering the 259-pending
+record import reported in issue #94; larger selections are rejected clearly rather than
+backgrounded or partially applied. The capacity qualification now exercises both 259-
+and 300-record batches and passed on 2026-10-26 (run 40310446551; see the measurements
+above). Large import intake and preprocessing remain asynchronous. Automated
+community-proposal imports may still use the internal
 worker promotion queue. A candidate linked to a prior promotion queue can be retried
 synchronously only when that queue is failed and records that candidate as failed; the
 API locks the prior queue before candidate rows, clears the stale association in the same

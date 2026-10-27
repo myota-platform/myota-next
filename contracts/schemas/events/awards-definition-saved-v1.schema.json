@@ -30,6 +30,10 @@
             "description": {
               "type": "string"
             },
+            "awardText": {
+              "type": "string",
+              "maxLength": 200
+            },
             "category": {
               "type": "string"
             },

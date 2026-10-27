@@ -124,6 +124,17 @@ const locationForm = reactive({
   countyCode: '',
 });
 const locationEnrichmentSubmitting = ref(false);
+const locationBackfill = reactive({
+  running: false,
+  cancelRequested: false,
+  scanned: 0,
+  total: 0,
+  queued: 0,
+  skipped: 0,
+  failed: 0,
+  status: '',
+  firstFailure: '',
+});
 const locationEnrichmentPollIntervalMs = 2_000;
 const isManagement = computed(() => props.mode === 'management');
 const allSelected = computed(
@@ -245,8 +256,17 @@ function navigateEntity(offset: number): void {
   const entity = entities.value[selectedIndex.value + offset];
   if (selectedIndex.value >= 0 && entity) selectEntity(entity);
 }
-onBeforeRouteLeave(() => !isManagement.value || canDiscardEdits());
-onBeforeRouteUpdate(() => !isManagement.value || canDiscardEdits());
+function guardNavigation(): boolean {
+  if (locationBackfill.running) {
+    locationBackfill.cancelRequested = true;
+    locationBackfill.status =
+      'Stopping the scan after the current request. Already queued work continues in the background.';
+    return false;
+  }
+  return !isManagement.value || canDiscardEdits();
+}
+onBeforeRouteLeave(guardNavigation);
+onBeforeRouteUpdate(guardNavigation);
 watch(
   () => props.mode,
   () => {
@@ -345,16 +365,20 @@ function auditEntries(): AuditEntry[] {
     ),
   );
 }
-function query(): string {
+function query(
+  requestedPage = page.value,
+  requestedPageSize = pageSize.value,
+  scope = filters,
+): string {
   const params = new URLSearchParams({
-    page: String(page.value),
-    pageSize: String(pageSize.value),
+    page: String(requestedPage),
+    pageSize: String(requestedPageSize),
   });
-  if (filters.programme) params.set('programme', filters.programme);
-  filters.status.forEach((status) => params.append('status', status));
-  if (filters.entityType) params.set('entityType', filters.entityType);
+  if (scope.programme) params.set('programme', scope.programme);
+  scope.status.forEach((status) => params.append('status', status));
+  if (scope.entityType) params.set('entityType', scope.entityType);
   for (const key of ['continent', 'country', 'region', 'province', 'city']) {
-    const value = filters[key as keyof typeof filters];
+    const value = scope[key as keyof typeof filters];
     if (typeof value === 'string' && value) params.set(key, value);
   }
   return params.toString();
@@ -1332,6 +1356,120 @@ async function requestLocationEnrichment(): Promise<void> {
     locationEnrichmentSubmitting.value = false;
   }
 }
+async function fillMissingLocationMetadata(): Promise<void> {
+  if (!isManagement.value || !canEditLocation.value || locationBackfill.running)
+    return;
+
+  const scope = { ...filters, status: [...filters.status] };
+  const pageSizeForBackfill = 100;
+  let firstPage: { items: GeoEntity[]; total?: number };
+  try {
+    firstPage = await apiRequest<{ items: GeoEntity[]; total?: number }>(
+      `/v1/geodata/entities?${query(1, pageSizeForBackfill, scope)}`,
+    );
+  } catch (cause) {
+    setError(cause);
+    return;
+  }
+
+  const matchingEntities = Number(firstPage.total ?? firstPage.items.length);
+  if (!matchingEntities) {
+    message.value = 'No matching entities to scan.';
+    return;
+  }
+  if (
+    !window.confirm(
+      `Scan all ${matchingEntities} entities matching the current filters and queue asynchronous location enrichment only where metadata is missing? Existing queued requests will be skipped.`,
+    )
+  )
+    return;
+
+  Object.assign(locationBackfill, {
+    running: true,
+    cancelRequested: false,
+    scanned: 0,
+    total: matchingEntities,
+    queued: 0,
+    skipped: 0,
+    failed: 0,
+    status: 'Preparing location enrichment requests…',
+    firstFailure: '',
+  });
+  message.value = '';
+
+  try {
+    const pageCount = Math.ceil(matchingEntities / pageSizeForBackfill);
+    for (
+      let requestedPage = 1;
+      requestedPage <= pageCount;
+      requestedPage += 1
+    ) {
+      if (locationBackfill.cancelRequested) break;
+      const data =
+        requestedPage === 1
+          ? firstPage
+          : await apiRequest<{ items: GeoEntity[]; total?: number }>(
+              `/v1/geodata/entities?${query(requestedPage, pageSizeForBackfill, scope)}`,
+            );
+
+      for (const entity of data.items || []) {
+        if (locationBackfill.cancelRequested) break;
+        locationBackfill.scanned += 1;
+        if (
+          !entity.geometry ||
+          !entity.geometry.coordinates ||
+          !missingLocationFields(entity).length ||
+          entity.locationEnrichmentStatus === 'QUEUED'
+        ) {
+          locationBackfill.skipped += 1;
+        } else {
+          const requestPath = `/v1/geodata/entities/${encodeURIComponent(entity.id)}/location-enrichment-requests`;
+          const requestBody = { editorId: store.account?.id };
+          try {
+            await runGeodataMutation(
+              requestPath,
+              requestBody,
+              (idempotencyKey, body) =>
+                myotaClient.postGeodataEntityLocationEnrichmentRequest(
+                  entity.id,
+                  body,
+                  entity.version,
+                  idempotencyKey,
+                ),
+            );
+            locationBackfill.queued += 1;
+          } catch (cause) {
+            if (cause instanceof ApiError && cause.status === 409) {
+              locationBackfill.skipped += 1;
+            } else {
+              locationBackfill.failed += 1;
+              if (!locationBackfill.firstFailure)
+                locationBackfill.firstFailure =
+                  cause instanceof Error ? cause.message : String(cause);
+            }
+          }
+        }
+        locationBackfill.status = `Scanned ${locationBackfill.scanned} of ${locationBackfill.total} matching entities · queued ${locationBackfill.queued} · skipped ${locationBackfill.skipped} · failed ${locationBackfill.failed}.`;
+      }
+    }
+    const stopped = locationBackfill.cancelRequested;
+    locationBackfill.status = `${stopped ? 'Stopped' : 'Finished'} after scanning ${locationBackfill.scanned} of ${locationBackfill.total} matching entities · queued ${locationBackfill.queued} · skipped ${locationBackfill.skipped} · failed ${locationBackfill.failed}.`;
+    if (locationBackfill.failed)
+      locationBackfill.status +=
+        ' Run the action again to retry entities that remain incomplete.';
+    if (stopped)
+      locationBackfill.status +=
+        ' Already queued requests continue in the background.';
+    await load();
+    if (selected.value) await refreshSelection();
+  } catch (cause) {
+    locationBackfill.status = `Stopped after scanning ${locationBackfill.scanned} of ${locationBackfill.total} matching entities · queued ${locationBackfill.queued} · skipped ${locationBackfill.skipped} · failed ${locationBackfill.failed}.`;
+    locationBackfill.firstFailure =
+      cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    locationBackfill.running = false;
+  }
+}
 function toggleNewType(code: string): void {
   newTypes.value = newTypes.value.includes(code)
     ? newTypes.value.filter((item) => item !== code)
@@ -1736,6 +1874,23 @@ onMounted(async () => {
             @change="toggleAll"
           /><span>Select all</span></label
         ><button
+          v-if="isManagement && canEditLocation"
+          class="secondary"
+          :disabled="locationBackfill.running || loading || !total"
+          @click="fillMissingLocationMetadata"
+        >
+          {{
+            locationBackfill.running
+              ? 'Queueing location updates…'
+              : 'Fill missing location metadata from entities'
+          }}</button
+        ><button
+          v-if="locationBackfill.running"
+          class="secondary"
+          @click="locationBackfill.cancelRequested = true"
+        >
+          Stop queueing</button
+        ><button
           v-if="!isManagement"
           class="primary"
           :disabled="!selectedIds.length"
@@ -1756,6 +1911,17 @@ onMounted(async () => {
         </button>
       </div>
     </div>
+    <p
+      v-if="locationBackfill.status"
+      class="field-help"
+      role="status"
+      aria-live="polite"
+    >
+      {{ locationBackfill.status }}
+      <span v-if="locationBackfill.firstFailure">
+        First error: {{ locationBackfill.firstFailure }}
+      </span>
+    </p>
     <div class="geo-list">
       <div
         v-for="entity in entities"

@@ -13,9 +13,9 @@ spec:
     app.kubernetes.io/instance: {{ $.Release.Name }}
     app.kubernetes.io/component: {{ $name }}
   ports:
-    - name: http
-      port: {{ $component.port }}
-      targetPort: http
+    - name: {{ ternary "http" "health" (hasKey $component "port") }}
+      port: {{ default $component.healthPort $component.port }}
+      targetPort: {{ ternary "http" "health" (hasKey $component "port") }}
       protocol: TCP
 ---
 {{- end }}

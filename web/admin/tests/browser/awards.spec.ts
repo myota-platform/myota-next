@@ -364,3 +364,209 @@ test('saves an award draft and submits it for review', async ({ page }) => {
     },
   ]);
 });
+
+test('creates a version from a published award and derives landscape print dimensions', async ({
+  page,
+}) => {
+  const published = {
+    id: 'award-published-1',
+    programmeSlug: 'alpine',
+    code: 'ALPINE-10',
+    name: 'Alpine Ten',
+    description: 'Original description',
+    awardText: '',
+    category: 'HUNTER',
+    status: 'PUBLISHED',
+    version: 2,
+    achievementMetric: 'QSO_COUNT',
+    condition: { kind: 'QSO_COUNT', operator: 'GTE', value: 10 },
+    levels: [{ id: 'level-10', name: 'Ten contacts', threshold: 10 }],
+    backgroundAsset: {
+      id: 'background-1',
+      kind: 'BACKGROUND',
+      name: 'Alpine background',
+      objectKey: 'awards/alpine.png',
+      mediaType: 'image/png',
+      widthPx: 1200,
+      heightPx: 800,
+    },
+    printSpec: { page: 'A4', orientation: 'PORTRAIT', dpi: 300 },
+    template: {
+      elements: [
+        { kind: 'AWARD_NAME', x: 0.1, y: 0.1, width: 0.8, height: 0.1 },
+        { kind: 'CALLSIGN', x: 0.1, y: 0.2, width: 0.8, height: 0.1 },
+        { kind: 'PERSON_NAME', x: 0.1, y: 0.3, width: 0.8, height: 0.1 },
+        { kind: 'DATE_OBTAINED', x: 0.1, y: 0.4, width: 0.8, height: 0.1 },
+        { kind: 'MANAGER_NAME', x: 0.1, y: 0.5, width: 0.8, height: 0.1 },
+        { kind: 'MANAGER_SIGNATURE', x: 0.1, y: 0.6, width: 0.8, height: 0.1 },
+      ],
+    },
+    signatureAssetId: null,
+    managerName: 'Award Manager',
+    effectiveFrom: '2026-01-01T00:00:00.000Z',
+  };
+  let revision: Record<string, unknown> | null = null;
+  let revisionRequest: Record<string, any> | null = null;
+  let saveAttempts = 0;
+
+  await page.route('**/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+    if (url.pathname === '/v1/identity/auth/login') {
+      await route.fulfill({
+        json: {
+          accessToken: 'award-admin-token',
+          refreshToken: 'refresh-token',
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/identity/me') {
+      await route.fulfill({
+        json: {
+          id: 'award-admin-1',
+          email: 'award-admin@example.test',
+          displayName: 'Award Admin',
+          scopes: ['awards.admin'],
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({
+        json: { items: [{ slug: 'alpine', name: 'Alpine' }], nextPage: null },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/awards' && method === 'GET') {
+      await route.fulfill({
+        json: {
+          items: [published],
+          page: 1,
+          pageSize: 50,
+          total: 1,
+          nextPage: null,
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/awards/assets') {
+      await route.fulfill({ json: { items: [], nextPage: null } });
+      return;
+    }
+    if (
+      url.pathname === '/v1/awards/requests' ||
+      url.pathname === '/v1/awards/issuances'
+    ) {
+      await route.fulfill({
+        json: { items: [], page: 1, pageSize: 50, total: 0, nextPage: null },
+      });
+      return;
+    }
+    if (url.pathname === `/v1/awards/${published.id}` && method === 'GET') {
+      await route.fulfill({ json: published });
+      return;
+    }
+    if (url.pathname === `/v1/awards/${published.id}` && method === 'PATCH') {
+      revisionRequest = request.postDataJSON() as Record<string, any>;
+      saveAttempts += 1;
+      if (saveAttempts === 1) {
+        await route.fulfill({
+          status: 400,
+          json: {
+            statusCode: 400,
+            message: 'awardText must be at most 200 characters',
+          },
+        });
+        return;
+      }
+      if (saveAttempts === 2) {
+        await route.fulfill({
+          status: 409,
+          json: {
+            statusCode: 409,
+            message: 'award changed since it was loaded; reload before editing',
+          },
+        });
+        return;
+      }
+      revision = {
+        ...published,
+        ...revisionRequest,
+        id: 'award-version-3',
+        version: 3,
+        status: 'DRAFT',
+      };
+      await route.fulfill({ status: 201, json: revision });
+      return;
+    }
+    if (url.pathname === '/v1/awards/award-version-3' && method === 'GET') {
+      await route.fulfill({ json: revision });
+      return;
+    }
+    await route.fulfill({ json: { items: [], page: 1, total: 0 } });
+  });
+
+  await page.goto('/awards');
+  await page.getByLabel('Email').fill('award-admin@example.test');
+  await page.getByLabel('Password').fill('test-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: /Alpine Ten/ }).click();
+  await expect(page.getByText(/This award version is read-only/)).toBeVisible();
+  await page.getByRole('button', { name: 'Create editable version' }).click();
+  const awardForm = page.locator('form.form-grid').first();
+  const pageSize = awardForm.locator('select').nth(3);
+  const orientation = awardForm.locator('select').nth(4);
+  const backgroundWidth = page.getByLabel('Print background width (pixels)');
+  const backgroundHeight = page.getByLabel('Print background height (pixels)');
+  await expect(backgroundWidth).toHaveValue('2481');
+  await expect(backgroundHeight).toHaveValue('3508');
+  await pageSize.selectOption('LETTER');
+  await expect(backgroundWidth).toHaveValue('2550');
+  await expect(backgroundHeight).toHaveValue('3300');
+  await orientation.selectOption('LANDSCAPE');
+  await expect(backgroundWidth).toHaveValue('3300');
+  await expect(backgroundHeight).toHaveValue('2550');
+  await pageSize.selectOption('A4');
+  await expect(backgroundWidth).toHaveValue('3508');
+  await expect(backgroundHeight).toHaveValue('2481');
+  await page.getByLabel('Award Text').fill('For ten successful contacts');
+  const saveButton = page.getByRole('button', {
+    name: 'Save new version as draft',
+  });
+  await saveButton.click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'awardText must be at most 200 characters',
+  );
+  await saveButton.click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'award changed since it was loaded; reload before editing',
+  );
+  await saveButton.click();
+  await expect(
+    page.getByText('Award version 3 saved as a draft.'),
+  ).toBeVisible();
+  expect(revisionRequest).toMatchObject({
+    expectedVersion: 2,
+    programmeSlug: 'alpine',
+    code: 'ALPINE-10',
+    awardText: 'For ten successful contacts',
+    description: 'Original description',
+    printSpec: { page: 'A4', orientation: 'LANDSCAPE', dpi: 300 },
+    backgroundAsset: {
+      objectKey: 'awards/alpine.png',
+      widthPx: 3508,
+      heightPx: 2481,
+    },
+    template: {
+      elements: expect.arrayContaining([
+        expect.objectContaining({ kind: 'AWARD_TEXT', y: 0.21 }),
+      ]),
+    },
+  });
+  await expect(
+    page.getByRole('button', { name: 'Submit for review' }),
+  ).toBeVisible();
+  await expectResponsiveAccessible(page, 'editing a published award version');
+});

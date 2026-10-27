@@ -11,8 +11,8 @@ test('reviews pasted GeoJSON candidates and promotes a selected set synchronousl
     adapter: 'MANUAL',
     format: 'GEOJSON',
     entityTypes: ['SOTA'],
-    candidateCount: 2,
-    pendingCount: 2,
+    candidateCount: 259,
+    pendingCount: 259,
   };
   const firstFeature = {
     id: 'candidate-1',
@@ -35,7 +35,24 @@ test('reviews pasted GeoJSON candidates and promotes a selected set synchronousl
     validationStatus: 'PENDING',
     geometry: { type: 'Point', coordinates: [7.4, 46.3] },
   };
-  let pendingCandidates = [firstFeature, secondFeature, thirdFeature];
+  let pendingCandidates = [
+    firstFeature,
+    secondFeature,
+    thirdFeature,
+    ...Array.from({ length: 256 }, (_, index) => ({
+      id: `candidate-${index + 4}`,
+      ordinal: index + 4,
+      name: `Example summit ${index + 4}`,
+      validationStatus: 'PENDING',
+      geometry: {
+        type: 'Point',
+        coordinates: [7.5 + index / 10_000, 46.2],
+      },
+    })),
+  ];
+  const expectedPromotedCandidateIds = pendingCandidates
+    .slice(1)
+    .map((candidate) => candidate.id);
   const rejectionRequests: Array<{ body: unknown; key: string }> = [];
   const promotionRequests: Array<{ body: unknown; key: string }> = [];
 
@@ -111,11 +128,19 @@ test('reviews pasted GeoJSON candidates and promotes a selected set synchronousl
     }
 
     if (url.pathname === '/v1/geodata/imports/import-1/candidates') {
+      const requestedPage = Number(url.searchParams.get('page') || 1);
+      const requestedPageSize = Number(url.searchParams.get('pageSize') || 20);
+      const offset = (requestedPage - 1) * requestedPageSize;
       await route.fulfill({
         json: {
-          items: pendingCandidates,
+          items: pendingCandidates.slice(offset, offset + requestedPageSize),
+          page: requestedPage,
+          pageSize: requestedPageSize,
           total: pendingCandidates.length,
-          nextPage: null,
+          nextPage:
+            offset + requestedPageSize < pendingCandidates.length
+              ? requestedPage + 1
+              : null,
         },
       });
       return;
@@ -162,7 +187,7 @@ test('reviews pasted GeoJSON candidates and promotes a selected set synchronousl
           targetStatus: 'CANDIDATE',
           requestedBy: 'geodata-importer-1',
           status: 'COMPLETED',
-          created: ['entity-2', 'entity-3'],
+          created: body.candidateIds.map((id) => `entity-${id}`),
           updated: [],
           completedAt: '2026-10-23T12:00:00.000000Z',
         },
@@ -197,23 +222,11 @@ test('reviews pasted GeoJSON candidates and promotes a selected set synchronousl
   await page.getByLabel('Paste source document').fill(
     JSON.stringify({
       type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: { name: 'Example summit to reject' },
-          geometry: { type: 'Point', coordinates: [7.2, 46.1] },
-        },
-        {
-          type: 'Feature',
-          properties: { name: 'Example summit to keep' },
-          geometry: { type: 'Point', coordinates: [7.3, 46.2] },
-        },
-        {
-          type: 'Feature',
-          properties: { name: 'Example second summit to keep' },
-          geometry: { type: 'Point', coordinates: [7.4, 46.3] },
-        },
-      ],
+      features: pendingCandidates.map((candidate) => ({
+        type: 'Feature',
+        properties: { name: candidate.name },
+        geometry: candidate.geometry,
+      })),
     }),
   );
   await page.getByRole('button', { name: 'Queue preprocessing' }).click();
@@ -241,13 +254,13 @@ test('reviews pasted GeoJSON candidates and promotes a selected set synchronousl
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByLabel('Select all pending records').check();
   await expect(
-    page.getByText('2 pending records selected across all pages.'),
+    page.getByText('258 pending records selected across all pages.'),
   ).toBeVisible();
   await page
     .getByRole('button', { name: 'Promote selected to candidate' })
     .click();
   await expect(
-    page.getByText('2 records were promoted to candidate successfully.'),
+    page.getByText('258 records were promoted to candidate successfully.'),
   ).toBeVisible();
 
   expect(importRequests).toHaveLength(1);
@@ -274,7 +287,7 @@ test('reviews pasted GeoJSON candidates and promotes a selected set synchronousl
   expect(promotionRequests).toHaveLength(1);
   expect(promotionRequests[0].key).toMatch(/^[0-9a-f-]{36}$/i);
   expect(promotionRequests[0].body).toEqual({
-    candidateIds: ['candidate-2', 'candidate-3'],
+    candidateIds: expectedPromotedCandidateIds,
     targetStatus: 'CANDIDATE',
     processorId: 'geodata-importer-1',
   });

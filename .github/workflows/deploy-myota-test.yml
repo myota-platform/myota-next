@@ -1,0 +1,261 @@
+name: Upgrade Rancher myota-test from approved digests
+
+on:
+  push:
+    branches: [testing]
+    paths:
+      - deploy/fleet/myota-test/**
+      - deploy/helm/myota-next/**
+      - .github/workflows/deploy-myota-test.yml
+      - tools/upgrade-myota-test-catalog.mjs
+      - tools/myota-test-catalog-recovery.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-helm-chart-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Package immutable testing chart
+    if: github.ref == 'refs/heads/testing'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: write
+    outputs:
+      version: ${{ steps.chart.outputs.version }}
+      app_version: ${{ steps.chart.outputs.app_version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.0
+
+      - name: Build and render the exact test chart
+        id: chart
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/yaml-env"
+          "$RUNNER_TEMP/yaml-env/bin/pip" install --disable-pip-version-check PyYAML==6.0.2
+          short_sha="${SOURCE_SHA:0:12}"
+          version="1.1.6-testing.${short_sha}.1"
+          values_json="$RUNNER_TEMP/myota-test-values.json"
+          expected_json="$RUNNER_TEMP/myota-test-expected-deployments.json"
+          rendered_yaml="$RUNNER_TEMP/myota-test-rendered.yaml"
+
+          VALUES_JSON="$values_json" python3 - <<'PY'
+          import json
+          import os
+          import re
+          import yaml
+
+          with open("deploy/fleet/myota-test/values.yaml", encoding="utf-8") as source:
+              values = yaml.safe_load(source)
+          if not re.fullmatch(r"testing-[0-9a-f]{7,40}", values["buildVersion"]):
+              raise SystemExit("buildVersion must identify a testing image build")
+          images = values["images"]
+          if len(images) != 14:
+              raise SystemExit(f"expected 14 component images, got {len(images)}")
+          for name, image in images.items():
+              if not re.fullmatch(r"sha256:[0-9a-f]{64}", image["digest"]):
+                  raise SystemExit(f"{name} is not pinned by sha256 digest")
+          fd = os.open(os.environ["VALUES_JSON"], os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+          with os.fdopen(fd, "w", encoding="utf-8") as target:
+              json.dump(values, target)
+          PY
+
+          helm lint deploy/helm/myota-next --values "$values_json"
+          helm template myota-test deploy/helm/myota-next \
+            --namespace myota-test \
+            --values "$values_json" > "$rendered_yaml"
+
+          RENDERED_YAML="$rendered_yaml" EXPECTED_JSON="$expected_json" python3 - <<'PY'
+          import json
+          import os
+          import re
+          import yaml
+
+          with open(os.environ["RENDERED_YAML"], encoding="utf-8") as source:
+              documents = [doc for doc in yaml.safe_load_all(source) if doc]
+          workload_kinds = {"Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob", "Pod"}
+          workload_count = 0
+
+          def pod_spec(doc):
+              spec = doc.get("spec", {})
+              if doc.get("kind") == "CronJob":
+                  return spec.get("jobTemplate", {}).get("spec", {}).get("template", {}).get("spec", {})
+              if doc.get("kind") in {"Deployment", "StatefulSet", "DaemonSet", "Job"}:
+                  return spec.get("template", {}).get("spec", {})
+              return spec
+
+          for doc in documents:
+              instance = doc.get("metadata", {}).get("labels", {}).get("app.kubernetes.io/instance")
+              if doc.get("kind") not in workload_kinds or instance != "myota-test":
+                  continue
+              workload_count += 1
+              spec = pod_spec(doc)
+              containers = spec.get("containers", []) + spec.get("initContainers", [])
+              images_are_immutable = all(
+                  re.search(r"@sha256:[0-9a-f]{64}$", item.get("image", ""))
+                  for item in containers
+              )
+              if not containers or not images_are_immutable:
+                  name = doc["metadata"].get("name")
+                  raise SystemExit(f"{doc['kind']}/{name} has a container without an immutable image digest")
+          if workload_count == 0:
+              raise SystemExit("the rendered chart contains no MyOTA workloads")
+
+          deployments = [
+              doc for doc in documents
+              if doc.get("kind") == "Deployment"
+              and doc.get("metadata", {}).get("labels", {}).get("app.kubernetes.io/instance") == "myota-test"
+          ]
+          if len(deployments) != 15:
+              raise SystemExit(f"expected 15 rendered MyOTA Deployments, got {len(deployments)}")
+          result = {}
+          for doc in deployments:
+              name = doc["metadata"]["name"]
+              pod = doc.get("spec", {}).get("template", {}).get("spec", {})
+              containers = pod.get("containers", []) + pod.get("initContainers", [])
+              result[name] = {
+                  "replicas": doc["spec"].get("replicas", 1),
+                  "images": [item["image"] for item in containers],
+              }
+          fd = os.open(os.environ["EXPECTED_JSON"], os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+          with os.fdopen(fd, "w", encoding="utf-8") as target:
+              json.dump(result, target)
+          PY
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          app_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["buildVersion"])' "$values_json")"
+          echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
+          echo "Candidate chart: $version" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish chart archive and index to the testing branch of the chart repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CHART_VERSION: ${{ steps.chart.outputs.version }}
+          CHART_APP_VERSION: ${{ steps.chart.outputs.app_version }}
+        run: |
+          set -euo pipefail
+          auth_url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git clone --depth=1 --branch gh-pages "$auth_url" chart-repository
+          mkdir -p chart-repository/testing
+          archive="chart-repository/testing/myota-next-${CHART_VERSION}.tgz"
+
+          if [ -f chart-repository/testing/index.yaml ] && \
+             grep -Fq "version: ${CHART_VERSION}" chart-repository/testing/index.yaml; then
+            test -f "$archive"
+            echo "Verified existing immutable chart $CHART_VERSION."
+          else
+            helm package deploy/helm/myota-next \
+              --version "$CHART_VERSION" \
+              --app-version "$CHART_APP_VERSION" \
+              --destination chart-repository/testing
+            if [ -f chart-repository/testing/index.yaml ]; then
+              helm repo index chart-repository/testing \
+                --url "https://myota-platform.github.io/myota-next/testing" \
+                --merge chart-repository/testing/index.yaml
+            else
+              helm repo index chart-repository/testing \
+                --url "https://myota-platform.github.io/myota-next/testing"
+            fi
+            git -C chart-repository config user.name github-actions[bot]
+            git -C chart-repository config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git -C chart-repository add testing
+            git -C chart-repository commit -m "Publish isolated test chart ${CHART_VERSION}"
+            git -C chart-repository push origin HEAD:gh-pages
+          fi
+          rm -rf chart-repository/.git
+
+      - name: Upload the complete Helm repository site
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: chart-repository
+
+      - name: Upload rollout verification inputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: myota-test-rollout-inputs-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/myota-test-values.json
+            ${{ runner.temp }}/myota-test-expected-deployments.json
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy-pages:
+    name: Deploy Helm repository to GitHub Pages
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+      actions: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy the chart repository site
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  upgrade:
+    name: Upgrade the Rancher catalog release
+    needs: [package, deploy-pages]
+    if: github.ref == 'refs/heads/testing'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: myota-test
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6.0.0
+        with:
+          node-version: 24
+
+      - name: Download rendered rollout inputs
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: myota-test-rollout-inputs-${{ github.sha }}
+          path: ${{ runner.temp }}/rollout-inputs
+
+      - name: Install the pinned YAML parser for recovery values
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/yaml-env"
+          "$RUNNER_TEMP/yaml-env/bin/pip" install --disable-pip-version-check PyYAML==6.0.2
+          echo "MYOTA_TEST_PYTHON=$RUNNER_TEMP/yaml-env/bin/python" >> "$GITHUB_ENV"
+
+      - name: Upgrade and verify the Rancher catalog release
+        env:
+          MYOTA_TEST_RANCHER_URL: https://rancher.spainip.es/
+          MYOTA_TEST_RANCHER_TOKEN: ${{ secrets.MYOTA_TEST_RANCHER_TOKEN }}
+          MYOTA_TEST_GITHUB_TOKEN: ${{ github.token }}
+          MYOTA_TEST_CHART_VERSION: ${{ needs.package.outputs.version }}
+          VALUES_JSON: ${{ runner.temp }}/rollout-inputs/myota-test-values.json
+          EXPECTED_JSON: ${{ runner.temp }}/rollout-inputs/myota-test-expected-deployments.json
+        run: |
+          set -euo pipefail
+          test -n "$MYOTA_TEST_RANCHER_TOKEN"
+          node tools/upgrade-myota-test-catalog.mjs \
+            "$VALUES_JSON" \
+            "$EXPECTED_JSON"

@@ -34,6 +34,8 @@ describeWithDatabases(
         'MYOTA_ACTIVITY_URL',
         'MYOTA_GEODATA_URL',
         'MYOTA_ENV',
+        'MYOTA_PARTICIPANT_PUBLIC_URL',
+        'MYOTA_EXPOSE_DEV_TOKENS',
         'MYOTA_EMAIL_SERVICE_CLIENT_SECRET',
         'MYOTA_AUTH_SIGNING_KEY',
         'GEODATA_SOURCE_ALLOWLIST',
@@ -53,6 +55,9 @@ describeWithDatabases(
       process.env.MYOTA_AUTH_SIGNING_KEY = `gateway-e2e-${randomUUID()}-signing-key`;
       process.env.GEODATA_SOURCE_ALLOWLIST = 'example.test';
       process.env.MYOTA_ENV = 'test';
+      process.env.MYOTA_PARTICIPANT_PUBLIC_URL =
+        'https://participant.example.test/';
+      process.env.MYOTA_EXPOSE_DEV_TOKENS = '1';
       process.env.PORT = '0';
 
       let identityApp: INestApplication | undefined;
@@ -80,11 +85,11 @@ describeWithDatabases(
 
         await request(gatewayUrl)
           .post('/v1/identity/auth/register')
-          .send({ email: `disabled-${randomUUID()}@example.test` })
-          .expect(403)
+          .send({ email: `incomplete-${randomUUID()}@example.test` })
+          .expect(400)
           .expect(({ body }) => {
-            expect(body.detail).toBe(
-              'public participant registration is unavailable until email verification and abuse controls are deployed',
+            expect(JSON.stringify(body)).toContain(
+              'registration details are invalid',
             );
           });
 

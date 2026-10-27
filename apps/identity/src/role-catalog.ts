@@ -25,6 +25,11 @@ export const ADMIN_PERMISSION_CATALOG = [
     group: 'Identity',
   },
   {
+    code: 'identity.participants.manage',
+    label: 'Manage participant accounts',
+    group: 'Identity',
+  },
+  {
     code: 'identity.roles.assign',
     label: 'Assign roles to users',
     group: 'Identity',
@@ -120,6 +125,14 @@ export const DEFAULT_ROLE_DEFINITIONS: RoleDefinition[] = [
       'identity.audit.read',
       'callsign.verify',
     ],
+    system: true,
+  },
+  {
+    code: 'PARTICIPANT_ADMIN',
+    name: 'Participant Administrator',
+    description:
+      'View and manage participant accounts without broader Identity administration.',
+    scopes: ['identity.participants.manage'],
     system: true,
   },
   {

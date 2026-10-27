@@ -1,5 +1,9 @@
 const $ = (id) => document.getElementById(id);
 const profileUtils = window.MyotaProfileUtils;
+let participantPasswordResetToken = window.myotaPasswordResetToken || '';
+window.myotaPasswordResetToken = '';
+let participantEmailChangeToken = window.myotaEmailChangeToken || '';
+window.myotaEmailChangeToken = '';
 let programmes = [];
 let entities = [];
 let entityPage = 1;
@@ -36,7 +40,10 @@ const escapeHtml = (value) =>
   );
 async function api(path, options = {}) {
   const res = await fetch(path, options);
-  if (!res.ok) throw new Error((await res.json()).message || res.statusText);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || body.message || res.statusText);
+  }
   return res.json();
 }
 async function awardApi(path, options = {}) {
@@ -152,6 +159,7 @@ function clearParticipantSession() {
   }
   localStorage.removeItem('myota_public_access');
   localStorage.removeItem('myota_public_refresh');
+  renderParticipantSession();
   if ($('activation-start-form')) $('activation-start-form').hidden = true;
   if ($('qso-form')) $('qso-form').hidden = true;
   if ($('activations-list')) $('activations-list').replaceChildren();
@@ -168,6 +176,19 @@ function clearParticipantSession() {
     $('profile-status').textContent = 'Sign in below to manage your profile.';
   if (typeof revokeProfileSource === 'function') revokeProfileSource();
   if (typeof clearProfileImage === 'function') clearProfileImage();
+}
+function renderParticipantSession() {
+  const signedIn = Boolean(awardAccount && awardAccessToken);
+  if ($('participant-session-status'))
+    $('participant-session-status').textContent = signedIn
+      ? `Signed in as ${awardAccount.displayName} (${awardAccount.email || 'participant'}).`
+      : 'Sign in or create a participant account to manage activations and your profile.';
+  if ($('participant-login')) $('participant-login').hidden = signedIn;
+  if ($('participant-register-details'))
+    $('participant-register-details').hidden = signedIn;
+  if ($('participant-resend-details'))
+    $('participant-resend-details').hidden = signedIn;
+  if ($('participant-signout')) $('participant-signout').hidden = !signedIn;
 }
 async function refreshParticipantSession() {
   if (!awardRefreshToken) return false;
@@ -186,6 +207,8 @@ async function refreshParticipantSession() {
       if (!response.ok) {
         if ([401, 403].includes(response.status)) {
           clearParticipantSession();
+          $('participant-auth-status').textContent =
+            'Your session has expired. Please sign in again to continue.';
           return false;
         }
         throw new Error(
@@ -195,6 +218,8 @@ async function refreshParticipantSession() {
       const session = await response.json().catch(() => null);
       if (!session?.accessToken || !session?.refreshToken) {
         clearParticipantSession();
+        $('participant-auth-status').textContent =
+          'Your session is no longer valid. Please sign in again to continue.';
         return false;
       }
       awardAccessToken = session.accessToken;
@@ -906,15 +931,7 @@ async function loadActivations() {
       .join('');
     $('qso-form').hidden = !open.length;
     $('adif-import-form').hidden = !open.length;
-    $('activations-list').innerHTML = activations.length
-      ? `<ul>${activations
-          .slice(0, 20)
-          .map(
-            (activation) =>
-              `<li>${escapeHtml(activation.operatorCallsign || 'Activation')} · ${escapeHtml(activation.status)} · ${Number(activation.qsoCount || 0)} QSOs · ${escapeHtml(activation.startedAt)}</li>`,
-          )
-          .join('')}</ul>`
-      : '<p class="small">No activations recorded for this programme yet.</p>';
+    $('activations-list').replaceChildren(renderActivationHistory(activations));
     if (activeAdifImportId) void refreshAdifImportStatus();
     return true;
   } catch (error) {
@@ -922,6 +939,149 @@ async function loadActivations() {
     return false;
   }
 }
+
+function renderActivationHistory(items) {
+  if (!items.length) {
+    const empty = document.createElement('p');
+    empty.className = 'small';
+    empty.textContent = 'No activations recorded for this programme yet.';
+    return empty;
+  }
+
+  const list = document.createElement('ul');
+  list.className = 'activation-history';
+  for (const activation of items.slice(0, 20)) {
+    const id = String(activation.id);
+    const detailId = `activation-detail-${id}`;
+    const item = document.createElement('li');
+    const details = document.createElement('details');
+    details.className = 'activation-history-detail';
+    details.dataset.activationId = id;
+
+    const summary = document.createElement('summary');
+    summary.setAttribute('aria-controls', detailId);
+    summary.append(
+      document.createTextNode(
+        `${activation.operatorCallsign || 'Activation'} · ${activation.status} · ${Number(activation.qsoCount || 0)} QSOs · ${activation.startedAt} `,
+      ),
+    );
+    const hint = document.createElement('span');
+    hint.className = 'small';
+    hint.textContent = '· View details';
+    summary.append(hint);
+
+    const panel = document.createElement('div');
+    panel.id = detailId;
+    panel.className = 'activation-history-content';
+    panel.setAttribute('role', 'status');
+    panel.setAttribute('aria-live', 'polite');
+    panel.textContent = 'Open to load activation and QSO details.';
+
+    details.append(summary, panel);
+    details.addEventListener('toggle', () => {
+      if (details.open) void loadActivationDetails(details);
+    });
+    item.append(details);
+    list.append(item);
+  }
+  return list;
+}
+
+async function loadActivationDetails(details) {
+  if (details.dataset.loaded === 'true') return;
+  const activationId = details.dataset.activationId;
+  const panel = details.querySelector('.activation-history-content');
+  if (!activationId || !panel) return;
+  panel.setAttribute('role', 'status');
+  panel.textContent = 'Loading activation details…';
+  try {
+    const activation = await awardApi(
+      `/v1/activations/${encodeURIComponent(activationId)}`,
+    );
+    const qsos = Array.isArray(activation.qsos) ? activation.qsos : [];
+    const imports = Array.isArray(activation.imports) ? activation.imports : [];
+    const importsById = new Map(imports.map((item) => [item.id, item]));
+    const metadata = document.createElement('p');
+    metadata.textContent = [
+      `Entity type: ${activation.entityType || 'Unavailable'}`,
+      `Started: ${activation.startedAt || 'Unavailable'}`,
+      ...(activation.endedAt ? [`Ended: ${activation.endedAt}`] : []),
+    ].join(' · ');
+    const qsoHeading = document.createElement('h4');
+    qsoHeading.textContent = `QSOs (${qsos.length})`;
+    const qsoList = document.createElement('ul');
+    qsoList.className = 'activation-detail-list';
+    if (qsos.length) {
+      for (const qso of qsos) {
+        const item = document.createElement('li');
+        const callsign = document.createElement('strong');
+        callsign.textContent = qso.workedCallsign || 'Unknown callsign';
+        item.append(callsign);
+        for (const value of [
+          qso.timestamp || '',
+          [qso.band, qso.mode].filter(Boolean).join(' · ') ||
+            'Band/mode unavailable',
+        ]) {
+          const line = document.createElement('span');
+          line.textContent = value;
+          item.append(line);
+        }
+        const source = importsById.get(qso.sourceImportId);
+        const sourceLabel = source
+          ? `ADIF · ${source.filename}`
+          : qso.source || 'Manual';
+        const origin = document.createElement('span');
+        origin.textContent = `${sourceLabel} · ${qso.status || 'Unknown status'}`;
+        item.append(origin);
+        qsoList.append(item);
+      }
+    } else {
+      const empty = document.createElement('li');
+      empty.textContent = 'No QSOs have been recorded for this activation.';
+      qsoList.append(empty);
+    }
+
+    const importHeading = document.createElement('h4');
+    importHeading.textContent = 'ADIF imports';
+    const importList = document.createElement('ul');
+    importList.className = 'activation-detail-list';
+    if (imports.length) {
+      for (const imported of imports) {
+        const item = document.createElement('li');
+        const filename = document.createElement('strong');
+        filename.textContent = imported.filename || 'ADIF log';
+        item.append(filename);
+        for (const value of [
+          imported.status || 'Unknown status',
+          `${Number(imported.recordsAccepted || 0)} accepted · ${Number(imported.recordsRejected || 0)} rejected of ${Number(imported.recordsSeen || 0)} records`,
+        ]) {
+          const line = document.createElement('span');
+          line.textContent = value;
+          item.append(line);
+        }
+        importList.append(item);
+      }
+    } else {
+      const empty = document.createElement('li');
+      empty.textContent =
+        'No ADIF imports are associated with this activation.';
+      importList.append(empty);
+    }
+    panel.replaceChildren(
+      metadata,
+      qsoHeading,
+      qsoList,
+      importHeading,
+      importList,
+    );
+    panel.dataset.loaded = 'true';
+    details.dataset.loaded = 'true';
+  } catch (error) {
+    panel.setAttribute('role', 'alert');
+    panel.textContent = `Unable to load activation details. ${error.message}`;
+  }
+}
+
 function renderOperatorCallsigns() {
   const callsigns = awardAccount?.callsigns || [];
   $('activation-callsign').innerHTML = callsigns
@@ -1160,6 +1320,7 @@ async function signInForAward() {
   localStorage.setItem('myota_public_access', awardAccessToken);
   localStorage.setItem('myota_public_refresh', awardRefreshToken);
   awardAccount = await awardApi('/v1/identity/me');
+  renderParticipantSession();
   renderOperatorCallsigns();
   await loadActivations();
   await loadMyAwardRequests();
@@ -1202,18 +1363,197 @@ async function requestPublicAward(awardId, levelId) {
     $('award-status').textContent = error.message;
   }
 }
-$('award-login').onsubmit = (event) => {
+$('participant-login').onsubmit = (event) => {
   event.preventDefault();
+  $('participant-auth-status').textContent = 'Signing in…';
   signInForAward()
     .then(async () => {
+      $('participant-auth-status').textContent = '';
       $('award-request-status').textContent =
-        'Signed in. Choose an eligible award level to request it.';
+        'Choose an eligible award level to request it.';
       await loadProfile();
     })
     .catch((error) => {
-      $('award-status').textContent = error.message;
+      $('participant-auth-status').textContent = error.message;
     });
 };
+$('participant-register').onsubmit = async (event) => {
+  event.preventDefault();
+  const button = $('participant-register').querySelector(
+    'button[type="submit"]',
+  );
+  button.disabled = true;
+  $('participant-auth-status').textContent = 'Submitting registration…';
+  try {
+    const result = await api('/v1/identity/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        displayName: $('register-display-name').value,
+        email: $('register-email').value,
+        password: $('register-password').value,
+        participationType: $('register-participation-type').value,
+      }),
+    });
+    $('resend-email').value = $('register-email').value;
+    $('participant-register').reset();
+    $('participant-auth-status').textContent = result.message;
+  } catch (error) {
+    $('participant-auth-status').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+$('participant-resend').onsubmit = async (event) => {
+  event.preventDefault();
+  const button = $('participant-resend').querySelector('button[type="submit"]');
+  button.disabled = true;
+  $('participant-auth-status').textContent = 'Requesting another email…';
+  try {
+    const result = await api('/v1/identity/auth/register/resend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('resend-email').value }),
+    });
+    $('participant-auth-status').textContent = result.message;
+  } catch (error) {
+    $('participant-auth-status').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+function preparePasswordResetFromLink() {
+  if (!participantPasswordResetToken) return;
+  $('participant-recovery-request-details').hidden = true;
+  $('participant-recovery-reset').hidden = false;
+  $('participant-recovery-status').textContent =
+    'Choose a new password to finish resetting your account.';
+}
+
+$('participant-recovery-request').onsubmit = async (event) => {
+  event.preventDefault();
+  const button = $('participant-recovery-request').querySelector(
+    'button[type="submit"]',
+  );
+  button.disabled = true;
+  $('participant-recovery-status').textContent = 'Requesting a reset email…';
+  try {
+    await api('/v1/identity/auth/recovery/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('recovery-email').value }),
+    });
+    $('participant-recovery-status').textContent =
+      'If an account matches that address, a password reset link will be sent by email.';
+  } catch {
+    $('participant-recovery-status').textContent =
+      'We could not submit the request. Please try again later.';
+  } finally {
+    button.disabled = false;
+  }
+};
+
+$('participant-recovery-reset').onsubmit = async (event) => {
+  event.preventDefault();
+  const token = participantPasswordResetToken;
+  const button = $('participant-recovery-reset').querySelector(
+    'button[type="submit"]',
+  );
+  if (!token) {
+    $('participant-recovery-request-details').hidden = false;
+    $('participant-recovery-request-details').open = true;
+    $('participant-recovery-reset').hidden = true;
+    $('participant-recovery-status').textContent =
+      'This reset link is no longer available. Request a new link by email.';
+    return;
+  }
+  button.disabled = true;
+  $('participant-recovery-status').textContent = 'Updating your password…';
+  try {
+    await api('/v1/identity/auth/recovery/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token,
+        newPassword: $('recovery-new-password').value,
+      }),
+    });
+    participantPasswordResetToken = '';
+    $('participant-recovery-reset').reset();
+    $('participant-recovery-reset').hidden = true;
+    $('participant-recovery-request-details').hidden = true;
+    $('participant-login').hidden = false;
+    $('participant-auth-status').textContent =
+      'Password updated. Sign in with your new password.';
+    $('participant-recovery-status').textContent = '';
+  } catch (error) {
+    $('participant-recovery-request-details').hidden = false;
+    $('participant-recovery-request-details').open = true;
+    $('participant-recovery-status').textContent =
+      /invalid|expired|token/i.test(error.message)
+        ? 'This reset link is invalid or expired. Request a new link by email.'
+        : error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+preparePasswordResetFromLink();
+if (participantEmailChangeToken) {
+  const token = participantEmailChangeToken;
+  participantEmailChangeToken = '';
+  $('participant-email-change-link-status').textContent =
+    'Confirming this email address…';
+  api('/v1/identity/auth/email-change/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  })
+    .then((result) => {
+      $('participant-email-change-link-status').textContent =
+        result.status === 'email_changed'
+          ? 'Both addresses are verified. Your email address has been changed.'
+          : 'This address is confirmed. The email change will finish after the other address is confirmed.';
+      if (awardAccessToken) void loadEmailChangeStatus();
+    })
+    .catch(() => {
+      $('participant-email-change-link-status').textContent =
+        'This email confirmation link is invalid, expired, or already used. Your current address remains active.';
+    });
+}
+$('participant-signout').onclick = async () => {
+  $('participant-auth-status').textContent = 'Signing out…';
+  try {
+    if (awardRefreshToken)
+      await awardApi('/v1/identity/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken: awardRefreshToken }),
+      });
+  } catch {
+    // Clear local credentials even when the API is temporarily unavailable.
+  }
+  clearParticipantSession();
+  $('participant-auth-status').textContent = 'You have signed out.';
+};
+
+async function verifyRegistrationFromLink() {
+  const token = new URLSearchParams(window.location.search).get('token');
+  if (!token) return;
+  $('participant-auth-status').textContent = 'Verifying your email address…';
+  try {
+    const result = await api('/v1/identity/auth/register/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    $('participant-auth-status').textContent = result.message;
+  } catch (error) {
+    $('participant-auth-status').textContent = error.message;
+  } finally {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('token');
+    window.history.replaceState({}, '', url);
+  }
+}
 
 let profileCrop = null;
 let profileSourceUrl = null;
@@ -1264,14 +1604,17 @@ async function loadProfile() {
     $('profile-form').hidden = true;
     $('profile-callsigns').hidden = true;
     $('profile-image-editor').hidden = true;
+    $('profile-email-change').hidden = true;
     revokeProfileSource();
     clearProfileImage();
-    $('profile-status').textContent = 'Sign in below to manage your profile.';
+    $('profile-status').textContent = 'Sign in above to manage your profile.';
+    renderParticipantSession();
     return;
   }
   try {
     const account = await profileApi('/v1/identity/me');
     awardAccount = account;
+    renderParticipantSession();
     renderOperatorCallsigns();
     renderEntities();
     await loadActivations();
@@ -1280,6 +1623,8 @@ async function loadProfile() {
     $('profile-callsigns').hidden = false;
     renderProfileCallsigns(account);
     $('profile-image-editor').hidden = false;
+    $('profile-email-change').hidden = false;
+    await loadEmailChangeStatus();
     $('profile-website').value = account.websiteUrl || '';
     $('profile-biography').value = account.biographyMarkdown || '';
     $('profile-biography-preview').innerHTML = profileUtils.renderSafeMarkdown(
@@ -1297,11 +1642,25 @@ async function loadProfile() {
     $('profile-form').hidden = true;
     $('profile-callsigns').hidden = true;
     $('profile-image-editor').hidden = true;
+    $('profile-email-change').hidden = true;
     revokeProfileSource();
     clearProfileImage();
     if (/401|403|authentication|token/i.test(error.message)) {
       clearParticipantSession();
     }
+  }
+}
+
+async function loadEmailChangeStatus() {
+  try {
+    const result = await profileApi('/v1/identity/me/email-change');
+    const pending = result.pending;
+    $('profile-email-change-status').textContent = pending
+      ? `Pending change to ${pending.newEmail}. Current address confirmed: ${pending.oldAddressVerified ? 'yes' : 'no'}; new address confirmed: ${pending.newAddressVerified ? 'yes' : 'no'}. Expires ${new Date(pending.expiresAt).toLocaleString()}.`
+      : 'No email change is pending.';
+    $('profile-email-change-cancel').hidden = !pending;
+  } catch (error) {
+    $('profile-email-change-status').textContent = error.message;
   }
 }
 
@@ -1641,6 +2000,45 @@ $('profile-form').onsubmit = async (event) => {
   }
 };
 
+$('profile-email-change-form').onsubmit = async (event) => {
+  event.preventDefault();
+  const form = $('profile-email-change-form');
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  $('profile-email-change-status').textContent = 'Requesting email change…';
+  try {
+    await profileApi('/v1/identity/me/email-change', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        currentPassword: $('email-change-password').value,
+        newEmail: $('email-change-new-email').value,
+      }),
+    });
+    form.reset();
+    $('profile-email-change-status').textContent =
+      'Confirmation emails were requested. Your current address remains active until both links are confirmed.';
+    await loadEmailChangeStatus();
+  } catch (error) {
+    $('profile-email-change-status').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+
+$('profile-email-change-cancel').onclick = async () => {
+  const button = $('profile-email-change-cancel');
+  button.disabled = true;
+  try {
+    await profileApi('/v1/identity/me/email-change', { method: 'DELETE' });
+    await loadEmailChangeStatus();
+  } catch (error) {
+    $('profile-email-change-status').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+
 function drawProfileCrop() {
   if (!profileCrop) return;
   const size = profileCanvas.width;
@@ -1793,4 +2191,6 @@ $('profile-image-delete').onclick = async () => {
   }
 };
 
+renderParticipantSession();
 loadProfile();
+void verifyRegistrationFromLink();
