@@ -142,6 +142,7 @@ describe('AwardsService synchronous and asynchronous boundaries', () => {
       'revision-key',
       published.id,
       {
+        awardId: published.id,
         expectedVersion: 3,
         awardText: 'For ten successful contacts',
       },
