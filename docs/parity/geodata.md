@@ -776,3 +776,30 @@ If-Match protected name, website, description, geometry, category, and location 
 are also implemented. Entity status, import candidate, and conflation review actions
 have corresponding Admin workflows; broader payload and workflow compatibility
 qualification remains outstanding.
+
+## Location enrichment and catalogue backfill
+
+Lifecycle-triggered reverse geocoding and the Admin **Fill missing location
+metadata** action are implemented. The action scans the full matching
+catalogue, applies the same required-field rules used by the Location editor,
+and queues durable per-entity requests asynchronously. It does not call the
+provider synchronously or report queued requests as completed enrichment.
+
+### Current test-catalogue state — 2026-10-27
+
+A read-only Admin API inventory read 432 entities across five pages. All 432
+had geometry, were missing at least one provider-managed required location
+field under the Admin's eligibility rules, and reported
+`locationEnrichmentStatus: FAILED`; none were queued or running. The
+`myota-test` Geodata worker was Ready at 1/1, but the optional
+`myota-geodata-enrichment` Secret was absent. No backfill requests were
+submitted during this inventory.
+
+After provisioning a test-only provider key through the documented Kubernetes
+Secret procedure in the [Helm chart operator guide](../../deploy/helm/myota-next/README.md),
+first verify one entity reaches `COMPLETED` / `ENRICHED`. Then run the Admin
+backfill, review its queued/skipped/failed summary, and confirm completion with
+a fresh catalogue read. Track provider configuration and live backfill evidence
+under [#110](https://github.com/myota-platform/myota-next/issues/110),
+[#111](https://github.com/myota-platform/myota-next/issues/111), and
+[#112](https://github.com/myota-platform/myota-next/issues/112).
