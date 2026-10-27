@@ -18,8 +18,9 @@ export class WorkerProbeServer {
   async listen(
     port: number,
     ready: () => Promise<boolean>,
+    metrics: () => string,
     host = '0.0.0.0',
-  ): Promise<void> {
+  ): Promise<number> {
     this.server = createServer((request, response) => {
       if (request.method !== 'GET') {
         response.writeHead(404).end();
@@ -42,10 +43,21 @@ export class WorkerProbeServer {
           .catch(() => this.respond(response, false, 'ready', 'not ready'));
         return;
       }
+      if (request.url === '/metrics') {
+        response.writeHead(200, {
+          'Content-Type': 'text/plain; version=0.0.4; charset=utf-8',
+          'Cache-Control': 'no-store',
+        });
+        response.end(metrics());
+        return;
+      }
       response.writeHead(404).end();
     });
-    await new Promise<void>((resolve, reject) => {
-      this.server!.once('error', reject).listen(port, host, resolve);
+    return new Promise<number>((resolve, reject) => {
+      this.server!.once('error', reject).listen(port, host, () => {
+        const address = this.server!.address();
+        resolve(typeof address === 'object' && address ? address.port : port);
+      });
     });
   }
 

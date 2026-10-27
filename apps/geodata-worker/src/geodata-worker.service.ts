@@ -29,6 +29,10 @@ import {
   WorkerProbeServer,
   workerProbePort,
 } from '@app/platform/worker-probes.js';
+import {
+  WorkerMetrics,
+  type WorkerWorkOutcome,
+} from '@app/platform/worker-metrics.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { GeodataWorkRepository } from './geodata-work.repository.js';
 import { GeodataPromotionRepository } from './geodata-promotion.repository.js';
@@ -85,6 +89,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
   private connection?: Awaited<ReturnType<typeof connect>>;
   private loops: Promise<void>[] = [];
   private readonly probes = new WorkerProbeServer();
+  private readonly metrics = new WorkerMetrics('geodata-worker');
   private natsUp = false;
   private readonly repository: GeodataWorkRepository;
   private readonly promotion: GeodataPromotionRepository;
@@ -156,6 +161,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
       }
       this.importSemaphore = new AsyncSemaphore(geodataImportConcurrency());
       this.natsUp = true;
+      this.metrics.setDependency('nats', true);
       void this.monitorNats();
       await this.probes.listen(
         workerProbePort(
@@ -165,9 +171,16 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
         ),
         async () => {
           if (this.stopping || !this.natsUp || !this.pool) return false;
-          await this.pool.query('SELECT 1');
-          return true;
+          try {
+            await this.pool.query('SELECT 1');
+            this.metrics.setDependency('postgres', true);
+            return true;
+          } catch (error) {
+            this.metrics.setDependency('postgres', false);
+            throw error;
+          }
         },
+        () => this.metrics.render(),
       );
       this.loops = [
         ...definitions.flatMap((definition) =>
@@ -198,10 +211,13 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
       for await (const status of this.connection!.status()) {
         if (status.type === 'disconnect' || status.type === 'reconnecting') {
           this.natsUp = false;
+          this.metrics.setDependency('nats', false);
         } else if (status.type === 'reconnect') {
           this.natsUp = true;
+          this.metrics.setDependency('nats', true);
         } else if (status.type === 'close') {
           this.natsUp = false;
+          this.metrics.setDependency('nats', false);
           return;
         }
       }
@@ -278,46 +294,61 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
     definition: WorkDefinition,
     message: JsMsg,
   ): Promise<void> {
-    const delivery = Math.max(1, message.info.deliveryCount);
-    let envelope: Record<string, unknown>;
+    const startedAt = performance.now();
+    let outcome: WorkerWorkOutcome = 'settlement_error';
     try {
-      const decoded: unknown = JSON.parse(
-        new TextDecoder().decode(message.data),
-      );
-      if (!isRecord(decoded)) throw new Error('invalid_envelope');
-      envelope = decoded;
-      validateEnvelope(definition, envelope, message.subject);
-    } catch (error) {
-      await this.deadLetter(message, null, 'invalid_envelope', error);
-      return;
-    }
-
-    let job: unknown = null;
-    try {
-      job = await this.claimUntilReady(definition, envelope, message);
-      if (!job) return;
-      await this.processWithHeartbeats(definition, job, message);
-      message.ack();
-      this.logger.log(
-        `Completed Geodata work ${definition.workType} (${workId(envelope)})`,
-      );
-    } catch (error) {
+      const delivery = Math.max(1, message.info.deliveryCount);
+      let envelope: Record<string, unknown>;
       try {
-        await this.persistFailureWithDatabaseRecovery(
-          definition,
-          message,
-          envelope,
-          job,
-          error,
-          delivery,
+        const decoded: unknown = JSON.parse(
+          new TextDecoder().decode(message.data),
         );
-      } catch (persistError) {
+        if (!isRecord(decoded)) throw new Error('invalid_envelope');
+        envelope = decoded;
+        validateEnvelope(definition, envelope, message.subject);
+      } catch (error) {
+        await this.deadLetter(message, null, 'invalid_envelope', error);
+        outcome = 'dead_lettered';
+        return;
+      }
+
+      let job: unknown = null;
+      try {
+        job = await this.claimUntilReady(definition, envelope, message);
+        if (!job) {
+          outcome = 'not_claimed';
+          return;
+        }
+        await this.processWithHeartbeats(definition, job, message);
+        message.ack();
+        outcome = 'completed';
+        this.logger.log(
+          `Completed Geodata work ${definition.workType} (${workId(envelope)})`,
+        );
+      } catch (error) {
+        try {
+          outcome = await this.persistFailureWithDatabaseRecovery(
+            definition,
+            message,
+            envelope,
+            job,
+            error,
+            delivery,
+          );
+        } catch (persistError) {
+          this.logger.error(
+            `Could not persist Geodata work retry state: ${safeError(persistError)}`,
+          );
+        }
         this.logger.error(
-          `Could not persist Geodata work retry state: ${safeError(persistError)}`,
+          `Geodata work ${workId(envelope)} failed: ${safeError(error)}`,
         );
       }
-      this.logger.error(
-        `Geodata work ${workId(envelope)} failed: ${safeError(error)}`,
+    } finally {
+      this.metrics.recordWork(
+        definition.workType,
+        outcome,
+        (performance.now() - startedAt) / 1000,
       );
     }
   }
@@ -329,8 +360,8 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
     job: unknown,
     error: unknown,
     delivery: number,
-  ): Promise<void> {
-    await retryTransientDatabaseOperation(
+  ): Promise<WorkerWorkOutcome> {
+    return retryTransientDatabaseOperation(
       async () => {
         if (job && definition.onFailure) await definition.onFailure(job, error);
         const state = await definition.getState(envelope);
@@ -339,7 +370,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(
             `Geodata work ${workId(envelope)} reached a terminal owner state: ${safeError(error)}`,
           );
-          return;
+          return 'not_claimed';
         }
         if (delivery >= definition.maxDeliveries) {
           await this.deadLetter(
@@ -348,7 +379,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
             'delivery_attempts_exhausted',
             error,
           );
-          return;
+          return 'dead_lettered';
         }
         const retrySeconds = Math.min(
           60,
@@ -358,6 +389,7 @@ export class GeodataWorkerService implements OnModuleInit, OnModuleDestroy {
           ) * delivery,
         );
         message.nak(retrySeconds * 1000);
+        return 'retried';
       },
       {
         stopping: () => this.stopping,
