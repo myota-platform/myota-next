@@ -29,6 +29,10 @@ describe('myota-test catalog failure recovery integration', () => {
               repository: 'ghcr.io/myota-platform/myota-next-gateway',
               digest: `sha256:${'b'.repeat(64)}`,
             },
+            'participant-web': {
+              repository: 'ghcr.io/myota-platform/myota-next-participant-web',
+              digest: `sha256:${'c'.repeat(64)}`,
+            },
           },
         }),
       );
@@ -52,10 +56,11 @@ describe('myota-test catalog failure recovery integration', () => {
           timeout: 10_000,
           env: {
             ...process.env,
+            MYOTA_TEST_SIMULATE_RECOVERY_FAILURE: 'true',
             MYOTA_TEST_RANCHER_URL: 'https://rancher.spainip.es/',
             MYOTA_TEST_RANCHER_TOKEN: 'mock-rancher-token',
             MYOTA_TEST_GITHUB_TOKEN: 'mock-github-token',
-            MYOTA_TEST_CHART_VERSION: '1.1.6-testing.abcdef123456.1',
+            MYOTA_TEST_CHART_VERSION: '1.1.6-testing.abcdef123456.56',
             MYOTA_TEST_PYTHON: 'mock-yaml-parser',
             MYOTA_TEST_MOCK_ACTION_LOG: actionLogPath,
           },
@@ -65,6 +70,9 @@ describe('myota-test catalog failure recovery integration', () => {
       expect(result.error).toBeUndefined();
       expect(result.status).toBe(1);
       expect(result.stdout).toContain('Restoring prior chart');
+      expect(result.stdout).toContain(
+        'using a deliberately nonexistent participant-web image digest',
+      );
       expect(result.stderr).toContain(
         'Previous chart 1.1.6-testing.123456abcdef.1 and its approved image digests were restored and verified',
       );
@@ -75,7 +83,10 @@ describe('myota-test catalog failure recovery integration', () => {
         .map((line) => JSON.parse(line));
       const upgrades = actions.filter((action) => action.kind === 'upgrade');
       expect(upgrades).toHaveLength(2);
-      expect(upgrades[0].version).toBe('1.1.6-testing.abcdef123456.1');
+      expect(upgrades[0].version).toBe('1.1.6-testing.abcdef123456.56');
+      expect(upgrades[0].values.images['participant-web'].digest).toBe(
+        `sha256:${'0'.repeat(64)}`,
+      );
       expect(upgrades[1]).toEqual({
         kind: 'upgrade',
         version: '1.1.6-testing.123456abcdef.1',
