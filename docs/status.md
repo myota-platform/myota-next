@@ -81,11 +81,15 @@ verify persisted request facts and issuance records. Public catalogue loading us
 services as well.
 
 Participant registration with email verification and delegated Participant account
-management are implemented in the current Phase 6 work branch, including the
-`PARTICIPANT_ADMIN` role, Identity API authorization, Admin account workflow, and
-Participant registration/resend/verification UI. The local service and browser checks
-pass; real email delivery and authenticated workflow evidence in `myota-test` remain open
-under Phase 6 issues #91 and #96–#100.
+management are implemented, including the `PARTICIPANT_ADMIN` role, Identity API
+authorization, Admin account workflow, and Participant registration/resend/verification
+UI. `myota-test` qualification now includes authenticated reset-request and invalid-link
+browser checks, and a complete valid reset-link journey with replacement-password login
+and restoration of the synthetic account's original password. It also covers email-change
+initiation, dual delivery to the test Mailpit sink, and cancellation with the original
+address retained. Deployed token-expiry/throttling behavior and remaining account security
+criteria stay open under #10, #91, #114, and #115; see
+[Identity and Programme parity](parity/identity-programmes.md).
 
 Public Activity activation history, leaderboard, and JSON/CSV result exports are also
 checked through the live Gateway. Participants can read their own request status, while
@@ -119,7 +123,10 @@ against the isolated deployment remains under Phase 6 issue #10.
   object storage, secrets, observability, deployment, and release automation.
   Phase 6 now has isolated SMTP STARTTLS delivery and same-work-ID replay
   evidence; the broader clean-install, authenticated workflow, backup/restore,
-  observability, and rollback gates remain tracked by issue #10.
+  observability, and rollback gates remain tracked by issue #10. The current
+  `myota-test` topology has 21/21 requested replicas ready and 17/17 Prometheus
+  targets up, but no Observe destination or centralized logs/traces backend;
+  workflow signal correlation remains open under #90 and #91.
   The local Observe SDK delivery smoke test and its limits are documented in
   [Observe delivery smoke test](operations/observe-delivery-smoke.md); live
   test-namespace credentials and telemetry correlation are still required.
