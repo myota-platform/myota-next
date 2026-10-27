@@ -6,7 +6,7 @@ import { IdentityRegistrationService } from './identity-registration.service.js'
 
 const accountId = '566b8475-bda2-4a2d-8ab8-d7a9a93c0041';
 
-function registrationHarness(existingAccount = false) {
+function registrationHarness(existingAccount = false, emailVerified = false) {
   const tokens = new Map<
     string,
     { account_id: string; used_at: Date | null; expires_at: Date }
@@ -20,12 +20,16 @@ function registrationHarness(existingAccount = false) {
     ? {
         id: accountId,
         display_name: 'Casey Operator',
-        email_verified: false,
+        email_verified: emailVerified,
       }
     : null;
+  let registrationRateCount = 0;
   const query = vi.fn(async (sql: string, values: unknown[] = []) => {
     if (sql.includes('identity_registration_rate_limit'))
-      return { rows: [{ request_count: 1 }], rowCount: 1 };
+      return {
+        rows: [{ request_count: ++registrationRateCount }],
+        rowCount: 1,
+      };
     if (sql.includes('FROM public.account') && sql.includes('FOR UPDATE'))
       return { rows: account ? [account] : [], rowCount: account ? 1 : 0 };
     if (sql.includes('INSERT INTO public.account\n'))
@@ -52,6 +56,16 @@ function registrationHarness(existingAccount = false) {
     if (sql.includes('SELECT account_id, used_at, expires_at')) {
       const saved = tokens.get(String(values[0]));
       return { rows: saved ? [saved] : [], rowCount: saved ? 1 : 0 };
+    }
+    if (
+      sql.includes('UPDATE public.identity_email_verification_token') &&
+      sql.includes('used_at = coalesce')
+    ) {
+      for (const saved of tokens.values()) {
+        if (saved.account_id === values[0] && saved.used_at === null)
+          saved.used_at = new Date();
+      }
+      return { rows: [], rowCount: tokens.size };
     }
     if (sql.includes('SET used_at = clock_timestamp()')) {
       const saved = tokens.get(String(values[0]));
@@ -214,5 +228,142 @@ describe('IdentityRegistrationService', () => {
         String(sql).includes('INSERT INTO public.account\n'),
       ),
     ).toBe(false);
+  });
+
+  it('rejects malformed and expired verification tokens', async () => {
+    vi.stubEnv(
+      'MYOTA_PARTICIPANT_PUBLIC_URL',
+      'https://participant.example.test',
+    );
+    const harness = registrationHarness();
+    await expect(
+      harness.service.verify({ token: 'too-short' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(
+      harness.query.mock.calls.some(([sql]) =>
+        String(sql).includes('SELECT account_id, used_at, expires_at'),
+      ),
+    ).toBe(false);
+
+    await harness.service.register(
+      {
+        displayName: 'Casey Operator',
+        email: 'casey@example.test',
+        password: 'long-enough-test-password',
+        participationType: 'OPERATOR',
+      },
+      '192.0.2.10',
+    );
+    const delivery = harness.events.find(
+      (event) => event.eventType === 'email.send.v1',
+    )!;
+    const verificationUrl = (
+      delivery.payload.templateData as { verificationUrl: string }
+    ).verificationUrl;
+    const token = new URL(verificationUrl).searchParams.get('token')!;
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    harness.tokens.get(tokenHash)!.expires_at = new Date(Date.now() - 1);
+
+    await expect(harness.service.verify({ token })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('resends only for an unverified account and invalidates the previous token', async () => {
+    vi.stubEnv(
+      'MYOTA_PARTICIPANT_PUBLIC_URL',
+      'https://participant.example.test',
+    );
+    const harness = registrationHarness(true);
+    await harness.service.resend({ email: 'casey@example.test' }, '192.0.2.10');
+    const deliveries = harness.events.filter(
+      (event) => event.eventType === 'email.send.v1',
+    );
+    expect(deliveries).toHaveLength(1);
+    const firstToken = new URL(
+      (deliveries[0].payload.templateData as { verificationUrl: string })
+        .verificationUrl,
+    ).searchParams.get('token')!;
+
+    await harness.service.resend({ email: 'casey@example.test' }, '192.0.2.10');
+    const resentDeliveries = harness.events.filter(
+      (event) => event.eventType === 'email.send.v1',
+    );
+    expect(resentDeliveries).toHaveLength(2);
+    const secondToken = new URL(
+      (
+        resentDeliveries[1].payload.templateData as {
+          verificationUrl: string;
+        }
+      ).verificationUrl,
+    ).searchParams.get('token')!;
+    expect(secondToken).not.toBe(firstToken);
+    await expect(
+      harness.service.verify({ token: firstToken }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      harness.service.verify({ token: secondToken }),
+    ).resolves.toEqual({ message: 'Email verified. You can now sign in.' });
+  });
+
+  it('uses a generic response for a verified address and does not resend email', async () => {
+    vi.stubEnv(
+      'MYOTA_PARTICIPANT_PUBLIC_URL',
+      'https://participant.example.test',
+    );
+    const harness = registrationHarness(true, true);
+    await expect(
+      harness.service.resend({ email: 'casey@example.test' }, '192.0.2.10'),
+    ).resolves.toEqual({
+      message:
+        'If registration can proceed, a verification email will be sent.',
+    });
+    await expect(
+      harness.service.register(
+        {
+          displayName: 'A duplicate name',
+          email: 'casey@example.test',
+          password: 'another-long-test-password',
+          participationType: 'SWL',
+        },
+        '192.0.2.10',
+      ),
+    ).resolves.toEqual({
+      message:
+        'If registration can proceed, a verification email will be sent.',
+    });
+    expect(
+      harness.events.filter((event) => event.eventType === 'email.send.v1'),
+    ).toHaveLength(0);
+  });
+
+  it('limits repeated resends to five requests per address and client', async () => {
+    vi.stubEnv(
+      'MYOTA_PARTICIPANT_PUBLIC_URL',
+      'https://participant.example.test',
+    );
+    const harness = registrationHarness();
+    const responses = [];
+    for (let index = 0; index < 5; index++)
+      responses.push(
+        await harness.service.resend(
+          { email: 'unknown@example.test' },
+          '192.0.2.10',
+        ),
+      );
+    expect(responses).toHaveLength(5);
+    expect(
+      responses.every(
+        (result) =>
+          result.message ===
+          'If registration can proceed, a verification email will be sent.',
+      ),
+    ).toBe(true);
+    await expect(
+      harness.service.resend({ email: 'unknown@example.test' }, '192.0.2.10'),
+    ).rejects.toThrow('too many registration requests; try again later');
+    expect(
+      harness.events.filter((event) => event.eventType === 'email.send.v1'),
+    ).toHaveLength(0);
   });
 });
