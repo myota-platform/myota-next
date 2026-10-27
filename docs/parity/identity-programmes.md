@@ -282,8 +282,12 @@ The same day, six sequential reset requests from one test source to a unique non
 and no development token. The Core limiter recorded six attempts in its 15-minute window;
 no recovery request or email was created. The temporary limiter row was removed. This
 checks generic behavior and the deployed counter, but does not qualify coordinated
-requests from multiple source addresses. Remaining reset concurrency and session-security
-coverage stays open under [Participant password reset](https://github.com/myota-platform/myota-next/issues/114).
+requests from multiple source addresses. A separate test submitted the same valid reset
+token twice concurrently with two candidate passwords. Exactly one request succeeded;
+only that request's password authenticated afterward. This verifies single-use behavior
+under concurrent consumption, but does not qualify coordinated requests from multiple
+source addresses or all session-security criteria in
+[Participant password reset](https://github.com/myota-platform/myota-next/issues/114).
 
 ### Phase 6 deployed Participant email-change UI checks — 2026-10-27
 
