@@ -407,6 +407,7 @@ test('creates a version from a published award and derives landscape print dimen
   };
   let revision: Record<string, unknown> | null = null;
   let revisionRequest: Record<string, any> | null = null;
+  let saveAttempts = 0;
 
   await page.route('**/v1/**', async (route) => {
     const request = route.request();
@@ -469,6 +470,27 @@ test('creates a version from a published award and derives landscape print dimen
     }
     if (url.pathname === `/v1/awards/${published.id}` && method === 'PATCH') {
       revisionRequest = request.postDataJSON() as Record<string, any>;
+      saveAttempts += 1;
+      if (saveAttempts === 1) {
+        await route.fulfill({
+          status: 400,
+          json: {
+            statusCode: 400,
+            message: 'awardText must be at most 200 characters',
+          },
+        });
+        return;
+      }
+      if (saveAttempts === 2) {
+        await route.fulfill({
+          status: 409,
+          json: {
+            statusCode: 409,
+            message: 'award changed since it was loaded; reload before editing',
+          },
+        });
+        return;
+      }
       revision = {
         ...published,
         ...revisionRequest,
@@ -501,7 +523,18 @@ test('creates a version from a published award and derives landscape print dimen
   await expect(page.getByLabel('Print background height (pixels)')).toHaveValue(
     '2481',
   );
-  await page.getByRole('button', { name: 'Save new version as draft' }).click();
+  const saveButton = page.getByRole('button', {
+    name: 'Save new version as draft',
+  });
+  await saveButton.click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'awardText must be at most 200 characters',
+  );
+  await saveButton.click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'award changed since it was loaded; reload before editing',
+  );
+  await saveButton.click();
   await expect(
     page.getByText('Award version 3 saved as a draft.'),
   ).toBeVisible();
