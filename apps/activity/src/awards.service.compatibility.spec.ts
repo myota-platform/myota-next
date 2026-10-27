@@ -193,4 +193,31 @@ describe('AwardsService synchronous and asynchronous boundaries', () => {
     );
     expect(createPublishedAwardRevision).not.toHaveBeenCalled();
   });
+
+  it('denies published award edits without awards.admin', async () => {
+    const published = {
+      id: 'award-1',
+      programmeSlug: 'field-day',
+      code: 'FIELD-DAY-10',
+      version: 3,
+      status: 'PUBLISHED',
+    };
+    const createPublishedAwardRevision = vi.fn();
+    const service = new AwardsService(
+      {} as ActivityRepository,
+      {
+        getAwardDefinition: vi.fn(async () => published),
+        createPublishedAwardRevision,
+      } as unknown as ActivityAwardsRepository,
+    );
+    const readOnlyAuthorization = `Bearer ${signAccessToken('reader-1', ['awards.read'])}`;
+
+    await expect(
+      service.patch(readOnlyAuthorization, 'revision-key', published.id, {
+        expectedVersion: 3,
+        name: 'Unauthorized edit',
+      }),
+    ).rejects.toThrow('award scope is required');
+    expect(createPublishedAwardRevision).not.toHaveBeenCalled();
+  });
 });
