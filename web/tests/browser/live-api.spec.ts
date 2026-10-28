@@ -454,7 +454,9 @@ test('creates a participant account in Admin through the live Identity API', asy
   ).toBeVisible();
 
   const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export account' }).click();
+  await page
+    .getByRole('button', { name: 'Export account', exact: true })
+    .click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe(
     `myota-account-${createdAccount.id}.json`,
