@@ -3,7 +3,7 @@ entries:
   myota-next:
   - apiVersion: v2
     appVersion: testing-8ac4b99e762c11e2651bcbc8afd42ad531a309c0
-    created: "2026-10-28T06:47:34.432469193Z"
+    created: "2026-10-28T08:06:27.242354591Z"
     description: NestJS MyOTA APIs and background processes
     digest: 4fa5b09dbe8a74a7370978e8c5d73458373522fcffffe74258a8f4512d8e03a6
     name: myota-next
@@ -13,7 +13,7 @@ entries:
     version: 1.1.6-testing.fad505d1badd.1
   - apiVersion: v2
     appVersion: testing-8ac4b99e762c11e2651bcbc8afd42ad531a309c0
-    created: "2026-10-28T06:47:34.430606283Z"
+    created: "2026-10-28T08:06:27.241147116Z"
     description: NestJS MyOTA APIs and background processes
     digest: cde35d06f2a50c59482b6e2de3475e5d8c53266c62b2ce73a3009a548b754fc7
     name: myota-next
@@ -23,7 +23,7 @@ entries:
     version: 1.1.6-testing.fa7bbe557ecf.1
   - apiVersion: v2
     appVersion: testing-8ac4b99e762c11e2651bcbc8afd42ad531a309c0
-    created: "2026-10-28T06:47:34.428573547Z"
+    created: "2026-10-28T08:06:27.24018064Z"
     description: NestJS MyOTA APIs and background processes
     digest: 136eb869c3178ab2c97ed05fca9c59a4f7783a6c109a684883e3847c54111fe0
     name: myota-next
@@ -33,7 +33,7 @@ entries:
     version: 1.1.6-testing.e2c9993fe1b9.1
   - apiVersion: v2
     appVersion: testing-111ab98
-    created: "2026-10-28T06:47:34.425785725Z"
+    created: "2026-10-28T08:06:27.239174143Z"
     description: NestJS MyOTA APIs and background processes
     digest: 407818a45ea7f440026001a99d01102af337e70304c2bf7b6e0c8c3fd7343e7b
     name: myota-next
@@ -43,7 +43,7 @@ entries:
     version: 1.1.6-testing.d92f49fe9197.1
   - apiVersion: v2
     appVersion: testing-b7fdace
-    created: "2026-10-28T06:47:34.42398385Z"
+    created: "2026-10-28T08:06:27.237467912Z"
     description: NestJS MyOTA APIs and background processes
     digest: adf9ee66c06e315d33e5c42c725bc582511b76c5c48f1edd83c9892592219a32
     name: myota-next
@@ -53,7 +53,7 @@ entries:
     version: 1.1.6-testing.d5a92b208244.1
   - apiVersion: v2
     appVersion: testing-16bb2c3
-    created: "2026-10-28T06:47:34.422112765Z"
+    created: "2026-10-28T08:06:27.236489007Z"
     description: NestJS MyOTA APIs and background processes
     digest: 5896b7720fabf43e995b595348fd59091fee7be633434139edc640768a116dbf
     name: myota-next
@@ -63,7 +63,7 @@ entries:
     version: 1.1.6-testing.cfb1af644f91.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-28T06:47:34.419186444Z"
+    created: "2026-10-28T08:06:27.235536953Z"
     description: NestJS MyOTA APIs and background processes
     digest: d27a7847313645fe52dfb0e7c4a8729834ecf2c862a1817166f2aa39c0141e75
     name: myota-next
@@ -73,7 +73,7 @@ entries:
     version: 1.1.6-testing.cbb0fbfccd58.1
   - apiVersion: v2
     appVersion: testing-b7fdace
-    created: "2026-10-28T06:47:34.41742805Z"
+    created: "2026-10-28T08:06:27.234553301Z"
     description: NestJS MyOTA APIs and background processes
     digest: bf06b61f84348af2658f951376c533a26194f7f0b7991c8c3095352161b1fdf1
     name: myota-next
@@ -83,7 +83,7 @@ entries:
     version: 1.1.6-testing.cb48c2a0fe92.1
   - apiVersion: v2
     appVersion: testing-8ac4b99e762c11e2651bcbc8afd42ad531a309c0
-    created: "2026-10-28T06:47:34.415650158Z"
+    created: "2026-10-28T08:06:27.232970707Z"
     description: NestJS MyOTA APIs and background processes
     digest: 6113027abf32dc9302f254983b74cdb1aa619a17baf7cac0c7d65e082842501c
     name: myota-next
@@ -93,7 +93,7 @@ entries:
     version: 1.1.6-testing.c10df2f22479.1
   - apiVersion: v2
     appVersion: testing-ad29a0b
-    created: "2026-10-28T06:47:34.413876806Z"
+    created: "2026-10-28T08:06:27.232034667Z"
     description: NestJS MyOTA APIs and background processes
     digest: 6982950273c7acff693086199b9dcec38e913aa93fefa0498ee2e544e3803ee2
     name: myota-next
@@ -103,7 +103,7 @@ entries:
     version: 1.1.6-testing.be60a362894b.1
   - apiVersion: v2
     appVersion: testing-d5a92b2
-    created: "2026-10-28T06:47:34.410616784Z"
+    created: "2026-10-28T08:06:27.2310482Z"
     description: NestJS MyOTA APIs and background processes
     digest: 29a7d486626c49a9ad0a178f86e5f54c27815e9f9effd4472bf5db2808de8c76
     name: myota-next
@@ -113,7 +113,7 @@ entries:
     version: 1.1.6-testing.b6a158aeadad.1
   - apiVersion: v2
     appVersion: testing-8ac4b99e762c11e2651bcbc8afd42ad531a309c0
-    created: "2026-10-28T06:47:34.408523957Z"
+    created: "2026-10-28T08:06:27.229887147Z"
     description: NestJS MyOTA APIs and background processes
     digest: 627a54535e330d6f0d380e79de414a89b38993d88f8751ce9d1920665e691bd9
     name: myota-next
@@ -123,7 +123,7 @@ entries:
     version: 1.1.6-testing.b1bd3b9bd765.1
   - apiVersion: v2
     appVersion: testing-320475c
-    created: "2026-10-28T06:47:34.406700921Z"
+    created: "2026-10-28T08:06:27.228390222Z"
     description: NestJS MyOTA APIs and background processes
     digest: 4eb9aab007a08a30a39482ff207240b5b47589df3e095d51b8b89758e898e822
     name: myota-next
@@ -133,7 +133,7 @@ entries:
     version: 1.1.6-testing.b0c9ad77927d.1
   - apiVersion: v2
     appVersion: testing-8ac4b99e762c11e2651bcbc8afd42ad531a309c0
-    created: "2026-10-28T06:47:34.404572327Z"
+    created: "2026-10-28T08:06:27.227436545Z"
     description: NestJS MyOTA APIs and background processes
     digest: 0cf65653fe81b1f9473604064ed3a8fadbdf42e85442eaa5f4c2ef7d8213de04
     name: myota-next
@@ -143,7 +143,7 @@ entries:
     version: 1.1.6-testing.a8e9325feaaa.1
   - apiVersion: v2
     appVersion: testing-0e1e1fb
-    created: "2026-10-28T06:47:34.401913014Z"
+    created: "2026-10-28T08:06:27.226427395Z"
     description: NestJS MyOTA APIs and background processes
     digest: b41f04bea6658e30669cc491a1a71fd184fa7fa46bcc8dd7c6b4f2a838ea3099
     name: myota-next
@@ -153,7 +153,7 @@ entries:
     version: 1.1.6-testing.a289b159951f.1
   - apiVersion: v2
     appVersion: testing-0b6eb64
-    created: "2026-10-28T06:47:34.400078267Z"
+    created: "2026-10-28T08:06:27.224816763Z"
     description: NestJS MyOTA APIs and background processes
     digest: ab56957bc5c40348c2fdfc95a37e35f5c55429b2d14e97731336841680c6af4d
     name: myota-next
@@ -163,7 +163,7 @@ entries:
     version: 1.1.6-testing.9db5f64189b1.1
   - apiVersion: v2
     appVersion: testing-16bb2c3
-    created: "2026-10-28T06:47:34.398141209Z"
+    created: "2026-10-28T08:06:27.223846471Z"
     description: NestJS MyOTA APIs and background processes
     digest: 9973b8461ec6f637ab9c7c82004ea829bad5eecad3612d70e5401ac283a698bb
     name: myota-next
@@ -173,7 +173,7 @@ entries:
     version: 1.1.6-testing.9ca3f07b3352.1
   - apiVersion: v2
     appVersion: testing-ad29a0b
-    created: "2026-10-28T06:47:34.395597444Z"
+    created: "2026-10-28T08:06:27.222897942Z"
     description: NestJS MyOTA APIs and background processes
     digest: 90354dcc4fb2066db36754db11d75a515b42cd9b9d7956a89d269903b8416662
     name: myota-next
@@ -183,7 +183,7 @@ entries:
     version: 1.1.6-testing.99f7023c115b.1
   - apiVersion: v2
     appVersion: testing-16bb2c3
-    created: "2026-10-28T06:47:34.393339506Z"
+    created: "2026-10-28T08:06:27.221878306Z"
     description: NestJS MyOTA APIs and background processes
     digest: 83f898a21105adde3818152a71d277ed32bde04ab41ed287ba9291d4cfea213a
     name: myota-next
@@ -193,7 +193,7 @@ entries:
     version: 1.1.6-testing.95e8342a90bd.1
   - apiVersion: v2
     appVersion: testing-f767c84
-    created: "2026-10-28T06:47:34.391517333Z"
+    created: "2026-10-28T08:06:27.220351175Z"
     description: NestJS MyOTA APIs and background processes
     digest: 68b444c239874657526a8b86fa4942ffdc2a03d4dca26a7ea4245febe7154074
     name: myota-next
@@ -203,7 +203,7 @@ entries:
     version: 1.1.6-testing.932925b8fdd4.1
   - apiVersion: v2
     appVersion: testing-cafc881
-    created: "2026-10-28T06:47:34.389655816Z"
+    created: "2026-10-28T08:06:27.219361394Z"
     description: NestJS MyOTA APIs and background processes
     digest: 2f8da564b916a52e3dc254cefc8cf3fd4cc4d22a443d040be3a26279269858d0
     name: myota-next
@@ -213,7 +213,7 @@ entries:
     version: 1.1.6-testing.7f3a08de9f37.1
   - apiVersion: v2
     appVersion: testing-ad29a0b
-    created: "2026-10-28T06:47:34.38764445Z"
+    created: "2026-10-28T08:06:27.218342699Z"
     description: NestJS MyOTA APIs and background processes
     digest: cd09f2d6017c47fdcf171f5c3e8d2a59ed764eecdbceedc896791afeb0f6f334
     name: myota-next
@@ -223,7 +223,7 @@ entries:
     version: 1.1.6-testing.7c941eb2b761.1
   - apiVersion: v2
     appVersion: testing-ad29a0b
-    created: "2026-10-28T06:47:34.383692652Z"
+    created: "2026-10-28T08:06:27.216806701Z"
     description: NestJS MyOTA APIs and background processes
     digest: e90b91f66bfbea06897cd5710bcfc62b07572a200b266ce405a9a6b33e5ae556
     name: myota-next
@@ -233,7 +233,7 @@ entries:
     version: 1.1.6-testing.778a747bd069.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-28T06:47:34.380096175Z"
+    created: "2026-10-28T08:06:27.215850951Z"
     description: NestJS MyOTA APIs and background processes
     digest: 27d68d65c3eeb9bc937522d7b0e71ad28a4bcebd48b246f96d6bd65a490b0e24
     name: myota-next
@@ -243,7 +243,7 @@ entries:
     version: 1.1.6-testing.6fc64541f37f.1
   - apiVersion: v2
     appVersion: testing-ad29a0b
-    created: "2026-10-28T06:47:34.376703847Z"
+    created: "2026-10-28T08:06:27.214897024Z"
     description: NestJS MyOTA APIs and background processes
     digest: c76b6683538c17656d42f53e0dcc66a85248ab83efd8d3ca28f55aa35ababfe4
     name: myota-next
@@ -253,7 +253,7 @@ entries:
     version: 1.1.6-testing.637eaeea9b3c.1
   - apiVersion: v2
     appVersion: testing-5519181f8d5526e65b946eb189bb044e41d536c1
-    created: "2026-10-28T06:47:34.372985382Z"
+    created: "2026-10-28T08:06:27.213855404Z"
     description: NestJS MyOTA APIs and background processes
     digest: 04fc87a1a61e780b0ae2e5af1926b67ec1700d5abdaa61dcf84e80416e525c31
     name: myota-next
@@ -263,7 +263,7 @@ entries:
     version: 1.1.6-testing.5ed913cee411.1
   - apiVersion: v2
     appVersion: testing-ad29a0b
-    created: "2026-10-28T06:47:34.368393198Z"
+    created: "2026-10-28T08:06:27.21231671Z"
     description: NestJS MyOTA APIs and background processes
     digest: 4e6ec851b9ca9a7ea6bdd4d219a407a23ce23d0ac85b54f0dce43fed7826cfb6
     name: myota-next
@@ -273,7 +273,7 @@ entries:
     version: 1.1.6-testing.54b944d51999.1
   - apiVersion: v2
     appVersion: testing-917efb2d8abb6144d92b72cf38290e619ce7b8ba
-    created: "2026-10-28T06:47:34.366589068Z"
+    created: "2026-10-28T08:06:27.211343084Z"
     description: NestJS MyOTA APIs and background processes
     digest: f3bd4fdb96abbe896abdd711bda7fc103b488b8be05d88985b44c9c5bacb2e88
     name: myota-next
@@ -283,7 +283,7 @@ entries:
     version: 1.1.6-testing.5459f7bce4e9.1
   - apiVersion: v2
     appVersion: testing-f488b23
-    created: "2026-10-28T06:47:34.364755834Z"
+    created: "2026-10-28T08:06:27.210319692Z"
     description: NestJS MyOTA APIs and background processes
     digest: 6d8e95eaaa70c6002d5c284f6cc986976ef5429f25be83bc29a5fc93fba7345f
     name: myota-next
@@ -293,7 +293,7 @@ entries:
     version: 1.1.6-testing.53b623ce108c.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-28T06:47:34.362875161Z"
+    created: "2026-10-28T08:06:27.208750928Z"
     description: NestJS MyOTA APIs and background processes
     digest: d2a5ae6a7960d3bc8c8a3e812b91ddcc41c4379dfeca0dd8d88dbd5f838ea842
     name: myota-next
@@ -303,7 +303,7 @@ entries:
     version: 1.1.6-testing.5081fd9a67ff.1
   - apiVersion: v2
     appVersion: testing-33f10fe
-    created: "2026-10-28T06:47:34.359427941Z"
+    created: "2026-10-28T08:06:27.207821268Z"
     description: NestJS MyOTA APIs and background processes
     digest: 33a3d88c7d5ab58f9ee1eb7617797fefeb7ab7b081c164f773cd597b83a805fd
     name: myota-next
@@ -313,7 +313,7 @@ entries:
     version: 1.1.6-testing.458de92a1f78.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-28T06:47:34.357407207Z"
+    created: "2026-10-28T08:06:27.206836574Z"
     description: NestJS MyOTA APIs and background processes
     digest: 0ea469c592edfad082869346e1ba56c61cbbf47d4d8432ff984ce02653a72579
     name: myota-next
@@ -322,8 +322,18 @@ entries:
     - https://myota-platform.github.io/myota-next/testing/myota-next-1.1.6-testing.43abfa561b61.1.tgz
     version: 1.1.6-testing.43abfa561b61.1
   - apiVersion: v2
+    appVersion: testing-be5f518
+    created: "2026-10-28T08:06:27.205829106Z"
+    description: NestJS MyOTA APIs and background processes
+    digest: 9cc11f9a6b83fdd4e29df22e91e8fb0f368f812a30771d6dcaaa9883be8535da
+    name: myota-next
+    type: application
+    urls:
+    - https://myota-platform.github.io/myota-next/testing/myota-next-1.1.6-testing.4375882af675.1.tgz
+    version: 1.1.6-testing.4375882af675.1
+  - apiVersion: v2
     appVersion: testing-8ac4b99e762c11e2651bcbc8afd42ad531a309c0
-    created: "2026-10-28T06:47:34.355601164Z"
+    created: "2026-10-28T08:06:27.204240303Z"
     description: NestJS MyOTA APIs and background processes
     digest: f6524187cf30a3b6b73fd87688c19b8ad1c5401909cda6cea0fecb7e30cdab18
     name: myota-next
@@ -333,7 +343,7 @@ entries:
     version: 1.1.6-testing.37f3b73b435d.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-28T06:47:34.353756468Z"
+    created: "2026-10-28T08:06:27.203097552Z"
     description: NestJS MyOTA APIs and background processes
     digest: ced3f008f20a1473746ff29c1e6d5faa5b14c83c27a5e839b308bfccceba4d9f
     name: myota-next
@@ -343,7 +353,7 @@ entries:
     version: 1.1.6-testing.36ef48af4c8c.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-28T06:47:34.350057016Z"
+    created: "2026-10-28T08:06:27.202096964Z"
     description: NestJS MyOTA APIs and background processes
     digest: 8f315928e64637419e20fb4bb57ef37d9387c8c10986114930c5b2dbcd0c25a3
     name: myota-next
@@ -353,7 +363,7 @@ entries:
     version: 1.1.6-testing.2c9dd63c61de.1
   - apiVersion: v2
     appVersion: testing-39cb632
-    created: "2026-10-28T06:47:34.347554295Z"
+    created: "2026-10-28T08:06:27.200614075Z"
     description: NestJS MyOTA APIs and background processes
     digest: 6db1095b0f42fb3c7e2b88512094568719ca61dc72602c5c1bc834149cefadd8
     name: myota-next
@@ -363,7 +373,7 @@ entries:
     version: 1.1.6-testing.29a54b7f45ea.1
   - apiVersion: v2
     appVersion: testing-39cb632
-    created: "2026-10-28T06:47:34.345145398Z"
+    created: "2026-10-28T08:06:27.199646568Z"
     description: NestJS MyOTA APIs and background processes
     digest: b83acbe59ff6139af194978d5f86888016b22f986e5d5595d0895b621c5a8705
     name: myota-next
@@ -373,7 +383,7 @@ entries:
     version: 1.1.6-testing.204854d9cff4.1
   - apiVersion: v2
     appVersion: testing-f270f1f
-    created: "2026-10-28T06:47:34.343243606Z"
+    created: "2026-10-28T08:06:27.198656556Z"
     description: NestJS MyOTA APIs and background processes
     digest: b85dd2c0dd7d6827458c087370d2a6765e50651086a475833c837be1c9e16771
     name: myota-next
@@ -383,7 +393,7 @@ entries:
     version: 1.1.6-testing.0e4eb202bda2.1
   - apiVersion: v2
     appVersion: testing-16bb2c3
-    created: "2026-10-28T06:47:34.338978443Z"
+    created: "2026-10-28T08:06:27.197636029Z"
     description: NestJS MyOTA APIs and background processes
     digest: 4bb4b45c79086e5cf492e3d7b4990e52cf2b845ba7cbba66f68e98ce0b428202
     name: myota-next
@@ -393,7 +403,7 @@ entries:
     version: 1.1.6-testing.0e1e1fbe7ce2.1
   - apiVersion: v2
     appVersion: testing-111ab98
-    created: "2026-10-28T06:47:34.336733321Z"
+    created: "2026-10-28T08:06:27.19602779Z"
     description: NestJS MyOTA APIs and background processes
     digest: fc8d9e1bba6f594940f5b22114e21c16eef2c547cefb421fe96428b47a6ee538
     name: myota-next
@@ -403,7 +413,7 @@ entries:
     version: 1.1.6-testing.0b6eb64235ba.1
   - apiVersion: v2
     appVersion: testing-16bb2c3
-    created: "2026-10-28T06:47:34.33476202Z"
+    created: "2026-10-28T08:06:27.195041644Z"
     description: NestJS MyOTA APIs and background processes
     digest: 32a87ba1f0c5a9d8a506b1d4d1fd31d452fe4a0a7ad9c3e5b040e7c48d0492a9
     name: myota-next
@@ -413,7 +423,7 @@ entries:
     version: 1.1.6-testing.0a27b65729ff.28
   - apiVersion: v2
     appVersion: testing-16bb2c3
-    created: "2026-10-28T06:47:34.332648534Z"
+    created: "2026-10-28T08:06:27.194034917Z"
     description: NestJS MyOTA APIs and background processes
     digest: 09613e809eb153286cf147a61462871bd0471bfc62165079f6ce8f2765632753
     name: myota-next
@@ -423,7 +433,7 @@ entries:
     version: 1.1.6-testing.0a27b65729ff.1
   - apiVersion: v2
     appVersion: testing-d8be136
-    created: "2026-10-28T06:47:34.328650828Z"
+    created: "2026-10-28T08:06:27.193001971Z"
     description: NestJS MyOTA APIs and background processes
     digest: 00a3829778f2cff2c2e1e9bbe02fc4e1e280c23548c76ae68c489b2846141f64
     name: myota-next
@@ -431,4 +441,4 @@ entries:
     urls:
     - https://myota-platform.github.io/myota-next/testing/myota-next-1.1.6-testing.04fccdd32a98.1.tgz
     version: 1.1.6-testing.04fccdd32a98.1
-generated: "2026-10-28T06:47:34.326382764Z"
+generated: "2026-10-28T08:06:27.191400388Z"
