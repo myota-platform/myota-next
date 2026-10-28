@@ -18,6 +18,11 @@ import sharp from 'sharp';
 import { verifyAccessToken } from '@app/platform/access-token.js';
 import { renderCertificatePdf } from '@app/platform/certificate-renderer.js';
 import {
+  formatAwardValidationIssues,
+  pickAwardDefinitionInput,
+  validateAwardConfiguration,
+} from '../../../contracts/award-definition.js';
+import {
   nextPageIfMore,
   pageOffset,
   parsePageInteger,
@@ -101,8 +106,14 @@ export class AwardsService {
     authorization: string | undefined,
     key: string | undefined,
     body: JsonRecord,
+    allowStoredFields = false,
   ) {
     this.authorizeHeader(authorization, ['awards.admin']);
+    assertAwardConfiguration(body, { allowStoredFields });
+    if (body.expectedVersion !== undefined)
+      throw new BadRequestException(
+        'expectedVersion is only supported when revising a published award',
+      );
     let existing: JsonRecord | undefined;
     if (body.awardId) {
       try {
@@ -169,6 +180,7 @@ export class AwardsService {
     if (status === 'PUBLISHED')
       return this.publish(authorization, id, patch, key);
     if (status === 'RETIRED') return this.retire(authorization, id, patch, key);
+    assertAwardConfiguration(patch, { partial: true });
     const existing = await this.getAwardDefinitionOrThrow(id);
     if (existing.status === 'PUBLISHED') {
       this.authorizeHeader(authorization, ['awards.admin']);
@@ -193,6 +205,14 @@ export class AwardsService {
         throw new BadRequestException(
           'a published award revision must retain its programme and code',
         );
+      assertAwardConfiguration(
+        {
+          ...existing,
+          ...patch,
+          version: Number(existing.version ?? 1) + 1,
+        },
+        { allowStoredFields: true },
+      );
       const requestedBackground = asRecord(
         patch.backgroundAsset ?? existing.backgroundAsset,
         'backgroundAsset',
@@ -223,11 +243,22 @@ export class AwardsService {
         key,
       );
     }
-    const saved = await this.save(authorization, key, {
+    if (patch.expectedVersion !== undefined)
+      throw new BadRequestException(
+        'expectedVersion is only supported when revising a published award',
+      );
+    const nextDefinition = {
       ...existing,
       ...patch,
       awardId: id,
-    });
+    };
+    assertAwardConfiguration(nextDefinition, { allowStoredFields: true });
+    const saved = await this.save(
+      authorization,
+      key,
+      pickAwardDefinitionInput(nextDefinition) as JsonRecord,
+      true,
+    );
     return saved.award;
   }
 
@@ -1008,6 +1039,17 @@ function asRecord(value: unknown, field: string): JsonRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new BadRequestException(`${field} must be an object`);
   return value as JsonRecord;
+}
+
+function assertAwardConfiguration(
+  value: unknown,
+  options: { allowStoredFields?: boolean; partial?: boolean } = {},
+): void {
+  const issues = validateAwardConfiguration(value, options);
+  if (issues.length)
+    throw new BadRequestException(
+      `award configuration is invalid: ${formatAwardValidationIssues(issues)}`,
+    );
 }
 
 async function imageMetadata(content: Buffer) {

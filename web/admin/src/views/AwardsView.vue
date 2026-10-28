@@ -10,6 +10,10 @@ import { createPendingIdempotencyKeys } from '../lib/pendingIdempotencyKeys';
 import { useAppStore } from '../stores/app';
 import { bytesFromBase64, inspectArtwork } from '../lib/awardArtwork';
 import { utcInput, utcInputValue } from '../lib/utc';
+import {
+  validateAwardConfiguration,
+  type AwardValidationIssue,
+} from '../../../../contracts/award-definition.js';
 
 interface TemplateElement {
   kind: string;
@@ -89,6 +93,7 @@ const awardRecalculationError = ref('');
 let awardRecalculationTimer: ReturnType<typeof setTimeout> | undefined;
 const message = ref('');
 const templateElements = ref<TemplateElement[]>(defaultElements());
+const validationIssues = ref<AwardValidationIssue[]>([]);
 const error = ref('');
 const uploading = ref(false);
 const saving = ref(false);
@@ -336,6 +341,8 @@ function defaultElements(): TemplateElement[] {
 }
 function edit(item: Award | null, createPublishedVersion = false): void {
   selected.value = item;
+  validationIssues.value = [];
+  error.value = '';
   editingPublished.value = createPublishedVersion;
   const background: any = item?.backgroundAsset || {};
   const print: any = item?.printSpec || {};
@@ -728,50 +735,71 @@ async function queueCertificateRender(issuance: {
 }
 async function save(): Promise<void> {
   if (!editable.value || saving.value) return;
-  saving.value = true;
   error.value = '';
+  message.value = '';
+  validationIssues.value = [];
+  let condition: unknown;
+  let levels: unknown;
   try {
-    const body = {
-      awardId: selected.value?.id,
-      programmeSlug: programme.value,
-      code: form.code,
-      name: form.name,
-      description: form.description,
-      awardText: form.awardText,
-      category: form.category,
-      achievementMetric: form.achievementMetric,
-      condition: JSON.parse(form.condition),
-      levels: JSON.parse(form.levels),
-      backgroundAsset: {
-        ...selected.value?.backgroundAsset,
-        ...selectedBackground.value,
-        kind: 'BACKGROUND',
-        name: selectedBackground.value?.name || `${form.name} background`,
-        objectKey: form.backgroundKey,
-        mediaType: form.backgroundType,
-        widthPx: Number(form.width),
-        heightPx: Number(form.height),
-      },
-      printSpec: {
-        ...selected.value?.printSpec,
-        page: form.page,
-        orientation: form.orientation,
-        dpi: Number(form.dpi),
-      },
-      template: {
-        ...selected.value?.template,
-        elements: templateElements.value,
-      },
-      signatureAssetId: form.signatureAssetId || null,
-      managerName: form.managerName,
-      effectiveFrom: utcInputValue(
-        form.effectiveFrom,
-        selected.value?.effectiveFrom,
-      ),
-      ...(editingPublished.value
-        ? { expectedVersion: selected.value?.version }
-        : {}),
-    };
+    condition = JSON.parse(form.condition);
+  } catch {
+    validationIssues.value = [
+      { path: 'condition', message: 'must contain valid JSON' },
+    ];
+  }
+  try {
+    levels = JSON.parse(form.levels);
+  } catch {
+    validationIssues.value = [
+      ...validationIssues.value,
+      { path: 'levels', message: 'must contain valid JSON' },
+    ];
+  }
+  if (validationIssues.value.length) return;
+  const body = {
+    awardId: selected.value?.id,
+    programmeSlug: programme.value,
+    code: form.code,
+    name: form.name,
+    description: form.description,
+    awardText: form.awardText,
+    category: form.category,
+    achievementMetric: form.achievementMetric,
+    condition,
+    levels,
+    backgroundAsset: {
+      kind: 'BACKGROUND',
+      name: selectedBackground.value?.name || `${form.name} background`,
+      objectKey: form.backgroundKey,
+      mediaType: form.backgroundType,
+      widthPx: Number(form.width),
+      heightPx: Number(form.height),
+    },
+    printSpec: {
+      ...selected.value?.printSpec,
+      page: form.page,
+      orientation: form.orientation,
+      dpi: Number(form.dpi),
+    },
+    template: {
+      ...selected.value?.template,
+      elements: templateElements.value,
+    },
+    signatureAssetId: form.signatureAssetId || null,
+    managerName: form.managerName,
+    effectiveFrom: utcInputValue(
+      form.effectiveFrom,
+      selected.value?.effectiveFrom,
+    ),
+    ...(editingPublished.value
+      ? { expectedVersion: selected.value?.version ?? 1 }
+      : {}),
+  };
+  validationIssues.value = validateAwardConfiguration(body);
+  if (validationIssues.value.length) return;
+
+  saving.value = true;
+  try {
     let saved: Award;
     if (selected.value?.id) {
       const id = selected.value.id;
@@ -818,6 +846,69 @@ async function save(): Promise<void> {
   } finally {
     saving.value = false;
   }
+}
+const awardValidationTargets: Record<string, string> = {
+  awardId: 'award-code',
+  programmeSlug: 'award-name',
+  code: 'award-code',
+  name: 'award-name',
+  description: 'award-description',
+  awardText: 'award-text',
+  category: 'award-category',
+  achievementMetric: 'award-achievement-metric',
+  condition: 'award-condition',
+  levels: 'award-levels',
+  backgroundAsset: 'award-background',
+  printSpec: 'award-page',
+  template: 'award-template-layout',
+  signatureAssetId: 'award-signature',
+  managerName: 'award-manager-name',
+  effectiveFrom: 'award-effective-from',
+  expectedVersion: 'award-name',
+};
+const awardValidationLabels: Record<string, string> = {
+  awardId: 'Award',
+  programmeSlug: 'Programme',
+  code: 'Code',
+  name: 'Name',
+  description: 'Description',
+  awardText: 'Award Text',
+  category: 'Category',
+  achievementMetric: 'Achievement metric',
+  condition: 'Condition JSON',
+  levels: 'Levels JSON',
+  backgroundAsset: 'Background image',
+  printSpec: 'Print profile',
+  template: 'Certificate layout',
+  signatureAssetId: 'Manager signature',
+  managerName: 'Award manager name',
+  effectiveFrom: 'Effective from',
+  expectedVersion: 'Award version',
+};
+function awardValidationLabel(issue: AwardValidationIssue): string {
+  const root = issue.path.split(/[.[\]]/, 1)[0] || '$';
+  const remainder = issue.path
+    .slice(root.length)
+    .replace(/^\./, '')
+    .replaceAll('[', '.')
+    .replaceAll(']', '');
+  const label = awardValidationLabels[root] || root;
+  return `${label}${remainder ? ` (${remainder})` : ''}: ${issue.message}`;
+}
+function awardValidationTarget(issue: AwardValidationIssue): string {
+  const root = issue.path.split(/[.[\]]/, 1)[0];
+  if (issue.path.startsWith('printSpec.dpi')) return 'award-dpi';
+  if (issue.path.startsWith('printSpec.orientation'))
+    return 'award-orientation';
+  return awardValidationTargets[root] || 'award-validation-heading';
+}
+function hasAwardFieldError(field: string): boolean {
+  return validationIssues.value.some(
+    (issue) =>
+      issue.path === field ||
+      issue.path.startsWith(`${field}.`) ||
+      issue.path.startsWith(`${field}[`),
+  );
 }
 async function action(
   actionName: 'submit' | 'review' | 'publish' | 'retire',
@@ -966,6 +1057,26 @@ onMounted(() => {
   />
   <div v-if="message" class="notice" role="status">{{ message }}</div>
   <div v-if="error" class="error-card" role="alert">{{ error }}</div>
+  <section
+    v-if="validationIssues.length"
+    class="error-card"
+    role="alert"
+    aria-labelledby="award-validation-heading"
+  >
+    <strong id="award-validation-heading" tabindex="-1"
+      >Check these award configuration fields before saving:</strong
+    >
+    <ul>
+      <li
+        v-for="(issue, index) in validationIssues"
+        :key="`${issue.path}-${index}`"
+      >
+        <a :href="`#${awardValidationTarget(issue)}`">{{
+          awardValidationLabel(issue)
+        }}</a>
+      </li>
+    </ul>
+  </section>
   <div class="split-layout">
     <article class="panel">
       <div class="panel-heading">
@@ -1120,22 +1231,35 @@ onMounted(() => {
       <form class="form-grid" @submit.prevent="save">
         <label
           >Code<input
+            id="award-code"
             v-model="form.code"
+            :aria-invalid="hasAwardFieldError('code') ? 'true' : undefined"
             :readonly="!editable"
             required /></label
         ><label
           >Name<input
+            id="award-name"
             v-model="form.name"
+            :aria-invalid="hasAwardFieldError('name') ? 'true' : undefined"
             :readonly="!editable"
             required /></label
         ><label
-          >Category<select v-model="form.category" :disabled="!editable">
+          >Category<select
+            id="award-category"
+            v-model="form.category"
+            :aria-invalid="hasAwardFieldError('category') ? 'true' : undefined"
+            :disabled="!editable"
+          >
             <option>HUNTER</option>
             <option>ACTIVATOR</option>
           </select></label
         ><label
           >Achievement metric<select
+            id="award-achievement-metric"
             v-model="form.achievementMetric"
+            :aria-invalid="
+              hasAwardFieldError('achievementMetric') ? 'true' : undefined
+            "
             :disabled="!editable"
           >
             <option>QSO_COUNT</option>
@@ -1145,12 +1269,18 @@ onMounted(() => {
           </select></label
         ><label class="wide"
           >Description<textarea
+            id="award-description"
             v-model="form.description"
+            :aria-invalid="
+              hasAwardFieldError('description') ? 'true' : undefined
+            "
             :readonly="!editable"
           ></textarea></label
         ><label class="wide"
           >Award Text<textarea
+            id="award-text"
             v-model="form.awardText"
+            :aria-invalid="hasAwardFieldError('awardText') ? 'true' : undefined"
             :readonly="!editable"
             maxlength="200"
             rows="3"
@@ -1161,6 +1291,7 @@ onMounted(() => {
           ></label
         ><label
           >Effective from (UTC)<input
+            id="award-effective-from"
             v-model="form.effectiveFrom"
             :disabled="
               !canManage || (!editable && selected?.status !== 'APPROVED')
@@ -1168,7 +1299,11 @@ onMounted(() => {
             type="datetime-local" /></label
         ><label
           >Background object key<select
+            id="award-background"
             v-model="form.backgroundKey"
+            :aria-invalid="
+              hasAwardFieldError('backgroundAsset') ? 'true' : undefined
+            "
             :disabled="!editable"
             @change="chooseBackground"
           >
@@ -1200,18 +1335,30 @@ onMounted(() => {
             type="number"
             min="1" /></label
         ><label
-          >Page<select v-model="form.page" :disabled="!editable">
+          >Page<select
+            id="award-page"
+            v-model="form.page"
+            :aria-invalid="hasAwardFieldError('printSpec') ? 'true' : undefined"
+            :disabled="!editable"
+          >
             <option>A4</option>
             <option>LETTER</option>
           </select></label
         ><label
-          >Orientation<select v-model="form.orientation" :disabled="!editable">
+          >Orientation<select
+            id="award-orientation"
+            v-model="form.orientation"
+            :aria-invalid="hasAwardFieldError('printSpec') ? 'true' : undefined"
+            :disabled="!editable"
+          >
             <option>PORTRAIT</option>
             <option>LANDSCAPE</option>
           </select></label
         ><label
           >Resolution<input
+            id="award-dpi"
             v-model.number="form.dpi"
+            :aria-invalid="hasAwardFieldError('printSpec') ? 'true' : undefined"
             :readonly="!editable"
             type="number"
             min="150"
@@ -1224,10 +1371,12 @@ onMounted(() => {
         </p>
         ><label class="wide"
           >Award manager name<input
+            id="award-manager-name"
             v-model="form.managerName"
             :readonly="!editable" /></label
         ><label class="wide"
           >Manager signature<select
+            id="award-signature"
             v-model="form.signatureAssetId"
             :disabled="!editable"
           >
@@ -1242,7 +1391,9 @@ onMounted(() => {
           </select></label
         ><label class="wide"
           >Condition JSON<textarea
+            id="award-condition"
             v-model="form.condition"
+            :aria-invalid="hasAwardFieldError('condition') ? 'true' : undefined"
             :readonly="!editable"
             class="code-editor"
           ></textarea
@@ -1251,7 +1402,9 @@ onMounted(() => {
           ></label
         ><label class="wide"
           >Levels JSON<textarea
+            id="award-levels"
             v-model="form.levels"
+            :aria-invalid="hasAwardFieldError('levels') ? 'true' : undefined"
             :readonly="!editable"
             class="code-editor"
           ></textarea
@@ -1344,7 +1497,7 @@ onMounted(() => {
         </button>
       </div>
     </div>
-    <div class="award-layout">
+    <div id="award-template-layout" class="award-layout">
       <div
         class="award-canvas"
         :style="{ aspectRatio: canvasAspectRatio }"

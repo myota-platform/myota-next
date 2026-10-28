@@ -92,7 +92,7 @@ jobs:
       - name: Build image without publishing
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: ${{ matrix.app == 'admin-web' && './web/admin' || matrix.app == 'participant-web' && './web/participant' || '.' }}
+          context: ${{ matrix.app == 'participant-web' && './web/participant' || '.' }}
           file: ${{ (matrix.app == 'postgres' || matrix.app == 'postgis') && 'deploy/images/database/Dockerfile' || matrix.app == 'nats' && 'deploy/images/nats/Dockerfile' || matrix.app == 'tools' && 'deploy/Dockerfile.tools' || matrix.app == 'admin-web' && 'web/admin/Dockerfile' || matrix.app == 'participant-web' && 'web/participant/Dockerfile' || 'Dockerfile' }}
           build-args: ${{ steps.image-build-args.outputs.value }}
           target: ${{ steps.image-target.outputs.value }}
