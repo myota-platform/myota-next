@@ -97,13 +97,15 @@ handling. API checks show that a canceled operation's token cannot affect a late
 pending change, simultaneous confirmations apply one transition, and both completion
 notices are sent. The old address remained authoritative on expiry and after only one
 confirmation; the new address became authoritative only after both confirmations.
-Coordinated multi-source throttling, multi-session revocation, and deployed
-telemetry-secret checks remain open under #114. The current recovery-hardening
-branch adds a shared-email throttle and request-log secret-exclusion coverage;
-these changes still need deployment qualification. Email-change delivery
-recovery after a temporary SMTP outage is now verified. The current branch adds
-the missing Participant resend action, which still needs deployment and browser
-qualification under #115. See [Identity and Programme parity](parity/identity-programmes.md)
+Coordinated multi-source throttling and deployed telemetry-secret checks remain open
+under #114. A revision 73 reset test rejected two pre-reset access sessions and both
+refresh credentials; the temporary password worked and the original password was
+restored. Email-change delivery recovery after a temporary SMTP outage is verified.
+Revision 73 includes the Participant resend action.
+Deployed API and browser checks verified both replacement deliveries, rejection of earlier
+links, partial confirmation with the original email still active, cancellation, and cleanup
+of all four generated messages. Successful completion with both replacement links remains
+open under #115. See [Identity and Programme parity](parity/identity-programmes.md)
 and the [Phase 6 readiness record](operations/phase6-readiness.md).
 
 Public Activity activation history, leaderboard, and JSON/CSV result exports are also

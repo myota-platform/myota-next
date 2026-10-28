@@ -286,7 +286,8 @@ The reset request path now atomically increments both a normalized-email bucket 
 across source addresses and the existing email/source bucket. Its regression test submits
 six requests from distinct source addresses, verifies that only five recovery messages
 are queued, and checks that stored limiter keys are hashes rather than email or address
-values. Live multi-source qualification in `myota-test` remains pending under
+values. The change is deployed in `myota-test` revision 73. Live multi-source
+qualification remains pending under
 [Participant password reset](https://github.com/myota-platform/myota-next/issues/114).
 
 A separate deployed test submitted the same valid reset token twice concurrently with two
@@ -295,10 +296,14 @@ authenticated afterward. The service transaction also revokes all refresh sessio
 all unexpired access-token identifiers for the account. The deployed single-session check
 rejected the prior access and refresh credentials; the service regression checks that
 revocation covers every account session and unexpired access token. A deployed
-multi-session reset check and end-to-end telemetry-secret scan remain pending under #114.
-The shared-email limiter and telemetry exclusion regression coverage in the current
-feature branch are not yet present in a deployed image. Repeat live Mailpit throttling,
-session, and telemetry checks before closing the issue.
+two-session reset check on revision 73 rejected both prior access tokens and both refresh
+tokens with HTTP 403. The temporary password authenticated, the original password was
+restored through a second reset, and a new original-password login succeeded. The reset
+policy is to revoke every refresh session and unexpired access-token identifier; this is
+implemented and verified. An end-to-end telemetry-secret scan remains pending under #114.
+Revision 73 includes the shared-email limiter and request-log secret exclusion. The
+multi-source limiter and telemetry behavior have service-level regression coverage but
+still need deployed qualification before #114 can close.
 
 ### Phase 6 deployed Participant email-change UI checks — 2026-10-27
 
@@ -368,11 +373,15 @@ trace correlation, hosted Observe delivery, and alert qualification remain open 
 Phase 6 issues [#90](https://github.com/myota-platform/myota-next/issues/90) and
 [#91](https://github.com/myota-platform/myota-next/issues/91).
 
-Issue #115 also requires a Participant resend action. The current feature branch adds an
-authenticated resend API and UI action that starts a replacement operation, invalidates
-all earlier links, and sends new confirmation links to both addresses. It is not deployed
-or browser-qualified yet. Keep #115 open until API, browser, and Mailpit behavior are
-verified against the feature digest.
+Revision 73 includes the authenticated resend API and Participant UI action. On
+2026-10-28, a deployed API check started an email change, confirmed delivery to both
+addresses, resent it, and verified that both earlier links were rejected. A fresh
+current-address link recorded partial confirmation while the original email remained
+authoritative; cancellation removed the pending operation. The Participant UI check also
+verified the resend message, delivery to both addresses after resend, cancellation, and
+retention of the original email. Both checks removed their four generated Mailpit
+messages, and follow-up checks found no pending operation and an empty Mailpit inbox.
+Successful completion using both replacement links remains to be qualified under #115.
 
 It then adds a callsign, submits verification evidence, and verifies the callsign
 through the live Identity API. The same browser workflow exports the resulting account
