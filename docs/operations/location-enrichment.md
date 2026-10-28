@@ -90,3 +90,18 @@ are tracked in [the Geodata parity record](../parity/geodata.md) and issues
 [#110](https://github.com/myota-platform/myota-next/issues/110),
 [#111](https://github.com/myota-platform/myota-next/issues/111), and
 [#112](https://github.com/myota-platform/myota-next/issues/112).
+
+## Test deployment evidence — 2026-10-28
+
+A test-only key was provisioned in the `myota-test` namespace Secret
+`myota-geodata-enrichment` under key `api-key`. The Geodata worker was restarted
+to load the Secret and returned Ready at 1/1. An authenticated administrator
+queued one eligible entity with its current entity version and a request
+idempotency key. The API returned HTTP 202 (`QUEUED`); a fresh entity read then
+showed `COMPLETED` / `ENRICHED`, provider `BIGDATACLOUD`, and saved location
+metadata with a geocoding timestamp. The key itself was never displayed or
+logged.
+
+This single-entity API check does not qualify replacement-key rotation, lifecycle
+triggers, the Admin browser workflow, or the full-catalogue backfill. The test
+catalogue contains 432 entities; no catalogue-wide request was submitted.
