@@ -13,16 +13,15 @@ Operating guides and qualification records are maintained in this
 
 ## Current release
 
-At 2026-10-28 14:49 UTC, the Rancher-managed release was Helm revision 79,
-chart `myota-next-1.1.6-testing.17e26055f40f.1`, application version
-`testing-d8143c5`. All 17 Deployments were ready at their desired replica
-counts. The Core, Activity, Geodata/PostGIS, JetStream, and SeaweedFS PVCs were
-bound. Immutable application image digests are recorded in
+At 2026-10-28 16:44 UTC, the Rancher-managed release was Helm revision 80,
+chart `myota-next-1.1.6-testing.1273bd5c19e4.1`, application version
+`testing-7ce0b2e`. All 15 MyOTA Deployments were ready at their desired replica
+counts on the immutable image digests recorded in
 [`deploy/fleet/myota-test/values.yaml`](../../deploy/fleet/myota-test/values.yaml).
-The deployment was rechecked at 15:00 UTC: 17 of 17 Deployments matched desired
-replicas, the Admin and Participant web hosts returned HTTP 200, and Gateway
-readiness returned HTTP 200. The API host root returns 404 by design. Recheck
-release state and digests after a later rollout.
+The Core, Activity, Geodata/PostGIS, JetStream, and SeaweedFS PVCs were bound.
+Both Admin and Participant web hosts returned HTTP 200, and the Admin health
+endpoint returned HTTP 200. Recheck release state and digests after a later
+rollout.
 
 ## Qualified work packages
 
@@ -57,6 +56,21 @@ release state and digests after a later rollout.
 - **Dependency recovery ([#92](https://github.com/myota-platform/myota-next/issues/92)):** verified NATS redelivery after restart, database interruption and retry settlement, SeaweedFS pod replacement with its existing PVC, and safe object-store outage outcomes across Geodata, Activity, and Identity. See [single-instance recovery](single-instance-restart-recovery.md) and [object-store recovery](object-store-recovery.md).
 - **Backup and restore ([#89](https://github.com/myota-platform/myota-next/issues/89)):** restored a quiesced snapshot of the three owner databases and six object buckets into disposable targets. Counts matched across 46 Core, 27 Activity, and 66 Geodata tables. Five objects (45,173,156 bytes) passed size and SHA-256 checks; two Activity ADIF references resolved. The test release returned to 21/21 replicas with health checks at HTTP 200. This is not an accepted production RPO/RTO.
 - **Rollback ([#93](https://github.com/myota-platform/myota-next/issues/93)):** rolled back an immutable worker digest and restored the current digest; readiness and authenticated sign-in passed and database/work counters were unchanged. Activity was quiescent. The procedure refuses rollback when incompatible work is pending; compatibility with a non-empty in-flight stream is not claimed.
+- **Award JSON validation ([#250](https://github.com/myota-platform/myota-next/issues/250), child of [#249](https://github.com/myota-platform/myota-next/issues/249)):** Activity and Admin use the same validator in
+  [`contracts/award-definition.ts`](../../contracts/award-definition.ts), with
+  canonical valid and invalid fixtures under
+  [`contracts/fixtures/`](../../contracts/fixtures/). Coverage includes nested
+  conditions, unknown fields, numeric and layout boundaries, stored-field
+  handling, partial updates, and published-version tokens. In deployed
+  `myota-test` (chart `1.1.6-testing.1273bd5c19e4.1`), an invalid award create
+  returned HTTP 400 with a field path in `detail`; its unique probe code was
+  absent from the first 100 listed awards. A live Admin browser check showed
+  the accessible `Condition JSON` error and confirmed no create request was
+  sent. The check used the bootstrap administrator and left no award record.
+  Deployment was verified by [run 40728104528](https://github.com/myota-platform/myota-next/actions/runs/40728104528);
+  implementation is in [PR #275](https://github.com/myota-platform/myota-next/pull/275).
+  The complete human-readable JSON reference and its Awards-page help link
+  remain open under #249.
 
 ## Remaining Phase 6 qualification
 
