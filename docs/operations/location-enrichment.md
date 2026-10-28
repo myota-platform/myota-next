@@ -103,5 +103,6 @@ metadata with a geocoding timestamp. The key itself was never displayed or
 logged.
 
 This single-entity API check does not qualify replacement-key rotation, lifecycle
-triggers, the Admin browser workflow, or the full-catalogue backfill. The test
-catalogue contains 432 entities; no catalogue-wide request was submitted.
+triggers, queueing and monitoring the Admin browser workflow, or the
+full-catalogue backfill. A browser check displayed a confirmation for the 432
+matching entities; it was dismissed, and no enrichment requests were submitted.
