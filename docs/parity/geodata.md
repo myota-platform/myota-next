@@ -803,3 +803,12 @@ a fresh catalogue read. Track provider configuration and live backfill evidence
 under [#110](https://github.com/myota-platform/myota-next/issues/110),
 [#111](https://github.com/myota-platform/myota-next/issues/111), and
 [#112](https://github.com/myota-platform/myota-next/issues/112).
+
+### Test deployment recheck — 2026-10-28
+
+The `myota-test` Geodata worker is Ready at 1/1 on deployment revision 35
+(image digest `sha256:77c687a62b563fb7c55d0ee5350872b61cef724491ea6db34bce9bc0e92c1708`).
+Its `BIGDATACLOUD_API_KEY` reference points to the optional
+`myota-geodata-enrichment` Secret and `api-key` key. A presence-only lookup
+confirms that Secret is absent. No provider request or catalogue backfill was
+submitted; provider-backed qualification still requires a test-only credential.
