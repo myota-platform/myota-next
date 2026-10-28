@@ -39,6 +39,7 @@ export async function writeSecurityEvent(
   client: PoolClient,
   eventType: string,
   payload: Record<string, unknown>,
+  correlationId?: string,
 ): Promise<void> {
   const candidateAccountId = payload.accountId ?? payload.actorId;
   const accountId = isUuid(candidateAccountId) ? candidateAccountId : null;
@@ -61,6 +62,7 @@ export async function writeSecurityEvent(
     aggregateType: 'account',
     aggregateId,
     payload,
+    correlationId,
     occurredAt,
   });
 }
