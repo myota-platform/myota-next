@@ -562,3 +562,192 @@ test('does not render another participant activation when details are denied', a
     'Denied Participant activation history details',
   );
 });
+
+test('clears stale programme activity and retries failed award and QSO reads', async ({
+  page,
+}) => {
+  let coastAwardFails = true;
+  let coastActivityFails = true;
+  let activationDetailFails = true;
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  const programmes = ['alpine', 'coast'].map((slug) => ({
+    slug,
+    name: slug === 'alpine' ? 'Alpine Summits' : 'Coastal Parks',
+    description: `${slug} programme`,
+    theme: { primary: '#2367a8', accent: '#e38a32' },
+    rules: {
+      minimumQsos: { activation: 4, hunter: 1 },
+      publicAccessRequired: true,
+    },
+    entityTypes: [{ code: 'PARK', name: 'Park', geometryTypes: ['POINT'] }],
+  }));
+
+  await page.route('**/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({ json: { items: programmes, nextPage: null } });
+      return;
+    }
+    if (url.pathname.endsWith('/content')) {
+      await route.fulfill({ json: { items: [] } });
+      return;
+    }
+    if (url.pathname === '/v1/geodata/entities') {
+      await route.fulfill({ json: { items: [], page: 1, total: 0 } });
+      return;
+    }
+    if (url.pathname === '/v1/identity/auth/login') {
+      await route.fulfill({
+        json: {
+          accessToken: 'participant-recovery-access-token',
+          refreshToken: 'participant-recovery-refresh-token',
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/identity/me') {
+      await route.fulfill({
+        json: {
+          id: 'participant-1',
+          email: 'operator@example.test',
+          callsigns: [
+            { id: 'callsign-1', value: 'EA1ABC', status: 'VERIFIED' },
+          ],
+          primaryCallsignId: 'callsign-1',
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/awards/requests') {
+      await route.fulfill({ json: { items: [], nextPage: null } });
+      return;
+    }
+    if (url.pathname === '/v1/awards') {
+      const slug = url.searchParams.get('programme');
+      if (slug === 'coast' && coastAwardFails) {
+        coastAwardFails = false;
+        await route.fulfill({
+          status: 503,
+          json: { message: 'award service unavailable' },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              id: `${slug}-award`,
+              name: `${slug} award`,
+              category: 'activator',
+              achievementMetric: 'QSOs',
+              levels: [{ id: 'bronze', name: 'Bronze', threshold: 5 }],
+            },
+          ],
+          nextPage: null,
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/activations' && method === 'GET') {
+      const slug = url.searchParams.get('programme');
+      if (slug === 'coast' && coastActivityFails) {
+        coastActivityFails = false;
+        await route.fulfill({
+          status: 503,
+          json: { message: 'activity service unavailable' },
+        });
+        return;
+      }
+      const id = `${slug}-activation`;
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              id,
+              operatorCallsign: slug === 'coast' ? 'EA1ABC' : 'EA2XYZ',
+              status: 'CLOSED',
+              qsoCount: 1,
+              startedAt: '2026-10-28T10:00:00Z',
+            },
+          ],
+          nextPage: null,
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/activations/coast-activation') {
+      if (activationDetailFails) {
+        activationDetailFails = false;
+        await route.fulfill({
+          status: 503,
+          json: { message: 'QSO detail service unavailable' },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          id: 'coast-activation',
+          entityType: 'PARK',
+          startedAt: '2026-10-28T10:00:00Z',
+          qsos: [
+            {
+              workedCallsign: 'F4XYZ',
+              timestamp: '2026-10-28T10:30:00Z',
+              band: '20M',
+              mode: 'SSB',
+            },
+          ],
+          imports: [],
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: { items: [], nextPage: null, total: 0 } });
+  });
+
+  await page.goto('http://127.0.0.1:8091');
+  await expect(page.locator('#public-awards')).toContainText('alpine award');
+  await page.locator('#award-email').fill('operator@example.test');
+  await page.locator('#award-password').fill('test-password');
+  await page.locator('#participant-login button[type="submit"]').click();
+  await expect(page.locator('#activations-list')).toContainText('EA2XYZ');
+
+  await page.getByLabel('Programme').selectOption('coast');
+  await expect(page.locator('#activations-list')).toContainText(
+    'temporarily unavailable',
+  );
+  await expect(page.locator('#activations-list')).not.toContainText('EA2XYZ');
+  await expect(page.locator('#public-awards')).toContainText(
+    'Awards are temporarily unavailable',
+  );
+  await expect(page.locator('#public-awards')).not.toContainText(
+    'alpine award',
+  );
+  await expect(page.locator('#activation-status')).toContainText(
+    'Refresh programme data',
+  );
+
+  await page.getByRole('button', { name: 'Refresh programme data' }).click();
+  await expect(page.locator('#activations-list')).toContainText('EA1ABC');
+  await expect(page.locator('#public-awards')).toContainText('coast award');
+  await expect(page.locator('#activations-list')).not.toContainText('EA2XYZ');
+
+  const coastDetails = page.locator(
+    'details.activation-history-detail[data-activation-id="coast-activation"]',
+  );
+  await coastDetails.locator('summary').click();
+  const detailPanel = coastDetails.locator('.activation-history-content');
+  await expect(detailPanel).toContainText(
+    'Unable to load activation details. QSO detail service unavailable',
+  );
+  await detailPanel
+    .getByRole('button', { name: 'Retry activity and QSO details' })
+    .click();
+  await expect(detailPanel).toContainText('F4XYZ');
+  expect(pageErrors).toEqual([]);
+});
