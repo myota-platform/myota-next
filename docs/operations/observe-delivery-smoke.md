@@ -199,3 +199,25 @@ verified for this flow; worker log coverage, other worker operations, hosted
 Observe delivery, per-email trace coverage, and behavioral alert qualification
 remain open under Phase 6 issues [#90](https://github.com/myota-platform/myota-next/issues/90)
 and [#91](https://github.com/myota-platform/myota-next/issues/91).
+
+## Worker log and alert check — revision 72
+
+Protected rollout [40645993158](https://github.com/myota-platform/myota-next/actions/runs/40645993158)
+deployed chart `myota-next-1.1.6-testing.b6a158aeadad.1` at Helm revision 72.
+All 17 Deployments (22 requested replicas) are Ready, and all 17 Prometheus
+targets are up.
+
+A synthetic failed login for a non-existent address returned HTTP 400 and did
+not create an account. The request ID
+`e8afbf2b-787b-4d2c-b3f1-044b94f34c2d` was recorded as a trace ID and forwarded
+log trace ID at Gateway, Identity API, and Activity Notifications. The worker
+emitted a structured settlement log for the processed event, with delivery
+count 1. No external email or notification was sent.
+
+All seven MyOTA Prometheus rules loaded with healthy evaluation. Two outbox
+dead-letter alerts were firing for existing Core and Geodata dead-letter
+counts, labeled with `service_id=outbox-worker`. The test Alertmanager has no
+notification receiver, so external alert delivery remains unqualified. Hosted
+Observe delivery and other asynchronous worker operations remain open under
+[#90](https://github.com/myota-platform/myota-next/issues/90) and
+[#91](https://github.com/myota-platform/myota-next/issues/91).

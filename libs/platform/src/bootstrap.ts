@@ -18,6 +18,7 @@ import {
 } from './json-bigint.js';
 import { parseJsonWithExactIntegers } from './json-exact.js';
 import { recordHttpRequest } from './http-metrics.js';
+import { HttpRequestLogInterceptor } from './http-request-log.interceptor.js';
 
 type DeclaredBodyLimit = {
   method: string;
@@ -45,6 +46,7 @@ export async function bootstrapHttpService(
     instrument: ObserveInstrument,
   });
   app.use(requestIds);
+  app.useGlobalInterceptors(new HttpRequestLogInterceptor(serviceId));
   app.use((request: Request, response: Response, next: NextFunction) => {
     response.once('finish', () =>
       recordHttpRequest(serviceId, request, response.statusCode),

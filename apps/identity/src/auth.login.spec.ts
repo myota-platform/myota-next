@@ -16,6 +16,7 @@ describe('IdentityAuthService.login rate limits', () => {
     emailVerified = true,
   ) {
     const statements: Array<{ sql: string; values: unknown[] }> = [];
+    const audits: unknown[][] = [];
     let rateCount = 0;
     let globalOperatorChecks = 0;
     const account = {
@@ -68,7 +69,9 @@ describe('IdentityAuthService.login rate limits', () => {
       writeAudit: (...args: unknown[]) => Promise<void>;
       createSession: (...args: unknown[]) => Promise<Record<string, unknown>>;
     };
-    internal.writeAudit = async () => undefined;
+    internal.writeAudit = async (...args) => {
+      audits.push(args);
+    };
     internal.createSession = async () => ({
       accessToken: 'test-access-token',
       refreshToken: 'test-refresh-token',
@@ -77,6 +80,7 @@ describe('IdentityAuthService.login rate limits', () => {
     return {
       service,
       statements,
+      audits,
       get rateCount() {
         return rateCount;
       },
@@ -122,6 +126,28 @@ describe('IdentityAuthService.login rate limits', () => {
 
     expect(fixture.rateCount).toBe(0);
     expect(fixture.globalOperatorChecks).toBe(12);
+  });
+
+  it('keeps the request ID on successful and failed login security events', async () => {
+    const requestId = '646589b8-1439-4ad9-a397-475a7f3b4eb9';
+    const successful = harness(true);
+    await successful.service.login(
+      { email: 'standard@example.test', password },
+      { userAgent: null, remoteAddr: '192.0.2.10', requestId },
+    );
+
+    const failed = harness(true);
+    await expect(
+      failed.service.login(
+        { email: 'standard@example.test', password: 'incorrect password' },
+        { userAgent: null, remoteAddr: '192.0.2.10', requestId },
+      ),
+    ).rejects.toThrow('invalid credentials');
+
+    expect(successful.audits[0]?.[1]).toBe('identity.login.succeeded.v1');
+    expect(successful.audits[0]?.[3]).toBe(requestId);
+    expect(failed.audits[0]?.[1]).toBe('identity.login.failed.v1');
+    expect(failed.audits[0]?.[3]).toBe(requestId);
   });
 
   it('denies valid credentials while participant email verification is pending', async () => {

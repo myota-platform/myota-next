@@ -59,6 +59,14 @@ jobs:
           participant_deployment="$(awk -v RS='---' '/kind: Deployment/ && /name: myota-test-participant-web/ { print }' "$RUNNER_TEMP/myota-test-rendered.yaml")"
           test -n "$participant_deployment"
           ! grep -Fq 'mountPath: /etc/nginx/conf.d' <<< "$participant_deployment"
+          helm lint deploy/helm/myota-next -f deploy/fleet/myota-test/values.yaml
+          helm template myota-test deploy/helm/myota-next \
+            --namespace myota-test \
+            -f deploy/fleet/myota-test/values.yaml \
+            > "$RUNNER_TEMP/myota-test-fleet-rendered.yaml"
+          grep -F 'kind: PrometheusRule' "$RUNNER_TEMP/myota-test-fleet-rendered.yaml"
+          grep -F 'alert: MyOTAScrapeTargetUnavailable' "$RUNNER_TEMP/myota-test-fleet-rendered.yaml"
+          grep -F 'alert: MyOTAWorkerDependencyUnavailable' "$RUNNER_TEMP/myota-test-fleet-rendered.yaml"
       - name: Build and start hardened test dependencies
         run: |
           docker buildx build --load \

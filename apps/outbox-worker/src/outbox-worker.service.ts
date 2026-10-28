@@ -19,6 +19,7 @@ import {
   routeOutboxEvent,
   type ClaimedOutboxEvent,
 } from '@app/platform/outbox-routing.js';
+import { outboxTraceHeaders } from './outbox-trace-headers.js';
 
 const OWNER = process.env.OUTBOX_OWNER ?? '';
 const WORKER = process.env.OUTBOX_WORKER ?? `${OWNER}-outbox`;
@@ -504,9 +505,11 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
     const started = performance.now();
     let acknowledgedStream: string;
     try {
+      const messageHeaders = outboxTraceHeaders(event.correlationId);
       const ack = await this.relay!.publish(routed.subject, body, {
         msgID: event.eventId,
         timeout: PUBLISH_TIMEOUT_MS,
+        ...(messageHeaders ? { headers: messageHeaders } : {}),
       });
       acknowledgedStream = ack.stream;
       this.natsUp = 1;

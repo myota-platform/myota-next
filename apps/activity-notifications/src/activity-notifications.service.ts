@@ -4,7 +4,10 @@ import {
   Logger,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
+import { TracerService } from '@nestjs/observe';
+import type { Counter } from '@nestjs/observe';
 import { createHash, randomUUID } from 'node:crypto';
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import {
@@ -18,10 +21,12 @@ import type { Consumer, ConsumerConfig, JsMsg } from '@nats-io/jetstream';
 import { connect } from '@nats-io/transport-node';
 import type { Pool, PoolClient } from 'pg';
 import { DATABASE_HEALTH_POOL } from '@app/platform/database.module.js';
+import { ObserveEventBridge } from '@app/platform';
 import { abortableDelay } from '@app/platform/async-timers.js';
 import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
 import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import { integerSetting } from '@app/platform/integer-setting.js';
+import { ActivityNotificationJetStreamContext } from './activity-notifications-jetstream-context.js';
 import { retryTransientDatabaseOperation } from '@app/platform/database-retry.js';
 import { pythonString } from '@app/platform/python-strings.js';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
@@ -31,6 +36,7 @@ const STREAM = 'MYOTA_EVENTS';
 const DURABLE =
   process.env.ACTIVITY_NOTIFICATION_DURABLE ?? 'activity-notifications-v1';
 const DEFAULT_DURABLE = 'activity-notifications-v1';
+const OBSERVE_PATTERN = 'myota.events.>';
 const START_SEQUENCE = optionalPositiveSetting(
   'ACTIVITY_NOTIFICATION_START_SEQUENCE',
 );
@@ -101,13 +107,23 @@ export class ActivityNotificationsService
   private outcomes = new Map<string, number>();
   private unresolvedDeadLetters = 0;
   private completedMessages = 0;
+  private observeOutcomes?: Counter<'outcome'>;
 
   constructor(
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
+    @Optional() private readonly observeTransport?: ObserveEventBridge,
+    @Optional() private readonly tracer?: TracerService,
   ) {}
 
   async onModuleInit(): Promise<void> {
     if (!this.pool) throw new Error('ACTIVITY_DATABASE_URL is required');
+    this.observeOutcomes = this.tracer?.counter(
+      'myota.activity_notification.outcomes',
+      {
+        description: 'Activity notification worker outcomes',
+        labels: ['outcome'],
+      },
+    );
     const connection = await connect({
       servers: process.env.NATS_URL ?? 'nats://nats:4222',
       name: CONSUMER,
@@ -244,6 +260,7 @@ export class ActivityNotificationsService
 
   private countOutcome(outcome: string): void {
     this.outcomes.set(outcome, (this.outcomes.get(outcome) ?? 0) + 1);
+    this.observeOutcomes?.increment({ outcome });
   }
 
   private async monitorNats(): Promise<void> {
@@ -347,7 +364,17 @@ export class ActivityNotificationsService
     while (!this.stopping) {
       try {
         const message = await this.messages!.next({ expires: 1000 });
-        if (message) await this.handle(message);
+        if (message) {
+          if (this.observeTransport) {
+            await this.observeTransport.dispatch(
+              OBSERVE_PATTERN,
+              message,
+              new ActivityNotificationJetStreamContext(message),
+            );
+          } else {
+            await this.handle(message);
+          }
+        }
       } catch (error) {
         if (!this.stopping)
           this.logger.warn(
@@ -355,6 +382,11 @@ export class ActivityNotificationsService
           );
       }
     }
+  }
+
+  async handleObservedMessage(message: JsMsg): Promise<void> {
+    this.tracer?.setOperationId('activity.notification.consume');
+    await this.handle(message);
   }
 
   private async handle(message: JsMsg): Promise<void> {
@@ -414,6 +446,15 @@ export class ActivityNotificationsService
         return;
       }
       this.countOutcome(processed ? 'processed' : 'duplicate');
+      this.logger.log(
+        JSON.stringify({
+          event: 'activity_notification.settled',
+          eventId: String(envelope.eventId),
+          eventType,
+          outcome: processed ? 'processed' : 'duplicate',
+          deliveryCount: delivered,
+        }),
+      );
       this.completedMessages += 1;
       if (
         MAX_MESSAGES !== undefined &&

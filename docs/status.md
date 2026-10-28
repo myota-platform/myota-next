@@ -133,26 +133,21 @@ against the isolated deployment remains under Phase 6 issue #10.
   object storage, secrets, observability, deployment, and release automation.
   Phase 6 has isolated SMTP STARTTLS retry/replay, fresh-install, backup/restore,
   and rollback evidence; the remaining readiness work is tracked by #10.
-  Protected rollout [40626824073](https://github.com/myota-platform/myota-next/actions/runs/40626824073)
-  deployed the testing branch at Helm revision 68, chart
-  `1.1.6-testing.9db5f64189b1.1`. All 17 Deployments (22 replicas) are Ready,
-  the Admin Web host serves HTTP 200 on its approved immutable digest, and
-  Prometheus reports 17/17 targets up. The current test receiver configuration,
-  authenticated API correlation evidence, and limits are recorded in
-  [Observe delivery](operations/observe-delivery-smoke.md).
+  Protected rollout [40645993158](https://github.com/myota-platform/myota-next/actions/runs/40645993158)
+  deployed chart `1.1.6-testing.b6a158aeadad.1` at Helm revision 72. All 17
+  Deployments (22 replicas) and 17 Prometheus targets are ready. The in-cluster
+  receiver records authenticated Admin and Participant API telemetry across
+  Gateway and Identity, including matching traces, forwarded logs, and HTTP
+  200 metrics. At revision 72, Activity Notifications also emitted a structured
+  settlement log for a processed login event. Its snapshot and forwarded log
+  share the request trace ID with Gateway and Identity.
 
-  Fresh Admin and Participant login and `/me` requests returned HTTP 200. Their
-  request IDs appeared as trace IDs and forwarded log IDs at Gateway and
-  Identity API; Prometheus recorded the successful routes. Activity and
-  Geodata worker dependency metrics report NATS and PostgreSQL healthy. No
-  `myota-test` alerts were firing, and no MyOTA-specific alert rule or
-  Alertmanager delivery has been qualified. Protected rollout
-  [40638471527](https://github.com/myota-platform/myota-next/actions/runs/40638471527)
-  deployed Helm revision 70. The test-only receiver recorded an Activity
-  Notifications snapshot correlated to the asynchronous login event; the
-  processed counter increased from 2 to 3. That batch had no forwarded worker
-  log or operation name. Hosted Observe, other worker operation types, and
-  behavioral alert qualification remain open under #90 and #91.
+  All seven MyOTA Prometheus rules load with healthy evaluation. Two firing
+  outbox dead-letter warnings carry `service_id=outbox-worker`; the test
+  Alertmanager has no notification receiver. Hosted Observe delivery and
+  external alert delivery remain unqualified. See
+  [Observe delivery](operations/observe-delivery-smoke.md) and Phase 6 issues
+  #90 and #91.
 
   A supplemental password-recovery run delivered two synthetic messages to
   Mailpit and showed two successful `password-reset.v1` Email worker attempts;
@@ -161,8 +156,7 @@ against the isolated deployment remains under Phase 6 issue #10.
   needs reconciliation before calling the session-revocation check clean. The
   earlier Participant email-change retry evidence is in the
   [Identity parity record](parity/identity-programmes.md) and issue #115.
-  Authenticated Admin Grafana viewing is qualified under #116. Hosted Observe
-  and full worker-log correlation remain open. Geodata's optional
+  Authenticated Admin Grafana viewing is qualified under #116. Geodata's optional
   BigDataCloud Secret remains absent; provider-backed enrichment and catalogue
   backfill remain open under #110/#111. See the
   [location enrichment guide](operations/location-enrichment.md).
