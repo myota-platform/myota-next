@@ -13,9 +13,9 @@ Operating guides and qualification records are maintained in this
 
 ## Current release
 
-The Rancher-managed release is Helm revision 72, chart
-`myota-next-1.1.6-testing.b6a158aeadad.1`, application version
-`testing-d5a92b2`. All 17 Deployments are ready at their desired replica counts.
+The Rancher-managed release is Helm revision 73, chart
+`myota-next-1.1.6-testing.4375882af675.1`, application version
+`testing-be5f518`. All 17 Deployments are ready at their desired replica counts.
 The Core, Activity, Geodata/PostGIS, JetStream, and SeaweedFS PVCs are bound.
 Admin and Participant web hosts return HTTP 200; Gateway `/readyz` returns
 HTTP 200. The API host root returns 404 by design. Immutable image digests are
@@ -37,8 +37,8 @@ before relying on the record after a later rollout.
 ## Remaining Phase 6 qualification
 
 - **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):** lifecycle enrichment and the full-catalogue asynchronous Admin backfill are deployed. The optional `myota-geodata-enrichment` Secret is absent, so provider-backed enrichment and the backfill remain unverified. No provider requests were submitted. Follow the [location-enrichment guide](location-enrichment.md).
-- **Password reset ([#114](https://github.com/myota-platform/myota-next/issues/114)):** deployed Mailpit delivery, valid and expired browser links, concurrent single-use token consumption, and single-session revocation have been verified. This feature branch adds a shared per-email throttle bucket and a telemetry secret-exclusion regression test. These changes are not deployed yet. Live multi-source throttling, multi-session revocation, and deployed telemetry-secret checks remain open.
-- **Email change ([#115](https://github.com/myota-platform/myota-next/issues/115)):** deployed checks cover both-address confirmation, partial confirmation, expiry, replay, cancellation, operation mismatch, concurrent confirmation, address conflict, and transient SMTP outage/retry. This feature branch adds an authenticated resend route and Participant UI; resending starts a replacement operation and invalidates earlier links. That change is not deployed or live-qualified yet.
+- **Password reset ([#114](https://github.com/myota-platform/myota-next/issues/114)):** deployed Mailpit delivery, valid and expired browser links, concurrent single-use token consumption, and single-session revocation have been verified. Revision 73 includes the shared per-email throttle; a unit regression test covers attempts from multiple source addresses. Deployed multi-source throttling, multi-session revocation, and telemetry-secret checks remain open.
+- **Email change ([#115](https://github.com/myota-platform/myota-next/issues/115)):** deployed checks cover both-address confirmation, partial confirmation, expiry, replay, cancellation, operation mismatch, concurrent confirmation, address conflict, and transient SMTP outage/retry. Revision 73 includes the authenticated resend route and Participant UI. The local service/browser suites cover replacement of a pending operation and invalidation of earlier links; deployed resend and confirmation remain to be live-qualified.
 
 Do not close #10 until each remaining child issue has current evidence and its
 exit criteria are met or explicitly dispositioned.
