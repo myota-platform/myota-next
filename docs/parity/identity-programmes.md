@@ -381,7 +381,15 @@ authoritative; cancellation removed the pending operation. The Participant UI ch
 verified the resend message, delivery to both addresses after resend, cancellation, and
 retention of the original email. Both checks removed their four generated Mailpit
 messages, and follow-up checks found no pending operation and an empty Mailpit inbox.
-Successful completion using both replacement links remains to be qualified under #115.
+On 2026-10-28, a follow-up deployed API check completed the replacement operation.
+Both tokens from the superseded operation were rejected. Confirming the replacement
+current-address link first left the original address active; confirming the replacement
+new-address link then activated the new address. The synthetic participant was returned
+to the original address using both verification links, and sign-in with that address was
+confirmed. The six verification messages and four completion notices created by this run
+were removed by exact ID, leaving Mailpit empty. Together with the earlier Participant UI
+check for resend guidance, delivery to both replacement addresses, and cancellation,
+this qualifies the resend completion path in the deployed Identity-to-Email workflow.
 
 It then adds a callsign, submits verification evidence, and verifies the callsign
 through the live Identity API. The same browser workflow exports the resulting account
