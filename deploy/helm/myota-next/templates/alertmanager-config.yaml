@@ -25,4 +25,11 @@ spec:
           smarthost: {{ required "prometheus.alertmanagerConfig.email.smarthost is required when enabled" $email.smarthost | quote }}
           requireTLS: {{ $email.requireTLS }}
           sendResolved: true
+          {{- if $email.caSecretName }}
+          tlsConfig:
+            ca:
+              secret:
+                name: {{ $email.caSecretName | quote }}
+                key: {{ $email.caSecretKey | quote }}
+          {{- end }}
 {{- end }}

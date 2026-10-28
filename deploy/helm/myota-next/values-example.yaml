@@ -71,6 +71,8 @@ prometheus:
       from: ''
       smarthost: ''
       requireTLS: true
+      caSecretName: ''
+      caSecretKey: ca.crt
 # The API key is supplied by the myota-geodata-enrichment Secret, never here.
 geodataWorker:
   locationEnrichment:

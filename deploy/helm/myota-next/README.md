@@ -58,9 +58,11 @@ verification.
 Operator `AlertmanagerConfig` for `MyOTAUnresolvedOutboxDeadLetters`. It
 requires the Operator CRDs and routes only that alert to the configured email
 receiver. Set `email.to`, `email.from`, and `email.smarthost`; TLS is required
-by default. The test Fleet values route to the in-cluster SMTP sink. Leave this
-disabled unless the release namespace is authorized to define an Alertmanager
-receiver.
+by default. For a private SMTP certificate authority, set `email.caSecretName`
+and `email.caSecretKey` to reference a Secret in the release namespace. The test
+Fleet values route to the in-cluster SMTP sink and trust its qualification CA.
+Leave this disabled unless the release namespace is authorized to define an
+Alertmanager receiver.
 
 ## Images and install
 
