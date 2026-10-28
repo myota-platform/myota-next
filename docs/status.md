@@ -91,21 +91,20 @@ and reached the server-side limiter. Email-change initiation, dual delivery to t
 Mailpit sink, and cancellation with the original address retained are also verified.
 Two concurrent submissions of one reset token changed the password exactly once, and
 only the winning password authenticated.
-Participant email change now has deployed browser evidence for partial confirmation,
-successful verification at both addresses, token replay rejection, and expired-link
-handling. API checks show that a canceled operation's token cannot affect a later
-pending change, simultaneous confirmations apply one transition, and both completion
+Participant email change has deployed browser and API evidence for partial confirmation,
+successful verification at both addresses, token replay rejection, expired-link handling,
+and the resend flow. API checks show that a canceled operation's token cannot affect a
+later pending change, simultaneous confirmations apply one transition, and both completion
 notices are sent. The old address remained authoritative on expiry and after only one
-confirmation; the new address became authoritative only after both confirmations.
-Coordinated multi-source throttling and deployed telemetry-secret checks remain open
-under #114. A revision 73 reset test rejected two pre-reset access sessions and both
-refresh credentials; the temporary password worked and the original password was
-restored. Email-change delivery recovery after a temporary SMTP outage is verified.
-Revision 73 includes the Participant resend action.
-Deployed API and browser checks verified both replacement deliveries, rejection of earlier
-links, partial confirmation with the original email still active, cancellation, and cleanup
-of all four generated messages. Successful completion with both replacement links remains
-open under #115. See [Identity and Programme parity](parity/identity-programmes.md)
+confirmation; the new address became authoritative only after both confirmations. On
+2026-10-28, both stale links from a superseded resend were rejected, and the two replacement
+links completed the change in order while preserving the old address until the second
+confirmation. The synthetic account was restored to its original address and login verified;
+all generated messages were removed and Mailpit was empty. Email-change delivery recovery
+after a temporary SMTP outage is also verified. Coordinated multi-source throttling and
+deployed telemetry-secret checks remain open under #114. A revision 73 reset test rejected
+two pre-reset access sessions and both refresh credentials; the temporary password worked
+and the original password was restored. See [Identity and Programme parity](parity/identity-programmes.md)
 and the [Phase 6 readiness record](operations/phase6-readiness.md).
 
 Public Activity activation history, leaderboard, and JSON/CSV result exports are also
