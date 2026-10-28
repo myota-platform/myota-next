@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
+import type { DynamicModule } from '@nestjs/common';
 import { DatabaseHealthModule, observeRoot } from '@app/platform';
 import { parseJsonWithFloatMetadata } from '@app/platform/json-exact.js';
+import { ObserveEventBridge } from '@app/platform';
+import { ActivityNotificationsController } from './activity-notifications.controller.js';
 import { ActivityNotificationsService } from './activity-notifications.service.js';
 
 @Module({
@@ -11,6 +14,14 @@ import { ActivityNotificationsService } from './activity-notifications.service.j
       parseJsonWithFloatMetadata,
     ),
   ],
+  controllers: [ActivityNotificationsController],
   providers: [ActivityNotificationsService],
 })
-export class ActivityNotificationsModule {}
+export class ActivityNotificationsModule {
+  static withObserveTransport(transport: ObserveEventBridge): DynamicModule {
+    return {
+      module: ActivityNotificationsModule,
+      providers: [{ provide: ObserveEventBridge, useValue: transport }],
+    };
+  }
+}
