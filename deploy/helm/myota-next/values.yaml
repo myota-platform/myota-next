@@ -93,6 +93,15 @@ prometheus:
     enabled: false
     labels:
       release: kube-prometheus-stack
+  alertmanagerConfig:
+    enabled: false
+    email:
+      to: ''
+      from: ''
+      smarthost: ''
+      requireTLS: true
+      caSecretName: ''
+      caSecretKey: ca.crt
 dependencies:
   objectStorageEndpoint: http://myota-s3:8333
   objectStoragePublicEndpoint: ''

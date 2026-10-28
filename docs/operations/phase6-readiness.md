@@ -13,43 +13,52 @@ Operating guides and qualification records are maintained in this
 
 ## Current release
 
-The Rancher-managed release is Helm revision 73, chart
-`myota-next-1.1.6-testing.4375882af675.1`, application version
-`testing-be5f518`. All 17 Deployments are ready at their desired replica counts.
-The Core, Activity, Geodata/PostGIS, JetStream, and SeaweedFS PVCs are bound.
-Admin and Participant web hosts return HTTP 200; Gateway `/readyz` returns
-HTTP 200. The API host root returns 404 by design. Immutable image digests are
-recorded in [`deploy/fleet/myota-test/values.yaml`](../../deploy/fleet/myota-test/values.yaml).
-
-This snapshot was rechecked on 2026-10-28. Recheck the release and its digests
-before relying on the record after a later rollout.
+At 2026-10-28 14:49 UTC, the Rancher-managed release was Helm revision 79,
+chart `myota-next-1.1.6-testing.17e26055f40f.1`, application version
+`testing-d8143c5`. All 17 Deployments were ready at their desired replica
+counts. The Core, Activity, Geodata/PostGIS, JetStream, and SeaweedFS PVCs were
+bound. Immutable application image digests are recorded in
+[`deploy/fleet/myota-test/values.yaml`](../../deploy/fleet/myota-test/values.yaml).
+The deployment was rechecked at 15:00 UTC: 17 of 17 Deployments matched desired
+replicas, the Admin and Participant web hosts returned HTTP 200, and Gateway
+readiness returned HTTP 200. The API host root returns 404 by design. Recheck
+release state and digests after a later rollout.
 
 ## Qualified work packages
 
 - **Fresh installation ([#88](https://github.com/myota-platform/myota-next/issues/88)):** initialized empty Core, Activity, and Geodata databases and new PVCs; ran migrations in owner order; confirmed database runtime roles respect owner boundaries, including denied cross-owner access. No legacy data was migrated.
 - **Primary Admin and Participant workflows ([#91](https://github.com/myota-platform/myota-next/issues/91)):** qualified authenticated Admin and Participant journeys, email-verified registration, profile and callsign management, activations, QSO entry and closure, ADIF import, delegated Participant administration, and Admin award workflows. Test email was delivered to the in-cluster Mailpit sink. This evidence came from earlier test releases; the current release snapshot independently confirms service health.
 - **SMTP delivery and retry ([#13](https://github.com/myota-platform/myota-next/issues/13)):** verified STARTTLS using a test-only CA and credentials, retry after transient 451 responses, exhausted-delivery settlement, audited redrive, and no duplicate send when replaying the same work ID. This does not qualify a production provider or trust chain. See [single-instance recovery](single-instance-restart-recovery.md).
-- **Observe and alerting ([#90](https://github.com/myota-platform/myota-next/issues/90)):** at revision 72 all 17 Prometheus targets were up and seven MyOTA alert rules loaded and evaluated. API traces, forwarded logs, metrics, and an Activity Notifications settlement log correlated to stable service IDs and a request trace. Two dead-letter alerts were firing for existing test data. The test Alertmanager has no notification receiver; hosted Observe receipt is not claimed. See [Observe delivery evidence](observe-delivery-smoke.md) and [alert rules](alerts.md).
+- **Observe and alerting ([#90](https://github.com/myota-platform/myota-next/issues/90)):**
+  all 17 Prometheus targets were up and seven MyOTA alert rules loaded and
+  evaluated during qualification. API traces, forwarded logs, metrics, and an
+  Activity Notifications settlement log correlated to stable service IDs and
+  a request trace. The corrected test dead-letter alert and notification route
+  are qualified under #262. Hosted Observe receipt is not claimed. See
+  [Observe delivery evidence](observe-delivery-smoke.md) and
+  [alert rules](alerts.md).
+- **Outbox dead letters and Alertmanager delivery ([#262](https://github.com/myota-platform/myota-next/issues/262)):**
+  six Identity event contracts and a bounded Geodata preprocessing event were
+  deployed with audited handling for records whose source rows were no longer
+  retained. All 71 original rows were reconciled: retained safe events were
+  redriven once, and source-less rows received actor- and reason-recorded
+  dispositions. At Helm revision 79, Prometheus reported
+  `myota_outbox_unresolved_dead_letters=0` for Core, Activity, and Geodata; the
+  MyOTA dead-letter alert was inactive in Prometheus and Alertmanager. The test
+  Alertmanager route requires STARTTLS and trusts the CA key from the test-only
+  `myota-smtp-qualification-server` Secret. Mailpit received synthetic firing
+  and resolved notifications one minute apart. The synthetic alert was cleared,
+  only those two test messages were removed, and the mailbox was empty. The
+  deployment was introduced by
+  [PR #271](https://github.com/myota-platform/myota-next/pull/271) and verified
+  by [Rancher rollout run 40709534418](https://github.com/myota-platform/myota-next/actions/runs/40709534418).
+  This qualifies the isolated test route only, not a production SMTP provider
+  or trust chain.
 - **Dependency recovery ([#92](https://github.com/myota-platform/myota-next/issues/92)):** verified NATS redelivery after restart, database interruption and retry settlement, SeaweedFS pod replacement with its existing PVC, and safe object-store outage outcomes across Geodata, Activity, and Identity. See [single-instance recovery](single-instance-restart-recovery.md) and [object-store recovery](object-store-recovery.md).
 - **Backup and restore ([#89](https://github.com/myota-platform/myota-next/issues/89)):** restored a quiesced snapshot of the three owner databases and six object buckets into disposable targets. Counts matched across 46 Core, 27 Activity, and 66 Geodata tables. Five objects (45,173,156 bytes) passed size and SHA-256 checks; two Activity ADIF references resolved. The test release returned to 21/21 replicas with health checks at HTTP 200. This is not an accepted production RPO/RTO.
 - **Rollback ([#93](https://github.com/myota-platform/myota-next/issues/93)):** rolled back an immutable worker digest and restored the current digest; readiness and authenticated sign-in passed and database/work counters were unchanged. Activity was quiescent. The procedure refuses rollback when incompatible work is pending; compatibility with a non-empty in-flight stream is not claimed.
 
 ## Remaining Phase 6 qualification
-
-- **Prometheus alert check — 2026-10-28, Helm revision 74:** all 16 `myota-test`
-  scrape targets returned `up=1`, and all seven MyOTA alert rules reported
-  healthy evaluation. Two `MyOTAUnresolvedOutboxDeadLetters` alerts were
-  firing: Core reported 66 unresolved events and Geodata reported 5; Activity
-  reported 0. Read-only owner-database counts classify the Core rows as
-  Identity email-change and profile-image events, and the Geodata rows as
-  preprocessed-import events. The rows span 2026-10-25 through 2026-10-28.
-  Their exact initiating failures and attribution to qualification runs have
-  not yet been established. No dead letters were replayed, resolved, or
-  deleted. The test Alertmanager has no notification receiver, so alert
-  evaluation is verified but notification delivery is not. Trace each owner
-  row to its publish failure and audit history, determine whether replay is
-  safe, then verify the dead-letter gauges and alerts clear. Until that is
-  complete, alert qualification is not a pass.
 
 - **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):
   on 2026-10-28, the full-catalogue asynchronous Admin backfill scanned 432
@@ -65,8 +74,10 @@ before relying on the record after a later rollout.
 - **Password reset ([#114](https://github.com/myota-platform/myota-next/issues/114)):** deployed Mailpit delivery, valid and expired browser links, concurrent single-use token consumption, and revocation of two pre-reset access and refresh sessions have been verified. Revision 73 includes the shared per-email throttle and request-log secret exclusion. Six distinct signed client addresses produced five persisted recovery requests; the sixth created none. The `identity-api` recovery trace reached the test Observe receiver, and its reset token and link marker were absent from all `myota-test` pod logs. The mock receiver retains only trace IDs and operation names, so raw-snapshot token exclusion and hosted Observe delivery remain open.
 - **Email change ([#115](https://github.com/myota-platform/myota-next/issues/115)):** deployed checks cover both-address confirmation, partial confirmation, expiry, replay, cancellation, operation mismatch, concurrent confirmation, address conflict, and transient SMTP outage/retry. Revision 73's resend API and Participant UI were checked against Mailpit: both old links were rejected, the Participant UI showed resend guidance and received both replacement messages, and cancellation removed the pending operation. A follow-up API check completed the replacement pair, confirmed the old address remained authoritative until the second link, restored the synthetic account, and removed all generated messages. The complete resend lifecycle is verified.
 
-Do not close #10 until each remaining child issue has current evidence and its
-exit criteria are met or explicitly dispositioned.
+Additional product work remains open under #239 (Participant experience), #242
+(programme-scoped entity IDs), #246 (award lifecycle/configuration), and other
+Phase 6 child issues. Do not close #10 until each remaining child issue has
+current evidence and its exit criteria are met or explicitly dispositioned.
 
 ## Operational limits
 
