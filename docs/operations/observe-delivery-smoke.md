@@ -29,32 +29,46 @@ deployment credentials.
 
 ## Deployment evidence — 2026-10-28
 
-The Rancher-managed `myota-test` release is deployed at Helm revision 67,
+### Earlier check — revision 67
+
+The Rancher-managed `myota-test` release was deployed at Helm revision 67,
 chart `1.1.6-testing.0b6eb64235ba.1`. All 17 Deployments and 22 requested
-replicas are Ready, and Prometheus reports all 17 discovered targets up. The
-four Activity and Geodata worker dependency gauges report NATS and PostgreSQL
-healthy; no `myota-test` alerts were firing during the check. No alerts firing
-is an observation, not proof that alert rules have been triggered end to end.
+replicas were Ready, and Prometheus reported all 17 discovered targets up.
+The four Activity and Geodata worker dependency gauges reported NATS and
+PostgreSQL healthy. No `myota-test` alerts were firing during that check; this
+does not prove alert rules have been triggered end to end.
 
-Using test-only Admin and Participant accounts, successful `POST
-/v1/identity/auth/login` and `GET /v1/identity/me` requests returned HTTP 200.
-Their request IDs appeared as both trace IDs and forwarded log trace IDs at
-the `gateway` and `identity-api` services. Prometheus recorded the matching
-HTTP 200 route counters. The temporary in-cluster receiver therefore verifies
-authenticated, cross-service API trace and log delivery from the deployed
-applications. Example request IDs: Admin login
-`37faccef-9a04-433f-9ba7-568e86898648` and `/me`
-`facc1fed-0a59-4b17-a91f-1225fafd87e4`; Participant login
-`96c1d0c8-9fe9-4076-9646-c6d229074e81` and `/me`
-`dee9f6c6-c545-415e-a7fe-46835a981c4e`.
+Using test-only Admin and Participant accounts, successful
+`POST /v1/identity/auth/login` and `GET /v1/identity/me` requests returned
+HTTP 200. Their request IDs appeared as both trace IDs and forwarded log trace
+IDs at `gateway` and `identity-api`. Prometheus recorded the matching HTTP 200
+route counters. Example request IDs:
 
-All deployed NestJS workers sent periodic Observe batches during the sample,
-but their batches contained no task snapshots or forwarded logs. This proves
-collector delivery and configured service IDs for idle workers, not telemetry
-correlation for a worker business operation. Worker-operation correlation,
-behavioral alert qualification, and delivery to a hosted Observe account remain
-open under [issue #90](https://github.com/myota-platform/myota-next/issues/90)
-and [issue #91](https://github.com/myota-platform/myota-next/issues/91).
+- Admin login: `37faccef-9a04-433f-9ba7-568e86898648`; `/me`:
+  `facc1fed-0a59-4b17-a91f-1225fafd87e4`.
+- Participant login: `96c1d0c8-9fe9-4076-9646-c6d229074e81`; `/me`:
+  `dee9f6c6-c545-415e-a7fe-46835a981c4e`.
+
+### Worker correlation check — revision 70
+
+After PRs [#221](https://github.com/myota-platform/myota-next/pull/221) and
+[#224](https://github.com/myota-platform/myota-next/pull/224), the release
+deployed chart `myota-next-1.1.6-testing.cb48c2a0fe92.1` at Helm revision 70.
+All 17 Deployments were Ready. A test Participant login and subsequent
+`/v1/identity/me` request both returned HTTP 200 with request ID
+`0d9bda80-602c-43a2-ae73-3026c1b2cbff`.
+
+The in-cluster receiver recorded that same ID as a trace ID and forwarded log
+trace ID for both `gateway` and `identity-api`. The `activity-notifications`
+worker also delivered an Observe batch containing a snapshot with that ID,
+confirming correlation from the login request through its asynchronous event
+handler. Its batch had no forwarded log or operation name. The bounded
+`myota_activity_notification_outcomes_total{outcome="processed"}` counter
+increased from 2 to 3 during this check. The event-processing trace is verified;
+worker log coverage and behavioral alert qualification remain open under
+[#90](https://github.com/myota-platform/myota-next/issues/90) and
+[#91](https://github.com/myota-platform/myota-next/issues/91). Delivery to a
+hosted Observe account also remains unqualified.
 
 ## Authenticated Grafana dashboard proxy
 
@@ -73,8 +87,9 @@ subpath should not be used as a dashboard availability check. Grafana
 user/profile and star APIs returned HTTP 401 under the existing anonymous
 dashboard mode, while dashboard viewing and query APIs succeeded. The dashboard
 proxy is qualified for authorized viewing, but this does not qualify Observe
-collector delivery or cross-service log/trace correlation; those remain open
-under [#90](https://github.com/myota-platform/myota-next/issues/90) and
+collector delivery or cross-service log/trace correlation by itself; those are
+qualified separately above and tracked under
+[#90](https://github.com/myota-platform/myota-next/issues/90) and
 [#91](https://github.com/myota-platform/myota-next/issues/91).
 
 ## Isolated test receiver
@@ -92,5 +107,6 @@ delivery path without sending telemetry to a hosted Observe account. It does
 not qualify hosted Observe dashboards or alerting. Use chart values to configure
 workload environment; do not patch Helm-managed Deployment fields directly, or
 Helm may reject a later upgrade due to conflicting field ownership. The
-authenticated API delivery check above is complete for Gateway and Identity;
-worker task correlation and hosted Observe qualification remain open.
+authenticated API and login-event correlation checks above cover Gateway,
+Identity, and Activity Notifications. Worker logs for that event, other worker
+operation types, hosted Observe delivery, and alert qualification remain open.

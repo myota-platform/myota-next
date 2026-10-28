@@ -350,8 +350,12 @@ scrape, 2026-10-27 22:31:30 UTC, the `smtp_failure` counter for
 old- and new-address templates each increased by one. This agrees with the Core delivery
 records and worker retry logs. The counters are labeled by template and outcome, not by
 work ID or participant, so they corroborate the workflow totals but cannot trace an
-individual request. Centralized trace correlation remains open under Phase 6 issues #90
-and #91 because test-namespace Observe credentials are not configured.
+individual email request. The test-namespace receiver now verifies correlated traces
+for login, `/me`, and the resulting asynchronous notification event; see the
+[Observe delivery smoke evidence](../operations/observe-delivery-smoke.md). Per-email
+trace correlation, hosted Observe delivery, and alert qualification remain open under
+Phase 6 issues [#90](https://github.com/myota-platform/myota-next/issues/90) and
+[#91](https://github.com/myota-platform/myota-next/issues/91).
 
 It then adds a callsign, submits verification evidence, and verifies the callsign
 through the live Identity API. The same browser workflow exports the resulting account
