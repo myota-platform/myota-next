@@ -5,6 +5,7 @@ export * from './async-timers.js';
 export * from './database.module.js';
 export * from './health.controller.js';
 export * from './http-problem.js';
+export * from './http-request-log.interceptor.js';
 export * from './http-metrics.js';
 export * from './integer-setting.js';
 export * from './import-limits.js';
