@@ -139,7 +139,10 @@ issue [#91](https://github.com/myota-platform/myota-next/issues/91). Additional
 Phase 6 product work remains open under #239, #242, #246, and related child issues.
 Under award lifecycle parent [#246](https://github.com/myota-platform/myota-next/issues/246),
 new-version creation is verified and closed as [#248](https://github.com/myota-platform/myota-next/issues/248);
-global-admin award deletion remains in progress as [#247](https://github.com/myota-platform/myota-next/issues/247).
+global-admin award deletion is implemented and qualified in
+[#247](https://github.com/myota-platform/myota-next/issues/247), including the
+protected `myota-test` rollout and live deletion/audit verification documented
+in the [Phase 6 readiness record](operations/phase6-readiness.md).
 
 - **Production operations:** the single-node `myota-test` deployment has
   evidence for fresh initialization, authenticated workflows, Observe
