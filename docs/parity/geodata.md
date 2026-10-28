@@ -806,11 +806,16 @@ under [#110](https://github.com/myota-platform/myota-next/issues/110),
 
 ### Test deployment recheck — 2026-10-28
 
-The `myota-test` Helm release is deployed at revision 69
-(`myota-next-1.1.6-testing.b0c9ad77927d.1`). The Geodata worker is Ready at
+The `myota-test` Helm release is deployed at revision 72
+(`myota-next-1.1.6-testing.b6a158aeadad.1`). The Geodata worker is Ready at
 1/1 on image digest
-`sha256:1c75c359651f5c4c36d2c20658d66c5962dd7beace3a9f1c0169d7290a83fa8b`.
-Its `BIGDATACLOUD_API_KEY` reference points to the optional
-`myota-geodata-enrichment` Secret and `api-key` key. A presence-only lookup
+`sha256:030a44deaafeacf11c6a7fc1df98bc7eed806f6ea5eda7de286d9e0b2d1be18`.
+The Admin Web is Ready at 1/1 on image digest
+`sha256:2dcf068e70ae7b8a1e9c176115653e92a068528c5be5ae9679a858059690f9da`, and
+its test hostname returns HTTP 200. The
+worker's `BIGDATACLOUD_API_KEY` reference points to the optional
+`myota-geodata-enrichment` Secret and `api-key` key, but a presence-only lookup
 confirms that Secret is absent. No provider request or catalogue backfill was
-submitted; provider-backed qualification still requires a test-only credential.
+submitted. Provider-backed qualification still requires a test-only credential;
+the deployed worker and Admin feature are available for that check once the
+credential is provisioned.

@@ -53,6 +53,7 @@ const DEVELOPMENT_SIGNING_KEY = 'myota-development-key-change-me';
 interface RequestContext {
   userAgent: string | null;
   remoteAddr: string | null;
+  requestId?: string;
 }
 
 interface AccountRow {
@@ -257,11 +258,16 @@ export class IdentityAuthService {
             [account.id, failedAttempts],
           );
         }
-        await this.writeAudit(client, 'identity.login.failed.v1', {
-          email: input.email,
-          remoteAddr: context.remoteAddr,
-          ...(account ? { actorId: account.id } : {}),
-        });
+        await this.writeAudit(
+          client,
+          'identity.login.failed.v1',
+          {
+            email: input.email,
+            remoteAddr: context.remoteAddr,
+            ...(account ? { actorId: account.id } : {}),
+          },
+          context.requestId,
+        );
         failure = new BadRequestException('invalid credentials');
       }
 
@@ -272,11 +278,16 @@ export class IdentityAuthService {
             WHERE account_id = $1`,
           [account.id],
         );
-        await this.writeAudit(client, 'identity.login.succeeded.v1', {
-          accountId: account.id,
-          actorId: account.id,
-          remoteAddr: context.remoteAddr,
-        });
+        await this.writeAudit(
+          client,
+          'identity.login.succeeded.v1',
+          {
+            accountId: account.id,
+            actorId: account.id,
+            remoteAddr: context.remoteAddr,
+          },
+          context.requestId,
+        );
         const result = await this.createSession(client, account, context);
         await client.query('COMMIT');
         return result;
@@ -1141,8 +1152,9 @@ export class IdentityAuthService {
     client: PoolClient,
     eventType: string,
     payload: Record<string, unknown>,
+    requestId?: string,
   ) {
-    await writeSecurityEvent(client, eventType, payload);
+    await writeSecurityEvent(client, eventType, payload, requestId);
   }
 
   private async connect(): Promise<PoolClient> {

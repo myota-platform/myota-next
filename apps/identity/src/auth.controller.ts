@@ -18,6 +18,8 @@ import type { Request } from 'express';
 import {
   MYOTA_CLIENT_ADDRESS_HEADER,
   MYOTA_CLIENT_ADDRESS_SIGNATURE_HEADER,
+  REQUEST_ID_HEADER,
+  safeRequestId,
   verifyClientAddress,
 } from '@app/platform';
 import {
@@ -514,6 +516,7 @@ export class AuthController {
         : null;
     return {
       userAgent: request.get('user-agent') ?? null,
+      requestId: safeRequestId(request.get(REQUEST_ID_HEADER)),
       remoteAddr:
         trustedClientAddress ??
         request.socket.remoteAddress ??
