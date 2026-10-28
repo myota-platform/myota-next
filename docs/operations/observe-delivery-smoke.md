@@ -63,3 +63,22 @@ proxy is qualified for authorized viewing, but this does not qualify Observe
 collector delivery or cross-service log/trace correlation; those remain open
 under [#90](https://github.com/myota-platform/myota-next/issues/90) and
 [#91](https://github.com/myota-platform/myota-next/issues/91).
+
+## Isolated test receiver
+
+The `myota-test` namespace now has a temporary, in-cluster HTTP receiver for
+qualification. The Helm test values configure the Observe SDK to send to
+`http://myota-test-observe-mock.myota-test.svc.cluster.local:8080` and read
+test-only credentials from Secret `myota-observe-mock` (`app-key` and
+`app-secret`). The collector and Secret are local qualification resources;
+their manifests and inert test credentials stay under the ignored
+`runtime-secrets/` directory and are not committed.
+
+This setup exercises the real `@nestjs/observe` instrumentation and HTTP
+delivery path without sending telemetry to a production Observe account. It
+does not qualify delivery to the hosted Observe service, its dashboards, or
+alerting. Use the chart values to configure workload environment; do not patch
+Helm-managed Deployment fields directly, or Helm may reject a later upgrade due
+to conflicting field ownership. Deployment verification remains pending until
+the chart-managed endpoint and credentials are rolled out and representative
+authenticated requests are observed at the receiver.
