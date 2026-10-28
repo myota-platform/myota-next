@@ -36,6 +36,7 @@ describe('IdentityAuthService recovery compatibility', () => {
     rateLimitCount = 1,
   ) {
     const queries: Array<{ sql: string; values: unknown[] }> = [];
+    const rateLimits = new Map<string, number>();
     let recoveryTokenHash: string | undefined;
     let tokenUsed = false;
     let credentialHash: string | undefined;
@@ -51,11 +52,20 @@ describe('IdentityAuthService recovery compatibility', () => {
             rowCount: accountExists ? 1 : 0,
           };
         }
-        if (sql.includes('INSERT INTO public.identity_registration_rate_limit'))
+        if (
+          sql.includes('INSERT INTO public.identity_registration_rate_limit')
+        ) {
+          const key = String(values[0]);
+          const requestCount =
+            rateLimitCount > 1
+              ? rateLimitCount
+              : (rateLimits.get(key) ?? 0) + 1;
+          rateLimits.set(key, requestCount);
           return {
-            rows: [{ request_count: rateLimitCount }],
+            rows: [{ request_count: requestCount }],
             rowCount: 1,
           };
+        }
         if (
           sql.includes('INSERT INTO public.identity_password_recovery_request')
         )
@@ -157,6 +167,56 @@ describe('IdentityAuthService recovery compatibility', () => {
       ),
     ).toBe(false);
     expect(limited.recoveryTokenHash).toBeUndefined();
+  });
+
+  it('applies the password-reset ceiling across source addresses', async () => {
+    const fixture = harness();
+    const responses = [];
+    for (let request = 1; request <= 6; request += 1) {
+      responses.push(
+        await fixture.service.requestRecovery(
+          'user@example.test',
+          `192.0.2.${request}`,
+        ),
+      );
+    }
+
+    expect(responses.map(({ status }) => status)).toEqual(
+      Array.from({ length: 6 }, () => 'accepted'),
+    );
+    expect(
+      responses
+        .slice(0, 5)
+        .every(({ devResetToken }) => typeof devResetToken === 'string'),
+    ).toBe(true);
+    expect(responses[5]).toEqual({ status: 'accepted' });
+    const limiterWrites = fixture.queries.filter((item) =>
+      item.sql.includes('INSERT INTO public.identity_registration_rate_limit'),
+    );
+    expect(limiterWrites).toHaveLength(12);
+    const emailKeys = limiterWrites.map((item) => String(item.values[0]));
+    expect(new Set(emailKeys.slice(0, 2)).size).toBe(2);
+    expect(emailKeys[0]).toBe(emailKeys[2]);
+    expect(emailKeys[0]).toBe(emailKeys[4]);
+    expect(emailKeys[0]).toBe(emailKeys[10]);
+
+    const accountLookups = fixture.queries.filter((item) =>
+      item.sql.includes('SELECT id, display_name FROM public.account'),
+    );
+    const recoveryEmails = fixture.queries.filter(
+      (item) =>
+        item.sql.includes('INSERT INTO public.outbox_event') &&
+        item.values[1] === 'email.send.v1',
+    );
+    expect(accountLookups).toHaveLength(5);
+    expect(recoveryEmails).toHaveLength(5);
+    expect(
+      limiterWrites.every((item) =>
+        /^[0-9a-f]{64}$/.test(String(item.values[0])),
+      ),
+    ).toBe(true);
+    expect(JSON.stringify(limiterWrites)).not.toContain('user@example.test');
+    expect(JSON.stringify(limiterWrites)).not.toContain('192.0.2.');
   });
 
   it('does not expose reset tokens outside explicit test mode', async () => {

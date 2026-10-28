@@ -1659,6 +1659,7 @@ async function loadEmailChangeStatus() {
       ? `Pending change to ${pending.newEmail}. Current address confirmed: ${pending.oldAddressVerified ? 'yes' : 'no'}; new address confirmed: ${pending.newAddressVerified ? 'yes' : 'no'}. Expires ${new Date(pending.expiresAt).toLocaleString()}.`
       : 'No email change is pending.';
     $('profile-email-change-cancel').hidden = !pending;
+    $('profile-email-change-resend').hidden = !pending;
   } catch (error) {
     $('profile-email-change-status').textContent = error.message;
   }
@@ -2032,6 +2033,29 @@ $('profile-email-change-cancel').onclick = async () => {
   try {
     await profileApi('/v1/identity/me/email-change', { method: 'DELETE' });
     await loadEmailChangeStatus();
+  } catch (error) {
+    $('profile-email-change-status').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+
+$('profile-email-change-resend').onclick = async () => {
+  const button = $('profile-email-change-resend');
+  button.disabled = true;
+  $('profile-email-change-status').textContent =
+    'Restarting email confirmation…';
+  try {
+    const result = await profileApi('/v1/identity/me/email-change/resend', {
+      method: 'POST',
+    });
+    await loadEmailChangeStatus();
+    if (result.status === 'verification_resent')
+      $('profile-email-change-status').textContent =
+        'New confirmation emails were requested for both addresses. Earlier links are invalid; confirm both new links. Your current address remains active until then.';
+    else
+      $('profile-email-change-status').textContent =
+        'No pending email change was found.';
   } catch (error) {
     $('profile-email-change-status').textContent = error.message;
   } finally {
