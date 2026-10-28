@@ -25,3 +25,15 @@
   disabled when Observe is not configured.
 - Do not declare parity from compilation alone. Require contract, database,
   worker, browser, and recovery evidence for each completed slice.
+
+## GitHub project tracking
+
+- For every issue tracked in Project #2, set its Status to `In progress` when
+  work starts and whenever focus moves to it. Keep an active parent issue
+  `In progress` while working on its child issues.
+- When work is paused or no longer active, set its Status to the appropriate
+  non-active state. Set `Done` only after the issue's exit criteria are
+  verified.
+- Verify Project #2 status after each transition. Before ending a work
+  session, make sure every issue currently being worked is marked
+  `In progress`.

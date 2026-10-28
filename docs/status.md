@@ -158,12 +158,20 @@ Phase 6 product work remains open under #239, #242, #246, and related child issu
   needs reconciliation before calling the session-revocation check clean. The
   earlier Participant email-change retry evidence is in the
   [Identity parity record](parity/identity-programmes.md) and issue #115.
-  Authenticated Admin Grafana viewing is qualified under #116. Geodata's optional
-  BigDataCloud Secret remains absent; provider-backed enrichment and catalogue
-  backfill remain open under #110/#111. See the
-  [location enrichment guide](operations/location-enrichment.md).
+  Authenticated Admin Grafana viewing is qualified under #116. Provider-backed
+  location enrichment and catalogue backfill are complete under #110/#111/#112;
+  see the [location enrichment guide](operations/location-enrichment.md) and
+  [Phase 6 readiness](operations/phase6-readiness.md).
 
-- **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):** the Admin full-catalogue backfill and its repeated-scan guard are verified in `myota-test`. The initial run processed 432 entities; after the fix, a repeated scan queued 0, skipped 432, and failed 0. All 432 remain `COMPLETED` in Geodata. Lifecycle-trigger and replacement-key rotation checks remain open. See the [operator guide](operations/location-enrichment.md) and [Phase 6 readiness](operations/phase6-readiness.md).
+- **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110),
+  [#111](https://github.com/myota-platform/myota-next/issues/111),
+  [#112](https://github.com/myota-platform/myota-next/issues/112)):** the Admin
+  full-catalogue backfill and repeated-scan guard are verified in `myota-test`.
+  The initial run processed 432 entities; the post-fix repeat queued 0, skipped
+  432, and failed 0. The release owner confirmed provider credentials were
+  rotated and the enrichment function was tested successfully; issues #110 and
+  #111 are closed, and #112 is complete. See the [operator guide](operations/location-enrichment.md)
+  and [Phase 6 readiness](operations/phase6-readiness.md).
 - **Geodata performance:** larger datasets and full worker throughput remain
   unqualified. `MYOTA_UPLOAD_WORKERS` caps multipart finalization per Geodata
   API process. `MYOTA_IMPORT_WORKERS` caps preprocessing and promotion together
