@@ -373,8 +373,12 @@ an accepted scope decision is recorded in the dispositions section.
   collector accepted telemetry from Gateway and Activity for one public read
   request, and direct checks confirmed that removing the endpoint and Secret
   disabled delivery. This does not qualify a hosted Observe account. Centralized
-  application logs, alerts, and authenticated request-level workflow correlation
-  remain open under #90 and #91. An initial rollout poll was canceled after
+  application logs and authenticated request-level workflow correlation remain
+  open under #90 and #91. A 2026-10-28 Prometheus recheck found 17/17 targets up
+  and no firing alert for `myota-test`; none of the 30 cluster PrometheusRule
+  resources was scoped or labeled for this release. This confirms scraping,
+  but not Alertmanager notification delivery or MyOTA-specific alert coverage.
+  An initial rollout poll was canceled after
   Rancher removed its completed operation record before the workflow observed
   it; PR #209 changed that missing-record handoff to continue with App-version
   and digest/readiness checks. Protected run #40613457838 passed at revision 60,

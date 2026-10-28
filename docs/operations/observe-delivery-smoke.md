@@ -103,6 +103,20 @@ Issues [#10](https://github.com/myota-platform/myota-next/issues/10),
 [#91](https://github.com/myota-platform/myota-next/issues/91) remain open for
 the hosted Observe and authenticated workflow evidence.
 
+### Prometheus scraping and alert coverage
+
+A live check on 2026-10-28 at 01:31 UTC found all 17
+`up{namespace="myota-test"}` targets at `1`. The `myota-test-apis` and
+`myota-test-workers` ServiceMonitors scrape `/metrics` every 30 seconds. The
+Gateway HTTP 200 request counter was queryable in Prometheus.
+
+No active Prometheus alert had `namespace="myota-test"`. The cluster had 30
+PrometheusRule resources, but none was in `myota-test` or labeled for that
+release. This confirms target scraping, metric query visibility, and the
+current absence of firing alerts for this namespace. It does not qualify
+Alertmanager notification delivery or MyOTA-specific alert rules. Hosted
+Observe receipt and authenticated workflow signal correlation remain open.
+
 ## Authenticated Grafana dashboard proxy
 
 Issue [#116](https://github.com/myota-platform/myota-next/issues/116) records the

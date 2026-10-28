@@ -142,6 +142,11 @@ against the isolated deployment remains under Phase 6 issue #10.
   verified. There is also no centralized logs/traces backend; workflow signal
   correlation remains open under #90 and #91. See the current live recheck in
   [Observe delivery](operations/observe-delivery-smoke.md).
+  At 01:31 UTC on 2026-10-28, Prometheus returned 17/17 `myota-test` targets
+  up; the API and worker ServiceMonitors scrape `/metrics` every 30 seconds.
+  No active alert had `namespace="myota-test"`, and no PrometheusRule was
+  scoped or labeled for that release. Alert notification delivery and
+  MyOTA-specific alert rules remain unqualified.
   On 2026-10-28, a temporary in-cluster collector received the same trace for
   one public read through Gateway and Activity; the telemetry batch had no
   correlated application logs. After removing the test endpoint and Secret,
