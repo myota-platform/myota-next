@@ -15,7 +15,7 @@ spec:
     repeatInterval: 24h
     matchers:
       - name: alertname
-        matchType: =
+        matchType: "="
         value: MyOTAUnresolvedOutboxDeadLetters
   receivers:
     - name: myota-test-email
