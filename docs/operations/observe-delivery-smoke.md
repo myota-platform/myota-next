@@ -1,8 +1,8 @@
 # Observe delivery smoke test
 
-This check qualifies the local `@nestjs/observe` integration. It does not
-qualify delivery to a real Observe account or the deployed `myota-test`
-environment.
+This guide covers the local `@nestjs/observe` integration and deployed
+qualification in `myota-test`. The isolated receiver verifies delivery and
+correlation without sending telemetry to a hosted Observe account.
 
 ## Run the smoke test
 
@@ -24,7 +24,7 @@ The test uses the real `@nestjs/observe` worker and wire format. Its credentials
 are inert test values; they are sent only to the loopback server and are not
 deployment credentials.
 
-## Current deployment gate
+## Earlier deployment state — 2026-10-27
 
 On 2026-10-27, the `myota-test` Helm values had `observe.enabled: false`, no
 endpoint override, and no `myota-observe` Secret. The smoke test therefore
@@ -138,7 +138,7 @@ collector delivery or cross-service log/trace correlation; those remain open
 under [#90](https://github.com/myota-platform/myota-next/issues/90) and
 [#91](https://github.com/myota-platform/myota-next/issues/91).
 
-## Latest authenticated deployment check — 2026-10-28
+## Authenticated API delivery check — revision 68
 
 After the earlier cleanup check, the `testing` branch reconfigured `myota-test`
 to use a temporary, credential-protected in-cluster receiver. The test-only
@@ -164,15 +164,38 @@ notification delivery or a MyOTA-specific alert rule.
 
 All deployed NestJS workers delivered periodic Observe batches under their
 stable service IDs. The sampled idle-worker batches contained no task snapshots
-or forwarded logs, so worker business-operation telemetry remains unqualified. A
-separate synthetic password-recovery run delivered two reset emails to the
+or forwarded logs, so that sample did not qualify worker business-operation
+telemetry. A separate synthetic password-recovery run delivered two reset emails to the
 Mailpit sink, incremented the Email worker's `password-reset.v1` delivered
 counter to `2`, and reported SMTP availability `1`; both messages were deleted
 and the original test password was restored. Those worker metrics currently
-provide no request-to-worker trace or log correlation. Qualification remains
-open for hosted Observe, behavioral alerting, and worker task correlation under
-issues [#90](https://github.com/myota-platform/myota-next/issues/90) and
-[#91](https://github.com/myota-platform/myota-next/issues/91). The local
+provide no request-to-worker trace or log correlation. The revision 70 check
+below verifies correlation for one asynchronous login event. Hosted Observe,
+worker logs for that event, other worker operation types, and behavioral alerting
+remain open under issues [#90](https://github.com/myota-platform/myota-next/issues/90)
+and [#91](https://github.com/myota-platform/myota-next/issues/91). The local
 recovery helper also received HTTP 403 for revoked session probes where it
 expects 401; both requests were denied, but that assertion needs reconciliation
 before the session-revocation check is called clean.
+
+## Worker event correlation check — revision 70
+
+After PRs [#221](https://github.com/myota-platform/myota-next/pull/221) and
+[#224](https://github.com/myota-platform/myota-next/pull/224), protected rollout
+[40638471527](https://github.com/myota-platform/myota-next/actions/runs/40638471527)
+deployed chart `myota-next-1.1.6-testing.cb48c2a0fe92.1` at Helm revision 70.
+All 17 Deployments were Ready. A test Participant login and subsequent
+`/v1/identity/me` request both returned HTTP 200 with request ID
+`0d9bda80-602c-43a2-ae73-3026c1b2cbff`.
+
+The in-cluster receiver recorded that ID as a trace ID and forwarded log trace
+ID for both `gateway` and `identity-api`. The `activity-notifications` worker
+also delivered an Observe batch containing a snapshot with that ID, confirming
+correlation from the login request through its asynchronous event handler. Its
+batch had no forwarded log or operation name. The bounded
+`myota_activity_notification_outcomes_total{outcome="processed"}` counter
+increased from 2 to 3 during this check. Worker event trace correlation is
+verified for this flow; worker log coverage, other worker operations, hosted
+Observe delivery, per-email trace coverage, and behavioral alert qualification
+remain open under Phase 6 issues [#90](https://github.com/myota-platform/myota-next/issues/90)
+and [#91](https://github.com/myota-platform/myota-next/issues/91).

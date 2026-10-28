@@ -146,10 +146,13 @@ against the isolated deployment remains under Phase 6 issue #10.
   Identity API; Prometheus recorded the successful routes. Activity and
   Geodata worker dependency metrics report NATS and PostgreSQL healthy. No
   `myota-test` alerts were firing, and no MyOTA-specific alert rule or
-  Alertmanager delivery has been qualified. The test-only Observe Secret and
-  in-cluster receiver qualify delivery from APIs and idle workers. Hosted
-  Observe account delivery and worker business-operation trace/log correlation
-  remain open under #90 and #91.
+  Alertmanager delivery has been qualified. Protected rollout
+  [40638471527](https://github.com/myota-platform/myota-next/actions/runs/40638471527)
+  deployed Helm revision 70. The test-only receiver recorded an Activity
+  Notifications snapshot correlated to the asynchronous login event; the
+  processed counter increased from 2 to 3. That batch had no forwarded worker
+  log or operation name. Hosted Observe, other worker operation types, and
+  behavioral alert qualification remain open under #90 and #91.
 
   A supplemental password-recovery run delivered two synthetic messages to
   Mailpit and showed two successful `password-reset.v1` Email worker attempts;
@@ -159,7 +162,7 @@ against the isolated deployment remains under Phase 6 issue #10.
   earlier Participant email-change retry evidence is in the
   [Identity parity record](parity/identity-programmes.md) and issue #115.
   Authenticated Admin Grafana viewing is qualified under #116. Hosted Observe
-  and cross-service task correlation remain open. Geodata's optional
+  and full worker-log correlation remain open. Geodata's optional
   BigDataCloud Secret remains absent; provider-backed enrichment and catalogue
   backfill remain open under #110/#111. See the
   [location enrichment guide](operations/location-enrichment.md).
