@@ -832,9 +832,12 @@ reported `locationEnrichmentStatus: COMPLETED`, `geocodeStatus: ENRICHED`, and
 `geocodeProvider: BIGDATACLOUD`. The saved response included Spain, Galicia, and
 Culleredo location metadata and a geocoding timestamp.
 
-This confirms the configured single-entity API and worker path. It does not yet verify
-lifecycle-triggered enrichment after creation, promotion, or geometry edits, Secret
-rotation with a replacement credential, the Admin browser flow, or catalogue-wide
-backfill. The catalogue currently contains 432 entities; a full backfill was not
-started because it could trigger provider lookups for many entities. Continue with the
-single-entity and bounded Admin qualification sequence in the [operator guide](../operations/location-enrichment.md).
+This confirms the configured single-entity API and worker path. A browser check of
+Admin Entity Management also displayed a confirmation covering all 432 matching
+entities; the confirmation was dismissed and no enrichment requests were submitted.
+This verifies the UI entry point and catalogue count, not queueing or completion of a
+backfill. Lifecycle-triggered enrichment after creation, promotion, or geometry edits,
+Secret rotation with a replacement credential, and catalogue-wide backfill remain
+unverified. A full backfill was not started because it could trigger provider lookups
+for many entities. Continue with the single-entity and bounded Admin qualification
+sequence in the [operator guide](../operations/location-enrichment.md).
