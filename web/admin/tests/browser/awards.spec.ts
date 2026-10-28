@@ -622,7 +622,18 @@ test('creates a version from a published award and derives landscape print dimen
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.getByRole('button', { name: /Alpine Ten/ }).click();
   await expect(page.getByText(/This award version is read-only/)).toBeVisible();
-  await page.getByRole('button', { name: 'Create editable version' }).click();
+  await page
+    .getByRole('button', { name: 'Create a new version for this award' })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Alpine Ten · Draft version 3' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('status').filter({
+      hasText:
+        'This draft copies published version 2. Saving creates version 3 as a separate draft; the published version and awards issued from it stay unchanged.',
+    }),
+  ).toBeVisible();
   const awardForm = page.locator('form.form-grid').first();
   const pageSize = awardForm.locator('select').nth(3);
   const orientation = awardForm.locator('select').nth(4);
