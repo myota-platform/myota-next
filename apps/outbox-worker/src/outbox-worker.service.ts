@@ -388,7 +388,7 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
     if (OWNER === 'activity' || OWNER === 'geodata') {
       const stream =
         OWNER === 'activity' ? 'MYOTA_ACTIVITY_WORK' : 'MYOTA_GEODATA_WORK';
-      const expectedCount = OWNER === 'activity' ? 6 : 4;
+      const expectedCount = OWNER === 'activity' ? 7 : 4;
       if (ownedWork.length !== expectedCount) {
         throw new Error(
           `${stream} work routes are incomplete in the event registry`,
