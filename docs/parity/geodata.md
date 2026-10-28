@@ -806,8 +806,10 @@ under [#110](https://github.com/myota-platform/myota-next/issues/110),
 
 ### Test deployment recheck — 2026-10-28
 
-The `myota-test` Geodata worker is Ready at 1/1 on deployment revision 35
-(image digest `sha256:77c687a62b563fb7c55d0ee5350872b61cef724491ea6db34bce9bc0e92c1708`).
+The `myota-test` Helm release is deployed at revision 69
+(`myota-next-1.1.6-testing.b0c9ad77927d.1`). The Geodata worker is Ready at
+1/1 on image digest
+`sha256:1c75c359651f5c4c36d2c20658d66c5962dd7beace3a9f1c0169d7290a83fa8b`.
 Its `BIGDATACLOUD_API_KEY` reference points to the optional
 `myota-geodata-enrichment` Secret and `api-key` key. A presence-only lookup
 confirms that Secret is absent. No provider request or catalogue backfill was

@@ -7,15 +7,18 @@ production key for qualification.
 ## Configuration
 
 The Helm chart injects the optional `BIGDATACLOUD_API_KEY` only into
-`geodata-worker`. The defaults are:
+`geodata-worker`. Configure these non-secret chart values as needed:
 
-| Setting           | Helm value                                           | Default                                    |
-| ----------------- | ---------------------------------------------------- | ------------------------------------------ |
-| Provider endpoint | `geodataWorker.locationEnrichment.reverseGeocodeUrl` | `https://api-bdc.net/data/reverse-geocode` |
-| Locality language | `geodataWorker.locationEnrichment.localityLanguage`  | `en`                                       |
-| Request timeout   | `geodataWorker.locationEnrichment.timeoutSeconds`    | `10` seconds                               |
-| Kubernetes Secret | `secrets.geodataEnrichment`                          | `myota-geodata-enrichment`                 |
-| Secret key        | —                                                    | `api-key`                                  |
+- **Provider endpoint** —
+  `geodataWorker.locationEnrichment.reverseGeocodeUrl`; defaults to
+  `https://api-bdc.net/data/reverse-geocode`.
+- **Locality language** —
+  `geodataWorker.locationEnrichment.localityLanguage`; defaults to `en`.
+- **Request timeout** —
+  `geodataWorker.locationEnrichment.timeoutSeconds`; defaults to 10 seconds.
+- **Kubernetes Secret** — `secrets.geodataEnrichment`; defaults to
+  `myota-geodata-enrichment`.
+- **Secret key** — `api-key`.
 
 The endpoint, language, and timeout are non-secret Helm values. Use a
 BigDataCloud account and plan that permit server-side reverse-geocoding lookups
