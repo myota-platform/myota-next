@@ -138,9 +138,11 @@ against the isolated deployment remains under Phase 6 issue #10.
   targets up. An in-cluster, credential-protected receiver now verifies
   authenticated Admin and Participant login and `/me` telemetry across Gateway
   and Identity API, with matching traces, forwarded logs, and HTTP 200 metrics.
-  Worker batches are delivered but contain no business-operation snapshots or
-  logs; hosted Observe and behavioral alert qualification remain open under #90
-  and #91.
+  At Helm revision 70, the Activity Notifications worker also received a
+  request-correlated snapshot for the asynchronous login event; its processed
+  counter increased from 2 to 3. That batch contained no forwarded worker log
+  or operation name. Hosted Observe delivery and behavioral alert qualification
+  remain open under #90 and #91.
   A deployed Participant email-change request recovered from a temporary SMTP
   outage: the current-address message retried twice and delivered after the
   test sink returned. The old address remained authoritative until both links
@@ -148,8 +150,8 @@ against the isolated deployment remains under Phase 6 issue #10.
   and Phase 6 issue #115.
   Prometheus also retained matching Email worker counters: two old-address SMTP
   failures and one delivery for each address template. These template/outcome
-  counters do not identify a work item, so full request-level correlation and
-  centralized traces remain open under #90 and #91.
+  counters do not identify an email work item, so per-email trace correlation
+  remains open under #90 and #91.
   The local Observe SDK delivery smoke test and current deployment evidence are
   documented in [Observe delivery smoke test](operations/observe-delivery-smoke.md).
   The receiver uses test-only credentials stored outside Git; it does not
@@ -157,7 +159,8 @@ against the isolated deployment remains under Phase 6 issue #10.
   Authenticated Admin access to the embedded Grafana dashboard is qualified
   under #116: dashboard/query requests succeed, while unauthorized requests
   redirect to sign-in. This does not substitute for Observe delivery or
-  cross-service trace correlation.
+  worker-event correlation, which is separately verified in the Observe smoke
+  record.
 - **Geodata performance:** larger datasets and full worker throughput remain
   unqualified. `MYOTA_UPLOAD_WORKERS` caps multipart finalization per Geodata
   API process. `MYOTA_IMPORT_WORKERS` caps preprocessing and promotion together
