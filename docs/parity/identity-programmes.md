@@ -296,7 +296,11 @@ authenticated afterward. The service transaction also revokes all refresh sessio
 all unexpired access-token identifiers for the account. The deployed single-session check
 rejected the prior access and refresh credentials; the service regression checks that
 revocation covers every account session and unexpired access token. A deployed
-multi-session reset check and end-to-end telemetry-secret scan remain pending under #114.
+two-session reset check on revision 73 rejected both prior access tokens and both refresh
+tokens with HTTP 403. The temporary password authenticated, the original password was
+restored through a second reset, and a new original-password login succeeded. The reset
+policy is to revoke every refresh session and unexpired access-token identifier; this is
+implemented and verified. An end-to-end telemetry-secret scan remains pending under #114.
 Revision 73 includes the shared-email limiter and request-log secret exclusion. The
 multi-source limiter and telemetry behavior have service-level regression coverage but
 still need deployed qualification before #114 can close.
