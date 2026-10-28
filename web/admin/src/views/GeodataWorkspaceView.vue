@@ -1419,7 +1419,8 @@ async function fillMissingLocationMetadata(): Promise<void> {
           !entity.geometry ||
           !entity.geometry.coordinates ||
           !missingLocationFields(entity).length ||
-          entity.locationEnrichmentStatus === 'QUEUED'
+          entity.locationEnrichmentStatus === 'QUEUED' ||
+          entity.locationEnrichmentStatus === 'COMPLETED'
         ) {
           locationBackfill.skipped += 1;
         } else {
