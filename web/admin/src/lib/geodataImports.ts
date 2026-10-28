@@ -2,6 +2,7 @@ import type { UploadRequest } from './geodataUploads';
 
 export interface ImportRun {
   id: string;
+  programmeSlug?: string | null;
   filename?: string;
   format?: string;
   adapter?: string;

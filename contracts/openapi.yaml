@@ -531,14 +531,18 @@ paths:
   /v1/programmes/{slug}/policy:
     get:
       tags: [Programmes]
-      summary: Get the effective programme policy version
+      summary: Get effective programme rules, entity types, and numbering policy
       parameters:
         - in: path
           name: slug
           required: true
           schema: { type: string }
       responses:
-        '200': { description: Effective programme policy }
+        '200':
+          description: Effective programme policy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProgrammePolicy' }
   /v1/entity-types:
     get:
       tags: [Programmes]
@@ -780,6 +784,42 @@ paths:
                     { $ref: '#/components/schemas/GeoImportCandidatePage' },
                 },
             }
+  /v1/geodata/imports/{runId}/candidates/{candidateId}/entity-id-suggestion:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Suggest the next available manual entity ID serial
+      description: Returns an advisory, non-reserving suggestion for the candidate's programme and qualifier scope. Promotion rechecks uniqueness atomically; another administrator may claim the suggestion first.
+      parameters:
+        - {
+            in: path,
+            name: runId,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+        - {
+            in: path,
+            name: candidateId,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                qualifier: { type: string }
+      responses:
+        '200':
+          description: Existing stable ID or the next available manual assignment suggestion
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GeoEntityIdSuggestion' }
+        '400':
+          { description: No manual numbering policy or qualifier is invalid }
+        '404': { description: Candidate does not belong to the import run }
   /v1/geodata/imports/{runId}/candidates/validate:
     post:
       tags: [Geodata]
@@ -3437,6 +3477,60 @@ components:
         rules: { type: object }
         theme: { type: object }
         oidc: { type: object, nullable: true }
+        entityNumbering:
+          {
+            allOf: [{ $ref: '#/components/schemas/ProgrammeEntityNumbering' }],
+            nullable: true,
+            description: Optional programme-scoped entity identifier policy; existing identifiers are not rewritten by policy changes.,
+          }
+    ProgrammeEntityNumbering:
+      type: object
+      required: [identifier, qualifierMode, serialWidth, assignmentMode]
+      properties:
+        identifier: { type: string, pattern: '^[A-Z0-9]{1,4}$' }
+        qualifierMode: { type: string, enum: [NONE, MANUAL, LOCATION] }
+        qualifierField:
+          {
+            type: string,
+            enum:
+              [
+                continent,
+                country,
+                countryCode,
+                region,
+                regionCode,
+                subdivision,
+                subdivisionCode,
+                province,
+                provinceCode,
+                county,
+                countyCode,
+                city,
+                municipality,
+                locality,
+              ],
+            description: Required when qualifierMode is LOCATION; read from the entity location metadata.,
+          }
+        serialWidth: { type: integer, minimum: 3, maximum: 6 }
+        assignmentMode:
+          {
+            type: string,
+            enum: [PROGRAMME_SEQUENCE, QUALIFIER_SEQUENCE, MANUAL],
+          }
+    ProgrammePolicy:
+      type: object
+      required: [programmeSlug, version, rules, entityTypes, entityNumbering]
+      properties:
+        programmeSlug: { type: string }
+        version: { type: integer }
+        rules: { type: object }
+        entityTypes: { type: array, items: { type: object } }
+        entityNumbering:
+          {
+            allOf: [{ $ref: '#/components/schemas/ProgrammeEntityNumbering' }],
+            nullable: true,
+          }
+        updatedAt: { type: string }
     EntityType:
       type: object
       required: [code, label, geometryTypes]
@@ -3514,6 +3608,11 @@ components:
         rules: { type: object }
         theme: { type: object }
         oidc: { type: object, nullable: true }
+        entityNumbering:
+          {
+            allOf: [{ $ref: '#/components/schemas/ProgrammeEntityNumbering' }],
+            nullable: true,
+          }
     GeoImport:
       type: object
       required: [adapter, source, entityTypes]
@@ -3642,6 +3741,7 @@ components:
             uniqueItems: true,
             items: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,63}$' },
           }
+        programmeSlug: { type: string, nullable: true }
         filename: { type: string, minLength: 1 }
         expectedSize:
           {
@@ -3864,8 +3964,10 @@ components:
       properties:
         id: { type: string, format: uuid }
         importRunId: { type: string, format: uuid }
+        programmeSlug: { type: string, nullable: true }
         ordinal: { type: integer, minimum: 0 }
         existingEntityId: { type: string, format: uuid, nullable: true }
+        entityIdentifier: { type: string, nullable: true }
         name: { type: string }
         entityTypes: { type: array, items: { type: string } }
         geometry: { type: object, additionalProperties: true }
@@ -3893,6 +3995,16 @@ components:
           { type: string, enum: [CANDIDATE, APPROVED], nullable: true }
         processedEntityId: { type: string, format: uuid, nullable: true }
         processedAt: { type: string, format: date-time, nullable: true }
+    GeoEntityIdSuggestion:
+      type: object
+      required: [entityIdentifier, assigned, reserved]
+      properties:
+        entityIdentifier: { type: string }
+        serial: { type: integer, minimum: 1 }
+        paddedSerial: { type: string, pattern: '^\\d{3,6}$' }
+        qualifier: { type: string, nullable: true }
+        assigned: { type: boolean }
+        reserved: { type: boolean }
         location: { type: object, additionalProperties: true }
     GeoImportDuplicate:
       type: object
@@ -4058,6 +4170,12 @@ components:
             type: string,
             nullable: true,
             description: Optional programme eligibility assignment.,
+          }
+        entityIdentifier:
+          {
+            type: string,
+            nullable: true,
+            description: Stable programme-scoped identifier assigned and retained by Geodata.,
           }
         entityType: { type: string }
         entityTypes:

@@ -161,7 +161,7 @@ export async function bootstrapHttpService(
               '/v1/identity/admin/roles',
               '/v1/identity/roles',
             ].includes(path) ||
-            /^\/v1\/geodata\/imports\/[^/]+\/(?:candidates\/validate|process|processed)$/.test(
+            /^\/v1\/geodata\/imports\/[^/]+\/(?:candidates\/validate|candidates\/[^/]+\/entity-id-suggestion|process|processed)$/.test(
               path,
             ) ||
             /^\/v1\/geodata\/imports\/[^/]+\/processing-queues\/[^/]+\/redrive$/.test(

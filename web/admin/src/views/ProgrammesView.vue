@@ -38,6 +38,12 @@ const form = reactive({
   entityTypes: [] as EntityCategory[],
   primary: '#0f766e',
   accent: '#f59e0b',
+  numberingEnabled: false,
+  numberingIdentifier: '',
+  qualifierMode: 'NONE',
+  qualifierField: 'municipality',
+  serialWidth: 4,
+  assignmentMode: 'PROGRAMME_SEQUENCE',
 });
 
 function restoreCategoryMutationKeys(): Map<string, string> {
@@ -103,6 +109,14 @@ function resetForm(programme: Programme | null = null): void {
     entityTypes: (programme as any)?.entityTypes || [],
     primary: (programme as any)?.theme?.primary || '#0f766e',
     accent: (programme as any)?.theme?.accent || '#f59e0b',
+    numberingEnabled: Boolean(programme?.entityNumbering),
+    numberingIdentifier: programme?.entityNumbering?.identifier || '',
+    qualifierMode: programme?.entityNumbering?.qualifierMode || 'NONE',
+    qualifierField:
+      programme?.entityNumbering?.qualifierField || 'municipality',
+    serialWidth: programme?.entityNumbering?.serialWidth || 4,
+    assignmentMode:
+      programme?.entityNumbering?.assignmentMode || 'PROGRAMME_SEQUENCE',
   });
 }
 
@@ -255,6 +269,17 @@ async function save(): Promise<void> {
         excludeOverlappingProgrammes: form.excludeOverlaps,
       },
       theme: { ...existing?.theme, primary: form.primary, accent: form.accent },
+      entityNumbering: form.numberingEnabled
+        ? {
+            identifier: form.numberingIdentifier.trim().toUpperCase(),
+            qualifierMode: form.qualifierMode,
+            ...(form.qualifierMode === 'LOCATION'
+              ? { qualifierField: form.qualifierField }
+              : {}),
+            serialWidth: Number(form.serialWidth),
+            assignmentMode: form.assignmentMode,
+          }
+        : null,
     };
     if (!selected.value) payload.entityTypes = form.entityTypes;
     let saved: Programme;
@@ -461,6 +486,80 @@ onMounted(() =>
               ><input v-model="form.excludeOverlaps" type="checkbox" /><span
                 >Exclude overlapping programmes</span
               ></label
+            >
+          </div>
+        </section>
+        <section class="form-section wide">
+          <div class="section-heading">
+            <h3>Programme entity IDs</h3>
+            <span class="help-badge">Optional policy</span>
+          </div>
+          <p class="field-help">
+            Give entities a stable, readable ID within this programme. The
+            programme identifier is unique across MyOTA; changing this policy
+            does not rewrite IDs already assigned to entities.
+          </p>
+          <label class="check-field wide">
+            <input v-model="form.numberingEnabled" type="checkbox" />
+            <span>Enable programme entity IDs</span>
+          </label>
+          <div v-if="form.numberingEnabled" class="form-grid nested-grid">
+            <label
+              >Programme ID prefix<input
+                v-model="form.numberingIdentifier"
+                maxlength="4"
+                pattern="[A-Z0-9]{1,4}"
+                required
+                aria-describedby="entity-id-prefix-help"
+              />
+              <small id="entity-id-prefix-help" class="field-help"
+                >1–4 uppercase letters or digits, for example PJE.</small
+              ></label
+            ><label
+              >Qualifier source<select v-model="form.qualifierMode">
+                <option value="NONE">No qualifier</option>
+                <option value="MANUAL">Entered for each entity</option>
+                <option value="LOCATION">Location metadata</option>
+              </select></label
+            ><label v-if="form.qualifierMode === 'LOCATION'"
+              >Location field<select v-model="form.qualifierField">
+                <option value="continent">Continent</option>
+                <option value="country">Country</option>
+                <option value="countryCode">Country code</option>
+                <option value="region">Region</option>
+                <option value="regionCode">Region code</option>
+                <option value="subdivision">Subdivision</option>
+                <option value="subdivisionCode">Subdivision code</option>
+                <option value="province">Province</option>
+                <option value="provinceCode">Province code</option>
+                <option value="county">County</option>
+                <option value="countyCode">County code</option>
+                <option value="city">City</option>
+                <option value="municipality">Municipality</option>
+                <option value="locality">Locality</option>
+              </select></label
+            ><label
+              >Serial number width<select v-model.number="form.serialWidth">
+                <option :value="3">3 digits</option>
+                <option :value="4">4 digits</option>
+                <option :value="5">5 digits</option>
+                <option :value="6">6 digits</option>
+              </select></label
+            ><label
+              >Assignment policy<select v-model="form.assignmentMode">
+                <option value="PROGRAMME_SEQUENCE">
+                  Sequential within programme
+                </option>
+                <option
+                  v-if="form.qualifierMode !== 'NONE'"
+                  value="QUALIFIER_SEQUENCE"
+                >
+                  Sequential within programme and qualifier
+                </option>
+                <option value="MANUAL">
+                  Manual, with next-free suggestion
+                </option>
+              </select></label
             >
           </div>
         </section>

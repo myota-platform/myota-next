@@ -287,6 +287,22 @@ export class GeodataImportsController {
     return this.repository.listImportCandidates(runId, query);
   }
 
+  @Post('imports/:runId/candidates/:candidateId/entity-id-suggestion')
+  @HttpCode(200)
+  suggestImportCandidateEntityIdentifier(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('runId') runId: string,
+    @Param('candidateId') candidateId: string,
+    @Body() body: Record<string, unknown> = {},
+  ) {
+    authorizeImport(authorization);
+    return this.importMutations.suggestEntityIdentifier(
+      runId,
+      candidateId,
+      body,
+    );
+  }
+
   @Post('imports/:runId/candidates/validate')
   @HttpCode(200)
   validateImportCandidates(

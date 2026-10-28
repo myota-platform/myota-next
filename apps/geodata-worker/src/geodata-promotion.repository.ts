@@ -14,6 +14,13 @@ import {
   locationSnapshot,
   queueLocationEnrichment,
 } from '../../geodata/src/geodata-location-enrichment.js';
+import {
+  allocateProgrammeEntityIdentifier,
+  ProgrammeEntityIdentifierError,
+  type ManualEntityIdentifierAssignment,
+  type ProgrammeEntityNumberingPolicy,
+} from './programme-entity-identifier.js';
+import { loadProgrammeNumberingPolicy } from './programme-policy-client.js';
 
 export interface PromotionQueue {
   id: string;
@@ -31,6 +38,47 @@ export class GeodataPromotionRepository {
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
     private readonly scoring: GeodataPromotionScoring,
   ) {}
+
+  async loadProgrammeNumberingPolicies(
+    importRunId: string,
+    candidateIds: string[],
+  ): Promise<Map<string, ProgrammeEntityNumberingPolicy | null>> {
+    const client = await this.connect();
+    let slugs: string[];
+    try {
+      const result = await client.query<{
+        id: string;
+        programme_slug: string | null;
+      }>(
+        `SELECT id::text,programme_slug FROM geodata_import_candidate
+          WHERE import_run_id=$1 AND id=ANY($2::uuid[])
+          ORDER BY id`,
+        [importRunId, candidateIds],
+      );
+      if (result.rows.length !== new Set(candidateIds).size)
+        throw new Error(
+          'one or more candidates do not belong to this import run',
+        );
+      slugs = [
+        ...new Set(
+          result.rows
+            .map((row) => row.programme_slug)
+            .filter(
+              (slug): slug is string => typeof slug === 'string' && !!slug,
+            ),
+        ),
+      ];
+    } finally {
+      client.release();
+    }
+    const policies = await Promise.all(
+      slugs.map(
+        async (slug) =>
+          [slug, await loadProgrammeNumberingPolicy(slug)] as const,
+      ),
+    );
+    return new Map(policies);
+  }
 
   async claimPromotion(queueId?: string): Promise<PromotionQueue | null> {
     const client = await this.connect();
@@ -120,11 +168,19 @@ export class GeodataPromotionRepository {
     const created: string[] = [];
     const updated: string[] = [];
     const errors: Record<string, string>[] = [];
+    const numberingPolicies = await this.loadProgrammeNumberingPolicies(
+      queue.import_run_id,
+      queue.candidate_ids,
+    );
     for (let index = 0; index < queue.candidate_ids.length; index++) {
       if (index > 0 && index % 25 === 0) await this.heartbeatPromotion(queue);
       const candidateId = queue.candidate_ids[index];
       try {
-        const outcome = await this.promoteCandidate(queue, candidateId);
+        const outcome = await this.promoteCandidate(
+          queue,
+          candidateId,
+          numberingPolicies,
+        );
         (outcome.updated ? updated : created).push(outcome.entityId);
       } catch (error) {
         if (isCandidateConflict(error)) {
@@ -480,7 +536,11 @@ export class GeodataPromotionRepository {
     }
   }
 
-  private async promoteCandidate(queue: PromotionQueue, candidateId: string) {
+  private async promoteCandidate(
+    queue: PromotionQueue,
+    candidateId: string,
+    numberingPolicies: Map<string, ProgrammeEntityNumberingPolicy | null>,
+  ) {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -488,6 +548,7 @@ export class GeodataPromotionRepository {
         client,
         queue,
         candidateId,
+        numberingPolicies,
       );
       await client.query('COMMIT');
       return outcome;
@@ -508,6 +569,10 @@ export class GeodataPromotionRepository {
     client: PoolClient,
     queue: PromotionQueue,
     candidateId: string,
+    numberingPolicies = new Map<
+      string,
+      ProgrammeEntityNumberingPolicy | null
+    >(),
   ) {
     if (queue.id) {
       const queueResult = await client.query(
@@ -587,7 +652,7 @@ export class GeodataPromotionRepository {
       existingEntityId ?? candidate.planned_entity_id ?? randomUUID();
     const existing = existingEntityId
       ? await client.query(
-          'SELECT lifecycle_status,website,description,public_properties FROM geodata_entity WHERE id=$1 FOR UPDATE',
+          'SELECT lifecycle_status,website,description,public_properties,entity_identifier FROM geodata_entity WHERE id=$1 FOR UPDATE',
           [entityId],
         )
       : { rows: [] };
@@ -595,6 +660,41 @@ export class GeodataPromotionRepository {
       throw new CandidateConflict(
         'an approved entity cannot be changed by import processing',
       );
+
+    const programmeSlug =
+      typeof candidate.programme_slug === 'string'
+        ? candidate.programme_slug
+        : null;
+    const numberingPolicy = programmeSlug
+      ? (numberingPolicies.get(programmeSlug) ?? null)
+      : null;
+    const manualAssignments = isRecord(queue.job_metadata.manualAssignments)
+      ? queue.job_metadata.manualAssignments
+      : {};
+    const manualAssignment = isRecord(manualAssignments[candidateId])
+      ? (manualAssignments[candidateId] as ManualEntityIdentifierAssignment)
+      : undefined;
+    let entityIdentifier: string | null =
+      typeof existing.rows[0]?.entity_identifier === 'string'
+        ? existing.rows[0].entity_identifier
+        : null;
+    if (programmeSlug && numberingPolicy) {
+      try {
+        entityIdentifier = await allocateProgrammeEntityIdentifier(
+          client,
+          programmeSlug,
+          numberingPolicy,
+          entityId,
+          properties,
+          entityIdentifier,
+          manualAssignment,
+        );
+      } catch (error) {
+        if (error instanceof ProgrammeEntityIdentifierError)
+          throw new CandidateConflict(error.message);
+        throw error;
+      }
+    }
 
     await client.query(
       "SELECT set_config('myota.geodata_writer','row-v1',true)",
@@ -678,6 +778,7 @@ export class GeodataPromotionRepository {
         sourceHash: candidate.source_hash,
         importRunId: queue.import_run_id,
       },
+      entityIdentifier,
       review,
       reviewHistory,
       updatedAt: now,
@@ -699,9 +800,9 @@ export class GeodataPromotionRepository {
            source_state,source_key,source_hash,jurisdiction,attachments,programme_slug,
            entity_type_code,website,description,continent,continent_code,country,country_code,
            region,region_code,subdivision,subdivision_code,province,province_code,county,
-           county_code,city,municipality,locality)
+           county_code,city,municipality,locality,entity_identifier)
          SELECT $1,NULL,$2,$3,$4,g,ST_Centroid(g)::geography,$5::jsonb,'CURRENT',$6,$7,$8,$9::jsonb,$10,$11,$12,$13,
-           $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28
+           $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$30
          FROM (SELECT ST_SetSRID(ST_GeomFromGeoJSON($29),4326) AS g) geometry
          ON CONFLICT (id) DO UPDATE SET entity_type_id=EXCLUDED.entity_type_id,
            entity_type_code=EXCLUDED.entity_type_code,name=EXCLUDED.name,
@@ -717,7 +818,9 @@ export class GeodataPromotionRepository {
            province=EXCLUDED.province,province_code=EXCLUDED.province_code,
            county=EXCLUDED.county,county_code=EXCLUDED.county_code,
            city=EXCLUDED.city,municipality=EXCLUDED.municipality,
-           locality=EXCLUDED.locality,updated_at=now()`,
+           locality=EXCLUDED.locality,
+           entity_identifier=COALESCE(geodata_entity.entity_identifier,EXCLUDED.entity_identifier),
+           updated_at=now()`,
       [
         entityId,
         categories[0],
@@ -748,6 +851,7 @@ export class GeodataPromotionRepository {
         locationValue('municipality'),
         locationValue('locality'),
         stringifyJsonWithBigInts(properties.geometry),
+        entityIdentifier,
       ],
     );
     await client.query(
@@ -839,6 +943,7 @@ export class GeodataPromotionRepository {
         : 'geodata.entity.candidate.created.v1';
     const eventPayload = {
       entityId,
+      entityIdentifier,
       status: queue.target_status,
       importRunId: queue.import_run_id,
       actor: queue.requested_by,

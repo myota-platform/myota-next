@@ -292,3 +292,200 @@ test('reviews pasted GeoJSON candidates and promotes a selected set synchronousl
     processorId: 'geodata-importer-1',
   });
 });
+
+test('suggests a non-reserving manual entity ID and submits the chosen assignment', async ({
+  page,
+}) => {
+  const suggestionRequests: unknown[] = [];
+  const promotionRequests: Array<Record<string, unknown>> = [];
+  const run = {
+    id: 'import-manual-id',
+    programmeSlug: 'judicial',
+    filename: 'district.geojson',
+    status: 'PREPROCESSED',
+    adapter: 'MANUAL',
+    format: 'GEOJSON',
+    candidateCount: 1,
+    pendingCount: 1,
+  };
+  const candidate = {
+    id: 'candidate-manual-id',
+    programmeSlug: 'judicial',
+    ordinal: 1,
+    name: 'Test judicial district',
+    validationStatus: 'PENDING',
+    geometry: { type: 'Point', coordinates: [-3.7, 40.4] },
+  };
+  let importCreated = false;
+  await page.route('**/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+
+    if (url.pathname === '/v1/identity/auth/login') {
+      await route.fulfill({
+        json: {
+          accessToken: 'admin-geodata-import-access-token',
+          refreshToken: 'admin-geodata-import-refresh-token',
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/identity/me') {
+      await route.fulfill({
+        json: {
+          id: 'geodata-importer-1',
+          email: 'geodata-importer@example.test',
+          displayName: 'Geodata Importer',
+          scopes: ['geodata.import'],
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              slug: 'judicial',
+              name: 'Judicial districts',
+              entityNumbering: {
+                identifier: 'PJE',
+                qualifierMode: 'MANUAL',
+                serialWidth: 4,
+                assignmentMode: 'MANUAL',
+              },
+            },
+          ],
+          nextPage: null,
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/entity-types') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              code: 'JUDICIAL_DISTRICT',
+              label: 'Judicial district',
+              active: true,
+              geometryTypes: ['POINT'],
+            },
+          ],
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/geodata/imports' && method === 'GET') {
+      const items = importCreated ? [run] : [];
+      await route.fulfill({
+        json: { items, total: items.length, nextPage: null },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/geodata/imports' && method === 'POST') {
+      importCreated = true;
+      await route.fulfill({ status: 202, json: run });
+      return;
+    }
+    if (url.pathname === '/v1/geodata/imports/import-manual-id/candidates') {
+      await route.fulfill({
+        json: { items: [candidate], total: 1, nextPage: null },
+      });
+      return;
+    }
+    if (url.pathname.endsWith('/entity-id-suggestion') && method === 'POST') {
+      suggestionRequests.push(request.postDataJSON());
+      await route.fulfill({
+        json: {
+          entityIdentifier: 'PJE-DISTRICT-0007',
+          serial: 7,
+          paddedSerial: '0007',
+          qualifier: 'DISTRICT',
+          assigned: false,
+          reserved: false,
+        },
+      });
+      return;
+    }
+    if (
+      url.pathname === '/v1/geodata/imports/import-manual-id/process' &&
+      method === 'POST'
+    ) {
+      promotionRequests.push(request.postDataJSON() as Record<string, unknown>);
+      await route.fulfill({
+        json: {
+          importRunId: run.id,
+          candidateIds: [candidate.id],
+          targetStatus: 'CANDIDATE',
+          status: 'COMPLETED',
+          created: ['entity-1'],
+          updated: [],
+        },
+      });
+      return;
+    }
+    if (url.pathname === `/v1/geodata/imports/${run.id}`) {
+      await route.fulfill({ json: run });
+      return;
+    }
+    await route.fulfill({ json: { items: [], total: 0, nextPage: null } });
+  });
+
+  await page.goto('/geodata-imports');
+  await expect(page).toHaveURL(/\/login\?redirect=\/geodata-imports$/);
+  await page.getByLabel('Email').fill('geodata-importer@example.test');
+  await page.getByLabel('Password').fill('test-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/geodata-imports$/);
+
+  await page.getByLabel('Feature category').selectOption('JUDICIAL_DISTRICT');
+  await page
+    .getByLabel('Assign to programme (optional)')
+    .selectOption('judicial');
+  await page.getByLabel('Source label').fill('Browser manual ID fixture');
+  await page.getByLabel('Licence').fill('CC BY 4.0');
+  await page.getByLabel('Attribution').fill('Synthetic browser test');
+  await page.getByLabel('Source filename').fill('district.geojson');
+  await page.getByLabel('Paste source document').fill(
+    JSON.stringify({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { name: candidate.name },
+          geometry: candidate.geometry,
+        },
+      ],
+    }),
+  );
+  await page.getByRole('button', { name: 'Queue preprocessing' }).click();
+  await expect(page.getByText('Review pre-processed records')).toBeVisible();
+  await page
+    .getByLabel('Entity ID qualifier for Test judicial district')
+    .fill('District');
+  await page.getByRole('button', { name: 'Suggest next free serial' }).click();
+  await expect(
+    page.getByText(
+      'Suggested ID: PJE-DISTRICT-0007 (not reserved until promotion)',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel('Entity ID serial for Test judicial district'),
+  ).toHaveValue('7');
+  await page.getByLabel('Select Test judicial district').check();
+  await page
+    .getByRole('button', { name: 'Promote selected to candidate' })
+    .click();
+  await expect(
+    page.getByText('1 records were promoted to candidate successfully.'),
+  ).toBeVisible();
+  expect(suggestionRequests).toEqual([{ qualifier: 'District' }]);
+  expect(promotionRequests[0]).toMatchObject({
+    candidateIds: [candidate.id],
+    manualAssignments: {
+      [candidate.id]: { qualifier: 'District', serial: '7' },
+    },
+  });
+});

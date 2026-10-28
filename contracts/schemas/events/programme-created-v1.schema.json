@@ -66,9 +66,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "code"
-                ],
+                "required": ["code"],
                 "additionalProperties": true
               }
             },
@@ -78,6 +76,45 @@
             },
             "theme": {},
             "oidc": {},
+            "entityNumbering": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "type": "string",
+                      "pattern": "^[A-Z0-9]{1,4}$"
+                    },
+                    "qualifierMode": {
+                      "type": "string",
+                      "enum": ["NONE", "MANUAL", "LOCATION"]
+                    },
+                    "qualifierField": { "type": "string" },
+                    "serialWidth": {
+                      "type": "integer",
+                      "minimum": 3,
+                      "maximum": 6
+                    },
+                    "assignmentMode": {
+                      "type": "string",
+                      "enum": [
+                        "PROGRAMME_SEQUENCE",
+                        "QUALIFIER_SEQUENCE",
+                        "MANUAL"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "identifier",
+                    "qualifierMode",
+                    "serialWidth",
+                    "assignmentMode"
+                  ],
+                  "additionalProperties": false
+                },
+                { "type": "null" }
+              ]
+            },
             "status": {
               "type": "string"
             },

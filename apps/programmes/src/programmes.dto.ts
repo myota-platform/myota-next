@@ -2,13 +2,59 @@ import {
   Allow,
   IsArray,
   IsIn,
+  IsInt,
   IsObject,
   IsOptional,
   IsString,
+  Matches,
+  Max,
+  Min,
   MinLength,
+  ValidateNested,
   ValidateIf,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { pythonTruthy } from '@app/platform/python-truthiness.js';
+
+const LOCATION_QUALIFIER_FIELDS = [
+  'continent',
+  'country',
+  'countryCode',
+  'region',
+  'regionCode',
+  'subdivision',
+  'subdivisionCode',
+  'province',
+  'provinceCode',
+  'county',
+  'countyCode',
+  'city',
+  'municipality',
+  'locality',
+] as const;
+
+export class ProgrammeEntityNumberingDto {
+  @IsString()
+  @Matches(/^[A-Z0-9]{1,4}$/)
+  identifier!: string;
+
+  @IsIn(['NONE', 'MANUAL', 'LOCATION'])
+  qualifierMode!: 'NONE' | 'MANUAL' | 'LOCATION';
+
+  @ValidateIf(
+    (value: ProgrammeEntityNumberingDto) => value.qualifierMode === 'LOCATION',
+  )
+  @IsIn(LOCATION_QUALIFIER_FIELDS)
+  qualifierField?: (typeof LOCATION_QUALIFIER_FIELDS)[number];
+
+  @IsInt()
+  @Min(3)
+  @Max(6)
+  serialWidth!: number;
+
+  @IsIn(['PROGRAMME_SEQUENCE', 'QUALIFIER_SEQUENCE', 'MANUAL'])
+  assignmentMode!: 'PROGRAMME_SEQUENCE' | 'QUALIFIER_SEQUENCE' | 'MANUAL';
+}
 
 function validateContentPatchFields(object: { status?: unknown }) {
   return !pythonTruthy(object.status);
@@ -39,6 +85,11 @@ export class CreateProgrammeDto {
   @IsOptional()
   @IsObject()
   oidc?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ProgrammeEntityNumberingDto)
+  entityNumbering?: ProgrammeEntityNumberingDto | null;
 
   @Allow()
   policyVersion?: unknown;
@@ -304,6 +355,17 @@ export class UpdateProgrammeDto {
   @IsOptional()
   @IsObject()
   oidc?: Record<string, unknown> | null;
+
+  @ValidateIf(
+    (object) =>
+      object.status === undefined ||
+      object.status === null ||
+      object.status === 'ACTIVE',
+  )
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ProgrammeEntityNumberingDto)
+  entityNumbering?: ProgrammeEntityNumberingDto | null;
 
   @Allow()
   status?: unknown;

@@ -21,7 +21,7 @@ import type {
 } from '../lib/geodataUploads';
 import { useAppStore } from '../stores/app';
 import LeafletMap from '../components/LeafletMap.vue';
-import type { EntityCategory, GeoEntity } from '../types';
+import type { EntityCategory, GeoEntity, Programme } from '../types';
 
 interface DuplicateMatch extends GeoEntity {
   entityId?: string;
@@ -30,6 +30,8 @@ interface DuplicateMatch extends GeoEntity {
 }
 interface ImportCandidate {
   id: string;
+  programmeSlug?: string | null;
+  entityIdentifier?: string | null;
   ordinal?: number;
   name?: string;
   geom?: { type: string; coordinates: unknown };
@@ -63,6 +65,7 @@ const importTotal = ref(0);
 const format = ref('GEOJSON');
 const adapter = ref('MANUAL');
 const entityType = ref('');
+const programmeSlug = ref('');
 const filename = ref('');
 const source = ref('MANUAL');
 const sourceLicense = ref('');
@@ -99,6 +102,11 @@ const allSelected = computed(
 );
 const selectedCounts = computed(() =>
   selectedRun.value ? importCounts(selectedRun.value) : null,
+);
+const selectedProgramme = computed<Programme | undefined>(() =>
+  store.programmes.find(
+    (programme) => programme.slug === selectedRun.value?.programmeSlug,
+  ),
 );
 const showReview = computed(() =>
   Boolean(
@@ -137,6 +145,13 @@ const uploadLabel = computed(() => {
   return `Uploading… ${uploadPercent.value}%`;
 });
 const candidateDetail = ref<ImportCandidate | null>(null);
+const manualEntityAssignments = ref<
+  Record<string, { qualifier: string; serial: string }>
+>({});
+const candidateEntityIdentifiers = ref<Record<string, string>>({});
+const entityIdentifierSuggestions = ref<Record<string, string>>({});
+const suggestionPending = ref<string | null>(null);
+const suggestionError = ref('');
 const candidateMapEntities = ref<GeoEntity[]>([]);
 const candidateActionStatus = ref('');
 const candidateActionError = ref('');
@@ -180,6 +195,7 @@ function metadata(): UploadMetadata {
         : adapter.value,
     format: format.value === 'OSM_GEOJSON' ? 'GEOJSON' : format.value,
     entityTypes: [entityType.value],
+    ...(programmeSlug.value ? { programmeSlug: programmeSlug.value } : {}),
     source: {
       name: source.value,
       license: sourceLicense.value || 'Not specified',
@@ -262,6 +278,15 @@ async function loadCandidates(): Promise<void> {
   const previousIds = new Set(candidates.value.map((item) => item.id));
   const nextIds = new Set(data.items.map((item) => item.id));
   candidates.value = data.items;
+  for (const candidate of candidates.value) {
+    if (candidate.entityIdentifier)
+      candidateEntityIdentifiers.value[candidate.id] =
+        candidate.entityIdentifier;
+    manualEntityAssignments.value[candidate.id] ??= {
+      qualifier: '',
+      serial: '',
+    };
+  }
   totalCandidates.value = Number(data.total ?? data.items.length);
   if (
     renderedCandidateRunId === id &&
@@ -279,6 +304,51 @@ async function loadCandidates(): Promise<void> {
   if (page.value > lastPage) {
     page.value = lastPage;
     await loadCandidates();
+  }
+}
+async function suggestEntityIdentifier(
+  candidate: ImportCandidate,
+): Promise<void> {
+  const runId = selectedRun.value?.id;
+  if (!runId || suggestionPending.value) return;
+  suggestionPending.value = candidate.id;
+  suggestionError.value = '';
+  try {
+    const assignment = manualEntityAssignments.value[candidate.id] || {
+      qualifier: '',
+      serial: '',
+    };
+    const result = await apiRequest<{
+      entityIdentifier: string;
+      serial?: number;
+      assigned?: boolean;
+    }>(
+      `/v1/geodata/imports/${encodeURIComponent(runId)}/candidates/${encodeURIComponent(candidate.id)}/entity-id-suggestion`,
+      {
+        method: 'POST',
+        body: JSON.stringify(
+          selectedProgramme.value?.entityNumbering?.qualifierMode === 'MANUAL'
+            ? { qualifier: assignment.qualifier }
+            : {},
+        ),
+      },
+    );
+    if (result.assigned) {
+      entityIdentifierSuggestions.value[candidate.id] = result.entityIdentifier;
+      return;
+    }
+    if (result.serial === undefined)
+      throw new Error('The server did not return an available serial.');
+    manualEntityAssignments.value[candidate.id] = {
+      ...assignment,
+      serial: String(result.serial),
+    };
+    entityIdentifierSuggestions.value[candidate.id] = result.entityIdentifier;
+  } catch (cause) {
+    suggestionError.value =
+      cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    suggestionPending.value = null;
   }
 }
 async function fetchAllPendingCandidates(
@@ -339,6 +409,13 @@ async function decideCandidate(
       'The previous action has no confirmed result. Retry that same action before choosing a different one.';
     return;
   }
+  if (action !== 'REJECTED') {
+    const assignmentError = validateManualAssignments([candidate.id]);
+    if (assignmentError) {
+      candidateActionError.value = assignmentError;
+      return;
+    }
+  }
   actionBusy.value = true;
   candidatePendingAction.value = action;
   const requestBody =
@@ -352,6 +429,9 @@ async function decideCandidate(
           candidateIds: [candidate.id],
           targetStatus: action,
           processorId: store.account?.id,
+          ...(manualAssignmentPayload([candidate.id])
+            ? { manualAssignments: manualAssignmentPayload([candidate.id]) }
+            : {}),
         };
   const requestPath =
     action === 'REJECTED'
@@ -646,7 +726,12 @@ async function toggleAll(): Promise<void> {
       const data: CandidatePage = await readApi<CandidatePage>(
         `/v1/geodata/imports/${encodeURIComponent(id)}/candidates?page=${nextPage}&pageSize=100`,
       );
-      ids.push(...data.items.map((item) => item.id));
+      for (const candidate of data.items) {
+        ids.push(candidate.id);
+        if (candidate.entityIdentifier)
+          candidateEntityIdentifiers.value[candidate.id] =
+            candidate.entityIdentifier;
+      }
       nextPage = data.nextPage;
     }
     const uniqueIds = [...new Set(ids)];
@@ -679,6 +764,11 @@ async function processCandidates(
     );
     return;
   }
+  const assignmentError = validateManualAssignments(ids);
+  if (assignmentError) {
+    setError(assignmentError);
+    return;
+  }
   actionBusy.value = true;
   error.value = '';
   const requestPath = `/v1/geodata/imports/${encodeURIComponent(id)}/process`;
@@ -686,6 +776,9 @@ async function processCandidates(
     candidateIds: ids,
     targetStatus,
     processorId: store.account?.id,
+    ...(manualAssignmentPayload(ids)
+      ? { manualAssignments: manualAssignmentPayload(ids) }
+      : {}),
   };
   const fingerprint = JSON.stringify([
     store.account?.id,
@@ -857,6 +950,44 @@ function openCandidate(item: ImportCandidate, event?: MouseEvent): void {
       ?.focus(),
   );
 }
+function manualAssignmentPayload(
+  ids: string[],
+): Record<string, { qualifier?: string; serial: string }> | undefined {
+  const policy = selectedProgramme.value?.entityNumbering;
+  if (policy?.assignmentMode !== 'MANUAL') return undefined;
+  return Object.fromEntries(
+    ids
+      .filter((id) => !candidateEntityIdentifiers.value[id])
+      .map((id) => {
+        const assignment = manualEntityAssignments.value[id] || {
+          qualifier: '',
+          serial: '',
+        };
+        return [
+          id,
+          {
+            serial: assignment.serial,
+            ...(policy.qualifierMode === 'MANUAL'
+              ? { qualifier: assignment.qualifier }
+              : {}),
+          },
+        ];
+      }),
+  );
+}
+function validateManualAssignments(ids: string[]): string | null {
+  const policy = selectedProgramme.value?.entityNumbering;
+  if (policy?.assignmentMode !== 'MANUAL') return null;
+  for (const id of ids) {
+    if (candidateEntityIdentifiers.value[id]) continue;
+    const assignment = manualEntityAssignments.value[id];
+    if (!assignment?.serial.trim())
+      return 'Enter a serial number for every selected entity.';
+    if (policy.qualifierMode === 'MANUAL' && !assignment.qualifier.trim())
+      return 'Enter a qualifier for every selected entity.';
+  }
+  return null;
+}
 function closeCandidate(): void {
   if (actionBusy.value) return;
   candidateDetail.value = null;
@@ -896,7 +1027,11 @@ function refreshWhenVisible(): void {
     void refreshImports();
 }
 onMounted(async () => {
-  await Promise.all([loadCategories(), refreshImports(true)]);
+  await Promise.all([
+    loadCategories(),
+    refreshImports(true),
+    store.programmesLoaded ? Promise.resolve() : store.loadProgrammes(),
+  ]);
   if (disposed) return;
   pollTimer = setInterval(refreshWhenVisible, 5_000);
   document.addEventListener('visibilitychange', refreshWhenVisible);
@@ -980,6 +1115,23 @@ onBeforeUnmount(() => {
               {{ category.label || category.code }}
             </option>
           </select>
+        </label>
+        <label
+          >Assign to programme (optional)
+          <select v-model="programmeSlug">
+            <option value="">Programme-independent catalogue</option>
+            <option
+              v-for="programme in store.programmes"
+              :key="programme.slug"
+              :value="programme.slug"
+            >
+              {{ programme.name }} ({{ programme.slug }})
+            </option>
+          </select>
+          <small class="field-help"
+            >If selected, promoted entities receive IDs according to this
+            programme's numbering policy.</small
+          >
         </label>
         <label
           >Source label<input
@@ -1371,6 +1523,58 @@ onBeforeUnmount(() => {
             <small>{{
               item.geometry?.type || item.geom?.type || 'No geometry'
             }}</small>
+            <div
+              v-if="
+                selectedProgramme?.entityNumbering?.assignmentMode === 'MANUAL'
+              "
+              class="candidate-id-assignment"
+              @click.stop
+            >
+              <label v-if="!item.entityIdentifier"
+                >Entity ID serial<input
+                  v-model="manualEntityAssignments[item.id].serial"
+                  @input="entityIdentifierSuggestions[item.id] = ''"
+                  inputmode="numeric"
+                  pattern="[0-9]+"
+                  :aria-label="`Entity ID serial for ${item.name || 'unnamed entity'}`"
+              /></label>
+              <label
+                v-if="
+                  !item.entityIdentifier &&
+                  selectedProgramme.entityNumbering.qualifierMode === 'MANUAL'
+                "
+                >Entity ID qualifier<input
+                  v-model="manualEntityAssignments[item.id].qualifier"
+                  @input="entityIdentifierSuggestions[item.id] = ''"
+                  :aria-label="`Entity ID qualifier for ${item.name || 'unnamed entity'}`"
+              /></label>
+              <button
+                v-if="!item.entityIdentifier"
+                type="button"
+                class="quiet"
+                :disabled="actionBusy || suggestionPending !== null"
+                @click="suggestEntityIdentifier(item)"
+              >
+                {{
+                  suggestionPending === item.id
+                    ? 'Finding serial…'
+                    : 'Suggest next free serial'
+                }}
+              </button>
+              <small v-if="entityIdentifierSuggestions[item.id]" role="status">
+                {{ item.entityIdentifier ? 'Existing ID:' : 'Suggested ID:' }}
+                {{ entityIdentifierSuggestions[item.id] }}
+                <template v-if="!item.entityIdentifier">
+                  (not reserved until promotion)
+                </template>
+              </small>
+              <small v-if="item.entityIdentifier" role="status">
+                Existing ID: {{ item.entityIdentifier }} will be preserved.
+              </small>
+              <small v-if="suggestionError" class="error" role="alert">
+                {{ suggestionError }}
+              </small>
+            </div>
           </div>
           <p v-if="!candidates.length" class="muted empty">
             No pending records for this import.
@@ -1485,6 +1689,58 @@ onBeforeUnmount(() => {
       <p class="field-help">
         Compare the imported location with nearby existing entities.
       </p>
+      <div
+        v-if="selectedProgramme?.entityNumbering?.assignmentMode === 'MANUAL'"
+        class="form-grid nested-grid"
+      >
+        <label v-if="!candidateDetail.entityIdentifier"
+          >Entity ID serial<input
+            v-model="manualEntityAssignments[candidateDetail.id].serial"
+            @input="entityIdentifierSuggestions[candidateDetail.id] = ''"
+            inputmode="numeric"
+            pattern="[0-9]+"
+        /></label>
+        <label
+          v-if="
+            !candidateDetail.entityIdentifier &&
+            selectedProgramme.entityNumbering.qualifierMode === 'MANUAL'
+          "
+          >Entity ID qualifier<input
+            v-model="manualEntityAssignments[candidateDetail.id].qualifier"
+            @input="entityIdentifierSuggestions[candidateDetail.id] = ''"
+        /></label>
+        <button
+          v-if="!candidateDetail.entityIdentifier"
+          type="button"
+          class="quiet"
+          :disabled="actionBusy || suggestionPending !== null"
+          @click="suggestEntityIdentifier(candidateDetail)"
+        >
+          {{
+            suggestionPending === candidateDetail.id
+              ? 'Finding serial…'
+              : 'Suggest next free serial'
+          }}
+        </button>
+        <small
+          v-if="entityIdentifierSuggestions[candidateDetail.id]"
+          role="status"
+        >
+          {{
+            candidateDetail.entityIdentifier ? 'Existing ID:' : 'Suggested ID:'
+          }}
+          {{ entityIdentifierSuggestions[candidateDetail.id] }}
+          <template v-if="!candidateDetail.entityIdentifier">
+            (not reserved until promotion)
+          </template>
+        </small>
+        <small v-if="candidateDetail.entityIdentifier" role="status">
+          Existing ID: {{ candidateDetail.entityIdentifier }} will be preserved.
+        </small>
+        <small v-if="suggestionError" class="error" role="alert">
+          {{ suggestionError }}
+        </small>
+      </div>
       <LeafletMap
         :entities="candidateMapEntities"
         :selected-id="candidateDetail.id"
