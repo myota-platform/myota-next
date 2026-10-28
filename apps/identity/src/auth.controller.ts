@@ -145,6 +145,16 @@ export class AuthController {
     return this.emailChanges.request(authorization, body);
   }
 
+  @Post('me/email-change/resend')
+  @HttpCode(200)
+  resendEmailChange(
+    @Headers('authorization') authorization: string | undefined,
+  ) {
+    if (!authorization)
+      throw new UnauthorizedException('Bearer authentication is required');
+    return this.emailChanges.resend(authorization);
+  }
+
   @Delete('me/email-change')
   @HttpCode(200)
   cancelEmailChange(

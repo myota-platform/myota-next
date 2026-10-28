@@ -97,9 +97,14 @@ handling. API checks show that a canceled operation's token cannot affect a late
 pending change, simultaneous confirmations apply one transition, and both completion
 notices are sent. The old address remained authoritative on expiry and after only one
 confirmation; the new address became authoritative only after both confirmations.
-Coordinated multi-source throttling and remaining session-security checks, along with
-email-change delivery-failure recovery, remain open under #10, #91, #114, and #115; see
-[Identity and Programme parity](parity/identity-programmes.md).
+Coordinated multi-source throttling, multi-session revocation, and deployed
+telemetry-secret checks remain open under #114. The current recovery-hardening
+branch adds a shared-email throttle and request-log secret-exclusion coverage;
+these changes still need deployment qualification. Email-change delivery
+recovery after a temporary SMTP outage is now verified. The current branch adds
+the missing Participant resend action, which still needs deployment and browser
+qualification under #115. See [Identity and Programme parity](parity/identity-programmes.md)
+and the [Phase 6 readiness record](operations/phase6-readiness.md).
 
 Public Activity activation history, leaderboard, and JSON/CSV result exports are also
 checked through the live Gateway. Participants can read their own request status, while

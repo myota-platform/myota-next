@@ -401,32 +401,37 @@ export class IdentityAuthService {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
-      const rateLimitKey = createHash('sha256')
-        .update(`recovery:${normalizedEmail}:${remoteAddr ?? 'unknown'}`)
-        .digest('hex');
-      const rateLimit = await client.query<{ request_count: number }>(
-        `INSERT INTO public.identity_registration_rate_limit
-           (key_hash, window_started_at, request_count, expires_at)
-         VALUES ($1, clock_timestamp(), 1,
-                 clock_timestamp() + interval '15 minutes')
-         ON CONFLICT (key_hash) DO UPDATE SET
-           window_started_at = CASE
-             WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
-               THEN clock_timestamp()
-             ELSE identity_registration_rate_limit.window_started_at END,
-           request_count = CASE
-             WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
-               THEN 1
-             ELSE identity_registration_rate_limit.request_count + 1 END,
-           expires_at = CASE
-             WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
-               THEN clock_timestamp() + interval '15 minutes'
-             ELSE identity_registration_rate_limit.expires_at END,
-           updated_at = clock_timestamp()
-         RETURNING request_count`,
-        [rateLimitKey],
-      );
-      if ((rateLimit.rows[0]?.request_count ?? 0) > 5) {
+      const rateLimitKeys = [
+        `recovery-email:${normalizedEmail}`,
+        `recovery:${normalizedEmail}:${remoteAddr ?? 'unknown'}`,
+      ].map((value) => createHash('sha256').update(value).digest('hex'));
+      let rateLimited = false;
+      for (const keyHash of rateLimitKeys) {
+        const rateLimit = await client.query<{ request_count: number }>(
+          `INSERT INTO public.identity_registration_rate_limit
+             (key_hash, window_started_at, request_count, expires_at)
+           VALUES ($1, clock_timestamp(), 1,
+                   clock_timestamp() + interval '15 minutes')
+           ON CONFLICT (key_hash) DO UPDATE SET
+             window_started_at = CASE
+               WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
+                 THEN clock_timestamp()
+               ELSE identity_registration_rate_limit.window_started_at END,
+             request_count = CASE
+               WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
+                 THEN 1
+               ELSE identity_registration_rate_limit.request_count + 1 END,
+             expires_at = CASE
+               WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
+                 THEN clock_timestamp() + interval '15 minutes'
+               ELSE identity_registration_rate_limit.expires_at END,
+             updated_at = clock_timestamp()
+           RETURNING request_count`,
+          [keyHash],
+        );
+        if ((rateLimit.rows[0]?.request_count ?? 0) > 5) rateLimited = true;
+      }
+      if (rateLimited) {
         await client.query('COMMIT');
         return { status: 'accepted' };
       }

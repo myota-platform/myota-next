@@ -280,14 +280,25 @@ temporary verification session was logged out. The generated Mailpit message was
 The same day, six sequential reset requests from one test source to a unique nonexistent
 `example.test` address all returned HTTP 200 with the same generic `accepted` response
 and no development token. The Core limiter recorded six attempts in its 15-minute window;
-no recovery request or email was created. The temporary limiter row was removed. This
-checks generic behavior and the deployed counter, but does not qualify coordinated
-requests from multiple source addresses. A separate test submitted the same valid reset
-token twice concurrently with two candidate passwords. Exactly one request succeeded;
-only that request's password authenticated afterward. This verifies single-use behavior
-under concurrent consumption, but does not qualify coordinated requests from multiple
-source addresses or all session-security criteria in
+no recovery request or email was created. The temporary limiter row was removed. The
+source limiter alone did not qualify coordinated requests from multiple source addresses.
+The reset request path now atomically increments both a normalized-email bucket shared
+across source addresses and the existing email/source bucket. Its regression test submits
+six requests from distinct source addresses, verifies that only five recovery messages
+are queued, and checks that stored limiter keys are hashes rather than email or address
+values. Live multi-source qualification in `myota-test` remains pending under
 [Participant password reset](https://github.com/myota-platform/myota-next/issues/114).
+
+A separate deployed test submitted the same valid reset token twice concurrently with two
+candidate passwords. Exactly one request succeeded; only that request's password
+authenticated afterward. The service transaction also revokes all refresh sessions and
+all unexpired access-token identifiers for the account. The deployed single-session check
+rejected the prior access and refresh credentials; the service regression checks that
+revocation covers every account session and unexpired access token. A deployed
+multi-session reset check and end-to-end telemetry-secret scan remain pending under #114.
+The shared-email limiter and telemetry exclusion regression coverage in the current
+feature branch are not yet present in a deployed image. Repeat live Mailpit throttling,
+session, and telemetry checks before closing the issue.
 
 ### Phase 6 deployed Participant email-change UI checks — 2026-10-27
 
@@ -356,6 +367,12 @@ for login, `/me`, and the resulting asynchronous notification event; see the
 trace correlation, hosted Observe delivery, and alert qualification remain open under
 Phase 6 issues [#90](https://github.com/myota-platform/myota-next/issues/90) and
 [#91](https://github.com/myota-platform/myota-next/issues/91).
+
+Issue #115 also requires a Participant resend action. The current feature branch adds an
+authenticated resend API and UI action that starts a replacement operation, invalidates
+all earlier links, and sends new confirmation links to both addresses. It is not deployed
+or browser-qualified yet. Keep #115 open until API, browser, and Mailpit behavior are
+verified against the feature digest.
 
 It then adds a callsign, submits verification evidence, and verifies the callsign
 through the live Identity API. The same browser workflow exports the resulting account

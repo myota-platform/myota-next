@@ -134,6 +134,7 @@ test('signed-in participant can request a double-verified email change', async (
   page,
 }) => {
   let changeBody: unknown;
+  let resendCalls = 0;
   await page.route('**/v1/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -166,6 +167,11 @@ test('signed-in participant can request a double-verified email change', async (
       await route.fulfill({ json: { status: 'verification_required' } });
       return;
     }
+    if (url.pathname === '/v1/identity/me/email-change/resend') {
+      resendCalls += 1;
+      await route.fulfill({ json: { status: 'verification_resent' } });
+      return;
+    }
     if (url.pathname === '/v1/identity/me/email-change') {
       await route.fulfill({
         json: {
@@ -195,7 +201,9 @@ test('signed-in participant can request a double-verified email change', async (
     .locator('#email-change-password')
     .fill('current-participant-password');
   await page.locator('#email-change-new-email').fill('new@example.test');
-  await page.getByRole('button', { name: 'Send confirmation emails' }).click();
+  await page
+    .getByRole('button', { name: 'Send confirmation emails', exact: true })
+    .click();
 
   await expect(page.locator('#profile-email-change-status')).toContainText(
     'Current address confirmed: no; new address confirmed: no',
@@ -204,4 +212,12 @@ test('signed-in participant can request a double-verified email change', async (
     currentPassword: 'current-participant-password',
     newEmail: 'new@example.test',
   });
+
+  await page
+    .getByRole('button', { name: 'Resend confirmation emails' })
+    .click();
+  await expect(page.locator('#profile-email-change-status')).toContainText(
+    'Earlier links are invalid; confirm both new links.',
+  );
+  expect(resendCalls).toBe(1);
 });
