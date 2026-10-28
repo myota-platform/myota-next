@@ -169,3 +169,10 @@ prometheus:
     enabled: true
     labels:
       release: kube-prometheus-stack
+  alertmanagerConfig:
+    enabled: true
+    email:
+      to: myota-test-alerts@myota.test
+      from: qualification@myota.test
+      smarthost: myota-test-smtp-sink.myota-test.svc.cluster.local:1025
+      requireTLS: true

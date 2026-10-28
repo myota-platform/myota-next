@@ -18,8 +18,8 @@ consumers on the configured NATS server.
   hostnames, middleware references, TLS certificate resolver, and optional
   TLS Secret. The test cluster uses `websecure` with `acmeresolver`.
 - `secrets`, `dependencies`, `migrations`, `observe`, `prometheus.serviceMonitor`,
-  `prometheus.rules`,
-  and `jetstreamProvisioner` configure secret references, external endpoints,
+  `prometheus.rules`, `prometheus.alertmanagerConfig`, and
+  `jetstreamProvisioner` configure secret references, external endpoints,
   schema setup, Observe reporting, Prometheus API scraping, and NATS topology
   provisioning.
 - Pod-level values control image pull secrets, annotations/labels, security
@@ -53,6 +53,14 @@ installed Prometheus rule selector; this chart defaults that label to
 `release: kube-prometheus-stack`. The test release enables these alerts. See the
 [Prometheus alert guide](../../../docs/operations/alerts.md) for conditions and
 verification.
+
+`prometheus.alertmanagerConfig.enabled` installs an optional Prometheus
+Operator `AlertmanagerConfig` for `MyOTAUnresolvedOutboxDeadLetters`. It
+requires the Operator CRDs and routes only that alert to the configured email
+receiver. Set `email.to`, `email.from`, and `email.smarthost`; TLS is required
+by default. The test Fleet values route to the in-cluster SMTP sink. Leave this
+disabled unless the release namespace is authorized to define an Alertmanager
+receiver.
 
 ## Images and install
 
