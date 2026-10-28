@@ -138,38 +138,36 @@ against the isolated deployment remains under Phase 6 issue #10.
 
 - **Production operations:** qualify persistent database operations, NATS,
   object storage, secrets, observability, deployment, and release automation.
-  Phase 6 now has isolated SMTP STARTTLS delivery and same-work-ID replay
-  evidence; the broader clean-install, authenticated workflow, backup/restore,
-  observability, and rollback gates remain tracked by issue #10. At Helm
-  revision 72, the `myota-test` topology has 22/22 requested replicas ready and
-  17/17 Prometheus targets up. An in-cluster, credential-protected receiver verifies
-  authenticated Admin and Participant login and `/me` telemetry across Gateway
-  and Identity API, with matching traces, forwarded logs, and HTTP 200 metrics.
-  At revision 72, Activity Notifications emitted a structured settlement log
-  for a processed login event; its snapshot and forwarded log share the same
-  request trace ID as Gateway and Identity. All seven MyOTA Prometheus rules
-  load with healthy evaluation. The two firing outbox dead-letter warnings are
-  correlated to `service_id=outbox-worker`; the test Alertmanager has no
-  notification receiver. Hosted Observe delivery and external alert delivery
-  remain unqualified under #90 and #91.
-  A deployed Participant email-change request recovered from a temporary SMTP
-  outage: the current-address message retried twice and delivered after the
-  test sink returned. The old address remained authoritative until both links
-  were confirmed. See the [Identity parity evidence](parity/identity-programmes.md)
-  and Phase 6 issue #115.
-  Prometheus also retained matching Email worker counters: two old-address SMTP
-  failures and one delivery for each address template. These template/outcome
-  counters do not identify an email work item, so per-email trace correlation
-  remains open under #90 and #91.
-  The local Observe SDK delivery smoke test and current deployment evidence are
-  documented in [Observe delivery smoke test](operations/observe-delivery-smoke.md).
-  The receiver uses test-only credentials stored outside Git; it does not
-  replace a hosted Observe destination.
-  Authenticated Admin access to the embedded Grafana dashboard is qualified
-  under #116: dashboard/query requests succeed, while unauthorized requests
-  redirect to sign-in. This does not substitute for Observe delivery or
-  worker-event correlation, which is separately verified in the Observe smoke
-  record.
+  Phase 6 has isolated SMTP STARTTLS retry/replay, fresh-install, backup/restore,
+  and rollback evidence; the remaining readiness work is tracked by #10.
+  Protected rollout [40645993158](https://github.com/myota-platform/myota-next/actions/runs/40645993158)
+  deployed chart `1.1.6-testing.b6a158aeadad.1` at Helm revision 72. All 17
+  Deployments (22 replicas) and 17 Prometheus targets are ready. The in-cluster
+  receiver records authenticated Admin and Participant API telemetry across
+  Gateway and Identity, including matching traces, forwarded logs, and HTTP
+  200 metrics. At revision 72, Activity Notifications also emitted a structured
+  settlement log for a processed login event. Its snapshot and forwarded log
+  share the request trace ID with Gateway and Identity.
+
+  All seven MyOTA Prometheus rules load with healthy evaluation. Two firing
+  outbox dead-letter warnings carry `service_id=outbox-worker`; the test
+  Alertmanager has no notification receiver. Hosted Observe delivery and
+  external alert delivery remain unqualified. See
+  [Observe delivery](operations/observe-delivery-smoke.md) and Phase 6 issues
+  #90 and #91.
+
+  A supplemental password-recovery run delivered two synthetic messages to
+  Mailpit and showed two successful `password-reset.v1` Email worker attempts;
+  the test password was restored and messages were deleted. Its revoked-session
+  probes returned HTTP 403 while the local helper expects 401, so that assertion
+  needs reconciliation before calling the session-revocation check clean. The
+  earlier Participant email-change retry evidence is in the
+  [Identity parity record](parity/identity-programmes.md) and issue #115.
+  Authenticated Admin Grafana viewing is qualified under #116. Geodata's optional
+  BigDataCloud Secret remains absent; provider-backed enrichment and catalogue
+  backfill remain open under #110/#111. See the
+  [location enrichment guide](operations/location-enrichment.md).
+
 - **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):** the Admin full-catalogue backfill and its repeated-scan guard are verified in `myota-test`. The initial run processed 432 entities; after the fix, a repeated scan queued 0, skipped 432, and failed 0. All 432 remain `COMPLETED` in Geodata. Lifecycle-trigger and replacement-key rotation checks remain open. See the [operator guide](operations/location-enrichment.md) and [Phase 6 readiness](operations/phase6-readiness.md).
 - **Geodata performance:** larger datasets and full worker throughput remain
   unqualified. `MYOTA_UPLOAD_WORKERS` caps multipart finalization per Geodata

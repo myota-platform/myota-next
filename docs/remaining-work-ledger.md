@@ -29,17 +29,20 @@ an accepted scope decision is recorded in the dispositions section.
   STARTTLS behavior. Deployed evidence covers SMTP 451 retry exhaustion and
   audited redrive, successful allowlisted delivery over STARTTLS using a
   test-only CA mounted from a Kubernetes Secret, and same-work-ID replay without
-  a second delivery. See [Identity and Programmes parity](parity/identity-programmes.md)
-  and [deployed recovery evidence](operations/single-instance-restart-recovery.md).
+  a second delivery. A Participant email-change request also recovered from a
+  temporary SMTP connection outage: the old-address verification retried twice,
+  delivered after sink recovery, and both verification and completion notices
+  reached their intended addresses. Core delivery state and worker logs confirm
+  the outcomes; Prometheus counters corroborate totals but do not carry a work ID.
+  See [Identity and Programmes parity](parity/identity-programmes.md) and
+  [deployed recovery evidence](operations/single-instance-restart-recovery.md).
 - **Missing evidence:** The account-creation producer-to-outbox workflow and a
-  production SMTP provider's trust chain have not been qualified. Connection
-  refusal and notification outcomes are also not covered by the deployed SMTP
-  run.
+  production SMTP provider's trust chain have not been qualified. The temporary
+  sink test does not qualify delivery through a production relay.
 - **Risk:** Account setup and recovery messages may fail despite passing local
   tests, or use an untrusted TLS chain.
-- **Next check:** Qualify the account-creation producer path, connection-refusal
-  handling, and notification outcomes when the relevant launch configuration is
-  available; verify a production relay separately before production cutover.
+- **Next check:** Qualify the account-creation producer path; verify a production
+  relay and its trust chain separately before production cutover.
 - **Tracked by:** [Issue #13](https://github.com/myota-platform/myota-next/issues/13).
 - **Sources:** [Identity and Programmes, lines 22–25](parity/identity-programmes.md#L22);
   [parity matrix, lines 48–52](parity-matrix.md#L48).
@@ -354,18 +357,44 @@ an accepted scope decision is recorded in the dispositions section.
 - **Reference behavior:** A fresh install initializes the three empty owner
   databases, serves primary user journeys, recovers safely, exposes
   observability, and can roll back to the previous immutable image digests.
-- **Current implementation and evidence:** Compose, Helm, health/readiness,
-  migrations, and image builds exist. CI exercises services and browser flows
-  in disposable infrastructure.
-- **Missing evidence:** The parity criteria separate production deployment
-  qualification from API-level evidence, and the implementation plan requires
-  end-to-end qualification in the Helm-backed `myota-test` release, including
-  Observe instrumentation, secrets, backup/restore, and rollback.
+- **Current implementation and evidence:** The Helm-backed `myota-test` release
+  uses immutable image digests. Issues #88, #89, #92, #93, and #118 record
+  completed empty-database initialization, backup/restore, dependency recovery,
+  rollback, and protected digest deployment. Issue #91 records the launch-critical
+  authenticated Admin and Participant journeys as passed, including self-service,
+  registration, account management, Activity/QSO workflows, and awards. The
+  latest protected release, revision 60, has 15 chart-managed Deployments ready
+  (20/20 replicas); a 2026-10-27 check observed 17/17 Prometheus targets up.
+  Authenticated Grafana viewing is qualified by #116. Email delivery and
+  recovery evidence is in L-02. See the
+  [Observe guide](operations/observe-delivery-smoke.md).
+- **Missing evidence:** Observe credentialed delivery has not been verified because
+  the optional `myota-observe` Secret is absent. A temporary in-cluster mock
+  collector accepted telemetry from Gateway and Activity for one public read
+  request, and direct checks confirmed that removing the endpoint and Secret
+  disabled delivery. This does not qualify a hosted Observe account. Centralized
+  application logs and authenticated request-level workflow correlation remain
+  open under #90 and #91. A 2026-10-28 Prometheus recheck found 17/17 targets up
+  and no firing alert for `myota-test`; none of the 30 cluster PrometheusRule
+  resources was scoped or labeled for this release. This confirms scraping,
+  but not Alertmanager notification delivery or MyOTA-specific alert coverage.
+  An initial rollout poll was canceled after
+  Rancher removed its completed operation record before the workflow observed
+  it; PR #209 changed that missing-record handoff to continue with App-version
+  and digest/readiness checks. Protected run #40613457838 passed at revision 60,
+  qualifying that rollout path. This does not change the missing hosted Observe
+  or authenticated-signal evidence. The optional
+  BigDataCloud key is also absent, so provider-backed location enrichment under
+  #110/#111 remains unqualified. No production SMTP relay trust chain has been
+  qualified; see L-02. The live no-key state and its limits are recorded in the
+  [location-enrichment guide](operations/location-enrichment.md).
 - **Risk:** CI/Compose success can mask Helm, secret, image-provenance,
   readiness, observability, or rollback failures in the actual isolated target.
-- **Next check:** Deploy immutable image digests to a fresh `myota-test`
-  installation; verify empty-database migration, primary workflows, Observe,
-  logs/metrics/traces/alerts, dependency recovery, backup/restore, and rollback.
+- **Next check:** Provision approved test-only Observe credentials and a
+  BigDataCloud key through the Kubernetes Secret store; verify telemetry delivery
+  for representative API and worker workflows, cross-service logs/metrics/traces
+  correlation, and provider-backed location enrichment. Keep production SMTP trust
+  qualification separate from this isolated deployment gate.
 - **Tracked by:** [Issue #10](https://github.com/myota-platform/myota-next/issues/10).
 - **Sources:** [completion criteria, lines 15–26](parity/completion-criteria.md#L15);
   [implementation plan, Step 6](implementation-plan.md#L185);
@@ -614,9 +643,13 @@ duplicated as separate work.
 - [Database backup and restore](operations/database-backup-restore.md):
   L-16, D-02.
 - [Geodata source importer](operations/geodata-importer.md): L-10.
+- [Location enrichment](operations/location-enrichment.md): L-17.
+- [Observe delivery smoke test](operations/observe-delivery-smoke.md): L-17.
 - [Object-store recovery](operations/object-store-recovery.md): L-13.
 - [Outbox dead-letter recovery](operations/outbox-recovery.md): completed
   Issue #17.
+- [Single-instance restart recovery](operations/single-instance-restart-recovery.md):
+  L-02, L-09, L-13, and L-17.
 
 The ledger excludes verified behavior statements that have no open or
 qualification status. For example, the documented MultiPatch Shapefile error

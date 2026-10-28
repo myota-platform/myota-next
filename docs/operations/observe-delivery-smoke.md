@@ -1,9 +1,8 @@
 # Observe delivery smoke test
 
-This guide records both the local `@nestjs/observe` smoke test and the
-deployment check against an isolated receiver in `myota-test`. The isolated
-receiver verifies deployment delivery without contacting a hosted Observe
-account.
+This guide covers the local `@nestjs/observe` integration and deployed
+qualification in `myota-test`. The isolated receiver verifies delivery and
+correlation without sending telemetry to a hosted Observe account.
 
 ## Run the smoke test
 
@@ -19,80 +18,104 @@ collector. It uses test-only credentials and verifies gzip delivery to
 an HTTP request snapshot plus a forwarded stdout log in the same batch. The
 trace ID on the log must match the request snapshot. The second case starts
 and serves a request with credentials absent, then verifies the collector
-receives nothing. A third case runs a Nest custom event transport, dispatches a
-worker operation with an `X-Request-ID`, and checks that its Observe snapshot,
-forwarded log, and bounded custom outcome metric reach the local collector.
+receives nothing.
 
 The test uses the real `@nestjs/observe` worker and wire format. Its credentials
 are inert test values; they are sent only to the loopback server and are not
 deployment credentials.
 
-## Deployment evidence — 2026-10-28
+## Earlier deployment state — 2026-10-27
 
-### Earlier check — revision 67
+On 2026-10-27, the `myota-test` Helm values had `observe.enabled: false`, no
+endpoint override, and no `myota-observe` Secret. The smoke test therefore
+proves instrumentation and the configured delivery path can work, but it does
+not prove authenticated delivery from deployed APIs/workers, dashboard
+visibility, alerting, or cross-service workflow correlation. Provision
+approved test credentials through the secret store and complete the deployed
+checks tracked by [issue #90](https://github.com/myota-platform/myota-next/issues/90)
+and [issue #91](https://github.com/myota-platform/myota-next/issues/91).
 
-The Rancher-managed `myota-test` release was deployed at Helm revision 67,
-chart `1.1.6-testing.0b6eb64235ba.1`. All 17 Deployments and 22 requested
-replicas were Ready, and Prometheus reported all 17 discovered targets up.
-The four Activity and Geodata worker dependency gauges reported NATS and
-PostgreSQL healthy. No `myota-test` alerts were firing during that check; this
-does not prove alert rules have been triggered end to end.
+A live recheck at 18:57 UTC found all 21 requested `myota-test` replicas ready,
+all 17 discovered Prometheus targets `up=1`, and all four Activity/Geodata NATS
+and PostgreSQL dependency gauges healthy; no namespace alerts were firing. The
+cluster still had no Observe Secret, Observe workload environment, Loki, Tempo,
+or OpenTelemetry Collector. This verifies metrics scraping and worker dependency
+availability only; it does not provide Observe delivery or deployed log/trace
+correlation.
 
-Using test-only Admin and Participant accounts, successful
-`POST /v1/identity/auth/login` and `GET /v1/identity/me` requests returned
-HTTP 200. Their request IDs appeared as both trace IDs and forwarded log trace
-IDs at `gateway` and `identity-api`. Prometheus recorded the matching HTTP 200
-route counters. Example request IDs:
+A further live recheck at 23:23 UTC on 2026-10-27 found all 16 Helm-managed
+Deployments available (21/21 requested replicas) and all 17 `myota-test`
+Prometheus targets up. Helm now has `observe.enabled: true`, but the configured
+`myota-observe` Secret is absent and its app-key/app-secret references are
+optional. The service bootstrap enables reporting only when both credentials
+are non-empty, so the current deployment is expected to keep reporting disabled;
+this follows from the rendered configuration and bootstrap predicate, not a
+direct read of environment values inside the distroless containers. The Helm
+endpoint override is empty, no Loki/Tempo/OpenTelemetry Collector Deployment was
+found, and authenticated delivery to a real Observe account remains unqualified.
 
-- Admin login: `37faccef-9a04-433f-9ba7-568e86898648`; `/me`:
-  `facc1fed-0a59-4b17-a91f-1225fafd87e4`.
-- Participant login: `96c1d0c8-9fe9-4076-9646-c6d229074e81`; `/me`:
-  `dee9f6c6-c545-415e-a7fe-46835a981c4e`.
+### In-cluster mock collector qualification
 
-### Worker correlation check — revision 70
+On 2026-10-28, a temporary, ClusterIP-only mock collector was used to check
+delivery from the deployed NestJS services without sending test credentials to
+an external Observe account. The fixture is
+[`deploy/testing/observe-mock-collector.yaml`](../../deploy/testing/observe-mock-collector.yaml).
+It accepts only gzip telemetry at `/applications/telemetry`, validates the
+test-only app key and secret, and logs service IDs, trace IDs, operation names,
+and record counts. It does not log credentials or telemetry payloads.
 
-After PRs [#221](https://github.com/myota-platform/myota-next/pull/221) and
-[#224](https://github.com/myota-platform/myota-next/pull/224), the release
-deployed chart `myota-next-1.1.6-testing.cb48c2a0fe92.1` at Helm revision 70.
-All 17 Deployments were Ready. A test Participant login and subsequent
-`/v1/identity/me` request both returned HTTP 200 with request ID
-`0d9bda80-602c-43a2-ae73-3026c1b2cbff`.
+The local test-only Secret manifest belongs at
+`runtime-secrets/issue10-observe-mock.yaml`; `runtime-secrets/` is ignored by
+Git. Use disposable credentials only. For the temporary test values, enable
+Observe, keep `secretName: myota-observe`, and set the endpoint to
+`http://myota-test-observe-mock.myota-test.svc.cluster.local:8080`. Send a
+read-only request through the test Gateway and verify accepted batches from
+both Gateway and a downstream service contain the same request trace ID. Then
+remove the endpoint override, delete the test Secret, and remove the collector
+resources. The regular endpoint is left empty so the SDK uses its configured
+default when real Observe credentials are supplied.
 
-The in-cluster receiver recorded that same ID as a trace ID and forwarded log
-trace ID for both `gateway` and `identity-api`. The `activity-notifications`
-worker also delivered an Observe batch containing a snapshot with that ID,
-confirming correlation from the login request through its asynchronous event
-handler. Its batch had no forwarded log or operation name. The bounded
-`myota_activity_notification_outcomes_total{outcome="processed"}` counter
-increased from 2 to 3 during this check. The event-processing trace is verified;
-worker log coverage and behavioral alert qualification remain open under
-[#90](https://github.com/myota-platform/myota-next/issues/90) and
-[#91](https://github.com/myota-platform/myota-next/issues/91). Delivery to a
-hosted Observe account also remains unqualified.
+The mock accepted telemetry batches from `gateway` and `activity-api` for the
+same synthetic request trace ID
+`0db1abd5-893c-4a80-b3d1-ff7ae6af7423`; the Prometheus Gateway request counter
+also recorded the public HTTP 200. The batches contained no application logs
+for that request. This establishes SDK-to-collector delivery and trace
+propagation for one public read path, but not authenticated workflow behavior,
+application-log correlation, hosted Observe ingestion, dashboards, or alerts.
 
-### Worker log and alert check — revision 72
+After cleanup, chart revision 59 (`myota-next-1.1.6-testing.99f7023c115b.1`)
+was `deployed`; all 15 chart-managed Deployments were ready (20/20 replicas),
+none had `OBSERVE_ENDPOINT`, and the `myota-observe` Secret was absent. A fresh
+public request returned HTTP 200 while the mock collector received no new
+batches. The protected deployment workflow was canceled after Rancher had
+completed and removed its operation record but before the workflow poller
+observed completion; that specific run is not a passing gate. PR
+[#209](https://github.com/myota-platform/myota-next/pull/209) changed the
+poller to hand off a missing operation record to Rancher App
+revision and Deployment digest/readiness checks. The next protected run
+[#40613457838](https://github.com/myota-platform/myota-next/actions/runs/40613457838)
+passed at Helm revision 60 (`myota-next-1.1.6-testing.637eaeea9b3c.1`), with
+15 chart-managed Deployments ready (20/20 replicas). This qualifies the
+rollout verification path; it does not qualify hosted Observe or authenticated
+workflow signal coverage.
+Issues [#10](https://github.com/myota-platform/myota-next/issues/10),
+[#90](https://github.com/myota-platform/myota-next/issues/90), and
+[#91](https://github.com/myota-platform/myota-next/issues/91) remain open for
+the hosted Observe and authenticated workflow evidence.
 
-Protected rollout [#228](https://github.com/myota-platform/myota-next/pull/228)
-deployed chart `myota-next-1.1.6-testing.b6a158aeadad.1` at Helm revision 72.
-All 17 Deployments (22/22 replicas) and all 17 Prometheus scrape targets were
-ready. A login attempt for a synthetic, non-existent `.invalid` address
-returned HTTP 400 with request ID
-`e5885f8b-787b-4d2c-b3f1-044b94f34c2d`; it created no account.
+### Prometheus scraping and alert coverage
 
-The Observe mock receiver recorded that ID as both snapshot trace ID and
-forwarded log trace ID for `gateway`, `identity-api`, and
-`activity-notifications`. The Activity Notifications pod log included a
-structured `activity_notification.settled` record for
-`identity.login.failed.v1`, outcome `processed`, and delivery count 1. Its
-Observe batch contained one log and one trace snapshot with the same ID. The
-worker's processed-outcome counter was 1 after the rollout.
+A live check on 2026-10-28 at 01:31 UTC found all 17
+`up{namespace="myota-test"}` targets at `1`. The `myota-test-apis` and
+`myota-test-workers` ServiceMonitors scrape `/metrics` every 30 seconds. The
+Gateway HTTP 200 request counter was queryable in Prometheus.
 
-All seven `myota.api` and `myota.delivery` Prometheus alert rules are loaded
-with healthy evaluation status. Two
-`MyOTAUnresolvedOutboxDeadLetters` alerts are firing for Core and Geodata and
-carry `service_id=outbox-worker`. The Alertmanager has no notification
-receiver, so this verifies rule discovery and firing state, not email or
-webhook delivery. Hosted Observe delivery remains unqualified.
+No active Prometheus alert had `namespace="myota-test"`. The cluster had 30
+PrometheusRule resources, but none was in `myota-test` or labeled for that
+release. This confirms target scraping, metric query visibility, and the
+current absence of firing alerts for this namespace. It does not qualify
+Alertmanager notification delivery or MyOTA-specific alert rules. Hosted
+Observe receipt and authenticated workflow signal correlation remain open.
 
 ## Authenticated Grafana dashboard proxy
 
@@ -111,29 +134,93 @@ subpath should not be used as a dashboard availability check. Grafana
 user/profile and star APIs returned HTTP 401 under the existing anonymous
 dashboard mode, while dashboard viewing and query APIs succeeded. The dashboard
 proxy is qualified for authorized viewing, but this does not qualify Observe
-collector delivery or cross-service log/trace correlation by itself; those are
-qualified separately above and tracked under
-[#90](https://github.com/myota-platform/myota-next/issues/90) and
+collector delivery or cross-service log/trace correlation; those remain open
+under [#90](https://github.com/myota-platform/myota-next/issues/90) and
 [#91](https://github.com/myota-platform/myota-next/issues/91).
 
-## Isolated test receiver
+## Authenticated API delivery check — revision 68
 
-The `myota-test` namespace now has a temporary, in-cluster HTTP receiver for
-qualification. The Helm test values configure the Observe SDK to send to
-`http://myota-test-observe-mock.myota-test.svc.cluster.local:8080` and read
-test-only credentials from Secret `myota-observe-mock` (`app-key` and
-`app-secret`). The collector and Secret are local qualification resources;
-their manifests and inert test credentials stay under the ignored
-`runtime-secrets/` directory and are not committed.
+After the earlier cleanup check, the `testing` branch reconfigured `myota-test`
+to use a temporary, credential-protected in-cluster receiver. The test-only
+Secret is stored outside Git. Protected rollout
+[#40626824073](https://github.com/myota-platform/myota-next/actions/runs/40626824073)
+deployed Helm revision 68, chart `1.1.6-testing.9db5f64189b1.1`, app version
+`testing-0b6eb64`. All 17 Deployments and 22 requested replicas were Ready; the
+Admin and Participant web hosts and API health endpoint returned HTTP 200. Admin
+Web ran digest
+`sha256:8501dd08285191109456e3fbfd0482c7d2b990387dc2f975667fbe292b196ffd`.
 
-This setup exercises the real `@nestjs/observe` instrumentation and HTTP
-delivery path without sending telemetry to a hosted Observe account. It does
-not qualify hosted Observe dashboards or alerting. Use chart values to configure
-workload environment; do not patch Helm-managed Deployment fields directly, or
-Helm may reject a later upgrade due to conflicting field ownership. The
-authenticated API and login-event correlation checks above cover Gateway,
-Identity, and Activity Notifications. Worker logs for that event, other worker
-operation types, hosted Observe delivery, and alert qualification remain open.
+Fresh test Admin and Participant logins and authenticated `/me` calls returned
+HTTP 200. Their request IDs matched both trace IDs and forwarded log IDs at
+`gateway` and `identity-api`; Prometheus recorded the successful HTTP routes.
+The four sample request IDs were Admin login
+`e2e10439-f3c0-419e-80ca-43d27d7e4faa`, Admin `/me`
+`8fe16e87-8b7c-41b5-be94-87e921b8d57a`, Participant login
+`0b3c2947-0ef1-4798-8667-d1506213b5c0`, and Participant `/me`
+`23c7893b-0331-4fca-bd25-19a870105dee`. Prometheus reported 17/17 targets up;
+Activity and Geodata worker NATS/PostgreSQL dependency gauges were `1`. No
+alerts with `namespace="myota-test"` were firing. This does not verify alert
+notification delivery or a MyOTA-specific alert rule.
+
+All deployed NestJS workers delivered periodic Observe batches under their
+stable service IDs. The sampled idle-worker batches contained no task snapshots
+or forwarded logs, so that sample did not qualify worker business-operation
+telemetry. A separate synthetic password-recovery run delivered two reset emails to the
+Mailpit sink, incremented the Email worker's `password-reset.v1` delivered
+counter to `2`, and reported SMTP availability `1`; both messages were deleted
+and the original test password was restored. Those worker metrics currently
+provide no request-to-worker trace or log correlation. The revision 70 check
+below verifies correlation for one asynchronous login event. Hosted Observe,
+worker logs for that event, other worker operation types, and behavioral alerting
+remain open under issues [#90](https://github.com/myota-platform/myota-next/issues/90)
+and [#91](https://github.com/myota-platform/myota-next/issues/91). The local
+recovery helper also received HTTP 403 for revoked session probes where it
+expects 401; both requests were denied, but that assertion needs reconciliation
+before the session-revocation check is called clean.
+
+## Worker event correlation check — revision 70
+
+After PRs [#221](https://github.com/myota-platform/myota-next/pull/221) and
+[#224](https://github.com/myota-platform/myota-next/pull/224), protected rollout
+[40638471527](https://github.com/myota-platform/myota-next/actions/runs/40638471527)
+deployed chart `myota-next-1.1.6-testing.cb48c2a0fe92.1` at Helm revision 70.
+All 17 Deployments were Ready. A test Participant login and subsequent
+`/v1/identity/me` request both returned HTTP 200 with request ID
+`0d9bda80-602c-43a2-ae73-3026c1b2cbff`.
+
+The in-cluster receiver recorded that ID as a trace ID and forwarded log trace
+ID for both `gateway` and `identity-api`. The `activity-notifications` worker
+also delivered an Observe batch containing a snapshot with that ID, confirming
+correlation from the login request through its asynchronous event handler. Its
+batch had no forwarded log or operation name. The bounded
+`myota_activity_notification_outcomes_total{outcome="processed"}` counter
+increased from 2 to 3 during this check. Worker event trace correlation is
+verified for this flow; worker log coverage, other worker operations, hosted
+Observe delivery, per-email trace coverage, and behavioral alert qualification
+remain open under Phase 6 issues [#90](https://github.com/myota-platform/myota-next/issues/90)
+and [#91](https://github.com/myota-platform/myota-next/issues/91).
+
+## Worker log and alert check — revision 72
+
+Protected rollout [40645993158](https://github.com/myota-platform/myota-next/actions/runs/40645993158)
+deployed chart `myota-next-1.1.6-testing.b6a158aeadad.1` at Helm revision 72.
+All 17 Deployments (22 requested replicas) are Ready, and all 17 Prometheus
+targets are up.
+
+A synthetic failed login for a non-existent address returned HTTP 400 and did
+not create an account. The request ID
+`e8afbf2b-787b-4d2c-b3f1-044b94f34c2d` was recorded as a trace ID and forwarded
+log trace ID at Gateway, Identity API, and Activity Notifications. The worker
+emitted a structured settlement log for the processed event, with delivery
+count 1. No external email or notification was sent.
+
+All seven MyOTA Prometheus rules loaded with healthy evaluation. Two outbox
+dead-letter alerts were firing for existing Core and Geodata dead-letter
+counts, labeled with `service_id=outbox-worker`. The test Alertmanager has no
+notification receiver, so external alert delivery remains unqualified. Hosted
+Observe delivery and other asynchronous worker operations remain open under
+[#90](https://github.com/myota-platform/myota-next/issues/90) and
+[#91](https://github.com/myota-platform/myota-next/issues/91).
 
 ### Password-recovery request trace and token scan — revision 73
 
@@ -141,8 +228,9 @@ On 2026-10-28, a password-recovery request with a unique `X-Request-ID` returned
 HTTP 200 from the deployed Identity API. The test receiver accepted an `identity-api`
 batch containing that request ID and a recovery operation. The reset token was read
 in memory from the Mailpit message; neither the exact token nor a `resetToken=` link
-appeared in any `myota-test` pod log. The test receiver logs only the service ID, request ID, and operation name, so
-raw OTLP attributes were not available for field-level inspection. The test recovery
+appeared in any `myota-test` pod log. The test receiver logs only the service ID,
+request ID, and operation name, so raw OTLP attributes were not available for
+field-level inspection. The test recovery
 rows and generated Mailpit message were invalidated or deleted afterward. This confirms
 trace delivery and pod-log token exclusion, not token exclusion from every trace field
 or hosted Observe delivery. See
