@@ -282,13 +282,25 @@ The same day, six sequential reset requests from one test source to a unique non
 and no development token. The Core limiter recorded six attempts in its 15-minute window;
 no recovery request or email was created. The temporary limiter row was removed. The
 source limiter alone did not qualify coordinated requests from multiple source addresses.
-The reset request path now atomically increments both a normalized-email bucket shared
-across source addresses and the existing email/source bucket. Its regression test submits
-six requests from distinct source addresses, verifies that only five recovery messages
-are queued, and checks that stored limiter keys are hashes rather than email or address
-values. The change is deployed in `myota-test` revision 73. Live multi-source
-qualification remains pending under
-[Participant password reset](https://github.com/myota-platform/myota-next/issues/114).
+
+On 2026-10-28, six sequential requests for the synthetic Participant were sent directly
+to the deployed Identity API using six distinct, validly signed client addresses. Every
+request returned HTTP 200 with the same generic response. Core contained one new recovery
+request after each of the first five calls and still five after the sixth, confirming the
+shared per-email limit suppresses the sixth request across source addresses. The account
+password was unchanged. Test recovery rows and limiter buckets were invalidated or removed,
+and the five generated Mailpit messages were removed.
+
+A request with a unique `X-Request-ID` also reached the test Observe receiver as an
+`identity-api` recovery-operation trace. The delivered reset token was extracted only in
+memory from the test mailbox; its exact value and the `resetToken=` marker were absent
+from all `myota-test` pod logs. The mock receiver records only the service ID, operation,
+and trace IDs; it does not retain raw OTLP attributes. This verifies deployed trace
+delivery and token/log hygiene, but does not inspect every trace attribute for the token.
+The synthetic recovery operation and messages were cleaned up afterward. Hosted Observe
+delivery also remains outside this qualification. See
+[Participant password reset](https://github.com/myota-platform/myota-next/issues/114)
+and the [Observe delivery smoke evidence](../operations/observe-delivery-smoke.md).
 
 A separate deployed test submitted the same valid reset token twice concurrently with two
 candidate passwords. Exactly one request succeeded; only that request's password
@@ -300,10 +312,10 @@ two-session reset check on revision 73 rejected both prior access tokens and bot
 tokens with HTTP 403. The temporary password authenticated, the original password was
 restored through a second reset, and a new original-password login succeeded. The reset
 policy is to revoke every refresh session and unexpired access-token identifier; this is
-implemented and verified. An end-to-end telemetry-secret scan remains pending under #114.
-Revision 73 includes the shared-email limiter and request-log secret exclusion. The
-multi-source limiter and telemetry behavior have service-level regression coverage but
-still need deployed qualification before #114 can close.
+implemented and verified. Revision 73 includes the shared-email limiter and request-log
+secret exclusion. Deployed multi-source throttling, an Identity recovery trace, and token
+exclusion from test-namespace pod logs are recorded above. Field-level token exclusion
+from raw OTLP snapshots and hosted Observe delivery remain unqualified.
 
 ### Phase 6 deployed Participant email-change UI checks — 2026-10-27
 

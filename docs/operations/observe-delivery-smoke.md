@@ -221,3 +221,17 @@ notification receiver, so external alert delivery remains unqualified. Hosted
 Observe delivery and other asynchronous worker operations remain open under
 [#90](https://github.com/myota-platform/myota-next/issues/90) and
 [#91](https://github.com/myota-platform/myota-next/issues/91).
+
+### Password-recovery request trace and token scan — revision 73
+
+On 2026-10-28, a password-recovery request with a unique `X-Request-ID` returned
+HTTP 200 from the deployed Identity API. The test receiver accepted an `identity-api`
+batch containing that request ID and a recovery operation. The reset token was read
+in memory from the Mailpit message; neither the exact token nor a `resetToken=` link
+appeared in any `myota-test` pod log. The test receiver logs only the service ID,
+request ID, and operation name, so raw OTLP attributes were not available for
+field-level inspection. The test recovery
+rows and generated Mailpit message were invalidated or deleted afterward. This confirms
+trace delivery and pod-log token exclusion, not token exclusion from every trace field
+or hosted Observe delivery. See
+[Participant password reset](https://github.com/myota-platform/myota-next/issues/114).
