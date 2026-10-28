@@ -1,8 +1,9 @@
 # Observe delivery smoke test
 
-This check qualifies the local `@nestjs/observe` integration. It does not
-qualify delivery to a real Observe account or the deployed `myota-test`
-environment.
+This guide records both the local `@nestjs/observe` smoke test and the
+deployment check against an isolated receiver in `myota-test`. The isolated
+receiver verifies deployment delivery without contacting a hosted Observe
+account.
 
 ## Run the smoke test
 
@@ -24,24 +25,34 @@ The test uses the real `@nestjs/observe` worker and wire format. Its credentials
 are inert test values; they are sent only to the loopback server and are not
 deployment credentials.
 
-## Current deployment gate
+## Deployment evidence — 2026-10-28
 
-On 2026-10-27, the `myota-test` Helm values had `observe.enabled: false`, no
-endpoint override, and no `myota-observe` Secret. The smoke test therefore
-proves instrumentation and the configured delivery path can work, but it does
-not prove authenticated delivery from deployed APIs/workers, dashboard
-visibility, alerting, or cross-service workflow correlation. Provision
-approved test credentials through the secret store and complete the deployed
-checks tracked by [issue #90](https://github.com/myota-platform/myota-next/issues/90)
+The Rancher-managed `myota-test` release is deployed at Helm revision 67,
+chart `1.1.6-testing.0b6eb64235ba.1`. All 17 Deployments and 22 requested
+replicas are Ready, and Prometheus reports all 17 discovered targets up. The
+four Activity and Geodata worker dependency gauges report NATS and PostgreSQL
+healthy; no `myota-test` alerts were firing during the check. No alerts firing
+is an observation, not proof that alert rules have been triggered end to end.
+
+Using test-only Admin and Participant accounts, successful `POST
+/v1/identity/auth/login` and `GET /v1/identity/me` requests returned HTTP 200.
+Their request IDs appeared as both trace IDs and forwarded log trace IDs at
+the `gateway` and `identity-api` services. Prometheus recorded the matching
+HTTP 200 route counters. The temporary in-cluster receiver therefore verifies
+authenticated, cross-service API trace and log delivery from the deployed
+applications. Example request IDs: Admin login
+`37faccef-9a04-433f-9ba7-568e86898648` and `/me`
+`facc1fed-0a59-4b17-a91f-1225fafd87e4`; Participant login
+`96c1d0c8-9fe9-4076-9646-c6d229074e81` and `/me`
+`dee9f6c6-c545-415e-a7fe-46835a981c4e`.
+
+All deployed NestJS workers sent periodic Observe batches during the sample,
+but their batches contained no task snapshots or forwarded logs. This proves
+collector delivery and configured service IDs for idle workers, not telemetry
+correlation for a worker business operation. Worker-operation correlation,
+behavioral alert qualification, and delivery to a hosted Observe account remain
+open under [issue #90](https://github.com/myota-platform/myota-next/issues/90)
 and [issue #91](https://github.com/myota-platform/myota-next/issues/91).
-
-A live recheck at 18:57 UTC found all 21 requested `myota-test` replicas ready,
-all 17 discovered Prometheus targets `up=1`, and all four Activity/Geodata NATS
-and PostgreSQL dependency gauges healthy; no namespace alerts were firing. The
-cluster still had no Observe Secret, Observe workload environment, Loki, Tempo,
-or OpenTelemetry Collector. This verifies metrics scraping and worker dependency
-availability only; it does not provide Observe delivery or deployed log/trace
-correlation.
 
 ## Authenticated Grafana dashboard proxy
 
@@ -75,10 +86,9 @@ their manifests and inert test credentials stay under the ignored
 `runtime-secrets/` directory and are not committed.
 
 This setup exercises the real `@nestjs/observe` instrumentation and HTTP
-delivery path without sending telemetry to a production Observe account. It
-does not qualify delivery to the hosted Observe service, its dashboards, or
-alerting. Use the chart values to configure workload environment; do not patch
-Helm-managed Deployment fields directly, or Helm may reject a later upgrade due
-to conflicting field ownership. Deployment verification remains pending until
-the chart-managed endpoint and credentials are rolled out and representative
-authenticated requests are observed at the receiver.
+delivery path without sending telemetry to a hosted Observe account. It does
+not qualify hosted Observe dashboards or alerting. Use chart values to configure
+workload environment; do not patch Helm-managed Deployment fields directly, or
+Helm may reject a later upgrade due to conflicting field ownership. The
+authenticated API delivery check above is complete for Gateway and Identity;
+worker task correlation and hosted Observe qualification remain open.
