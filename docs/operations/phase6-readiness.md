@@ -36,6 +36,21 @@ before relying on the record after a later rollout.
 
 ## Remaining Phase 6 qualification
 
+- **Prometheus alert check — 2026-10-28, Helm revision 74:** all 16 `myota-test`
+  scrape targets returned `up=1`, and all seven MyOTA alert rules reported
+  healthy evaluation. Two `MyOTAUnresolvedOutboxDeadLetters` alerts were
+  firing: Core reported 66 unresolved events and Geodata reported 5; Activity
+  reported 0. Read-only owner-database counts classify the Core rows as
+  Identity email-change and profile-image events, and the Geodata rows as
+  preprocessed-import events. The rows span 2026-10-25 through 2026-10-28.
+  Their exact initiating failures and attribution to qualification runs have
+  not yet been established. No dead letters were replayed, resolved, or
+  deleted. The test Alertmanager has no notification receiver, so alert
+  evaluation is verified but notification delivery is not. Trace each owner
+  row to its publish failure and audit history, determine whether replay is
+  safe, then verify the dead-letter gauges and alerts clear. Until that is
+  complete, alert qualification is not a pass.
+
 - **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):
   on 2026-10-28, the full-catalogue asynchronous Admin backfill scanned 432
   entities, queued 430, skipped two, and failed none. All 432 later showed
