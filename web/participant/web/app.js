@@ -549,7 +549,7 @@ function renderEntities() {
   $('entities').innerHTML = entities
     .map(
       (e) =>
-        `<tr><td><strong>${escapeHtml(e.name)}</strong><div class="small">${escapeHtml(e.id.slice(0, 8))}…</div></td><td>${escapeHtml(e.entityType)}</td><td><span class="badge ${escapeHtml(e.status.toLowerCase())}">${escapeHtml(e.status)}</span></td><td>${escapeHtml(e.provenance?.adapter || '—')}</td><td>${e.status === 'CANDIDATE' ? `<button data-id="${escapeHtml(e.id)}" class="propose">Propose</button>` : '<span class="small">Reference active</span>'}</td></tr>`,
+        `<tr><td><strong>${escapeHtml(e.name)}</strong><div class="small">${escapeHtml(e.entityIdentifier || `${e.id.slice(0, 8)}…`)}</div></td><td>${escapeHtml(e.entityType)}</td><td><span class="badge ${escapeHtml(e.status.toLowerCase())}">${escapeHtml(e.status)}</span></td><td>${escapeHtml(e.provenance?.adapter || '—')}</td><td>${e.status === 'CANDIDATE' ? `<button data-id="${escapeHtml(e.id)}" class="propose">Propose</button>` : '<span class="small">Reference active</span>'}</td></tr>`,
     )
     .join('');
   document.querySelectorAll('.propose').forEach(

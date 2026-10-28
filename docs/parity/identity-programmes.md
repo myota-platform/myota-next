@@ -1,5 +1,39 @@
 # Identity and Programmes
 
+## Programme-scoped entity ID configuration
+
+Programme administrators can configure an optional entity ID policy in Admin
+→ Programmes. The programme identifier is 1–4 uppercase letters or digits
+and is unique across configured programmes. Serial width is 3–6 digits.
+Qualifiers can be omitted, entered manually per entity, or read from supported
+location metadata. Assignment can be sequential across the programme,
+sequential within each qualifier, or manual with a next-free suggestion.
+
+The policy is owned by the Programmes service in Core PostgreSQL. A unique
+partial index enforces current identifiers, and a reservation table prevents
+previously used identifiers from being assigned to another programme if the
+configuration changes or is cleared. Unconfigured programmes remain valid.
+Policy changes do not rewrite entity records. Geodata owns assigned IDs and
+serial allocation. New import promotions read the current policy from the
+Programmes API and reserve the identifier in the same Geodata transaction as
+the entity mutation. Reservations survive entity deletion, so serials are not
+reused. Sequential assignment uses a transaction-scoped advisory lock; manual
+assignment checks uniqueness in the final write transaction. The Admin import
+review can request a next-free suggestion. Suggestions are advisory and do not
+reserve a number; promotion rejects a stale collision with a recoverable error.
+
+Qualifiers use Unicode NFKD normalization, strip combining marks, uppercase,
+remove non-alphanumeric characters, and must normalize to 1–24 characters.
+Location qualifiers can use continent, country/country code, region/code,
+subdivision/code, province/code, county/code, city, municipality, or locality.
+Missing or ambiguous source values reject assignment rather than creating an
+incomplete identifier. Exhaustion at the configured serial width is also an
+explicit error. The cross-service transaction boundary is described in the
+[target architecture](../architecture.md#data-boundaries). Entity ID display
+and complete import/admin/participant qualification remain tracked under #245.
+The current implementation is on `feature/programme-entity-ids-config` and
+has not yet been merged or verified in `myota-test`.
+
 ## Shared implementation notes
 
 Gateway JSON forwarding and Identity outbox, security-event, evidence, and idempotency

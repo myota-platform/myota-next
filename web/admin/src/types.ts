@@ -12,6 +12,13 @@ export interface Programme {
   name: string;
   description?: string;
   status?: string;
+  entityNumbering?: {
+    identifier: string;
+    qualifierMode: 'NONE' | 'MANUAL' | 'LOCATION';
+    qualifierField?: string;
+    serialWidth: number;
+    assignmentMode: 'PROGRAMME_SEQUENCE' | 'QUALIFIER_SEQUENCE' | 'MANUAL';
+  } | null;
 }
 
 export interface DashboardData {
@@ -41,6 +48,7 @@ export interface GeoEntity {
   entityType?: string;
   entityTypes?: string[] | EntityCategory[];
   programmeSlug?: string;
+  entityIdentifier?: string | null;
   programmes?: Array<string | { slug: string; name?: string }>;
   geometry?: { type: string; coordinates: unknown };
   maidenheadGridSquares4?: string[];

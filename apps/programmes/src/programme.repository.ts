@@ -91,6 +91,42 @@ export class ProgrammeRepository {
     return result.rows[0]?.payload;
   }
 
+  async identifierIsAssigned(
+    client: PoolClient,
+    identifier: string,
+    excludingSlug?: string,
+  ): Promise<boolean> {
+    const result = await client.query(
+      `SELECT 1 FROM public.programme_entity_identifier_reservation
+        WHERE identifier=$1
+          AND ($2::text IS NULL OR programme_slug <> $2)
+        LIMIT 1`,
+      [identifier, excludingSlug ?? null],
+    );
+    return result.rowCount !== 0;
+  }
+
+  async reserveIdentifier(
+    client: PoolClient,
+    slug: string,
+    identifier: string,
+  ): Promise<boolean> {
+    await client.query(
+      `INSERT INTO public.programme_entity_identifier_reservation
+         (identifier, programme_slug)
+       VALUES ($1, $2)
+       ON CONFLICT (identifier) DO NOTHING`,
+      [identifier, slug],
+    );
+    const result = await client.query<{ programme_slug: string }>(
+      `SELECT programme_slug
+         FROM public.programme_entity_identifier_reservation
+        WHERE identifier=$1`,
+      [identifier],
+    );
+    return result.rows[0]?.programme_slug === slug;
+  }
+
   async create(
     client: PoolClient,
     slug: string,
@@ -98,14 +134,16 @@ export class ProgrammeRepository {
   ): Promise<void> {
     await client.query(
       `INSERT INTO public.programme_record
-         (slug, status, created_at, updated_at, payload)
-       VALUES ($1,$2,$3,$4,$5::jsonb)`,
+         (slug, status, created_at, updated_at, payload,
+          programme_identifier)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6)`,
       [
         slug,
         programme.status ?? 'ACTIVE',
         programme.createdAt ?? '',
         programme.updatedAt ?? '',
         stringifyJsonWithBigInts(programme),
+        programme.entityNumbering?.identifier ?? null,
       ],
     );
   }
@@ -113,19 +151,22 @@ export class ProgrammeRepository {
   async save(client: PoolClient, programme: ProgrammeRecord): Promise<void> {
     await client.query(
       `INSERT INTO public.programme_record
-         (slug, status, created_at, updated_at, payload)
-       VALUES ($1,$2,$3,$4,$5::jsonb)
+         (slug, status, created_at, updated_at, payload,
+          programme_identifier)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6)
        ON CONFLICT (slug) DO UPDATE SET
          status=EXCLUDED.status,
          created_at=EXCLUDED.created_at,
          updated_at=EXCLUDED.updated_at,
-         payload=EXCLUDED.payload`,
+         payload=EXCLUDED.payload,
+         programme_identifier=EXCLUDED.programme_identifier`,
       [
         programme.slug,
         programme.status ?? 'ACTIVE',
         programme.createdAt ?? '',
         programme.updatedAt ?? '',
         stringifyJsonWithBigInts(programme),
+        programme.entityNumbering?.identifier ?? null,
       ],
     );
   }

@@ -1938,7 +1938,8 @@ onMounted(async () => {
         /><button class="entity-link" @click="selectEntity(entity)">
           <strong>{{ entity.name }}</strong
           ><small
-            >{{ categoryCodes(entity).join(', ') || 'Uncategorised' }} ·
+            >{{ entity.entityIdentifier || 'No programme ID' }} ·
+            {{ categoryCodes(entity).join(', ') || 'Uncategorised' }} ·
             {{ locationValue(entity, 'city') || 'Location unavailable' }}</small
           ><small v-if="entity.website || entity.description"
             >{{ entity.website || 'No website'

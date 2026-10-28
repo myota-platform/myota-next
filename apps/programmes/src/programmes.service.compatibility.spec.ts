@@ -5,8 +5,72 @@ import type { ProgrammeMutationRepository } from './programme-mutation.repositor
 import type { ProgrammeRepository } from './programme.repository.js';
 import type { UpdateProgrammeDto } from './programmes.dto.js';
 import { ProgrammesService } from './programmes.service.js';
+import type { ProgrammeEntityNumbering } from './programme.types.js';
 
 describe('ProgrammesService compatibility', () => {
+  it('rejects qualifier sequencing when the programme has no qualifier source', async () => {
+    const service = new ProgrammesService(
+      {} as ProgrammeMutationRepository,
+      {} as ProgrammeRepository,
+      {} as ProgrammeEntityTypeRepository,
+    );
+
+    await expect(
+      service.update(undefined, 'alpine', {
+        entityNumbering: {
+          identifier: 'ALP',
+          qualifierMode: 'NONE',
+          serialWidth: 4,
+          assignmentMode: 'QUALIFIER_SEQUENCE',
+        },
+      }),
+    ).rejects.toThrow(
+      'qualifier fields and qualifier sequencing require a qualifier mode',
+    );
+  });
+
+  it('rejects a programme identifier already assigned to another programme', async () => {
+    const saveProgramme = vi.fn();
+    const programme = {
+      id: 'programme-1',
+      slug: 'alpine',
+      name: 'Alpine Radio',
+      rules: {},
+      entityTypes: [],
+    };
+    const programmes = {
+      getInTransaction: async () => programme,
+      identifierIsAssigned: async () => true,
+      save: saveProgramme,
+    } as unknown as ProgrammeRepository;
+    const mutations = {
+      mutate: async <T>(
+        _key: string | undefined,
+        operation: (transaction: PoolClient) => Promise<T>,
+      ) => operation({} as PoolClient),
+    } as unknown as ProgrammeMutationRepository;
+    const service = new ProgrammesService(
+      mutations,
+      programmes,
+      {} as ProgrammeEntityTypeRepository,
+    );
+    const numbering: ProgrammeEntityNumbering = {
+      identifier: 'PJE',
+      qualifierMode: 'NONE',
+      serialWidth: 4,
+      assignmentMode: 'PROGRAMME_SEQUENCE',
+    };
+
+    await expect(
+      service.update(
+        `Bearer ${signAccessToken('admin-1', ['programme.admin'])}`,
+        'alpine',
+        { entityNumbering: numbering },
+      ),
+    ).rejects.toThrow('programme entity identifier is already assigned');
+    expect(saveProgramme).not.toHaveBeenCalled();
+  });
+
   it('rejects an invalid programme status before authentication or repository access', async () => {
     const mutate = vi.fn();
     const service = new ProgrammesService(
@@ -21,6 +85,35 @@ describe('ProgrammesService compatibility', () => {
       } as unknown as UpdateProgrammeDto),
     ).rejects.toThrow('status must be ACTIVE or ARCHIVED');
     expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it('exposes the authoritative numbering policy through the programme policy API', async () => {
+    const entityNumbering = {
+      identifier: 'PJE',
+      qualifierMode: 'LOCATION',
+      qualifierField: 'provinceCode',
+      serialWidth: 5,
+      assignmentMode: 'QUALIFIER_SEQUENCE',
+    };
+    const service = new ProgrammesService(
+      {} as ProgrammeMutationRepository,
+      {
+        get: async () => ({
+          slug: 'pje',
+          policyVersion: 4,
+          rules: {},
+          entityTypes: [],
+          entityNumbering,
+        }),
+      } as ProgrammeRepository,
+      {} as ProgrammeEntityTypeRepository,
+    );
+
+    await expect(service.getPolicy('pje')).resolves.toMatchObject({
+      programmeSlug: 'pje',
+      version: 4,
+      entityNumbering,
+    });
   });
 
   it('archives a programme while ignoring other update fields', async () => {
@@ -77,6 +170,12 @@ describe('ProgrammesService compatibility', () => {
       status: 'ARCHIVED',
       name: 'Ignored replacement name',
       rules: { minimumQsos: 99 },
+      entityNumbering: {
+        identifier: 'PJE',
+        qualifierMode: 'NONE',
+        serialWidth: 4,
+        assignmentMode: 'QUALIFIER_SEQUENCE',
+      },
     });
 
     expect(result).toMatchObject({

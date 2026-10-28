@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -67,6 +68,7 @@ export class ProgrammesService {
       version: programme.policyVersion ?? 1,
       rules: programme.rules,
       entityTypes: programme.entityTypes,
+      entityNumbering: programme.entityNumbering ?? null,
       updatedAt: programme.updatedAt,
     };
   }
@@ -76,6 +78,7 @@ export class ProgrammesService {
     body: CreateProgrammeDto,
     idempotencyKey?: string,
   ): Promise<Record<string, unknown>> {
+    validateNumberingPolicy(body.entityNumbering);
     const missing = [
       ...(!pythonTruthy(body.slug) ? ['slug'] : []),
       ...(!pythonTruthy(body.name) ? ['name'] : []),
@@ -109,6 +112,18 @@ export class ProgrammesService {
         ...new Set(normalizedTypes.map((item) => item.code)),
       ];
       const entityTypes = entityTypeCodes.map((code) => catalog[code]);
+      const entityNumbering = body.entityNumbering ?? null;
+      if (
+        entityNumbering &&
+        (await this.programmes.identifierIsAssigned(
+          client,
+          entityNumbering.identifier,
+        ))
+      ) {
+        throw new ConflictException(
+          'programme entity identifier is already assigned',
+        );
+      }
       const programme: ProgrammeRecord = {
         id: randomUUID(),
         slug,
@@ -116,6 +131,7 @@ export class ProgrammesService {
         description: body.description !== undefined ? body.description : '',
         entityTypeCodes,
         entityTypes,
+        entityNumbering,
         rules: body.rules,
         policyVersion:
           body.policyVersion !== undefined
@@ -130,7 +146,28 @@ export class ProgrammesService {
         createdAt: await utcTimestamp(client),
         updatedAt: await utcTimestamp(client),
       };
-      await this.programmes.create(client, slug, programme);
+      try {
+        await this.programmes.create(client, slug, programme);
+        if (
+          entityNumbering &&
+          !(await this.programmes.reserveIdentifier(
+            client,
+            slug,
+            entityNumbering.identifier,
+          ))
+        ) {
+          throw new ConflictException(
+            'programme entity identifier has already been reserved',
+          );
+        }
+      } catch (error) {
+        if (isProgrammeIdentifierConflict(error)) {
+          throw new ConflictException(
+            'programme entity identifier is already assigned',
+          );
+        }
+        throw error;
+      }
       await this.mutations.recordEvent(
         client,
         'programme.created.v1',
@@ -157,6 +194,7 @@ export class ProgrammesService {
     ) {
       throw new BadRequestException('status must be ACTIVE or ARCHIVED');
     }
+    if (status !== 'ARCHIVED') validateNumberingPolicy(body.entityNumbering);
     this.authorizeAdmin(authorization, slug);
     return this.mutations.mutate(idempotencyKey, async (client) => {
       const programme = await this.programmes.getInTransaction(client, slug);
@@ -180,6 +218,34 @@ export class ProgrammesService {
       if (body.rules !== undefined) programme.rules = body.rules;
       if (body.theme !== undefined) programme.theme = body.theme;
       if (body.oidc !== undefined) programme.oidc = body.oidc;
+      if (body.entityNumbering !== undefined) {
+        const entityNumbering = body.entityNumbering ?? null;
+        if (
+          entityNumbering &&
+          (await this.programmes.identifierIsAssigned(
+            client,
+            entityNumbering.identifier,
+            slug,
+          ))
+        ) {
+          throw new ConflictException(
+            'programme entity identifier is already assigned',
+          );
+        }
+        if (
+          entityNumbering &&
+          !(await this.programmes.reserveIdentifier(
+            client,
+            slug,
+            entityNumbering.identifier,
+          ))
+        ) {
+          throw new ConflictException(
+            'programme entity identifier has already been reserved',
+          );
+        }
+        programme.entityNumbering = entityNumbering;
+      }
       if (body.entityTypes !== undefined) {
         const catalog = await this.entityTypes.listAll(client);
         const codes: string[] = [];
@@ -204,11 +270,24 @@ export class ProgrammesService {
           (code) => catalog[code],
         );
       }
-      if (body.rules !== undefined || body.entityTypes !== undefined) {
+      if (
+        body.rules !== undefined ||
+        body.entityTypes !== undefined ||
+        body.entityNumbering !== undefined
+      ) {
         programme.policyVersion = nextPolicyVersion(programme.policyVersion);
       }
       programme.updatedAt = await utcTimestamp(client);
-      await this.programmes.save(client, programme);
+      try {
+        await this.programmes.save(client, programme);
+      } catch (error) {
+        if (isProgrammeIdentifierConflict(error)) {
+          throw new ConflictException(
+            'programme entity identifier is already assigned',
+          );
+        }
+        throw error;
+      }
       await this.mutations.recordEvent(
         client,
         'programme.updated.v1',
@@ -447,6 +526,30 @@ export class ProgrammesService {
       return;
     }
     throw new ForbiddenException('programme administration scope is required');
+  }
+}
+
+function isProgrammeIdentifierConflict(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('constraint' in error))
+    return false;
+  return [
+    'programme_record_programme_identifier_idx',
+    'programme_entity_identifier_reservation_pkey',
+  ].includes(String(error.constraint));
+}
+
+function validateNumberingPolicy(
+  policy: CreateProgrammeDto['entityNumbering'],
+): void {
+  if (!policy) return;
+  if (
+    policy.qualifierMode === 'NONE' &&
+    (policy.qualifierField !== undefined ||
+      policy.assignmentMode === 'QUALIFIER_SEQUENCE')
+  ) {
+    throw new BadRequestException(
+      'qualifier fields and qualifier sequencing require a qualifier mode',
+    );
   }
 }
 

@@ -267,6 +267,7 @@ components:
       GEO_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }
       MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.geodata }}'
       MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
+      MYOTA_PROGRAMMES_URL: '{{ default (printf "http://%s-programmes:8002" .Release.Name) .Values.dependencies.programmesUrl }}'
       MYOTA_ACTIVITY_URL: '{{ default (printf "http://%s-activity:8004" .Release.Name) .Values.dependencies.activityUrl }}'
       MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'
       MYOTA_OBJECT_STORAGE_PUBLIC_ENDPOINT: '{{ default .Values.dependencies.objectStorageEndpoint .Values.dependencies.objectStoragePublicEndpoint }}'
@@ -290,6 +291,7 @@ components:
       GEO_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }
       MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.geodata }}'
       NATS_URL: { secret: nats, key: url }
+      MYOTA_PROGRAMMES_URL: '{{ default (printf "http://%s-programmes:8002" .Release.Name) .Values.dependencies.programmesUrl }}'
       MYOTA_ACTIVITY_URL: '{{ default (printf "http://%s-activity:8004" .Release.Name) .Values.dependencies.activityUrl }}'
       MYOTA_AUTH_SIGNING_KEY: { secret: auth, key: signing-key }
       MYOTA_OBJECT_STORAGE_ENDPOINT: '{{ .Values.dependencies.objectStorageEndpoint }}'

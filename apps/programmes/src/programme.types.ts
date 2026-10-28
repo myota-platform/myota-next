@@ -6,9 +6,18 @@ export interface ProgrammeRecord {
   entityTypeCodes?: string[];
   rules: unknown;
   entityTypes: unknown[];
+  entityNumbering?: ProgrammeEntityNumbering | null;
   policyVersion?: number | bigint;
   updatedAt?: string;
   [key: string]: unknown;
+}
+
+export interface ProgrammeEntityNumbering {
+  identifier: string;
+  qualifierMode: 'NONE' | 'MANUAL' | 'LOCATION';
+  qualifierField?: string;
+  serialWidth: number;
+  assignmentMode: 'PROGRAMME_SEQUENCE' | 'QUALIFIER_SEQUENCE' | 'MANUAL';
 }
 
 export function nextPolicyVersion(value: number | bigint | undefined) {

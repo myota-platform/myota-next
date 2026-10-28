@@ -4,7 +4,7 @@ This generated index groups contract operations by service and links each one to
 
 Regenerate with `npm run docs:api-traceability`. The mapping must cover every operation in the copied contract; target-only operations are documented separately in [API baseline notes](api-baseline.md).
 
-Contract baseline: [152 operations](../contracts/openapi.yaml).
+Contract baseline: [153 operations](../contracts/openapi.yaml).
 
 ## Identity
 
@@ -86,7 +86,8 @@ Contract baseline: [152 operations](../contracts/openapi.yaml).
 - `GET /v1/geodata/imports/{runId}` — [geodata-imports.controller.ts#L160](../apps/geodata/src/geodata-imports.controller.ts#L160)
 - `PUT /v1/geodata/imports/{runId}/cancellation` — [geodata-imports.controller.ts#L223](../apps/geodata/src/geodata-imports.controller.ts#L223)
 - `GET /v1/geodata/imports/{runId}/candidates` — [geodata-imports.controller.ts#L280](../apps/geodata/src/geodata-imports.controller.ts#L280)
-- `POST /v1/geodata/imports/{runId}/candidates/validate` — [geodata-imports.controller.ts#L290](../apps/geodata/src/geodata-imports.controller.ts#L290)
+- `POST /v1/geodata/imports/{runId}/candidates/{candidateId}/entity-id-suggestion` — [geodata-imports.controller.ts#L290](../apps/geodata/src/geodata-imports.controller.ts#L290)
+- `POST /v1/geodata/imports/{runId}/candidates/validate` — [geodata-imports.controller.ts#L306](../apps/geodata/src/geodata-imports.controller.ts#L306)
 - `POST /v1/geodata/imports/{runId}/process` — [geodata-imports.controller.ts#L169](../apps/geodata/src/geodata-imports.controller.ts#L169)
 - `GET /v1/geodata/imports/{runId}/processing-queues/{queueId}` — [geodata-imports.controller.ts#L243](../apps/geodata/src/geodata-imports.controller.ts#L243)
 - `POST /v1/geodata/imports/{runId}/processing-queues/{queueId}/redrive` — [geodata-imports.controller.ts#L253](../apps/geodata/src/geodata-imports.controller.ts#L253)
