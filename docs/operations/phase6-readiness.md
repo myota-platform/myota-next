@@ -13,15 +13,18 @@ Operating guides and qualification records are maintained in this
 
 ## Current release
 
-At 2026-10-28 16:44 UTC, the Rancher-managed release was Helm revision 80,
-chart `myota-next-1.1.6-testing.1273bd5c19e4.1`, application version
-`testing-7ce0b2e`. All 15 MyOTA Deployments were ready at their desired replica
+At 2026-10-28 18:07 UTC, the Rancher-managed release was Helm revision 81,
+chart `myota-next-1.1.6-testing.1189d11278f7.1`, application version
+`testing-875f79a`. All 15 MyOTA Deployments were ready at their desired replica
 counts on the immutable image digests recorded in
 [`deploy/fleet/myota-test/values.yaml`](../../deploy/fleet/myota-test/values.yaml).
 The Core, Activity, Geodata/PostGIS, JetStream, and SeaweedFS PVCs were bound.
-Both Admin and Participant web hosts returned HTTP 200, and the Admin health
-endpoint returned HTTP 200. Recheck release state and digests after a later
-rollout.
+Admin and Participant web hosts, the Admin health endpoint, and the Award JSON
+reference page returned HTTP 200. The Admin Web ran at digest
+`sha256:e496f35e37fc76865f50de82ad68dabbb891b2ea81d94546cb6572b53c79ccfb`.
+The protected catalog rollout was verified by
+[run 40741182531](https://github.com/myota-platform/myota-next/actions/runs/40741182531).
+Recheck release state and digests after a later rollout.
 
 ## Qualified work packages
 
@@ -69,8 +72,18 @@ rollout.
   sent. The check used the bootstrap administrator and left no award record.
   Deployment was verified by [run 40728104528](https://github.com/myota-platform/myota-next/actions/runs/40728104528);
   implementation is in [PR #275](https://github.com/myota-platform/myota-next/pull/275).
-  The complete human-readable JSON reference and its Awards-page help link
-  remain open under #249.
+- **Award JSON reference ([#249](https://github.com/myota-platform/myota-next/issues/249)):**
+  [PR #279](https://github.com/myota-platform/myota-next/pull/279) added a
+  complete, copyable JSON example and a visible, accessible link from Admin
+  Awards. The example is checked against the shared fixture and runtime
+  validator; browser coverage verifies the link and reference content in
+  [Node CI run 40740098340](https://github.com/myota-platform/myota-next/actions/runs/40740098340). In
+  `myota-test`, the page
+  [`/award-configuration-reference.html`](https://myota-admin-test.spainip.es/award-configuration-reference.html)
+  returned HTTP 200 and included the complete example, condition schema, and
+  `AWARD_TEXT` layout element. The deployment at chart
+  `1.1.6-testing.1189d11278f7.1` was verified by
+  [run 40741182531](https://github.com/myota-platform/myota-next/actions/runs/40741182531).
 
 ## Remaining Phase 6 qualification
 
@@ -81,8 +94,10 @@ rollout.
   entities; PR #255 fixed the Admin guard and added browser coverage. The
   protected Helm upgrade to chart `1.1.6-testing.43fa7c967a90.1` completed with
   15 Deployments Ready. The verified post-fix scan reported 0 queued, 432
-  skipped, and 0 failed; the database still showed `COMPLETED|432`. Lifecycle
-  triggers and replacement-key rotation remain open under #111. See the
+  skipped, and 0 failed; the database still showed `COMPLETED|432`. The release
+  owner subsequently confirmed the provider credentials were rotated and the
+  enrichment function was tested successfully. Issues #110 and #111 are closed;
+  #112 was already closed. See the
   [location-enrichment guide](location-enrichment.md) and
   [Geodata parity record](../parity/geodata.md).
 - **Password reset ([#114](https://github.com/myota-platform/myota-next/issues/114)):** deployed Mailpit delivery, valid and expired browser links, concurrent single-use token consumption, and revocation of two pre-reset access and refresh sessions have been verified. Revision 73 includes the shared per-email throttle and request-log secret exclusion. Six distinct signed client addresses produced five persisted recovery requests; the sixth created none. The `identity-api` recovery trace reached the test Observe receiver, and its reset token and link marker were absent from all `myota-test` pod logs. The mock receiver retains only trace IDs and operation names, so raw-snapshot token exclusion and hosted Observe delivery remain open.
