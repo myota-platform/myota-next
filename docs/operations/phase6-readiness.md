@@ -36,7 +36,18 @@ before relying on the record after a later rollout.
 
 ## Remaining Phase 6 qualification
 
-- **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):** lifecycle enrichment and the full-catalogue asynchronous Admin backfill are deployed. At revision 73, the optional `myota-geodata-enrichment` Secret is absent; the worker is Ready, normal Geodata reads return HTTP 200, and an existing entity reports `NOT_CONFIGURED`. No provider requests or backfill work were submitted. The no-credential fallback is qualified; provider-backed enrichment and bulk completion still need a test-only credential. Follow the [location-enrichment guide](location-enrichment.md).
+- **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):**
+  lifecycle enrichment and the full-catalogue asynchronous Admin backfill are
+  deployed. The no-credential fallback was previously verified at revision 73.
+  On 2026-10-28, after provisioning the test-only
+  `myota-geodata-enrichment` Secret and restarting the worker, one authenticated
+  API request completed with `ENRICHED` / `BIGDATACLOUD` and saved location
+  fields. The Admin confirmation preview showed 432 matching entities and was
+  dismissed without submitting requests. Replacement-key rotation, lifecycle
+  triggers, submitted/monitored Admin backfill, and catalogue-wide completion
+  remain unverified; the 432-record backfill was not launched. Follow the
+  [location-enrichment guide](location-enrichment.md) and
+  [Geodata parity record](../parity/geodata.md).
 - **Password reset ([#114](https://github.com/myota-platform/myota-next/issues/114)):** deployed Mailpit delivery, valid and expired browser links, concurrent single-use token consumption, and revocation of two pre-reset access and refresh sessions have been verified. Revision 73 includes the shared per-email throttle and request-log secret exclusion. Service tests cover attempts from multiple source addresses; deployed multi-source throttling and telemetry-secret checks remain open.
 - **Email change ([#115](https://github.com/myota-platform/myota-next/issues/115)):** deployed checks cover both-address confirmation, partial confirmation, expiry, replay, cancellation, operation mismatch, concurrent confirmation, address conflict, and transient SMTP outage/retry. Revision 73's resend API and Participant UI were checked against Mailpit: old links were rejected, a fresh current-address link recorded partial confirmation, the old address remained authoritative, and cancellation removed the pending operation. The deployed UI confirmed both replacement deliveries and cancellation. Successful completion using both replacement links remains open.
 
