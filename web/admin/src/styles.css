@@ -760,6 +760,16 @@ select:focus-visible {
   background: var(--white);
   color: var(--ink);
 }
+.leaflet-container
+  .leaflet-popup.myota-entity-popup
+  .myota-entity-popup-content,
+.leaflet-container
+  .leaflet-popup.myota-entity-popup
+  .myota-entity-popup-content
+  * {
+  background: #fff !important;
+  color: #142b2d !important;
+}
 .leaflet-popup-content > div,
 .leaflet-popup-content > div * {
   background: #fff !important;
