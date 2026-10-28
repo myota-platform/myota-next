@@ -13,6 +13,14 @@ let programmeLoadGeneration = 0;
 const entityPageSize = 50;
 let activationEntityOptions = new Map();
 let publicAwards = [];
+let publicAwardsRequest = 0;
+let programmeContentRequest = 0;
+let activationRequest = 0;
+let activations = [];
+let publicActivityPage = 1;
+let publicActivityNextPage = null;
+let publicActivityRequest = 0;
+let leaderboardRequest = 0;
 let awardAccount = null;
 let awardAccessToken = localStorage.getItem('myota_public_access') || '';
 let awardRefreshToken = localStorage.getItem('myota_public_refresh') || '';
@@ -343,6 +351,7 @@ async function loadProgramme(slug) {
   await loadProgrammeEntities(slug, 1, generation);
   if (generation !== programmeLoadGeneration) return;
   await loadPublicAwards(slug);
+  await loadPublicActivity(slug);
   await loadActivations();
 }
 
@@ -419,12 +428,14 @@ async function loadProgrammeEntities(
 }
 
 async function loadProgrammeContent(slug, locale) {
+  const request = ++programmeContentRequest;
   $('content-status').textContent = 'Loading published programme information…';
   $('programme-content').replaceChildren();
   try {
     const result = await api(
       `/v1/public/programmes/${encodeURIComponent(slug)}/content${locale ? `?locale=${encodeURIComponent(locale)}` : ''}`,
     );
+    if (request !== programmeContentRequest) return;
     let items = result.items || [];
     if (!locale) {
       const locales = [
@@ -474,6 +485,7 @@ async function loadProgrammeContent(slug, locale) {
       $('programme-content').append(article);
     }
   } catch (error) {
+    if (request !== programmeContentRequest) return;
     $('content-status').textContent =
       `Programme information is temporarily unavailable. Use “Refresh programme data” to retry. ${error.message}`;
   }
@@ -594,6 +606,22 @@ $('entity-retry').onclick = () =>
       $('entity-retry').hidden = false;
     },
   );
+$('public-activity-prev').onclick = () =>
+  loadPublicActivity(
+    $('programme-select').value,
+    Math.max(1, publicActivityPage - 1),
+  );
+$('public-activity-next').onclick = () => {
+  if (publicActivityNextPage)
+    loadPublicActivity($('programme-select').value, publicActivityNextPage);
+};
+$('public-ranking-category').onchange = () =>
+  loadPublicLeaderboard(
+    $('programme-select').value,
+    $('public-ranking-category').value,
+  );
+$('community-refresh').onclick = () =>
+  loadPublicActivity($('programme-select').value, publicActivityPage);
 $('entity-prev').onclick = () =>
   loadProgrammeEntities($('programme-select').value, entityPage - 1).catch(
     (error) => {
@@ -851,6 +879,10 @@ function renderMarkers() {
   publicTileMap();
 }
 async function loadPublicAwards(slug) {
+  const request = ++publicAwardsRequest;
+  publicAwards = [];
+  $('award-status').textContent = 'Loading published awards…';
+  $('public-awards').textContent = 'Loading programme awards…';
   try {
     const items = [];
     let page = 1;
@@ -858,6 +890,7 @@ async function loadPublicAwards(slug) {
       const data = await api(
         `/v1/awards?programme=${encodeURIComponent(slug)}&page=${page}&pageSize=100`,
       );
+      if (request !== publicAwardsRequest) return;
       items.push(...(data.items || []));
       const nextPage = data.nextPage;
       if (nextPage == null) {
@@ -868,12 +901,123 @@ async function loadPublicAwards(slug) {
         throw new Error('The award catalogue returned invalid paging data.');
       }
     }
+    if (request !== publicAwardsRequest) return;
     publicAwards = items;
+    $('award-status').textContent = '';
     renderPublicAwards();
   } catch (error) {
+    if (request !== publicAwardsRequest) return;
+    publicAwards = [];
     $('public-awards').innerHTML =
       '<p class="small">Awards are temporarily unavailable. Use “Refresh programme data” to retry.</p>';
     $('award-status').textContent = error.message;
+  }
+}
+async function loadPublicActivity(slug, page = 1) {
+  publicActivityPage = page;
+  const resultsLink = $('public-results-download');
+  resultsLink.href = `/v1/public/results?programme=${encodeURIComponent(slug)}&format=csv`;
+  await Promise.all([
+    loadPublicActivationHistory(slug, page),
+    loadPublicLeaderboard(slug, $('public-ranking-category').value),
+  ]);
+}
+async function loadPublicActivationHistory(slug, page) {
+  const request = ++publicActivityRequest;
+  const list = $('public-activations');
+  $('public-activity-status').textContent = 'Loading recent activations…';
+  $('public-activity-page').textContent = '';
+  $('public-activity-prev').disabled = true;
+  $('public-activity-next').disabled = true;
+  list.replaceChildren();
+  try {
+    const result = await api(
+      `/v1/public/activations?programme=${encodeURIComponent(slug)}&page=${page}&pageSize=5`,
+    );
+    if (request !== publicActivityRequest) return;
+    const items = result.items || [];
+    publicActivityPage = result.page || page;
+    publicActivityNextPage = result.nextPage ?? null;
+    $('public-activity-status').textContent = '';
+    $('public-activity-page').textContent =
+      `Page ${publicActivityPage} · ${Number(result.total || 0)} public activations`;
+    if (!items.length) {
+      const empty = document.createElement('li');
+      empty.className = 'small';
+      empty.textContent = 'No public activations have been recorded yet.';
+      list.append(empty);
+    }
+    for (const activation of items) {
+      const item = document.createElement('li');
+      const callsign = document.createElement('strong');
+      callsign.textContent = activation.operatorCallsign || 'Participant';
+      const summary = document.createElement('span');
+      summary.textContent = `${Number(activation.qsoCount || 0)} QSOs · ${activation.status || 'Status unavailable'}`;
+      const timestamp = document.createElement('span');
+      timestamp.textContent = activation.startedAt || 'Start time unavailable';
+      item.append(callsign, summary, timestamp);
+      list.append(item);
+    }
+  } catch (error) {
+    if (request !== publicActivityRequest) return;
+    publicActivityNextPage = null;
+    $('public-activity-status').textContent =
+      `Public activity is temporarily unavailable. Use “Refresh community activity” to retry. ${error.message}`;
+    const unavailable = document.createElement('li');
+    unavailable.className = 'small';
+    unavailable.textContent = 'Recent activations could not be loaded.';
+    list.replaceChildren(unavailable);
+  } finally {
+    if (request === publicActivityRequest) {
+      $('public-activity-prev').disabled = publicActivityPage <= 1;
+      $('public-activity-next').disabled = !publicActivityNextPage;
+    }
+  }
+}
+async function loadPublicLeaderboard(slug, category) {
+  const request = ++leaderboardRequest;
+  const normalizedCategory = category === 'ACTIVATOR' ? 'ACTIVATOR' : 'HUNTER';
+  const list = $('public-leaderboard');
+  $('leaderboard-heading').textContent =
+    normalizedCategory === 'ACTIVATOR' ? 'Top activators' : 'Top hunters';
+  $('leaderboard-status').textContent = 'Loading programme rankings…';
+  list.replaceChildren();
+  try {
+    const result = await api(
+      `/v1/public/leaderboards?programme=${encodeURIComponent(slug)}&category=${normalizedCategory}`,
+    );
+    if (request !== leaderboardRequest) return;
+    const items = result.items || [];
+    $('leaderboard-status').textContent = '';
+    if (!items.length) {
+      const empty = document.createElement('li');
+      empty.className = 'small';
+      empty.textContent = 'Rankings will appear when activity is recorded.';
+      list.append(empty);
+      return;
+    }
+    items.forEach((entry, index) => {
+      const item = document.createElement('li');
+      const rank = document.createElement('strong');
+      rank.textContent = `#${index + 1}`;
+      const participant = document.createElement('span');
+      participant.textContent =
+        normalizedCategory === 'ACTIVATOR'
+          ? `Activator ${index + 1}`
+          : `Hunter ${index + 1}`;
+      const totals = document.createElement('small');
+      totals.textContent = `${Number(entry.qso_count || 0)} QSOs · ${Number(entry.activation_count || 0)} activations · ${Number(entry.unique_entity_count || 0)} unique entities`;
+      item.append(rank, participant, totals);
+      list.append(item);
+    });
+  } catch (error) {
+    if (request !== leaderboardRequest) return;
+    $('leaderboard-status').textContent =
+      `Programme rankings are temporarily unavailable. Use “Refresh community activity” to retry. ${error.message}`;
+    const unavailable = document.createElement('li');
+    unavailable.className = 'small';
+    unavailable.textContent = 'The programme rankings could not be loaded.';
+    list.replaceChildren(unavailable);
   }
 }
 async function loadMyAwardRequests() {
@@ -959,23 +1103,32 @@ function renderPublicAwards() {
           requestPublicAward(button.dataset.awardId, button.dataset.levelId)),
     );
 }
-let activations = [];
 async function loadActivations() {
+  const request = ++activationRequest;
+  const slug = $('programme-select').value;
   const signedIn = Boolean(awardAccessToken && awardAccount);
   $('activation-start-form').hidden = !signedIn;
   $('qso-form').hidden = !signedIn;
   $('adif-import-form').hidden = !signedIn;
   if (!signedIn) {
+    activations = [];
     $('activations-list').innerHTML = '';
     return false;
   }
+  activations = [];
+  $('activations-list').textContent = 'Loading your activations…';
+  $('qso-activation').replaceChildren();
+  $('qso-form').hidden = true;
+  $('adif-import-form').hidden = true;
+  $('activation-status').textContent = 'Loading your activations…';
   try {
     const items = [];
     let page = 1;
     while (page !== null) {
       const result = await awardApi(
-        `/v1/activations?programme=${encodeURIComponent($('programme-select').value)}&operatorId=${encodeURIComponent(awardAccount.id)}&page=${page}&pageSize=100`,
+        `/v1/activations?programme=${encodeURIComponent(slug)}&operatorId=${encodeURIComponent(awardAccount.id)}&page=${page}&pageSize=100`,
       );
+      if (request !== activationRequest) return false;
       items.push(...(result.items || []));
       const nextPage = result.nextPage;
       if (nextPage == null) {
@@ -986,6 +1139,7 @@ async function loadActivations() {
         throw new Error('Activation history returned invalid paging data.');
       }
     }
+    if (request !== activationRequest) return false;
     activations = items;
     const open = activations.filter(
       (activation) => activation.status === 'OPEN',
@@ -999,10 +1153,19 @@ async function loadActivations() {
     $('qso-form').hidden = !open.length;
     $('adif-import-form').hidden = !open.length;
     $('activations-list').replaceChildren(renderActivationHistory(activations));
+    $('activation-status').textContent = '';
     if (activeAdifImportId) void refreshAdifImportStatus();
     return true;
   } catch (error) {
-    $('activation-status').textContent = error.message;
+    if (request !== activationRequest) return false;
+    activations = [];
+    $('qso-activation').replaceChildren();
+    $('qso-form').hidden = true;
+    $('adif-import-form').hidden = true;
+    $('activations-list').textContent =
+      'Your activation history is temporarily unavailable.';
+    $('activation-status').textContent =
+      `Use “Refresh programme data” to retry. ${error.message}`;
     return false;
   }
 }
@@ -1145,7 +1308,17 @@ async function loadActivationDetails(details) {
     details.dataset.loaded = 'true';
   } catch (error) {
     panel.setAttribute('role', 'alert');
-    panel.textContent = `Unable to load activation details. ${error.message}`;
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'secondary';
+    retry.textContent = 'Retry activity and QSO details';
+    retry.addEventListener('click', () => void loadActivationDetails(details));
+    panel.replaceChildren(
+      document.createTextNode(
+        `Unable to load activation details. ${error.message} `,
+      ),
+      retry,
+    );
   }
 }
 
@@ -1217,7 +1390,8 @@ async function startActivation(event) {
     });
     completePendingParticipantMutation(request.id);
     $('activation-status').textContent = 'Activation started.';
-    await loadActivations();
+    if (await loadActivations())
+      $('activation-status').textContent = 'Activation started.';
   } catch (error) {
     $('activation-status').textContent = error.message;
   }
@@ -1247,7 +1421,8 @@ async function recordQso(event) {
     completePendingParticipantMutation(request.id);
     $('qso-callsign').value = '';
     $('activation-status').textContent = 'Contact recorded.';
-    await loadActivations();
+    if (await loadActivations())
+      $('activation-status').textContent = 'Contact recorded.';
   } catch (error) {
     $('activation-status').textContent = error.message;
   }
@@ -1264,7 +1439,8 @@ async function closeActivation() {
       }),
     });
     $('activation-status').textContent = 'Activation closed.';
-    await loadActivations();
+    if (await loadActivations())
+      $('activation-status').textContent = 'Activation closed.';
   } catch (error) {
     const refreshed = await loadActivations();
     const activation = refreshed

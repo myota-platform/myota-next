@@ -306,6 +306,7 @@ test('recovers from unavailable programme and entity catalogues', async ({
     'entity catalogue is temporarily unavailable',
   );
   await expect(page.locator('#entities')).toBeEmpty();
+  await expectResponsiveAccessible(page, 'Participant catalogue recovery');
   await page.getByRole('button', { name: 'Retry entity catalogue' }).click();
   await expect(page.locator('#entities')).toContainText(
     'alpine recovered entity',
@@ -325,4 +326,90 @@ test('recovers from unavailable programme and entity catalogues', async ({
   expect(programmeReads).toBe(2);
   expect(entityReads).toBe(4);
   expect(pageErrors).toEqual([]);
+});
+
+test('shows live community activations, rankings, and programme exports', async ({
+  page,
+}) => {
+  const leaderboardCategories: string[] = [];
+  await page.route('**/v1/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({ json: { items: [programmes[0]], nextPage: null } });
+      return;
+    }
+    if (url.pathname === '/v1/geodata/entities') {
+      await route.fulfill({ json: { items: [], page: 1, total: 0 } });
+      return;
+    }
+    if (url.pathname.endsWith('/content')) {
+      await route.fulfill({ json: { items: [] } });
+      return;
+    }
+    if (url.pathname === '/v1/public/activations') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              id: 'public-activation-1',
+              operatorCallsign: 'N0***L',
+              status: 'CLOSED',
+              qsoCount: 8,
+              startedAt: '2026-10-28T09:30:00Z',
+            },
+          ],
+          page: 1,
+          pageSize: 5,
+          total: 1,
+          nextPage: null,
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/public/leaderboards') {
+      const category = url.searchParams.get('category') || '';
+      leaderboardCategories.push(category);
+      await route.fulfill({
+        json: {
+          programme: url.searchParams.get('programme'),
+          category,
+          items: [
+            {
+              subject_id: 'private-subject-id-must-not-render',
+              qso_count: category === 'HUNTER' ? 12 : 6,
+              activation_count: 3,
+              unique_call_sign_count: 4,
+              unique_entity_count: 2,
+            },
+          ],
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: { items: [], nextPage: null, total: 0 } });
+  });
+
+  await page.goto('http://127.0.0.1:8091');
+  await expect(
+    page.getByRole('navigation', { name: 'Participant navigation' }),
+  ).toContainText('Explore');
+  await expect(page.locator('#public-activations')).toContainText('N0***L');
+  await expect(page.locator('#public-activations')).toContainText('8 QSOs');
+  await expect(page.locator('#public-leaderboard')).toContainText('Hunter 1');
+  await expect(page.locator('#public-leaderboard')).toContainText('12 QSOs');
+  await expect(page.locator('#public-leaderboard')).not.toContainText(
+    'private-subject-id-must-not-render',
+  );
+
+  await page.getByLabel('Rankings for').selectOption('ACTIVATOR');
+  await expect(page.locator('#leaderboard-heading')).toHaveText(
+    'Top activators',
+  );
+  await expect(page.locator('#public-leaderboard')).toContainText('6 QSOs');
+  await expect(page.locator('#public-results-download')).toHaveAttribute(
+    'href',
+    /programme=alpine&format=csv/,
+  );
+  expect(leaderboardCategories).toEqual(['HUNTER', 'ACTIVATOR']);
+  await expectResponsiveAccessible(page, 'Participant community workspace');
 });
