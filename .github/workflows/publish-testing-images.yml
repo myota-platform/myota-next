@@ -112,7 +112,6 @@ jobs:
                 dockerfile=deploy/Dockerfile.tools
                 ;;
               admin-web)
-                context=web/admin
                 dockerfile=web/admin/Dockerfile
                 ;;
               participant-web)

@@ -181,6 +181,93 @@ test('queues broad award progress recalculation and shows terminal job state', a
   );
 });
 
+test('validates award JSON locally with accessible field-specific feedback', async ({
+  page,
+}) => {
+  const createRequests: unknown[] = [];
+  await page.route('**/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === '/v1/identity/auth/login') {
+      await route.fulfill({ json: { accessToken: 'award-admin-token' } });
+      return;
+    }
+    if (url.pathname === '/v1/identity/me') {
+      await route.fulfill({
+        json: {
+          id: 'award-admin',
+          email: 'award-admin@example.test',
+          displayName: 'Award Admin',
+          scopes: ['awards.admin'],
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({
+        json: { items: [{ slug: 'alpine', name: 'Alpine' }], nextPage: null },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/awards' && request.method() === 'GET') {
+      await route.fulfill({
+        json: { items: [], page: 1, pageSize: 50, total: 0, nextPage: null },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/awards/assets') {
+      await route.fulfill({ json: { items: [], nextPage: null } });
+      return;
+    }
+    if (
+      url.pathname === '/v1/awards/requests' ||
+      url.pathname === '/v1/awards/issuances'
+    ) {
+      await route.fulfill({
+        json: { items: [], page: 1, pageSize: 50, total: 0 },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/awards' && request.method() === 'POST') {
+      createRequests.push(request.postDataJSON());
+      await route.fulfill({ status: 201, json: { id: 'unexpected' } });
+      return;
+    }
+    await route.fulfill({ json: { items: [], page: 1, total: 0 } });
+  });
+
+  await page.goto('/awards');
+  await page.getByLabel('Email').fill('award-admin@example.test');
+  await page.getByLabel('Password').fill('test-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/awards$/);
+  await page.getByRole('button', { name: 'New award draft' }).click();
+  await page.getByLabel('Code').fill('ALPINE-10');
+  await page.getByLabel('Name', { exact: true }).fill('Alpine Ten');
+  const invalidCondition =
+    '{"kind":"QSO_COUNT","operator":"GTE","value":"many"}';
+  await page.getByLabel('Condition JSON').fill(invalidCondition);
+  await page.getByRole('button', { name: 'Save award draft' }).click();
+
+  const validation = page.getByRole('alert').filter({
+    hasText: 'Check these award configuration fields before saving:',
+  });
+  await expect(validation).toContainText(
+    'Condition JSON (value): must be a finite number',
+  );
+  await expect(validation.getByRole('link')).toHaveAttribute(
+    'href',
+    '#award-condition',
+  );
+  await expect(page.locator('#award-condition')).toHaveAttribute(
+    'aria-invalid',
+    'true',
+  );
+  await expect(page.locator('#award-condition')).toHaveValue(invalidCondition);
+  expect(createRequests).toHaveLength(0);
+  await expectResponsiveAccessible(page, 'Admin award JSON validation');
+});
+
 test('saves an award draft and submits it for review', async ({ page }) => {
   const saveRequests: Array<{ body: Record<string, any>; key: string }> = [];
   const actionRequests: unknown[] = [];
@@ -476,7 +563,7 @@ test('creates a version from a published award and derives landscape print dimen
           status: 400,
           json: {
             statusCode: 400,
-            message: 'awardText must be at most 200 characters',
+            message: 'choose a registered background asset',
           },
         });
         return;
@@ -537,7 +624,7 @@ test('creates a version from a published award and derives landscape print dimen
   });
   await saveButton.click();
   await expect(page.getByRole('alert')).toHaveText(
-    'awardText must be at most 200 characters',
+    'choose a registered background asset',
   );
   await saveButton.click();
   await expect(page.getByRole('alert')).toHaveText(
