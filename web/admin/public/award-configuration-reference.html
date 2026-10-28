@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Field-by-field reference for MyOTA award configuration JSON."
+    />
+    <title>Award JSON configuration reference | MyOTA</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+        color: #183234;
+        background: #f4f8f7;
+        line-height: 1.6;
+      }
+      body {
+        margin: 0;
+      }
+      main {
+        width: min(100% - 2rem, 58rem);
+        margin: 0 auto;
+        padding: 2rem 0 4rem;
+      }
+      h1,
+      h2,
+      h3 {
+        line-height: 1.25;
+      }
+      h1 {
+        font-size: clamp(1.8rem, 5vw, 2.6rem);
+      }
+      h2 {
+        margin-top: 2.5rem;
+      }
+      a {
+        color: #075b56;
+        text-underline-offset: 0.18em;
+      }
+      .lede,
+      .note {
+        max-width: 72ch;
+      }
+      .note {
+        padding: 0.8rem 1rem;
+        border-left: 0.25rem solid #08796f;
+        background: #e8f3f1;
+      }
+      dl {
+        margin: 1rem 0;
+      }
+      dt {
+        margin-top: 1.1rem;
+        font-weight: 700;
+      }
+      dd {
+        margin: 0.2rem 0 0 1rem;
+        max-width: 76ch;
+      }
+      code,
+      pre {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      code {
+        overflow-wrap: anywhere;
+      }
+      pre {
+        max-width: 100%;
+        overflow-x: auto;
+        padding: 1rem;
+        border-radius: 0.6rem;
+        background: #142b2d;
+        color: #f4f8f7;
+        line-height: 1.45;
+        white-space: pre;
+      }
+      .back-link {
+        display: inline-block;
+        margin-bottom: 1rem;
+      }
+      :focus-visible {
+        outline: 3px solid #bd5a00;
+        outline-offset: 3px;
+      }
+      @media (max-width: 40rem) {
+        main {
+          width: min(100% - 1.25rem, 58rem);
+          padding-top: 1.25rem;
+        }
+        pre {
+          font-size: 0.8rem;
+          padding: 0.75rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a class="back-link" href="/awards">Back to Awards management</a>
+      <h1>Award JSON configuration</h1>
+      <p class="lede">
+        This reference describes the award definition accepted by the Activity
+        API and Admin editor. The shared runtime validator is
+        <a
+          href="https://github.com/myota-platform/myota-next/blob/main/contracts/award-definition.ts"
+          >contracts/award-definition.ts</a
+        >. Unknown fields are rejected. API updates may send a partial object;
+        creates and saved definitions require the required fields below.
+      </p>
+
+      <p class="note">
+        The example is structurally valid, but its background object key is a
+        placeholder. Upload a background image in Awards management and use the
+        registered asset's object key before saving. The service checks that the
+        background is registered and adjusts its pixel dimensions to the
+        selected print profile.
+      </p>
+
+      <h2>Complete example</h2>
+      <p>
+        Copy this JSON as a starting point. Change the programme, code, text,
+        thresholds, registered background asset, and layout for the award.
+      </p>
+      <pre
+        id="canonical-award-example"
+        tabindex="0"
+        aria-label="Copyable complete award JSON example"
+      ><code>{
+  "programmeSlug": "field-day",
+  "code": "FIELD-DAY-10",
+  "name": "Field Day Ten",
+  "description": "Reach ten contacts during Field Day.",
+  "awardText": "For excellent operating",
+  "category": "HUNTER",
+  "achievementMetric": "QSO_COUNT",
+  "condition": {
+    "kind": "AND",
+    "conditions": [
+      { "kind": "QSO_COUNT", "operator": "GTE", "value": 10 },
+      {
+        "kind": "OR",
+        "conditions": [
+          { "kind": "UNIQUE_ENTITIES", "operator": "GTE", "value": 3 },
+          { "kind": "ENTITY_TYPE", "values": ["MUNICIPAL_PARK"] }
+        ]
+      }
+    ]
+  },
+  "levels": [
+    { "id": "level-10", "name": "Ten contacts", "threshold": 10 },
+    { "id": "level-50", "name": "Fifty contacts", "threshold": 50 }
+  ],
+  "backgroundAsset": {
+    "kind": "BACKGROUND",
+    "name": "Field Day background",
+    "objectKey": "field-day/background.png",
+    "mediaType": "image/png",
+    "widthPx": 2481,
+    "heightPx": 3508
+  },
+  "printSpec": { "page": "A4", "orientation": "PORTRAIT", "dpi": 300 },
+  "template": {
+    "elements": [
+      { "kind": "AWARD_NAME", "x": 0.1, "y": 0.1, "width": 0.8, "height": 0.1 },
+      { "kind": "AWARD_TEXT", "label": "Award text", "x": 0.1, "y": 0.2, "width": 0.8, "height": 0.1 },
+      { "kind": "CALLSIGN", "x": 0.1, "y": 0.3, "width": 0.8, "height": 0.1 },
+      { "kind": "PERSON_NAME", "x": 0.1, "y": 0.4, "width": 0.8, "height": 0.1 },
+      { "kind": "DATE_OBTAINED", "x": 0.1, "y": 0.5, "width": 0.8, "height": 0.1 },
+      { "kind": "MANAGER_NAME", "x": 0.1, "y": 0.6, "width": 0.8, "height": 0.1 },
+      { "kind": "MANAGER_SIGNATURE", "x": 0.1, "y": 0.7, "width": 0.8, "height": 0.1 }
+    ]
+  }
+}</code></pre>
+
+      <h2>Top-level fields</h2>
+      <dl>
+        <dt><code>programmeSlug</code> — required string</dt>
+        <dd>Slug of the programme that owns this award. Must not be empty.</dd>
+
+        <dt><code>code</code> — required string</dt>
+        <dd>Stable, programme-scoped award code. Must not be empty.</dd>
+
+        <dt><code>name</code> — required string</dt>
+        <dd>
+          Display name shown to administrators and participants. Must not be
+          empty.
+        </dd>
+
+        <dt><code>description</code> — optional string</dt>
+        <dd>Longer explanation of the award. Defaults to an empty string.</dd>
+
+        <dt><code>awardText</code> — optional string</dt>
+        <dd>
+          Short text printed below the award name. Defaults to an empty string
+          and is limited to 200 characters.
+        </dd>
+
+        <dt><code>category</code> — required string</dt>
+        <dd>
+          <code>HUNTER</code> or <code>ACTIVATOR</code>. Input is
+          case-insensitive and stored uppercase.
+        </dd>
+
+        <dt><code>achievementMetric</code> — optional string</dt>
+        <dd>
+          Summary metric: <code>QSO_COUNT</code>, <code>ACTIVATION_COUNT</code>,
+          <code>UNIQUE_CALLSIGNS</code>, or <code>UNIQUE_ENTITIES</code>. Use
+          these uppercase values. Defaults to <code>QSO_COUNT</code>.
+        </dd>
+
+        <dt><code>condition</code> — required object</dt>
+        <dd>
+          Recursive eligibility rule. See
+          <a href="#conditions">Condition kinds</a>.
+        </dd>
+
+        <dt><code>levels</code> — required array</dt>
+        <dd>
+          One or more thresholds. Each item has a non-empty string
+          <code>id</code>, non-empty string <code>name</code>, and finite
+          numeric <code>threshold</code> greater than zero.
+        </dd>
+
+        <dt><code>backgroundAsset</code> — required object</dt>
+        <dd>
+          Registered background image. <code>kind</code> must be
+          <code>BACKGROUND</code>. Optional <code>name</code> is its display
+          label. <code>objectKey</code> must identify an uploaded background;
+          <code>mediaType</code>, when supplied, is <code>image/png</code> or
+          <code>image/jpeg</code>; <code>widthPx</code> and
+          <code>heightPx</code>, when supplied, are positive integers. The
+          server verifies the registered object key and computes print-ready
+          dimensions.
+        </dd>
+
+        <dt><code>printSpec</code> — optional object</dt>
+        <dd>
+          <code>page</code> is <code>A4</code> or <code>LETTER</code>;
+          <code>orientation</code> is <code>PORTRAIT</code> or
+          <code>LANDSCAPE</code>; <code>dpi</code> is an integer from 150
+          through 300. Defaults are A4, portrait, and 300 DPI.
+        </dd>
+
+        <dt><code>template</code> — required object</dt>
+        <dd>
+          Contains the certificate <code>elements</code> array. Every required
+          element kind must appear at least once; supported optional kinds may
+          be added.
+        </dd>
+
+        <dt><code>signatureAssetId</code> — optional string or null</dt>
+        <dd>
+          Registered signature asset to use when issuing a certificate. Non-null
+          values must be non-empty and identify a signature asset.
+        </dd>
+
+        <dt><code>managerName</code> — optional string</dt>
+        <dd>
+          Manager name used as the certificate default when a request does not
+          provide one.
+        </dd>
+
+        <dt><code>effectiveFrom</code> — optional timestamp string</dt>
+        <dd>
+          ISO-compatible timestamp used when publishing. Leave it out of a draft
+          unless needed.
+        </dd>
+
+        <dt><code>awardId</code> — optional string</dt>
+        <dd>
+          Existing award identifier used when editing a draft. Omit when
+          creating a new award.
+        </dd>
+
+        <dt><code>expectedVersion</code> — optional positive integer</dt>
+        <dd>
+          Optimistic concurrency token for creating a new draft revision from a
+          published award. It is not used for an ordinary draft create or
+          update.
+        </dd>
+      </dl>
+
+      <h2 id="conditions">Condition kinds</h2>
+      <ul>
+        <li>
+          <code>AND</code> / <code>ALL</code> and <code>OR</code> /
+          <code>ANY</code> contain a non-empty <code>conditions</code> array.
+        </li>
+        <li><code>NOT</code> contains one nested <code>condition</code>.</li>
+        <li>
+          <code>ENTITY_TYPE</code> contains a non-empty
+          <code>values</code> array of entity type codes.
+        </li>
+        <li>
+          <code>QSO_COUNT</code>, <code>ACTIVATION_COUNT</code>,
+          <code>UNIQUE_CALLSIGNS</code>, <code>UNIQUE_ENTITIES</code>, and
+          <code>FIELD</code> compare a numeric fact to <code>value</code>.
+          <code>FIELD</code> also requires a non-empty fact name.
+        </li>
+      </ul>
+      <p>
+        Numeric conditions accept finite JSON numbers or numeric strings.
+        <code>operator</code> may be <code>GTE</code>, <code>GT</code>,
+        <code>EQ</code>, <code>LTE</code>, or <code>LT</code>; it defaults to
+        <code>GTE</code>. Conditions may be nested to 32 levels.
+      </p>
+
+      <h2>Certificate template elements</h2>
+      <p>
+        Every element has a supported <code>kind</code> and normalized
+        <code>x</code>, <code>y</code>, <code>width</code>, and
+        <code>height</code> coordinates. Coordinates range from zero to one;
+        width and height must be greater than zero, and the rectangle must fit
+        inside the page.
+      </p>
+      <ul>
+        <li>
+          Required: <code>AWARD_NAME</code>, <code>CALLSIGN</code>,
+          <code>PERSON_NAME</code>, <code>DATE_OBTAINED</code>,
+          <code>MANAGER_NAME</code>, and <code>MANAGER_SIGNATURE</code>.
+        </li>
+        <li>Optional: <code>AWARD_TEXT</code> and <code>CUSTOM_TEXT</code>.</li>
+        <li>
+          <code>label</code> is optional except for <code>CUSTOM_TEXT</code>,
+          where it must be non-empty.
+        </li>
+      </ul>
+
+      <h2>Fields managed by the service</h2>
+      <p>These returned fields are not accepted in create or update input:</p>
+      <ul>
+        <li>
+          <code>id</code>, positive integer <code>version</code>, and
+          <code>revisionOf</code> identify a stored award version.
+        </li>
+        <li>
+          <code>status</code> is one of <code>DRAFT</code>,
+          <code>UNDER_REVIEW</code>, <code>APPROVED</code>,
+          <code>CHANGES_REQUESTED</code>, <code>PUBLISHED</code>, or
+          <code>RETIRED</code>. Change it through the submit, review, publish,
+          and retire actions.
+        </li>
+        <li>
+          <code>createdAt</code>, <code>updatedAt</code>,
+          <code>submittedAt</code>, <code>reviewedAt</code>,
+          <code>publishedAt</code>, and <code>retiredAt</code> are
+          service-generated timestamps.
+        </li>
+        <li>
+          <code>printReadiness</code> is calculated from the selected background
+          and print profile.
+        </li>
+      </ul>
+      <p>
+        Unknown fields are rejected so a misspelling cannot be silently saved.
+      </p>
+      <p>
+        Returned background assets may also contain service-managed identifiers,
+        SHA-256 hashes, storage backend, bucket and endpoint, content status,
+        content size, and creation or storage timestamps. These fields are
+        accepted only while the service validates a merged stored record;
+        clients must not send them in create or update input.
+      </p>
+      <p><a href="/awards">Return to Awards management</a></p>
+    </main>
+  </body>
+</html>
