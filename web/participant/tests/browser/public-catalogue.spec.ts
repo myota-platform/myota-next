@@ -238,3 +238,91 @@ test('selects a programme and renders its public content and entity catalogue', 
 
   await expectResponsiveAccessible(page, 'Participant public catalogue');
 });
+
+test('recovers from unavailable programme and entity catalogues', async ({
+  page,
+}) => {
+  let programmeReads = 0;
+  let entityReads = 0;
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  await page.route('**/v1/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/v1/programmes') {
+      programmeReads += 1;
+      if (programmeReads === 1) {
+        await route.fulfill({
+          status: 503,
+          json: { message: 'catalogue temporarily unavailable' },
+        });
+        return;
+      }
+      await route.fulfill({ json: { items: programmes, nextPage: null } });
+      return;
+    }
+
+    if (url.pathname === '/v1/geodata/entities') {
+      entityReads += 1;
+      if (entityReads === 1 || entityReads === 3) {
+        await route.fulfill({
+          status: 503,
+          json: { message: 'entity service temporarily unavailable' },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              id: `${url.searchParams.get('programme')}-recovered-entity`,
+              name: `${url.searchParams.get('programme')} recovered entity`,
+              entityType:
+                url.searchParams.get('programme') === 'alpine'
+                  ? 'SOTA'
+                  : 'PARK',
+              status: 'APPROVED',
+              geometry: { type: 'Point', coordinates: [7, 46] },
+            },
+          ],
+          page: 1,
+          total: 1,
+          nextPage: null,
+        },
+      });
+      return;
+    }
+
+    await route.fulfill({ json: { items: [], nextPage: null, total: 0 } });
+  });
+
+  await page.goto('http://127.0.0.1:8091');
+  await expect(page.locator('#programme-status')).toContainText(
+    'catalogue temporarily unavailable',
+  );
+  await page.getByRole('button', { name: 'Retry programme catalogue' }).click();
+  await expect(page.locator('#programme-name')).toHaveText('Alpine Summits');
+  await expect(page.locator('#loading')).toContainText(
+    'entity catalogue is temporarily unavailable',
+  );
+  await expect(page.locator('#entities')).toBeEmpty();
+  await page.getByRole('button', { name: 'Retry entity catalogue' }).click();
+  await expect(page.locator('#entities')).toContainText(
+    'alpine recovered entity',
+  );
+  await expect(page.locator('#entity-retry')).toBeHidden();
+
+  await page.getByLabel('Programme').selectOption('coast');
+  await expect(page.locator('#programme-name')).toHaveText('Coastal Parks');
+  await expect(page.locator('#loading')).toContainText(
+    'entity catalogue is temporarily unavailable',
+  );
+  await expect(page.locator('#entities')).toBeEmpty();
+  await page.getByRole('button', { name: 'Retry entity catalogue' }).click();
+  await expect(page.locator('#entities')).toContainText(
+    'coast recovered entity',
+  );
+  expect(programmeReads).toBe(2);
+  expect(entityReads).toBe(4);
+  expect(pageErrors).toEqual([]);
+});
