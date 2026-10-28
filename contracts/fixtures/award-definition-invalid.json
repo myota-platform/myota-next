@@ -1,0 +1,34 @@
+{
+  "programmeSlug": "field-day",
+  "code": "FIELD-DAY-INVALID",
+  "name": "Invalid Award",
+  "category": "HUNTER",
+  "condition": {
+    "kind": "AND",
+    "conditions": [
+      {
+        "kind": "QSO_COUNT",
+        "operator": "GTE",
+        "value": "many",
+        "unexpected": true
+      }
+    ]
+  },
+  "levels": [{ "id": "level-1", "name": "One", "threshold": 0 }],
+  "backgroundAsset": { "kind": "BACKGROUND", "objectKey": "", "extra": true },
+  "printSpec": { "page": "A3", "orientation": "PORTRAIT", "dpi": 301 },
+  "template": {
+    "elements": [
+      { "kind": "AWARD_NAME", "x": 0.8, "y": 0.1, "width": 0.5, "height": 0.1 },
+      {
+        "kind": "CUSTOM_TEXT",
+        "label": " ",
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0.1
+      }
+    ]
+  },
+  "notAField": "must be rejected"
+}
