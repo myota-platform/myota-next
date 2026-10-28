@@ -48,3 +48,21 @@ When JetStream acknowledges a publish but the owner-database update fails, the
 relay leaves the outbox event unpublished. A later claim retries the event with
 the same event ID as `Nats-Msg-Id`; the relay does not count the database-mark
 failure against the publish retry limit or dead-letter the acknowledged event.
+
+If an unresolved dead letter has no retained outbox row, do not use redrive.
+An operator may resolve it without replay only when the active event registry
+explicitly lists the event with no consumer groups. The command records the
+operator, reason, prior attempts, and error in
+`outbox_dead_letter_disposition_audit` before resolving the dead letter in the
+same transaction:
+
+```sh
+OUTBOX_DATABASE_URL="$CORE_DATABASE_URL" npm run outbox:admin -- resolve-orphan \
+  00000000-0000-4000-8000-000000000000 \
+  --actor operator-id \
+  --reason "Confirmed the source row is absent and no consumer is registered"
+```
+
+Use the owning database URL and a reason based on a reviewed disposition. The
+command rejects retained source rows, unregistered events, and events with
+consumers. It does not delete the dead-letter record or its audit history.

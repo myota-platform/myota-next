@@ -485,6 +485,7 @@ services:
       OUTBOX_OWNER: core
       OUTBOX_WORKER: core-outbox
       OUTBOX_DATABASE_URL: postgresql://myota_core_app:${CORE_APP_PASSWORD:-myota-local-core-runtime-password-change-me-32chars}@core-db:5432/myota_core
+      OUTBOX_MAX_MESSAGE_BYTES: ${NATS_EVENTS_MAX_MESSAGE_BYTES:-1048576}
       NATS_URL: nats://nats:4222
     depends_on:
       migrations: { condition: service_completed_successfully }
@@ -499,6 +500,7 @@ services:
       OUTBOX_OWNER: activity
       OUTBOX_WORKER: activity-outbox
       OUTBOX_DATABASE_URL: postgresql://myota_activity_app:${ACTIVITY_APP_PASSWORD:-myota-local-activity-runtime-password-change-me-32chars}@activity-db:5432/myota_activity
+      OUTBOX_MAX_MESSAGE_BYTES: ${NATS_EVENTS_MAX_MESSAGE_BYTES:-1048576}
       NATS_URL: nats://nats:4222
     depends_on:
       migrations: { condition: service_completed_successfully }
@@ -513,6 +515,7 @@ services:
       OUTBOX_OWNER: geodata
       OUTBOX_WORKER: geodata-outbox
       OUTBOX_DATABASE_URL: postgresql://myota_geo_app:${GEO_APP_PASSWORD:-myota-local-geodata-runtime-password-change-me-32chars}@geo-db:5432/myota_geo
+      OUTBOX_MAX_MESSAGE_BYTES: ${NATS_EVENTS_MAX_MESSAGE_BYTES:-1048576}
       NATS_URL: nats://nats:4222
     depends_on:
       migrations: { condition: service_completed_successfully }

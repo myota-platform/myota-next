@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/myota-platform/myota-next/contracts/schemas/events/identity-profile-image-updated-v1.schema.json",
+  "title": "identity.profile-image.updated.v1 envelope v1",
+  "allOf": [
+    {
+      "$ref": "../event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "identity.profile-image.updated.v1"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "accountId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "actorId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "profileImage": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "contentType": {
+                  "const": "image/webp"
+                },
+                "width": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "height": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "contentType",
+                "width",
+                "height",
+                "updatedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "accountId",
+            "actorId",
+            "profileImage"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  ],
+  "x-payload-evidence": "source-derived:apps/identity/src/identity-profile-image.service.ts",
+  "x-data-classification": "personal"
+}

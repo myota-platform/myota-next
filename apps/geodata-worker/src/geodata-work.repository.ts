@@ -1197,10 +1197,6 @@ export class GeodataWorkRepository {
         FROM geodata_import_candidate_stage
         WHERE import_run_id=$2::uuid AND attempt_count=$3 AND candidate_id IS NOT NULL
           AND candidate_payload->'possibleDuplicates' <> '[]'::jsonb),'[]'::jsonb)`;
-      const sourceRecordMap = `COALESCE((SELECT jsonb_object_agg(source_ref,source_hash)
-        FROM (SELECT DISTINCT ON (source_ref COLLATE "C") source_ref,source_hash
-          FROM geodata_import_candidate WHERE import_run_id=$2::uuid AND source_ref IS NOT NULL
-          ORDER BY source_ref COLLATE "C",ordinal DESC) records),'{}'::jsonb)`;
       await client.query(
         `INSERT INTO outbox_event
           (event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,correlation_id)
@@ -1212,7 +1208,7 @@ export class GeodataWorkRepository {
              'conflationCandidates',${conflationSummaries},
              'manifest',jsonb_build_object('runId',$2::text,'adapter',$4::text,
                'source',$5::jsonb,'sourceHash',$6::text,'recordCount',$7::bigint,
-               'records',${sourceRecordMap},
+               'recordsStored',true,
                'retrievedAt',$5::jsonb->>'retrievedAt',
                'license',$5::jsonb->>'license',
                'attribution',$5::jsonb->>'attribution',
