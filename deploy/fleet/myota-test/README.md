@@ -62,3 +62,13 @@ Open a pull request to `testing` with the proposed values. Reviewers should
 confirm that only built images were changed and that each image reference is a
 sha256 digest. The `postgres`, `postgis`, and `nats` artifacts belong to the
 separate infrastructure releases and are not applied through this App bundle.
+
+### Helm-managed workload fields
+
+Rancher applies this release with server-side apply. Do not use `kubectl patch`
+or `kubectl set env` to change fields on its Deployments, including
+`OBSERVE_APP_KEY`, `OBSERVE_APP_SECRET`, or `OBSERVE_ENDPOINT`. A direct patch
+can take field ownership away from Helm and make the next catalog upgrade
+conflict. Put test or release configuration in the chart values and deliver it
+through the reviewed digest-sync pull request, then use the protected Rancher
+upgrade workflow.
