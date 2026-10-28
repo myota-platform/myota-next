@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/myota-platform/myota-next/contracts/schemas/events/identity-email-change-resent-v1.schema.json",
+  "title": "identity.email-change.resent.v1 envelope v1",
+  "allOf": [
+    {
+      "$ref": "../event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "identity.email-change.resent.v1"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "accountId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "changeId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "replacementChangeId": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "accountId",
+            "changeId",
+            "replacementChangeId"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  ],
+  "x-payload-evidence": "source-derived:apps/identity/src/identity-email-change.service.ts",
+  "x-data-classification": "personal-and-security"
+}

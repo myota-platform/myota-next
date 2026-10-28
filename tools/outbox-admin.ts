@@ -1,4 +1,5 @@
 import { Pool, type PoolClient } from 'pg';
+import { loadOutboxRegistry } from '../libs/platform/src/outbox-routing.js';
 
 type DeadLetter = {
   event_id: string;
@@ -121,6 +122,86 @@ async function redrive(eventId: string, actor: string, reason: string) {
   }
 }
 
+async function resolveOrphan(eventId: string, actor: string, reason: string) {
+  const normalizedId = normalizeUuid(eventId);
+  const normalizedActor = actor.trim();
+  const normalizedReason = reason.trim();
+  if (!normalizedActor || normalizedActor.length > 120)
+    throw new Error('actor must contain 1 to 120 characters');
+  if (!normalizedReason || normalizedReason.length > 500)
+    throw new Error('reason must contain 1 to 500 characters');
+
+  const registry = await loadOutboxRegistry();
+  const pool = new Pool({
+    connectionString: connectionString(),
+    max: 1,
+    connectionTimeoutMillis: 5000,
+  });
+  let client: PoolClient | undefined;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const result = await client.query<{
+      event_type: string;
+      attempts: number;
+      error: string | null;
+      source_exists: boolean;
+    }>(
+      `SELECT d.event_type,d.attempts,d.error,(e.event_id IS NOT NULL) AS source_exists
+         FROM public.dead_letter_event d
+         LEFT JOIN public.outbox_event e USING (event_id)
+        WHERE d.event_id=$1 AND d.resolved_at IS NULL
+        FOR UPDATE OF d`,
+      [normalizedId],
+    );
+    const event = result.rows[0];
+    if (!event) throw new Error('no unresolved dead letter was found');
+    if (event.source_exists)
+      throw new Error('dead letter has a retained outbox row; use redrive');
+    const contract = registry.events.find(
+      (candidate) => candidate.eventType === event.event_type,
+    );
+    if (!contract || !Array.isArray(contract.consumerGroups))
+      throw new Error('event has no explicit registered consumer disposition');
+    if (contract.consumerGroups.length)
+      throw new Error('event has registered consumers and cannot be discarded');
+
+    await client.query(
+      `INSERT INTO public.outbox_dead_letter_disposition_audit
+         (event_id,event_type,actor,reason,previous_attempts,previous_error,disposition)
+       VALUES ($1,$2,$3,$4,$5,$6,'resolved_without_redrive')`,
+      [
+        normalizedId,
+        event.event_type,
+        normalizedActor,
+        normalizedReason,
+        event.attempts,
+        event.error,
+      ],
+    );
+    const resolved = await client.query(
+      `UPDATE public.dead_letter_event SET resolved_at=now()
+        WHERE event_id=$1 AND resolved_at IS NULL`,
+      [normalizedId],
+    );
+    if (resolved.rowCount !== 1)
+      throw new Error('dead letter changed before its disposition was saved');
+    await client.query('COMMIT');
+    return {
+      eventId: normalizedId,
+      eventType: event.event_type,
+      actor: normalizedActor,
+      disposition: 'resolved_without_redrive',
+    };
+  } catch (error) {
+    await client?.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client?.release();
+    await pool.end();
+  }
+}
+
 function normalizeUuid(value: string): string {
   let hex = value.toLowerCase();
   if (hex.startsWith('urn:uuid:')) hex = hex.slice('urn:uuid:'.length);
@@ -169,8 +250,36 @@ function parseArgs(values: string[]) {
       reason: parsed['--reason'],
     } as const;
   }
+  if (command === 'resolve-orphan') {
+    const [eventId, ...options] = args;
+    const parsed: Record<string, string> = {};
+    for (let index = 0; index < options.length; index += 2) {
+      const key = options[index];
+      const value = options[index + 1];
+      if (
+        !['--actor', '--reason'].includes(key) ||
+        !value ||
+        value.startsWith('--') ||
+        key in parsed
+      )
+        throw new Error(
+          'usage: outbox:admin resolve-orphan UUID --actor ID --reason TEXT',
+        );
+      parsed[key] = value;
+    }
+    if (!eventId || !parsed['--actor'] || !parsed['--reason'])
+      throw new Error(
+        'usage: outbox:admin resolve-orphan UUID --actor ID --reason TEXT',
+      );
+    return {
+      command,
+      eventId,
+      actor: parsed['--actor'],
+      reason: parsed['--reason'],
+    } as const;
+  }
   throw new Error(
-    'usage: outbox:admin list [--limit 1..1000] | outbox:admin redrive UUID --actor ID --reason TEXT',
+    'usage: outbox:admin list [--limit 1..1000] | outbox:admin redrive UUID --actor ID --reason TEXT | outbox:admin resolve-orphan UUID --actor ID --reason TEXT',
   );
 }
 
@@ -179,7 +288,9 @@ try {
   const result =
     options.command === 'list'
       ? await listDeadLetters(options.limit)
-      : await redrive(options.eventId, options.actor, options.reason);
+      : options.command === 'redrive'
+        ? await redrive(options.eventId, options.actor, options.reason)
+        : await resolveOrphan(options.eventId, options.actor, options.reason);
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 } catch (error) {
   process.stderr.write(
