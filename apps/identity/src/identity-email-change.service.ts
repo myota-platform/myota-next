@@ -85,35 +85,7 @@ export class IdentityEmailChangeService {
     const client = await this.connect();
     try {
       await client.query('BEGIN');
-      const rateLimitKey = createHash('sha256')
-        .update(`email-change:${String(actor.id)}`)
-        .digest('hex');
-      const rateLimit = await client.query<{ request_count: number }>(
-        `INSERT INTO public.identity_registration_rate_limit
-           (key_hash, window_started_at, request_count, expires_at)
-         VALUES ($1, clock_timestamp(), 1,
-                 clock_timestamp() + interval '15 minutes')
-         ON CONFLICT (key_hash) DO UPDATE SET
-           window_started_at = CASE
-             WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
-               THEN clock_timestamp()
-             ELSE identity_registration_rate_limit.window_started_at END,
-           request_count = CASE
-             WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
-               THEN 1
-             ELSE identity_registration_rate_limit.request_count + 1 END,
-           expires_at = CASE
-             WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
-               THEN clock_timestamp() + interval '15 minutes'
-             ELSE identity_registration_rate_limit.expires_at END,
-           updated_at = clock_timestamp()
-         RETURNING request_count`,
-        [rateLimitKey],
-      );
-      if ((rateLimit.rows[0]?.request_count ?? 0) > 5)
-        throw new BadRequestException(
-          'too many email change requests; try again later',
-        );
+      await this.incrementRequestRateLimit(client, String(actor.id));
       const accountResult = await client.query<{
         id: string;
         display_name: string;
@@ -232,6 +204,103 @@ export class IdentityEmailChangeService {
       });
       await client.query('COMMIT');
       return { status: result.rowCount ? 'cancelled' : 'no_pending_change' };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async resend(authorization: string) {
+    const actor = await this.auth.currentAccount(authorization);
+    const client = await this.connect();
+    try {
+      await client.query('BEGIN');
+      const pendingResult = await client.query<{
+        id: string;
+        display_name: string;
+        old_email: string;
+        old_email_key: string;
+        new_email: string;
+        new_email_key: string;
+      }>(
+        `SELECT c.id, a.display_name,
+                c.old_email::text AS old_email, c.old_email_key,
+                c.new_email::text AS new_email, c.new_email_key
+           FROM public.identity_email_change c
+           JOIN public.account a ON a.id = c.account_id
+          WHERE c.account_id = $1 AND a.status = 'ACTIVE'
+            AND c.canceled_at IS NULL
+            AND c.completed_at IS NULL AND c.expires_at > clock_timestamp()
+          ORDER BY c.created_at DESC LIMIT 1 FOR UPDATE OF c`,
+        [actor.id],
+      );
+      const pending = pendingResult.rows[0];
+      if (!pending) {
+        await client.query('COMMIT');
+        return { status: 'no_pending_change' };
+      }
+
+      await this.incrementRequestRateLimit(client, String(actor.id));
+      const targetAccount = await client.query(
+        `SELECT 1 FROM public.account
+          WHERE identity_email_key = $1 AND id <> $2 LIMIT 1`,
+        [pending.new_email_key, actor.id],
+      );
+      if (targetAccount.rowCount)
+        throw new BadRequestException('new email address is unavailable');
+
+      await client.query(
+        `UPDATE public.identity_email_change
+            SET canceled_at = clock_timestamp()
+          WHERE id = $1 AND account_id = $2`,
+        [pending.id, actor.id],
+      );
+      await client.query(
+        `UPDATE public.identity_email_change_token
+            SET used_at = clock_timestamp()
+          WHERE change_id = $1 AND used_at IS NULL`,
+        [pending.id],
+      );
+      const nextChangeId = randomUUID();
+      await client.query(
+        `INSERT INTO public.identity_email_change
+           (id, account_id, old_email, old_email_key, new_email, new_email_key,
+            expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6,
+                 clock_timestamp() + ($7 * interval '1 second'))`,
+        [
+          nextChangeId,
+          actor.id,
+          pending.old_email,
+          pending.old_email_key,
+          pending.new_email,
+          pending.new_email_key,
+          CHANGE_TTL_SECONDS,
+        ],
+      );
+      await this.queueEmail(
+        client,
+        nextChangeId,
+        String(actor.id),
+        'participant-email-change-old.v1',
+        pending.display_name,
+      );
+      await this.queueEmail(
+        client,
+        nextChangeId,
+        String(actor.id),
+        'participant-email-change-new.v1',
+        pending.display_name,
+      );
+      await writeSecurityEvent(client, 'identity.email-change.resent.v1', {
+        accountId: actor.id,
+        changeId: pending.id,
+        replacementChangeId: nextChangeId,
+      });
+      await client.query('COMMIT');
+      return { status: 'verification_resent' };
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
@@ -489,6 +558,41 @@ export class IdentityEmailChangeService {
         templateData: { changeId, displayName },
       },
     });
+  }
+
+  private async incrementRequestRateLimit(
+    client: PoolClient,
+    accountId: string,
+  ) {
+    const rateLimitKey = createHash('sha256')
+      .update(`email-change:${accountId}`)
+      .digest('hex');
+    const rateLimit = await client.query<{ request_count: number }>(
+      `INSERT INTO public.identity_registration_rate_limit
+         (key_hash, window_started_at, request_count, expires_at)
+       VALUES ($1, clock_timestamp(), 1,
+               clock_timestamp() + interval '15 minutes')
+       ON CONFLICT (key_hash) DO UPDATE SET
+         window_started_at = CASE
+           WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
+             THEN clock_timestamp()
+           ELSE identity_registration_rate_limit.window_started_at END,
+         request_count = CASE
+           WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
+             THEN 1
+           ELSE identity_registration_rate_limit.request_count + 1 END,
+         expires_at = CASE
+           WHEN identity_registration_rate_limit.expires_at <= clock_timestamp()
+             THEN clock_timestamp() + interval '15 minutes'
+           ELSE identity_registration_rate_limit.expires_at END,
+         updated_at = clock_timestamp()
+       RETURNING request_count`,
+      [rateLimitKey],
+    );
+    if ((rateLimit.rows[0]?.request_count ?? 0) > 5)
+      throw new BadRequestException(
+        'too many email change requests; try again later',
+      );
   }
 
   private async connect(): Promise<PoolClient> {

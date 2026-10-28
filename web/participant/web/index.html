@@ -366,7 +366,8 @@
           </p>
           <p class="small">
             Requesting a new change replaces earlier pending confirmation links.
-            You can cancel a pending change at any time.
+            Resending restarts confirmation for both addresses and invalidates
+            earlier links. You can cancel a pending change at any time.
           </p>
           <form id="profile-email-change-form" class="profile-form">
             <label
@@ -395,6 +396,9 @@
           ></p>
           <button id="profile-email-change-cancel" type="button" hidden>
             Cancel pending email change
+          </button>
+          <button id="profile-email-change-resend" type="button" hidden>
+            Resend confirmation emails
           </button>
         </section>
         <section id="profile-callsigns" class="profile-callsigns" hidden>

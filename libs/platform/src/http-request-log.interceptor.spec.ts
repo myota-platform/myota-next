@@ -55,6 +55,37 @@ describe('HttpRequestLogInterceptor', () => {
     expect(JSON.stringify(entry)).not.toContain('private-account-id');
   });
 
+  it('does not log password-reset tokens or credentials from request data', () => {
+    const write = vi
+      .spyOn(Logger.prototype, 'log')
+      .mockImplementation(() => {});
+    const interceptor = new HttpRequestLogInterceptor('identity-api');
+    const resetToken = 'synthetic-reset-token-must-not-appear';
+    const password = 'synthetic-password-must-not-appear';
+    const request = {
+      method: 'POST',
+      path: '/v1/identity/auth/recovery/reset',
+      baseUrl: '/v1/identity/auth/recovery',
+      route: { path: '/reset' },
+      query: { token: resetToken },
+      body: { token: resetToken, newPassword: password },
+      get: () => 'trace-request-reset',
+    } as unknown as Request;
+
+    interceptor
+      .intercept(context(request, { statusCode: 200 }), {
+        handle: () => of({ status: 'password_reset' }),
+      } as CallHandler)
+      .subscribe();
+
+    const logEntry = String(write.mock.calls[0]?.[0]);
+    expect(write).toHaveBeenCalledOnce();
+    expect(logEntry).toContain('/v1/identity/auth/recovery/reset');
+    expect(logEntry).not.toContain(resetToken);
+    expect(logEntry).not.toContain(password);
+    expect(logEntry).not.toContain('newPassword');
+  });
+
   it('logs the HTTP status from a Nest exception', () => {
     const write = vi
       .spyOn(Logger.prototype, 'log')
