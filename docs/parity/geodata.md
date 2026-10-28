@@ -819,3 +819,25 @@ location options, and adapter catalogue returned HTTP 200. The entity list repor
 records; a sample entity reports `geocodeStatus: NOT_CONFIGURED`. No provider request or
 catalogue backfill was submitted. The no-credential fallback is qualified; provider-backed
 enrichment and the Admin backfill still require a test-only credential.
+
+### Provider-backed single-entity check — 2026-10-28
+
+A test-only credential was later provisioned in the `myota-test` namespace through
+the documented Kubernetes Secret. The secret value was not read to output or logged.
+The Geodata worker was restarted so its environment loaded the new Secret and returned
+Ready at 1/1. An authenticated administrator queued one request for an eligible test
+catalogue entity using its current version and an idempotency key. The API returned
+HTTP 202 with `QUEUED`; the worker then completed the request. A fresh entity read
+reported `locationEnrichmentStatus: COMPLETED`, `geocodeStatus: ENRICHED`, and
+`geocodeProvider: BIGDATACLOUD`. The saved response included Spain, Galicia, and
+Culleredo location metadata and a geocoding timestamp.
+
+This confirms the configured single-entity API and worker path. A browser check of
+Admin Entity Management also displayed a confirmation covering all 432 matching
+entities; the confirmation was dismissed and no enrichment requests were submitted.
+This verifies the UI entry point and catalogue count, not queueing or completion of a
+backfill. Lifecycle-triggered enrichment after creation, promotion, or geometry edits,
+Secret rotation with a replacement credential, and catalogue-wide backfill remain
+unverified. A full backfill was not started because it could trigger provider lookups
+for many entities. Continue with the single-entity and bounded Admin qualification
+sequence in the [operator guide](../operations/location-enrichment.md).
