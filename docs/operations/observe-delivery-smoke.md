@@ -19,7 +19,9 @@ collector. It uses test-only credentials and verifies gzip delivery to
 an HTTP request snapshot plus a forwarded stdout log in the same batch. The
 trace ID on the log must match the request snapshot. The second case starts
 and serves a request with credentials absent, then verifies the collector
-receives nothing.
+receives nothing. A third case runs a Nest custom event transport, dispatches a
+worker operation with an `X-Request-ID`, and checks that its Observe snapshot,
+forwarded log, and bounded custom outcome metric reach the local collector.
 
 The test uses the real `@nestjs/observe` worker and wire format. Its credentials
 are inert test values; they are sent only to the loopback server and are not

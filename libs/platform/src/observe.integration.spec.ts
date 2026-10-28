@@ -1,10 +1,13 @@
 import { Controller, Get, Module } from '@nestjs/common';
-import type { INestApplication } from '@nestjs/common';
+import type { INestApplicationContext } from '@nestjs/common';
+import { BaseRpcContext, EventPattern } from '@nestjs/microservices';
 import { NestFactory } from '@nestjs/core';
+import { TracerService } from '@nestjs/observe';
 import { createServer, Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { gunzipSync } from 'node:zlib';
 import { ObserveInstrument, ObserveModule, observeOptions } from './observe.js';
+import { ObserveEventBridge } from './observe-event-bridge.js';
 
 type CollectorRequest = {
   path: string;
@@ -19,6 +22,36 @@ type TelemetryBatch = {
   snapshots: Array<{ ti: string; a?: { ou?: string } }>;
   logs?: Array<{ text: string; traceId?: string }>;
 };
+
+const RPC_TRACE_ID = '11111111-2222-4333-8444-555555555555';
+let eventTracer: TracerService | undefined;
+
+class ObserveSmokeEventContext extends BaseRpcContext<[string]> {
+  readonly headers = { 'x-request-id': RPC_TRACE_ID };
+
+  getPattern(): string {
+    return this.getArgByIndex(0);
+  }
+}
+
+class ObserveSmokeEventHandler {
+  async handle(): Promise<void> {
+    eventTracer
+      ?.counter('observe.smoke.worker.events', { labels: ['status'] })
+      .increment({ status: 'accepted' });
+    process.stdout.write('observe-worker-log-sentinel\n');
+  }
+}
+
+Controller()(ObserveSmokeEventHandler);
+EventPattern('observe-smoke.event')(
+  ObserveSmokeEventHandler.prototype,
+  'handle',
+  Object.getOwnPropertyDescriptor(
+    ObserveSmokeEventHandler.prototype,
+    'handle',
+  )!,
+);
 
 class ObserveSmokeController {
   probe() {
@@ -88,12 +121,13 @@ async function closeServer(server: Server): Promise<void> {
 }
 
 describe('@nestjs/observe integration', () => {
-  let application: INestApplication | undefined;
+  let application: INestApplicationContext | undefined;
   let collector: Server | undefined;
 
   afterEach(async () => {
     await application?.close();
     application = undefined;
+    eventTracer = undefined;
     if (collector) await closeServer(collector);
     collector = undefined;
   });
@@ -180,4 +214,56 @@ describe('@nestjs/observe integration', () => {
     await new Promise((resolve) => setTimeout(resolve, 1200));
     expect(received).toHaveLength(0);
   }, 10000);
+
+  it('traces a custom JetStream event handler and correlates its worker log', async () => {
+    const received: CollectorRequest[] = [];
+    collector = collectorServer(received);
+    const collectorPort = await listen(collector);
+    const options = observeOptions('observe-smoke-worker', {
+      OBSERVE_APP_KEY: 'integration-test-app-key',
+      OBSERVE_APP_SECRET: 'integration-test-app-secret',
+      OBSERVE_ENDPOINT: `http://127.0.0.1:${collectorPort}`,
+    });
+    class ObserveSmokeWorkerModule {}
+    Module({
+      imports: [ObserveModule.forRoot({ ...options, flushInterval: 1000 })],
+      controllers: [ObserveSmokeEventHandler],
+    })(ObserveSmokeWorkerModule);
+
+    const transport = new ObserveEventBridge();
+    application = await NestFactory.createMicroservice(
+      ObserveSmokeWorkerModule,
+      { logger: false, strategy: transport, instrument: ObserveInstrument },
+    );
+    await application.listen();
+    eventTracer = application.get(TracerService);
+    await transport.dispatch(
+      'observe-smoke.event',
+      { eventId: 'test-event' },
+      new ObserveSmokeEventContext(['observe-smoke.event']),
+    );
+
+    const correlatedBatch = () =>
+      received.find((batch) => {
+        const payload = JSON.parse(batch.body) as TelemetryBatch;
+        return (
+          payload.snapshots.some((snapshot) => snapshot.ti === RPC_TRACE_ID) &&
+          payload.logs?.some((log) =>
+            log.text.includes('observe-worker-log-sentinel'),
+          )
+        );
+      });
+    const receivedWorkerBatch = await waitFor(
+      () => correlatedBatch() !== undefined,
+    );
+    expect(receivedWorkerBatch).toBe(true);
+    const payload = JSON.parse(correlatedBatch()!.body) as TelemetryBatch;
+    const log = payload.logs!.find((candidate) =>
+      candidate.text.includes('observe-worker-log-sentinel'),
+    )!;
+
+    expect(payload.serviceId).toBe('observe-smoke-worker');
+    expect(log.traceId).toBe(RPC_TRACE_ID);
+    expect(correlatedBatch()!.body).toContain('observe.smoke.worker.events');
+  }, 15000);
 });
