@@ -134,9 +134,13 @@ against the isolated deployment remains under Phase 6 issue #10.
   Phase 6 now has isolated SMTP STARTTLS delivery and same-work-ID replay
   evidence; the broader clean-install, authenticated workflow, backup/restore,
   observability, and rollback gates remain tracked by issue #10. The current
-  `myota-test` topology has 21/21 requested replicas ready and 17/17 Prometheus
-  targets up, but no Observe destination or centralized logs/traces backend;
-  workflow signal correlation remains open under #90 and #91.
+  `myota-test` topology has 22/22 requested replicas ready and 17/17 Prometheus
+  targets up. An in-cluster, credential-protected receiver now verifies
+  authenticated Admin and Participant login and `/me` telemetry across Gateway
+  and Identity API, with matching traces, forwarded logs, and HTTP 200 metrics.
+  Worker batches are delivered but contain no business-operation snapshots or
+  logs; hosted Observe and behavioral alert qualification remain open under #90
+  and #91.
   A deployed Participant email-change request recovered from a temporary SMTP
   outage: the current-address message retried twice and delivered after the
   test sink returned. The old address remained authoritative until both links
@@ -146,9 +150,10 @@ against the isolated deployment remains under Phase 6 issue #10.
   failures and one delivery for each address template. These template/outcome
   counters do not identify a work item, so full request-level correlation and
   centralized traces remain open under #90 and #91.
-  The local Observe SDK delivery smoke test and its limits are documented in
-  [Observe delivery smoke test](operations/observe-delivery-smoke.md); live
-  test-namespace credentials and telemetry correlation are still required.
+  The local Observe SDK delivery smoke test and current deployment evidence are
+  documented in [Observe delivery smoke test](operations/observe-delivery-smoke.md).
+  The receiver uses test-only credentials stored outside Git; it does not
+  replace a hosted Observe destination.
   Authenticated Admin access to the embedded Grafana dashboard is qualified
   under #116: dashboard/query requests succeed, while unauthorized requests
   redirect to sign-in. This does not substitute for Observe delivery or
