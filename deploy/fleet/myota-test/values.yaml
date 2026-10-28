@@ -116,7 +116,7 @@ images:
     digest: sha256:7a60cc43573fd7c0595e7f6c03ca177cf7c73df94ab83ad8902a61013b4c9402
     repository: ghcr.io/myota-platform/myota-next-outbox-worker
   participant-web:
-    digest: sha256:ea67163a7f863dac20db159900e267a0e8e5f9a5744fc49ac8457e2e44e6be5f
+    digest: sha256:dc54be031166ea2cac26f067f22229a713ec32c72e7a8d62cc7f0f0a9ddd0a9c
     repository: ghcr.io/myota-platform/myota-next-participant-web
   programmes:
     digest: sha256:a776615de94479209930d951aa4c8803ca3e27ab28e3233493a2ec6ad9d93635
