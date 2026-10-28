@@ -87,3 +87,15 @@ are tracked in [the Geodata parity record](../parity/geodata.md) and issues
 [#110](https://github.com/myota-platform/myota-next/issues/110),
 [#111](https://github.com/myota-platform/myota-next/issues/111), and
 [#112](https://github.com/myota-platform/myota-next/issues/112).
+
+## Live no-key check
+
+On 2026-10-27 at 23:55 UTC, Helm release `myota-test` used chart
+`myota-next-1.1.6-testing.54b944d51999.1`. The
+`myota-geodata-enrichment` Secret was absent. The live Geodata worker Deployment
+references the optional `api-key` only from its container and remained Ready
+(1/1); all 16 release Deployments were available (21/21 replicas). This verifies
+that the worker can start without the provider credential and that the Secret
+reference is isolated to that worker. It does not verify a provider request, a
+live API response of `NOT_CONFIGURED`, or secret rotation. Those checks remain
+open under [#111](https://github.com/myota-platform/myota-next/issues/111).
