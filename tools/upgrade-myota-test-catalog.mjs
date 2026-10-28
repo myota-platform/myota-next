@@ -374,8 +374,15 @@ async function requestCatalogUpgrade(version, values) {
   );
   await waitFor(
     `Rancher Helm operation for chart ${version}`,
-    () => getJson(operationUrl),
+    () => getJsonIfPresent(operationUrl),
     (operation) => {
+      if (!operation)
+        return {
+          done: true,
+          description:
+            'operation record is no longer available; verifying the Rancher App revision and Deployments',
+        };
+
       const conditions = operation.status?.conditions ?? [];
       const ready = conditions.find((condition) => condition.type === 'Ready');
       const reconciling = conditions.find(
