@@ -46,6 +46,53 @@ const escapeHtml = (value) =>
         character
       ],
   );
+function themeHex(value, fallback) {
+  if (typeof value !== 'string' || !/^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(value))
+    return fallback;
+  if (value.length === 4)
+    return `#${[...value.slice(1)].map((channel) => channel + channel).join('')}`;
+  return value.toLowerCase();
+}
+function linearColorChannel(channel) {
+  const value = channel / 255;
+  return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+}
+function colorLuminance(hex) {
+  const color = hex
+    .slice(1)
+    .match(/.{2}/g)
+    .map((channel) => linearColorChannel(Number.parseInt(channel, 16)));
+  return color[0] * 0.2126 + color[1] * 0.7152 + color[2] * 0.0722;
+}
+function contrastRatio(first, second) {
+  const luminances = [colorLuminance(first), colorLuminance(second)].sort(
+    (a, b) => b - a,
+  );
+  return (luminances[0] + 0.05) / (luminances[1] + 0.05);
+}
+function readablePrimaryColor(primary) {
+  if (contrastRatio(primary, '#ffffff') >= 4.5) return primary;
+  const channels = primary
+    .slice(1)
+    .match(/.{2}/g)
+    .map((channel) => Number.parseInt(channel, 16));
+  for (let darkness = 0.05; darkness <= 1; darkness += 0.05) {
+    const candidate = `#${channels
+      .map((channel) =>
+        Math.round(channel * (1 - darkness))
+          .toString(16)
+          .padStart(2, '0'),
+      )
+      .join('')}`;
+    if (contrastRatio(candidate, '#ffffff') >= 4.5) return candidate;
+  }
+  return '#0f766e';
+}
+function foregroundForPrimary(primary) {
+  const whiteContrast = contrastRatio(primary, '#ffffff');
+  const inkContrast = contrastRatio(primary, '#17312f');
+  return whiteContrast >= inkContrast ? '#ffffff' : '#17312f';
+}
 async function api(path, options = {}) {
   const res = await fetch(path, options);
   if (!res.ok) {
@@ -307,16 +354,24 @@ async function loadProgramme(slug) {
     programmes.find((p) => p.slug === slug) ||
     (await api(`/v1/programmes/${encodeURIComponent(slug)}`));
   if (generation !== programmeLoadGeneration) return;
+  const primary = themeHex(programme.theme?.primary, '#0f766e');
+  document.documentElement.style.setProperty('--primary', primary);
   document.documentElement.style.setProperty(
-    '--primary',
-    programme.theme.primary,
+    '--primary-readable',
+    readablePrimaryColor(primary),
+  );
+  document.documentElement.style.setProperty(
+    '--primary-foreground',
+    foregroundForPrimary(primary),
   );
   document.documentElement.style.setProperty(
     '--accent',
-    programme.theme.accent,
+    themeHex(programme.theme?.accent, '#f59e0b'),
   );
   $('programme-name').textContent = programme.name;
-  $('programme-description').textContent = programme.description;
+  $('programme-description').textContent =
+    programme.description?.trim() ||
+    'Discover places where radio meets the outdoors.';
   $('rules').innerHTML =
     `<dt>Activation QSOs</dt><dd>${escapeHtml(programme.rules.minimumQsos.activation)}</dd><dt>Hunter QSOs</dt><dd>${escapeHtml(programme.rules.minimumQsos.hunter)}</dd><dt>Public access</dt><dd>${programme.rules.publicAccessRequired ? 'Required' : 'Programme-defined'}</dd>`;
   const proposalTypes = Array.isArray(programme.entityTypes)

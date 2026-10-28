@@ -6,6 +6,10 @@
   --muted: #627875;
   --line: #d9e7e4;
   --white: #fff;
+  --content-width: 1180px;
+  --panel-radius: 16px;
+  --control-radius: 8px;
+  --panel-shadow: 0 5px 20px #0b3b3210;
 }
 * {
   box-sizing: border-box;
@@ -32,7 +36,7 @@ body {
 }
 .skip-link {
   background: var(--white);
-  border: 2px solid var(--primary);
+  border: 2px solid var(--primary-readable, var(--primary));
   border-radius: 6px;
   left: 16px;
   padding: 10px 14px;
@@ -44,8 +48,29 @@ body {
   top: 8px;
 }
 :focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--primary-readable, var(--primary));
   outline-offset: 3px;
+}
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not(
+    [type='range']
+  ),
+select,
+textarea {
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  color: var(--ink);
+  font: inherit;
+  padding: 9px 11px;
+}
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not(
+    [type='range']
+  ),
+select,
+button {
+  min-height: 42px;
+}
+textarea {
+  min-height: 6rem;
 }
 .topbar {
   align-items: center;
@@ -63,7 +88,7 @@ body {
   margin: 3px 0;
 }
 .eyebrow {
-  color: var(--primary);
+  color: var(--primary-readable, var(--primary));
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -83,7 +108,7 @@ body {
 .hero,
 main {
   margin: auto;
-  max-width: 1180px;
+  max-width: var(--content-width);
 }
 .hero {
   align-items: end;
@@ -112,7 +137,7 @@ main {
 }
 .stat strong {
   display: block;
-  color: var(--primary);
+  color: var(--primary-readable, var(--primary));
   font-size: 34px;
 }
 .stat span {
@@ -128,8 +153,8 @@ main {
 .panel {
   background: var(--white);
   border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: 0 5px 20px #0b3b3210;
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
   overflow: hidden;
 }
 .panel-head {
@@ -244,7 +269,7 @@ button {
   background: var(--primary);
   border: 0;
   border-radius: 8px;
-  color: white;
+  color: var(--primary-foreground, white);
   cursor: pointer;
   font-weight: 700;
   padding: 10px 13px;
@@ -296,7 +321,7 @@ th {
   font-size: 12px;
 }
 a {
-  color: var(--primary);
+  color: var(--primary-readable, var(--primary));
 }
 @media (max-width: 760px) {
   .hero {
@@ -480,7 +505,7 @@ a {
   background: var(--surface);
   border: 1px solid #bce3db;
   border-radius: 7px;
-  color: var(--primary);
+  color: var(--primary-readable, var(--primary));
   font-size: 12px;
   margin: 0;
   padding: 8px 10px;
@@ -529,7 +554,7 @@ a {
   display: block;
 }
 .award-request-status {
-  color: var(--primary);
+  color: var(--primary-readable, var(--primary));
   font-size: 11px;
   font-weight: 700;
 }
@@ -554,7 +579,7 @@ a {
   overflow-wrap: anywhere;
 }
 .activation-history-detail summary .small {
-  color: var(--primary);
+  color: var(--primary-readable, var(--primary));
   font-weight: 700;
 }
 .activation-history-content {
@@ -741,10 +766,11 @@ a {
   margin-bottom: 0;
 }
 .biography-preview a {
-  color: var(--primary);
+  color: var(--primary-readable, var(--primary));
 }
 .secondary {
   background: #64748b;
+  color: white;
 }
 
 .topbar {
@@ -775,7 +801,10 @@ a {
 .primary-nav a:hover,
 .primary-nav a:focus-visible {
   background: var(--surface);
-  color: var(--primary);
+  color: var(--primary-readable, var(--primary));
+}
+.primary-nav a:focus-visible {
+  outline-offset: 1px;
 }
 .programme-controls {
   display: grid;
@@ -800,6 +829,17 @@ a {
   margin-top: 22px;
   padding: 36px 32px;
 }
+.hero,
+.layout,
+.public-content-panel,
+.entity-panel,
+.community-panel,
+.participant-account-panel,
+.profile-panel,
+.awards-panel,
+.activation-panel {
+  scroll-margin-top: 7rem;
+}
 .hero h2 {
   color: #163a35;
   font-size: clamp(30px, 4vw, 44px);
@@ -808,7 +848,7 @@ a {
   align-items: center;
   background: var(--primary);
   border-radius: 9px;
-  color: white;
+  color: var(--primary-foreground, white);
   display: inline-flex;
   font-size: 14px;
   font-weight: 750;
@@ -937,9 +977,10 @@ a {
   .primary-nav {
     grid-column: 1 / -1;
     grid-row: 2;
+    flex-wrap: wrap;
     justify-content: flex-start;
-    overflow-x: auto;
-    padding-bottom: 2px;
+    overflow: visible;
+    row-gap: 2px;
   }
   .programme-controls {
     grid-column: 2;
@@ -989,12 +1030,26 @@ a {
   .primary-nav {
     grid-column: 1;
     grid-row: auto;
-    gap: 12px;
+    column-gap: 8px;
+    gap: 2px 8px;
+    flex-wrap: wrap;
     justify-content: flex-start;
     width: 100%;
   }
   .primary-nav a {
-    font-size: 12px;
+    font-size: 13px;
+    padding: 7px 8px;
+  }
+  .hero,
+  .layout,
+  .public-content-panel,
+  .entity-panel,
+  .community-panel,
+  .participant-account-panel,
+  .profile-panel,
+  .awards-panel,
+  .activation-panel {
+    scroll-margin-top: 12rem;
   }
   .hero {
     margin: 16px 16px 18px;
