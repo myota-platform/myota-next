@@ -409,6 +409,8 @@ test('shows live community activations, rankings, and programme exports', async 
   await expect(
     page.getByRole('navigation', { name: 'Participant navigation' }),
   ).toContainText('Explore');
+  await page.getByRole('link', { name: 'Profile' }).click();
+  await expect(page).toHaveURL(/#profile$/);
   await expect(page.locator('#public-activations')).toContainText('N0***L');
   await expect(page.locator('#public-activations')).toContainText('8 QSOs');
   await expect(page.locator('#public-leaderboard')).toContainText('Hunter 1');
