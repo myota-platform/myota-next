@@ -48,6 +48,11 @@ prometheus:
 The selector label must match the installed Prometheus resource. Keep rules
 disabled when the Prometheus Operator CRDs are unavailable. The chart creates
 `PrometheusRule` resources only when `prometheus.rules.enabled` is true.
+For Rancher catalog deployments, the catalog-upgrader Role also needs
+namespace-scoped `get`, `list`, `watch`, `create`, `update`, `patch`, and
+`delete` access to `monitoring.coreos.com/prometheusrules`. The test deployment
+grants this alongside its existing ServiceMonitor permissions; it does not
+grant cluster-wide access.
 
 ## Verify
 

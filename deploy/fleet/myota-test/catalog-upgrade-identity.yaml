@@ -26,7 +26,7 @@ rules:
     resources: ["ingressroutes"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["monitoring.coreos.com"]
-    resources: ["servicemonitors"]
+    resources: ["servicemonitors", "prometheusrules"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
