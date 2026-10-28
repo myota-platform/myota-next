@@ -165,3 +165,7 @@ migrations:
 prometheus:
   serviceMonitor:
     enabled: true
+  rules:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack

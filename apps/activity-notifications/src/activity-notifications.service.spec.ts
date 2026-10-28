@@ -26,6 +26,10 @@ describe('ActivityNotificationsService redelivery', () => {
       query: vi.fn().mockResolvedValue({ rows: [{ count: '0' }] }),
     };
     const service = new ActivityNotificationsService(pool as never);
+    const log = vi.spyOn(
+      Reflect.get(service, 'logger') as { log: (message: string) => void },
+      'log',
+    );
     const message = {
       data: new TextEncoder().encode(
         JSON.stringify({
@@ -51,6 +55,15 @@ describe('ActivityNotificationsService redelivery', () => {
     expect(message.working).toHaveBeenCalledOnce();
     expect(message.ackAck).toHaveBeenCalledOnce();
     expect(message.nak).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(
+      JSON.stringify({
+        event: 'activity_notification.settled',
+        eventId: '33333333-3333-4333-8333-333333333333',
+        eventType: 'identity.account.created.v1',
+        outcome: 'processed',
+        deliveryCount: 1,
+      }),
+    );
     expect(
       statements.filter((sql) =>
         sql.startsWith('INSERT INTO public.activity_notification'),

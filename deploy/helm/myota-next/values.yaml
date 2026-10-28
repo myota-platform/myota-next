@@ -89,6 +89,10 @@ prometheus:
     enabled: false
     interval: 30s
     scrapeTimeout: 10s
+  rules:
+    enabled: false
+    labels:
+      release: kube-prometheus-stack
 dependencies:
   objectStorageEndpoint: http://myota-s3:8333
   objectStoragePublicEndpoint: ''

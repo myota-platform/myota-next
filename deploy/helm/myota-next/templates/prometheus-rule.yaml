@@ -1,0 +1,92 @@
+{{- if .Values.prometheus.rules.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "myota-next.name" . }}-alerts
+  labels:
+    {{- include "myota-next.labels" . | nindent 4 }}
+    {{- toYaml .Values.prometheus.rules.labels | nindent 4 }}
+spec:
+  groups:
+    - name: myota.api
+      rules:
+        - alert: MyOTAScrapeTargetUnavailable
+          expr: label_replace(up{namespace="{{ .Release.Namespace }}",service=~"{{ .Release.Name }}-.*"} == 0, "service_id", "$1", "service", "{{ .Release.Name }}-(.*)")
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: MyOTA telemetry scrape target is unavailable
+            description: >-
+              Prometheus cannot scrape {{ "{{" }} $labels.service {{ "}}" }}. Check the service,
+              endpoint, and metrics port.
+        - alert: MyOTAApiServerErrors
+          expr: sum by (service) (increase(myota_http_requests_total{status=~"5.."}[10m])) >= 5
+          for: 5m
+          labels:
+            severity: warning
+            service_id: '{{ "{{" }} $labels.service {{ "}}" }}'
+          annotations:
+            summary: MyOTA API is returning repeated server errors
+            description: >-
+              {{ "{{" }} $labels.service {{ "}}" }} recorded at least five HTTP 5xx responses in
+              the last ten minutes. Check the service logs and traces.
+        - alert: MyOTAWorkerDependencyUnavailable
+          expr: myota_worker_dependency_up == 0
+          for: 2m
+          labels:
+            severity: critical
+            service_id: '{{ "{{" }} $labels.service_id {{ "}}" }}'
+          annotations:
+            summary: MyOTA worker dependency is unavailable
+            description: >-
+              {{ "{{" }} $labels.service_id {{ "}}" }} cannot reach its {{ "{{" }} $labels.dependency {{ "}}" }}
+              dependency. Check service health, network connectivity, and the
+              dependency workload.
+        - alert: MyOTAWorkerWorkFailures
+          expr: sum by (service_id, work_type) (increase(myota_worker_work_total{outcome=~"failed|dead_lettered|settlement_error"}[10m])) > 0
+          for: 1m
+          labels:
+            severity: warning
+            service_id: '{{ "{{" }} $labels.service_id {{ "}}" }}'
+          annotations:
+            summary: MyOTA worker could not settle work successfully
+            description: >-
+              {{ "{{" }} $labels.service_id {{ "}}" }} recorded {{ "{{" }} $value {{ "}}" }} failed, dead-lettered,
+              or unsettled {{ "{{" }} $labels.work_type {{ "}}" }} message(s) in the last ten
+              minutes.
+    - name: myota.delivery
+      rules:
+        - alert: MyOTAOutboxDependencyUnavailable
+          expr: myota_outbox_database_up == 0 or myota_outbox_nats_up == 0
+          for: 2m
+          labels:
+            severity: critical
+            service_id: '{{ "{{" }} $labels.worker {{ "}}" }}'
+          annotations:
+            summary: MyOTA outbox relay cannot reach a dependency
+            description: >-
+              {{ "{{" }} $labels.worker {{ "}}" }} reports a failed PostgreSQL or NATS connection.
+        - alert: MyOTAUnresolvedOutboxDeadLetters
+          expr: myota_outbox_unresolved_dead_letters > 0
+          for: 2m
+          labels:
+            severity: warning
+            service_id: '{{ "{{" }} $labels.worker {{ "}}" }}'
+          annotations:
+            summary: MyOTA outbox has unresolved dead letters
+            description: >-
+              {{ "{{" }} $labels.worker {{ "}}" }} has {{ "{{" }} $value {{ "}}" }} unresolved outbox dead-letter
+              event(s).
+        - alert: MyOTAActivityNotificationDeadLetters
+          expr: myota_activity_notification_unresolved_dead_letters > 0
+          for: 2m
+          labels:
+            severity: warning
+            service_id: activity-notifications
+          annotations:
+            summary: MyOTA Activity notifications have unresolved dead letters
+            description: >-
+              The Activity Notifications worker has {{ "{{" }} $value {{ "}}" }} unresolved
+              poison event(s).
+{{- end }}
