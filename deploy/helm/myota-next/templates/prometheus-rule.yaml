@@ -11,7 +11,10 @@ spec:
     - name: myota.api
       rules:
         - alert: MyOTAScrapeTargetUnavailable
-          expr: label_replace(up{namespace="{{ .Release.Namespace }}",service=~"{{ .Release.Name }}-.*"} == 0, "service_id", "$1", "service", "{{ .Release.Name }}-(.*)")
+          expr: >-
+            label_replace(up{namespace="{{ .Release.Namespace }}",service=~"{{ .Release.Name }}-(identity|programmes|activity|geodata)"} == 0, "service_id", "$1-api", "service", "{{ .Release.Name }}-(.*)")
+            or label_replace(up{namespace="{{ .Release.Namespace }}",service=~"{{ .Release.Name }}-outbox-(core|activity|geodata)"} == 0, "service_id", "outbox-worker", "service", ".*")
+            or label_replace(up{namespace="{{ .Release.Namespace }}",service!~"{{ .Release.Name }}-(identity|programmes|activity|geodata|outbox-(core|activity|geodata))"} == 0, "service_id", "$1", "service", "{{ .Release.Name }}-(.*)")
           for: 2m
           labels:
             severity: critical
@@ -62,7 +65,7 @@ spec:
           for: 2m
           labels:
             severity: critical
-            service_id: '{{ "{{" }} $labels.worker {{ "}}" }}'
+            service_id: outbox-worker
           annotations:
             summary: MyOTA outbox relay cannot reach a dependency
             description: >-
@@ -72,7 +75,7 @@ spec:
           for: 2m
           labels:
             severity: warning
-            service_id: '{{ "{{" }} $labels.worker {{ "}}" }}'
+            service_id: outbox-worker
           annotations:
             summary: MyOTA outbox has unresolved dead letters
             description: >-

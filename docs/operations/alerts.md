@@ -23,11 +23,13 @@ The chart currently defines these alerts:
   gauge remains above zero for two minutes.
 
 Rules attach the stable `service_id` label where the source metric provides it.
-The scrape-target alert derives that label from the release-prefixed Service
-name. API, worker, and outbox alerts preserve the owning service identifier and
-add useful dimensions such as work type or dependency. Alert descriptions point
-operators to service logs, traces, and dependency health; they do not include
-request payloads or credentials.
+The scrape-target alert maps API Service names to their `*-api` IDs and maps
+the three outbox Services to their shared `outbox-worker` ID; other release-
+prefixed Service names retain their suffix as the ID. API, worker, and outbox
+alerts preserve the owning service identifier and add useful dimensions such as
+work type or dependency. Alert descriptions point operators to service logs,
+traces, and dependency health; they do not include request payloads or
+credentials.
 
 ## Configure
 
