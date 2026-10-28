@@ -620,6 +620,37 @@ $('public-ranking-category').onchange = () =>
     $('programme-select').value,
     $('public-ranking-category').value,
   );
+$('public-results-download').onclick = async (event) => {
+  event.preventDefault();
+  const link = $('public-results-download');
+  const status = $('public-results-status');
+  link.setAttribute('aria-busy', 'true');
+  status.textContent = 'Preparing programme results download…';
+  const slug = $('programme-select').value;
+  try {
+    const result = await api(
+      `/v1/public/results?programme=${encodeURIComponent(slug)}&format=csv`,
+    );
+    if (result.format !== 'csv' || typeof result.content !== 'string')
+      throw new Error('The results service returned an invalid CSV export.');
+    const filename = result.downloadName || `myota-results-${slug}.csv`;
+    const url = URL.createObjectURL(
+      new Blob([result.content], { type: 'text/csv;charset=utf-8' }),
+    );
+    const download = document.createElement('a');
+    download.href = url;
+    download.download = filename;
+    document.body.append(download);
+    download.click();
+    download.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status.textContent = `Downloaded ${filename}.`;
+  } catch (error) {
+    status.textContent = `Programme results are temporarily unavailable. Try again. ${error.message}`;
+  } finally {
+    link.removeAttribute('aria-busy');
+  }
+};
 $('community-refresh').onclick = () =>
   loadPublicActivity($('programme-select').value, publicActivityPage);
 $('entity-prev').onclick = () =>
@@ -916,7 +947,7 @@ async function loadPublicAwards(slug) {
 async function loadPublicActivity(slug, page = 1) {
   publicActivityPage = page;
   const resultsLink = $('public-results-download');
-  resultsLink.href = `/v1/public/results?programme=${encodeURIComponent(slug)}&format=csv`;
+  resultsLink.href = '#community';
   await Promise.all([
     loadPublicActivationHistory(slug, page),
     loadPublicLeaderboard(slug, $('public-ranking-category').value),
