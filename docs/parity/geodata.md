@@ -814,7 +814,8 @@ The Admin Web is Ready at 1/1 on digest
 `sha256:7008a0a1b5c6700e574eed43cf4f3e77d37ba42cd4666db0b6f2d99d53e701b6`.
 The worker's `BIGDATACLOUD_API_KEY` reference points to the optional
 `myota-geodata-enrichment` Secret and `api-key` key, but a presence-only lookup
-confirms that Secret is absent. No provider request or catalogue backfill was
-submitted. Provider-backed qualification still requires a test-only credential;
-the deployed worker and Admin feature are available for that check once the
-credential is provisioned.
+confirms that Secret is absent. Authenticated read-only requests to the entity list,
+location options, and adapter catalogue returned HTTP 200. The entity list reports 432
+records; a sample entity reports `geocodeStatus: NOT_CONFIGURED`. No provider request or
+catalogue backfill was submitted. The no-credential fallback is qualified; provider-backed
+enrichment and the Admin backfill still require a test-only credential.
