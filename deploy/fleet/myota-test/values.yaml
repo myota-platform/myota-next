@@ -11,6 +11,7 @@ commonResources:
     memory: 96Mi
 observe:
   enabled: true
+  endpoint: http://myota-test-observe-mock.myota-test.svc.cluster.local:8080
 components:
   activity-worker:
     resources:
