@@ -101,8 +101,9 @@ confirmation; the new address became authoritative only after both confirmations
 links completed the change in order while preserving the old address until the second
 confirmation. The synthetic account was restored to its original address and login verified;
 all generated messages were removed and Mailpit was empty. Email-change delivery recovery
-after a temporary SMTP outage is also verified. Coordinated multi-source throttling and
-deployed telemetry-secret checks remain open under #114. A revision 73 reset test rejected
+after a temporary SMTP outage is also verified. Deployed recovery throttling across six
+signed client addresses and reset-token exclusion from test-namespace logs are verified
+under #114. A revision 73 reset test rejected
 two pre-reset access sessions and both refresh credentials; the temporary password worked
 and the original password was restored. See [Identity and Programme parity](parity/identity-programmes.md)
 and the [Phase 6 readiness record](operations/phase6-readiness.md).
