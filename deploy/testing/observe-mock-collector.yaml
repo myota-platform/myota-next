@@ -1,0 +1,173 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: myota-test-observe-mock
+  namespace: myota-test
+  labels:
+    app.kubernetes.io/name: myota-test-observe-mock
+    app.kubernetes.io/part-of: myota-test-qualification
+data:
+  collector.mjs: |
+    import { createServer } from 'node:http';
+    import { gunzipSync } from 'node:zlib';
+
+    const maxBytes = 8 * 1024 * 1024;
+    const server = createServer((request, response) => {
+      if (request.method === 'GET' && request.url === '/healthz') {
+        response.writeHead(200, { 'content-type': 'text/plain' }).end('ok');
+        return;
+      }
+      if (request.method !== 'POST' || request.url !== '/applications/telemetry') {
+        response.writeHead(404).end();
+        return;
+      }
+
+      const chunks = [];
+      let size = 0;
+      request.on('data', (chunk) => {
+        size += chunk.length;
+        if (size > maxBytes) {
+          request.destroy();
+          return;
+        }
+        chunks.push(chunk);
+      });
+      request.on('end', () => {
+        try {
+          const keyMatches = request.headers['x-api-key'] === process.env.MOCK_APP_KEY;
+          const secretMatches = request.headers['x-api-secret'] === process.env.MOCK_APP_SECRET;
+          if (!keyMatches || !secretMatches) {
+            response.writeHead(401, { 'content-type': 'application/json' }).end('{}');
+            console.log(JSON.stringify({ event: 'rejected-batch', reason: 'test-credentials-mismatch' }));
+            return;
+          }
+          if (request.headers['content-encoding'] !== 'gzip') {
+            response.writeHead(415, { 'content-type': 'application/json' }).end('{}');
+            return;
+          }
+
+          const batch = JSON.parse(gunzipSync(Buffer.concat(chunks)).toString('utf8'));
+          const snapshots = Array.isArray(batch.snapshots) ? batch.snapshots : [];
+          const logs = Array.isArray(batch.logs) ? batch.logs : [];
+          const traceIds = (items) => [...new Set(items.map((item) => item?.ti ?? item?.traceId).filter((id) => typeof id === 'string'))];
+          console.log(JSON.stringify({
+            event: 'accepted-batch',
+            serviceId: batch.serviceId ?? null,
+            serviceVersion: batch.serviceVersion ?? null,
+            snapshotCount: snapshots.length,
+            traceIds: traceIds(snapshots),
+            operations: [...new Set(snapshots.map((item) => item?.a?.ou).filter((value) => typeof value === 'string'))],
+            logCount: logs.length,
+            logTraceIds: traceIds(logs),
+            credentials: 'matched-test-secret',
+          }));
+          response.writeHead(200, { 'content-type': 'application/json' }).end('{}');
+        } catch {
+          response.writeHead(400, { 'content-type': 'application/json' }).end('{}');
+          console.log(JSON.stringify({ event: 'rejected-batch', reason: 'invalid-gzip-or-json' }));
+        }
+      });
+    });
+
+    server.listen(8080, '0.0.0.0');
+    for (const signal of ['SIGTERM', 'SIGINT']) {
+      process.on(signal, () => server.close(() => process.exit(0)));
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myota-test-observe-mock
+  namespace: myota-test
+  labels:
+    app.kubernetes.io/name: myota-test-observe-mock
+    app.kubernetes.io/part-of: myota-test-qualification
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: myota-test-observe-mock
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: myota-test-observe-mock
+        app.kubernetes.io/part-of: myota-test-qualification
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: collector
+          image: docker.io/library/node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
+          imagePullPolicy: IfNotPresent
+          command: [node, /collector/collector.mjs]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: MOCK_APP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: myota-observe
+                  key: app-key
+            - name: MOCK_APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: myota-observe
+                  key: app-secret
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          volumeMounts:
+            - name: source
+              mountPath: /collector
+              readOnly: true
+      volumes:
+        - name: source
+          configMap:
+            name: myota-test-observe-mock
+            defaultMode: 0444
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: myota-test-observe-mock
+  namespace: myota-test
+  labels:
+    app.kubernetes.io/name: myota-test-observe-mock
+    app.kubernetes.io/part-of: myota-test-qualification
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: myota-test-observe-mock
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

@@ -368,8 +368,15 @@ an accepted scope decision is recorded in the dispositions section.
   Email delivery and recovery evidence is in L-02. See the
   [Observe guide](operations/observe-delivery-smoke.md).
 - **Missing evidence:** Observe credentialed delivery has not been verified because
-  the optional `myota-observe` Secret is absent. Centralized logs/traces and
-  request-level workflow correlation remain open under #90 and #91. The optional
+  the optional `myota-observe` Secret is absent. A temporary in-cluster mock
+  collector accepted telemetry from Gateway and Activity for one public read
+  request, and direct checks confirmed that removing the endpoint and Secret
+  disabled delivery. This does not qualify a hosted Observe account. Centralized
+  application logs, alerts, and authenticated request-level workflow correlation
+  remain open under #90 and #91. The automated deployment workflow was canceled
+  after Rancher completed and removed its operation record before the workflow
+  poller observed completion; the deployed Helm and Kubernetes state was checked
+  directly, so that run is not counted as a passing gate. The optional
   BigDataCloud key is also absent, so provider-backed location enrichment under
   #110/#111 remains unqualified. No production SMTP relay trust chain has been
   qualified; see L-02. The live no-key state and its limits are recorded in the

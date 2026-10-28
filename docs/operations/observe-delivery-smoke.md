@@ -54,6 +54,48 @@ direct read of environment values inside the distroless containers. The Helm
 endpoint override is empty, no Loki/Tempo/OpenTelemetry Collector Deployment was
 found, and authenticated delivery to a real Observe account remains unqualified.
 
+### In-cluster mock collector qualification
+
+On 2026-10-28, a temporary, ClusterIP-only mock collector was used to check
+delivery from the deployed NestJS services without sending test credentials to
+an external Observe account. The fixture is
+[`deploy/testing/observe-mock-collector.yaml`](../../deploy/testing/observe-mock-collector.yaml).
+It accepts only gzip telemetry at `/applications/telemetry`, validates the
+test-only app key and secret, and logs service IDs, trace IDs, operation names,
+and record counts. It does not log credentials or telemetry payloads.
+
+The local test-only Secret manifest belongs at
+`runtime-secrets/issue10-observe-mock.yaml`; `runtime-secrets/` is ignored by
+Git. Use disposable credentials only. For the temporary test values, enable
+Observe, keep `secretName: myota-observe`, and set the endpoint to
+`http://myota-test-observe-mock.myota-test.svc.cluster.local:8080`. Send a
+read-only request through the test Gateway and verify accepted batches from
+both Gateway and a downstream service contain the same request trace ID. Then
+remove the endpoint override, delete the test Secret, and remove the collector
+resources. The regular endpoint is left empty so the SDK uses its configured
+default when real Observe credentials are supplied.
+
+The mock accepted telemetry batches from `gateway` and `activity-api` for the
+same synthetic request trace ID
+`0db1abd5-893c-4a80-b3d1-ff7ae6af7423`; the Prometheus Gateway request counter
+also recorded the public HTTP 200. The batches contained no application logs
+for that request. This establishes SDK-to-collector delivery and trace
+propagation for one public read path, but not authenticated workflow behavior,
+application-log correlation, hosted Observe ingestion, dashboards, or alerts.
+
+After cleanup, chart revision 59 (`myota-next-1.1.6-testing.99f7023c115b.1`)
+was `deployed`; all 15 chart-managed Deployments were ready (20/20 replicas),
+none had `OBSERVE_ENDPOINT`, and the `myota-observe` Secret was absent. A fresh
+public request returned HTTP 200 while the mock collector received no new
+batches. The protected deployment workflow was canceled after Rancher had
+completed and removed its operation record but before the workflow poller
+observed completion. The direct Helm and Kubernetes state checks establish the
+resulting deployment state; the workflow run itself is not a passing gate.
+Issues [#10](https://github.com/myota-platform/myota-next/issues/10),
+[#90](https://github.com/myota-platform/myota-next/issues/90), and
+[#91](https://github.com/myota-platform/myota-next/issues/91) remain open for
+the hosted Observe and authenticated workflow evidence.
+
 ## Authenticated Grafana dashboard proxy
 
 Issue [#116](https://github.com/myota-platform/myota-next/issues/116) records the
