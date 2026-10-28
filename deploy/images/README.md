@@ -26,10 +26,11 @@ Other application images have no shell.
 Publishing, immutable registry tags, image scanning, deployment manifests, and
 rollout verification remain separate release gates.
 
-The browser applications have separate image contexts:
+The browser applications have separate images. Admin builds from the repository
+root so it can consume shared contracts; participant keeps its isolated context:
 
 ```sh
-docker build -t myota/admin:dev web/admin
+docker build -f web/admin/Dockerfile -t myota/admin:dev .
 docker build -t myota/participant:dev web/participant
 ```
 
