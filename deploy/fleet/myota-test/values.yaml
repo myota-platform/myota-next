@@ -1,7 +1,7 @@
 activityLimits:
   maxBatchQsos: 5000
   uploadMaxBytes: 26214400
-buildVersion: testing-320475c
+buildVersion: testing-b7fdace
 commonResources:
   limits:
     cpu: '1'
@@ -80,46 +80,46 @@ geodataWorker:
 imagePullPolicy: IfNotPresent
 images:
   activity:
-    digest: sha256:1d1b1fed7d3a6bd9fd2e014e8e9f40dd9b84dd1e20b3572b972a79f0756e2a07
+    digest: sha256:d0c4d31c8fb0341a1262282ccf75d77c4d34f83e92a8110c0bc1730ebf887a23
     repository: ghcr.io/myota-platform/myota-next-activity
   activity-notifications:
-    digest: sha256:076a213b491b0bf221069be3e3937d295fa865c14eda33bc62f561f8a89ae701
+    digest: sha256:cd1e4e7853f802cea0109b0f3778fee539482adf968e3945946ac7ff3cbb0961
     repository: ghcr.io/myota-platform/myota-next-activity-notifications
   activity-worker:
-    digest: sha256:7bd7e580bac7b6af660973a3a95d71e3bf582fb62742077217c4eb80325639a2
+    digest: sha256:8101f77a415f739b9919b697c7b717ccdea10a245eb5617869682d02d054a52f
     repository: ghcr.io/myota-platform/myota-next-activity-worker
   admin-web:
     digest: sha256:21c2ef26fa2a7c4f305bba24b5ac7119be9f622820f674555656df0c1e7eb5e9
     repository: ghcr.io/myota-platform/myota-next-admin-web
   email-worker:
-    digest: sha256:03c2c832f3aa477547a22cca1df388dd272aac7961dbe8fa433ad2556903d7a6
+    digest: sha256:55f286b28e45d8a0384448835c8c6eee4bf26cb6b10780566b87815b27bd59c5
     repository: ghcr.io/myota-platform/myota-next-email-worker
   gateway:
-    digest: sha256:3f0289d3f0a38aa42187d3d5b110227725db256975a6ab256f4fde17797b0d52
+    digest: sha256:45e5513cbf561ce9256abb483cf63da5604e7d4c7b2e6aeb4964028817be1e6e
     repository: ghcr.io/myota-platform/myota-next-gateway
   geodata:
-    digest: sha256:9356ba559ed50e27873f6ae73249be8ebafddadb7347f5d87e39893bae3090de
+    digest: sha256:735e13b06f3b9e1497a4b77164d92eea2e9ab4318af9c42f9307960abfea6380
     repository: ghcr.io/myota-platform/myota-next-geodata
   geodata-importer:
-    digest: sha256:99c644315ee25baf094d0f717cd3774b9d7dd657d867067533d716aa1bf76db3
+    digest: sha256:10f89b012b395f990885396d2a83bb23183f9f1a10ac9bd5ddc28871b52c83c9
     repository: ghcr.io/myota-platform/myota-next-geodata-importer
   geodata-worker:
-    digest: sha256:1c75c359651f5c4c36d2c20658d66c5962dd7beace3a9f1c0169d7290a83fa8b
+    digest: sha256:030a44deaafeacf11c6a7fc1df98bc7eed806f6ea5eda7de286d9e0b2d1be18d
     repository: ghcr.io/myota-platform/myota-next-geodata-worker
   identity:
-    digest: sha256:f8018981a0dcf17fecd659ae5737650ed7e3c149ff34e5a70bc0b0b4321b0cc8
+    digest: sha256:743cb1fa6471e70ad7dc99ebbc323e83684beade00315605b401592249bc0dc5
     repository: ghcr.io/myota-platform/myota-next-identity
   identity-maintenance:
-    digest: sha256:c6705dbd3c0a462a9357a585f26acba4b8f4b9c9dcb94d34a33c195bfc8bb502
+    digest: sha256:b31da09a6fc1af075f580ecbb8f2e33a099bb0cdcbcf11ca8d3296476c3d725d
     repository: ghcr.io/myota-platform/myota-next-identity-maintenance
   outbox-worker:
-    digest: sha256:59b0df2cc50d7708c8f86e54e3b2279387357d6f668ec2ef06bd2ecd01ad3db6
+    digest: sha256:ddab5ac60d683cd90ec03be336ed93a2c2b68508c4a6d1d22eaff8bcc518057b
     repository: ghcr.io/myota-platform/myota-next-outbox-worker
   participant-web:
     digest: sha256:699a6d6872bb1435013e57d7562e0807b37227579f44eef75a3f128d06b84993
     repository: ghcr.io/myota-platform/myota-next-participant-web
   programmes:
-    digest: sha256:b18cbf382aed2a3e736520a0ea998b9c0e9ded2c8b561eb59757dc62d53116ef
+    digest: sha256:f12c8aeb021938bb3a841da080e12083c1c72f64c804920e76126bf57c9bb0ed
     repository: ghcr.io/myota-platform/myota-next-programmes
 ingress:
   adminHost: myota-admin-test.spainip.es
