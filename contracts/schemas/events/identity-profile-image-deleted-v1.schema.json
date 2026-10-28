@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/myota-platform/myota-next/contracts/schemas/events/identity-profile-image-deleted-v1.schema.json",
+  "title": "identity.profile-image.deleted.v1 envelope v1",
+  "allOf": [
+    {
+      "$ref": "../event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "identity.profile-image.deleted.v1"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "accountId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "actorId": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "accountId",
+            "actorId"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  ],
+  "x-payload-evidence": "source-derived:apps/identity/src/identity-profile-image.service.ts",
+  "x-data-classification": "personal"
+}

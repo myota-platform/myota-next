@@ -25,7 +25,12 @@ type JsonSchema = {
 };
 
 type Registry = {
-  events: Array<{ eventType: string; owner: string; subject: string }>;
+  events: Array<{
+    eventType: string;
+    owner: string;
+    subject: string;
+    consumerGroups?: string[];
+  }>;
   work: Array<{
     workType: string;
     subject: string;

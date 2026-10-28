@@ -2499,6 +2499,100 @@
       "dataClassification": "personal"
     },
     {
+      "eventType": "identity.email-change.cancelled.v1",
+      "owner": "identity-service",
+      "class": "domain-fact",
+      "subject": "myota.events.identity.email-change.cancelled.v1",
+      "schema": "schemas/events/identity-email-change-cancelled-v1.schema.json",
+      "consumerGroups": [],
+      "disposition": "Registered for audit and transport; no consumer groups are currently assigned",
+      "payloadEvidence": "source-derived-identity-callsite",
+      "producerSources": ["apps/identity/identity.py"],
+      "payloadSchema": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          }
+        },
+        "required": ["accountId"],
+        "additionalProperties": true
+      },
+      "dataClassification": "personal"
+    },
+    {
+      "eventType": "identity.email-change.completed.v1",
+      "owner": "identity-service",
+      "class": "domain-fact",
+      "subject": "myota.events.identity.email-change.completed.v1",
+      "schema": "schemas/events/identity-email-change-completed-v1.schema.json",
+      "consumerGroups": [],
+      "disposition": "Registered for audit and transport; no consumer groups are currently assigned",
+      "payloadEvidence": "source-derived-identity-callsite",
+      "producerSources": ["apps/identity/identity.py"],
+      "payloadSchema": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          }
+        },
+        "required": ["accountId"],
+        "additionalProperties": true
+      },
+      "dataClassification": "personal"
+    },
+    {
+      "eventType": "identity.email-change.requested.v1",
+      "owner": "identity-service",
+      "class": "domain-fact",
+      "subject": "myota.events.identity.email-change.requested.v1",
+      "schema": "schemas/events/identity-email-change-requested-v1.schema.json",
+      "consumerGroups": [],
+      "disposition": "Registered for audit and transport; no consumer groups are currently assigned",
+      "payloadEvidence": "source-derived-identity-callsite",
+      "producerSources": ["apps/identity/identity.py"],
+      "payloadSchema": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          }
+        },
+        "required": ["accountId"],
+        "additionalProperties": true
+      },
+      "dataClassification": "personal"
+    },
+    {
+      "eventType": "identity.email-change.resent.v1",
+      "owner": "identity-service",
+      "class": "domain-fact",
+      "subject": "myota.events.identity.email-change.resent.v1",
+      "schema": "schemas/events/identity-email-change-resent-v1.schema.json",
+      "consumerGroups": [],
+      "disposition": "Registered for audit and transport; no consumer groups are currently assigned",
+      "payloadEvidence": "source-derived-identity-callsite",
+      "producerSources": ["apps/identity/identity.py"],
+      "payloadSchema": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "changeId": {
+            "type": "string"
+          },
+          "replacementChangeId": {
+            "type": "string"
+          }
+        },
+        "required": ["accountId", "changeId", "replacementChangeId"],
+        "additionalProperties": true
+      },
+      "dataClassification": "personal"
+    },
+    {
       "eventType": "identity.login.failed.v1",
       "owner": "identity-service",
       "class": "domain-fact",
@@ -2602,6 +2696,79 @@
         "additionalProperties": true
       },
       "dataClassification": "internal-configuration"
+    },
+    {
+      "eventType": "identity.profile-image.deleted.v1",
+      "owner": "identity-service",
+      "class": "domain-fact",
+      "subject": "myota.events.identity.profile-image.deleted.v1",
+      "schema": "schemas/events/identity-profile-image-deleted-v1.schema.json",
+      "consumerGroups": [],
+      "disposition": "Registered for audit and transport; no consumer groups are currently assigned",
+      "payloadEvidence": "source-derived-identity-callsite",
+      "producerSources": ["apps/identity/identity.py"],
+      "payloadSchema": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": "string"
+          }
+        },
+        "required": ["accountId", "actorId"],
+        "additionalProperties": true
+      },
+      "dataClassification": "personal"
+    },
+    {
+      "eventType": "identity.profile-image.updated.v1",
+      "owner": "identity-service",
+      "class": "domain-fact",
+      "subject": "myota.events.identity.profile-image.updated.v1",
+      "schema": "schemas/events/identity-profile-image-updated-v1.schema.json",
+      "consumerGroups": [],
+      "disposition": "Registered for audit and transport; no consumer groups are currently assigned",
+      "payloadEvidence": "source-derived-identity-callsite",
+      "producerSources": ["apps/identity/identity.py"],
+      "payloadSchema": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "profileImage": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "contentType": {
+                "type": "string"
+              },
+              "width": {
+                "type": "integer"
+              },
+              "height": {
+                "type": "integer"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": ["id", "contentType", "width", "height", "updatedAt"],
+            "additionalProperties": true
+          }
+        },
+        "required": ["accountId", "actorId", "profileImage"],
+        "additionalProperties": true
+      },
+      "dataClassification": "personal"
     },
     {
       "eventType": "identity.recovery.completed.v1",
