@@ -101,3 +101,19 @@ confirmed the optional Secret reference was isolated to the worker and that it
 could start without the provider credential. It did not verify a provider
 request, a live API response of `NOT_CONFIGURED`, or secret rotation. The newer
 revision 72 deployment is recorded in the [Geodata parity record](../parity/geodata.md).
+
+## Test deployment evidence — 2026-10-28
+
+A test-only key was provisioned in the `myota-test` namespace Secret
+`myota-geodata-enrichment` under key `api-key`. The Geodata worker was restarted
+to load the Secret and returned Ready at 1/1. An authenticated administrator
+queued one eligible entity with its current entity version and a request
+idempotency key. The API returned HTTP 202 (`QUEUED`); a fresh entity read then
+showed `COMPLETED` / `ENRICHED`, provider `BIGDATACLOUD`, and saved location
+metadata with a geocoding timestamp. The key itself was never displayed or
+logged.
+
+This single-entity API check does not qualify replacement-key rotation, lifecycle
+triggers, queueing and monitoring the Admin browser workflow, or the
+full-catalogue backfill. A browser check displayed a confirmation for the 432
+matching entities; it was dismissed, and no enrichment requests were submitted.
