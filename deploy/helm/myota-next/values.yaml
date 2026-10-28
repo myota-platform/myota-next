@@ -342,6 +342,7 @@ components:
       OUTBOX_WORKER: core-outbox
       OUTBOX_DATABASE_URL: { secret: databaseUrls, key: core-database-url }
       MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.core }}'
+      OUTBOX_MAX_MESSAGE_BYTES: '{{ default "1048576" .Values.jetstreamProvisioner.capacity.eventsMaxMessageBytes }}'
       NATS_URL: { secret: nats, key: url }
       OUTBOX_METRICS_PORT: '9108'
   outbox-activity:
@@ -355,6 +356,7 @@ components:
       OUTBOX_WORKER: activity-outbox
       OUTBOX_DATABASE_URL: { secret: databaseUrls, key: activity-database-url }
       MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.activity }}'
+      OUTBOX_MAX_MESSAGE_BYTES: '{{ default "1048576" .Values.jetstreamProvisioner.capacity.eventsMaxMessageBytes }}'
       NATS_URL: { secret: nats, key: url }
       OUTBOX_METRICS_PORT: '9108'
   outbox-geodata:
@@ -368,6 +370,7 @@ components:
       OUTBOX_WORKER: geodata-outbox
       OUTBOX_DATABASE_URL: { secret: databaseUrls, key: geo-database-url }
       MYOTA_DB_POOL_MAX: '{{ .Values.databasePools.geodata }}'
+      OUTBOX_MAX_MESSAGE_BYTES: '{{ default "1048576" .Values.jetstreamProvisioner.capacity.eventsMaxMessageBytes }}'
       NATS_URL: { secret: nats, key: url }
       OUTBOX_METRICS_PORT: '9108'
   admin-web:

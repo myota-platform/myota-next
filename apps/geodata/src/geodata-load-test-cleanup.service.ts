@@ -231,11 +231,24 @@ export class GeodataLoadTestCleanupService {
           'DELETE FROM geodata_upload_session WHERE id=ANY($1::uuid[])',
           [uploads.map((upload) => upload.id)],
         );
-      if (aggregateIds.length)
+      if (aggregateIds.length) {
+        const fixtureEvents = `SELECT event_id FROM outbox_event
+          WHERE aggregate_id=ANY($1::text[])`;
+        await client.query(
+          `DELETE FROM outbox_redrive_audit
+            WHERE event_id IN (${fixtureEvents})`,
+          [aggregateIds],
+        );
+        await client.query(
+          `DELETE FROM dead_letter_event
+            WHERE event_id IN (${fixtureEvents})`,
+          [aggregateIds],
+        );
         await client.query(
           'DELETE FROM outbox_event WHERE aggregate_id=ANY($1::text[])',
           [aggregateIds],
         );
+      }
 
       const result = {
         testRunId,

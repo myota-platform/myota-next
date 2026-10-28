@@ -288,13 +288,23 @@ async function removeFixtures(pool: Pool, runIds: string[], startedAt: Date) {
        )`,
       [runIds],
     );
-    await client.query(
-      `DELETE FROM outbox_event WHERE occurred_at >= $1 AND (
+    const fixtureEvents = `SELECT event_id FROM outbox_event
+      WHERE occurred_at >= $1 AND (
          aggregate_id=ANY($2::text[]) OR aggregate_id IN (
            SELECT id::text FROM geodata_entity
            WHERE public_properties#>>'{provenance,importRunId}'=ANY($2::text[])
          ) OR payload->>'importRunId'=ANY($2::text[])
-       )`,
+       )`;
+    await client.query(
+      `DELETE FROM outbox_redrive_audit WHERE event_id IN (${fixtureEvents})`,
+      [startedAt, runIds],
+    );
+    await client.query(
+      `DELETE FROM dead_letter_event WHERE event_id IN (${fixtureEvents})`,
+      [startedAt, runIds],
+    );
+    await client.query(
+      `DELETE FROM outbox_event WHERE event_id IN (${fixtureEvents})`,
       [startedAt, runIds],
     );
     await client.query(
