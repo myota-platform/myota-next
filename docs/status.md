@@ -141,6 +141,13 @@ against the isolated deployment remains under Phase 6 issue #10.
   verified. There is also no centralized logs/traces backend; workflow signal
   correlation remains open under #90 and #91. See the current live recheck in
   [Observe delivery](operations/observe-delivery-smoke.md).
+  On 2026-10-28, a temporary in-cluster collector received the same trace for
+  one public read through Gateway and Activity; the telemetry batch had no
+  correlated application logs. After removing the test endpoint and Secret,
+  chart revision 59 was directly verified deployed with 20/20 chart replicas
+  ready and no `OBSERVE_ENDPOINT`. Hosted delivery and authenticated workflow
+  correlation remain open; the canceled deployment workflow is not counted as
+  a passing gate.
   A deployed Participant email-change request recovered from a temporary SMTP
   outage: the current-address message retried twice and delivered after the
   test sink returned. The old address remained authoritative until both links
