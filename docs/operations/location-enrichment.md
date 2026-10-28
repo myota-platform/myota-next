@@ -93,16 +93,35 @@ are tracked in [the Geodata parity record](../parity/geodata.md) and issues
 
 ## Test deployment evidence — 2026-10-28
 
-A test-only key was provisioned in the `myota-test` namespace Secret
-`myota-geodata-enrichment` under key `api-key`. The Geodata worker was restarted
-to load the Secret and returned Ready at 1/1. An authenticated administrator
-queued one eligible entity with its current entity version and a request
-idempotency key. The API returned HTTP 202 (`QUEUED`); a fresh entity read then
-showed `COMPLETED` / `ENRICHED`, provider `BIGDATACLOUD`, and saved location
-metadata with a geocoding timestamp. The key itself was never displayed or
-logged.
+The configured single-entity API and worker path was verified first. A test-only
+credential was provisioned in the `myota-test` namespace Secret
+`myota-geodata-enrichment` under key `api-key`; the value was not displayed or
+logged. The Geodata worker restarted and returned Ready at 1/1. An authenticated
+administrator queued one eligible entity using its current version and an
+idempotency key. The API returned HTTP 202 (`QUEUED`), and a fresh entity read
+reported `COMPLETED` / `ENRICHED`, provider `BIGDATACLOUD`, saved location
+metadata, and a geocoding timestamp.
 
-This single-entity API check does not qualify replacement-key rotation, lifecycle
-triggers, queueing and monitoring the Admin browser workflow, or the
-full-catalogue backfill. A browser check displayed a confirmation for the 432
-matching entities; it was dismissed, and no enrichment requests were submitted.
+The first catalogue backfill scanned 432 matching entities and queued 430;
+two were skipped and none failed. After processing, a read-only Geodata
+database aggregate showed all 432 entities as `COMPLETED`. A subsequent scan
+before the fix queued seven completed entities again because some provider
+responses left optional fields empty. PR [#255](https://github.com/myota-platform/myota-next/pull/255)
+changed the Admin action to skip both `QUEUED` and `COMPLETED` entities while
+leaving `FAILED` entities retryable.
+
+The fix was deployed through digest PR
+[#256](https://github.com/myota-platform/myota-next/pull/256) and the protected
+[Helm upgrade workflow](https://github.com/myota-platform/myota-next/actions/runs/40678337347).
+Chart `1.1.6-testing.43fa7c967a90.1` completed with 15 Deployments Ready. Admin
+Web is Ready at 1/1 on immutable image digest
+`sha256:6e49656947c31db55465e14994b9d65a695d6f8522783df510cd4db488fb5c70`.
+The post-deployment scan processed all 432 matching entities and reported
+`queued 0 · skipped 432 · failed 0`; the Geodata database aggregate remained
+`COMPLETED|432`.
+
+The full-catalogue asynchronous backfill and repeat-scan behavior are verified.
+Lifecycle-triggered enrichment after creation, promotion, or geometry edits and
+replacement-key rotation remain unqualified. Track those provider lifecycle and
+rotation checks under [#111](https://github.com/myota-platform/myota-next/issues/111)
+and the parent [#110](https://github.com/myota-platform/myota-next/issues/110).

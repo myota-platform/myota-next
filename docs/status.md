@@ -170,6 +170,7 @@ against the isolated deployment remains under Phase 6 issue #10.
   redirect to sign-in. This does not substitute for Observe delivery or
   worker-event correlation, which is separately verified in the Observe smoke
   record.
+- **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):** the Admin full-catalogue backfill and its repeated-scan guard are verified in `myota-test`. The initial run processed 432 entities; after the fix, a repeated scan queued 0, skipped 432, and failed 0. All 432 remain `COMPLETED` in Geodata. Lifecycle-trigger and replacement-key rotation checks remain open. See the [operator guide](operations/location-enrichment.md) and [Phase 6 readiness](operations/phase6-readiness.md).
 - **Geodata performance:** larger datasets and full worker throughput remain
   unqualified. `MYOTA_UPLOAD_WORKERS` caps multipart finalization per Geodata
   API process. `MYOTA_IMPORT_WORKERS` caps preprocessing and promotion together
