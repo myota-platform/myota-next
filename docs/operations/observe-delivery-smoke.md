@@ -137,3 +137,42 @@ proxy is qualified for authorized viewing, but this does not qualify Observe
 collector delivery or cross-service log/trace correlation; those remain open
 under [#90](https://github.com/myota-platform/myota-next/issues/90) and
 [#91](https://github.com/myota-platform/myota-next/issues/91).
+
+## Latest authenticated deployment check — 2026-10-28
+
+After the earlier cleanup check, the `testing` branch reconfigured `myota-test`
+to use a temporary, credential-protected in-cluster receiver. The test-only
+Secret is stored outside Git. Protected rollout
+[#40626824073](https://github.com/myota-platform/myota-next/actions/runs/40626824073)
+deployed Helm revision 68, chart `1.1.6-testing.9db5f64189b1.1`, app version
+`testing-0b6eb64`. All 17 Deployments and 22 requested replicas were Ready; the
+Admin and Participant web hosts and API health endpoint returned HTTP 200. Admin
+Web ran digest
+`sha256:8501dd08285191109456e3fbfd0482c7d2b990387dc2f975667fbe292b196ffd`.
+
+Fresh test Admin and Participant logins and authenticated `/me` calls returned
+HTTP 200. Their request IDs matched both trace IDs and forwarded log IDs at
+`gateway` and `identity-api`; Prometheus recorded the successful HTTP routes.
+The four sample request IDs were Admin login
+`e2e10439-f3c0-419e-80ca-43d27d7e4faa`, Admin `/me`
+`8fe16e87-8b7c-41b5-be94-87e921b8d57a`, Participant login
+`0b3c2947-0ef1-4798-8667-d1506213b5c0`, and Participant `/me`
+`23c7893b-0331-4fca-bd25-19a870105dee`. Prometheus reported 17/17 targets up;
+Activity and Geodata worker NATS/PostgreSQL dependency gauges were `1`. No
+alerts with `namespace="myota-test"` were firing. This does not verify alert
+notification delivery or a MyOTA-specific alert rule.
+
+All deployed NestJS workers delivered periodic Observe batches under their
+stable service IDs. The sampled idle-worker batches contained no task snapshots
+or forwarded logs, so worker business-operation telemetry remains unqualified. A
+separate synthetic password-recovery run delivered two reset emails to the
+Mailpit sink, incremented the Email worker's `password-reset.v1` delivered
+counter to `2`, and reported SMTP availability `1`; both messages were deleted
+and the original test password was restored. Those worker metrics currently
+provide no request-to-worker trace or log correlation. Qualification remains
+open for hosted Observe, behavioral alerting, and worker task correlation under
+issues [#90](https://github.com/myota-platform/myota-next/issues/90) and
+[#91](https://github.com/myota-platform/myota-next/issues/91). The local
+recovery helper also received HTTP 403 for revoked session probes where it
+expects 401; both requests were denied, but that assertion needs reconciliation
+before the session-revocation check is called clean.
