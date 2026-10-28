@@ -6,6 +6,10 @@
   --muted: #627875;
   --line: #d9e7e4;
   --white: #fff;
+  --content-width: 1180px;
+  --panel-radius: 16px;
+  --control-radius: 8px;
+  --panel-shadow: 0 5px 20px #0b3b3210;
 }
 * {
   box-sizing: border-box;
@@ -47,6 +51,27 @@ body {
   outline: 2px solid var(--primary);
   outline-offset: 3px;
 }
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not(
+    [type='range']
+  ),
+select,
+textarea {
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  color: var(--ink);
+  font: inherit;
+  padding: 9px 11px;
+}
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not(
+    [type='range']
+  ),
+select,
+button {
+  min-height: 42px;
+}
+textarea {
+  min-height: 6rem;
+}
 .topbar {
   align-items: center;
   background: var(--white);
@@ -83,7 +108,7 @@ body {
 .hero,
 main {
   margin: auto;
-  max-width: 1180px;
+  max-width: var(--content-width);
 }
 .hero {
   align-items: end;
@@ -128,8 +153,8 @@ main {
 .panel {
   background: var(--white);
   border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: 0 5px 20px #0b3b3210;
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
   overflow: hidden;
 }
 .panel-head {
@@ -777,6 +802,9 @@ a {
   background: var(--surface);
   color: var(--primary);
 }
+.primary-nav a:focus-visible {
+  outline-offset: 1px;
+}
 .programme-controls {
   display: grid;
   justify-items: end;
@@ -799,6 +827,17 @@ a {
   border-radius: 22px;
   margin-top: 22px;
   padding: 36px 32px;
+}
+.hero,
+.layout,
+.public-content-panel,
+.entity-panel,
+.community-panel,
+.participant-account-panel,
+.profile-panel,
+.awards-panel,
+.activation-panel {
+  scroll-margin-top: 7rem;
 }
 .hero h2 {
   color: #163a35;
@@ -937,9 +976,10 @@ a {
   .primary-nav {
     grid-column: 1 / -1;
     grid-row: 2;
+    flex-wrap: wrap;
     justify-content: flex-start;
-    overflow-x: auto;
-    padding-bottom: 2px;
+    overflow: visible;
+    row-gap: 2px;
   }
   .programme-controls {
     grid-column: 2;
@@ -989,12 +1029,26 @@ a {
   .primary-nav {
     grid-column: 1;
     grid-row: auto;
-    gap: 12px;
+    column-gap: 8px;
+    gap: 2px 8px;
+    flex-wrap: wrap;
     justify-content: flex-start;
     width: 100%;
   }
   .primary-nav a {
-    font-size: 12px;
+    font-size: 13px;
+    padding: 7px 8px;
+  }
+  .hero,
+  .layout,
+  .public-content-panel,
+  .entity-panel,
+  .community-panel,
+  .participant-account-panel,
+  .profile-panel,
+  .awards-panel,
+  .activation-panel {
+    scroll-margin-top: 12rem;
   }
   .hero {
     margin: 16px 16px 18px;

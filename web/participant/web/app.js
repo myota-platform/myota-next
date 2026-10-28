@@ -316,7 +316,9 @@ async function loadProgramme(slug) {
     programme.theme.accent,
   );
   $('programme-name').textContent = programme.name;
-  $('programme-description').textContent = programme.description;
+  $('programme-description').textContent =
+    programme.description?.trim() ||
+    'Discover places where radio meets the outdoors.';
   $('rules').innerHTML =
     `<dt>Activation QSOs</dt><dd>${escapeHtml(programme.rules.minimumQsos.activation)}</dd><dt>Hunter QSOs</dt><dd>${escapeHtml(programme.rules.minimumQsos.hunter)}</dd><dt>Public access</dt><dd>${programme.rules.publicAccessRequired ? 'Required' : 'Programme-defined'}</dd>`;
   const proposalTypes = Array.isArray(programme.entityTypes)

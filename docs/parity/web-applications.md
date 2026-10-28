@@ -13,6 +13,19 @@ and error states.
 
 ## Participant web
 
+The primary navigation follows the Participant workspace order: Explore,
+Entities, Community, Account, Profile, Awards, and My activity. Each link
+targets a real section, and the navigation wraps into visible rows on narrow
+screens instead of hiding later destinations in a horizontal strip. Section
+anchors account for the sticky header. If a programme has no description, the
+hero keeps a useful default heading rather than rendering an empty title.
+
+The shared presentation uses programme-provided primary and accent colors with
+common content width, panel radius and shadow, form-control sizing, and focus
+indicators. The page retains MyOTA's own identity while using clear community
+activity and ranking patterns as general inspiration; it does not reuse PARC
+branding or assets.
+
 Preserve programme selection, public content and rules, approved and candidate
 entity lists and maps, candidate proposals, authenticated profile editing,
 callsign self-service, and cropped profile-image uploads. Support published

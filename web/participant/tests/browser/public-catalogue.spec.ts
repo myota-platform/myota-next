@@ -20,7 +20,7 @@ const programmes = [
   {
     slug: 'coast',
     name: 'Coastal Parks',
-    description: 'Radio from protected shorelines.',
+    description: '',
     theme: { primary: '#176f72', accent: '#efb04d' },
     rules: {
       minimumQsos: { activation: 3, hunter: 1 },
@@ -156,11 +156,34 @@ test('selects a programme and renders its public content and entity catalogue', 
   await page.getByLabel('Programme').selectOption('coast');
 
   await expect(page.locator('#programme-name')).toHaveText('Coastal Parks');
+  await expect(page.locator('#programme-description')).toHaveText(
+    'Discover places where radio meets the outdoors.',
+  );
   await expect(page.locator('#rules')).toContainText('Programme-defined');
   await expect(page.locator('#entities')).toContainText('coast reference site');
   await expect(page.locator('#programme-content')).toContainText(
     'coast eligibility',
   );
+
+  const primaryLinks = page.locator('.primary-nav a');
+  await expect(primaryLinks).toHaveText([
+    'Explore',
+    'Entities',
+    'Community',
+    'Account',
+    'Profile',
+    'Awards',
+    'My activity',
+  ]);
+  for (const link of await primaryLinks.all()) {
+    const target = await link.getAttribute('href');
+    expect(target).toBeTruthy();
+    await expect(page.locator(target!)).toHaveCount(1);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const link of await primaryLinks.all()) {
+    await expect(link).toBeInViewport();
+  }
 
   await page.locator('#award-email').fill('operator@example.test');
   await page.locator('#award-password').fill('test-password');
