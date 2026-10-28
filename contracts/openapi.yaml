@@ -185,6 +185,32 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/EmailChangeCancellation' }
+  /v1/identity/me/email-change/resend:
+    post:
+      tags: [Identity]
+      security: [{ bearerAuth: [] }]
+      summary: Restart verification for the authenticated participant's pending email change
+      description: >-
+        Invalidates links from the previous pending operation and queues new
+        confirmations for both the current and proposed addresses. The
+        participant must confirm both new links. The account's current email
+        remains authoritative until then.
+      responses:
+        '200':
+          description: Verification restarted or no pending change exists
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [verification_resent, no_pending_change]
+        '400':
+          {
+            description: New address is no longer available or resend is throttled,
+          }
   /v1/identity/auth/email-change/verify:
     post:
       tags: [Identity]

@@ -288,4 +288,86 @@ describe('IdentityEmailChangeService', () => {
     expect(referenceRead).toBeLessThan(sharedLock);
     expect(sharedLock).toBeLessThan(tokenLock);
   });
+
+  it('resends both confirmations on a replacement operation and invalidates the old one', async () => {
+    const statements: string[] = [];
+    const outboxEvents: Array<{ eventType: string; payload: string }> = [];
+    const securityEvents: Array<{ eventType: string; payload: string }> = [];
+    const canceledIds: string[] = [];
+    const invalidatedTokenIds: string[] = [];
+    const replacementIds: string[] = [];
+    const client = {
+      query: async (sql: string, values: unknown[] = []) => {
+        statements.push(sql);
+        if (sql.includes('SELECT c.id, a.display_name'))
+          return {
+            rows: [
+              {
+                id: changeId,
+                display_name: 'Casey Participant',
+                old_email: 'old@example.test',
+                old_email_key: 'old@example.test',
+                new_email: 'new@example.test',
+                new_email_key: 'new@example.test',
+              },
+            ],
+            rowCount: 1,
+          };
+        if (sql.includes('identity_registration_rate_limit'))
+          return { rows: [{ request_count: 1 }], rowCount: 1 };
+        if (sql.includes('SELECT 1 FROM public.account'))
+          return { rows: [], rowCount: 0 };
+        if (sql.includes('UPDATE public.identity_email_change\n'))
+          canceledIds.push(String(values[0]));
+        if (sql.includes('UPDATE public.identity_email_change_token'))
+          invalidatedTokenIds.push(String(values[0]));
+        if (sql.includes('INSERT INTO public.identity_email_change\n'))
+          replacementIds.push(String(values[0]));
+        if (sql.includes('INSERT INTO public.security_event')) {
+          securityEvents.push({
+            eventType: String(values[2]),
+            payload: String(values[3]),
+          });
+          return {
+            rows: [{ occurred_at: new Date().toISOString() }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('INSERT INTO public.outbox_event'))
+          outboxEvents.push({
+            eventType: String(values[1]),
+            payload: String(values[5]),
+          });
+        return { rows: [], rowCount: 1 };
+      },
+      release: () => undefined,
+    } as unknown as PoolClient;
+    const pool = { connect: async () => client } as unknown as Pool;
+    const auth = {
+      currentAccount: vi.fn().mockResolvedValue({ id: accountId }),
+    };
+    const service = new IdentityEmailChangeService(pool, auth as never);
+
+    await expect(service.resend('Bearer participant-token')).resolves.toEqual({
+      status: 'verification_resent',
+    });
+
+    expect(canceledIds).toEqual([changeId]);
+    expect(invalidatedTokenIds).toEqual([changeId]);
+    expect(replacementIds).toHaveLength(1);
+    expect(replacementIds[0]).not.toBe(changeId);
+    expect(outboxEvents).toHaveLength(3);
+    const emailTemplates = outboxEvents
+      .filter((event) => event.eventType === 'email.send.v1')
+      .map((event) => JSON.parse(event.payload).templateId)
+      .sort((left, right) => left.localeCompare(right));
+    expect(emailTemplates).toEqual([
+      'participant-email-change-new.v1',
+      'participant-email-change-old.v1',
+    ]);
+    expect(securityEvents).toHaveLength(1);
+    expect(securityEvents[0].eventType).toBe('identity.email-change.resent.v1');
+    expect(securityEvents[0].payload).not.toContain('@example.test');
+    expect(statements.at(-1)).toBe('COMMIT');
+  });
 });
