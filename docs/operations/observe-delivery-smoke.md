@@ -70,6 +70,30 @@ worker log coverage and behavioral alert qualification remain open under
 [#91](https://github.com/myota-platform/myota-next/issues/91). Delivery to a
 hosted Observe account also remains unqualified.
 
+### Worker log and alert check — revision 72
+
+Protected rollout [#228](https://github.com/myota-platform/myota-next/pull/228)
+deployed chart `myota-next-1.1.6-testing.b6a158aeadad.1` at Helm revision 72.
+All 17 Deployments (22/22 replicas) and all 17 Prometheus scrape targets were
+ready. A login attempt for a synthetic, non-existent `.invalid` address
+returned HTTP 400 with request ID
+`e5885f8b-787b-4d2c-b3f1-044b94f34c2d`; it created no account.
+
+The Observe mock receiver recorded that ID as both snapshot trace ID and
+forwarded log trace ID for `gateway`, `identity-api`, and
+`activity-notifications`. The Activity Notifications pod log included a
+structured `activity_notification.settled` record for
+`identity.login.failed.v1`, outcome `processed`, and delivery count 1. Its
+Observe batch contained one log and one trace snapshot with the same ID. The
+worker's processed-outcome counter was 1 after the rollout.
+
+All seven `myota.api` and `myota.delivery` Prometheus alert rules are loaded
+with healthy evaluation status. Two
+`MyOTAUnresolvedOutboxDeadLetters` alerts are firing for Core and Geodata and
+carry `service_id=outbox-worker`. The Alertmanager has no notification
+receiver, so this verifies rule discovery and firing state, not email or
+webhook delivery. Hosted Observe delivery remains unqualified.
+
 ## Authenticated Grafana dashboard proxy
 
 Issue [#116](https://github.com/myota-platform/myota-next/issues/116) records the

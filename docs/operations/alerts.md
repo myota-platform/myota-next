@@ -82,3 +82,13 @@ expected to become active after the two-minute hold period until those records
 are resolved. The deployed Alertmanager configuration has no notification
 receiver. This baseline allows rule discovery and firing-state checks without
 email or webhook delivery; notification delivery remains unqualified.
+
+### Deployed rule check — 2026-10-28
+
+The protected test rollout completed at Helm revision 72 using chart
+`myota-next-1.1.6-testing.b6a158aeadad.1`. Prometheus loaded all seven rules
+across `myota.api` and `myota.delivery`; every rule reports healthy evaluation.
+All 17 test scrape targets were up. Two dead-letter warnings are firing for
+Core and Geodata, with stable `service_id=outbox-worker` and the `worker` label
+preserving the affected outbox. The test Alertmanager still has no notification
+receiver, so email and webhook delivery remain unqualified.

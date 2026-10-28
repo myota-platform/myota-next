@@ -133,16 +133,18 @@ against the isolated deployment remains under Phase 6 issue #10.
   object storage, secrets, observability, deployment, and release automation.
   Phase 6 now has isolated SMTP STARTTLS delivery and same-work-ID replay
   evidence; the broader clean-install, authenticated workflow, backup/restore,
-  observability, and rollback gates remain tracked by issue #10. The current
-  `myota-test` topology has 22/22 requested replicas ready and 17/17 Prometheus
-  targets up. An in-cluster, credential-protected receiver now verifies
+  observability, and rollback gates remain tracked by issue #10. At Helm
+  revision 72, the `myota-test` topology has 22/22 requested replicas ready and
+  17/17 Prometheus targets up. An in-cluster, credential-protected receiver verifies
   authenticated Admin and Participant login and `/me` telemetry across Gateway
   and Identity API, with matching traces, forwarded logs, and HTTP 200 metrics.
-  At Helm revision 70, the Activity Notifications worker also received a
-  request-correlated snapshot for the asynchronous login event; its processed
-  counter increased from 2 to 3. That batch contained no forwarded worker log
-  or operation name. Hosted Observe delivery and behavioral alert qualification
-  remain open under #90 and #91.
+  At revision 72, Activity Notifications emitted a structured settlement log
+  for a processed login event; its snapshot and forwarded log share the same
+  request trace ID as Gateway and Identity. All seven MyOTA Prometheus rules
+  load with healthy evaluation. The two firing outbox dead-letter warnings are
+  correlated to `service_id=outbox-worker`; the test Alertmanager has no
+  notification receiver. Hosted Observe delivery and external alert delivery
+  remain unqualified under #90 and #91.
   A deployed Participant email-change request recovered from a temporary SMTP
   outage: the current-address message retried twice and delivered after the
   test sink returned. The old address remained authoritative until both links
