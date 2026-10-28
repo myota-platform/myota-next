@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import { expectResponsiveAccessible } from '../../../a11y';
 
@@ -330,8 +331,9 @@ test('recovers from unavailable programme and entity catalogues', async ({
 
 test('shows live community activations, rankings, and programme exports', async ({
   page,
-}) => {
+}, testInfo) => {
   const leaderboardCategories: string[] = [];
+  let exportReads = 0;
   await page.route('**/v1/**', async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === '/v1/programmes') {
@@ -362,6 +364,20 @@ test('shows live community activations, rankings, and programme exports', async 
           pageSize: 5,
           total: 1,
           nextPage: null,
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/public/results') {
+      exportReads += 1;
+      expect(url.searchParams.get('programme')).toBe('alpine');
+      expect(url.searchParams.get('format')).toBe('csv');
+      await route.fulfill({
+        json: {
+          format: 'csv',
+          contentType: 'text/csv',
+          downloadName: 'myota-results-alpine.csv',
+          content: 'programme,entityId\nalpine,ALP-001\n',
         },
       });
       return;
@@ -406,10 +422,18 @@ test('shows live community activations, rankings, and programme exports', async 
     'Top activators',
   );
   await expect(page.locator('#public-leaderboard')).toContainText('6 QSOs');
-  await expect(page.locator('#public-results-download')).toHaveAttribute(
-    'href',
-    /programme=alpine&format=csv/,
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#public-results-download').click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('myota-results-alpine.csv');
+  await download.saveAs(testInfo.outputPath(download.suggestedFilename()));
+  await expect(page.locator('#public-results-status')).toContainText(
+    'Downloaded myota-results-alpine.csv',
   );
+  expect(exportReads).toBe(1);
+  expect(
+    await readFile(testInfo.outputPath(download.suggestedFilename()), 'utf8'),
+  ).toBe('programme,entityId\nalpine,ALP-001\n');
   expect(leaderboardCategories).toEqual(['HUNTER', 'ACTIVATOR']);
   await expectResponsiveAccessible(page, 'Participant community workspace');
 });
