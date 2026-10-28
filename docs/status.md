@@ -133,28 +133,23 @@ registered Admin routes have Axe and narrow/wide viewport checks. Remaining read
 dashboard/filter and monitoring presentation combinations are dispositioned in
 [L-11/L-12](remaining-work-ledger.md#l-11--complete-browser-compatibility-coverage-for-admin-workflows)
 and Phase 3 issues [#22](https://github.com/myota-platform/myota-next/issues/22) and
-[#7](https://github.com/myota-platform/myota-next/issues/7). Primary workflow review
-against the isolated deployment remains under Phase 6 issue #10.
+[#7](https://github.com/myota-platform/myota-next/issues/7). The authenticated
+primary Admin and Participant deployment workflows are qualified under Phase 6
+issue [#91](https://github.com/myota-platform/myota-next/issues/91). Additional
+Phase 6 product work remains open under #239, #242, #246, and related child issues.
 
-- **Production operations:** qualify persistent database operations, NATS,
-  object storage, secrets, observability, deployment, and release automation.
-  Phase 6 has isolated SMTP STARTTLS retry/replay, fresh-install, backup/restore,
-  and rollback evidence; the remaining readiness work is tracked by #10.
-  Protected rollout [40645993158](https://github.com/myota-platform/myota-next/actions/runs/40645993158)
-  deployed chart `1.1.6-testing.b6a158aeadad.1` at Helm revision 72. All 17
-  Deployments (22 replicas) and 17 Prometheus targets are ready. The in-cluster
-  receiver records authenticated Admin and Participant API telemetry across
-  Gateway and Identity, including matching traces, forwarded logs, and HTTP
-  200 metrics. At revision 72, Activity Notifications also emitted a structured
-  settlement log for a processed login event. Its snapshot and forwarded log
-  share the request trace ID with Gateway and Identity.
-
-  All seven MyOTA Prometheus rules load with healthy evaluation. Two firing
-  outbox dead-letter warnings carry `service_id=outbox-worker`; the test
-  Alertmanager has no notification receiver. Hosted Observe delivery and
-  external alert delivery remain unqualified. See
-  [Observe delivery](operations/observe-delivery-smoke.md) and Phase 6 issues
-  #90 and #91.
+- **Production operations:** the single-node `myota-test` deployment has
+  evidence for fresh initialization, authenticated workflows, Observe
+  instrumentation, dependency recovery, backup/restore, rollback, and SMTP
+  delivery. At Helm revision 79, the test-only Alertmanager STARTTLS route
+  delivered both firing and resolved dead-letter notifications; all three
+  owner gauges were zero and the MyOTA dead-letter alert was inactive. The
+  release had all 17 Deployments ready. See the
+  [Phase 6 readiness record](operations/phase6-readiness.md),
+  [Observe delivery](operations/observe-delivery-smoke.md), and Phase 6 issue
+  [#10](https://github.com/myota-platform/myota-next/issues/10). This evidence
+  does not qualify hosted Observe delivery, a production SMTP provider, HA
+  infrastructure, production RPO/RTO, or the remaining Phase 6 product work.
 
   A supplemental password-recovery run delivered two synthetic messages to
   Mailpit and showed two successful `password-reset.v1` Email worker attempts;
