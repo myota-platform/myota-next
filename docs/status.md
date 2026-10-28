@@ -163,6 +163,7 @@ against the isolated deployment remains under Phase 6 issue #10.
   BigDataCloud Secret remains absent; provider-backed enrichment and catalogue
   backfill remain open under #110/#111. See the
   [location enrichment guide](operations/location-enrichment.md).
+
 - **Geodata performance:** larger datasets and full worker throughput remain
   unqualified. `MYOTA_UPLOAD_WORKERS` caps multipart finalization per Geodata
   API process. `MYOTA_IMPORT_WORKERS` caps preprocessing and promotion together
