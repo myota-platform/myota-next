@@ -62,6 +62,15 @@ prometheus:
     enabled: false
     labels:
       release: kube-prometheus-stack
+  alertmanagerConfig:
+    # Optional test-only receiver. Requires Prometheus Operator CRDs and an
+    # SMTP destination.
+    enabled: false
+    email:
+      to: ''
+      from: ''
+      smarthost: ''
+      requireTLS: true
 # The API key is supplied by the myota-geodata-enrichment Secret, never here.
 geodataWorker:
   locationEnrichment:
