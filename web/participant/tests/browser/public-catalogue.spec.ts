@@ -306,6 +306,7 @@ test('recovers from unavailable programme and entity catalogues', async ({
     'entity catalogue is temporarily unavailable',
   );
   await expect(page.locator('#entities')).toBeEmpty();
+  await expectResponsiveAccessible(page, 'Participant catalogue recovery');
   await page.getByRole('button', { name: 'Retry entity catalogue' }).click();
   await expect(page.locator('#entities')).toContainText(
     'alpine recovered entity',

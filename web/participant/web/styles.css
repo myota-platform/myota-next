@@ -950,6 +950,35 @@ a {
   .topbar {
     gap: 8px;
     padding: 12px 16px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .topbar-brand,
+  .programme-controls {
+    min-width: 0;
+  }
+  .programme-controls {
+    grid-column: 1;
+    grid-row: auto;
+    max-width: 100%;
+    justify-items: start;
+  }
+  .programme-controls > label {
+    display: grid;
+    max-width: 100%;
+    width: min(100%, 220px);
+  }
+  .programme-controls select {
+    margin: 5px 0 0;
+    max-width: 100%;
+    width: 100%;
+  }
+  .programme-controls > button {
+    max-width: 100%;
+    white-space: normal;
+  }
+  .programme-controls > p {
+    overflow-wrap: anywhere;
+    text-align: left;
   }
   .topbar-brand h1 {
     font-size: 18px;
@@ -958,7 +987,11 @@ a {
     max-width: min(72vw, 320px);
   }
   .primary-nav {
+    grid-column: 1;
+    grid-row: auto;
     gap: 12px;
+    justify-content: flex-start;
+    width: 100%;
   }
   .primary-nav a {
     font-size: 12px;
