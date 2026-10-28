@@ -89,8 +89,15 @@ none had `OBSERVE_ENDPOINT`, and the `myota-observe` Secret was absent. A fresh
 public request returned HTTP 200 while the mock collector received no new
 batches. The protected deployment workflow was canceled after Rancher had
 completed and removed its operation record but before the workflow poller
-observed completion. The direct Helm and Kubernetes state checks establish the
-resulting deployment state; the workflow run itself is not a passing gate.
+observed completion; that specific run is not a passing gate. PR
+[#209](https://github.com/myota-platform/myota-next/pull/209) changed the
+poller to hand off a missing operation record to Rancher App
+revision and Deployment digest/readiness checks. The next protected run
+[#40613457838](https://github.com/myota-platform/myota-next/actions/runs/40613457838)
+passed at Helm revision 60 (`myota-next-1.1.6-testing.637eaeea9b3c.1`), with
+15 chart-managed Deployments ready (20/20 replicas). This qualifies the
+rollout verification path; it does not qualify hosted Observe or authenticated
+workflow signal coverage.
 Issues [#10](https://github.com/myota-platform/myota-next/issues/10),
 [#90](https://github.com/myota-platform/myota-next/issues/90), and
 [#91](https://github.com/myota-platform/myota-next/issues/91) remain open for

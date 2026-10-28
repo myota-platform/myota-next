@@ -133,9 +133,10 @@ against the isolated deployment remains under Phase 6 issue #10.
   object storage, secrets, observability, deployment, and release automation.
   Phase 6 now has isolated SMTP STARTTLS delivery and same-work-ID replay
   evidence; the broader clean-install, authenticated workflow, backup/restore,
-  observability, and rollback gates remain tracked by issue #10. The current
-  `myota-test` topology has 21/21 requested replicas ready and 17/17 Prometheus
-  targets up. Helm enables optional Observe credential wiring, but the
+  observability, and rollback gates remain tracked by issue #10. A 2026-10-27
+  live check found 21/21 replicas ready and 17/17 Prometheus targets up. The
+  latest protected release, revision 60, has 20/20 chart replicas ready. Helm
+  enables optional Observe credential wiring, but the
   `myota-observe` Secret is absent; the application enables reporting only when
   both credentials are non-empty, so no authenticated Observe receipt is
   verified. There is also no centralized logs/traces backend; workflow signal
@@ -145,9 +146,13 @@ against the isolated deployment remains under Phase 6 issue #10.
   one public read through Gateway and Activity; the telemetry batch had no
   correlated application logs. After removing the test endpoint and Secret,
   chart revision 59 was directly verified deployed with 20/20 chart replicas
-  ready and no `OBSERVE_ENDPOINT`. Hosted delivery and authenticated workflow
-  correlation remain open; the canceled deployment workflow is not counted as
-  a passing gate.
+  ready and no `OBSERVE_ENDPOINT`. The first workflow run was canceled after
+  Rancher removed its completed operation record before the poller observed
+  completion. PR #209 fixed that handoff, and protected rollout
+  [#40613457838](https://github.com/myota-platform/myota-next/actions/runs/40613457838)
+  passed on revision 60 with all 20 chart replicas ready. Hosted delivery and
+  authenticated workflow correlation remain open. The evidence and limits are
+  in [Observe delivery](operations/observe-delivery-smoke.md).
   A deployed Participant email-change request recovered from a temporary SMTP
   outage: the current-address message retried twice and delivered after the
   test sink returned. The old address remained authoritative until both links

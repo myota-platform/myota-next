@@ -363,9 +363,10 @@ an accepted scope decision is recorded in the dispositions section.
   rollback, and protected digest deployment. Issue #91 records the launch-critical
   authenticated Admin and Participant journeys as passed, including self-service,
   registration, account management, Activity/QSO workflows, and awards. The
-  current release has 16 Deployments available (21/21 replicas) and 17/17
-  Prometheus targets up. Authenticated Grafana viewing is qualified by #116.
-  Email delivery and recovery evidence is in L-02. See the
+  latest protected release, revision 60, has 15 chart-managed Deployments ready
+  (20/20 replicas); a 2026-10-27 check observed 17/17 Prometheus targets up.
+  Authenticated Grafana viewing is qualified by #116. Email delivery and
+  recovery evidence is in L-02. See the
   [Observe guide](operations/observe-delivery-smoke.md).
 - **Missing evidence:** Observe credentialed delivery has not been verified because
   the optional `myota-observe` Secret is absent. A temporary in-cluster mock
@@ -373,10 +374,12 @@ an accepted scope decision is recorded in the dispositions section.
   request, and direct checks confirmed that removing the endpoint and Secret
   disabled delivery. This does not qualify a hosted Observe account. Centralized
   application logs, alerts, and authenticated request-level workflow correlation
-  remain open under #90 and #91. The automated deployment workflow was canceled
-  after Rancher completed and removed its operation record before the workflow
-  poller observed completion; the deployed Helm and Kubernetes state was checked
-  directly, so that run is not counted as a passing gate. The optional
+  remain open under #90 and #91. An initial rollout poll was canceled after
+  Rancher removed its completed operation record before the workflow observed
+  it; PR #209 changed that missing-record handoff to continue with App-version
+  and digest/readiness checks. Protected run #40613457838 passed at revision 60,
+  qualifying that rollout path. This does not change the missing hosted Observe
+  or authenticated-signal evidence. The optional
   BigDataCloud key is also absent, so provider-backed location enrichment under
   #110/#111 remains unqualified. No production SMTP relay trust chain has been
   qualified; see L-02. The live no-key state and its limits are recorded in the
