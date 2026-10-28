@@ -36,16 +36,15 @@ before relying on the record after a later rollout.
 
 ## Remaining Phase 6 qualification
 
-- **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):**
-  lifecycle enrichment and the full-catalogue asynchronous Admin backfill are
-  deployed. The no-credential fallback was previously verified at revision 73.
-  On 2026-10-28, after provisioning the test-only
-  `myota-geodata-enrichment` Secret and restarting the worker, one authenticated
-  API request completed with `ENRICHED` / `BIGDATACLOUD` and saved location
-  fields. The Admin confirmation preview showed 432 matching entities and was
-  dismissed without submitting requests. Replacement-key rotation, lifecycle
-  triggers, submitted/monitored Admin backfill, and catalogue-wide completion
-  remain unverified; the 432-record backfill was not launched. Follow the
+- **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):
+  on 2026-10-28, the full-catalogue asynchronous Admin backfill scanned 432
+  entities, queued 430, skipped two, and failed none. All 432 later showed
+  `COMPLETED` in Geodata. A repeated scan initially queued seven completed
+  entities; PR #255 fixed the Admin guard and added browser coverage. The
+  protected Helm upgrade to chart `1.1.6-testing.43fa7c967a90.1` completed with
+  15 Deployments Ready. The verified post-fix scan reported 0 queued, 432
+  skipped, and 0 failed; the database still showed `COMPLETED|432`. Lifecycle
+  triggers and replacement-key rotation remain open under #111. See the
   [location-enrichment guide](location-enrichment.md) and
   [Geodata parity record](../parity/geodata.md).
 - **Password reset ([#114](https://github.com/myota-platform/myota-next/issues/114)):** deployed Mailpit delivery, valid and expired browser links, concurrent single-use token consumption, and revocation of two pre-reset access and refresh sessions have been verified. Revision 73 includes the shared per-email throttle and request-log secret exclusion. Six distinct signed client addresses produced five persisted recovery requests; the sixth created none. The `identity-api` recovery trace reached the test Observe receiver, and its reset token and link marker were absent from all `myota-test` pod logs. The mock receiver retains only trace IDs and operation names, so field-level token exclusion from raw snapshots and hosted Observe delivery remain open.

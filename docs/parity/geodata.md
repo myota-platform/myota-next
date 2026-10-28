@@ -804,40 +804,32 @@ under [#110](https://github.com/myota-platform/myota-next/issues/110),
 [#111](https://github.com/myota-platform/myota-next/issues/111), and
 [#112](https://github.com/myota-platform/myota-next/issues/112).
 
-### Test deployment recheck — 2026-10-28
+### Test deployment and backfill — 2026-10-28
 
-The `myota-test` Helm release is deployed at revision 73
-(`myota-next-1.1.6-testing.4375882af675.1`, application version
-`testing-be5f518`). The Geodata worker is Ready at 1/1 on image digest
-`sha256:574e6f1d50732ee07dc8e083a23f92cca32b9d95e3fbb164571c75414ea368c6`.
-The Admin Web is Ready at 1/1 on digest
-`sha256:7008a0a1b5c6700e574eed43cf4f3e77d37ba42cd4666db0b6f2d99d53e701b6`.
-The worker's `BIGDATACLOUD_API_KEY` reference points to the optional
-`myota-geodata-enrichment` Secret and `api-key` key, but a presence-only lookup
-confirms that Secret is absent. Authenticated read-only requests to the entity list,
-location options, and adapter catalogue returned HTTP 200. The entity list reports 432
-records; a sample entity reports `geocodeStatus: NOT_CONFIGURED`. No provider request or
-catalogue backfill was submitted. The no-credential fallback is qualified; provider-backed
-enrichment and the Admin backfill still require a test-only credential.
+A test-only `BIGDATACLOUD_API_KEY` was provisioned through the documented
+Kubernetes Secret and loaded by a restarted Geodata worker. One authenticated
+API request returned HTTP 202 (`QUEUED`); a fresh entity read showed
+`COMPLETED` / `ENRICHED`, provider `BIGDATACLOUD`, saved location metadata, and
+a geocoding timestamp.
 
-### Provider-backed single-entity check — 2026-10-28
+The Admin action then scanned the complete 432-entity catalogue, queued 430,
+skipped two, and failed none. After worker completion, all 432 entities
+reported `locationEnrichmentStatus: COMPLETED`. A repeat scan exposed that
+completed entities could be queued again when optional provider fields remained
+empty. PR [#255](https://github.com/myota-platform/myota-next/pull/255) added a
+browser regression test and now skips queued and completed requests while
+allowing retries for failed requests.
 
-A test-only credential was later provisioned in the `myota-test` namespace through
-the documented Kubernetes Secret. The secret value was not read to output or logged.
-The Geodata worker was restarted so its environment loaded the new Secret and returned
-Ready at 1/1. An authenticated administrator queued one request for an eligible test
-catalogue entity using its current version and an idempotency key. The API returned
-HTTP 202 with `QUEUED`; the worker then completed the request. A fresh entity read
-reported `locationEnrichmentStatus: COMPLETED`, `geocodeStatus: ENRICHED`, and
-`geocodeProvider: BIGDATACLOUD`. The saved response included Spain, Galicia, and
-Culleredo location metadata and a geocoding timestamp.
+The fix is deployed on chart `1.1.6-testing.43fa7c967a90.1`; all 15 Deployments
+are Ready. Admin Web is Ready at 1/1 on digest
+`sha256:6e49656947c31db55465e14994b9d65a695d6f8522783df510cd4db488fb5c70`.
+A post-deployment scan covered all 432 entities and reported zero queued, 432
+skipped, and zero failed. A read-only Geodata database aggregate remained
+`COMPLETED|432`. See the [operator guide](../operations/location-enrichment.md),
+[PR #256](https://github.com/myota-platform/myota-next/pull/256), and
+[Helm upgrade run](https://github.com/myota-platform/myota-next/actions/runs/40678337347).
 
-This confirms the configured single-entity API and worker path. A browser check of
-Admin Entity Management also displayed a confirmation covering all 432 matching
-entities; the confirmation was dismissed and no enrichment requests were submitted.
-This verifies the UI entry point and catalogue count, not queueing or completion of a
-backfill. Lifecycle-triggered enrichment after creation, promotion, or geometry edits,
-Secret rotation with a replacement credential, and catalogue-wide backfill remain
-unverified. A full backfill was not started because it could trigger provider lookups
-for many entities. Continue with the single-entity and bounded Admin qualification
-sequence in the [operator guide](../operations/location-enrichment.md).
+Provider-backed lifecycle enrichment after entity creation, promotion, or
+geometry edits and replacement-key rotation remain unverified; see issues
+[#110](https://github.com/myota-platform/myota-next/issues/110) and
+[#111](https://github.com/myota-platform/myota-next/issues/111).
