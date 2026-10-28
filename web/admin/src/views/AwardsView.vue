@@ -1132,19 +1132,44 @@ onMounted(() => {
     </article>
     <article class="panel">
       <div class="panel-heading">
-        <h2>{{ selected ? selected.name : 'New award draft' }}</h2>
+        <h2>
+          {{
+            editingPublished && selected
+              ? `${selected.name} · Draft version ${Number(selected.version || 1) + 1}`
+              : selected
+                ? selected.name
+                : 'New award draft'
+          }}
+        </h2>
         <button
-          v-if="canManage && selected?.status === 'PUBLISHED'"
+          v-if="
+            canManage && selected?.status === 'PUBLISHED' && !editingPublished
+          "
           class="secondary"
           type="button"
           :disabled="saving"
           @click="beginPublishedVersionEdit"
         >
-          {{
-            editingPublished ? 'Editing new version' : 'Create editable version'
-          }}
+          Create a new version for this award
         </button>
+        <span
+          v-else-if="editingPublished && selected"
+          class="status-chip"
+          role="status"
+        >
+          Editing draft version {{ Number(selected.version || 1) + 1 }}
+        </span>
       </div>
+      <p
+        v-if="editingPublished && selected"
+        class="read-only-note"
+        role="status"
+      >
+        This draft copies published version {{ Number(selected.version || 1) }}.
+        Saving creates version {{ Number(selected.version || 1) + 1 }} as a
+        separate draft; the published version and awards issued from it stay
+        unchanged.
+      </p>
       <p v-if="!editable" class="read-only-note">
         This award version is read-only. Create an editable version to preserve
         the published definition while you make and review changes.
