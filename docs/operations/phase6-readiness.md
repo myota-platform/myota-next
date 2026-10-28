@@ -13,17 +13,15 @@ Operating guides and qualification records are maintained in this
 
 ## Current release
 
-At 2026-10-28 18:07 UTC, the Rancher-managed release was Helm revision 81,
-chart `myota-next-1.1.6-testing.1189d11278f7.1`, application version
-`testing-875f79a`. All 15 MyOTA Deployments were ready at their desired replica
+At 2026-10-28 20:06 UTC, the Rancher-managed release was Helm revision 83,
+chart `myota-next-1.1.6-testing.086ec4c7788d.1`, application version
+`testing-3ccb58e`. All 17 MyOTA Deployments were ready at their desired replica
 counts on the immutable image digests recorded in
 [`deploy/fleet/myota-test/values.yaml`](../../deploy/fleet/myota-test/values.yaml).
 The Core, Activity, Geodata/PostGIS, JetStream, and SeaweedFS PVCs were bound.
-Admin and Participant web hosts, the Admin health endpoint, and the Award JSON
-reference page returned HTTP 200. The Admin Web ran at digest
-`sha256:e496f35e37fc76865f50de82ad68dabbb891b2ea81d94546cb6572b53c79ccfb`.
-The protected catalog rollout was verified by
-[run 40741182531](https://github.com/myota-platform/myota-next/actions/runs/40741182531).
+The Admin host and Award JSON reference page returned HTTP 200. The protected
+catalog rollout was verified by
+[run 40760093201](https://github.com/myota-platform/myota-next/actions/runs/40760093201).
 Recheck release state and digests after a later rollout.
 
 ## Qualified work packages
@@ -84,7 +82,8 @@ Recheck release state and digests after a later rollout.
   `AWARD_TEXT` layout element. The deployment at chart
   `1.1.6-testing.1189d11278f7.1` was verified by
   [run 40741182531](https://github.com/myota-platform/myota-next/actions/runs/40741182531).
-- **Award version creation ([#248](https://github.com/myota-platform/myota-next/issues/248)):** Admin now labels the action that creates the next draft version and explains that the published source and its issued-award references remain unchanged. Service and browser coverage passed in [PR #283](https://github.com/myota-platform/myota-next/pull/283); the Admin Web digest was deployed by [PR #284](https://github.com/myota-platform/myota-next/pull/284). Protected Rancher [run 40749348878](https://github.com/myota-platform/myota-next/actions/runs/40749348878) succeeded at chart `1.1.6-testing.645d83f4b1a4.1`, app version `testing-f6ed0b5`; all 22 Deployments were ready and the Awards page returned HTTP 200. The deployed Admin bundle contains the version action. Issue #248 is closed. This verifies version creation presentation and service behavior; award deletion and overall parent #246 qualification remain open.
+- **Award version creation ([#248](https://github.com/myota-platform/myota-next/issues/248)):** Admin now labels the action that creates the next draft version and explains that the published source and its issued-award references remain unchanged. Service and browser coverage passed in [PR #283](https://github.com/myota-platform/myota-next/pull/283); the Admin Web digest was deployed by [PR #284](https://github.com/myota-platform/myota-next/pull/284). Protected Rancher [run 40749348878](https://github.com/myota-platform/myota-next/actions/runs/40749348878) succeeded at chart `1.1.6-testing.645d83f4b1a4.1`, app version `testing-f6ed0b5`; all 22 Deployments were ready and the Awards page returned HTTP 200. The deployed Admin bundle contains the version action. Issue #248 is closed.
+- **Global-admin award deletion ([#247](https://github.com/myota-platform/myota-next/issues/247)):** implementation and browser/service coverage passed in [PR #285](https://github.com/myota-platform/myota-next/pull/285); the immutable test image digests were approved in [PR #286](https://github.com/myota-platform/myota-next/pull/286). Protected Rancher [run 40760093201](https://github.com/myota-platform/myota-next/actions/runs/40760093201) deployed chart `1.1.6-testing.086ec4c7788d.1` (`testing-3ccb58e`); live inspection found all 17 Deployments ready. A temporary draft award was deleted through the Admin action: the durable job reached `SUCCEEDED`, the deleted award read back as HTTP 404, and the shared background asset remained available. The Activity database contains the append-only deletion audit row with the job, root award, deleted version ID, and timestamp. The smoke test used no existing award and did not expose deployment credentials. The deletion boundary and retry behavior are documented in [`award-deletion.md`](../awards/award-deletion.md).
 
 ## Remaining Phase 6 qualification
 
