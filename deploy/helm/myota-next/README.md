@@ -18,6 +18,7 @@ consumers on the configured NATS server.
   hostnames, middleware references, TLS certificate resolver, and optional
   TLS Secret. The test cluster uses `websecure` with `acmeresolver`.
 - `secrets`, `dependencies`, `migrations`, `observe`, `prometheus.serviceMonitor`,
+  `prometheus.rules`,
   and `jetstreamProvisioner` configure secret references, external endpoints,
   schema setup, Observe reporting, Prometheus API scraping, and NATS topology
   provisioning.
@@ -44,6 +45,14 @@ Geodata worker metrics include bounded work-type outcomes and durations, plus
 NATS and PostgreSQL dependency state. The ServiceMonitor stays disabled by
 default. This Prometheus scrape path is complementary to `@nestjs/observe`; it
 does not verify Observe telemetry delivery or log/trace correlation.
+
+Set `prometheus.rules.enabled: true` to install release-scoped alerts for
+unavailable scrape targets, API 5xx responses, worker dependency/work failures,
+and unresolved dead letters. Configure `prometheus.rules.labels` to match the
+installed Prometheus rule selector; this chart defaults that label to
+`release: kube-prometheus-stack`. The test release enables these alerts. See the
+[Prometheus alert guide](../../../docs/operations/alerts.md) for conditions and
+verification.
 
 ## Images and install
 

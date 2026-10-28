@@ -446,6 +446,15 @@ export class ActivityNotificationsService
         return;
       }
       this.countOutcome(processed ? 'processed' : 'duplicate');
+      this.logger.log(
+        JSON.stringify({
+          event: 'activity_notification.settled',
+          eventId: String(envelope.eventId),
+          eventType,
+          outcome: processed ? 'processed' : 'duplicate',
+          deliveryCount: delivered,
+        }),
+      );
       this.completedMessages += 1;
       if (
         MAX_MESSAGES !== undefined &&
