@@ -137,6 +137,9 @@ and Phase 3 issues [#22](https://github.com/myota-platform/myota-next/issues/22)
 primary Admin and Participant deployment workflows are qualified under Phase 6
 issue [#91](https://github.com/myota-platform/myota-next/issues/91). Additional
 Phase 6 product work remains open under #239, #242, #246, and related child issues.
+Under award lifecycle parent [#246](https://github.com/myota-platform/myota-next/issues/246),
+new-version creation is verified and closed as [#248](https://github.com/myota-platform/myota-next/issues/248);
+global-admin award deletion remains in progress as [#247](https://github.com/myota-platform/myota-next/issues/247).
 
 - **Production operations:** the single-node `myota-test` deployment has
   evidence for fresh initialization, authenticated workflows, Observe

@@ -78,9 +78,9 @@ export class ActivityWorkerService implements OnModuleInit, OnModuleDestroy {
     const work = registry.work.filter(
       (item) => item.owner === 'activity-service',
     );
-    if (work.length !== 6) {
+    if (work.length !== 7) {
       throw new Error(
-        'Activity work registry must define six durable commands',
+        'Activity work registry must define seven durable commands',
       );
     }
     this.connection = await connect({
@@ -621,6 +621,7 @@ function consumerPolicy(durable: string): {
     'activity-adif-import-v1': [1, 1],
     'activity-award-recalculate-v1': [2, 2],
     'activity-award-evaluation-v1': [2, 2],
+    'activity-award-delete-v1': [1, 1],
     'activity-pdf-render-v1': [1, 1],
     'activity-statistics-rebuild-v1': [1, 1],
   };

@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -63,6 +64,7 @@ const WORK_TYPE_BY_KIND: Record<string, string> = {
   AWARD_RECALCULATE: 'activity.award-recalculate.v1',
   AWARD_EVALUATION: 'activity.award-evaluation.v1',
   PDF_RENDER: 'activity.pdf-render.v1',
+  AWARD_DELETE: 'activity.award-delete.v1',
   STATISTICS_REBUILD: 'activity.statistics-rebuild.v1',
 };
 
@@ -388,6 +390,8 @@ export class ActivityWorkRepository {
         await this.processAwardRecalculation(client, job.payload);
       } else if (job.kind === 'PDF_RENDER') {
         await this.processPdfRender(client, job.payload);
+      } else if (job.kind === 'AWARD_DELETE') {
+        await this.processAwardDeletion(client, job.payload, job.id);
       } else if (job.kind === 'STATISTICS_REBUILD') {
         await this.processStatisticsRebuild(client, job.payload);
       } else {
@@ -702,7 +706,7 @@ export class ActivityWorkRepository {
 
   private async processPdfRender(client: PoolClient, payload: JsonRecord) {
     const selected = await client.query(
-      'SELECT issuance::text AS issuance_text FROM activity_award_issuance WHERE id=$1 FOR UPDATE',
+      'SELECT award_id,issuance::text AS issuance_text FROM activity_award_issuance WHERE id=$1 FOR UPDATE',
       [payload.issuanceId],
     );
     const issuance = selected.rows[0]
@@ -711,6 +715,12 @@ export class ActivityWorkRepository {
         ) as JsonRecord)
       : undefined;
     if (!issuance) throw new Error('award issuance not found');
+    const awardStatus = await client.query(
+      'SELECT status FROM activity_award_definition WHERE id=$1',
+      [selected.rows[0].award_id],
+    );
+    if (!awardStatus.rows[0] || awardStatus.rows[0].status === 'DELETING')
+      return;
     const spec = issuance.renderSpec as JsonRecord;
     const backgroundAsset = spec.backgroundAsset as JsonRecord;
     const signatureAsset = spec.signatureAsset as JsonRecord;
@@ -772,6 +782,103 @@ export class ActivityWorkRepository {
         stringifyJsonWithBigInts(issuance),
         randomUUID(),
       ],
+    );
+  }
+
+  private async processAwardDeletion(
+    client: PoolClient,
+    payload: JsonRecord,
+    jobId: string,
+  ) {
+    let awardIds = Array.isArray(payload.awardIds)
+      ? [...new Set(payload.awardIds.map(String))]
+      : [];
+    if (!awardIds.length || !payload.rootAwardId || !payload.actorId)
+      throw new Error('award deletion job payload is incomplete');
+
+    const definitions = await client.query(
+      `SELECT id,definition::text AS definition_text,status
+       FROM activity_award_definition WHERE id=ANY($1::uuid[])
+       ORDER BY id FOR UPDATE`,
+      [awardIds],
+    );
+    if (!definitions.rows.length) return;
+    if (definitions.rows.length !== awardIds.length)
+      throw new Error('award family changed during deletion');
+    if (definitions.rows.some((row) => row.status !== 'DELETING'))
+      throw new Error('award family is no longer marked for deletion');
+    awardIds = definitions.rows.map((row) => String(row.id));
+
+    await client.query(
+      `SELECT id FROM activity_award_request
+       WHERE award_id=ANY($1::uuid[]) ORDER BY id FOR UPDATE`,
+      [awardIds],
+    );
+    const issuances = await client.query(
+      `SELECT id,issuance::text AS issuance_text FROM activity_award_issuance
+       WHERE award_id=ANY($1::uuid[]) ORDER BY id FOR UPDATE`,
+      [awardIds],
+    );
+
+    const deletedDefinitionIds = new Set(awardIds);
+    const objectReferences: { bucket: string; key: string }[] = [];
+    for (const row of issuances.rows) {
+      const issuance = parseJsonWithExactIntegers(
+        String(row.issuance_text),
+      ) as JsonRecord;
+      const artifact = asJsonRecord(issuance.artifact);
+      if (artifact.bucket && artifact.objectKey) {
+        objectReferences.push({
+          bucket: String(artifact.bucket),
+          key: String(artifact.objectKey),
+        });
+      } else if (artifact.downloadReady)
+        throw new Error(
+          'issued award artifact is missing its storage location',
+        );
+    }
+
+    const uniqueObjects = new Map<string, { bucket: string; key: string }>();
+    for (const object of objectReferences) {
+      if (!object.bucket || !object.key)
+        throw new Error('award asset is missing its storage location');
+      uniqueObjects.set(`${object.bucket}\u0000${object.key}`, object);
+    }
+    const objectStore = objectStoreClient();
+    for (const object of uniqueObjects.values())
+      await objectStore.send(
+        new DeleteObjectCommand({ Bucket: object.bucket, Key: object.key }),
+      );
+
+    await client.query(
+      `INSERT INTO activity_award_deletion_audit
+       (id,job_id,root_award_id,programme_slug,award_code,deleted_award_ids,actor_id)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7)`,
+      [
+        randomUUID(),
+        jobId,
+        String(payload.rootAwardId),
+        String(payload.programmeSlug),
+        String(payload.code),
+        JSON.stringify([...deletedDefinitionIds]),
+        String(payload.actorId),
+      ],
+    );
+    await client.query(
+      'DELETE FROM activity_award_issuance WHERE award_id=ANY($1::uuid[])',
+      [awardIds],
+    );
+    await client.query(
+      'DELETE FROM activity_award_request WHERE award_id=ANY($1::uuid[])',
+      [awardIds],
+    );
+    await client.query(
+      'DELETE FROM activity_award_progress WHERE award_id=ANY($1::uuid[])',
+      [awardIds],
+    );
+    await client.query(
+      'DELETE FROM activity_award_definition WHERE id=ANY($1::uuid[])',
+      [awardIds],
     );
   }
 
@@ -854,7 +961,7 @@ export class ActivityWorkRepository {
     payload: JsonRecord,
   ) {
     const result = await client.query(
-      'SELECT definition::text AS definition_text FROM activity_award_definition WHERE id=$1',
+      'SELECT definition::text AS definition_text,status FROM activity_award_definition WHERE id=$1',
       [payload.awardId],
     );
     const award = result.rows[0]
@@ -863,6 +970,7 @@ export class ActivityWorkRepository {
         ) as JsonRecord)
       : undefined;
     if (!award) throw new Error('award definition not found');
+    if (result.rows[0].status === 'DELETING') return;
     const facts = pythonTruthy(payload.facts)
       ? payload.facts
       : await readSubjectFacts(
@@ -1236,6 +1344,12 @@ function objectStoreClient() {
         process.env.MYOTA_OBJECT_STORAGE_SECRET_KEY ?? 'myota-s3-dev-only',
     },
   });
+}
+
+function asJsonRecord(value: unknown): JsonRecord {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as JsonRecord)
+    : {};
 }
 
 function date(value: unknown) {

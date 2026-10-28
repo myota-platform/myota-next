@@ -4711,6 +4711,36 @@
       "producerSources": ["apps/geodata/geodata.py"],
       "consumerSources": ["apps/geodata/geodata_import_worker.py"],
       "legacySubject": "myota.geodata.entity.location-enrichment.v1"
+    },
+    {
+      "workType": "activity.award-delete.v1",
+      "owner": "activity-service",
+      "class": "work-command",
+      "subject": "myota.work.activity.award-delete.v1",
+      "stream": "MYOTA_ACTIVITY_WORK",
+      "durable": "activity-award-delete-v1",
+      "schema": "schemas/work/activity-award-delete-v1.schema.json",
+      "payloadEvidence": "database-row-reference; checked against current handler sources",
+      "payloadSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["jobId"],
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "maxLength": 36
+          }
+        }
+      },
+      "workIdSource": "myota_activity.activity_job.id",
+      "producerSources": [
+        "apps/activity/src/awards.service.ts",
+        "apps/activity/src/activity-awards.repository.ts"
+      ],
+      "consumerSources": [
+        "apps/activity-worker/src/activity-work.repository.ts"
+      ]
     }
   ],
   "producerNamesByOwner": {
@@ -4835,6 +4865,12 @@
       "stream": "MYOTA_GEODATA_WORK",
       "durable": "geodata-location-enrichment-v1",
       "producers": ["geodata", "geodata-service", "geodata-worker"]
+    },
+    "activity.award-delete.v1": {
+      "subject": "myota.work.activity.award-delete.v1",
+      "stream": "MYOTA_ACTIVITY_WORK",
+      "durable": "activity-award-delete-v1",
+      "producers": ["activity", "activity-service", "awards"]
     }
   }
 }

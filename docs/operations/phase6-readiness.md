@@ -84,6 +84,7 @@ Recheck release state and digests after a later rollout.
   `AWARD_TEXT` layout element. The deployment at chart
   `1.1.6-testing.1189d11278f7.1` was verified by
   [run 40741182531](https://github.com/myota-platform/myota-next/actions/runs/40741182531).
+- **Award version creation ([#248](https://github.com/myota-platform/myota-next/issues/248)):** Admin now labels the action that creates the next draft version and explains that the published source and its issued-award references remain unchanged. Service and browser coverage passed in [PR #283](https://github.com/myota-platform/myota-next/pull/283); the Admin Web digest was deployed by [PR #284](https://github.com/myota-platform/myota-next/pull/284). Protected Rancher [run 40749348878](https://github.com/myota-platform/myota-next/actions/runs/40749348878) succeeded at chart `1.1.6-testing.645d83f4b1a4.1`, app version `testing-f6ed0b5`; all 22 Deployments were ready and the Awards page returned HTTP 200. The deployed Admin bundle contains the version action. Issue #248 is closed. This verifies version creation presentation and service behavior; award deletion and overall parent #246 qualification remain open.
 
 ## Remaining Phase 6 qualification
 

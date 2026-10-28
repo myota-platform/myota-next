@@ -15,6 +15,70 @@ function repositoryWithQuery(
 }
 
 describe('ActivityAwardsRepository published revisions', () => {
+  it('marks every version deleting and atomically queues a durable deletion job', async () => {
+    const statements: { sql: string; values?: unknown[] }[] = [];
+    const { repository } = repositoryWithQuery(async (sql, values) => {
+      statements.push({ sql, values });
+      if (sql.startsWith('SELECT response::text')) return { rows: [] };
+      if (sql.includes('FROM activity_award_definition WHERE id=$1 FOR UPDATE'))
+        return {
+          rows: [
+            {
+              id: 'award-v2',
+              programme_slug: 'field-day',
+              code: 'FIELD-DAY-10',
+              status: 'PUBLISHED',
+            },
+          ],
+        };
+      if (
+        sql.includes('FROM activity_award_definition') &&
+        sql.includes('ORDER BY version,id')
+      )
+        return {
+          rows: [
+            { id: 'award-v1', status: 'RETIRED' },
+            { id: 'award-v2', status: 'PUBLISHED' },
+          ],
+        };
+      if (sql.includes("kind='AWARD_DELETE'")) return { rows: [] };
+      return { rows: [], rowCount: 1 };
+    });
+
+    await expect(
+      repository.enqueueAwardDeletion(
+        'award-v2',
+        'global-admin-1',
+        'delete-request-key',
+      ),
+    ).resolves.toMatchObject({
+      kind: 'AWARD_DELETE',
+      status: 'QUEUED',
+      payload: {
+        rootAwardId: 'award-v2',
+        awardIds: ['award-v1', 'award-v2'],
+        actorId: 'global-admin-1',
+      },
+    });
+    expect(
+      statements.some(
+        (statement) =>
+          statement.sql.includes("status='DELETING'") &&
+          statement.sql.includes('programme_slug=$1 AND code=$2'),
+      ),
+    ).toBe(true);
+    expect(
+      statements.some((statement) =>
+        statement.sql.includes("VALUES ($1,'AWARD_DELETE'"),
+      ),
+    ).toBe(true);
+    expect(
+      statements.some((statement) =>
+        statement.sql.includes("'activity.award-delete.v1'"),
+      ),
+    ).toBe(true);
+  });
+
   it('locks and verifies the source version before inserting a new draft', async () => {
     const statements: string[] = [];
     const { repository, release } = repositoryWithQuery(async (sql) => {

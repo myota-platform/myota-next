@@ -1504,6 +1504,50 @@ paths:
         ]
       responses:
         { '200': { description: Evaluation job status and retry information } }
+  /v1/awards/{awardId}/deletion-jobs:
+    post:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Request permanent deletion of an award and its versions
+      description: Restricted to GLOBAL_ADMIN and GLOBAL_OPERATOR. The durable deletion job removes award-owned records and unshared assets; the response is returned before object-store cleanup finishes.
+      operationId: createAwardDeletionJob
+      parameters:
+        [
+          { $ref: '#/components/parameters/AwardId' },
+          { $ref: '#/components/parameters/IdempotencyKey' },
+        ]
+      responses:
+        {
+          '202':
+            {
+              description: Award deletion queued; poll the deletion job endpoint for terminal status,
+            },
+        }
+  /v1/awards/deletion-jobs/{jobId}:
+    get:
+      tags: [Awards]
+      security: [{ bearerAuth: [] }]
+      summary: Get permanent award deletion status
+      description: Restricted to GLOBAL_ADMIN and GLOBAL_OPERATOR.
+      operationId: getAwardDeletionJob
+      parameters:
+        [
+          {
+            in: path,
+            name: jobId,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      responses:
+        {
+          '200':
+            {
+              description: Deletion job status,
+              attempts,
+              and terminal error if any,
+            },
+        }
   /v1/awards/progress:
     get:
       tags: [Awards]

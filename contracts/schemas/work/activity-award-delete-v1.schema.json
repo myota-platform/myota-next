@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/myota-platform/myota-contracts/contracts/schemas/work/activity-award-delete-v1.schema.json",
+  "title": "activity.award-delete.v1 command envelope v1",
+  "allOf": [
+    {
+      "$ref": "../work-command.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "workType": {
+          "const": "activity.award-delete.v1"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["jobId"],
+          "properties": {
+            "jobId": {
+              "type": "string",
+              "format": "uuid",
+              "maxLength": 36
+            }
+          }
+        }
+      }
+    }
+  ],
+  "x-payload-evidence": "database-row-reference; checked against current handler sources",
+  "x-work-id-source": "myota_activity.activity_job.id",
+  "x-producer-sources": [
+    "apps/activity/src/awards.service.ts",
+    "apps/activity/src/activity-awards.repository.ts"
+  ],
+  "x-consumer-sources": ["apps/activity-worker/src/activity-work.repository.ts"]
+}

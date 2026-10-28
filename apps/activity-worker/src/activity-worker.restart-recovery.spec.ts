@@ -1592,6 +1592,7 @@ function activityConsumerLimits(durable: string): [number, number] {
     'activity-adif-import-v1': [1, 1],
     'activity-award-recalculate-v1': [2, 2],
     'activity-award-evaluation-v1': [2, 2],
+    'activity-award-delete-v1': [1, 1],
     'activity-pdf-render-v1': [1, 1],
     'activity-statistics-rebuild-v1': [1, 1],
   };

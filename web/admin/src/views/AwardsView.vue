@@ -59,13 +59,34 @@ interface AwardRecalculationJob {
   lastError?: string | null;
   completedAt?: string | null;
 }
+interface AwardDeletionJob {
+  id?: string;
+  kind?: string;
+  awardId: string;
+  awardName?: string;
+  status?: string;
+  attempts?: number;
+  lastError?: string | null;
+  completedAt?: string | null;
+}
 
 const store = useAppStore();
 const pendingAwardMutationKeys = createPendingIdempotencyKeys(
   'myota_admin_pending_award_mutations',
 );
 const awardRecalculationStorageKey = 'myota_admin_award_recalculation_job';
+const awardDeletionStorageKey = 'myota_admin_award_deletion_job';
 const canManage = computed(() => hasAnyScope(store.account, 'awards.admin'));
+const canDeleteAwards = computed(() =>
+  [
+    store.account?.role,
+    ...(store.account?.roles || []).map((role) => role.role),
+  ].some((role) =>
+    ['GLOBAL_ADMIN', 'GLOBAL_OPERATOR'].includes(
+      String(role || '').toUpperCase(),
+    ),
+  ),
+);
 const loading = ref(false);
 let loadGeneration = 0;
 const programme = ref(
@@ -91,6 +112,10 @@ const awardRecalculation = ref<AwardRecalculationJob | null>(null);
 const awardRecalculationLoading = ref(false);
 const awardRecalculationError = ref('');
 let awardRecalculationTimer: ReturnType<typeof setTimeout> | undefined;
+const awardDeletion = ref<AwardDeletionJob | null>(null);
+const awardDeletionLoading = ref(false);
+const awardDeletionError = ref('');
+let awardDeletionTimer: ReturnType<typeof setTimeout> | undefined;
 const message = ref('');
 const templateElements = ref<TemplateElement[]>(defaultElements());
 const validationIssues = ref<AwardValidationIssue[]>([]);
@@ -214,6 +239,100 @@ function scheduleAwardRecalculationRefresh(): void {
   awardRecalculationTimer = setTimeout(() => {
     void refreshAwardRecalculation();
   }, 2000);
+}
+
+function persistAwardDeletion(): void {
+  try {
+    if (awardDeletion.value)
+      sessionStorage.setItem(
+        awardDeletionStorageKey,
+        JSON.stringify(awardDeletion.value),
+      );
+    else sessionStorage.removeItem(awardDeletionStorageKey);
+  } catch {
+    // The current deletion remains visible if session storage is unavailable.
+  }
+}
+
+function scheduleAwardDeletionRefresh(): void {
+  if (awardDeletionTimer) clearTimeout(awardDeletionTimer);
+  if (!['QUEUED', 'RUNNING'].includes(awardDeletion.value?.status || ''))
+    return;
+  awardDeletionTimer = setTimeout(() => {
+    void refreshAwardDeletion();
+  }, 2000);
+}
+
+async function refreshAwardDeletion(): Promise<void> {
+  const current = awardDeletion.value;
+  const id = current?.id;
+  if (!current || !id || awardDeletionLoading.value) return;
+  awardDeletionLoading.value = true;
+  awardDeletionError.value = '';
+  const awardName = selected.value?.name;
+  try {
+    awardDeletion.value = await apiRequest<AwardDeletionJob>(
+      `/v1/awards/deletion-jobs/${encodeURIComponent(id)}`,
+    );
+    awardDeletion.value.awardId = current.awardId;
+    awardDeletion.value.awardName = current.awardName;
+    persistAwardDeletion();
+    if (awardDeletion.value.status === 'SUCCEEDED') {
+      if (selected.value?.id === current.awardId) selected.value = null;
+      await load();
+      message.value = `Award ${current.awardName || awardName || 'definition'} was permanently deleted.`;
+    }
+  } catch (cause) {
+    awardDeletionError.value =
+      cause instanceof Error
+        ? cause.message
+        : 'Unable to refresh award deletion status.';
+  } finally {
+    awardDeletionLoading.value = false;
+    scheduleAwardDeletionRefresh();
+  }
+}
+
+async function deleteAward(): Promise<void> {
+  const award = selected.value;
+  if (
+    !canDeleteAwards.value ||
+    !award?.id ||
+    awardDeletionLoading.value ||
+    !window.confirm(
+      `Permanently delete “${award.name}” (${award.programmeSlug}, ${award.code}) and every version, request, issued record, progress row, and generated certificate file? This cannot be undone. Registered backgrounds and signatures remain in the shared asset library.`,
+    )
+  )
+    return;
+  awardDeletionLoading.value = true;
+  awardDeletionError.value = '';
+  try {
+    const fingerprint = `award-delete:${award.id}`;
+    const key = await pendingAwardMutationKeys.getOrCreate(fingerprint);
+    const job = await apiRequest<AwardDeletionJob>(
+      `/v1/awards/${encodeURIComponent(award.id)}/deletion-jobs`,
+      { method: 'POST', headers: { 'Idempotency-Key': key } },
+    );
+    job.awardId = award.id;
+    job.awardName = award.name;
+    items.value = items.value.map((item) =>
+      item.programmeSlug === award.programmeSlug && item.code === award.code
+        ? { ...item, status: 'DELETING' }
+        : item,
+    );
+    if (selected.value?.id && selected.value.code === award.code)
+      selected.value = { ...selected.value, status: 'DELETING' };
+    awardDeletion.value = job;
+    await pendingAwardMutationKeys.complete(fingerprint);
+    persistAwardDeletion();
+    message.value = `Deleting ${award.name} and its award-owned records and assets.`;
+  } catch (cause) {
+    awardDeletionError.value =
+      cause instanceof Error ? cause.message : 'Unable to delete this award.';
+  } finally {
+    awardDeletionLoading.value = false;
+    scheduleAwardDeletionRefresh();
+  }
 }
 
 async function refreshAwardRecalculation(): Promise<void> {
@@ -1036,7 +1155,21 @@ onMounted(() => {
   } catch {
     sessionStorage.removeItem(awardRecalculationStorageKey);
   }
+  try {
+    const saved = JSON.parse(
+      sessionStorage.getItem(awardDeletionStorageKey) || 'null',
+    ) as AwardDeletionJob | null;
+    if (saved?.awardId && saved.id) {
+      awardDeletion.value = saved;
+      void refreshAwardDeletion();
+    }
+  } catch {
+    sessionStorage.removeItem(awardDeletionStorageKey);
+  }
   void load();
+});
+onUnmounted(() => {
+  if (awardDeletionTimer) clearTimeout(awardDeletionTimer);
 });
 </script>
 
@@ -1064,6 +1197,32 @@ onMounted(() => {
   />
   <div v-if="message" class="notice" role="status">{{ message }}</div>
   <div v-if="error" class="error-card" role="alert">{{ error }}</div>
+  <section
+    v-if="awardDeletion"
+    class="activity-job"
+    aria-live="polite"
+    aria-label="Award deletion status"
+  >
+    <strong>{{ awardDeletion.awardName || 'Award' }} deletion</strong>
+    <span class="status-chip">{{ awardDeletion.status || 'QUEUED' }}</span>
+    <p v-if="['QUEUED', 'RUNNING'].includes(awardDeletion.status || '')">
+      Award records and stored files are being removed. Cleanup failures are
+      retried safely.
+    </p>
+    <p v-else-if="awardDeletion.status === 'FAILED'" class="error-text">
+      Deletion stopped after {{ awardDeletion.attempts ?? 0 }} attempts. Select
+      the award to retry after reviewing the service error.
+    </p>
+    <p v-else-if="awardDeletion.status === 'SUCCEEDED'">
+      Deletion completed and was recorded in the audit log.
+    </p>
+    <p v-if="awardDeletion.lastError" class="error-text">
+      {{ awardDeletion.lastError }}
+    </p>
+    <p v-if="awardDeletionError" class="error-text" role="alert">
+      {{ awardDeletionError }}
+    </p>
+  </section>
   <section
     v-if="validationIssues.length"
     class="error-card"
@@ -1151,6 +1310,19 @@ onMounted(() => {
           @click="beginPublishedVersionEdit"
         >
           Create a new version for this award
+        </button>
+        <button
+          v-if="canDeleteAwards && selected?.id"
+          class="danger"
+          type="button"
+          :disabled="awardDeletionLoading"
+          @click="deleteAward"
+        >
+          {{
+            selected.status === 'DELETING'
+              ? 'Check or retry deletion'
+              : 'Delete award permanently'
+          }}
         </button>
         <span
           v-else-if="editingPublished && selected"

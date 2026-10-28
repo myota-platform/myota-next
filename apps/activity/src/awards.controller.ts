@@ -68,6 +68,24 @@ export class AwardsController {
     return this.awards.getAwardJob(jobId);
   }
 
+  @Post(':awardId/deletion-jobs')
+  @HttpCode(202)
+  createDeletion(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Param('awardId') awardId: string,
+  ) {
+    return this.awards.requestAwardDeletion(authorization, key, awardId);
+  }
+
+  @Get('deletion-jobs/:jobId')
+  getDeletion(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('jobId') jobId: string,
+  ) {
+    return this.awards.getAwardDeletionJob(authorization, jobId);
+  }
+
   @Get('progress')
   progress(
     @Headers('authorization') authorization: string | undefined,

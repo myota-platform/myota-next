@@ -689,3 +689,197 @@ test('creates a version from a published award and derives landscape print dimen
   ).toBeVisible();
   await expectResponsiveAccessible(page, 'editing a published award version');
 });
+
+test('limits permanent award deletion to global administrators and reports completion', async ({
+  page,
+}) => {
+  const award = {
+    id: 'award-delete-1',
+    programmeSlug: 'alpine',
+    code: 'ALPINE-DELETE',
+    name: 'Alpine deletion fixture',
+    category: 'HUNTER',
+    status: 'DRAFT',
+    version: 1,
+    condition: {},
+    levels: [],
+    template: { elements: [] },
+  };
+  let deletionRequest: { method: string; key?: string } | undefined;
+  let confirmation = '';
+  page.on('dialog', async (dialog) => {
+    confirmation = dialog.message();
+    await dialog.accept();
+  });
+  await page.route('**/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+    if (url.pathname === '/v1/identity/auth/login') {
+      await route.fulfill({ json: { accessToken: 'global-admin-token' } });
+      return;
+    }
+    if (url.pathname === '/v1/identity/me') {
+      await route.fulfill({
+        json: {
+          id: 'global-admin-1',
+          email: 'global-admin@example.test',
+          displayName: 'Global Admin',
+          roles: [{ role: 'GLOBAL_OPERATOR', scopes: ['*'] }],
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({
+        json: { items: [{ slug: 'alpine', name: 'Alpine' }], nextPage: null },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/awards' && method === 'GET') {
+      await route.fulfill({
+        json: {
+          items: [award],
+          page: 1,
+          pageSize: 50,
+          total: 1,
+          nextPage: null,
+        },
+      });
+      return;
+    }
+    if (url.pathname === `/v1/awards/${award.id}` && method === 'GET') {
+      await route.fulfill({ json: award });
+      return;
+    }
+    if (url.pathname === '/v1/awards/assets') {
+      await route.fulfill({ json: { items: [], nextPage: null } });
+      return;
+    }
+    if (
+      url.pathname === '/v1/awards/requests' ||
+      url.pathname === '/v1/awards/issuances'
+    ) {
+      await route.fulfill({
+        json: { items: [], page: 1, pageSize: 50, total: 0 },
+      });
+      return;
+    }
+    if (
+      url.pathname === `/v1/awards/${award.id}/deletion-jobs` &&
+      method === 'POST'
+    ) {
+      deletionRequest = { method, key: request.headers()['idempotency-key'] };
+      await route.fulfill({
+        status: 202,
+        json: {
+          id: 'award-delete-job-1',
+          kind: 'AWARD_DELETE',
+          awardId: award.id,
+          status: 'QUEUED',
+          attempts: 0,
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/awards/deletion-jobs/award-delete-job-1') {
+      await route.fulfill({
+        json: {
+          id: 'award-delete-job-1',
+          kind: 'AWARD_DELETE',
+          awardId: award.id,
+          status: 'SUCCEEDED',
+          attempts: 1,
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: {} });
+  });
+
+  await page.goto('/login');
+  await page.getByLabel('Email').fill('global-admin@example.test');
+  await page.getByLabel('Password').fill('correct-horse-battery-staple');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto('/awards');
+  await page.getByRole('button', { name: /Alpine deletion fixture/ }).click();
+  await page.getByRole('button', { name: 'Delete award permanently' }).click();
+
+  await expect
+    .poll(() => deletionRequest)
+    .toMatchObject({ method: 'POST', key: expect.any(String) });
+  expect(confirmation).toContain('Alpine deletion fixture');
+  expect(confirmation).toContain('ALPINE-DELETE');
+  expect(confirmation).toContain('cannot be undone');
+  await expect(
+    page.getByText('Award Alpine deletion fixture was permanently deleted.'),
+  ).toBeVisible({ timeout: 6000 });
+});
+
+test('does not expose permanent award deletion to a scoped awards administrator', async ({
+  page,
+}) => {
+  const award = {
+    id: 'award-scoped-1',
+    programmeSlug: 'alpine',
+    code: 'ALPINE-SCOPED',
+    name: 'Scoped award',
+    category: 'HUNTER',
+    status: 'DRAFT',
+    version: 1,
+    condition: {},
+    levels: [],
+    template: { elements: [] },
+  };
+  await page.route('**/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === '/v1/identity/auth/login') {
+      await route.fulfill({ json: { accessToken: 'scoped-admin-token' } });
+    } else if (url.pathname === '/v1/identity/me') {
+      await route.fulfill({
+        json: {
+          id: 'scoped-admin-1',
+          email: 'scoped-admin@example.test',
+          displayName: 'Scoped Admin',
+          scopes: ['awards.admin'],
+          roles: [{ role: 'AWARD_ADMIN', scopes: ['awards.admin'] }],
+        },
+      });
+    } else if (url.pathname === '/v1/programmes') {
+      await route.fulfill({
+        json: { items: [{ slug: 'alpine', name: 'Alpine' }], nextPage: null },
+      });
+    } else if (url.pathname === '/v1/awards' && request.method() === 'GET') {
+      await route.fulfill({
+        json: { items: [award], page: 1, pageSize: 50, total: 1 },
+      });
+    } else if (url.pathname === `/v1/awards/${award.id}`) {
+      await route.fulfill({ json: award });
+    } else if (url.pathname === '/v1/awards/assets') {
+      await route.fulfill({ json: { items: [], nextPage: null } });
+    } else if (
+      url.pathname === '/v1/awards/requests' ||
+      url.pathname === '/v1/awards/issuances'
+    ) {
+      await route.fulfill({
+        json: { items: [], page: 1, pageSize: 50, total: 0 },
+      });
+    } else {
+      await route.fulfill({ json: {} });
+    }
+  });
+
+  await page.goto('/login');
+  await page.getByLabel('Email').fill('scoped-admin@example.test');
+  await page.getByLabel('Password').fill('correct-horse-battery-staple');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto('/awards');
+  await page.getByRole('button', { name: /Scoped award/ }).click();
+
+  await expect(
+    page.getByRole('button', { name: 'Delete award permanently' }),
+  ).toHaveCount(0);
+});

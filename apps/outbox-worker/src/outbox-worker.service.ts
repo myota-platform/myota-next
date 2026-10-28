@@ -388,7 +388,7 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
     if (OWNER === 'activity' || OWNER === 'geodata') {
       const stream =
         OWNER === 'activity' ? 'MYOTA_ACTIVITY_WORK' : 'MYOTA_GEODATA_WORK';
-      const expectedCount = OWNER === 'activity' ? 6 : 4;
+      const expectedCount = OWNER === 'activity' ? 7 : 4;
       if (ownedWork.length !== expectedCount) {
         throw new Error(
           `${stream} work routes are incomplete in the event registry`,
@@ -430,6 +430,7 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
       'activity-adif-import-v1': 300,
       'activity-award-recalculate-v1': 120,
       'activity-award-evaluation-v1': 120,
+      'activity-award-delete-v1': 120,
       'activity-pdf-render-v1': 300,
       'activity-statistics-rebuild-v1': 300,
       'geodata-preprocessing-v1': 300,
@@ -449,6 +450,7 @@ export class OutboxWorkerService implements OnModuleInit, OnModuleDestroy {
       'activity-adif-import-v1': 1,
       'activity-award-recalculate-v1': 2,
       'activity-award-evaluation-v1': 2,
+      'activity-award-delete-v1': 1,
       'activity-pdf-render-v1': 1,
       'activity-statistics-rebuild-v1': 1,
       'geodata-preprocessing-v1': 1,
