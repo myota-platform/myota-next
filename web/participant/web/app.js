@@ -258,14 +258,26 @@ async function loadProgrammes() {
     if (nextPage !== null && nextPage <= page)
       throw new Error('Programme catalogue pagination did not advance.');
   }
+  if (!catalogue.length)
+    throw new Error('No programmes are currently available.');
   programmes = catalogue;
+  $('programme-status').textContent = '';
+  $('programme-retry').hidden = true;
   $('programme-select').innerHTML = programmes
     .map(
       (p) =>
         `<option value="${escapeHtml(p.slug)}">${escapeHtml(p.name)}</option>`,
     )
     .join('');
-  $('programme-select').value = location.hash.slice(1) || programmes[0].slug;
+  const requestedSlug = location.hash.slice(1);
+  const selectedSlug = programmes.some(
+    (programme) => programme.slug === requestedSlug,
+  )
+    ? requestedSlug
+    : programmes[0].slug;
+  $('programme-select').value = selectedSlug;
+  if (requestedSlug && requestedSlug !== selectedSlug)
+    location.hash = selectedSlug;
   await loadProgramme($('programme-select').value);
 }
 async function loadProgramme(slug) {
@@ -276,6 +288,13 @@ async function loadProgramme(slug) {
   $('entity-prev').disabled = true;
   $('entity-next').disabled = true;
   activationEntityOptions = new Map();
+  entities = [];
+  $('entities').replaceChildren();
+  $('entity-count').textContent = '…';
+  $('entity-page-status').textContent = '';
+  $('entity-retry').hidden = true;
+  $('activation-entity').replaceChildren();
+  renderMarkers();
   const programme =
     programmes.find((p) => p.slug === slug) ||
     (await api(`/v1/programmes/${encodeURIComponent(slug)}`));
@@ -335,6 +354,11 @@ async function loadProgrammeEntities(
   const request = ++entityPageRequest;
   $('entity-prev').disabled = true;
   $('entity-next').disabled = true;
+  entities = [];
+  $('entities').replaceChildren();
+  $('entity-count').textContent = '…';
+  $('entity-page-status').textContent = `Loading page ${page}…`;
+  renderMarkers();
   $('loading').textContent = 'Loading entities…';
   try {
     const result = await api(
@@ -343,6 +367,7 @@ async function loadProgrammeEntities(
     if (generation !== programmeLoadGeneration || request !== entityPageRequest)
       return;
     entities = result.items || [];
+    $('entity-retry').hidden = true;
     entityPage = result.page || page;
     entityHasNext = Boolean(result.nextPage);
     const total = Number(result.total || 0);
@@ -367,6 +392,21 @@ async function loadProgrammeEntities(
     renderMarkers();
     $('entity-page-status').textContent =
       `Page ${entityPage} · ${total} entities`;
+  } catch (error) {
+    if (generation !== programmeLoadGeneration || request !== entityPageRequest)
+      return;
+    entities = [];
+    entityPage = 1;
+    entityHasNext = false;
+    activationEntityOptions.clear();
+    $('activation-entity').replaceChildren();
+    $('entities').replaceChildren();
+    $('entity-count').textContent = '–';
+    $('loading').textContent =
+      'The entity catalogue is temporarily unavailable.';
+    $('entity-page-status').textContent = error.message;
+    $('entity-retry').hidden = false;
+    renderMarkers();
   } finally {
     if (
       generation === programmeLoadGeneration &&
@@ -434,7 +474,8 @@ async function loadProgrammeContent(slug, locale) {
       $('programme-content').append(article);
     }
   } catch (error) {
-    $('content-status').textContent = error.message;
+    $('content-status').textContent =
+      `Programme information is temporarily unavailable. Use “Refresh programme data” to retry. ${error.message}`;
   }
 }
 function renderEntities() {
@@ -531,8 +572,28 @@ $('new-proposal-form').onsubmit = async (event) => {
 };
 $('programme-select').onchange = async (e) => {
   location.hash = e.target.value;
-  await loadProgramme(e.target.value);
+  try {
+    await loadProgramme(e.target.value);
+    $('programme-status').textContent = '';
+  } catch (error) {
+    $('programme-status').textContent =
+      `Programme data is temporarily unavailable. Use “Retry programme catalogue” to retry. ${error.message}`;
+    $('programme-retry').hidden = false;
+  }
 };
+$('programme-retry').onclick = () =>
+  loadProgrammes().catch((error) => {
+    $('programme-status').textContent =
+      `Programme catalogue is temporarily unavailable. ${error.message}`;
+    $('programme-retry').hidden = false;
+  });
+$('entity-retry').onclick = () =>
+  loadProgrammeEntities($('programme-select').value, entityPage).catch(
+    (error) => {
+      $('loading').textContent = error.message;
+      $('entity-retry').hidden = false;
+    },
+  );
 $('entity-prev').onclick = () =>
   loadProgrammeEntities($('programme-select').value, entityPage - 1).catch(
     (error) => {
@@ -547,9 +608,15 @@ $('entity-next').onclick = () =>
   );
 $('content-locale').onchange = () =>
   loadProgrammeContent($('programme-select').value, $('content-locale').value);
-$('refresh').onclick = () => loadProgramme($('programme-select').value);
+$('refresh').onclick = () =>
+  loadProgramme($('programme-select').value).catch((error) => {
+    $('programme-status').textContent =
+      `Programme data is temporarily unavailable. ${error.message}`;
+  });
 loadProgrammes().catch((e) => {
-  $('loading').textContent = e.message;
+  $('programme-status').textContent =
+    `Programme catalogue is temporarily unavailable. ${e.message}`;
+  $('programme-retry').hidden = false;
 });
 
 let publicMapState = { lat: 37.395, lon: -5.995, zoom: 12 };
@@ -805,7 +872,7 @@ async function loadPublicAwards(slug) {
     renderPublicAwards();
   } catch (error) {
     $('public-awards').innerHTML =
-      `<p class="small">Awards are temporarily unavailable.</p>`;
+      '<p class="small">Awards are temporarily unavailable. Use “Refresh programme data” to retry.</p>';
     $('award-status').textContent = error.message;
   }
 }

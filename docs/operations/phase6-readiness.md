@@ -105,9 +105,9 @@ Recheck release state and digests after a later rollout.
 - **Email change ([#115](https://github.com/myota-platform/myota-next/issues/115)):** deployed checks cover both-address confirmation, partial confirmation, expiry, replay, cancellation, operation mismatch, concurrent confirmation, address conflict, and transient SMTP outage/retry. Revision 73's resend API and Participant UI were checked against Mailpit: both old links were rejected, the Participant UI showed resend guidance and received both replacement messages, and cancellation removed the pending operation. A follow-up API check completed the replacement pair, confirmed the old address remained authoritative until the second link, restored the synthetic account, and removed all generated messages. The complete resend lifecycle is verified.
 
 Additional product work remains open under #239 (Participant experience), #242
-(programme-scoped entity IDs), #246 (award lifecycle/configuration), and other
-Phase 6 child issues. Do not close #10 until each remaining child issue has
-current evidence and its exit criteria are met or explicitly dispositioned.
+(programme-scoped entity IDs), and other Phase 6 child issues. Award lifecycle
+work under #246 is complete. Do not close #10 until each remaining child issue
+has current evidence and its exit criteria are met or explicitly dispositioned.
 
 ## Operational limits
 
