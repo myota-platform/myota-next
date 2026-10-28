@@ -22,9 +22,10 @@ hero keeps a useful default heading rather than rendering an empty title.
 
 The shared presentation uses programme-provided primary and accent colors with
 common content width, panel radius and shadow, form-control sizing, and focus
-indicators. The page retains MyOTA's own identity while using clear community
-activity and ranking patterns as general inspiration; it does not reuse PARC
-branding or assets.
+indicators. Text and controls derive readable foreground colors from the
+programme primary color so light themes retain text contrast. The page retains
+MyOTA's own identity while using clear community activity and ranking patterns
+as general inspiration; it does not reuse PARC branding or assets.
 
 Preserve programme selection, public content and rules, approved and candidate
 entity lists and maps, candidate proposals, authenticated profile editing,

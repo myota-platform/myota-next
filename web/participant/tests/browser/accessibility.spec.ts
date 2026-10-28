@@ -60,3 +60,53 @@ test('Participant page has accessible viewport layouts and a keyboard skip link'
   await page.keyboard.press('Enter');
   await expect(page.locator('#participant-content')).toBeFocused();
 });
+
+test('Participant primary navigation is keyboard reachable with visible focus', async ({
+  page,
+}) => {
+  await page.route('**/v1/**', async (route) => {
+    if (new URL(route.request().url()).pathname === '/v1/programmes') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              slug: 'alpine',
+              name: 'Alpine Summits',
+              description: 'Radio from the high country.',
+              theme: { primary: '#2367a8', accent: '#e38a32' },
+              rules: {
+                minimumQsos: { activation: 4, hunter: 1 },
+                publicAccessRequired: true,
+              },
+              entityTypes: [],
+            },
+          ],
+          nextPage: null,
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: { items: [], nextPage: null, total: 0, page: 1 },
+    });
+  });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('http://127.0.0.1:8091/');
+  const links = page
+    .getByRole('navigation', {
+      name: 'Participant navigation',
+    })
+    .getByRole('link');
+
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.skip-link')).toBeFocused();
+  for (let index = 0; index < (await links.count()); index += 1) {
+    await page.keyboard.press('Tab');
+    const link = links.nth(index);
+    await expect(link).toBeFocused();
+    expect(
+      await link.evaluate((element) => getComputedStyle(element).outlineStyle),
+    ).not.toBe('none');
+  }
+});

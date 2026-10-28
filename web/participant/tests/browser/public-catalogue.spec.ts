@@ -21,7 +21,7 @@ const programmes = [
     slug: 'coast',
     name: 'Coastal Parks',
     description: '',
-    theme: { primary: '#176f72', accent: '#efb04d' },
+    theme: { primary: '#f490a9', accent: '#efb04d' },
     rules: {
       minimumQsos: { activation: 3, hunter: 1 },
       publicAccessRequired: false,
@@ -159,6 +159,35 @@ test('selects a programme and renders its public content and entity catalogue', 
   await expect(page.locator('#programme-description')).toHaveText(
     'Discover places where radio meets the outdoors.',
   );
+  for (const selector of ['.primary-action', '.community-actions a']) {
+    const ratio = await page.locator(selector).evaluate((element) => {
+      const channel = (value: string) => {
+        const normalized = Number(value) / 255;
+        return normalized <= 0.04045
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4;
+      };
+      const luminance = (value: string) => {
+        const [red, green, blue] = value.match(/[\d.]+/g)!.map(Number);
+        return (
+          channel(red) * 0.2126 +
+          channel(green) * 0.7152 +
+          channel(blue) * 0.0722
+        );
+      };
+      const style = getComputedStyle(element);
+      const background =
+        style.backgroundColor === 'rgba(0, 0, 0, 0)'
+          ? getComputedStyle(element.closest('.panel') || document.body)
+              .backgroundColor
+          : style.backgroundColor;
+      const colors = [luminance(style.color), luminance(background)].sort(
+        (a, b) => b - a,
+      );
+      return (colors[0] + 0.05) / (colors[1] + 0.05);
+    });
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+  }
   await expect(page.locator('#rules')).toContainText('Programme-defined');
   await expect(page.locator('#entities')).toContainText('coast reference site');
   await expect(page.locator('#programme-content')).toContainText(
