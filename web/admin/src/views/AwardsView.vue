@@ -1042,6 +1042,13 @@ onMounted(() => {
 
 <template>
   <PageHeader :refresh="() => load()" :busy="saving || uploading || loading"
+    ><a
+      class="secondary"
+      href="/award-configuration-reference.html"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Award JSON reference (opens in a new tab)"
+      >Award JSON reference</a
     ><button
       v-if="canManage"
       class="primary"

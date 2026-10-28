@@ -241,6 +241,11 @@ test('validates award JSON locally with accessible field-specific feedback', asy
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/awards$/);
+  await expect(
+    page.getByRole('link', {
+      name: 'Award JSON reference (opens in a new tab)',
+    }),
+  ).toHaveAttribute('href', '/award-configuration-reference.html');
   await page.getByRole('button', { name: 'New award draft' }).click();
   await page.getByLabel('Code').fill('ALPINE-10');
   await page.getByLabel('Name', { exact: true }).fill('Alpine Ten');
@@ -266,6 +271,22 @@ test('validates award JSON locally with accessible field-specific feedback', asy
   await expect(page.locator('#award-condition')).toHaveValue(invalidCondition);
   expect(createRequests).toHaveLength(0);
   await expectResponsiveAccessible(page, 'Admin award JSON validation');
+});
+
+test('serves the readable award JSON reference without horizontal page overflow', async ({
+  page,
+}) => {
+  await page.goto('/award-configuration-reference.html');
+  await expect(
+    page.getByRole('heading', { name: 'Award JSON configuration' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Condition kinds' }),
+  ).toBeVisible();
+  await expect(page.locator('#canonical-award-example')).toContainText(
+    'FIELD-DAY-10',
+  );
+  await expectResponsiveAccessible(page, 'Award JSON configuration reference');
 });
 
 test('saves an award draft and submits it for review', async ({ page }) => {
