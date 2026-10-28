@@ -161,8 +161,8 @@ test('selects a programme and renders its public content and entity catalogue', 
   );
   for (const selector of ['.primary-action', '.community-actions a']) {
     const ratio = await page.locator(selector).evaluate((element) => {
-      const channel = (value: string) => {
-        const normalized = Number(value) / 255;
+      const channel = (value: number) => {
+        const normalized = value / 255;
         return normalized <= 0.04045
           ? normalized / 12.92
           : ((normalized + 0.055) / 1.055) ** 2.4;
