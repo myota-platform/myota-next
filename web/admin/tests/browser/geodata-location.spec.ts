@@ -206,3 +206,106 @@ test('saves manual location metadata and queues a provider refresh', async ({
   ]);
   expect(enrichmentRequests[0].idempotencyKey).not.toBe('');
 });
+
+test('catalogue backfill skips queued and completed enrichments but retries failed ones', async ({
+  page,
+}) => {
+  const entities = ['queued', 'completed', 'failed', 'unattempted'].map(
+    (status, index) => ({
+      id: `backfill-${status}`,
+      version: index + 1,
+      name: `Backfill ${status}`,
+      status: 'APPROVED',
+      entityType: 'SOTA',
+      entityTypes: ['SOTA'],
+      location: {},
+      geometry: { type: 'Point', coordinates: [5.1 + index, 45.7] },
+      ...(status === 'unattempted'
+        ? {}
+        : { locationEnrichmentStatus: status.toUpperCase() }),
+    }),
+  );
+  const requests: string[] = [];
+
+  await page.route('**/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+
+    if (url.pathname === '/v1/identity/auth/login') {
+      await route.fulfill({
+        json: {
+          accessToken: 'admin-location-access-token',
+          refreshToken: 'admin-location-refresh-token',
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/identity/me') {
+      await route.fulfill({
+        json: {
+          id: 'location-admin-1',
+          email: 'location-admin@example.test',
+          displayName: 'Location Admin',
+          role: 'GLOBAL_ADMIN',
+          scopes: ['geodata.review', 'geodata.location.manage'],
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({ json: { items: [], nextPage: null } });
+      return;
+    }
+    if (url.pathname === '/v1/geodata/entities' && method === 'GET') {
+      await route.fulfill({
+        json: { items: entities, total: entities.length },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/entity-types') {
+      await route.fulfill({ json: { items: [] } });
+      return;
+    }
+    if (url.pathname === '/v1/geodata/location-options') {
+      await route.fulfill({ json: { continents: [] } });
+      return;
+    }
+    const match = url.pathname.match(
+      /^\/v1\/geodata\/entities\/([^/]+)\/location-enrichment-requests$/,
+    );
+    if (match && method === 'POST') {
+      const entityId = decodeURIComponent(match[1]);
+      requests.push(entityId);
+      await route.fulfill({
+        status: 202,
+        json: {
+          entityId,
+          requestId: `request-${entityId}`,
+          status: 'QUEUED',
+          queued: true,
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: { items: [], page: 1, total: 0 } });
+  });
+  page.on('dialog', (dialog) => dialog.accept());
+
+  await page.goto('/entity-management');
+  await expect(page).toHaveURL(/\/login\?redirect=\/entity-management$/);
+  await page.getByLabel('Email').fill('location-admin@example.test');
+  await page.getByLabel('Password').fill('test-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/entity-management$/);
+
+  await page
+    .getByRole('button', {
+      name: 'Fill missing location metadata from entities',
+    })
+    .click();
+  await expect(page.locator('p[role="status"]')).toHaveText(
+    'Finished after scanning 4 of 4 matching entities · queued 2 · skipped 2 · failed 0.',
+  );
+  expect(requests).toEqual(['backfill-failed', 'backfill-unattempted']);
+});
