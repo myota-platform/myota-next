@@ -216,6 +216,123 @@ describe('ActivityWorkRepository ADIF failure notifications', () => {
   });
 });
 
+describe('ActivityWorkRepository award deletion', () => {
+  function deletionFixture() {
+    const statements: { sql: string; values: unknown[] }[] = [];
+    const awardId = '10000000-0000-4000-8000-000000000001';
+    const client = {
+      query: async (sql: string, values: unknown[] = []) => {
+        statements.push({ sql, values });
+        if (sql.includes('FROM activity_award_definition WHERE id=ANY'))
+          return {
+            rows: [
+              {
+                id: awardId,
+                status: 'DELETING',
+                definition_text: JSON.stringify({
+                  id: awardId,
+                }),
+              },
+            ],
+          };
+        if (
+          sql.includes('SELECT definition::text') &&
+          sql.includes('WHERE NOT')
+        )
+          return { rows: [] };
+        if (sql.includes('FROM activity_award_issuance'))
+          return {
+            rows: [
+              {
+                id: '30000000-0000-4000-8000-000000000001',
+                issuance_text: JSON.stringify({
+                  artifact: {
+                    downloadReady: true,
+                    bucket: 'certificate-files',
+                    objectKey: 'rendered/award-delete.pdf',
+                  },
+                }),
+              },
+            ],
+          };
+        return { rows: [], rowCount: 1 };
+      },
+    } as unknown as PoolClient;
+    const repository = new ActivityWorkRepository(null);
+    const internal = repository as unknown as {
+      processAwardDeletion(
+        db: PoolClient,
+        payload: Record<string, unknown>,
+        jobId: string,
+      ): Promise<void>;
+    };
+    const payload = {
+      rootAwardId: awardId,
+      awardIds: [awardId],
+      actorId: 'global-admin-1',
+      programmeSlug: 'field-day',
+      code: 'FIELD-DAY-10',
+    };
+    return { client, internal, payload, statements, awardId };
+  }
+
+  it('deletes object-store files before committing the audit and database cascade', async () => {
+    const fixture = deletionFixture();
+    const deleteObject = vi
+      .spyOn(S3Client.prototype, 'send')
+      .mockResolvedValue({} as never);
+
+    await fixture.internal.processAwardDeletion(
+      fixture.client,
+      fixture.payload,
+      '30000000-0000-4000-8000-000000000001',
+    );
+
+    expect(deleteObject).toHaveBeenCalledOnce();
+    expect((deleteObject.mock.calls[0][0] as any).input).toEqual({
+      Bucket: 'certificate-files',
+      Key: 'rendered/award-delete.pdf',
+    });
+    const auditIndex = fixture.statements.findIndex((item) =>
+      item.sql.includes('INSERT INTO activity_award_deletion_audit'),
+    );
+    expect(auditIndex).toBeGreaterThan(-1);
+    expect(
+      fixture.statements.some((item) =>
+        item.sql.includes('DELETE FROM activity_award_definition'),
+      ),
+    ).toBe(true);
+    expect(
+      fixture.statements.some((item) =>
+        item.sql.includes('DELETE FROM activity_asset'),
+      ),
+    ).toBe(false);
+  });
+
+  it('keeps database rows and audit unchanged when object storage deletion fails', async () => {
+    const fixture = deletionFixture();
+    vi.spyOn(S3Client.prototype, 'send').mockRejectedValue(
+      new Error('object storage unavailable'),
+    );
+
+    await expect(
+      fixture.internal.processAwardDeletion(
+        fixture.client,
+        fixture.payload,
+        '30000000-0000-4000-8000-000000000001',
+      ),
+    ).rejects.toThrow('object storage unavailable');
+    expect(
+      fixture.statements.some((item) =>
+        item.sql.includes('INSERT INTO activity_award_deletion_audit'),
+      ),
+    ).toBe(false);
+    expect(
+      fixture.statements.some((item) => item.sql.includes('DELETE FROM')),
+    ).toBe(false);
+  });
+});
+
 describe('ActivityWorkRepository ADIF validity-window compatibility', () => {
   it('rejects an out-of-window later record before inserting the ADIF batch', async () => {
     const queries: string[] = [];
