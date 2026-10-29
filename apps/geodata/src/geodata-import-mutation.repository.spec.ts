@@ -484,7 +484,7 @@ describe('GeodataImportMutationRepository entity ID suggestions', () => {
               },
             ],
           };
-        if (sql.includes('MAX(serial_number)'))
+        if (sql.includes('WITH used AS'))
           return { rows: [{ next_serial: '8' }] };
         return { rows: [] };
       },
@@ -525,9 +525,7 @@ describe('GeodataImportMutationRepository entity ID suggestions', () => {
       assigned: false,
       reserved: false,
     });
-    expect(queries.some(({ sql }) => sql.includes('MAX(serial_number)'))).toBe(
-      true,
-    );
+    expect(queries.some(({ sql }) => sql.includes('WITH used AS'))).toBe(true);
     expect(
       queries.some(({ sql }) =>
         sql.includes("qualifier_scope=$2 OR qualifier_scope=''"),

@@ -1,5 +1,6 @@
 import {
   allocateProgrammeEntityIdentifier,
+  findNextFreeProgrammeEntitySerial,
   ProgrammeEntityIdentifierError,
   suggestProgrammeEntityIdentifier,
   type ProgrammeEntityNumberingPolicy,
@@ -49,6 +50,59 @@ describe('suggestProgrammeEntityIdentifier', () => {
     expect(() =>
       suggestProgrammeEntityIdentifier(policy, {}, { qualifier: 'X' }, 10_000),
     ).toThrow(ProgrammeEntityIdentifierError);
+  });
+});
+
+describe('findNextFreeProgrammeEntitySerial', () => {
+  it('uses the first gap in the selected qualifier scope', async () => {
+    let query: { sql: string; values: unknown[] } | undefined;
+    const client = {
+      query: async (sql: string, values: unknown[]) => {
+        query = { sql, values };
+        return { rows: [{ next_serial: '3' }] };
+      },
+    };
+
+    await expect(
+      findNextFreeProgrammeEntitySerial(
+        client as never,
+        'judicial',
+        {
+          identifier: 'PJE',
+          qualifierMode: 'MANUAL',
+          serialWidth: 4,
+          assignmentMode: 'MANUAL',
+        },
+        'ACORUNA',
+      ),
+    ).resolves.toBe(3);
+    expect(query?.sql).toContain('lag(serial_number,1,0)');
+    expect(query?.sql).toContain("qualifier_scope=$2 OR qualifier_scope=''");
+    expect(query?.values).toEqual(['judicial', 'ACORUNA']);
+  });
+
+  it('searches all programme reservations for programme-wide numbering', async () => {
+    let query: { sql: string; values: unknown[] } | undefined;
+    const client = {
+      query: async (sql: string, values: unknown[]) => {
+        query = { sql, values };
+        return { rows: [{ next_serial: '3' }] };
+      },
+    };
+
+    await findNextFreeProgrammeEntitySerial(
+      client as never,
+      'judicial',
+      {
+        identifier: 'PJE',
+        qualifierMode: 'NONE',
+        serialWidth: 4,
+        assignmentMode: 'PROGRAMME_SEQUENCE',
+      },
+      null,
+    );
+    expect(query?.sql).not.toContain('qualifier_scope=$2');
+    expect(query?.values).toEqual(['judicial']);
   });
 });
 
@@ -156,6 +210,33 @@ describe('allocateProgrammeEntityIdentifier', () => {
     expect(fixture.queries.some(({ sql }) => sql.includes('pg_advisory'))).toBe(
       false,
     );
+  });
+
+  it('checks programme-wide serial history when manual IDs have no qualifier', async () => {
+    const fixture = clientWithNextSerial(1);
+
+    await expect(
+      allocateProgrammeEntityIdentifier(
+        fixture.client,
+        'part_jud_es',
+        {
+          identifier: 'PJES',
+          qualifierMode: 'NONE',
+          serialWidth: 3,
+          assignmentMode: 'MANUAL',
+        },
+        '44444444-4444-4444-8444-444444444444',
+        {},
+        null,
+        { serial: '8' },
+      ),
+    ).resolves.toBe('PJES-008');
+
+    const uniquenessQuery = fixture.queries.find(({ sql }) =>
+      sql.includes('SELECT 1 FROM geodata_entity_identifier_reservation'),
+    );
+    expect(uniquenessQuery?.sql).toContain("$3='' OR qualifier_scope=$3");
+    expect(uniquenessQuery?.values).toEqual(['PJES-008', 'part_jud_es', '', 8]);
   });
 
   it('rejects an already reserved manual identifier before insertion', async () => {

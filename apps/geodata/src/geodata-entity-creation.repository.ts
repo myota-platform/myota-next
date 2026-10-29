@@ -9,6 +9,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { AccessTokenClaims } from '@app/platform/access-token.js';
 import {
   allocateProgrammeEntityIdentifier,
+  findNextFreeProgrammeEntitySerial,
   ProgrammeEntityIdentifierError,
   suggestProgrammeEntityIdentifier,
   type ManualEntityIdentifierAssignment,
@@ -87,24 +88,17 @@ export class GeodataEntityCreationRepository {
         manual,
         1,
       );
-      const scope = first.qualifier ?? '';
-      const programmeWide = policy.assignmentMode === 'PROGRAMME_SEQUENCE';
-      const result = await client.query<{ next_serial: number | string }>(
-        programmeWide
-          ? `SELECT COALESCE(MAX(serial_number),0)+1 AS next_serial
-               FROM geodata_entity_identifier_reservation
-              WHERE programme_slug=$1`
-          : `SELECT COALESCE(MAX(serial_number),0)+1 AS next_serial
-               FROM geodata_entity_identifier_reservation
-              WHERE programme_slug=$1
-                AND (qualifier_scope=$2 OR qualifier_scope='')`,
-        programmeWide ? [programmeSlug] : [programmeSlug, scope],
+      const nextSerial = await findNextFreeProgrammeEntitySerial(
+        client,
+        programmeSlug,
+        policy,
+        first.qualifier,
       );
       const preview = suggestProgrammeEntityIdentifier(
         { ...policy, assignmentMode: 'MANUAL' },
         properties,
         manual,
-        Number(result.rows[0]?.next_serial ?? 1),
+        nextSerial,
       );
       return {
         ...preview,

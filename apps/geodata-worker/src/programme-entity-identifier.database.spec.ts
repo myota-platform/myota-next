@@ -3,6 +3,7 @@ import { Pool, type PoolClient } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   allocateProgrammeEntityIdentifier,
+  findNextFreeProgrammeEntitySerial,
   type ProgrammeEntityNumberingPolicy,
 } from './programme-entity-identifier.js';
 
@@ -20,12 +21,14 @@ describe.skipIf(!databaseUrl)(
       `B${suffix.slice(3, 6)}`,
       `C${suffix.slice(6, 9)}`,
       `D${suffix.slice(9, 12)}`,
+      `E${suffix.slice(12, 15)}`,
     ];
     const programmeSlugs = [
       `id-sequence-${suffix}`,
       `id-qualifier-${suffix}`,
       `id-transition-${suffix}`,
       `id-manual-race-${suffix}`,
+      `id-manual-gap-${suffix}`,
     ];
 
     beforeAll(() => {
@@ -183,6 +186,42 @@ describe.skipIf(!databaseUrl)(
           )
           .map((item) => item.value),
       ).toEqual([`${prefixes[3]}-G-007`]);
+    });
+
+    it('suggests the lowest free serial when reservations contain a gap', async () => {
+      if (!pool) throw new Error('GEO_DATABASE_URL is required');
+      const policy: ProgrammeEntityNumberingPolicy = {
+        identifier: prefixes[4]!,
+        qualifierMode: 'LOCATION',
+        qualifierField: 'provinceCode',
+        serialWidth: 3,
+        assignmentMode: 'MANUAL',
+      };
+      await pool.query(
+        `INSERT INTO geodata_entity_identifier_reservation
+           (entity_identifier,programme_slug,qualifier_scope,serial_number,entity_id)
+         VALUES ($1,$2,'G',1,$3),($4,$2,'G',3,$5)`,
+        [
+          `${prefixes[4]}-G-001`,
+          programmeSlugs[4],
+          randomUUID(),
+          `${prefixes[4]}-G-003`,
+          randomUUID(),
+        ],
+      );
+      const client = await pool.connect();
+      try {
+        await expect(
+          findNextFreeProgrammeEntitySerial(
+            client,
+            programmeSlugs[4]!,
+            policy,
+            'G',
+          ),
+        ).resolves.toBe(2);
+      } finally {
+        client.release();
+      }
     });
 
     async function allocateCommitted(

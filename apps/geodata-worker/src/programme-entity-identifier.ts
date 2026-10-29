@@ -23,6 +23,42 @@ export interface ProgrammeEntityIdentifierSuggestion {
 }
 
 /**
+ * Find the lowest unreserved serial in the policy's assignment scope.
+ * Suggestions are advisory; allocation still reserves the selected serial
+ * inside the entity transaction and reports a conflict if another writer wins.
+ */
+export async function findNextFreeProgrammeEntitySerial(
+  client: Pick<PoolClient, 'query'>,
+  programmeSlug: string,
+  policy: ProgrammeEntityNumberingPolicy,
+  qualifier: string | null,
+): Promise<number> {
+  const programmeWide =
+    policy.assignmentMode === 'PROGRAMME_SEQUENCE' || qualifier === null;
+  const result = await client.query<{ next_serial: number | string }>(
+    `WITH used AS (
+       SELECT serial_number,
+              lag(serial_number,1,0) OVER (ORDER BY serial_number) AS previous_serial
+         FROM geodata_entity_identifier_reservation
+        WHERE programme_slug=$1
+          ${programmeWide ? '' : "AND (qualifier_scope=$2 OR qualifier_scope='')"}
+     ), first_gap AS (
+       SELECT previous_serial+1 AS next_serial
+         FROM used
+        WHERE serial_number > previous_serial+1
+        ORDER BY serial_number
+        LIMIT 1
+     ), after_last AS (
+       SELECT COALESCE(MAX(serial_number),0)+1 AS next_serial FROM used
+     )
+     SELECT COALESCE((SELECT next_serial FROM first_gap),
+                     (SELECT next_serial FROM after_last)) AS next_serial`,
+    programmeWide ? [programmeSlug] : [programmeSlug, qualifier ?? ''],
+  );
+  return Number(result.rows[0]?.next_serial ?? 1);
+}
+
+/**
  * Return an advisory manual serial without reserving it. The final allocator
  * repeats the uniqueness check while holding the owning transaction's locks.
  */
@@ -110,7 +146,8 @@ export async function allocateProgrammeEntityIdentifier(
     const existing = await client.query(
       `SELECT 1 FROM geodata_entity_identifier_reservation
         WHERE entity_identifier=$1
-           OR (programme_slug=$2 AND qualifier_scope=$3 AND serial_number=$4)
+           OR (programme_slug=$2 AND serial_number=$4
+               AND ($3='' OR qualifier_scope=$3 OR qualifier_scope=''))
         LIMIT 1`,
       [proposedIdentifier, programmeSlug, scope, serial],
     );
