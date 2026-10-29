@@ -106,18 +106,24 @@ test('creates and manages an account through live Admin', async ({
     );
     expect(initialRoles.rows).toHaveLength(2);
 
-    const activated = await request.patch(
-      `${gateway}/v1/identity/accounts/${accountId}`,
-      {
-        headers: authorization,
-        data: { status: 'ACTIVE', password },
-      },
-    );
-    expect(activated.status(), await activated.text()).toBe(200);
-
     await page.getByLabel('Search users').fill(displayName);
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     await page.getByRole('button', { name: new RegExp(displayName) }).click();
+    await page.getByLabel('Status').selectOption('ACTIVE');
+    await page.getByLabel('Reset password').fill(password);
+    const activateResponse = page.waitForResponse((response) => {
+      return (
+        new URL(response.url()).pathname ===
+          `/v1/identity/accounts/${accountId}` &&
+        response.request().method() === 'PATCH'
+      );
+    });
+    await page.getByRole('button', { name: 'Save user' }).click();
+    const activated = await activateResponse;
+    expect(activated.status(), await activated.text()).toBe(200);
+    await expect(
+      page.getByRole('button', { name: 'Deactivate and anonymize' }),
+    ).toBeVisible();
 
     const callsignRows = page.locator('.callsign-management .callsign-row');
     const addCallsignForm = page.locator('.callsign-management form').first();
