@@ -40,12 +40,19 @@ explicit error. The cross-service transaction boundary is described in the
 The policy configuration has live test-deployment evidence. PR [#305](https://github.com/myota-platform/myota-next/pull/305)
 made database migration changes rebuild the `tools` image; digest-sync PR
 [#306](https://github.com/myota-platform/myota-next/pull/306) deployed Core
-migration `024_programme_entity_numbering.sql`. The protected Rancher workflow
-completed at chart `1.1.6-testing.e31a0cf7724e.1` (build `testing-71e1da1`),
-and the Core migration ledger records the migration. In the Admin UI, saving
-and reloading the existing Partidos Judiciales programme returned the
-persisted policy: identifier `PJES`, location qualifier `provinceCode`,
-three-digit serials, and sequential assignment within each qualifier.
+migration `024_programme_entity_numbering.sql`. The policy-history fix in PR
+[#308](https://github.com/myota-platform/myota-next/pull/308) and digest approval
+in [#309](https://github.com/myota-platform/myota-next/pull/309) are now deployed
+at Helm revision 91, chart `1.1.6-testing.ea14850b8aad.1` (build
+`testing-75fcd96`). Core's migration ledger records the numbering migration.
+In the Admin UI, saving and reloading the existing Partidos Judiciales
+programme returned the persisted policy: identifier `PJES`, location qualifier
+`provinceCode`, three-digit serials, and sequential assignment within each
+qualifier. A deployed authenticated policy update also saved and read back a
+programme-wide sequence mode, then restored and read back the original
+qualifier-sequence policy. The Admin and Participant sites returned HTTP 200;
+post-merge Node CI run [40810934682](https://github.com/myota-platform/myota-next/actions/runs/40810934682)
+passed.
 
 On 2026-10-29, an approved two-feature import produced `PJES-G-001` and
 `PJES-G-002`; both IDs appeared in Participant web. Under manual assignment,
@@ -60,9 +67,11 @@ Ready.
 
 The tested import path now has live evidence for policy persistence, ordered
 allocation, manual suggestions, stale-suggestion conflict recovery, import
-promotion, Participant ID display, and deleted-ID retention. Broader creation
-paths, programme-wide sequencing, serial exhaustion, and additional qualifier
-edge cases remain tracked under
+promotion, Participant ID display, and deleted-ID retention. The allocator
+also preserves serial history across numbering-policy transitions, with
+concurrency and transition regression coverage. Broader creation paths,
+programme-wide allocation, serial exhaustion, and additional qualifier edge
+cases remain tracked under
 [#242–#245](https://github.com/myota-platform/myota-next/issues/242).
 
 ## Shared implementation notes
