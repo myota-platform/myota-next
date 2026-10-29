@@ -295,6 +295,15 @@ export const myotaClient = {
       idempotencyKey,
     );
   },
+  postGeodataEntity<T = unknown>(body: unknown, idempotencyKey?: string) {
+    return write<T>(
+      '/v1/geodata/entities',
+      'POST',
+      body,
+      undefined,
+      idempotencyKey,
+    );
+  },
   resolveGeodataConflation<T = unknown>(
     id: string,
     body: unknown,
