@@ -64,6 +64,17 @@ It accepts only gzip telemetry at `/applications/telemetry`, validates the
 test-only app key and secret, and logs service IDs, trace IDs, operation names,
 and record counts. It does not log credentials or telemetry payloads.
 
+The mock also provides a credential-protected token scan for short, controlled
+security checks. Register a random scan ID, a request ID, and the exact test
+token with `POST /__test/token-scans`; the marker remains only in process
+memory for at most two minutes. Read `GET /__test/token-scans/{id}` to obtain
+only `requestObserved` and `tokenObserved` booleans, then remove it with
+`DELETE /__test/token-scans/{id}`. The scanner checks raw accepted OTLP items
+without retaining them or logging the marker. Do not put real participant
+tokens in files, command history, CI output, or test logs. CI runs
+`node tools/check-observe-mock-token-scanner.mjs`, which verifies that a
+synthetic marker is detected without appearing in collector output.
+
 The local test-only Secret manifest belongs at
 `runtime-secrets/issue10-observe-mock.yaml`; `runtime-secrets/` is ignored by
 Git. Use disposable credentials only. For the temporary test values, enable
