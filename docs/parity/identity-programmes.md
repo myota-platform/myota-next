@@ -29,10 +29,13 @@ subdivision/code, province/code, county/code, city, municipality, or locality.
 Missing or ambiguous source values reject assignment rather than creating an
 incomplete identifier. Exhaustion at the configured serial width is also an
 explicit error. The cross-service transaction boundary is described in the
-[target architecture](../architecture.md#data-boundaries). Entity ID display
-and complete import/admin/participant qualification remain tracked under #245.
-The current implementation is on `feature/programme-entity-ids-config` and
-has not yet been merged or verified in `myota-test`.
+[target architecture](../architecture.md#data-boundaries). The implementation
+is merged to `testing` and deployed to `myota-test` in chart
+`1.1.6-testing.476991ae810c.1` (build `testing-77f10eb`). Node CI and all
+applicable image build/scan checks passed, and the protected rollout completed
+with all release Deployments Ready. Live policy editing, serial allocation and
+retry behavior, import promotion, and Admin/Participant visibility still need
+workflow evidence. Track this qualification under [#242–#245](https://github.com/myota-platform/myota-next/issues/242).
 
 ## Shared implementation notes
 
