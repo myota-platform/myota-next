@@ -1,7 +1,7 @@
 activityLimits:
   maxBatchQsos: 5000
   uploadMaxBytes: 26214400
-buildVersion: testing-9651310
+buildVersion: testing-77f10eb
 commonResources:
   limits:
     cpu: '1'
@@ -89,7 +89,7 @@ images:
     digest: sha256:9822e96d3964f9dce036d0927b1fc5e3642f1cbac369cc5730368072b5604df1
     repository: ghcr.io/myota-platform/myota-next-activity-worker
   admin-web:
-    digest: sha256:fb25838f8bae305de640766aa168e7754f729c7dd814130c5ed302d24491f92f
+    digest: sha256:929e730b9af543754feb69e1c9eba71fce49d0f8e0e9b1f561b87da315ebc2af
     repository: ghcr.io/myota-platform/myota-next-admin-web
   email-worker:
     digest: sha256:58d6e99346be6d95e1a02e6df23dd2b24922fbaae1d5484c0383658bb00407d0
