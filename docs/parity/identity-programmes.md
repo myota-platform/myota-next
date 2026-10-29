@@ -88,9 +88,15 @@ The allocator also preserves serial history across numbering-policy
 transitions, with concurrency and transition regression coverage. API, Admin,
 Participant, import-promotion, manual-create, and isolated-deployment evidence
 is complete under child issue
-[#245](https://github.com/myota-platform/myota-next/issues/245). Additional
-serial-exhaustion and qualifier-edge qualification remains tracked under
-[#242](https://github.com/myota-platform/myota-next/issues/242).
+[#245](https://github.com/myota-platform/myota-next/issues/245). Serial
+exhaustion and qualifier-source edge behavior for parent issue
+[#242](https://github.com/myota-platform/myota-next/issues/242) were
+subsequently covered by focused tests and deployed verification. Authenticated
+preview requests on `myota-test` returned HTTP 400 for a missing
+`provinceCode` and for an array-valued `provinceCode`, without reserving an ID.
+The current release is chart `1.1.6-testing.c6634a9fad6b.1`, Helm revision 95;
+the full evidence is in the
+[Phase 6 readiness record](../operations/phase6-readiness.md).
 
 ## Shared implementation notes
 

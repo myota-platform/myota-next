@@ -141,12 +141,12 @@ dashboard/filter and monitoring presentation combinations are dispositioned in
 and Phase 3 issues [#22](https://github.com/myota-platform/myota-next/issues/22) and
 [#7](https://github.com/myota-platform/myota-next/issues/7). The authenticated
 primary Admin and Participant deployment workflows are qualified under Phase 6
-issue [#91](https://github.com/myota-platform/myota-next/issues/91). Additional
-Phase 6 product work remains open under #242 and related child issues.
-Programme-scoped entity IDs (#242/#245) are implemented on `testing` and deployed to
-`myota-test` in chart `1.1.6-testing.759569b00082.1` (build `testing-f7de67a`,
-Helm revision 94). The protected digest rollout passed, with all 17 MyOTA
-Deployments ready; the Admin and Participant hosts return HTTP 200.
+issue [#91](https://github.com/myota-platform/myota-next/issues/91). Entity-ID
+work under #242 and child issues #243–#245 is complete; other Phase 6 child
+issues remain open. Programme-scoped entity IDs are implemented on `testing`
+and deployed to `myota-test` in chart `1.1.6-testing.c6634a9fad6b.1` (build
+`testing-89cb2e2`, Helm revision 95). The protected digest rollout passed, with
+all 17 MyOTA Deployments ready; the Admin and Participant hosts return HTTP 200.
 The change adds Core policy persistence and identifier reservation, Programmes
 API validation, OpenAPI/event contracts, and an Admin policy editor. Geodata
 import promotion allocates IDs transactionally, preserves existing IDs, emits
@@ -173,8 +173,17 @@ all release Deployments ready. Manual serial suggestions now return the lowest
 unreserved number; the PostgreSQL CI regression reserves `001` and `003` and
 verifies that `002` is suggested. A live authenticated preview returned
 `PJES-M-002` with `reserved: false`. Creation, import, API, UI, Participant
-display, and deployment evidence is complete under #245. Broader qualifier-edge
-and serial-exhaustion qualification remains open under #242.
+display, and deployment evidence is complete under #245. Qualifier-edge and
+serial-exhaustion qualification is complete under #242. PR #319 added explicit
+missing, ambiguous, punctuation-only, and overlong qualifier handling with
+focused tests. Authenticated non-mutating previews on `myota-test` rejected
+missing `provinceCode` and array-valued `provinceCode` with HTTP 400. Digest PR
+#320 deployed worker digest
+`sha256:39edbdb449a22e295f42ed7d9f92d4a964906b344cca69cdbd21e8c992f0e874`
+through protected workflow
+[40830503438](https://github.com/myota-platform/myota-next/actions/runs/40830503438),
+chart `1.1.6-testing.c6634a9fad6b.1`, Helm revision 95; all 17 release
+Deployments are ready.
 Award lifecycle parent [#246](https://github.com/myota-platform/myota-next/issues/246)
 is complete: [#247](https://github.com/myota-platform/myota-next/issues/247)
 qualifies global-admin award deletion, [#248](https://github.com/myota-platform/myota-next/issues/248)
