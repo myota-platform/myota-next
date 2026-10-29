@@ -103,8 +103,8 @@ confirmation. The synthetic account was restored to its original address and log
 all generated messages were removed and Mailpit was empty. Email-change delivery recovery
 after a temporary SMTP outage is also verified. Deployed recovery throttling across six
 signed client addresses, reset-token exclusion from test-namespace logs, and raw request
-telemetry field exclusion are verified under #114. Hosted Observe delivery remains
-tracked under #90. A revision 73 reset test rejected
+telemetry field exclusion are verified under #114. Hosted Observe delivery
+remains unqualified and is recorded as an operational limit. A revision 73 reset test rejected
 two pre-reset access sessions and both refresh credentials; the temporary password worked
 and the original password was restored. See [Identity and Programme parity](parity/identity-programmes.md)
 and the [Phase 6 readiness record](operations/phase6-readiness.md).
@@ -141,49 +141,21 @@ dashboard/filter and monitoring presentation combinations are dispositioned in
 and Phase 3 issues [#22](https://github.com/myota-platform/myota-next/issues/22) and
 [#7](https://github.com/myota-platform/myota-next/issues/7). The authenticated
 primary Admin and Participant deployment workflows are qualified under Phase 6
-issue [#91](https://github.com/myota-platform/myota-next/issues/91). Entity-ID
-work under #242 and child issues #243–#245 is complete; other Phase 6 child
-issues remain open. Programme-scoped entity IDs are implemented on `testing`
-and deployed to `myota-test` in chart `1.1.6-testing.c6634a9fad6b.1` (build
-`testing-89cb2e2`, Helm revision 95). The protected digest rollout passed, with
-all 17 MyOTA Deployments ready; the Admin and Participant hosts return HTTP 200.
-The change adds Core policy persistence and identifier reservation, Programmes
-API validation, OpenAPI/event contracts, and an Admin policy editor. Geodata
-import promotion allocates IDs transactionally, preserves existing IDs, emits
-them in lifecycle events, and displays them in Admin and Participant entity
-views. Admin import review has a non-reserving manual serial suggestion; a
-stale suggestion is checked again during synchronous promotion. A tools-image
-trigger correction and approved tools digest deployed Core migration
-`024_programme_entity_numbering.sql`; the migration ledger confirms it applied.
-The Admin UI saved and reloaded the Partidos Judiciales policy (`PJES`,
-location `provinceCode`, 3 digits, qualifier sequence) with HTTP 200. Live
-import qualification assigned `PJES-G-001` and `PJES-G-002`, displayed both in
-Participant web, and verified two non-reserving suggestions for `PJES-G-003`.
-Concurrent manual assignment produced one success and one recoverable conflict;
-retry suggested and assigned `PJES-G-004`. The synthetic entities were
-deleted, their identifier reservations were retained, and the original
-qualifier-sequence policy was restored. Allocator hardening now includes
-reservations retained across numbering-policy scope changes, with concurrent
-PostgreSQL regression coverage. PR #308 merged to `testing`; digest approval
-PR #309 deployed the Geodata changes. A deployed authenticated policy update
-also round-tripped the programme-wide sequence mode, after which the original
-qualifier-sequence policy was restored and verified. Node CI and all applicable
-image build/scan jobs passed, and the protected Rancher rollout completed with
-all release Deployments ready. Manual serial suggestions now return the lowest
-unreserved number; the PostgreSQL CI regression reserves `001` and `003` and
-verifies that `002` is suggested. A live authenticated preview returned
-`PJES-M-002` with `reserved: false`. Creation, import, API, UI, Participant
-display, and deployment evidence is complete under #245. Qualifier-edge and
-serial-exhaustion qualification is complete under #242. PR #319 added explicit
-missing, ambiguous, punctuation-only, and overlong qualifier handling with
-focused tests. Authenticated non-mutating previews on `myota-test` rejected
-missing `provinceCode` and array-valued `provinceCode` with HTTP 400. Digest PR
-#320 deployed worker digest
-`sha256:39edbdb449a22e295f42ed7d9f92d4a964906b344cca69cdbd21e8c992f0e874`
-through protected workflow
-[40830503438](https://github.com/myota-platform/myota-next/actions/runs/40830503438),
-chart `1.1.6-testing.c6634a9fad6b.1`, Helm revision 95; all 17 release
-Deployments are ready.
+issue [#91](https://github.com/myota-platform/myota-next/issues/91). Phase 6 child
+issues, including entity IDs (#242–#245), participant workflows, awards, SMTP,
+recovery, backup/restore, observability, and rollback, are complete. The launch
+evidence and explicit operational limits are recorded in the
+[Phase 6 readiness record](operations/phase6-readiness.md).
+
+The current `myota-test` release is chart
+`1.1.6-testing.c6634a9fad6b.1` (build `testing-89cb2e2`, Helm revision 95).
+All 17 Deployments are ready; Gateway readiness and the Admin and Participant
+roots return HTTP 200. The Geodata worker uses immutable digest
+`sha256:39edbdb449a22e295f42ed7d9f92d4a964906b344cca69cdbd21e8c992f0e874`.
+Programme qualifier validation is covered by CI and authenticated live preview
+checks. Production backup policy, permanent-storage-loss recovery, hosted
+telemetry, and high availability remain explicitly outside the qualified
+single-node launch scope.
 Award lifecycle parent [#246](https://github.com/myota-platform/myota-next/issues/246)
 is complete: [#247](https://github.com/myota-platform/myota-next/issues/247)
 qualifies global-admin award deletion, [#248](https://github.com/myota-platform/myota-next/issues/248)

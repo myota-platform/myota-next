@@ -13,21 +13,23 @@ Operating guides and qualification records are maintained in this
 
 ## Current release
 
-At 2026-10-29 05:23 UTC, the Rancher-managed release was Helm revision 93,
-chart `myota-next-1.1.6-testing.829e9582307d.1`, application version
-`testing-1f8c0ab`. All 17 MyOTA Deployments were ready at their desired replica
+At 2026-10-29 06:44 UTC, the Rancher-managed release was Helm revision 95,
+chart `myota-next-1.1.6-testing.c6634a9fad6b.1`, application version
+`testing-89cb2e2`. All 17 Deployments were ready at their desired replica
 counts on the immutable image digests recorded in
 [`deploy/fleet/myota-test/values.yaml`](../../deploy/fleet/myota-test/values.yaml).
 The Core, Activity, Geodata/PostGIS, JetStream, and SeaweedFS PVCs were bound.
-The API `/healthz` and `/readyz` endpoints and Admin and Participant hosts
-returned HTTP 200. The protected catalog rollout was verified by
-[run 40822949596](https://github.com/myota-platform/myota-next/actions/runs/40822949596).
-The Geodata Deployment uses the immutable digest published for `1f8c0ab`.
-Source PR [#313](https://github.com/myota-platform/myota-next/pull/313),
-digest-sync PR [#314](https://github.com/myota-platform/myota-next/pull/314),
-both PR gate suites, and post-merge Node CI
-[run 40822949647](https://github.com/myota-platform/myota-next/actions/runs/40822949647)
-passed. Recheck release state and digests after a later rollout.
+Gateway readiness and the Admin and Participant roots returned HTTP 200.
+Protected catalog rollout
+[40830503438](https://github.com/myota-platform/myota-next/actions/runs/40830503438)
+completed successfully. The Geodata worker runs immutable digest
+`sha256:39edbdb449a22e295f42ed7d9f92d4a964906b344cca69cdbd21e8c992f0e874`.
+Code PR [#319](https://github.com/myota-platform/myota-next/pull/319),
+deployment PR [#320](https://github.com/myota-platform/myota-next/pull/320),
+docs PR [#321](https://github.com/myota-platform/myota-next/pull/321),
+their required checks, and post-merge Node CI
+[40829108774](https://github.com/myota-platform/myota-next/actions/runs/40829108774)
+passed.
 
 ## Qualified work packages
 
@@ -90,123 +92,38 @@ passed. Recheck release state and digests after a later rollout.
 - **Award version creation ([#248](https://github.com/myota-platform/myota-next/issues/248)):** Admin now labels the action that creates the next draft version and explains that the published source and its issued-award references remain unchanged. Service and browser coverage passed in [PR #283](https://github.com/myota-platform/myota-next/pull/283); the Admin Web digest was deployed by [PR #284](https://github.com/myota-platform/myota-next/pull/284). Protected Rancher [run 40749348878](https://github.com/myota-platform/myota-next/actions/runs/40749348878) succeeded at chart `1.1.6-testing.645d83f4b1a4.1`, app version `testing-f6ed0b5`; all 22 Deployments were ready and the Awards page returned HTTP 200. The deployed Admin bundle contains the version action. Issue #248 is closed.
 - **Global-admin award deletion ([#247](https://github.com/myota-platform/myota-next/issues/247)):** implementation and browser/service coverage passed in [PR #285](https://github.com/myota-platform/myota-next/pull/285); the immutable test image digests were approved in [PR #286](https://github.com/myota-platform/myota-next/pull/286). Protected Rancher [run 40760093201](https://github.com/myota-platform/myota-next/actions/runs/40760093201) deployed chart `1.1.6-testing.086ec4c7788d.1` (`testing-3ccb58e`); live inspection found all 17 Deployments ready. A temporary draft award was deleted through the Admin action: the durable job reached `SUCCEEDED`, the deleted award read back as HTTP 404, and the shared background asset remained available. The Activity database contains the append-only deletion audit row with the job, root award, deleted version ID, and timestamp. The smoke test used no existing award and did not expose deployment credentials. The deletion boundary and retry behavior are documented in [`award-deletion.md`](../awards/award-deletion.md).
 
-## Remaining Phase 6 qualification
+- **Location enrichment ([#110–#112](https://github.com/myota-platform/myota-next/issues/110)):** the full-catalogue backfill processed 432 entities; the post-fix repeat scan reported 0 queued, 432 skipped, and 0 failed. The release owner confirmed provider credentials were rotated and tested the enrichment function successfully. All three issues are closed. See the [location-enrichment guide](location-enrichment.md) and [Geodata parity record](../parity/geodata.md).
+
+## Follow-up qualification completed
 
 - **Programme-scoped entity IDs ([#242–#245](https://github.com/myota-platform/myota-next/issues/242)):**
-  implementation PRs [#297](https://github.com/myota-platform/myota-next/pull/297)
-  and [#300](https://github.com/myota-platform/myota-next/pull/300) are merged to
-  `testing`. Node CI run
-  [40794860714](https://github.com/myota-platform/myota-next/actions/runs/40794860714)
-  passed, including 390 unit tests, one E2E test, and 93 browser tests.
-
-  The migration-image trigger fix [#305](https://github.com/myota-platform/myota-next/pull/305) and approved tools digest [#306](https://github.com/myota-platform/myota-next/pull/306) are merged. Node CI run [40804106528](https://github.com/myota-platform/myota-next/actions/runs/40804106528) and all image build/scan checks passed. Protected Rancher run [40804867920](https://github.com/myota-platform/myota-next/actions/runs/40804867920) deployed chart `1.1.6-testing.e31a0cf7724e.1` (`testing-71e1da1`). Helm reports `deployed`, all release Deployments are Ready, and Core's migration ledger records `024_programme_entity_numbering.sql`.
-
-  The Geodata policy-history fix was approved and deployed by PR [#309](https://github.com/myota-platform/myota-next/pull/309). Protected Rancher run [40810934617](https://github.com/myota-platform/myota-next/actions/runs/40810934617) completed at chart revision 91. An authenticated Admin policy update to `PROGRAMME_SEQUENCE` persisted and read back successfully; the existing `QUALIFIER_SEQUENCE` policy was then restored and verified. This confirms the deployed migration-backed policy write path is available after the tools-image trigger correction.
-
-  Admin saved and reloaded the Partidos Judiciales policy (`PJES`,
-  `provinceCode`, three digits, qualifier sequence). On 2026-10-29, an approved
-  two-feature import assigned `PJES-G-001` and `PJES-G-002`, both visible in
-  Participant web. Two manual next-free requests returned `PJES-G-003` without
-  reserving it. Concurrent attempts to claim it produced one successful
-  promotion and one recoverable HTTP 400 conflict; the retry suggested and
-  assigned `PJES-G-004`. Both synthetic entities were deleted and their
-  reservations retained. The qualifier-sequence policy was restored. PR #308
-  now accounts for prior reservations when switching numbering scopes without
-  rewriting existing IDs; its PostgreSQL regression coverage passed CI, and
-  PR #309 deployed the code. Configuration and allocation sub-issues #243 and
-  #244 are closed. The remaining serial-exhaustion and qualifier-source edge
-  criteria were subsequently covered and deployed under #242 (see the latest
-  evidence below).
-
-  Manual entity creation was then exercised against the deployed API. PR
-  [#313](https://github.com/myota-platform/myota-next/pull/313) fixed two issues
-  found in qualification: PostgreSQL could not infer a reused UUID parameter
-  as both UUID and text for the manual source reference, and a programme-
-  configured entity type did not necessarily yet have its global Geodata
-  category row. Creation now creates missing categories under the existing
-  category advisory lock. Its PostgreSQL-backed API end-to-end create/readback
-  check passed in Node CI
-  [run 40820113810](https://github.com/myota-platform/myota-next/actions/runs/40820113810).
-  After digest-sync PR
-  [#314](https://github.com/myota-platform/myota-next/pull/314) and protected
-  rollout
-  [run 40822949596](https://github.com/myota-platform/myota-next/actions/runs/40822949596),
-  an authenticated live create returned `PJES-M-001` and readback returned the
-  same ID. The synthetic entity was removed and read back as HTTP 404; its ID
-  reservation remains to prevent reuse. A subsequent preview returned HTTP
-  200, `PJES-M-002`, and `reserved: false`. The remaining serial-exhaustion
-  and qualifier-source edge criteria were subsequently covered and deployed
-  under #242 (see the latest evidence below).
-
-  Follow-up review found that advisory manual suggestions used `MAX(serial)+1`,
-  which skipped lower serials left free by deletions or prior manual assignment.
-  PR [#316](https://github.com/myota-platform/myota-next/pull/316) changed the
-  entity-create and import-promotion suggestion paths to share a lowest-free
-  lookup scoped by programme and qualifier. Final assignment remains checked
-  and reserved in the write transaction. Node CI run
-  [40824698851](https://github.com/myota-platform/myota-next/actions/runs/40824698851)
-  passed, including the PostgreSQL regression where reservations `001` and
-  `003` produce suggestion `002`; the full Node, E2E, browser, type, and build
-  checks passed. Image build/scan run
-  [40824698857](https://github.com/myota-platform/myota-next/actions/runs/40824698857)
-  also passed.
-
-  Digest approval PR
-  [#317](https://github.com/myota-platform/myota-next/pull/317) and protected
-  Rancher workflow
-  [40826550841](https://github.com/myota-platform/myota-next/actions/runs/40826550841)
-  deployed chart `1.1.6-testing.759569b00082.1`, app version
-  `testing-f7de67a`, at Helm revision 94. The Rancher App reports `deployed`;
-  all 17 Deployments are ready. Geodata and Geodata worker run the approved
-  immutable digests. An authenticated preview returned HTTP 200,
-  `PJES-M-002`, serial `2`, qualifier `M`, and `reserved: false`; this live
-  catalogue had only `PJES-M-001` reserved, so the 001/003 gap case is proven
-  by the PostgreSQL CI regression. Admin and Participant web roots and Gateway
-  readiness returned HTTP 200. Issue #245's creation, import, API, display,
-  and isolated-deployment evidence is complete.
-
-  Qualifier-source edge behavior was completed in PR
-  [#319](https://github.com/myota-platform/myota-next/pull/319): missing values
-  return a clear required-value error; non-text values are rejected as
-  ambiguous; punctuation-only and overlong normalized values are rejected.
-  The focused identifier suite passed (15 tests), and full Node CI
+  Policy configuration, sequential allocation, concurrent and manual
+  assignment, lowest-free suggestions, imports, Admin/Participant display,
+  and retained reservations are covered by the linked issues and
+  PostgreSQL/browser tests. PR [#319](https://github.com/myota-platform/myota-next/pull/319)
+  adds clear outcomes for missing, ambiguous, punctuation-only, and overlong
+  qualifiers. The focused identifier suite passed 15 tests; Node CI
   [40828438579](https://github.com/myota-platform/myota-next/actions/runs/40828438579)
-  and image build/scan
+  and image scans
   [40828438654](https://github.com/myota-platform/myota-next/actions/runs/40828438654)
-  passed. An authenticated, non-mutating preview against `myota-test` returned
-  HTTP 400 and reported that a qualifier value is required when `provinceCode`
-  was absent. An array-valued `provinceCode` also returned HTTP 400 and was
-  rejected because location fields must be scalar or null.
+  passed. Authenticated previews on `myota-test` returned HTTP 400 for missing
+  and array-valued `provinceCode`; neither validation path reserves an ID.
   Digest PR [#320](https://github.com/myota-platform/myota-next/pull/320)
-  deployed worker digest
-  `sha256:39edbdb449a22e295f42ed7d9f92d4a964906b344cca69cdbd21e8c992f0e874`.
-  Protected Rancher run
-  [40830503438](https://github.com/myota-platform/myota-next/actions/runs/40830503438)
-  completed successfully at chart `1.1.6-testing.c6634a9fad6b.1`, app version
-  `testing-89cb2e2`, Helm revision 95; all 17 release Deployments were ready.
-  The qualifier-source and serial-exhaustion criteria for #242 are covered by
-  automated and deployed evidence.
-
-- **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):
-  on 2026-10-28, the full-catalogue asynchronous Admin backfill scanned 432
-  entities, queued 430, skipped two, and failed none. All 432 later showed
-  `COMPLETED` in Geodata. A repeated scan initially queued seven completed
-  entities; PR #255 fixed the Admin guard and added browser coverage. The
-  protected Helm upgrade to chart `1.1.6-testing.43fa7c967a90.1` completed with
-  15 Deployments Ready. The verified post-fix scan reported 0 queued, 432
-  skipped, and 0 failed; the database still showed `COMPLETED|432`. The release
-  owner subsequently confirmed the provider credentials were rotated and the
-  enrichment function was tested successfully. Issues #110 and #111 are closed;
-  #112 was already closed. See the
-  [location-enrichment guide](location-enrichment.md) and
-  [Geodata parity record](../parity/geodata.md).
-- **Password reset ([#114](https://github.com/myota-platform/myota-next/issues/114)):** deployed Mailpit delivery, valid and expired browser links, concurrent single-use token consumption, and revocation of pre-reset access and refresh sessions are verified. Revision 73 includes shared per-email throttling and request-log secret exclusion. Six distinct signed client addresses produced five persisted recovery requests; the sixth created none. PR [#302](https://github.com/myota-platform/myota-next/pull/302) adds a credential-protected, in-memory raw-batch scanner. On 2026-10-29, the deployed reset endpoint returned HTTP 400 for a synthetic invalid token; the scanner observed matching Gateway and Identity traces while reporting `tokenObserved: false`, and the marker was absent from application and collector logs. No valid credential was used in this telemetry check. Issue #114's password-reset qualification is complete; hosted Observe delivery remains tracked under #90.
-- **Email change ([#115](https://github.com/myota-platform/myota-next/issues/115), closed):** deployed checks cover both-address confirmation, partial confirmation, expiry, replay, cancellation, operation mismatch, concurrent confirmation, address conflict, and transient SMTP outage/retry. Revision 73's resend API and Participant UI were checked against Mailpit: both old links were rejected, the Participant UI showed resend guidance and received both replacement messages, and cancellation removed the pending operation. A follow-up API check completed the replacement pair, confirmed the old address remained authoritative until the second link, restored the synthetic account, and removed all generated messages. The release owner confirmed credentials were rotated and the function worked; all issue tasks and exit criteria are checked.
-
-Programme-scoped entity ID work under #242 and children #243–#245 is complete.
-Other Phase 6 child issues remain open. Award lifecycle work under #246 is
-complete. Do not close #10 until each remaining child issue has current
-evidence and its exit criteria are met or explicitly dispositioned.
+  deployed chart `1.1.6-testing.c6634a9fad6b.1` at revision 95. Issues
+  #242–#245 are closed.
+- **Password reset ([#114](https://github.com/myota-platform/myota-next/issues/114)):**
+  Deployed Mailpit delivery, valid and expired browser links, concurrent
+  single-use token consumption, session revocation, per-email throttling, and
+  request-log secret exclusion are verified. A synthetic invalid token
+  returned HTTP 400; trace inspection confirmed the marker was absent from app
+  and collector logs. Hosted Observe delivery remains an explicit operational
+  limit.
+- **Email change ([#115](https://github.com/myota-platform/myota-next/issues/115)):**
+  Deployed Mailpit and Participant UI checks cover both-address confirmation,
+  partial confirmation, expiry, replay, cancellation, operation mismatch,
+  concurrent confirmation, address conflict, and transient SMTP failure/retry.
+  The release owner confirmed credentials were rotated and the function
+  worked; the issue checklist is complete and #115 is closed.
 
 ## Operational limits
 
