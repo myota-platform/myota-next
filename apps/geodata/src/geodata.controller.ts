@@ -39,6 +39,7 @@ export class GeodataController {
   }
 
   @Post('entity-id-preview')
+  @HttpCode(200)
   previewEntityIdentifier(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: Record<string, unknown>,

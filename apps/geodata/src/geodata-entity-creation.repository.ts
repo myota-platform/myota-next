@@ -22,6 +22,7 @@ import {
   normalizeDescription,
   normalizeManualLocationValue,
   normalizeWebsite,
+  titleCode,
 } from './geodata-entity-mutation.helpers.js';
 import {
   lockRequest,
@@ -262,13 +263,32 @@ export class GeodataEntityCreationRepository {
         throw new BadRequestException(
           'geometry must be a non-empty, valid GeoJSON geometry',
         );
+      const categoryIds = new Map<string, string>();
+      for (const code of entityTypeCodes) {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('geodata:category:' || $1,0))",
+          [code],
+        );
+        const found = await client.query<{ id: string }>(
+          'SELECT id FROM entity_type WHERE programme_id IS NULL AND code=$1 LIMIT 1',
+          [code],
+        );
+        let categoryId = found.rows[0]?.id;
+        if (!categoryId) {
+          categoryId = randomUUID();
+          await client.query(
+            `INSERT INTO entity_type(id,programme_id,code,label,geometry_kind,config)
+             VALUES ($1,NULL,$2,$3,'GEOMETRY','{}'::jsonb)`,
+            [categoryId, code, titleCode(code)],
+          );
+        }
+        categoryIds.set(code, categoryId);
+      }
       const category = await client.query<{ id: string; code: string }>(
         'SELECT id::text,code FROM entity_type WHERE programme_id IS NULL AND code=ANY($1::text[])',
         [entityTypeCodes],
       );
-      const categoryIds = new Map(
-        category.rows.map((row) => [row.code, row.id]),
-      );
+      for (const row of category.rows) categoryIds.set(row.code, row.id);
       if (entityTypeCodes.some((code) => !categoryIds.has(code)))
         throw new BadRequestException('entity type is unavailable');
       const categoryId = categoryIds.get(entityTypeCode)!;
@@ -354,8 +374,13 @@ export class GeodataEntityCreationRepository {
       await client.query(
         `INSERT INTO source_reference
           (id,entity_id,adapter_code,source_record_id,source_payload)
-         VALUES ($1,$2,'MANUAL',$2,$3::jsonb)`,
-        [randomUUID(), id, stringifyJsonWithBigInts({ geometry, properties })],
+         VALUES ($1,$2,'MANUAL',$3,$4::jsonb)`,
+        [
+          randomUUID(),
+          id,
+          id,
+          stringifyJsonWithBigInts({ geometry, properties }),
+        ],
       );
       const locationEnrichment = queueLocationEnrichment(
         id,

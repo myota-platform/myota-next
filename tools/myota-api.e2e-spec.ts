@@ -397,8 +397,19 @@ describeWithDatabases(
                 label: 'Integration point',
                 geometryTypes: ['POINT'],
               },
+              {
+                code: 'SOTA',
+                label: 'Summit',
+                geometryTypes: ['POINT'],
+              },
             ],
             rules: { activationValidityDays: 7 },
+            entityNumbering: {
+              identifier: 'E2E',
+              qualifierMode: 'MANUAL',
+              serialWidth: 3,
+              assignmentMode: 'MANUAL',
+            },
           })
           .expect(201);
         const programmeRead = await request(gatewayUrl)
@@ -417,6 +428,41 @@ describeWithDatabases(
           total: 0,
           nextPage: null,
         });
+
+        const entityIdPreview = await request(gatewayUrl)
+          .post('/v1/geodata/entity-id-preview')
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .send({
+            programmeSlug,
+            entityTypeCode: 'SOTA',
+            qualifier: 'QA',
+          })
+          .expect(200);
+        expect(entityIdPreview.body).toMatchObject({
+          entityIdentifier: 'E2E-QA-001',
+          reserved: false,
+        });
+
+        const createdGeodataEntity = await request(gatewayUrl)
+          .post('/v1/geodata/entities')
+          .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({
+            name: 'Gateway manual entity creation fixture',
+            programmeSlug,
+            entityTypeCodes: ['SOTA'],
+            geometry: { type: 'Point', coordinates: [-3.7, 40.4] },
+            qualifier: 'QA',
+            serial: '1',
+          })
+          .expect(201);
+        expect(createdGeodataEntity.body.entityIdentifier).toBe('E2E-QA-001');
+        await request(gatewayUrl)
+          .get(`/v1/geodata/entities/${createdGeodataEntity.body.id}`)
+          .expect(200)
+          .expect(({ body }) => {
+            expect(body.entityIdentifier).toBe('E2E-QA-001');
+          });
 
         const startedAt = new Date().toISOString();
         const activation = await request(gatewayUrl)
