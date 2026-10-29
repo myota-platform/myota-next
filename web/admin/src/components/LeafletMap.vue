@@ -85,27 +85,36 @@ function styleFor(
     radius: selected ? 10 : 8,
   };
 }
-function escapeHtml(value: unknown): string {
-  return String(value ?? '').replace(
-    /[&<>"']/g,
-    (character) =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
-        character
-      ] || character,
-  );
-}
 function values(entity: GeoEntity, key: string): string {
   return String(entity.location?.[key] || '');
 }
-function popupText(entity: GeoEntity): string {
+function popupText(entity: GeoEntity): HTMLElement {
   const categories = (entity.entityTypes || [])
     .map((item) => (typeof item === 'string' ? item : item.code))
     .join(', ');
   const programmes = (entity.programmes || [])
     .map((item) => (typeof item === 'string' ? item : item.name || item.slug))
     .join(', ');
-  const contrastStyle = 'background:#fff !important;color:#142b2d !important;';
-  return `<div class="myota-entity-popup-content" style="${contrastStyle}"><strong style="${contrastStyle}">${escapeHtml(entity.name)}</strong><br>Status: ${escapeHtml(entity.status)}<br>Category: ${escapeHtml(categories || entity.entityType || '—')}<br>Programmes: ${escapeHtml(programmes || 'Unassigned')}<br>Location: ${escapeHtml([values(entity, 'city'), values(entity, 'region'), values(entity, 'country')].filter(Boolean).join(', ') || '—')}</div>`;
+  const content = document.createElement('div');
+  content.className = 'myota-entity-popup-content';
+  content.style.setProperty('background-color', '#fff', 'important');
+  content.style.setProperty('color', '#142b2d', 'important');
+  const heading = document.createElement('strong');
+  heading.textContent = String(entity.name ?? '');
+  heading.style.setProperty('background-color', '#fff', 'important');
+  heading.style.setProperty('color', '#142b2d', 'important');
+  content.append(heading, document.createElement('br'));
+  const details = [
+    `Status: ${String(entity.status ?? '')}`,
+    `Category: ${categories || entity.entityType || '—'}`,
+    `Programmes: ${programmes || 'Unassigned'}`,
+    `Location: ${[values(entity, 'city'), values(entity, 'region'), values(entity, 'country')].filter(Boolean).join(', ') || '—'}`,
+  ];
+  details.forEach((detail, index) => {
+    if (index > 0) content.append(document.createElement('br'));
+    content.append(document.createTextNode(detail));
+  });
+  return content;
 }
 function feature(entity: GeoEntity): any {
   return {

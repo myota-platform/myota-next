@@ -66,6 +66,10 @@ test('explores a persisted Geodata entity through the live Admin map', async ({
     await expect(selected).toContainText('Spain');
     await expect(selected).toContainText('Andalusia');
     await expect(selected).toContainText('Granada');
+    const popup = page.locator('.myota-entity-popup-content');
+    await expect(popup).toHaveCSS('color', 'rgb(20, 43, 45)');
+    await expect(popup).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(popup.locator('strong')).toHaveCSS('color', 'rgb(20, 43, 45)');
     await expectResponsiveAccessible(
       page,
       'Live Admin Geodata map exploration',
