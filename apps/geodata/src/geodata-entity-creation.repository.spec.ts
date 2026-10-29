@@ -131,6 +131,18 @@ describe('GeodataEntityCreationRepository', () => {
     expect(test.queries[0]?.sql).toBe('BEGIN');
     expect(
       test.queries.some((query) =>
+        query.sql.includes("'geodata:category:' || $1"),
+      ),
+    ).toBe(true);
+    expect(
+      test.queries.some((query) =>
+        query.sql.includes(
+          'INSERT INTO entity_type(id,programme_id,code,label',
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      test.queries.some((query) =>
         query.sql.includes('INSERT INTO geodata_entity_identifier_reservation'),
       ),
     ).toBe(true);
@@ -139,6 +151,13 @@ describe('GeodataEntityCreationRepository', () => {
         query.sql.includes('INSERT INTO geodata_entity'),
       ),
     ).toBe(true);
+    const sourceReference = test.queries.find((query) =>
+      query.sql.includes('INSERT INTO source_reference'),
+    );
+    expect(sourceReference?.sql).toContain(
+      "VALUES ($1,$2,'MANUAL',$3,$4::jsonb)",
+    );
+    expect(sourceReference?.values.slice(1, 3)).toEqual([entity.id, entity.id]);
     expect(test.queries.at(-1)?.sql).toBe('COMMIT');
     expect(test.events.map(({ type }) => type)).toEqual([
       'geodata.entity.location-enrichment-requested.v1',
