@@ -71,7 +71,8 @@ function contrastRatio(first, second) {
   return (luminances[0] + 0.05) / (luminances[1] + 0.05);
 }
 function readablePrimaryColor(primary) {
-  if (contrastRatio(primary, '#ffffff') >= 4.5) return primary;
+  const pageBackground = '#f6f8f5';
+  if (contrastRatio(primary, pageBackground) >= 4.5) return primary;
   const channels = primary
     .slice(1)
     .match(/.{2}/g)
@@ -84,7 +85,7 @@ function readablePrimaryColor(primary) {
           .padStart(2, '0'),
       )
       .join('')}`;
-    if (contrastRatio(candidate, '#ffffff') >= 4.5) return candidate;
+    if (contrastRatio(candidate, pageBackground) >= 4.5) return candidate;
   }
   return '#0f766e';
 }
@@ -371,7 +372,7 @@ async function loadProgramme(slug) {
   $('programme-name').textContent = programme.name;
   $('programme-description').textContent =
     programme.description?.trim() ||
-    'Discover places where radio meets the outdoors.';
+    'Explore the places, programmes, and people behind every contact.';
   $('rules').innerHTML =
     `<dt>Activation QSOs</dt><dd>${escapeHtml(programme.rules.minimumQsos.activation)}</dd><dt>Hunter QSOs</dt><dd>${escapeHtml(programme.rules.minimumQsos.hunter)}</dd><dt>Public access</dt><dd>${programme.rules.publicAccessRequired ? 'Required' : 'Programme-defined'}</dd>`;
   const proposalTypes = Array.isArray(programme.entityTypes)
