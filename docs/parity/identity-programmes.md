@@ -332,10 +332,14 @@ A request with a unique `X-Request-ID` also reached the test Observe receiver as
 `identity-api` recovery-operation trace. The delivered reset token was extracted only in
 memory from the test mailbox; its exact value and the `resetToken=` marker were absent
 from all `myota-test` pod logs. The mock receiver records only the service ID, operation,
-and trace IDs; it does not retain raw OTLP attributes. This verifies deployed trace
-delivery and token/log hygiene, but does not inspect every trace attribute for the token.
-The synthetic recovery operation and messages were cleaned up afterward. Hosted Observe
-delivery also remains outside this qualification. See
+and trace IDs; it does not retain raw OTLP attributes. On 2026-10-29, a separate deployed
+check submitted a synthetic invalid marker in the reset endpoint's `token` field. The
+API returned HTTP 400; the raw-batch scanner observed matching Gateway and Identity
+traces, returned `tokenObserved: false`, and found the marker absent from all three
+services' logs. The scan used no valid credential and its in-memory state was deleted.
+Together with the valid Mailpit reset journey above, this verifies token-field exclusion
+from the deployed request telemetry path. The synthetic recovery operation and messages
+were cleaned up afterward. Hosted Observe delivery remains outside this qualification. See
 [Participant password reset](https://github.com/myota-platform/myota-next/issues/114)
 and the [Observe delivery smoke evidence](../operations/observe-delivery-smoke.md).
 
