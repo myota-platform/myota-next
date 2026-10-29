@@ -149,12 +149,16 @@ stale suggestion is checked again during synchronous promotion. A tools-image
 trigger correction and approved tools digest deployed Core migration
 `024_programme_entity_numbering.sql`; the migration ledger confirms it applied.
 The Admin UI saved and reloaded the Partidos Judiciales policy (`PJES`,
-location `provinceCode`, 3 digits, qualifier sequence) with HTTP 200, without
-creating or editing entities. Node CI and all applicable image build/scan jobs
-passed, and the protected Rancher rollout completed with all release
-Deployments Ready. Live allocation/concurrency/retry, manual suggestions,
-import-promotion, and Participant display qualification remain open under
-#242–#245.
+location `provinceCode`, 3 digits, qualifier sequence) with HTTP 200. Live
+import qualification assigned `PJES-G-001` and `PJES-G-002`, displayed both in
+Participant web, and verified two non-reserving suggestions for `PJES-G-003`.
+Concurrent manual assignment produced one success and one recoverable conflict;
+retry suggested and assigned `PJES-G-004`. The synthetic entities were
+deleted, their identifier reservations were retained, and the original
+qualifier-sequence policy was restored. Node CI and all applicable image
+build/scan jobs passed, and the protected Rancher rollout completed with all
+release Deployments Ready. Additional creation-path, qualifier edge-case, and
+serial-exhaustion qualification remains open under #242–#245.
 Award lifecycle parent [#246](https://github.com/myota-platform/myota-next/issues/246)
 is complete: [#247](https://github.com/myota-platform/myota-next/issues/247)
 qualifies global-admin award deletion, [#248](https://github.com/myota-platform/myota-next/issues/248)

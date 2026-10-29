@@ -39,13 +39,24 @@ completed at chart `1.1.6-testing.e31a0cf7724e.1` (build `testing-71e1da1`),
 and the Core migration ledger records the migration. In the Admin UI, saving
 and reloading the existing Partidos Judiciales programme returned the
 persisted policy: identifier `PJES`, location qualifier `provinceCode`,
-three-digit serials, and sequential assignment within each qualifier. No
-entity was created or edited during this configuration check. Node CI and all
-applicable image build/scan checks passed for the protected rollout.
+three-digit serials, and sequential assignment within each qualifier.
 
-Live allocation under concurrency, stale retry behavior, import promotion,
-manual next-free suggestions, and Admin/Participant ID display still need
-workflow evidence. Track this qualification under
+On 2026-10-29, an approved two-feature import produced `PJES-G-001` and
+`PJES-G-002`; both IDs appeared in Participant web. Under manual assignment,
+two independent suggestions for qualifier `G` both returned `PJES-G-003` with
+`reserved: false`. Two concurrent promotions claiming that serial returned one
+success and one recoverable HTTP 400 conflict. The rejected attempt then
+suggested `PJES-G-004` and succeeded on retry. Both synthetic entities were
+deleted through the authenticated deletion workflow; their reservations remain
+to prevent ID reuse. The test restored the programme's qualifier-sequence
+policy. The protected chart remains deployed with all release Deployments
+Ready.
+
+The tested import path now has live evidence for policy persistence, ordered
+allocation, manual suggestions, stale-suggestion conflict recovery, import
+promotion, Participant ID display, and deleted-ID retention. Broader creation
+paths, programme-wide sequencing, serial exhaustion, and additional qualifier
+edge cases remain tracked under
 [#242–#245](https://github.com/myota-platform/myota-next/issues/242).
 
 ## Shared implementation notes
