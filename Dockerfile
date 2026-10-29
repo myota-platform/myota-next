@@ -1,4 +1,4 @@
-FROM node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS build
+FROM node:26-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec AS build
 
 ARG APP_NAME
 WORKDIR /workspace
@@ -23,7 +23,7 @@ RUN test -n "$APP_NAME" \
   && npx nest build "$APP_NAME" \
   && test -f "dist/apps/$APP_NAME/main.js"
 
-FROM node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS osmium-build
+FROM node:26-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec AS osmium-build
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends osmium-tool \
@@ -44,7 +44,7 @@ RUN apt-get update \
         cp -L "$library" "$destination"; \
       done
 
-FROM node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS production-dependencies
+FROM node:26-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec AS production-dependencies
 
 WORKDIR /app
 COPY package.json package-lock.json ./
