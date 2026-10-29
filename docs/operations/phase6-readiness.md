@@ -114,8 +114,9 @@ passed. Recheck release state and digests after a later rollout.
   now accounts for prior reservations when switching numbering scopes without
   rewriting existing IDs; its PostgreSQL regression coverage passed CI, and
   PR #309 deployed the code. Configuration and allocation sub-issues #243 and
-  #244 are closed. Broader serial-exhaustion and qualifier-edge qualification
-  remains open under #242.
+  #244 are closed. The remaining serial-exhaustion and qualifier-source edge
+  criteria were subsequently covered and deployed under #242 (see the latest
+  evidence below).
 
   Manual entity creation was then exercised against the deployed API. PR
   [#313](https://github.com/myota-platform/myota-next/pull/313) fixed two issues
@@ -133,8 +134,9 @@ passed. Recheck release state and digests after a later rollout.
   an authenticated live create returned `PJES-M-001` and readback returned the
   same ID. The synthetic entity was removed and read back as HTTP 404; its ID
   reservation remains to prevent reuse. A subsequent preview returned HTTP
-  200, `PJES-M-002`, and `reserved: false`. Broader serial-exhaustion and
-  qualifier-edge qualification remains open under #242.
+  200, `PJES-M-002`, and `reserved: false`. The remaining serial-exhaustion
+  and qualifier-source edge criteria were subsequently covered and deployed
+  under #242 (see the latest evidence below).
 
   Follow-up review found that advisory manual suggestions used `MAX(serial)+1`,
   which skipped lower serials left free by deletions or prior manual assignment.
@@ -161,8 +163,29 @@ passed. Recheck release state and digests after a later rollout.
   catalogue had only `PJES-M-001` reserved, so the 001/003 gap case is proven
   by the PostgreSQL CI regression. Admin and Participant web roots and Gateway
   readiness returned HTTP 200. Issue #245's creation, import, API, display,
-  and isolated-deployment evidence is complete; broader qualifier edge cases
-  remain tracked under #242.
+  and isolated-deployment evidence is complete.
+
+  Qualifier-source edge behavior was completed in PR
+  [#319](https://github.com/myota-platform/myota-next/pull/319): missing values
+  return a clear required-value error; non-text values are rejected as
+  ambiguous; punctuation-only and overlong normalized values are rejected.
+  The focused identifier suite passed (15 tests), and full Node CI
+  [40828438579](https://github.com/myota-platform/myota-next/actions/runs/40828438579)
+  and image build/scan
+  [40828438654](https://github.com/myota-platform/myota-next/actions/runs/40828438654)
+  passed. An authenticated, non-mutating preview against `myota-test` returned
+  HTTP 400 and reported that a qualifier value is required when `provinceCode`
+  was absent. An array-valued `provinceCode` also returned HTTP 400 and was
+  rejected because location fields must be scalar or null.
+  Digest PR [#320](https://github.com/myota-platform/myota-next/pull/320)
+  deployed worker digest
+  `sha256:39edbdb449a22e295f42ed7d9f92d4a964906b344cca69cdbd21e8c992f0e874`.
+  Protected Rancher run
+  [40830503438](https://github.com/myota-platform/myota-next/actions/runs/40830503438)
+  completed successfully at chart `1.1.6-testing.c6634a9fad6b.1`, app version
+  `testing-89cb2e2`, Helm revision 95; all 17 release Deployments were ready.
+  The qualifier-source and serial-exhaustion criteria for #242 are covered by
+  automated and deployed evidence.
 
 - **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):
   on 2026-10-28, the full-catalogue asynchronous Admin backfill scanned 432
@@ -180,10 +203,10 @@ passed. Recheck release state and digests after a later rollout.
 - **Password reset ([#114](https://github.com/myota-platform/myota-next/issues/114)):** deployed Mailpit delivery, valid and expired browser links, concurrent single-use token consumption, and revocation of pre-reset access and refresh sessions are verified. Revision 73 includes shared per-email throttling and request-log secret exclusion. Six distinct signed client addresses produced five persisted recovery requests; the sixth created none. PR [#302](https://github.com/myota-platform/myota-next/pull/302) adds a credential-protected, in-memory raw-batch scanner. On 2026-10-29, the deployed reset endpoint returned HTTP 400 for a synthetic invalid token; the scanner observed matching Gateway and Identity traces while reporting `tokenObserved: false`, and the marker was absent from application and collector logs. No valid credential was used in this telemetry check. Issue #114's password-reset qualification is complete; hosted Observe delivery remains tracked under #90.
 - **Email change ([#115](https://github.com/myota-platform/myota-next/issues/115), closed):** deployed checks cover both-address confirmation, partial confirmation, expiry, replay, cancellation, operation mismatch, concurrent confirmation, address conflict, and transient SMTP outage/retry. Revision 73's resend API and Participant UI were checked against Mailpit: both old links were rejected, the Participant UI showed resend guidance and received both replacement messages, and cancellation removed the pending operation. A follow-up API check completed the replacement pair, confirmed the old address remained authoritative until the second link, restored the synthetic account, and removed all generated messages. The release owner confirmed credentials were rotated and the function worked; all issue tasks and exit criteria are checked.
 
-Additional product work remains open under #242
-(programme-scoped entity IDs) and other Phase 6 child issues. Award lifecycle
-work under #246 is complete. Do not close #10 until each remaining child issue
-has current evidence and its exit criteria are met or explicitly dispositioned.
+Programme-scoped entity ID work under #242 and children #243–#245 is complete.
+Other Phase 6 child issues remain open. Award lifecycle work under #246 is
+complete. Do not close #10 until each remaining child issue has current
+evidence and its exit criteria are met or explicitly dispositioned.
 
 ## Operational limits
 
