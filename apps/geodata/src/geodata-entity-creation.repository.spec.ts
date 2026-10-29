@@ -131,6 +131,18 @@ describe('GeodataEntityCreationRepository', () => {
     expect(test.queries[0]?.sql).toBe('BEGIN');
     expect(
       test.queries.some((query) =>
+        query.sql.includes("'geodata:category:' || $1"),
+      ),
+    ).toBe(true);
+    expect(
+      test.queries.some((query) =>
+        query.sql.includes(
+          'INSERT INTO entity_type(id,programme_id,code,label',
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      test.queries.some((query) =>
         query.sql.includes('INSERT INTO geodata_entity_identifier_reservation'),
       ),
     ).toBe(true);
