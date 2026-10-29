@@ -1,7 +1,7 @@
 activityLimits:
   maxBatchQsos: 5000
   uploadMaxBytes: 26214400
-buildVersion: testing-77f10eb
+buildVersion: testing-71e1da1
 commonResources:
   limits:
     cpu: '1'
@@ -155,12 +155,12 @@ jetstreamProvisioner:
   confirmedCapacityReview: true
   enabled: true
   image:
-    digest: sha256:8223ceba34bffcbd93b7cdb90b02374961a5f614e90beb34a4c24a5ee8243ff1
+    digest: sha256:d64942e7c5b84763e8df71c9a20e1f83d9046c0a65e179604928cb2863573b88
     repository: ghcr.io/myota-platform/myota-next-tools
 migrations:
   enabled: true
   image:
-    digest: sha256:8223ceba34bffcbd93b7cdb90b02374961a5f614e90beb34a4c24a5ee8243ff1
+    digest: sha256:d64942e7c5b84763e8df71c9a20e1f83d9046c0a65e179604928cb2863573b88
     repository: ghcr.io/myota-platform/myota-next-tools
 prometheus:
   serviceMonitor:
