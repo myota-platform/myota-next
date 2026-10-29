@@ -7,7 +7,8 @@ Programme administrators can configure an optional entity ID policy in Admin
 and is unique across configured programmes. Serial width is 3–6 digits.
 Qualifiers can be omitted, entered manually per entity, or read from supported
 location metadata. Assignment can be sequential across the programme,
-sequential within each qualifier, or manual with a next-free suggestion.
+sequential within each qualifier, or manual with a suggestion for the lowest
+unreserved serial in the applicable programme or qualifier scope.
 
 The policy is owned by the Programmes service in Core PostgreSQL. A unique
 partial index enforces current identifiers, and a reservation table prevents
@@ -65,14 +66,31 @@ to prevent ID reuse. The test restored the programme's qualifier-sequence
 policy. The protected chart remains deployed with all release Deployments
 Ready.
 
-The tested import path now has live evidence for policy persistence, ordered
+The tested import path has live evidence for policy persistence, ordered
 allocation, manual suggestions, stale-suggestion conflict recovery, import
-promotion, Participant ID display, and deleted-ID retention. The allocator
-also preserves serial history across numbering-policy transitions, with
-concurrency and transition regression coverage. Broader creation paths,
-programme-wide allocation, serial exhaustion, and additional qualifier edge
-cases remain tracked under
-[#242–#245](https://github.com/myota-platform/myota-next/issues/242).
+promotion, Participant ID display, and deleted-ID retention. Manual entity
+creation is also verified through the authenticated API: the test entity was
+created as `PJES-M-001`, read back with the same ID, then deleted while its
+reservation was retained. The live preview returned `PJES-M-002` without
+reserving it.
+
+PR [#316](https://github.com/myota-platform/myota-next/pull/316) fixed manual
+suggestions to find the lowest unused serial, including gaps, and uses the
+same lookup for manual creation and import review. The PostgreSQL CI regression
+reserves `001` and `003` and verifies that `002` is suggested. The change is
+deployed in `myota-test` at chart
+`1.1.6-testing.759569b00082.1` (build `testing-f7de67a`, revision 94); the
+authenticated preview returned `PJES-M-002`, `reserved: false`, and the
+programme's qualifier-sequence mode. All 17 release Deployments were ready.
+See the [Phase 6 readiness evidence](../operations/phase6-readiness.md).
+
+The allocator also preserves serial history across numbering-policy
+transitions, with concurrency and transition regression coverage. API, Admin,
+Participant, import-promotion, manual-create, and isolated-deployment evidence
+is complete under child issue
+[#245](https://github.com/myota-platform/myota-next/issues/245). Additional
+serial-exhaustion and qualifier-edge qualification remains tracked under
+[#242](https://github.com/myota-platform/myota-next/issues/242).
 
 ## Shared implementation notes
 

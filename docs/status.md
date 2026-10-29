@@ -109,6 +109,11 @@ two pre-reset access sessions and both refresh credentials; the temporary passwo
 and the original password was restored. See [Identity and Programme parity](parity/identity-programmes.md)
 and the [Phase 6 readiness record](operations/phase6-readiness.md).
 
+Participant email-change qualification #115 is now closed after the release owner
+confirmed credential rotation and successful function testing. The deployed evidence
+includes both-address confirmation, cancellation, expiry, replay, concurrency, conflict,
+and transient SMTP recovery.
+
 Public Activity activation history, leaderboard, and JSON/CSV result exports are also
 checked through the live Gateway. Participants can read their own request status, while
 cross-account reads are denied. Admin can queue certificate PDF rendering, and
@@ -137,10 +142,10 @@ and Phase 3 issues [#22](https://github.com/myota-platform/myota-next/issues/22)
 [#7](https://github.com/myota-platform/myota-next/issues/7). The authenticated
 primary Admin and Participant deployment workflows are qualified under Phase 6
 issue [#91](https://github.com/myota-platform/myota-next/issues/91). Additional
-Phase 6 product work remains open under #239, #242, and related child issues.
-Programme-scoped entity IDs (#242) are implemented on `testing` and deployed to
-`myota-test` in chart `1.1.6-testing.ea14850b8aad.1` (build `testing-75fcd96`,
-Helm revision 91). The protected digest rollout passed, with all 17 MyOTA
+Phase 6 product work remains open under #242 and related child issues.
+Programme-scoped entity IDs (#242/#245) are implemented on `testing` and deployed to
+`myota-test` in chart `1.1.6-testing.759569b00082.1` (build `testing-f7de67a`,
+Helm revision 94). The protected digest rollout passed, with all 17 MyOTA
 Deployments ready; the Admin and Participant hosts return HTTP 200.
 The change adds Core policy persistence and identifier reservation, Programmes
 API validation, OpenAPI/event contracts, and an Admin policy editor. Geodata
@@ -164,8 +169,12 @@ PR #309 deployed the Geodata changes. A deployed authenticated policy update
 also round-tripped the programme-wide sequence mode, after which the original
 qualifier-sequence policy was restored and verified. Node CI and all applicable
 image build/scan jobs passed, and the protected Rancher rollout completed with
-all release Deployments ready. Additional creation-path, qualifier edge-case,
-and serial-exhaustion qualification remains open under #242–#245.
+all release Deployments ready. Manual serial suggestions now return the lowest
+unreserved number; the PostgreSQL CI regression reserves `001` and `003` and
+verifies that `002` is suggested. A live authenticated preview returned
+`PJES-M-002` with `reserved: false`. Creation, import, API, UI, Participant
+display, and deployment evidence is complete under #245. Broader qualifier-edge
+and serial-exhaustion qualification remains open under #242.
 Award lifecycle parent [#246](https://github.com/myota-platform/myota-next/issues/246)
 is complete: [#247](https://github.com/myota-platform/myota-next/issues/247)
 qualifies global-admin award deletion, [#248](https://github.com/myota-platform/myota-next/issues/248)
