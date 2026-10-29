@@ -139,7 +139,9 @@ primary Admin and Participant deployment workflows are qualified under Phase 6
 issue [#91](https://github.com/myota-platform/myota-next/issues/91). Additional
 Phase 6 product work remains open under #239, #242, and related child issues.
 Programme-scoped entity IDs (#242) are implemented on `testing` and deployed to
-`myota-test` in chart `1.1.6-testing.e31a0cf7724e.1` (build `testing-71e1da1`).
+`myota-test` in chart `1.1.6-testing.ea14850b8aad.1` (build `testing-75fcd96`,
+Helm revision 91). The protected digest rollout passed, with all 17 MyOTA
+Deployments ready; the Admin and Participant hosts return HTTP 200.
 The change adds Core policy persistence and identifier reservation, Programmes
 API validation, OpenAPI/event contracts, and an Admin policy editor. Geodata
 import promotion allocates IDs transactionally, preserves existing IDs, emits
@@ -155,13 +157,15 @@ Participant web, and verified two non-reserving suggestions for `PJES-G-003`.
 Concurrent manual assignment produced one success and one recoverable conflict;
 retry suggested and assigned `PJES-G-004`. The synthetic entities were
 deleted, their identifier reservations were retained, and the original
-qualifier-sequence policy was restored. Node CI and all applicable image
-build/scan jobs passed, and the protected Rancher rollout completed with all
-release Deployments Ready. Additional creation-path, qualifier edge-case, and
-serial-exhaustion qualification remains open under #242–#245.
-A follow-up allocator hardening change accounts for prior reservations when
-numbering scopes change; regression coverage and rollout are in progress on a
-feature branch.
+qualifier-sequence policy was restored. Allocator hardening now includes
+reservations retained across numbering-policy scope changes, with concurrent
+PostgreSQL regression coverage. PR #308 merged to `testing`; digest approval
+PR #309 deployed the Geodata changes. A deployed authenticated policy update
+also round-tripped the programme-wide sequence mode, after which the original
+qualifier-sequence policy was restored and verified. Node CI and all applicable
+image build/scan jobs passed, and the protected Rancher rollout completed with
+all release Deployments ready. Additional creation-path, qualifier edge-case,
+and serial-exhaustion qualification remains open under #242–#245.
 Award lifecycle parent [#246](https://github.com/myota-platform/myota-next/issues/246)
 is complete: [#247](https://github.com/myota-platform/myota-next/issues/247)
 qualifies global-admin award deletion, [#248](https://github.com/myota-platform/myota-next/issues/248)
