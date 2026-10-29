@@ -528,6 +528,11 @@ describe('GeodataImportMutationRepository entity ID suggestions', () => {
     expect(queries.some(({ sql }) => sql.includes('MAX(serial_number)'))).toBe(
       true,
     );
+    expect(
+      queries.some(({ sql }) =>
+        sql.includes("qualifier_scope=$2 OR qualifier_scope=''"),
+      ),
+    ).toBe(true);
     expect(queries.some(({ sql }) => sql.includes('INSERT INTO'))).toBe(false);
   });
 });

@@ -22,6 +22,12 @@ assignment checks uniqueness in the final write transaction. The Admin import
 review can request a next-free suggestion. Suggestions are advisory and do not
 reserve a number; promotion rejects a stale collision with a recoverable error.
 
+Changing the numbering scope does not rewrite existing IDs or reservations.
+Programme-wide allocation considers reservations from every qualifier scope;
+qualifier-scoped allocation and suggestions also consider prior programme-wide
+reservations. This prevents a policy change from restarting at a serial that
+was already assigned under the previous scope.
+
 Qualifiers use Unicode NFKD normalization, strip combining marks, uppercase,
 remove non-alphanumeric characters, and must normalize to 1–24 characters.
 Location qualifiers can use continent, country/country code, region/code,

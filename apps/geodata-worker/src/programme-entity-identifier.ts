@@ -102,11 +102,17 @@ export async function allocateProgrammeEntityIdentifier(
 
   if (policy.assignmentMode === 'MANUAL') {
     serial = parseManualSerial(manualAssignment?.serial, maximum);
+    const proposedIdentifier = [
+      policy.identifier,
+      ...(qualifier ? [qualifier] : []),
+      String(serial).padStart(policy.serialWidth, '0'),
+    ].join('-');
     const existing = await client.query(
       `SELECT 1 FROM geodata_entity_identifier_reservation
-        WHERE programme_slug=$1 AND qualifier_scope=$2 AND serial_number=$3
+        WHERE entity_identifier=$1
+           OR (programme_slug=$2 AND qualifier_scope=$3 AND serial_number=$4)
         LIMIT 1`,
-      [programmeSlug, scope, serial],
+      [proposedIdentifier, programmeSlug, scope, serial],
     );
     if (existing.rowCount)
       throw new ProgrammeEntityIdentifierError(
@@ -117,11 +123,18 @@ export async function allocateProgrammeEntityIdentifier(
       "SELECT pg_advisory_xact_lock(hashtextextended('geodata:entity-id:' || $1 || ':' || $2,0))",
       [programmeSlug, scope],
     );
+    // Policy changes must advance past reservations made in the prior scope.
+    const programmeWide = policy.assignmentMode === 'PROGRAMME_SEQUENCE';
     const next = await client.query<{ next_serial: number | string }>(
-      `SELECT COALESCE(MAX(serial_number),0)+1 AS next_serial
-         FROM geodata_entity_identifier_reservation
-        WHERE programme_slug=$1 AND qualifier_scope=$2`,
-      [programmeSlug, scope],
+      programmeWide
+        ? `SELECT COALESCE(MAX(serial_number),0)+1 AS next_serial
+             FROM geodata_entity_identifier_reservation
+            WHERE programme_slug=$1`
+        : `SELECT COALESCE(MAX(serial_number),0)+1 AS next_serial
+             FROM geodata_entity_identifier_reservation
+            WHERE programme_slug=$1
+              AND (qualifier_scope=$2 OR qualifier_scope='')`,
+      programmeWide ? [programmeSlug] : [programmeSlug, scope],
     );
     serial = Number(next.rows[0]?.next_serial ?? 1);
     if (serial > maximum)

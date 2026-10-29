@@ -159,6 +159,9 @@ qualifier-sequence policy was restored. Node CI and all applicable image
 build/scan jobs passed, and the protected Rancher rollout completed with all
 release Deployments Ready. Additional creation-path, qualifier edge-case, and
 serial-exhaustion qualification remains open under #242–#245.
+A follow-up allocator hardening change accounts for prior reservations when
+numbering scopes change; regression coverage and rollout are in progress on a
+feature branch.
 Award lifecycle parent [#246](https://github.com/myota-platform/myota-next/issues/246)
 is complete: [#247](https://github.com/myota-platform/myota-next/issues/247)
 qualifies global-admin award deletion, [#248](https://github.com/myota-platform/myota-next/issues/248)
