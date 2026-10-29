@@ -66,6 +66,40 @@ const entities = ref<GeoEntity[]>([]);
 const categories = ref<EntityCategory[]>([]);
 const selected = ref<GeoEntity | null>(null);
 const selectedIds = ref<string[]>([]);
+const selectedProgrammeAssignmentEntities = computed(() =>
+  selectedIds.value.map((id) => ({
+    id,
+    entity: entities.value.find((item) => item.id === id),
+  })),
+);
+interface ProgrammeAssignmentPreviewItem {
+  entityId: string;
+  name: string;
+  entityIdentifier: string;
+  qualifier: string | null;
+  serial: number;
+  entityTypeCodes: string[];
+}
+interface ProgrammeAssignmentPreview {
+  programmeSlug: string;
+  assignmentMode: 'PROGRAMME_SEQUENCE' | 'QUALIFIER_SEQUENCE' | 'MANUAL';
+  entityCount: number;
+  items: ProgrammeAssignmentPreviewItem[];
+}
+const programmeAssignmentOpen = ref(false);
+const programmeAssignmentProgrammeSlug = ref('');
+const programmeAssignmentPreview = ref<ProgrammeAssignmentPreview | null>(null);
+const programmeAssignmentInputs = ref<
+  Record<string, { qualifier: string; serial: string }>
+>({});
+const programmeAssignmentBusy = ref(false);
+const programmeAssignmentError = ref('');
+const programmeAssignmentPolicy = computed(
+  () =>
+    store.programmes.find(
+      (programme) => programme.slug === programmeAssignmentProgrammeSlug.value,
+    )?.entityNumbering ?? null,
+);
 const total = ref(0);
 const page = ref(1);
 const pageSize = ref(25);
@@ -515,14 +549,159 @@ function toggleStatus(status: string): void {
   load();
 }
 function toggleAll(): void {
-  selectedIds.value = allSelected.value
-    ? []
-    : entities.value.map((item) => item.id);
+  const pageIds = entities.value.map((item) => item.id);
+  if (allSelected.value) {
+    const pageIdSet = new Set(pageIds);
+    selectedIds.value = selectedIds.value.filter((id) => !pageIdSet.has(id));
+    return;
+  }
+  const next = [...new Set([...selectedIds.value, ...pageIds])];
+  if (next.length > 500) {
+    error.value = 'Select at most 500 entities for one synchronous assignment.';
+    return;
+  }
+  selectedIds.value = next;
 }
 function toggleEntity(id: string): void {
-  selectedIds.value = selectedIds.value.includes(id)
-    ? selectedIds.value.filter((item) => item !== id)
-    : [...selectedIds.value, id];
+  if (selectedIds.value.includes(id)) {
+    selectedIds.value = selectedIds.value.filter((item) => item !== id);
+    return;
+  }
+  if (selectedIds.value.length >= 500) {
+    error.value = 'Select at most 500 entities for one synchronous assignment.';
+    return;
+  }
+  selectedIds.value = [...selectedIds.value, id];
+}
+function openProgrammeAssignment(): void {
+  programmeAssignmentError.value = '';
+  programmeAssignmentPreview.value = null;
+  programmeAssignmentProgrammeSlug.value = '';
+  programmeAssignmentInputs.value = Object.fromEntries(
+    selectedIds.value.map((id) => [id, { qualifier: '', serial: '' }]),
+  );
+  programmeAssignmentOpen.value = true;
+}
+function closeProgrammeAssignment(): void {
+  if (programmeAssignmentBusy.value) return;
+  programmeAssignmentOpen.value = false;
+}
+function programmeAssignmentInputChanged(): void {
+  programmeAssignmentPreview.value = null;
+}
+function programmeAssignmentBody(includePreview = false) {
+  const policy = programmeAssignmentPolicy.value;
+  const needsManualInputs =
+    policy?.assignmentMode === 'MANUAL' || policy?.qualifierMode === 'MANUAL';
+  const manualAssignments = needsManualInputs
+    ? selectedIds.value.map((entityId) => ({
+        entityId,
+        ...(programmeAssignmentInputs.value[entityId]?.qualifier
+          ? { qualifier: programmeAssignmentInputs.value[entityId]?.qualifier }
+          : {}),
+        ...(programmeAssignmentInputs.value[entityId]?.serial
+          ? { serial: programmeAssignmentInputs.value[entityId]?.serial }
+          : {}),
+      }))
+    : undefined;
+  return {
+    programmeSlug: programmeAssignmentProgrammeSlug.value,
+    entityIds: [...selectedIds.value],
+    ...(manualAssignments ? { manualAssignments } : {}),
+    ...(includePreview && programmeAssignmentPreview.value
+      ? {
+          expectedIdentifiers: programmeAssignmentPreview.value.items.map(
+            ({ entityId, entityIdentifier }) => ({
+              entityId,
+              entityIdentifier,
+            }),
+          ),
+        }
+      : {}),
+  };
+}
+async function previewProgrammeAssignment(): Promise<void> {
+  programmeAssignmentError.value = '';
+  programmeAssignmentPreview.value = null;
+  if (!programmeAssignmentProgrammeSlug.value) {
+    programmeAssignmentError.value = 'Select the target programme.';
+    return;
+  }
+  const policy = programmeAssignmentPolicy.value;
+  if (!policy) {
+    programmeAssignmentError.value =
+      'The target programme has no entity ID numbering policy.';
+    return;
+  }
+  if (
+    policy.qualifierMode === 'MANUAL' &&
+    selectedIds.value.some(
+      (id) => !programmeAssignmentInputs.value[id]?.qualifier.trim(),
+    )
+  ) {
+    programmeAssignmentError.value =
+      'Enter a qualifier for every selected entity before previewing IDs.';
+    return;
+  }
+  programmeAssignmentBusy.value = true;
+  try {
+    const result =
+      await myotaClient.previewGeodataProgrammeAssignment<ProgrammeAssignmentPreview>(
+        programmeAssignmentBody(),
+      );
+    programmeAssignmentPreview.value = result;
+    for (const item of result.items) {
+      const current = programmeAssignmentInputs.value[item.entityId] || {
+        qualifier: '',
+        serial: '',
+      };
+      programmeAssignmentInputs.value[item.entityId] = {
+        qualifier: current.qualifier || item.qualifier || '',
+        serial: current.serial || String(item.serial),
+      };
+    }
+  } catch (cause) {
+    programmeAssignmentError.value =
+      cause instanceof Error
+        ? cause.message
+        : 'Unable to preview programme assignment.';
+  } finally {
+    programmeAssignmentBusy.value = false;
+  }
+}
+async function confirmProgrammeAssignment(): Promise<void> {
+  if (!programmeAssignmentPreview.value || programmeAssignmentBusy.value)
+    return;
+  programmeAssignmentBusy.value = true;
+  programmeAssignmentError.value = '';
+  try {
+    const body = programmeAssignmentBody(true);
+    const result = await runGeodataMutation(
+      '/v1/geodata/entity-programme-assignments',
+      body,
+      (idempotencyKey, requestBody) =>
+        myotaClient.assignGeodataEntitiesToProgramme(
+          requestBody,
+          idempotencyKey,
+        ),
+    );
+    const assignedCount =
+      typeof result === 'object' && result !== null && 'assignedCount' in result
+        ? Number(result.assignedCount)
+        : programmeAssignmentPreview.value.entityCount;
+    message.value = `${assignedCount} entities assigned to ${programmeAssignmentProgrammeSlug.value} with permanent IDs.`;
+    selectedIds.value = [];
+    programmeAssignmentOpen.value = false;
+    programmeAssignmentPreview.value = null;
+    await load();
+  } catch (cause) {
+    programmeAssignmentError.value =
+      cause instanceof Error
+        ? cause.message
+        : 'Unable to assign entities to the programme.';
+  } finally {
+    programmeAssignmentBusy.value = false;
+  }
 }
 function statusEvent(event: Event): string {
   return (event.target as HTMLSelectElement).value;
@@ -2067,6 +2246,13 @@ onMounted(async () => {
             @change="toggleAll"
           /><span>Select all</span></label
         ><button
+          v-if="isManagement && isGlobalAdmin"
+          class="secondary"
+          :disabled="!selectedIds.length || selectedIds.length > 500 || loading"
+          @click="openProgrammeAssignment"
+        >
+          Assign selected to programme ({{ selectedIds.length }})</button
+        ><button
           v-if="isManagement && canEditLocation"
           class="secondary"
           :disabled="locationBackfill.running || loading || !total"
@@ -2909,6 +3095,162 @@ onMounted(async () => {
                     ? 'Check deletion status'
                     : `Permanently delete ${deletionModal.items.length} entities`
         }}
+      </button>
+    </div>
+  </WorkspaceDialog>
+  <WorkspaceDialog
+    :open="programmeAssignmentOpen"
+    eyebrow="PROGRAMME MEMBERSHIP"
+    title="Assign entities and permanent IDs"
+    @request-close="closeProgrammeAssignment"
+  >
+    <div v-if="programmeAssignmentError" class="error-card" role="alert">
+      {{ programmeAssignmentError }}
+    </div>
+    <p class="muted">
+      Category membership determines which programmes may use an entity. This
+      action separately assigns the selected approved entities to one programme
+      and permanently reserves each suggested entity ID. Review the full set
+      before confirming; the operation is synchronous and all-or-nothing.
+    </p>
+    <label>
+      Target programme
+      <select
+        v-model="programmeAssignmentProgrammeSlug"
+        :disabled="programmeAssignmentBusy"
+        @change="programmeAssignmentInputChanged"
+      >
+        <option value="">Select a programme</option>
+        <option
+          v-for="programme in store.programmes.filter(
+            (item) => item.entityNumbering,
+          )"
+          :key="programme.slug"
+          :value="programme.slug"
+        >
+          {{ programme.name }} ({{ programme.entityNumbering?.identifier }})
+        </option>
+      </select>
+    </label>
+    <p v-if="programmeAssignmentPolicy" class="field-help">
+      {{ programmeAssignmentPolicy.assignmentMode }} ·
+      {{ programmeAssignmentPolicy.qualifierMode }} qualifier ·
+      {{ programmeAssignmentPolicy.serialWidth }} digit serials
+    </p>
+    <div v-if="programmeAssignmentPreview" class="programme-assignment-review">
+      <strong>
+        {{ programmeAssignmentPreview.entityCount }} entities will receive
+        permanent IDs
+      </strong>
+      <div
+        class="programme-assignment-list"
+        role="region"
+        aria-label="Programme ID preview"
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>Entity</th>
+              <th>Categories</th>
+              <th>Programme ID</th>
+              <th v-if="programmeAssignmentPolicy?.assignmentMode === 'MANUAL'">
+                Serial
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="item in programmeAssignmentPreview.items"
+              :key="item.entityId"
+            >
+              <td>{{ item.name }}</td>
+              <td>{{ item.entityTypeCodes.join(', ') }}</td>
+              <td>
+                <code>{{ item.entityIdentifier }}</code>
+              </td>
+              <td v-if="programmeAssignmentPolicy?.assignmentMode === 'MANUAL'">
+                <input
+                  v-model="programmeAssignmentInputs[item.entityId].serial"
+                  inputmode="numeric"
+                  :aria-label="`Serial for ${item.name}`"
+                  :disabled="programmeAssignmentBusy"
+                  @input="programmeAssignmentInputChanged"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <ul v-else class="bulk-delete-list programme-assignment-list">
+      <li
+        v-for="selection in selectedProgrammeAssignmentEntities"
+        :key="selection.id"
+      >
+        <strong>{{ selection.entity?.name || selection.id }}</strong>
+        <small v-if="selection.entity">
+          {{ categoryCodes(selection.entity).join(', ') || 'Uncategorised' }} ·
+          {{ selection.entity.status }}
+        </small>
+        <label v-if="programmeAssignmentPolicy?.qualifierMode === 'MANUAL'">
+          Qualifier
+          <input
+            v-model="programmeAssignmentInputs[selection.id].qualifier"
+            :aria-label="`Qualifier for ${selection.entity?.name || selection.id}`"
+            :disabled="programmeAssignmentBusy"
+            @input="programmeAssignmentInputChanged"
+          />
+        </label>
+        <label v-if="programmeAssignmentPolicy?.assignmentMode === 'MANUAL'">
+          Serial
+          <input
+            v-model="programmeAssignmentInputs[selection.id].serial"
+            inputmode="numeric"
+            :aria-label="`Serial for ${selection.entity?.name || selection.id}`"
+            :disabled="programmeAssignmentBusy"
+            @input="programmeAssignmentInputChanged"
+          />
+        </label>
+      </li>
+    </ul>
+    <div v-if="programmeAssignmentBusy" class="notice" role="status">
+      {{
+        programmeAssignmentPreview
+          ? 'Assigning selected entities…'
+          : 'Building ID preview…'
+      }}
+    </div>
+    <div class="form-actions">
+      <button
+        class="secondary"
+        type="button"
+        :disabled="programmeAssignmentBusy"
+        @click="closeProgrammeAssignment"
+      >
+        Cancel
+      </button>
+      <button
+        v-if="!programmeAssignmentPreview"
+        class="primary"
+        type="button"
+        :disabled="
+          programmeAssignmentBusy ||
+          !programmeAssignmentProgrammeSlug ||
+          !selectedIds.length
+        "
+        @click="previewProgrammeAssignment"
+      >
+        Preview IDs
+      </button>
+      <button
+        v-else
+        class="primary"
+        type="button"
+        :disabled="programmeAssignmentBusy"
+        @click="confirmProgrammeAssignment"
+      >
+        Confirm assignment of
+        {{ programmeAssignmentPreview.entityCount }} entities
       </button>
     </div>
   </WorkspaceDialog>

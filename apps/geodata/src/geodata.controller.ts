@@ -48,6 +48,39 @@ export class GeodataController {
     return this.entityMutations.previewEntityIdentifier(body, claims);
   }
 
+  @Post('entity-programme-assignment-preview')
+  @HttpCode(200)
+  previewProgrammeEntityAssignment(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const claims = verifyAccessToken(authorization);
+    return this.entityMutations.previewProgrammeEntityAssignment(body, claims);
+  }
+
+  @Post('entity-programme-assignments')
+  @HttpCode(200)
+  assignProgrammeEntities(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() request: Request,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const claims = verifyAccessToken(authorization);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
+    return this.entityMutations.assignProgrammeEntities(
+      idempotency.key,
+      body,
+      claims,
+      idempotency.requestHash,
+    );
+  }
+
   @Post('entities')
   @HttpCode(201)
   createEntity(

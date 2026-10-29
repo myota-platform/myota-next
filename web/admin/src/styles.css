@@ -1391,6 +1391,42 @@ select:focus-visible {
   font-size: 11px;
   overflow-wrap: anywhere;
 }
+.programme-assignment-list {
+  max-height: min(45vh, 360px);
+  overflow: auto;
+}
+.programme-assignment-list li label {
+  display: inline-grid;
+  gap: 4px;
+  margin: 6px 12px 0 0;
+  max-width: 180px;
+  vertical-align: top;
+}
+.programme-assignment-list li input {
+  min-width: 120px;
+}
+.programme-assignment-review {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+.programme-assignment-list table {
+  border-collapse: collapse;
+  min-width: 100%;
+  text-align: left;
+}
+.programme-assignment-list th,
+.programme-assignment-list td {
+  border-bottom: 1px solid var(--line);
+  padding: 7px 10px;
+  vertical-align: top;
+}
+.programme-assignment-list td code {
+  white-space: nowrap;
+}
+.programme-assignment-list td input {
+  max-width: 120px;
+}
 
 /* Catalogue editing keeps the underlying page, filters and batch selection intact. */
 .form-grid {

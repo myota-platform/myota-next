@@ -137,6 +137,12 @@ export async function allocateProgrammeEntityIdentifier(
   let serial: number;
 
   if (policy.assignmentMode === 'MANUAL') {
+    // Manual assignments must serialize with programme-wide numbering: a
+    // programme-wide reservation conflicts with every qualifier scope.
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended('geodata:entity-id:' || $1 || ':' || $2,0))",
+      [programmeSlug, ''],
+    );
     serial = parseManualSerial(manualAssignment?.serial, maximum);
     const proposedIdentifier = [
       policy.identifier,

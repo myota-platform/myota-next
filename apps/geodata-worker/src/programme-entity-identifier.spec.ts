@@ -248,15 +248,17 @@ describe('allocateProgrammeEntityIdentifier', () => {
       ),
     ).resolves.toBe('PJES-G-008');
 
-    expect(fixture.queries[0]?.sql).toContain('WHERE entity_identifier=$1');
-    expect(fixture.queries[0]?.values).toEqual([
+    const reservationCheck = fixture.queries.find(({ sql }) =>
+      sql.includes('WHERE entity_identifier=$1'),
+    );
+    expect(reservationCheck?.values).toEqual([
       'PJES-G-008',
       'part_jud_es',
       'G',
       8,
     ]);
     expect(fixture.queries.some(({ sql }) => sql.includes('pg_advisory'))).toBe(
-      false,
+      true,
     );
   });
 
