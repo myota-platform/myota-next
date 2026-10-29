@@ -152,12 +152,25 @@ test('selects a programme and renders its public content and entity catalogue', 
   await expect(page.locator('#programme-content')).not.toContainText(
     'alpine admissibilite',
   );
+  await expect(page.locator('.hero h2')).toHaveText(
+    'Explore radio activity through the places that matter to you.',
+  );
+  await expect(page.locator('#programme-description')).toHaveText(
+    'Radio from the high country.',
+  );
+  await expect(page.locator('.hero-sidecard')).toContainText(
+    'Many ways to get on the air',
+  );
+  await expect(page.locator('.hero-sidecard')).toContainText(
+    'geographic entities in this programme',
+  );
+  await expect(page.locator('.hero')).not.toContainText(/parks/i);
 
   await page.getByLabel('Programme').selectOption('coast');
 
   await expect(page.locator('#programme-name')).toHaveText('Coastal Parks');
   await expect(page.locator('#programme-description')).toHaveText(
-    'Discover places where radio meets the outdoors.',
+    'Explore the places, programmes, and people behind every contact.',
   );
   for (const selector of ['.primary-action', '.community-actions a']) {
     const ratio = await page.locator(selector).evaluate((element) => {

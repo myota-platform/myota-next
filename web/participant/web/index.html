@@ -22,8 +22,8 @@
     <a class="skip-link" href="#participant-content">Skip to content</a>
     <header class="topbar">
       <div class="topbar-brand">
-        <span class="eyebrow">MYOTA PLATFORM</span>
-        <h1 id="programme-name">Outdoor Activation</h1>
+        <span class="eyebrow">MYOTA · RADIO ACTIVITY</span>
+        <h1 id="programme-name">Geography-based radio activity</h1>
       </div>
       <nav class="primary-nav" aria-label="Participant navigation">
         <a href="#explore">Explore</a>
@@ -53,27 +53,43 @@
     <main id="participant-content" tabindex="-1">
       <section class="hero" id="explore">
         <div>
-          <p class="eyebrow">YOUR NEXT OUTDOOR ACTIVATION</p>
-          <h2 id="programme-description">
-            Discover places where radio meets the outdoors.
-          </h2>
-          <p>
-            Explore eligible places, follow community activity, and log your
-            contacts from one programme workspace.
+          <p class="eyebrow">RADIO ACTIVITY, CONNECTED TO PLACE</p>
+          <h2>Explore radio activity through the places that matter to you.</h2>
+          <p id="programme-description" class="hero-programme-description">
+            Choose a programme to explore its geography, community, and
+            activity.
           </p>
-          <a class="primary-action" href="#entity-catalogue"
-            >Explore eligible entities</a
-          >
+          <p>
+            Find geographic entities across participating programmes, follow
+            radio activity, and record your contacts in one community workspace.
+          </p>
+          <div class="hero-actions">
+            <a class="primary-action" href="#entity-catalogue"
+              >Explore the map and entities</a
+            >
+            <a class="hero-secondary-action" href="#activity"
+              >Log radio activity</a
+            >
+          </div>
         </div>
-        <div class="stat">
-          <strong id="entity-count">–</strong
-          ><span>entities on this programme</span>
+        <div class="hero-sidecard">
+          <span class="hero-sidecard-mark" aria-hidden="true">⌖</span>
+          <p class="eyebrow">ONE SHARED GEOGRAPHY</p>
+          <h3>Many ways to get on the air</h3>
+          <p>
+            Explore mapped places and areas, join a programme, then activate or
+            make contacts wherever your radio takes you.
+          </p>
+          <div class="stat">
+            <strong id="entity-count">–</strong
+            ><span>geographic entities in this programme</span>
+          </div>
         </div>
       </section>
       <section class="layout" aria-label="Map and rules">
         <div class="panel map-panel">
           <div class="panel-head">
-            <h3>Entity map</h3>
+            <h3>Programme geography</h3>
             <div class="legend">
               <span class="dot verified"></span> Approved
               <span class="dot candidate"></span> Candidate
@@ -111,7 +127,12 @@
       </section>
       <section class="panel entity-panel" id="entity-catalogue">
         <div class="panel-head">
-          <h3>Entities</h3>
+          <div>
+            <h3>Explore geographic entities</h3>
+            <p class="small">
+              Browse the places and areas recognized by this programme.
+            </p>
+          </div>
           <span id="loading">Loading…</span>
           <button id="entity-retry" class="secondary" type="button" hidden>
             Retry entity catalogue
@@ -152,7 +173,7 @@
           </button>
         </nav>
         <form id="new-proposal-form" class="profile-form proposal-form">
-          <h4>Suggest a new point location</h4>
+          <h4>Suggest a geographic entity</h4>
           <p class="small">
             Proposals enter community review and are not active until approved.
             Sign in from Your account before submitting.

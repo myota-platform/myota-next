@@ -24,8 +24,13 @@ The shared presentation uses programme-provided primary and accent colors with
 common content width, panel radius and shadow, form-control sizing, and focus
 indicators. Text and controls derive readable foreground colors from the
 programme primary color so light themes retain text contrast. The page retains
-MyOTA's own identity while using clear community activity and ranking patterns
-as general inspiration; it does not reuse PARC branding or assets.
+MyOTA's own identity and presents a universal geography-based radio activity
+programme across programme-defined geographic entities. Its welcome emphasizes
+places, programmes, radio contacts, and community participation; it is not
+organized around parks. The [PARC Community homepage](https://parc-community.com/)
+is a reference for clear hierarchy, approachable community presentation, and
+concise live activity summaries only. No PARC branding, assets, park-specific
+structure, or assumptions are reused.
 
 Preserve programme selection, public content and rules, approved and candidate
 entity lists and maps, candidate proposals, authenticated profile editing,
