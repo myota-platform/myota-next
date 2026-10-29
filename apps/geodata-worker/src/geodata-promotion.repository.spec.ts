@@ -10,7 +10,7 @@ describe('GeodataPromotionRepository transactional candidate mutation', () => {
   const entityId = '33333333-3333-4333-8333-333333333333';
   const runId = '11111111-1111-4111-8111-111111111111';
 
-  function harness() {
+  function harness(existingIdentifier: string | null = null) {
     const queries: Array<{ sql: string; values: unknown[] }> = [];
     const outbox: Array<{ sql: string; values: unknown[] }> = [];
     const client = {
@@ -42,7 +42,7 @@ describe('GeodataPromotionRepository transactional candidate mutation', () => {
                 programme_slug: 'alpine',
                 ordinal: 1,
                 name: 'Fixture summit',
-                existing_entity_id: null,
+                existing_entity_id: existingIdentifier ? entityId : null,
                 planned_entity_id: entityId,
               },
             ],
@@ -66,7 +66,19 @@ describe('GeodataPromotionRepository transactional candidate mutation', () => {
         if (sql.includes('SELECT entity_id FROM source_reference'))
           return { rows: [] };
         if (sql.includes('SELECT lifecycle_status,website,description'))
-          return { rows: [] };
+          return {
+            rows: existingIdentifier
+              ? [
+                  {
+                    lifecycle_status: 'CANDIDATE',
+                    website: null,
+                    description: null,
+                    public_properties: {},
+                    entity_identifier: existingIdentifier,
+                  },
+                ]
+              : [],
+          };
         if (sql.includes('SELECT id FROM entity_type'))
           return { rows: [{ id: '44444444-4444-4444-8444-444444444444' }] };
         if (sql.includes('FROM geodata_entity candidate')) return { rows: [] };
@@ -129,5 +141,39 @@ describe('GeodataPromotionRepository transactional candidate mutation', () => {
         ['BEGIN', 'COMMIT', 'ROLLBACK'].includes(query.sql),
       ),
     ).toBe(false);
+  });
+
+  it('preserves an assigned programme ID when a scoped source promotion updates its entity', async () => {
+    const existingIdentifier = 'ALPINE-007';
+    const fixture = harness(existingIdentifier);
+    const repository = new GeodataPromotionRepository(
+      null,
+      new GeodataPromotionScoring(),
+    );
+    const queue: PromotionQueue = {
+      id: '',
+      import_run_id: runId,
+      candidate_ids: [candidateId],
+      target_status: 'CANDIDATE',
+      requested_by: 'reviewer-1',
+      job_metadata: { note: 'Programme-scoped source refresh' },
+      attempt_count: 0,
+    };
+
+    const result = await repository.promoteCandidateInTransaction(
+      fixture.client,
+      queue,
+      candidateId,
+    );
+
+    expect(result).toEqual({ entityId, updated: true });
+    const entityUpsert = fixture.queries.find((query) =>
+      query.sql.startsWith('INSERT INTO geodata_entity'),
+    );
+    expect(entityUpsert?.sql).toContain(
+      'entity_identifier=COALESCE(geodata_entity.entity_identifier,EXCLUDED.entity_identifier)',
+    );
+    expect(entityUpsert?.values.at(-1)).toBe(existingIdentifier);
+    expect(entityUpsert?.values[9]).toBe('alpine');
   });
 });

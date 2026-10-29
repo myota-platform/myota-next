@@ -30,6 +30,11 @@ test('filters the Entity catalogue to unassigned entities for programme assignme
     entityTypes: ['PARK'],
   };
   const listQueries: URL[] = [];
+  const assignmentRequests: Array<{
+    body: Record<string, unknown>;
+    idempotencyKey: string;
+  }> = [];
+  let assignmentCommitted = false;
 
   await page.route('**/v1/**', async (route) => {
     const request = route.request();
@@ -73,7 +78,9 @@ test('filters the Entity catalogue to unassigned entities for programme assignme
       const unassignedOnly =
         url.searchParams.get('programmeUnassigned') === 'true';
       const items = unassignedOnly
-        ? [unassignedEntity]
+        ? assignmentCommitted
+          ? []
+          : [unassignedEntity]
         : [assignedEntity, unassignedEntity];
       await route.fulfill({
         json: {
@@ -84,6 +91,41 @@ test('filters the Entity catalogue to unassigned entities for programme assignme
           nextPage: null,
         },
       });
+      return;
+    }
+    if (
+      url.pathname === '/v1/geodata/entity-programme-assignment-preview' &&
+      method === 'POST'
+    ) {
+      await route.fulfill({
+        json: {
+          programmeSlug: programme.slug,
+          assignmentMode: 'PROGRAMME_SEQUENCE',
+          entityCount: 1,
+          items: [
+            {
+              entityId: unassignedEntity.id,
+              name: unassignedEntity.name,
+              entityIdentifier: 'PARK-001',
+              qualifier: null,
+              serial: 1,
+              entityTypeCodes: ['PARK'],
+            },
+          ],
+        },
+      });
+      return;
+    }
+    if (
+      url.pathname === '/v1/geodata/entity-programme-assignments' &&
+      method === 'POST'
+    ) {
+      assignmentRequests.push({
+        body: request.postDataJSON() as Record<string, unknown>,
+        idempotencyKey: request.headers()['idempotency-key'] || '',
+      });
+      assignmentCommitted = true;
+      await route.fulfill({ status: 200, json: { assignedCount: 1 } });
       return;
     }
     await route.fulfill({ json: { items: [], total: 0, nextPage: null } });
@@ -121,4 +163,33 @@ test('filters the Entity catalogue to unassigned entities for programme assignme
     page.getByRole('heading', { name: 'Assign entities and permanent IDs' }),
   ).toBeVisible();
   await expect(page.getByLabel('Target programme')).toBeVisible();
+  await page.getByLabel('Target programme').selectOption(programme.slug);
+  await page.getByRole('button', { name: 'Preview IDs' }).click();
+  await expect(page.getByText('PARK-001')).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Confirm assignment of 1 entities' })
+    .click();
+  await expect(
+    page.getByText('1 entities assigned to parks with permanent IDs.'),
+  ).toBeVisible();
+  await expect(
+    page.getByText('No entities match these filters.'),
+  ).toBeVisible();
+  await expect(page.getByText('Unassigned Park', { exact: true })).toHaveCount(
+    0,
+  );
+  expect(assignmentRequests).toHaveLength(1);
+  expect(assignmentRequests[0]).toMatchObject({
+    body: {
+      programmeSlug: programme.slug,
+      entityIds: [unassignedEntity.id],
+      expectedIdentifiers: [
+        { entityId: unassignedEntity.id, entityIdentifier: 'PARK-001' },
+      ],
+    },
+  });
+  expect(assignmentRequests[0]?.idempotencyKey).not.toBe('');
+  expect(listQueries.at(-1)?.searchParams.get('programmeUnassigned')).toBe(
+    'true',
+  );
 });
