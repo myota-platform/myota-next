@@ -71,8 +71,8 @@ function contrastRatio(first, second) {
   return (luminances[0] + 0.05) / (luminances[1] + 0.05);
 }
 function readablePrimaryColor(primary) {
-  const pageBackground = '#f6f8f5';
-  if (contrastRatio(primary, pageBackground) >= 4.5) return primary;
+  const surfaceBackground = '#edf4ef';
+  if (contrastRatio(primary, surfaceBackground) >= 4.5) return primary;
   const channels = primary
     .slice(1)
     .match(/.{2}/g)
@@ -85,7 +85,7 @@ function readablePrimaryColor(primary) {
           .padStart(2, '0'),
       )
       .join('')}`;
-    if (contrastRatio(candidate, pageBackground) >= 4.5) return candidate;
+    if (contrastRatio(candidate, surfaceBackground) >= 4.5) return candidate;
   }
   return '#0f766e';
 }

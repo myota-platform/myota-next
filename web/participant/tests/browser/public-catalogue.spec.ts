@@ -172,7 +172,18 @@ test('selects a programme and renders its public content and entity catalogue', 
   await expect(page.locator('#programme-description')).toHaveText(
     'Explore the places, programmes, and people behind every contact.',
   );
-  for (const selector of ['.primary-action', '.community-actions a']) {
+  await page.locator('#awards').evaluate((panel) => {
+    const preview = document.createElement('button');
+    preview.id = 'theme-award-contrast-preview';
+    preview.className = 'award-level';
+    preview.textContent = 'Award contrast preview';
+    panel.append(preview);
+  });
+  for (const selector of [
+    '.primary-action',
+    '.community-actions a',
+    '#theme-award-contrast-preview',
+  ]) {
     const ratio = await page.locator(selector).evaluate((element) => {
       const channel = (value: number) => {
         const normalized = value / 255;
