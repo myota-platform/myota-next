@@ -13,19 +13,21 @@ Operating guides and qualification records are maintained in this
 
 ## Current release
 
-At 2026-10-29 03:14 UTC, the Rancher-managed release was Helm revision 91,
-chart `myota-next-1.1.6-testing.ea14850b8aad.1`, application version
-`testing-75fcd96`. All 17 MyOTA Deployments were ready at their desired replica
+At 2026-10-29 05:23 UTC, the Rancher-managed release was Helm revision 93,
+chart `myota-next-1.1.6-testing.829e9582307d.1`, application version
+`testing-1f8c0ab`. All 17 MyOTA Deployments were ready at their desired replica
 counts on the immutable image digests recorded in
 [`deploy/fleet/myota-test/values.yaml`](../../deploy/fleet/myota-test/values.yaml).
 The Core, Activity, Geodata/PostGIS, JetStream, and SeaweedFS PVCs were bound.
-The Admin and Participant hosts returned HTTP 200. The protected catalog rollout
-was verified by
-[run 40810934617](https://github.com/myota-platform/myota-next/actions/runs/40810934617).
-The Geodata and Geodata Worker Deployments use the approved immutable digests
-for `testing-75fcd96`. PR checks passed, including post-merge Node CI
-[run 40810934682](https://github.com/myota-platform/myota-next/actions/runs/40810934682).
-Recheck release state and digests after a later rollout.
+The API `/healthz` and `/readyz` endpoints and Admin and Participant hosts
+returned HTTP 200. The protected catalog rollout was verified by
+[run 40822949596](https://github.com/myota-platform/myota-next/actions/runs/40822949596).
+The Geodata Deployment uses the immutable digest published for `1f8c0ab`.
+Source PR [#313](https://github.com/myota-platform/myota-next/pull/313),
+digest-sync PR [#314](https://github.com/myota-platform/myota-next/pull/314),
+both PR gate suites, and post-merge Node CI
+[run 40822949647](https://github.com/myota-platform/myota-next/actions/runs/40822949647)
+passed. Recheck release state and digests after a later rollout.
 
 ## Qualified work packages
 
@@ -90,13 +92,49 @@ Recheck release state and digests after a later rollout.
 
 ## Remaining Phase 6 qualification
 
-- **Programme-scoped entity IDs ([#242–#245](https://github.com/myota-platform/myota-next/issues/242)):** implementation PRs [#297](https://github.com/myota-platform/myota-next/pull/297) and [#300](https://github.com/myota-platform/myota-next/pull/300) are merged to `testing`. Node CI run [40794860714](https://github.com/myota-platform/myota-next/actions/runs/40794860714) passed, including 390 unit tests, one E2E test, and 93 browser tests.
+- **Programme-scoped entity IDs ([#242–#245](https://github.com/myota-platform/myota-next/issues/242)):**
+  implementation PRs [#297](https://github.com/myota-platform/myota-next/pull/297)
+  and [#300](https://github.com/myota-platform/myota-next/pull/300) are merged to
+  `testing`. Node CI run
+  [40794860714](https://github.com/myota-platform/myota-next/actions/runs/40794860714)
+  passed, including 390 unit tests, one E2E test, and 93 browser tests.
 
   The migration-image trigger fix [#305](https://github.com/myota-platform/myota-next/pull/305) and approved tools digest [#306](https://github.com/myota-platform/myota-next/pull/306) are merged. Node CI run [40804106528](https://github.com/myota-platform/myota-next/actions/runs/40804106528) and all image build/scan checks passed. Protected Rancher run [40804867920](https://github.com/myota-platform/myota-next/actions/runs/40804867920) deployed chart `1.1.6-testing.e31a0cf7724e.1` (`testing-71e1da1`). Helm reports `deployed`, all release Deployments are Ready, and Core's migration ledger records `024_programme_entity_numbering.sql`.
 
   The Geodata policy-history fix was approved and deployed by PR [#309](https://github.com/myota-platform/myota-next/pull/309). Protected Rancher run [40810934617](https://github.com/myota-platform/myota-next/actions/runs/40810934617) completed at chart revision 91. An authenticated Admin policy update to `PROGRAMME_SEQUENCE` persisted and read back successfully; the existing `QUALIFIER_SEQUENCE` policy was then restored and verified. This confirms the deployed migration-backed policy write path is available after the tools-image trigger correction.
 
-  Admin saved and reloaded the Partidos Judiciales policy (`PJES`, `provinceCode`, three digits, qualifier sequence). On 2026-10-29, an approved two-feature import assigned `PJES-G-001` and `PJES-G-002`, both visible in Participant web. Two manual next-free requests returned `PJES-G-003` without reserving it. Concurrent attempts to claim it produced one successful promotion and one recoverable HTTP 400 conflict; the retry suggested and assigned `PJES-G-004`. Both synthetic entities were deleted and their reservations retained. The qualifier-sequence policy was restored. PR #308 now accounts for prior reservations when switching numbering scopes without rewriting existing IDs; its PostgreSQL regression coverage passed CI, and PR #309 deployed the code. Configuration and allocation sub-issues #243 and #244 are closed. Wider creation-path and additional live serial-exhaustion/qualifier-edge qualification remains open under #242 and #245.
+  Admin saved and reloaded the Partidos Judiciales policy (`PJES`,
+  `provinceCode`, three digits, qualifier sequence). On 2026-10-29, an approved
+  two-feature import assigned `PJES-G-001` and `PJES-G-002`, both visible in
+  Participant web. Two manual next-free requests returned `PJES-G-003` without
+  reserving it. Concurrent attempts to claim it produced one successful
+  promotion and one recoverable HTTP 400 conflict; the retry suggested and
+  assigned `PJES-G-004`. Both synthetic entities were deleted and their
+  reservations retained. The qualifier-sequence policy was restored. PR #308
+  now accounts for prior reservations when switching numbering scopes without
+  rewriting existing IDs; its PostgreSQL regression coverage passed CI, and
+  PR #309 deployed the code. Configuration and allocation sub-issues #243 and
+  #244 are closed. Wider creation-path and additional live serial-exhaustion
+  and qualifier-edge qualification remains open under #242 and #245.
+
+  Manual entity creation was then exercised against the deployed API. PR
+  [#313](https://github.com/myota-platform/myota-next/pull/313) fixed two issues
+  found in qualification: PostgreSQL could not infer a reused UUID parameter
+  as both UUID and text for the manual source reference, and a programme-
+  configured entity type did not necessarily yet have its global Geodata
+  category row. Creation now creates missing categories under the existing
+  category advisory lock. Its PostgreSQL-backed API end-to-end create/readback
+  check passed in Node CI
+  [run 40820113810](https://github.com/myota-platform/myota-next/actions/runs/40820113810).
+  After digest-sync PR
+  [#314](https://github.com/myota-platform/myota-next/pull/314) and protected
+  rollout
+  [run 40822949596](https://github.com/myota-platform/myota-next/actions/runs/40822949596),
+  an authenticated live create returned `PJES-M-001` and readback returned the
+  same ID. The synthetic entity was removed and read back as HTTP 404; its ID
+  reservation remains to prevent reuse. A subsequent preview returned HTTP
+  200, `PJES-M-002`, and `reserved: false`. Broader serial-exhaustion and
+  qualifier-edge qualification remains open under #242.
 
 - **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):
   on 2026-10-28, the full-catalogue asynchronous Admin backfill scanned 432
