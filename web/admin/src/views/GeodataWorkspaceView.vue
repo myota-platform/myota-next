@@ -3099,7 +3099,8 @@ onMounted(async () => {
     </div>
   </WorkspaceDialog>
   <WorkspaceDialog
-    :open="programmeAssignmentOpen"
+    v-if="programmeAssignmentOpen"
+    :open="true"
     eyebrow="PROGRAMME MEMBERSHIP"
     title="Assign entities and permanent IDs"
     @request-close="closeProgrammeAssignment"
