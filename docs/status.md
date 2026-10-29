@@ -137,16 +137,19 @@ and Phase 3 issues [#22](https://github.com/myota-platform/myota-next/issues/22)
 primary Admin and Participant deployment workflows are qualified under Phase 6
 issue [#91](https://github.com/myota-platform/myota-next/issues/91). Additional
 Phase 6 product work remains open under #239, #242, and related child issues.
-Work on programme-scoped entity IDs (#242) has started. The current branch
-adds Core policy persistence and identifier reservation, Programmes API
-validation, OpenAPI/event contracts, and an Admin policy editor. Geodata import
-promotion now allocates IDs transactionally, preserves existing IDs, emits
+Programme-scoped entity IDs (#242) are implemented on `testing` and deployed to
+`myota-test` in chart `1.1.6-testing.476991ae810c.1` (build `testing-77f10eb`).
+The change adds Core policy persistence and identifier reservation, Programmes
+API validation, OpenAPI/event contracts, and an Admin policy editor. Geodata
+import promotion allocates IDs transactionally, preserves existing IDs, emits
 them in lifecycle events, and displays them in Admin and Participant entity
 views. Admin import review has a non-reserving manual serial suggestion; a
-stale suggestion is checked again during synchronous promotion. Focused
-programme and Geodata tests plus repository typecheck pass locally. These
-changes are not yet merged or deployed; browser qualification and live
-`myota-test` verification remain open under #245.
+stale suggestion is checked again during synchronous promotion. Node CI passed
+with 390 unit tests, one E2E test, and 93 browser tests; all applicable image
+build and scan jobs passed. The protected rollout completed with all release
+Deployments Ready. Live policy editing, automatic/manual allocation,
+concurrency/retry, import-promotion, and Participant display qualification
+remain open under #242–#245.
 Award lifecycle parent [#246](https://github.com/myota-platform/myota-next/issues/246)
 is complete: [#247](https://github.com/myota-platform/myota-next/issues/247)
 qualifies global-admin award deletion, [#248](https://github.com/myota-platform/myota-next/issues/248)
