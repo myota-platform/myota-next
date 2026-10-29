@@ -246,3 +246,17 @@ rows and generated Mailpit message were invalidated or deleted afterward. This c
 trace delivery and pod-log token exclusion, not token exclusion from every trace field
 or hosted Observe delivery. See
 [Participant password reset](https://github.com/myota-platform/myota-next/issues/114).
+
+### Deployed raw-batch scanner check — 2026-10-29
+
+After PR [#302](https://github.com/myota-platform/myota-next/pull/302) passed
+post-merge Node CI ([run 40798409242](https://github.com/myota-platform/myota-next/actions/runs/40798409242)),
+the test-only collector was updated in `myota-test` and its Deployment rolled
+out Ready. A synthetic request ID and marker were registered, then sent in a
+gzip telemetry batch. The deployed scanner returned `requestObserved: true`
+and `tokenObserved: true`; the marker did not appear in collector logs, and
+the temporary scan state was deleted. No participant credential or real reset
+token was used. This proves the deployed scanner examines raw accepted batches
+and returns only booleans. The real reset-token-to-OTLP exclusion check and
+hosted Observe delivery remain open under [#114](https://github.com/myota-platform/myota-next/issues/114)
+and Phase 6 issue [#10](https://github.com/myota-platform/myota-next/issues/10).
