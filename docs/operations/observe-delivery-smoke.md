@@ -257,6 +257,16 @@ gzip telemetry batch. The deployed scanner returned `requestObserved: true`
 and `tokenObserved: true`; the marker did not appear in collector logs, and
 the temporary scan state was deleted. No participant credential or real reset
 token was used. This proves the deployed scanner examines raw accepted batches
-and returns only booleans. The real reset-token-to-OTLP exclusion check and
-hosted Observe delivery remain open under [#114](https://github.com/myota-platform/myota-next/issues/114)
+and returns only booleans.
+
+A second scan registered a synthetic marker and submitted it as the `token`
+value to the deployed `POST /v1/identity/auth/recovery/reset` endpoint with a
+unique `X-Request-ID`. The endpoint returned HTTP 400 for the invalid token.
+The scanner observed the request in both Gateway and Identity telemetry while
+returning `tokenObserved: false`. The marker was absent from Gateway, Identity,
+and mock collector logs; the scan state was deleted. This checks token-field
+exclusion on the deployed reset endpoint without using a valid credential. The
+valid Mailpit reset flow is documented in the
+[Identity parity record](../parity/identity-programmes.md). Hosted Observe
+delivery remains open under [#90](https://github.com/myota-platform/myota-next/issues/90)
 and Phase 6 issue [#10](https://github.com/myota-platform/myota-next/issues/10).
