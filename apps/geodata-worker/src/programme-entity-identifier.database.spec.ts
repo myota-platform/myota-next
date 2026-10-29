@@ -14,7 +14,7 @@ describe.skipIf(!databaseUrl)(
     const pool = databaseUrl
       ? new Pool({ connectionString: databaseUrl, max: 6 })
       : undefined;
-    const suffix = randomUUID().replaceAll('-', '').slice(0, 16);
+    const suffix = randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase();
     const prefixes = [
       `A${suffix.slice(0, 3)}`,
       `B${suffix.slice(3, 6)}`,
