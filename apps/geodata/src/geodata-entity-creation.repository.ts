@@ -354,8 +354,13 @@ export class GeodataEntityCreationRepository {
       await client.query(
         `INSERT INTO source_reference
           (id,entity_id,adapter_code,source_record_id,source_payload)
-         VALUES ($1,$2,'MANUAL',$2,$3::jsonb)`,
-        [randomUUID(), id, stringifyJsonWithBigInts({ geometry, properties })],
+         VALUES ($1,$2,'MANUAL',$3,$4::jsonb)`,
+        [
+          randomUUID(),
+          id,
+          id,
+          stringifyJsonWithBigInts({ geometry, properties }),
+        ],
       );
       const locationEnrichment = queueLocationEnrichment(
         id,
