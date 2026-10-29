@@ -698,9 +698,14 @@ paths:
                 qualifier: { type: string }
                 serial: { type: string }
       responses:
-        '201': { description: Candidate created and identifier assigned atomically }
-        '400': { description: Invalid entity fields, geometry, or numbering policy }
-        '409': { description: Identifier was assigned concurrently; retry with a new suggestion }
+        '201':
+          { description: Candidate created and identifier assigned atomically }
+        '400':
+          { description: Invalid entity fields, geometry, or numbering policy }
+        '409':
+          {
+            description: Identifier was assigned concurrently; retry with a new suggestion,
+          }
   /v1/geodata/entity-id-preview:
     post:
       tags: [Geodata]
@@ -722,6 +727,67 @@ paths:
       responses:
         '200': { description: Non-reserving identifier preview }
         '400': { description: Invalid scope or missing qualifier }
+  /v1/geodata/entity-programme-assignment-preview:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Preview a synchronous assignment of existing entities to a programme
+      operationId: previewGeodataProgrammeEntityAssignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                $ref: '#/components/schemas/GeodataProgrammeAssignmentPreviewRequest',
+              }
+      responses:
+        '200':
+          { description: Ordered assignment and immutable entity ID preview }
+        '400':
+          {
+            description: Invalid selection or entities are not eligible for the programme,
+          }
+        '403':
+          {
+            description: Caller lacks administration coverage for the target programme,
+          }
+        '409':
+          {
+            description: An entity already has programme membership or an identifier,
+          }
+  /v1/geodata/entity-programme-assignments:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Synchronously assign selected existing entities and reserve their programme IDs atomically
+      description: >-
+        This bounded command is synchronous and all-or-nothing. It accepts at
+        most 500 approved, currently unassigned entities. Category membership
+        alone never assigns an entity to a programme. The identifier preview
+        must be submitted unchanged; stale or conflicting previews are rejected.
+      operationId: assignGeodataEntitiesToProgramme
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: '#/components/schemas/GeodataProgrammeAssignmentRequest' }
+      responses:
+        '200':
+          { description: All selected entities assigned with permanent IDs }
+        '400': { description: Invalid selection or numbering policy }
+        '401': { description: Missing or invalid authentication }
+        '403':
+          {
+            description: Caller lacks administration coverage for the target programme,
+          }
+        '409':
+          {
+            description: Selection or ID preview changed; the transaction made no changes,
+          }
+        '503': { description: Programme configuration is unavailable }
 
   /v1/geodata/imports:
     get:
@@ -3572,6 +3638,77 @@ components:
             type: string,
             enum: [PROGRAMME_SEQUENCE, QUALIFIER_SEQUENCE, MANUAL],
           }
+    GeodataProgrammeAssignmentPreviewRequest:
+      type: object
+      required: [programmeSlug, entityIds]
+      properties:
+        programmeSlug: { type: string }
+        entityIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        manualAssignments:
+          type: array
+          items:
+            { $ref: '#/components/schemas/GeodataProgrammeManualAssignment' }
+    GeodataProgrammeAssignmentRequest:
+      allOf:
+        - {
+            $ref: '#/components/schemas/GeodataProgrammeAssignmentPreviewRequest',
+          }
+        - type: object
+          required: [expectedIdentifiers]
+          properties:
+            expectedIdentifiers:
+              type: array
+              minItems: 1
+              maxItems: 500
+              items:
+                {
+                  $ref: '#/components/schemas/GeodataProgrammeExpectedIdentifier',
+                }
+    GeodataProgrammeManualAssignment:
+      type: object
+      required: [entityId]
+      properties:
+        entityId: { type: string, format: uuid }
+        qualifier: { type: string }
+        serial: { type: [string, integer] }
+    GeodataProgrammeExpectedIdentifier:
+      type: object
+      required: [entityId, entityIdentifier]
+      properties:
+        entityId: { type: string, format: uuid }
+        entityIdentifier: { type: string }
+    GeodataProgrammeAssignmentPreview:
+      type: object
+      required: [programmeSlug, assignmentMode, entityCount, items]
+      properties:
+        programmeSlug: { type: string }
+        assignmentMode:
+          {
+            type: string,
+            enum: [PROGRAMME_SEQUENCE, QUALIFIER_SEQUENCE, MANUAL],
+          }
+        entityCount: { type: integer }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/GeodataProgrammeAssignedEntity' }
+    GeodataProgrammeAssignedEntity:
+      type: object
+      required: [entityId, name, entityIdentifier, serial, entityTypeCodes]
+      properties:
+        entityId: { type: string, format: uuid }
+        name: { type: string }
+        sourceOrder: { type: string }
+        entityIdentifier: { type: string }
+        qualifier: { type: string, nullable: true }
+        serial: { type: integer }
+        entityTypeCodes:
+          type: array
+          items: { type: string }
     ProgrammePolicy:
       type: object
       required: [programmeSlug, version, rules, entityTypes, entityNumbering]

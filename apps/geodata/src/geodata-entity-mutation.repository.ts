@@ -5,6 +5,7 @@ import { GeodataEntityEnrichmentRequestRepository } from './geodata-entity-enric
 import { GeodataEntityCategoryRepository } from './geodata-entity-categories.repository.js';
 import { GeodataEntityGeometryRepository } from './geodata-entity-geometry.repository.js';
 import { GeodataEntityCreationRepository } from './geodata-entity-creation.repository.js';
+import { GeodataEntityProgrammeAssignmentRepository } from './geodata-entity-programme-assignment.repository.js';
 
 export { assertReviewCoverage } from './geodata-entity-mutation.helpers.js';
 
@@ -17,6 +18,7 @@ export class GeodataEntityMutationRepository {
     private readonly categories: GeodataEntityCategoryRepository,
     private readonly geometry: GeodataEntityGeometryRepository,
     private readonly creation: GeodataEntityCreationRepository,
+    private readonly programmeAssignment: GeodataEntityProgrammeAssignmentRepository,
   ) {}
 
   createEntity(...args: Parameters<GeodataEntityCreationRepository['create']>) {
@@ -27,6 +29,18 @@ export class GeodataEntityMutationRepository {
     ...args: Parameters<GeodataEntityCreationRepository['previewIdentifier']>
   ) {
     return this.creation.previewIdentifier(...args);
+  }
+
+  previewProgrammeEntityAssignment(
+    ...args: Parameters<GeodataEntityProgrammeAssignmentRepository['preview']>
+  ) {
+    return this.programmeAssignment.preview(...args);
+  }
+
+  assignProgrammeEntities(
+    ...args: Parameters<GeodataEntityProgrammeAssignmentRepository['assign']>
+  ) {
+    return this.programmeAssignment.assign(...args);
   }
 
   reviewEntity(

@@ -90,6 +90,25 @@ export const myotaClient = {
       idempotencyKey,
     );
   },
+  previewGeodataProgrammeAssignment<T = unknown>(body: unknown) {
+    return write<T>(
+      '/v1/geodata/entity-programme-assignment-preview',
+      'POST',
+      body,
+    );
+  },
+  assignGeodataEntitiesToProgramme<T = unknown>(
+    body: unknown,
+    idempotencyKey?: string,
+  ) {
+    return write<T>(
+      '/v1/geodata/entity-programme-assignments',
+      'POST',
+      body,
+      undefined,
+      idempotencyKey,
+    );
+  },
   unassignProgrammeEntityCategory<T = unknown>(
     slug: string,
     code: string,

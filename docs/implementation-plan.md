@@ -92,6 +92,19 @@ fixtures do not cover an important outcome.
   launch RSS ceiling, remaining geometry/CRS cases, and datum-grid-dependent
   transformations. Do not require a PBF RSS workload above 25,000 features.
   Verify any confirmed differences against the pinned importer before changing behavior.
+- **Programme entity assignment and IDs ([#325](https://github.com/myota-platform/myota-next/issues/325)):** treat entity categories and
+  an entity's programme membership as separate data. Category membership makes an
+  entity eligible for a programme; it must not implicitly assign the entity or allocate
+  an ID. Admins assign a bounded selection of approved, currently unassigned entities
+  through a preview-and-confirm command. The command validates every entity and the
+  programme's category eligibility, proposes IDs in stable source order, and commits all
+  programme assignments, permanent reservations, and audit/outbox facts in one Geodata
+  transaction. The synchronous API limit is 500 entities. Confirmation must include the
+  previewed IDs; stale previews fail without partial writes. Manual numbering may
+  suggest the next available serial, but the admin reviews it before confirmation.
+  Once assigned, an entity ID and its programme are write-once. Database guards protect
+  that invariant even from alternate writers, and serial reservations remain permanent
+  after entity deletion so an identifier is never reused.
 - **Email:** keep bulk delivery asynchronous and verify SMTP delivery, TLS, failure,
   retry, deduplication, and notification outcomes in the deployment environment, using
   the existing allowlisted templates and privacy constraints.

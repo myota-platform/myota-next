@@ -4,7 +4,7 @@ This generated index groups contract operations by service and links each one to
 
 Regenerate with `npm run docs:api-traceability`. The mapping must cover every operation in the copied contract; target-only operations are documented separately in [API baseline notes](api-baseline.md).
 
-Contract baseline: [155 operations](../contracts/openapi.yaml).
+Contract baseline: [157 operations](../contracts/openapi.yaml).
 
 ## Identity
 
@@ -81,8 +81,10 @@ Contract baseline: [155 operations](../contracts/openapi.yaml).
 ## Geodata
 
 - `GET /v1/geodata/entities` — [geodata.controller.ts#L36](../apps/geodata/src/geodata.controller.ts#L36)
-- `POST /v1/geodata/entities` — [geodata.controller.ts#L51](../apps/geodata/src/geodata.controller.ts#L51)
+- `POST /v1/geodata/entities` — [geodata.controller.ts#L84](../apps/geodata/src/geodata.controller.ts#L84)
 - `POST /v1/geodata/entity-id-preview` — [geodata.controller.ts#L41](../apps/geodata/src/geodata.controller.ts#L41)
+- `POST /v1/geodata/entity-programme-assignment-preview` — [geodata.controller.ts#L51](../apps/geodata/src/geodata.controller.ts#L51)
+- `POST /v1/geodata/entity-programme-assignments` — [geodata.controller.ts#L61](../apps/geodata/src/geodata.controller.ts#L61)
 - `GET /v1/geodata/imports` — [geodata-imports.controller.ts#L151](../apps/geodata/src/geodata-imports.controller.ts#L151)
 - `POST /v1/geodata/imports` — [geodata-imports.controller.ts#L107](../apps/geodata/src/geodata-imports.controller.ts#L107)
 - `GET /v1/geodata/imports/{runId}` — [geodata-imports.controller.ts#L160](../apps/geodata/src/geodata-imports.controller.ts#L160)
@@ -100,22 +102,22 @@ Contract baseline: [155 operations](../contracts/openapi.yaml).
 - `DELETE /v1/geodata/import-uploads/{uploadId}` — [geodata-imports.controller.ts#L98](../apps/geodata/src/geodata-imports.controller.ts#L98)
 - `POST /v1/geodata/import-uploads/{uploadId}/parts/{partNumber}` — [geodata-imports.controller.ts#L64](../apps/geodata/src/geodata-imports.controller.ts#L64)
 - `POST /v1/geodata/import-uploads/{uploadId}/complete` — [geodata-imports.controller.ts#L88](../apps/geodata/src/geodata-imports.controller.ts#L88)
-- `GET /v1/geodata/location-options` — [geodata.controller.ts#L164](../apps/geodata/src/geodata.controller.ts#L164)
-- `GET /v1/geodata/adapters` — [geodata.controller.ts#L83](../apps/geodata/src/geodata.controller.ts#L83)
-- `GET /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L182](../apps/geodata/src/geodata.controller.ts#L182)
-- `PATCH /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L187](../apps/geodata/src/geodata.controller.ts#L187)
-- `GET /v1/geodata/entities/{entityId}/audit` — [geodata.controller.ts#L74](../apps/geodata/src/geodata.controller.ts#L74)
-- `POST /v1/geodata/entities/{entityId}/location-enrichment-requests` — [geodata.controller.ts#L213](../apps/geodata/src/geodata.controller.ts#L213)
-- `GET /v1/geodata/tiles/{z}/{x}/{y}` — [geodata.controller.ts#L172](../apps/geodata/src/geodata.controller.ts#L172)
+- `GET /v1/geodata/location-options` — [geodata.controller.ts#L197](../apps/geodata/src/geodata.controller.ts#L197)
+- `GET /v1/geodata/adapters` — [geodata.controller.ts#L116](../apps/geodata/src/geodata.controller.ts#L116)
+- `GET /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L215](../apps/geodata/src/geodata.controller.ts#L215)
+- `PATCH /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L220](../apps/geodata/src/geodata.controller.ts#L220)
+- `GET /v1/geodata/entities/{entityId}/audit` — [geodata.controller.ts#L107](../apps/geodata/src/geodata.controller.ts#L107)
+- `POST /v1/geodata/entities/{entityId}/location-enrichment-requests` — [geodata.controller.ts#L246](../apps/geodata/src/geodata.controller.ts#L246)
+- `GET /v1/geodata/tiles/{z}/{x}/{y}` — [geodata.controller.ts#L205](../apps/geodata/src/geodata.controller.ts#L205)
 - `GET /v1/geodata/refresh-schedules` — [geodata-operations.controller.ts#L86](../apps/geodata/src/geodata-operations.controller.ts#L86)
 - `POST /v1/geodata/refresh-schedules` — [geodata-operations.controller.ts#L95](../apps/geodata/src/geodata-operations.controller.ts#L95)
 - `POST /v1/geodata/refresh-schedules/{scheduleId}/run` — [geodata-operations.controller.ts#L117](../apps/geodata/src/geodata-operations.controller.ts#L117)
-- `GET /v1/geodata/conflation` — [geodata.controller.ts#L131](../apps/geodata/src/geodata.controller.ts#L131)
-- `POST /v1/geodata/conflation/{candidateId}/resolve` — [geodata.controller.ts#L140](../apps/geodata/src/geodata.controller.ts#L140)
+- `GET /v1/geodata/conflation` — [geodata.controller.ts#L164](../apps/geodata/src/geodata.controller.ts#L164)
+- `POST /v1/geodata/conflation/{candidateId}/resolve` — [geodata.controller.ts#L173](../apps/geodata/src/geodata.controller.ts#L173)
 - `POST /v1/geodata/proposals` — [geodata-operations.controller.ts#L142](../apps/geodata/src/geodata-operations.controller.ts#L142)
-- `PUT /v1/geodata/entities/{entityId}/geometry` — [geodata.controller.ts#L293](../apps/geodata/src/geodata.controller.ts#L293)
-- `PUT /v1/geodata/entities/{entityId}/categories` — [geodata.controller.ts#L267](../apps/geodata/src/geodata.controller.ts#L267)
-- `POST /v1/geodata/entities/{entityId}/reviews` — [geodata.controller.ts#L240](../apps/geodata/src/geodata.controller.ts#L240)
+- `PUT /v1/geodata/entities/{entityId}/geometry` — [geodata.controller.ts#L326](../apps/geodata/src/geodata.controller.ts#L326)
+- `PUT /v1/geodata/entities/{entityId}/categories` — [geodata.controller.ts#L300](../apps/geodata/src/geodata.controller.ts#L300)
+- `POST /v1/geodata/entities/{entityId}/reviews` — [geodata.controller.ts#L273](../apps/geodata/src/geodata.controller.ts#L273)
 - `POST /v1/geodata/entity-deletion-jobs` — [geodata-operations.controller.ts#L34](../apps/geodata/src/geodata-operations.controller.ts#L34)
 - `GET /v1/geodata/entity-deletion-jobs/{jobId}` — [geodata-operations.controller.ts#L55](../apps/geodata/src/geodata-operations.controller.ts#L55)
 - `POST /v1/geodata/entity-deletion-jobs/{jobId}/confirm` — [geodata-operations.controller.ts#L63](../apps/geodata/src/geodata-operations.controller.ts#L63)
