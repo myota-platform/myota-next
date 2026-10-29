@@ -136,6 +136,15 @@ passed. Recheck release state and digests after a later rollout.
   200, `PJES-M-002`, and `reserved: false`. Broader serial-exhaustion and
   qualifier-edge qualification remains open under #242.
 
+  Follow-up review found that advisory manual suggestions used `MAX(serial)+1`,
+  which skipped lower serials left free by deletions or prior manual assignment.
+  The create and import-promotion suggestion paths now share a first-gap query
+  that respects programme-wide and qualifier scopes, while final assignments
+  remain transactionally checked and reserved. A regression test covers a
+  reserved `001`/`003` pair suggesting `002`; focused local checks passed. The
+  PostgreSQL-backed regression is included in CI and requires the CI database
+  service because this checkout has no `GEO_DATABASE_URL`.
+
 - **Location metadata ([#110](https://github.com/myota-platform/myota-next/issues/110), [#111](https://github.com/myota-platform/myota-next/issues/111), [#112](https://github.com/myota-platform/myota-next/issues/112)):
   on 2026-10-28, the full-catalogue asynchronous Admin backfill scanned 432
   entities, queued 430, skipped two, and failed none. All 432 later showed

@@ -20,6 +20,7 @@ import {
   type PromotionQueue,
 } from '../../geodata-worker/src/geodata-promotion.repository.js';
 import {
+  findNextFreeProgrammeEntitySerial,
   ProgrammeEntityIdentifierError,
   suggestProgrammeEntityIdentifier,
   type ManualEntityIdentifierAssignment,
@@ -105,18 +106,15 @@ export class GeodataImportMutationRepository {
         manualAssignment,
         1,
       ).qualifier;
-      const scope = qualifier ?? '';
       const client = await this.connect();
       let nextSerial: number;
       try {
-        const latest = await client.query(
-          `SELECT COALESCE(MAX(serial_number),0)+1 AS next_serial
-             FROM geodata_entity_identifier_reservation
-            WHERE programme_slug=$1
-              AND (qualifier_scope=$2 OR qualifier_scope='')`,
-          [candidate.programme_slug, scope],
+        nextSerial = await findNextFreeProgrammeEntitySerial(
+          client,
+          candidate.programme_slug,
+          policy,
+          qualifier,
         );
-        nextSerial = Number(latest.rows[0]?.next_serial ?? 1);
       } finally {
         client.release();
       }
