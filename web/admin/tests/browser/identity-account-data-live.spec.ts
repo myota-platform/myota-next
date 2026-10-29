@@ -109,8 +109,11 @@ test('creates and manages an account through live Admin', async ({
     await page.getByLabel('Search users').fill(displayName);
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     await page.getByRole('button', { name: new RegExp(displayName) }).click();
-    await page.getByLabel('Status').selectOption('ACTIVE');
-    await page.getByLabel('Reset password').fill(password);
+    const accountEditor = page
+      .locator('form')
+      .filter({ has: page.getByLabel('Display name') });
+    await accountEditor.getByLabel('Status').selectOption('ACTIVE');
+    await accountEditor.getByLabel('Reset password').fill(password);
     const activateResponse = page.waitForResponse((response) => {
       return (
         new URL(response.url()).pathname ===
@@ -118,7 +121,7 @@ test('creates and manages an account through live Admin', async ({
         response.request().method() === 'PATCH'
       );
     });
-    await page.getByRole('button', { name: 'Save user' }).click();
+    await accountEditor.getByRole('button', { name: 'Save user' }).click();
     const activated = await activateResponse;
     expect(activated.status(), await activated.text()).toBe(200);
     await expect(
