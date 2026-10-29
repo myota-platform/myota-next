@@ -222,9 +222,12 @@ test('signs in, records an activation contact, and closes the activation', async
     mimeType: 'text/plain',
     buffer: Buffer.from('<ADIF_VER:5>3.1.4<EOH><EOR>'),
   });
-  await page.locator('#adif-file').focus();
+  const adifFile = page.locator('#adif-file');
+  await page.getByRole('button', { name: 'Close activation' }).focus();
   await page.keyboard.press('Tab');
   const importButton = page.getByRole('button', { name: 'Import ADIF log' });
+  await expect(adifFile).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(importButton).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.locator('#adif-import-status')).toHaveText(

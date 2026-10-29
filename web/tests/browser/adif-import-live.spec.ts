@@ -355,14 +355,13 @@ async function submitAdifWithKeyboard(
 ) {
   const input = page.locator('#adif-file');
   await input.setInputFiles(file);
-  await input.focus();
-  await expect(input).toBeFocused();
   const submit = page.getByRole('button', { name: 'Import ADIF log' });
-  for (let tab = 0; tab < 4; tab++) {
-    await page.keyboard.press('Tab');
-    if (await submit.evaluate((element) => element === document.activeElement))
-      break;
-  }
+  const tabStart = page.getByRole('button', { name: 'Close activation' });
+  await tabStart.focus();
+  await expect(tabStart).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(input).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(submit).toBeFocused();
   await page.keyboard.press('Enter');
 }
