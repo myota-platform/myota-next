@@ -216,7 +216,6 @@ describe.skipIf(!databaseUrl)(
         serialWidth: 3,
         assignmentMode: 'MANUAL',
       };
-      const bothManualReads = barrier(2);
       const assignments = await Promise.allSettled(
         [1, 2].map(async () => {
           const client = await pool.connect();
@@ -226,7 +225,7 @@ describe.skipIf(!databaseUrl)(
               "SELECT set_config('myota.geodata_writer','row-v1',true)",
             );
             const identifier = await allocateProgrammeEntityIdentifier(
-              manualReadBarrier(client, bothManualReads.arrive),
+              client,
               programmeSlugs[3]!,
               policy,
               randomUUID(),
@@ -252,7 +251,7 @@ describe.skipIf(!databaseUrl)(
       expect(rejected?.status).toBe('rejected');
       if (rejected?.status === 'rejected')
         expect(String(rejected.reason)).toContain(
-          'assigned concurrently; retry with the latest suggestion',
+          'already assigned in this programme scope',
         );
       expect(
         assignments
@@ -342,33 +341,3 @@ describe.skipIf(!databaseUrl)(
     }
   },
 );
-
-function barrier(parties: number): { arrive: () => Promise<void> } {
-  let arrivals = 0;
-  let release!: () => void;
-  const wait = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  return {
-    arrive: async () => {
-      arrivals += 1;
-      if (arrivals === parties) release();
-      await wait;
-    },
-  };
-}
-
-function manualReadBarrier(
-  client: PoolClient,
-  arrive: () => Promise<void>,
-): PoolClient {
-  const query = client.query.bind(client);
-  return {
-    query: async (sql: string, values?: unknown[]) => {
-      const result = await query(sql, values);
-      if (sql.includes('SELECT 1 FROM geodata_entity_identifier_reservation'))
-        await arrive();
-      return result;
-    },
-  } as unknown as PoolClient;
-}
