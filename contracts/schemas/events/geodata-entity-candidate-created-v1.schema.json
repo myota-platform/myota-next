@@ -18,6 +18,9 @@
             "entityId": {
               "type": "string"
             },
+            "entityIdentifier": {
+              "type": ["string", "null"]
+            },
             "status": {
               "type": "string"
             },

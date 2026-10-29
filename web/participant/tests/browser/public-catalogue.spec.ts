@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import { expectResponsiveAccessible } from '../../../a11y';
 
@@ -19,8 +20,8 @@ const programmes = [
   {
     slug: 'coast',
     name: 'Coastal Parks',
-    description: 'Radio from protected shorelines.',
-    theme: { primary: '#176f72', accent: '#efb04d' },
+    description: '',
+    theme: { primary: '#f490a9', accent: '#efb04d' },
     rules: {
       minimumQsos: { activation: 3, hunter: 1 },
       publicAccessRequired: false,
@@ -155,11 +156,63 @@ test('selects a programme and renders its public content and entity catalogue', 
   await page.getByLabel('Programme').selectOption('coast');
 
   await expect(page.locator('#programme-name')).toHaveText('Coastal Parks');
+  await expect(page.locator('#programme-description')).toHaveText(
+    'Discover places where radio meets the outdoors.',
+  );
+  for (const selector of ['.primary-action', '.community-actions a']) {
+    const ratio = await page.locator(selector).evaluate((element) => {
+      const channel = (value: number) => {
+        const normalized = value / 255;
+        return normalized <= 0.04045
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4;
+      };
+      const luminance = (value: string) => {
+        const [red, green, blue] = value.match(/[\d.]+/g)!.map(Number);
+        return (
+          channel(red) * 0.2126 +
+          channel(green) * 0.7152 +
+          channel(blue) * 0.0722
+        );
+      };
+      const style = getComputedStyle(element);
+      const background =
+        style.backgroundColor === 'rgba(0, 0, 0, 0)'
+          ? getComputedStyle(element.closest('.panel') || document.body)
+              .backgroundColor
+          : style.backgroundColor;
+      const colors = [luminance(style.color), luminance(background)].sort(
+        (a, b) => b - a,
+      );
+      return (colors[0] + 0.05) / (colors[1] + 0.05);
+    });
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+  }
   await expect(page.locator('#rules')).toContainText('Programme-defined');
   await expect(page.locator('#entities')).toContainText('coast reference site');
   await expect(page.locator('#programme-content')).toContainText(
     'coast eligibility',
   );
+
+  const primaryLinks = page.locator('.primary-nav a');
+  await expect(primaryLinks).toHaveText([
+    'Explore',
+    'Entities',
+    'Community',
+    'Account',
+    'Profile',
+    'Awards',
+    'My activity',
+  ]);
+  for (const link of await primaryLinks.all()) {
+    const target = await link.getAttribute('href');
+    expect(target).toBeTruthy();
+    await expect(page.locator(target!)).toHaveCount(1);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const link of await primaryLinks.all()) {
+    await expect(link).toBeInViewport();
+  }
 
   await page.locator('#award-email').fill('operator@example.test');
   await page.locator('#award-password').fill('test-password');
@@ -237,4 +290,204 @@ test('selects a programme and renders its public content and entity catalogue', 
   await expect(page).toHaveURL(/#coast$/);
 
   await expectResponsiveAccessible(page, 'Participant public catalogue');
+});
+
+test('recovers from unavailable programme and entity catalogues', async ({
+  page,
+}) => {
+  let programmeReads = 0;
+  let entityReads = 0;
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  await page.route('**/v1/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/v1/programmes') {
+      programmeReads += 1;
+      if (programmeReads === 1) {
+        await route.fulfill({
+          status: 503,
+          json: { message: 'catalogue temporarily unavailable' },
+        });
+        return;
+      }
+      await route.fulfill({ json: { items: programmes, nextPage: null } });
+      return;
+    }
+
+    if (url.pathname === '/v1/geodata/entities') {
+      entityReads += 1;
+      if (entityReads === 1 || entityReads === 3) {
+        await route.fulfill({
+          status: 503,
+          json: { message: 'entity service temporarily unavailable' },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              id: `${url.searchParams.get('programme')}-recovered-entity`,
+              name: `${url.searchParams.get('programme')} recovered entity`,
+              entityType:
+                url.searchParams.get('programme') === 'alpine'
+                  ? 'SOTA'
+                  : 'PARK',
+              status: 'APPROVED',
+              geometry: { type: 'Point', coordinates: [7, 46] },
+            },
+          ],
+          page: 1,
+          total: 1,
+          nextPage: null,
+        },
+      });
+      return;
+    }
+
+    await route.fulfill({ json: { items: [], nextPage: null, total: 0 } });
+  });
+
+  await page.goto('http://127.0.0.1:8091');
+  await expect(page.locator('#programme-status')).toContainText(
+    'catalogue temporarily unavailable',
+  );
+  await page.getByRole('button', { name: 'Retry programme catalogue' }).click();
+  await expect(page.locator('#programme-name')).toHaveText('Alpine Summits');
+  await expect(page.locator('#loading')).toContainText(
+    'entity catalogue is temporarily unavailable',
+  );
+  await expect(page.locator('#entities')).toBeEmpty();
+  await expectResponsiveAccessible(page, 'Participant catalogue recovery');
+  await page.getByRole('button', { name: 'Retry entity catalogue' }).click();
+  await expect(page.locator('#entities')).toContainText(
+    'alpine recovered entity',
+  );
+  await expect(page.locator('#entity-retry')).toBeHidden();
+
+  await page.getByLabel('Programme').selectOption('coast');
+  await expect(page.locator('#programme-name')).toHaveText('Coastal Parks');
+  await expect(page.locator('#loading')).toContainText(
+    'entity catalogue is temporarily unavailable',
+  );
+  await expect(page.locator('#entities')).toBeEmpty();
+  await page.getByRole('button', { name: 'Retry entity catalogue' }).click();
+  await expect(page.locator('#entities')).toContainText(
+    'coast recovered entity',
+  );
+  expect(programmeReads).toBe(2);
+  expect(entityReads).toBe(4);
+  expect(pageErrors).toEqual([]);
+});
+
+test('shows live community activations, rankings, and programme exports', async ({
+  page,
+}, testInfo) => {
+  const leaderboardCategories: string[] = [];
+  let exportReads = 0;
+  await page.route('**/v1/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/v1/programmes') {
+      await route.fulfill({ json: { items: [programmes[0]], nextPage: null } });
+      return;
+    }
+    if (url.pathname === '/v1/geodata/entities') {
+      await route.fulfill({ json: { items: [], page: 1, total: 0 } });
+      return;
+    }
+    if (url.pathname.endsWith('/content')) {
+      await route.fulfill({ json: { items: [] } });
+      return;
+    }
+    if (url.pathname === '/v1/public/activations') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              id: 'public-activation-1',
+              operatorCallsign: 'N0***L',
+              status: 'CLOSED',
+              qsoCount: 8,
+              startedAt: '2026-10-28T09:30:00Z',
+            },
+          ],
+          page: 1,
+          pageSize: 5,
+          total: 1,
+          nextPage: null,
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/public/results') {
+      exportReads += 1;
+      expect(url.searchParams.get('programme')).toBe('alpine');
+      expect(url.searchParams.get('format')).toBe('csv');
+      await route.fulfill({
+        json: {
+          format: 'csv',
+          contentType: 'text/csv',
+          downloadName: 'myota-results-alpine.csv',
+          content: 'programme,entityId\nalpine,ALP-001\n',
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/v1/public/leaderboards') {
+      const category = url.searchParams.get('category') || '';
+      leaderboardCategories.push(category);
+      await route.fulfill({
+        json: {
+          programme: url.searchParams.get('programme'),
+          category,
+          items: [
+            {
+              subject_id: 'private-subject-id-must-not-render',
+              qso_count: category === 'HUNTER' ? 12 : 6,
+              activation_count: 3,
+              unique_call_sign_count: 4,
+              unique_entity_count: 2,
+            },
+          ],
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: { items: [], nextPage: null, total: 0 } });
+  });
+
+  await page.goto('http://127.0.0.1:8091');
+  await expect(
+    page.getByRole('navigation', { name: 'Participant navigation' }),
+  ).toContainText('Explore');
+  await page.getByRole('link', { name: 'Profile' }).click();
+  await expect(page).toHaveURL(/#profile$/);
+  await expect(page.locator('#public-activations')).toContainText('N0***L');
+  await expect(page.locator('#public-activations')).toContainText('8 QSOs');
+  await expect(page.locator('#public-leaderboard')).toContainText('Hunter 1');
+  await expect(page.locator('#public-leaderboard')).toContainText('12 QSOs');
+  await expect(page.locator('#public-leaderboard')).not.toContainText(
+    'private-subject-id-must-not-render',
+  );
+
+  await page.getByLabel('Rankings for').selectOption('ACTIVATOR');
+  await expect(page.locator('#leaderboard-heading')).toHaveText(
+    'Top activators',
+  );
+  await expect(page.locator('#public-leaderboard')).toContainText('6 QSOs');
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#public-results-download').click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('myota-results-alpine.csv');
+  await download.saveAs(testInfo.outputPath(download.suggestedFilename()));
+  await expect(page.locator('#public-results-status')).toContainText(
+    'Downloaded myota-results-alpine.csv',
+  );
+  expect(exportReads).toBe(1);
+  expect(
+    await readFile(testInfo.outputPath(download.suggestedFilename()), 'utf8'),
+  ).toBe('programme,entityId\nalpine,ALP-001\n');
+  expect(leaderboardCategories).toEqual(['HUNTER', 'ACTIVATOR']);
+  await expectResponsiveAccessible(page, 'Participant community workspace');
 });

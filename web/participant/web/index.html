@@ -21,33 +21,56 @@
   <body>
     <a class="skip-link" href="#participant-content">Skip to content</a>
     <header class="topbar">
-      <div>
+      <div class="topbar-brand">
         <span class="eyebrow">MYOTA PLATFORM</span>
         <h1 id="programme-name">Outdoor Activation</h1>
       </div>
-      <label
-        >Programme
-        <select id="programme-select"></select
-      ></label>
+      <nav class="primary-nav" aria-label="Participant navigation">
+        <a href="#explore">Explore</a>
+        <a href="#entity-catalogue">Entities</a>
+        <a href="#community">Community</a>
+        <a href="#account">Account</a>
+        <a href="#profile">Profile</a>
+        <a href="#awards">Awards</a>
+        <a href="#activity">My activity</a>
+      </nav>
+      <div class="programme-controls">
+        <label
+          >Programme
+          <select id="programme-select"></select
+        ></label>
+        <p
+          id="programme-status"
+          class="small"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <button id="programme-retry" class="secondary" type="button" hidden>
+          Retry programme catalogue
+        </button>
+      </div>
     </header>
     <main id="participant-content" tabindex="-1">
-      <section class="hero">
+      <section class="hero" id="explore">
         <div>
-          <p class="eyebrow">UNIVERSAL PROGRAMME VIEW</p>
+          <p class="eyebrow">YOUR NEXT OUTDOOR ACTIVATION</p>
           <h2 id="programme-description">
             Discover places where radio meets the outdoors.
           </h2>
           <p>
-            Verified entities are green. Imported candidates are amber until a
-            community member proposes and an approver reviews them.
+            Explore eligible places, follow community activity, and log your
+            contacts from one programme workspace.
           </p>
+          <a class="primary-action" href="#entity-catalogue"
+            >Explore eligible entities</a
+          >
         </div>
         <div class="stat">
           <strong id="entity-count">–</strong
           ><span>entities on this programme</span>
         </div>
       </section>
-      <section class="layout">
+      <section class="layout" aria-label="Map and rules">
         <div class="panel map-panel">
           <div class="panel-head">
             <h3>Entity map</h3>
@@ -68,7 +91,7 @@
         <aside class="panel">
           <div class="panel-head"><h3>Programme rules</h3></div>
           <dl id="rules"></dl>
-          <button id="refresh">Refresh map</button>
+          <button id="refresh">Refresh programme data</button>
         </aside>
       </section>
       <section class="panel public-content-panel">
@@ -86,10 +109,13 @@
         ></p>
         <div id="programme-content"></div>
       </section>
-      <section class="panel">
+      <section class="panel entity-panel" id="entity-catalogue">
         <div class="panel-head">
           <h3>Entities</h3>
           <span id="loading">Loading…</span>
+          <button id="entity-retry" class="secondary" type="button" hidden>
+            Retry entity catalogue
+          </button>
         </div>
         <p
           id="proposal-status"
@@ -174,7 +200,93 @@
         </form>
       </section>
       <section
+        class="panel community-panel"
+        id="community"
+        aria-labelledby="community-heading"
+      >
+        <div class="panel-head community-head">
+          <div>
+            <p class="eyebrow">THE COMMUNITY</p>
+            <h3 id="community-heading">Recent activity and rankings</h3>
+            <p class="small">
+              Follow public activations and programme standings. Callsigns in
+              the activity feed are masked.
+            </p>
+          </div>
+          <label class="ranking-filter"
+            >Rankings for
+            <select id="public-ranking-category">
+              <option value="HUNTER">Hunters</option>
+              <option value="ACTIVATOR">Activators</option>
+            </select>
+          </label>
+        </div>
+        <div class="community-grid">
+          <section
+            class="community-card"
+            aria-labelledby="public-activity-heading"
+          >
+            <h4 id="public-activity-heading">Recent activations</h4>
+            <p
+              id="public-activity-status"
+              class="small"
+              role="status"
+              aria-live="polite"
+            ></p>
+            <ul id="public-activations" class="public-activity-list"></ul>
+            <nav class="entity-pagination" aria-label="Public activation pages">
+              <button
+                id="public-activity-prev"
+                class="secondary"
+                type="button"
+                disabled
+              >
+                Previous
+              </button>
+              <span
+                id="public-activity-page"
+                class="small"
+                aria-live="polite"
+              ></span>
+              <button
+                id="public-activity-next"
+                class="secondary"
+                type="button"
+                disabled
+              >
+                Next
+              </button>
+            </nav>
+          </section>
+          <section class="community-card" aria-labelledby="leaderboard-heading">
+            <h4 id="leaderboard-heading">Top hunters</h4>
+            <p
+              id="leaderboard-status"
+              class="small"
+              role="status"
+              aria-live="polite"
+            ></p>
+            <ol id="public-leaderboard" class="public-leaderboard"></ol>
+          </section>
+        </div>
+        <div class="community-actions">
+          <button id="community-refresh" class="secondary" type="button">
+            Refresh community activity
+          </button>
+          <a id="public-results-download" href="#community"
+            >Download programme results (CSV)</a
+          >
+          <p
+            id="public-results-status"
+            class="small"
+            role="status"
+            aria-live="polite"
+          ></p>
+        </div>
+      </section>
+      <section
         class="panel participant-account-panel"
+        id="account"
         aria-labelledby="participant-account-heading"
       >
         <div class="panel-head">
@@ -317,7 +429,7 @@
           aria-live="polite"
         ></p>
       </section>
-      <section class="panel profile-panel">
+      <section class="panel profile-panel" id="profile">
         <div class="panel-head">
           <div>
             <h3>Your profile</h3>
@@ -566,7 +678,7 @@
           </button>
         </div>
       </section>
-      <section class="panel awards-panel">
+      <section class="panel awards-panel" id="awards">
         <div class="panel-head">
           <div>
             <h3>Programme awards</h3>
@@ -595,7 +707,7 @@
           <div id="participant-award-request-items"></div>
         </div>
       </section>
-      <section class="panel activation-panel">
+      <section class="panel activation-panel" id="activity">
         <div class="panel-head">
           <div>
             <h3>Field activations</h3>

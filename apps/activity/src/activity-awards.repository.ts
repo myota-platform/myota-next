@@ -108,6 +108,88 @@ export class ActivityAwardsRepository {
     });
   }
 
+  async enqueueAwardDeletion(
+    awardId: string,
+    actorId: string,
+    key?: string,
+  ): Promise<JsonRecord> {
+    return this.mutate(key, async (client) => {
+      const selected = await client.query(
+        `SELECT id,programme_slug,code,status
+         FROM activity_award_definition WHERE id=$1 FOR UPDATE`,
+        [awardId],
+      );
+      const source = selected.rows[0];
+      if (!source) throw new NotFoundException(pythonKeyErrorDetail(awardId));
+
+      const family = await client.query(
+        `SELECT id,status FROM activity_award_definition
+         WHERE programme_slug=$1 AND code=$2 ORDER BY version,id FOR UPDATE`,
+        [source.programme_slug, source.code],
+      );
+      const awardIds = family.rows.map((row) => String(row.id));
+      const existing = await client.query(
+        `SELECT id,kind,payload::text AS payload_text,status,attempts
+         FROM activity_job
+         WHERE kind='AWARD_DELETE' AND payload->>'rootAwardId'=$1
+           AND status IN ('QUEUED','RUNNING','FAILED')
+         ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+        [awardId],
+      );
+      if (
+        existing.rows[0]?.status === 'QUEUED' ||
+        existing.rows[0]?.status === 'RUNNING'
+      ) {
+        return {
+          id: String(existing.rows[0].id),
+          kind: existing.rows[0].kind,
+          payload: parseJsonWithExactIntegers(
+            String(existing.rows[0].payload_text),
+          ) as JsonRecord,
+          status: existing.rows[0].status,
+          attempts: Number(existing.rows[0].attempts),
+        };
+      }
+
+      await client.query(
+        `UPDATE activity_award_definition
+         SET status='DELETING',
+             definition=jsonb_set(definition,'{status}',to_jsonb('DELETING'::text),true),
+             updated_at=now()
+         WHERE programme_slug=$1 AND code=$2`,
+        [source.programme_slug, source.code],
+      );
+
+      const jobId = randomUUID();
+      const payload = {
+        rootAwardId: awardId,
+        awardIds,
+        actorId,
+        programmeSlug: String(source.programme_slug),
+        code: String(source.code),
+      };
+      const jobKey = `award-delete:${awardId}:${jobId}`;
+      await client.query(
+        `INSERT INTO activity_job(id,kind,payload,idempotency_key)
+         VALUES ($1,'AWARD_DELETE',$2::jsonb,$3)`,
+        [jobId, stringifyJsonWithMetadata(payload), jobKey],
+      );
+      await client.query(
+        `INSERT INTO outbox_event(event_id,event_type,producer,aggregate_type,aggregate_id,payload,occurred_at,available_at,correlation_id)
+         VALUES ($1::uuid,'activity.award-delete.v1','activity-service','activity_job',$1::uuid::text,$2::jsonb,now(),now(),$3)`,
+        [jobId, JSON.stringify({ jobId }), randomUUID()],
+      );
+      return {
+        id: jobId,
+        kind: 'AWARD_DELETE',
+        payload,
+        status: 'QUEUED',
+        attempts: 0,
+        awardIds,
+      };
+    });
+  }
+
   async listAwardDefinitionsPage(
     programme: string | undefined,
     category: string | undefined,

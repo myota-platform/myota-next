@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/myota-platform/myota-next/contracts/schemas/events/geodata-entity-manual-created-v1.schema.json",
+  "title": "geodata.entity.manual-created.v1 envelope v1",
+  "allOf": [
+    {
+      "$ref": "../event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "geodata.entity.manual-created.v1"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "entityId": { "type": "string" },
+            "entityIdentifier": { "type": ["string", "null"] },
+            "status": { "const": "CANDIDATE" },
+            "actor": { "type": "string" },
+            "programmeSlug": { "type": "string" },
+            "entityTypeCode": { "type": "string" },
+            "entityTypeCodes": { "type": "array", "items": { "type": "string" } },
+            "source": { "const": "MANUAL" }
+          },
+          "required": [
+            "entityId",
+            "entityIdentifier",
+            "status",
+            "actor",
+            "programmeSlug",
+            "entityTypeCode",
+            "entityTypeCodes",
+            "source"
+          ],
+          "additionalProperties": true
+        }
+      }
+    }
+  ],
+  "x-payload-evidence": "source-derived-geodata-manual-creation-callsite",
+  "x-data-classification": "geospatial-and-operational-data"
+}

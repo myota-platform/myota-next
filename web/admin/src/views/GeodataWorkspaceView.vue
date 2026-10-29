@@ -97,6 +97,33 @@ const newName = ref('');
 const newWebsite = ref('');
 const newDescription = ref('');
 const newTypes = ref<string[]>([]);
+const newProgrammeSlug = ref('');
+const newQualifierValue = ref('');
+const newManualSerial = ref('');
+const newIdentifierPreview = ref('');
+const newIdentifierPreviewError = ref('');
+const newIdentifierPreviewBusy = ref(false);
+const newSelectedProgramme = computed(() =>
+  store.programmes.find(
+    (programme) => programme.slug === newProgrammeSlug.value,
+  ),
+);
+const newNumberingPolicy = computed(
+  () => newSelectedProgramme.value?.entityNumbering ?? null,
+);
+const newIdentifierQualifierField = computed(() =>
+  newNumberingPolicy.value?.qualifierMode === 'LOCATION'
+    ? newNumberingPolicy.value.qualifierField
+    : null,
+);
+const displayedNewIdentifier = computed(() => {
+  const preview = newIdentifierPreview.value;
+  const policy = newNumberingPolicy.value;
+  if (!preview || !policy || policy.assignmentMode !== 'MANUAL') return preview;
+  const serial = newManualSerial.value.trim();
+  if (!/^\d+$/.test(serial)) return preview;
+  return preview.replace(/\d+$/, serial.padStart(policy.serialWidth, '0'));
+});
 const newGeometry = ref(
   '{\n  "type": "Point",\n  "coordinates": [-5.99, 37.39]\n}',
 );
@@ -1476,6 +1503,73 @@ function toggleNewType(code: string): void {
     ? newTypes.value.filter((item) => item !== code)
     : [...newTypes.value, code];
 }
+function toggleCreate(): void {
+  creating.value = !creating.value;
+  if (creating.value) {
+    newProgrammeSlug.value = filters.programme;
+    newQualifierValue.value = '';
+    newManualSerial.value = '';
+    newIdentifierPreview.value = '';
+    newIdentifierPreviewError.value = '';
+  }
+}
+let newIdentifierPreviewTimer: number | undefined;
+async function refreshNewIdentifierPreview(): Promise<void> {
+  const policy = newNumberingPolicy.value;
+  const entityTypeCode = newTypes.value[0];
+  if (!creating.value || !isManagement.value || !policy || !entityTypeCode) {
+    newIdentifierPreview.value = '';
+    newIdentifierPreviewError.value = '';
+    return;
+  }
+  newIdentifierPreviewBusy.value = true;
+  newIdentifierPreviewError.value = '';
+  try {
+    const location = newIdentifierQualifierField.value
+      ? { [newIdentifierQualifierField.value]: newQualifierValue.value }
+      : {};
+    const result = await apiRequest<{
+      entityIdentifier?: string | null;
+      serial?: number;
+    }>('/v1/geodata/entity-id-preview', {
+      method: 'POST',
+      body: JSON.stringify({
+        programmeSlug: newProgrammeSlug.value,
+        entityTypeCode,
+        location,
+        ...(policy.qualifierMode === 'MANUAL'
+          ? { qualifier: newQualifierValue.value }
+          : {}),
+      }),
+    });
+    newIdentifierPreview.value = result.entityIdentifier || '';
+    if (policy.assignmentMode === 'MANUAL' && result.serial)
+      newManualSerial.value ||= String(result.serial);
+  } catch (cause) {
+    newIdentifierPreview.value = '';
+    newIdentifierPreviewError.value =
+      cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    newIdentifierPreviewBusy.value = false;
+  }
+}
+watch(
+  () => [
+    creating.value,
+    props.mode,
+    newProgrammeSlug.value,
+    newTypes.value.join(','),
+    newQualifierValue.value,
+  ],
+  () => {
+    if (newIdentifierPreviewTimer !== undefined)
+      window.clearTimeout(newIdentifierPreviewTimer);
+    newIdentifierPreviewTimer = window.setTimeout(
+      () => void refreshNewIdentifierPreview(),
+      250,
+    );
+  },
+);
 async function createCandidate(): Promise<void> {
   if (!newName.value.trim() || !newTypes.value.length) {
     error.value = 'Enter a name and select at least one category.';
@@ -1488,6 +1582,48 @@ async function createCandidate(): Promise<void> {
   }
   try {
     const geometry = JSON.parse(newGeometry.value);
+    if (isManagement.value) {
+      if (!newProgrammeSlug.value) {
+        error.value = 'Select a programme for this entity.';
+        return;
+      }
+      const policy = newNumberingPolicy.value;
+      const location = newIdentifierQualifierField.value
+        ? {
+            [newIdentifierQualifierField.value]: newQualifierValue.value.trim(),
+          }
+        : {};
+      const manualQualifier =
+        policy?.qualifierMode === 'MANUAL'
+          ? newQualifierValue.value.trim()
+          : undefined;
+      const body = {
+        name: newName.value.trim(),
+        programmeSlug: newProgrammeSlug.value,
+        entityTypeCodes: newTypes.value,
+        geometry,
+        location,
+        website: newWebsite.value.trim() || null,
+        description: newDescription.value.trim() || null,
+        ...(manualQualifier ? { qualifier: manualQualifier } : {}),
+        ...(newManualSerial.value.trim()
+          ? { serial: newManualSerial.value.trim() }
+          : {}),
+      };
+      await runGeodataMutation('/v1/geodata/entities', body, (key, request) =>
+        myotaClient.postGeodataEntity(request, key),
+      );
+      message.value = `Candidate created synchronously${displayedNewIdentifier.value ? ` as ${displayedNewIdentifier.value}` : ''}.`;
+      creating.value = false;
+      newName.value = '';
+      newWebsite.value = '';
+      newDescription.value = '';
+      newTypes.value = [];
+      newManualSerial.value = '';
+      newIdentifierPreview.value = '';
+      await load();
+      return;
+    }
     const requestPath = '/v1/geodata/proposals';
     const requestBody = {
       source: {
@@ -1636,7 +1772,7 @@ onMounted(async () => {
 
 <template>
   <PageHeader :refresh="() => load()" :busy="loading"
-    ><button class="primary" @click="creating = !creating">
+    ><button class="primary" @click="toggleCreate">
       New Candidate
     </button></PageHeader
   >
@@ -1764,11 +1900,16 @@ onMounted(async () => {
   <article v-if="creating" class="panel">
     <div class="panel-heading">
       <div>
-        <p class="eyebrow">MANUAL PROPOSAL</p>
+        <p class="eyebrow">
+          {{ isManagement ? 'MANUAL ENTITY' : 'MANUAL PROPOSAL' }}
+        </p>
         <h2>New Candidate</h2>
         <p class="muted">
-          Manual proposals enter the candidate queue and are not approved
-          automatically.
+          {{
+            isManagement
+              ? 'Create one candidate synchronously. It remains in the review queue until approved.'
+              : 'Manual proposals enter the candidate queue and are not approved automatically.'
+          }}
         </p>
       </div>
     </div>
@@ -1790,8 +1931,10 @@ onMounted(async () => {
           placeholder="Plain text"
         ></textarea></label
       ><label
-        >Programme scope<select v-model="filters.programme">
-          <option value="">Unassigned / platform-wide</option>
+        >Programme scope<select v-model="newProgrammeSlug">
+          <option v-if="!isManagement" value="">
+            Unassigned / platform-wide
+          </option>
           <option
             v-for="programme in store.programmes"
             :key="programme.slug"
@@ -1800,6 +1943,55 @@ onMounted(async () => {
             {{ programme.name }}
           </option>
         </select></label
+      >
+      <div
+        v-if="isManagement && newNumberingPolicy"
+        class="wide notice"
+        role="status"
+        aria-live="polite"
+      >
+        <span v-if="newIdentifierPreviewBusy"
+          >Checking next available programme ID…</span
+        >
+        <span v-else-if="newIdentifierPreviewError"
+          >ID preview: {{ newIdentifierPreviewError }}</span
+        >
+        <span v-else-if="displayedNewIdentifier"
+          >Suggested programme ID:
+          <strong>{{ displayedNewIdentifier }}</strong></span
+        >
+        <span v-else
+          >Programme ID will be assigned when this candidate is saved.</span
+        >
+      </div>
+      <label
+        v-if="isManagement && newNumberingPolicy?.qualifierMode === 'LOCATION'"
+        >{{ newIdentifierQualifierField
+        }}<input v-model="newQualifierValue" required />
+        <small class="field-help"
+          >Used to derive the programme ID qualifier from location
+          metadata.</small
+        ></label
+      >
+      <label
+        v-if="isManagement && newNumberingPolicy?.qualifierMode === 'MANUAL'"
+        >ID qualifier<input v-model="newQualifierValue" required />
+        <small class="field-help"
+          >Letters and digits are normalized by the server.</small
+        ></label
+      >
+      <label
+        v-if="isManagement && newNumberingPolicy?.assignmentMode === 'MANUAL'"
+        >ID serial<input
+          v-model="newManualSerial"
+          inputmode="numeric"
+          pattern="[0-9]+"
+          required
+        />
+        <small class="field-help"
+          >The suggestion is advisory; the server checks availability when
+          saved.</small
+        ></label
       >
       <fieldset class="wide">
         <legend>Entity categories</legend>
@@ -1938,7 +2130,8 @@ onMounted(async () => {
         /><button class="entity-link" @click="selectEntity(entity)">
           <strong>{{ entity.name }}</strong
           ><small
-            >{{ categoryCodes(entity).join(', ') || 'Uncategorised' }} ·
+            >{{ entity.entityIdentifier || 'No programme ID' }} ·
+            {{ categoryCodes(entity).join(', ') || 'Uncategorised' }} ·
             {{ locationValue(entity, 'city') || 'Location unavailable' }}</small
           ><small v-if="entity.website || entity.description"
             >{{ entity.website || 'No website'

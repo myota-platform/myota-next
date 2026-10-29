@@ -990,6 +990,7 @@ export class ActivityRepository {
         'QSO_INGESTION',
         'ADIF_IMPORT',
         'AWARD_EVALUATION',
+        'AWARD_DELETE',
         'AWARD_RECALCULATE',
         'PDF_RENDER',
         'STATISTICS_REBUILD',
@@ -1342,6 +1343,7 @@ function timestamp(value: unknown) {
 
 function workEventType(kind: string) {
   const byKind: Record<string, string> = {
+    AWARD_DELETE: 'activity.award-delete.v1',
     AWARD_RECALCULATE: 'activity.award-recalculate.v1',
     QSO_INGESTION: 'activity.qso-ingestion.v1',
   };

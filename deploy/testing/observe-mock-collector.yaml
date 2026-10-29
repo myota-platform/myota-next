@@ -12,11 +12,104 @@ data:
     import { gunzipSync } from 'node:zlib';
 
     const maxBytes = 8 * 1024 * 1024;
+    const tokenScans = new Map();
+    const tokenScanLifetimeMs = 120_000;
+    const scanIdPattern = /^[0-9a-f-]{36}$/i;
+    const requestIdPattern = /^[A-Za-z0-9._:-]{8,128}$/;
+
+    function credentialsMatch(request) {
+      return request.headers['x-api-key'] === process.env.MOCK_APP_KEY &&
+        request.headers['x-api-secret'] === process.env.MOCK_APP_SECRET;
+    }
+
+    function removeExpiredScans() {
+      const now = Date.now();
+      for (const [id, scan] of tokenScans)
+        if (scan.expiresAt <= now) tokenScans.delete(id);
+    }
+
+    function readSmallJson(request, response, callback) {
+      const chunks = [];
+      let size = 0;
+      request.on('data', (chunk) => {
+        size += chunk.length;
+        if (size > 4096) {
+          response.writeHead(413).end();
+          request.destroy();
+          return;
+        }
+        chunks.push(chunk);
+      });
+      request.on('end', () => {
+        if (response.writableEnded) return;
+        try {
+          callback(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+        } catch {
+          response.writeHead(400, { 'content-type': 'application/json' }).end('{}');
+        }
+      });
+    }
+
     const server = createServer((request, response) => {
       if (request.method === 'GET' && request.url === '/healthz') {
         response.writeHead(200, { 'content-type': 'text/plain' }).end('ok');
         return;
       }
+
+      const url = new URL(request.url ?? '/', 'http://localhost');
+      const scanMatch = /^\/__test\/token-scans(?:\/([0-9a-f-]{36}))?$/.exec(url.pathname);
+      if (scanMatch) {
+        if (!credentialsMatch(request)) {
+          response.writeHead(401, { 'content-type': 'application/json' }).end('{}');
+          return;
+        }
+        removeExpiredScans();
+        const scanId = scanMatch[1];
+        if (request.method === 'POST' && !scanId) {
+          readSmallJson(request, response, (body) => {
+            if (
+              !scanIdPattern.test(body?.id ?? '') ||
+              !requestIdPattern.test(body?.requestId ?? '') ||
+              typeof body?.marker !== 'string' ||
+              body.marker.length < 24 ||
+              body.marker.length > 256 ||
+              tokenScans.size >= 16
+            ) {
+              response.writeHead(400, { 'content-type': 'application/json' }).end('{}');
+              return;
+            }
+            tokenScans.set(body.id, {
+              marker: body.marker,
+              requestId: body.requestId,
+              requestObserved: false,
+              tokenObserved: false,
+              expiresAt: Date.now() + tokenScanLifetimeMs,
+            });
+            response.writeHead(201, { 'content-type': 'application/json' }).end('{}');
+          });
+          return;
+        }
+        if (request.method === 'GET' && scanId) {
+          const scan = tokenScans.get(scanId);
+          if (!scan) {
+            response.writeHead(404, { 'content-type': 'application/json' }).end('{}');
+            return;
+          }
+          response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
+            requestObserved: scan.requestObserved,
+            tokenObserved: scan.tokenObserved,
+          }));
+          return;
+        }
+        if (request.method === 'DELETE' && scanId) {
+          tokenScans.delete(scanId);
+          response.writeHead(204).end();
+          return;
+        }
+        response.writeHead(405).end();
+        return;
+      }
+
       if (request.method !== 'POST' || request.url !== '/applications/telemetry') {
         response.writeHead(404).end();
         return;
@@ -34,9 +127,7 @@ data:
       });
       request.on('end', () => {
         try {
-          const keyMatches = request.headers['x-api-key'] === process.env.MOCK_APP_KEY;
-          const secretMatches = request.headers['x-api-secret'] === process.env.MOCK_APP_SECRET;
-          if (!keyMatches || !secretMatches) {
+          if (!credentialsMatch(request)) {
             response.writeHead(401, { 'content-type': 'application/json' }).end('{}');
             console.log(JSON.stringify({ event: 'rejected-batch', reason: 'test-credentials-mismatch' }));
             return;
@@ -49,6 +140,14 @@ data:
           const batch = JSON.parse(gunzipSync(Buffer.concat(chunks)).toString('utf8'));
           const snapshots = Array.isArray(batch.snapshots) ? batch.snapshots : [];
           const logs = Array.isArray(batch.logs) ? batch.logs : [];
+          removeExpiredScans();
+          for (const scan of tokenScans.values()) {
+            for (const item of [...snapshots, ...logs]) {
+              const serialized = JSON.stringify(item);
+              if (serialized.includes(scan.requestId)) scan.requestObserved = true;
+              if (serialized.includes(scan.marker)) scan.tokenObserved = true;
+            }
+          }
           const traceIds = (items) => [...new Set(items.map((item) => item?.ti ?? item?.traceId).filter((id) => typeof id === 'string'))];
           console.log(JSON.stringify({
             event: 'accepted-batch',
@@ -69,7 +168,11 @@ data:
       });
     });
 
-    server.listen(8080, '0.0.0.0');
+    server.listen(Number(process.env.MOCK_PORT ?? 8080), '0.0.0.0', () => {
+      const address = server.address();
+      if (typeof address === 'object' && address)
+        console.log(JSON.stringify({ event: 'collector-ready', port: address.port }));
+    });
     for (const signal of ['SIGTERM', 'SIGINT']) {
       process.on(signal, () => server.close(() => process.exit(0)));
     }
@@ -92,6 +195,8 @@ spec:
       labels:
         app.kubernetes.io/name: myota-test-observe-mock
         app.kubernetes.io/part-of: myota-test-qualification
+      annotations:
+        myota-platform.net/config-version: token-scan-v1
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -113,12 +218,12 @@ spec:
             - name: MOCK_APP_KEY
               valueFrom:
                 secretKeyRef:
-                  name: myota-observe
+                  name: myota-observe-mock
                   key: app-key
             - name: MOCK_APP_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: myota-observe
+                  name: myota-observe-mock
                   key: app-secret
           resources:
             requests:

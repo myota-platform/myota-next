@@ -59,6 +59,7 @@ const ACTIVITY_POLICY: Record<string, [number, number, number]> = {
   'activity-adif-import-v1': [300, 8, 1],
   'activity-award-recalculate-v1': [120, 8, 2],
   'activity-award-evaluation-v1': [120, 8, 2],
+  'activity-award-delete-v1': [120, 8, 1],
   'activity-pdf-render-v1': [300, 8, 1],
   'activity-statistics-rebuild-v1': [300, 8, 1],
 };

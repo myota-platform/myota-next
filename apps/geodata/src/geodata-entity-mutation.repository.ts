@@ -4,6 +4,7 @@ import { GeodataEntityMetadataRepository } from './geodata-entity-metadata.repos
 import { GeodataEntityEnrichmentRequestRepository } from './geodata-entity-enrichment.repository.js';
 import { GeodataEntityCategoryRepository } from './geodata-entity-categories.repository.js';
 import { GeodataEntityGeometryRepository } from './geodata-entity-geometry.repository.js';
+import { GeodataEntityCreationRepository } from './geodata-entity-creation.repository.js';
 
 export { assertReviewCoverage } from './geodata-entity-mutation.helpers.js';
 
@@ -15,7 +16,18 @@ export class GeodataEntityMutationRepository {
     private readonly enrichment: GeodataEntityEnrichmentRequestRepository,
     private readonly categories: GeodataEntityCategoryRepository,
     private readonly geometry: GeodataEntityGeometryRepository,
+    private readonly creation: GeodataEntityCreationRepository,
   ) {}
+
+  createEntity(...args: Parameters<GeodataEntityCreationRepository['create']>) {
+    return this.creation.create(...args);
+  }
+
+  previewEntityIdentifier(
+    ...args: Parameters<GeodataEntityCreationRepository['previewIdentifier']>
+  ) {
+    return this.creation.previewIdentifier(...args);
+  }
 
   reviewEntity(
     ...args: Parameters<GeodataEntityReviewRepository['reviewEntity']>

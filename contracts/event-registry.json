@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "registryVersion": 1,
-  "status": "68 source-derived fact schemas and 11 bounded work-command schemas; email.send.v1 has Identity producer and Email worker implementations",
+  "status": "69 source-derived fact schemas and 11 bounded work-command schemas; email.send.v1 has Identity producer and Email worker implementations",
   "factStream": "MYOTA_EVENTS",
   "factSubjectPrefix": "myota.events.",
   "activityWorkStream": "MYOTA_ACTIVITY_WORK",
@@ -1073,6 +1073,33 @@
           }
         },
         "required": ["entityId", "status", "importRunId", "actor"],
+        "additionalProperties": true
+      }
+    },
+    {
+      "eventType": "geodata.entity.manual-created.v1",
+      "owner": "geodata-service",
+      "class": "domain-fact",
+      "subject": "myota.events.geodata.entity.manual-created.v1",
+      "schema": "schemas/events/geodata-entity-manual-created-v1.schema.json",
+      "consumerGroups": [],
+      "disposition": "no current subscriber; retain as a domain fact without provisioning a no-op durable",
+      "payloadEvidence": "source-derived-geodata-manual-creation-callsite",
+      "producerSources": ["apps/geodata/src/geodata-entity-creation.repository.ts"],
+      "dataClassification": "geospatial-and-operational-data",
+      "payloadSchema": {
+        "type": "object",
+        "properties": {
+          "entityId": { "type": "string" },
+          "entityIdentifier": { "type": ["string", "null"] },
+          "status": { "type": "string" },
+          "actor": { "type": "string" },
+          "programmeSlug": { "type": "string" },
+          "entityTypeCode": { "type": "string" },
+          "entityTypeCodes": { "type": "array", "items": { "type": "string" } },
+          "source": { "type": "string" }
+        },
+        "required": ["entityId", "entityIdentifier", "status", "actor", "programmeSlug", "entityTypeCode", "entityTypeCodes", "source"],
         "additionalProperties": true
       }
     },
@@ -4711,6 +4738,36 @@
       "producerSources": ["apps/geodata/geodata.py"],
       "consumerSources": ["apps/geodata/geodata_import_worker.py"],
       "legacySubject": "myota.geodata.entity.location-enrichment.v1"
+    },
+    {
+      "workType": "activity.award-delete.v1",
+      "owner": "activity-service",
+      "class": "work-command",
+      "subject": "myota.work.activity.award-delete.v1",
+      "stream": "MYOTA_ACTIVITY_WORK",
+      "durable": "activity-award-delete-v1",
+      "schema": "schemas/work/activity-award-delete-v1.schema.json",
+      "payloadEvidence": "database-row-reference; checked against current handler sources",
+      "payloadSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["jobId"],
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "maxLength": 36
+          }
+        }
+      },
+      "workIdSource": "myota_activity.activity_job.id",
+      "producerSources": [
+        "apps/activity/src/awards.service.ts",
+        "apps/activity/src/activity-awards.repository.ts"
+      ],
+      "consumerSources": [
+        "apps/activity-worker/src/activity-work.repository.ts"
+      ]
     }
   ],
   "producerNamesByOwner": {
@@ -4835,6 +4892,12 @@
       "stream": "MYOTA_GEODATA_WORK",
       "durable": "geodata-location-enrichment-v1",
       "producers": ["geodata", "geodata-service", "geodata-worker"]
+    },
+    "activity.award-delete.v1": {
+      "subject": "myota.work.activity.award-delete.v1",
+      "stream": "MYOTA_ACTIVITY_WORK",
+      "durable": "activity-award-delete-v1",
+      "producers": ["activity", "activity-service", "awards"]
     }
   }
 }

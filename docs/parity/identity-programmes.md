@@ -1,5 +1,103 @@
 # Identity and Programmes
 
+## Programme-scoped entity ID configuration
+
+Programme administrators can configure an optional entity ID policy in Admin
+→ Programmes. The programme identifier is 1–4 uppercase letters or digits
+and is unique across configured programmes. Serial width is 3–6 digits.
+Qualifiers can be omitted, entered manually per entity, or read from supported
+location metadata. Assignment can be sequential across the programme,
+sequential within each qualifier, or manual with a suggestion for the lowest
+unreserved serial in the applicable programme or qualifier scope.
+
+The policy is owned by the Programmes service in Core PostgreSQL. A unique
+partial index enforces current identifiers, and a reservation table prevents
+previously used identifiers from being assigned to another programme if the
+configuration changes or is cleared. Unconfigured programmes remain valid.
+Policy changes do not rewrite entity records. Geodata owns assigned IDs and
+serial allocation. New import promotions read the current policy from the
+Programmes API and reserve the identifier in the same Geodata transaction as
+the entity mutation. Reservations survive entity deletion, so serials are not
+reused. Sequential assignment uses a transaction-scoped advisory lock; manual
+assignment checks uniqueness in the final write transaction. The Admin import
+review can request a next-free suggestion. Suggestions are advisory and do not
+reserve a number; promotion rejects a stale collision with a recoverable error.
+
+Changing the numbering scope does not rewrite existing IDs or reservations.
+Programme-wide allocation considers reservations from every qualifier scope;
+qualifier-scoped allocation and suggestions also consider prior programme-wide
+reservations. This prevents a policy change from restarting at a serial that
+was already assigned under the previous scope.
+
+Qualifiers use Unicode NFKD normalization, strip combining marks, uppercase,
+remove non-alphanumeric characters, and must normalize to 1–24 characters.
+Location qualifiers can use continent, country/country code, region/code,
+subdivision/code, province/code, county/code, city, municipality, or locality.
+Missing or ambiguous source values reject assignment rather than creating an
+incomplete identifier. Exhaustion at the configured serial width is also an
+explicit error. The cross-service transaction boundary is described in the
+[target architecture](../architecture.md#data-boundaries).
+
+The policy configuration has live test-deployment evidence. PR [#305](https://github.com/myota-platform/myota-next/pull/305)
+made database migration changes rebuild the `tools` image; digest-sync PR
+[#306](https://github.com/myota-platform/myota-next/pull/306) deployed Core
+migration `024_programme_entity_numbering.sql`. The policy-history fix in PR
+[#308](https://github.com/myota-platform/myota-next/pull/308) and digest approval
+in [#309](https://github.com/myota-platform/myota-next/pull/309) are now deployed
+at Helm revision 91, chart `1.1.6-testing.ea14850b8aad.1` (build
+`testing-75fcd96`). Core's migration ledger records the numbering migration.
+In the Admin UI, saving and reloading the existing Partidos Judiciales
+programme returned the persisted policy: identifier `PJES`, location qualifier
+`provinceCode`, three-digit serials, and sequential assignment within each
+qualifier. A deployed authenticated policy update also saved and read back a
+programme-wide sequence mode, then restored and read back the original
+qualifier-sequence policy. The Admin and Participant sites returned HTTP 200;
+post-merge Node CI run [40810934682](https://github.com/myota-platform/myota-next/actions/runs/40810934682)
+passed.
+
+On 2026-10-29, an approved two-feature import produced `PJES-G-001` and
+`PJES-G-002`; both IDs appeared in Participant web. Under manual assignment,
+two independent suggestions for qualifier `G` both returned `PJES-G-003` with
+`reserved: false`. Two concurrent promotions claiming that serial returned one
+success and one recoverable HTTP 400 conflict. The rejected attempt then
+suggested `PJES-G-004` and succeeded on retry. Both synthetic entities were
+deleted through the authenticated deletion workflow; their reservations remain
+to prevent ID reuse. The test restored the programme's qualifier-sequence
+policy. The protected chart remains deployed with all release Deployments
+Ready.
+
+The tested import path has live evidence for policy persistence, ordered
+allocation, manual suggestions, stale-suggestion conflict recovery, import
+promotion, Participant ID display, and deleted-ID retention. Manual entity
+creation is also verified through the authenticated API: the test entity was
+created as `PJES-M-001`, read back with the same ID, then deleted while its
+reservation was retained. The live preview returned `PJES-M-002` without
+reserving it.
+
+PR [#316](https://github.com/myota-platform/myota-next/pull/316) fixed manual
+suggestions to find the lowest unused serial, including gaps, and uses the
+same lookup for manual creation and import review. The PostgreSQL CI regression
+reserves `001` and `003` and verifies that `002` is suggested. The change is
+deployed in `myota-test` at chart
+`1.1.6-testing.759569b00082.1` (build `testing-f7de67a`, revision 94); the
+authenticated preview returned `PJES-M-002`, `reserved: false`, and the
+programme's qualifier-sequence mode. All 17 release Deployments were ready.
+See the [Phase 6 readiness evidence](../operations/phase6-readiness.md).
+
+The allocator also preserves serial history across numbering-policy
+transitions, with concurrency and transition regression coverage. API, Admin,
+Participant, import-promotion, manual-create, and isolated-deployment evidence
+is complete under child issue
+[#245](https://github.com/myota-platform/myota-next/issues/245). Serial
+exhaustion and qualifier-source edge behavior for parent issue
+[#242](https://github.com/myota-platform/myota-next/issues/242) were
+subsequently covered by focused tests and deployed verification. Authenticated
+preview requests on `myota-test` returned HTTP 400 for a missing
+`provinceCode` and for an array-valued `provinceCode`, without reserving an ID.
+The current release is chart `1.1.6-testing.c6634a9fad6b.1`, Helm revision 95;
+the full evidence is in the
+[Phase 6 readiness record](../operations/phase6-readiness.md).
+
 ## Shared implementation notes
 
 Gateway JSON forwarding and Identity outbox, security-event, evidence, and idempotency
@@ -295,10 +393,14 @@ A request with a unique `X-Request-ID` also reached the test Observe receiver as
 `identity-api` recovery-operation trace. The delivered reset token was extracted only in
 memory from the test mailbox; its exact value and the `resetToken=` marker were absent
 from all `myota-test` pod logs. The mock receiver records only the service ID, operation,
-and trace IDs; it does not retain raw OTLP attributes. This verifies deployed trace
-delivery and token/log hygiene, but does not inspect every trace attribute for the token.
-The synthetic recovery operation and messages were cleaned up afterward. Hosted Observe
-delivery also remains outside this qualification. See
+and trace IDs; it does not retain raw OTLP attributes. On 2026-10-29, a separate deployed
+check submitted a synthetic invalid marker in the reset endpoint's `token` field. The
+API returned HTTP 400; the raw-batch scanner observed matching Gateway and Identity
+traces, returned `tokenObserved: false`, and found the marker absent from all three
+services' logs. The scan used no valid credential and its in-memory state was deleted.
+Together with the valid Mailpit reset journey above, this verifies token-field exclusion
+from the deployed request telemetry path. The synthetic recovery operation and messages
+were cleaned up afterward. Hosted Observe delivery remains outside this qualification. See
 [Participant password reset](https://github.com/myota-platform/myota-next/issues/114)
 and the [Observe delivery smoke evidence](../operations/observe-delivery-smoke.md).
 

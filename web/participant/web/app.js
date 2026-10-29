@@ -13,6 +13,14 @@ let programmeLoadGeneration = 0;
 const entityPageSize = 50;
 let activationEntityOptions = new Map();
 let publicAwards = [];
+let publicAwardsRequest = 0;
+let programmeContentRequest = 0;
+let activationRequest = 0;
+let activations = [];
+let publicActivityPage = 1;
+let publicActivityNextPage = null;
+let publicActivityRequest = 0;
+let leaderboardRequest = 0;
 let awardAccount = null;
 let awardAccessToken = localStorage.getItem('myota_public_access') || '';
 let awardRefreshToken = localStorage.getItem('myota_public_refresh') || '';
@@ -38,6 +46,53 @@ const escapeHtml = (value) =>
         character
       ],
   );
+function themeHex(value, fallback) {
+  if (typeof value !== 'string' || !/^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(value))
+    return fallback;
+  if (value.length === 4)
+    return `#${[...value.slice(1)].map((channel) => channel + channel).join('')}`;
+  return value.toLowerCase();
+}
+function linearColorChannel(channel) {
+  const value = channel / 255;
+  return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+}
+function colorLuminance(hex) {
+  const color = hex
+    .slice(1)
+    .match(/.{2}/g)
+    .map((channel) => linearColorChannel(Number.parseInt(channel, 16)));
+  return color[0] * 0.2126 + color[1] * 0.7152 + color[2] * 0.0722;
+}
+function contrastRatio(first, second) {
+  const luminances = [colorLuminance(first), colorLuminance(second)].sort(
+    (a, b) => b - a,
+  );
+  return (luminances[0] + 0.05) / (luminances[1] + 0.05);
+}
+function readablePrimaryColor(primary) {
+  if (contrastRatio(primary, '#ffffff') >= 4.5) return primary;
+  const channels = primary
+    .slice(1)
+    .match(/.{2}/g)
+    .map((channel) => Number.parseInt(channel, 16));
+  for (let darkness = 0.05; darkness <= 1; darkness += 0.05) {
+    const candidate = `#${channels
+      .map((channel) =>
+        Math.round(channel * (1 - darkness))
+          .toString(16)
+          .padStart(2, '0'),
+      )
+      .join('')}`;
+    if (contrastRatio(candidate, '#ffffff') >= 4.5) return candidate;
+  }
+  return '#0f766e';
+}
+function foregroundForPrimary(primary) {
+  const whiteContrast = contrastRatio(primary, '#ffffff');
+  const inkContrast = contrastRatio(primary, '#17312f');
+  return whiteContrast >= inkContrast ? '#ffffff' : '#17312f';
+}
 async function api(path, options = {}) {
   const res = await fetch(path, options);
   if (!res.ok) {
@@ -258,14 +313,26 @@ async function loadProgrammes() {
     if (nextPage !== null && nextPage <= page)
       throw new Error('Programme catalogue pagination did not advance.');
   }
+  if (!catalogue.length)
+    throw new Error('No programmes are currently available.');
   programmes = catalogue;
+  $('programme-status').textContent = '';
+  $('programme-retry').hidden = true;
   $('programme-select').innerHTML = programmes
     .map(
       (p) =>
         `<option value="${escapeHtml(p.slug)}">${escapeHtml(p.name)}</option>`,
     )
     .join('');
-  $('programme-select').value = location.hash.slice(1) || programmes[0].slug;
+  const requestedSlug = location.hash.slice(1);
+  const selectedSlug = programmes.some(
+    (programme) => programme.slug === requestedSlug,
+  )
+    ? requestedSlug
+    : programmes[0].slug;
+  $('programme-select').value = selectedSlug;
+  if (requestedSlug && requestedSlug !== selectedSlug)
+    location.hash = selectedSlug;
   await loadProgramme($('programme-select').value);
 }
 async function loadProgramme(slug) {
@@ -276,20 +343,35 @@ async function loadProgramme(slug) {
   $('entity-prev').disabled = true;
   $('entity-next').disabled = true;
   activationEntityOptions = new Map();
+  entities = [];
+  $('entities').replaceChildren();
+  $('entity-count').textContent = '…';
+  $('entity-page-status').textContent = '';
+  $('entity-retry').hidden = true;
+  $('activation-entity').replaceChildren();
+  renderMarkers();
   const programme =
     programmes.find((p) => p.slug === slug) ||
     (await api(`/v1/programmes/${encodeURIComponent(slug)}`));
   if (generation !== programmeLoadGeneration) return;
+  const primary = themeHex(programme.theme?.primary, '#0f766e');
+  document.documentElement.style.setProperty('--primary', primary);
   document.documentElement.style.setProperty(
-    '--primary',
-    programme.theme.primary,
+    '--primary-readable',
+    readablePrimaryColor(primary),
+  );
+  document.documentElement.style.setProperty(
+    '--primary-foreground',
+    foregroundForPrimary(primary),
   );
   document.documentElement.style.setProperty(
     '--accent',
-    programme.theme.accent,
+    themeHex(programme.theme?.accent, '#f59e0b'),
   );
   $('programme-name').textContent = programme.name;
-  $('programme-description').textContent = programme.description;
+  $('programme-description').textContent =
+    programme.description?.trim() ||
+    'Discover places where radio meets the outdoors.';
   $('rules').innerHTML =
     `<dt>Activation QSOs</dt><dd>${escapeHtml(programme.rules.minimumQsos.activation)}</dd><dt>Hunter QSOs</dt><dd>${escapeHtml(programme.rules.minimumQsos.hunter)}</dd><dt>Public access</dt><dd>${programme.rules.publicAccessRequired ? 'Required' : 'Programme-defined'}</dd>`;
   const proposalTypes = Array.isArray(programme.entityTypes)
@@ -324,6 +406,7 @@ async function loadProgramme(slug) {
   await loadProgrammeEntities(slug, 1, generation);
   if (generation !== programmeLoadGeneration) return;
   await loadPublicAwards(slug);
+  await loadPublicActivity(slug);
   await loadActivations();
 }
 
@@ -335,6 +418,11 @@ async function loadProgrammeEntities(
   const request = ++entityPageRequest;
   $('entity-prev').disabled = true;
   $('entity-next').disabled = true;
+  entities = [];
+  $('entities').replaceChildren();
+  $('entity-count').textContent = '…';
+  $('entity-page-status').textContent = `Loading page ${page}…`;
+  renderMarkers();
   $('loading').textContent = 'Loading entities…';
   try {
     const result = await api(
@@ -343,6 +431,7 @@ async function loadProgrammeEntities(
     if (generation !== programmeLoadGeneration || request !== entityPageRequest)
       return;
     entities = result.items || [];
+    $('entity-retry').hidden = true;
     entityPage = result.page || page;
     entityHasNext = Boolean(result.nextPage);
     const total = Number(result.total || 0);
@@ -367,6 +456,21 @@ async function loadProgrammeEntities(
     renderMarkers();
     $('entity-page-status').textContent =
       `Page ${entityPage} · ${total} entities`;
+  } catch (error) {
+    if (generation !== programmeLoadGeneration || request !== entityPageRequest)
+      return;
+    entities = [];
+    entityPage = 1;
+    entityHasNext = false;
+    activationEntityOptions.clear();
+    $('activation-entity').replaceChildren();
+    $('entities').replaceChildren();
+    $('entity-count').textContent = '–';
+    $('loading').textContent =
+      'The entity catalogue is temporarily unavailable.';
+    $('entity-page-status').textContent = error.message;
+    $('entity-retry').hidden = false;
+    renderMarkers();
   } finally {
     if (
       generation === programmeLoadGeneration &&
@@ -379,12 +483,14 @@ async function loadProgrammeEntities(
 }
 
 async function loadProgrammeContent(slug, locale) {
+  const request = ++programmeContentRequest;
   $('content-status').textContent = 'Loading published programme information…';
   $('programme-content').replaceChildren();
   try {
     const result = await api(
       `/v1/public/programmes/${encodeURIComponent(slug)}/content${locale ? `?locale=${encodeURIComponent(locale)}` : ''}`,
     );
+    if (request !== programmeContentRequest) return;
     let items = result.items || [];
     if (!locale) {
       const locales = [
@@ -434,14 +540,16 @@ async function loadProgrammeContent(slug, locale) {
       $('programme-content').append(article);
     }
   } catch (error) {
-    $('content-status').textContent = error.message;
+    if (request !== programmeContentRequest) return;
+    $('content-status').textContent =
+      `Programme information is temporarily unavailable. Use “Refresh programme data” to retry. ${error.message}`;
   }
 }
 function renderEntities() {
   $('entities').innerHTML = entities
     .map(
       (e) =>
-        `<tr><td><strong>${escapeHtml(e.name)}</strong><div class="small">${escapeHtml(e.id.slice(0, 8))}…</div></td><td>${escapeHtml(e.entityType)}</td><td><span class="badge ${escapeHtml(e.status.toLowerCase())}">${escapeHtml(e.status)}</span></td><td>${escapeHtml(e.provenance?.adapter || '—')}</td><td>${e.status === 'CANDIDATE' ? `<button data-id="${escapeHtml(e.id)}" class="propose">Propose</button>` : '<span class="small">Reference active</span>'}</td></tr>`,
+        `<tr><td><strong>${escapeHtml(e.name)}</strong><div class="small">${escapeHtml(e.entityIdentifier || `${e.id.slice(0, 8)}…`)}</div></td><td>${escapeHtml(e.entityType)}</td><td><span class="badge ${escapeHtml(e.status.toLowerCase())}">${escapeHtml(e.status)}</span></td><td>${escapeHtml(e.provenance?.adapter || '—')}</td><td>${e.status === 'CANDIDATE' ? `<button data-id="${escapeHtml(e.id)}" class="propose">Propose</button>` : '<span class="small">Reference active</span>'}</td></tr>`,
     )
     .join('');
   document.querySelectorAll('.propose').forEach(
@@ -531,8 +639,75 @@ $('new-proposal-form').onsubmit = async (event) => {
 };
 $('programme-select').onchange = async (e) => {
   location.hash = e.target.value;
-  await loadProgramme(e.target.value);
+  try {
+    await loadProgramme(e.target.value);
+    $('programme-status').textContent = '';
+  } catch (error) {
+    $('programme-status').textContent =
+      `Programme data is temporarily unavailable. Use “Retry programme catalogue” to retry. ${error.message}`;
+    $('programme-retry').hidden = false;
+  }
 };
+$('programme-retry').onclick = () =>
+  loadProgrammes().catch((error) => {
+    $('programme-status').textContent =
+      `Programme catalogue is temporarily unavailable. ${error.message}`;
+    $('programme-retry').hidden = false;
+  });
+$('entity-retry').onclick = () =>
+  loadProgrammeEntities($('programme-select').value, entityPage).catch(
+    (error) => {
+      $('loading').textContent = error.message;
+      $('entity-retry').hidden = false;
+    },
+  );
+$('public-activity-prev').onclick = () =>
+  loadPublicActivity(
+    $('programme-select').value,
+    Math.max(1, publicActivityPage - 1),
+  );
+$('public-activity-next').onclick = () => {
+  if (publicActivityNextPage)
+    loadPublicActivity($('programme-select').value, publicActivityNextPage);
+};
+$('public-ranking-category').onchange = () =>
+  loadPublicLeaderboard(
+    $('programme-select').value,
+    $('public-ranking-category').value,
+  );
+$('public-results-download').onclick = async (event) => {
+  event.preventDefault();
+  const link = $('public-results-download');
+  const status = $('public-results-status');
+  link.setAttribute('aria-busy', 'true');
+  status.textContent = 'Preparing programme results download…';
+  const slug = $('programme-select').value;
+  try {
+    const result = await api(
+      `/v1/public/results?programme=${encodeURIComponent(slug)}&format=csv`,
+    );
+    if (result.format !== 'csv' || typeof result.content !== 'string')
+      throw new Error('The results service returned an invalid CSV export.');
+    const filename = result.downloadName || `myota-results-${slug}.csv`;
+    const url = URL.createObjectURL(
+      new Blob([result.content], { type: 'text/csv;charset=utf-8' }),
+    );
+    const download = document.createElement('a');
+    download.href = url;
+    download.download = filename;
+    document.body.append(download);
+    download.click();
+    download.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status.textContent = `Downloaded ${filename}.`;
+  } catch (error) {
+    status.textContent = `Programme results are temporarily unavailable. Try again. ${error.message}`;
+  } finally {
+    link.removeAttribute('aria-busy');
+  }
+};
+$('community-refresh').onclick = () =>
+  loadPublicActivity($('programme-select').value, publicActivityPage);
 $('entity-prev').onclick = () =>
   loadProgrammeEntities($('programme-select').value, entityPage - 1).catch(
     (error) => {
@@ -547,9 +722,15 @@ $('entity-next').onclick = () =>
   );
 $('content-locale').onchange = () =>
   loadProgrammeContent($('programme-select').value, $('content-locale').value);
-$('refresh').onclick = () => loadProgramme($('programme-select').value);
+$('refresh').onclick = () =>
+  loadProgramme($('programme-select').value).catch((error) => {
+    $('programme-status').textContent =
+      `Programme data is temporarily unavailable. ${error.message}`;
+  });
 loadProgrammes().catch((e) => {
-  $('loading').textContent = e.message;
+  $('programme-status').textContent =
+    `Programme catalogue is temporarily unavailable. ${e.message}`;
+  $('programme-retry').hidden = false;
 });
 
 let publicMapState = { lat: 37.395, lon: -5.995, zoom: 12 };
@@ -784,6 +965,10 @@ function renderMarkers() {
   publicTileMap();
 }
 async function loadPublicAwards(slug) {
+  const request = ++publicAwardsRequest;
+  publicAwards = [];
+  $('award-status').textContent = 'Loading published awards…';
+  $('public-awards').textContent = 'Loading programme awards…';
   try {
     const items = [];
     let page = 1;
@@ -791,6 +976,7 @@ async function loadPublicAwards(slug) {
       const data = await api(
         `/v1/awards?programme=${encodeURIComponent(slug)}&page=${page}&pageSize=100`,
       );
+      if (request !== publicAwardsRequest) return;
       items.push(...(data.items || []));
       const nextPage = data.nextPage;
       if (nextPage == null) {
@@ -801,12 +987,123 @@ async function loadPublicAwards(slug) {
         throw new Error('The award catalogue returned invalid paging data.');
       }
     }
+    if (request !== publicAwardsRequest) return;
     publicAwards = items;
+    $('award-status').textContent = '';
     renderPublicAwards();
   } catch (error) {
+    if (request !== publicAwardsRequest) return;
+    publicAwards = [];
     $('public-awards').innerHTML =
-      `<p class="small">Awards are temporarily unavailable.</p>`;
+      '<p class="small">Awards are temporarily unavailable. Use “Refresh programme data” to retry.</p>';
     $('award-status').textContent = error.message;
+  }
+}
+async function loadPublicActivity(slug, page = 1) {
+  publicActivityPage = page;
+  const resultsLink = $('public-results-download');
+  resultsLink.href = '#community';
+  await Promise.all([
+    loadPublicActivationHistory(slug, page),
+    loadPublicLeaderboard(slug, $('public-ranking-category').value),
+  ]);
+}
+async function loadPublicActivationHistory(slug, page) {
+  const request = ++publicActivityRequest;
+  const list = $('public-activations');
+  $('public-activity-status').textContent = 'Loading recent activations…';
+  $('public-activity-page').textContent = '';
+  $('public-activity-prev').disabled = true;
+  $('public-activity-next').disabled = true;
+  list.replaceChildren();
+  try {
+    const result = await api(
+      `/v1/public/activations?programme=${encodeURIComponent(slug)}&page=${page}&pageSize=5`,
+    );
+    if (request !== publicActivityRequest) return;
+    const items = result.items || [];
+    publicActivityPage = result.page || page;
+    publicActivityNextPage = result.nextPage ?? null;
+    $('public-activity-status').textContent = '';
+    $('public-activity-page').textContent =
+      `Page ${publicActivityPage} · ${Number(result.total || 0)} public activations`;
+    if (!items.length) {
+      const empty = document.createElement('li');
+      empty.className = 'small';
+      empty.textContent = 'No public activations have been recorded yet.';
+      list.append(empty);
+    }
+    for (const activation of items) {
+      const item = document.createElement('li');
+      const callsign = document.createElement('strong');
+      callsign.textContent = activation.operatorCallsign || 'Participant';
+      const summary = document.createElement('span');
+      summary.textContent = `${Number(activation.qsoCount || 0)} QSOs · ${activation.status || 'Status unavailable'}`;
+      const timestamp = document.createElement('span');
+      timestamp.textContent = activation.startedAt || 'Start time unavailable';
+      item.append(callsign, summary, timestamp);
+      list.append(item);
+    }
+  } catch (error) {
+    if (request !== publicActivityRequest) return;
+    publicActivityNextPage = null;
+    $('public-activity-status').textContent =
+      `Public activity is temporarily unavailable. Use “Refresh community activity” to retry. ${error.message}`;
+    const unavailable = document.createElement('li');
+    unavailable.className = 'small';
+    unavailable.textContent = 'Recent activations could not be loaded.';
+    list.replaceChildren(unavailable);
+  } finally {
+    if (request === publicActivityRequest) {
+      $('public-activity-prev').disabled = publicActivityPage <= 1;
+      $('public-activity-next').disabled = !publicActivityNextPage;
+    }
+  }
+}
+async function loadPublicLeaderboard(slug, category) {
+  const request = ++leaderboardRequest;
+  const normalizedCategory = category === 'ACTIVATOR' ? 'ACTIVATOR' : 'HUNTER';
+  const list = $('public-leaderboard');
+  $('leaderboard-heading').textContent =
+    normalizedCategory === 'ACTIVATOR' ? 'Top activators' : 'Top hunters';
+  $('leaderboard-status').textContent = 'Loading programme rankings…';
+  list.replaceChildren();
+  try {
+    const result = await api(
+      `/v1/public/leaderboards?programme=${encodeURIComponent(slug)}&category=${normalizedCategory}`,
+    );
+    if (request !== leaderboardRequest) return;
+    const items = result.items || [];
+    $('leaderboard-status').textContent = '';
+    if (!items.length) {
+      const empty = document.createElement('li');
+      empty.className = 'small';
+      empty.textContent = 'Rankings will appear when activity is recorded.';
+      list.append(empty);
+      return;
+    }
+    items.forEach((entry, index) => {
+      const item = document.createElement('li');
+      const rank = document.createElement('strong');
+      rank.textContent = `#${index + 1}`;
+      const participant = document.createElement('span');
+      participant.textContent =
+        normalizedCategory === 'ACTIVATOR'
+          ? `Activator ${index + 1}`
+          : `Hunter ${index + 1}`;
+      const totals = document.createElement('small');
+      totals.textContent = `${Number(entry.qso_count || 0)} QSOs · ${Number(entry.activation_count || 0)} activations · ${Number(entry.unique_entity_count || 0)} unique entities`;
+      item.append(rank, participant, totals);
+      list.append(item);
+    });
+  } catch (error) {
+    if (request !== leaderboardRequest) return;
+    $('leaderboard-status').textContent =
+      `Programme rankings are temporarily unavailable. Use “Refresh community activity” to retry. ${error.message}`;
+    const unavailable = document.createElement('li');
+    unavailable.className = 'small';
+    unavailable.textContent = 'The programme rankings could not be loaded.';
+    list.replaceChildren(unavailable);
   }
 }
 async function loadMyAwardRequests() {
@@ -892,23 +1189,32 @@ function renderPublicAwards() {
           requestPublicAward(button.dataset.awardId, button.dataset.levelId)),
     );
 }
-let activations = [];
 async function loadActivations() {
+  const request = ++activationRequest;
+  const slug = $('programme-select').value;
   const signedIn = Boolean(awardAccessToken && awardAccount);
   $('activation-start-form').hidden = !signedIn;
   $('qso-form').hidden = !signedIn;
   $('adif-import-form').hidden = !signedIn;
   if (!signedIn) {
+    activations = [];
     $('activations-list').innerHTML = '';
     return false;
   }
+  activations = [];
+  $('activations-list').textContent = 'Loading your activations…';
+  $('qso-activation').replaceChildren();
+  $('qso-form').hidden = true;
+  $('adif-import-form').hidden = true;
+  $('activation-status').textContent = 'Loading your activations…';
   try {
     const items = [];
     let page = 1;
     while (page !== null) {
       const result = await awardApi(
-        `/v1/activations?programme=${encodeURIComponent($('programme-select').value)}&operatorId=${encodeURIComponent(awardAccount.id)}&page=${page}&pageSize=100`,
+        `/v1/activations?programme=${encodeURIComponent(slug)}&operatorId=${encodeURIComponent(awardAccount.id)}&page=${page}&pageSize=100`,
       );
+      if (request !== activationRequest) return false;
       items.push(...(result.items || []));
       const nextPage = result.nextPage;
       if (nextPage == null) {
@@ -919,6 +1225,7 @@ async function loadActivations() {
         throw new Error('Activation history returned invalid paging data.');
       }
     }
+    if (request !== activationRequest) return false;
     activations = items;
     const open = activations.filter(
       (activation) => activation.status === 'OPEN',
@@ -932,10 +1239,19 @@ async function loadActivations() {
     $('qso-form').hidden = !open.length;
     $('adif-import-form').hidden = !open.length;
     $('activations-list').replaceChildren(renderActivationHistory(activations));
+    $('activation-status').textContent = '';
     if (activeAdifImportId) void refreshAdifImportStatus();
     return true;
   } catch (error) {
-    $('activation-status').textContent = error.message;
+    if (request !== activationRequest) return false;
+    activations = [];
+    $('qso-activation').replaceChildren();
+    $('qso-form').hidden = true;
+    $('adif-import-form').hidden = true;
+    $('activations-list').textContent =
+      'Your activation history is temporarily unavailable.';
+    $('activation-status').textContent =
+      `Use “Refresh programme data” to retry. ${error.message}`;
     return false;
   }
 }
@@ -1078,7 +1394,17 @@ async function loadActivationDetails(details) {
     details.dataset.loaded = 'true';
   } catch (error) {
     panel.setAttribute('role', 'alert');
-    panel.textContent = `Unable to load activation details. ${error.message}`;
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'secondary';
+    retry.textContent = 'Retry activity and QSO details';
+    retry.addEventListener('click', () => void loadActivationDetails(details));
+    panel.replaceChildren(
+      document.createTextNode(
+        `Unable to load activation details. ${error.message} `,
+      ),
+      retry,
+    );
   }
 }
 
@@ -1150,7 +1476,8 @@ async function startActivation(event) {
     });
     completePendingParticipantMutation(request.id);
     $('activation-status').textContent = 'Activation started.';
-    await loadActivations();
+    if (await loadActivations())
+      $('activation-status').textContent = 'Activation started.';
   } catch (error) {
     $('activation-status').textContent = error.message;
   }
@@ -1180,7 +1507,8 @@ async function recordQso(event) {
     completePendingParticipantMutation(request.id);
     $('qso-callsign').value = '';
     $('activation-status').textContent = 'Contact recorded.';
-    await loadActivations();
+    if (await loadActivations())
+      $('activation-status').textContent = 'Contact recorded.';
   } catch (error) {
     $('activation-status').textContent = error.message;
   }
@@ -1197,7 +1525,8 @@ async function closeActivation() {
       }),
     });
     $('activation-status').textContent = 'Activation closed.';
-    await loadActivations();
+    if (await loadActivations())
+      $('activation-status').textContent = 'Activation closed.';
   } catch (error) {
     const refreshed = await loadActivations();
     const activation = refreshed

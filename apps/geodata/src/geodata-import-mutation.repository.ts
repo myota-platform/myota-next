@@ -19,6 +19,12 @@ import {
   isCandidateConflict,
   type PromotionQueue,
 } from '../../geodata-worker/src/geodata-promotion.repository.js';
+import {
+  findNextFreeProgrammeEntitySerial,
+  ProgrammeEntityIdentifierError,
+  suggestProgrammeEntityIdentifier,
+  type ManualEntityIdentifierAssignment,
+} from '../../geodata-worker/src/programme-entity-identifier.js';
 import { assertReviewCoverage } from './geodata-entity-mutation.repository.js';
 import {
   lockRequest,
@@ -35,6 +41,99 @@ export class GeodataImportMutationRepository {
     @Inject(DATABASE_HEALTH_POOL) private readonly pool: Pool | null,
     private readonly promotion: GeodataPromotionRepository,
   ) {}
+
+  async suggestEntityIdentifier(
+    importRunId: string,
+    candidateId: string,
+    body: Record<string, unknown>,
+  ) {
+    if (!isUuid(importRunId) || !isUuid(candidateId))
+      throw new NotFoundException(pythonKeyErrorDetail(candidateId));
+    const selected = await this.connect();
+    let candidate:
+      | {
+          programme_slug: string | null;
+          entity_payload: unknown;
+          existing_identifier: string | null;
+        }
+      | undefined;
+    try {
+      const result = await selected.query(
+        `SELECT c.programme_slug,c.entity_payload,e.entity_identifier AS existing_identifier
+           FROM geodata_import_candidate c
+           LEFT JOIN geodata_entity e ON e.id=c.existing_entity_id
+          WHERE c.import_run_id=$1 AND c.id=$2`,
+        [importRunId, candidateId],
+      );
+      candidate = result.rows[0];
+    } finally {
+      selected.release();
+    }
+    if (!candidate)
+      throw new NotFoundException(pythonKeyErrorDetail(candidateId));
+    if (candidate.existing_identifier)
+      return {
+        entityIdentifier: candidate.existing_identifier,
+        assigned: true,
+        reserved: true,
+      };
+    if (!candidate.programme_slug)
+      throw new BadRequestException(
+        'select a programme before requesting an entity ID suggestion',
+      );
+    const policies = await this.promotion.loadProgrammeNumberingPolicies(
+      importRunId,
+      [candidateId],
+    );
+    const policy = policies.get(candidate.programme_slug);
+    if (!policy)
+      throw new BadRequestException(
+        'the selected programme has no entity ID numbering policy',
+      );
+    const properties = isRecord(candidate.entity_payload)
+      ? candidate.entity_payload
+      : {};
+    const manualAssignment: ManualEntityIdentifierAssignment = {};
+    if (body.qualifier !== undefined)
+      manualAssignment.qualifier = body.qualifier;
+    try {
+      // A suggestion is deliberately advisory: the serial can be claimed by
+      // another administrator before promotion. Allocation rechecks it in the
+      // promotion transaction and reports a recoverable conflict.
+      const qualifier = suggestProgrammeEntityIdentifier(
+        policy,
+        properties,
+        manualAssignment,
+        1,
+      ).qualifier;
+      const client = await this.connect();
+      let nextSerial: number;
+      try {
+        nextSerial = await findNextFreeProgrammeEntitySerial(
+          client,
+          candidate.programme_slug,
+          policy,
+          qualifier,
+        );
+      } finally {
+        client.release();
+      }
+      return {
+        ...suggestProgrammeEntityIdentifier(
+          policy,
+          properties,
+          manualAssignment,
+          nextSerial,
+        ),
+        assigned: false,
+        reserved: false,
+      };
+    } catch (error) {
+      if (error instanceof ProgrammeEntityIdentifierError)
+        throw new BadRequestException(error.message);
+      throw error;
+    }
+  }
 
   async resolveConflation(
     candidateId: string,
@@ -575,6 +674,23 @@ export class GeodataImportMutationRepository {
       );
     const requestedBy = body.processorId;
     const note = body.note === undefined ? null : body.note;
+    if (
+      body.manualAssignments !== undefined &&
+      !isRecord(body.manualAssignments)
+    )
+      throw new BadRequestException('manualAssignments must be an object');
+    const manualAssignments = isRecord(body.manualAssignments)
+      ? body.manualAssignments
+      : {};
+    const extraAssignmentIds = Object.keys(manualAssignments).filter(
+      (id) => !candidateIds.includes(id),
+    );
+    if (extraAssignmentIds.length)
+      throw new BadRequestException(
+        `manualAssignments contains unselected candidate ${extraAssignmentIds[0]}`,
+      );
+    const numberingPolicies =
+      await this.promotion.loadProgrammeNumberingPolicies(runId, candidateIds);
     const client = await this.connect();
     try {
       await client.query('BEGIN');
@@ -681,7 +797,7 @@ export class GeodataImportMutationRepository {
         candidate_ids: candidateIds,
         target_status: targetStatus as 'CANDIDATE' | 'APPROVED',
         requested_by: String(requestedBy),
-        job_metadata: { note },
+        job_metadata: { note, manualAssignments },
         attempt_count: 0,
       };
       const created: string[] = [];
@@ -693,6 +809,7 @@ export class GeodataImportMutationRepository {
             client,
             promotionQueue,
             candidateId,
+            numberingPolicies,
           );
         } catch (error) {
           if (isCandidateConflict(error))

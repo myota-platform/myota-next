@@ -38,6 +38,39 @@ export class GeodataController {
     return this.repository.listEntities(query);
   }
 
+  @Post('entity-id-preview')
+  @HttpCode(200)
+  previewEntityIdentifier(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const claims = verifyAccessToken(authorization);
+    return this.entityMutations.previewEntityIdentifier(body, claims);
+  }
+
+  @Post('entities')
+  @HttpCode(201)
+  createEntity(
+    @Headers('authorization') authorization: string | undefined,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() request: Request,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const claims = verifyAccessToken(authorization);
+    const idempotency = scopedRequestIdempotency(
+      key,
+      claims.sub,
+      request,
+      body,
+    );
+    return this.entityMutations.createEntity(
+      idempotency.key,
+      body,
+      claims,
+      idempotency.requestHash,
+    );
+  }
+
   @Get('entities/:entityId/audit')
   getEntityAudit(
     @Headers('authorization') authorization: string | undefined,

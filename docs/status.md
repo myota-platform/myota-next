@@ -102,11 +102,17 @@ links completed the change in order while preserving the old address until the s
 confirmation. The synthetic account was restored to its original address and login verified;
 all generated messages were removed and Mailpit was empty. Email-change delivery recovery
 after a temporary SMTP outage is also verified. Deployed recovery throttling across six
-signed client addresses and reset-token exclusion from test-namespace logs are verified
-under #114. A revision 73 reset test rejected
+signed client addresses, reset-token exclusion from test-namespace logs, and raw request
+telemetry field exclusion are verified under #114. Hosted Observe delivery
+remains unqualified and is recorded as an operational limit. A revision 73 reset test rejected
 two pre-reset access sessions and both refresh credentials; the temporary password worked
 and the original password was restored. See [Identity and Programme parity](parity/identity-programmes.md)
 and the [Phase 6 readiness record](operations/phase6-readiness.md).
+
+Participant email-change qualification #115 is now closed after the release owner
+confirmed credential rotation and successful function testing. The deployed evidence
+includes both-address confirmation, cancellation, expiry, replay, concurrency, conflict,
+and transient SMTP recovery.
 
 Public Activity activation history, leaderboard, and JSON/CSV result exports are also
 checked through the live Gateway. Participants can read their own request status, while
@@ -135,8 +141,28 @@ dashboard/filter and monitoring presentation combinations are dispositioned in
 and Phase 3 issues [#22](https://github.com/myota-platform/myota-next/issues/22) and
 [#7](https://github.com/myota-platform/myota-next/issues/7). The authenticated
 primary Admin and Participant deployment workflows are qualified under Phase 6
-issue [#91](https://github.com/myota-platform/myota-next/issues/91). Additional
-Phase 6 product work remains open under #239, #242, #246, and related child issues.
+issue [#91](https://github.com/myota-platform/myota-next/issues/91). Phase 6 child
+issues, including entity IDs (#242–#245), participant workflows, awards, SMTP,
+recovery, backup/restore, observability, and rollback, are complete. The launch
+evidence and explicit operational limits are recorded in the
+[Phase 6 readiness record](operations/phase6-readiness.md).
+
+The current `myota-test` release is chart
+`1.1.6-testing.c6634a9fad6b.1` (build `testing-89cb2e2`, Helm revision 95).
+All 17 Deployments are ready; Gateway readiness and the Admin and Participant
+roots return HTTP 200. The Geodata worker uses immutable digest
+`sha256:39edbdb449a22e295f42ed7d9f92d4a964906b344cca69cdbd21e8c992f0e874`.
+Programme qualifier validation is covered by CI and authenticated live preview
+checks. Production backup policy, permanent-storage-loss recovery, hosted
+telemetry, and high availability remain explicitly outside the qualified
+single-node launch scope.
+Award lifecycle parent [#246](https://github.com/myota-platform/myota-next/issues/246)
+is complete: [#247](https://github.com/myota-platform/myota-next/issues/247)
+qualifies global-admin award deletion, [#248](https://github.com/myota-platform/myota-next/issues/248)
+covers new-version creation, and [#249](https://github.com/myota-platform/myota-next/issues/249)
+and child [#250](https://github.com/myota-platform/myota-next/issues/250) cover
+configuration documentation and validation. See the
+[Phase 6 readiness record](operations/phase6-readiness.md).
 
 - **Production operations:** the single-node `myota-test` deployment has
   evidence for fresh initialization, authenticated workflows, Observe

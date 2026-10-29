@@ -4,6 +4,50 @@ import type { ActivityAwardsRepository } from './activity-awards.repository.js';
 import { AwardsService } from './awards.service.js';
 
 describe('AwardsService synchronous and asynchronous boundaries', () => {
+  it('queues deletion only for a platform global administrator role', async () => {
+    const enqueueAwardDeletion = vi.fn(async () => ({
+      id: 'delete-job-1',
+      kind: 'AWARD_DELETE',
+      status: 'QUEUED',
+    }));
+    const service = new AwardsService(
+      {} as ActivityRepository,
+      { enqueueAwardDeletion } as unknown as ActivityAwardsRepository,
+    );
+    const globalAdmin = `Bearer ${signAccessToken('global-admin', ['awards.admin'], [{ role: 'GLOBAL_ADMIN' }])}`;
+    const scopedAdmin = `Bearer ${signAccessToken('scoped-admin', ['awards.admin'])}`;
+
+    await expect(
+      service.requestAwardDeletion(globalAdmin, 'delete-key', 'award-1'),
+    ).resolves.toMatchObject({ kind: 'AWARD_DELETE', status: 'QUEUED' });
+    expect(enqueueAwardDeletion).toHaveBeenCalledWith(
+      'award-1',
+      'global-admin',
+      'delete-key',
+    );
+    await expect(
+      service.requestAwardDeletion(scopedAdmin, 'delete-key-2', 'award-1'),
+    ).rejects.toThrow('global administrator role is required');
+    expect(enqueueAwardDeletion).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires a global role to read award deletion status', async () => {
+    const getJob = vi.fn(async () => ({
+      id: 'delete-job-1',
+      kind: 'AWARD_DELETE',
+    }));
+    const service = new AwardsService(
+      { getJob } as unknown as ActivityRepository,
+      {} as ActivityAwardsRepository,
+    );
+    const scopedAdmin = `Bearer ${signAccessToken('scoped-admin', ['awards.admin'])}`;
+
+    await expect(
+      service.getAwardDeletionJob(scopedAdmin, 'delete-job-1'),
+    ).rejects.toThrow('global administrator role is required');
+    expect(getJob).not.toHaveBeenCalled();
+  });
+
   it('saves one subject progress synchronously and queues broad recalculation', async () => {
     const award = {
       id: 'award-1',

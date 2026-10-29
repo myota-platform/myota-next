@@ -212,7 +212,10 @@ for (const [name, port] of services) {
             MYOTA_ACTIVITY_URL: 'http://127.0.0.1:8004',
           }
         : name === 'geodata'
-          ? { MYOTA_ACTIVITY_URL: 'http://127.0.0.1:8004' }
+          ? {
+              MYOTA_ACTIVITY_URL: 'http://127.0.0.1:8004',
+              MYOTA_PROGRAMMES_URL: 'http://127.0.0.1:8002',
+            }
           : {}),
     },
     stdio: 'inherit',
@@ -275,6 +278,7 @@ if (process.env.MYOTA_BROWSER_GEODATA_WORKERS === '1') {
       entrypoint: 'dist/apps/geodata-worker/main.js',
       environment: {
         MYOTA_ACTIVITY_URL: 'http://127.0.0.1:8004',
+        MYOTA_PROGRAMMES_URL: 'http://127.0.0.1:8002',
         GEODATA_WORKER_HEALTH_PORT: '9114',
       },
     },

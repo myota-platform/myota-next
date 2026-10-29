@@ -442,7 +442,7 @@ function isCanonicalUuid(value: string) {
 }
 
 export const entityProjection = `public_properties || jsonb_build_object(
-  'id',id::text,'programmeSlug',programme_slug,'entityType',entity_type_code,
+  'id',id::text,'programmeSlug',programme_slug,'entityIdentifier',entity_identifier,'entityType',entity_type_code,
   'name',name,'website',website,'description',description,'status',lifecycle_status,
   'geometry',ST_AsGeoJSON(geom)::jsonb,
   'centroid',jsonb_build_object('lon',ST_X(COALESCE(centroid,ST_Centroid(geom)::geography)::geometry),'lat',ST_Y(COALESCE(centroid,ST_Centroid(geom)::geography)::geometry)),
@@ -481,7 +481,9 @@ export const importProjection = `(source_metadata - 'sourceFeatureHashOverrides'
 
 const candidateProjection = `jsonb_build_object(
   'id',id::text,'importRunId',import_run_id::text,'ordinal',ordinal,
+  'programmeSlug',programme_slug,
   'existingEntityId',existing_entity_id,'name',name,'entityTypes',entity_type_codes,
+  'entityIdentifier',(SELECT entity_identifier FROM geodata_entity WHERE id=existing_entity_id),
   'geometry',ST_AsGeoJSON(geom)::jsonb,
   'centroid',jsonb_build_object('lon',ST_X(ST_Centroid(geom)),'lat',ST_Y(ST_Centroid(geom))),
   'sourceRef',source_ref,'candidateSource',candidate_source,

@@ -11,6 +11,7 @@ export interface UploadMetadata {
   adapter: string;
   format: string;
   entityTypes: string[];
+  programmeSlug?: string | null;
   source: Record<string, unknown>;
 }
 
@@ -90,9 +91,10 @@ async function storageKeys(
     metadata.adapter,
     metadata.format,
     metadata.entityTypes,
+    metadata.programmeSlug || '',
     source,
   ]);
-  const legacyIdentity = `${file.name}:${file.size}:${file.lastModified}:${metadata.adapter}:${metadata.format}:${metadata.entityTypes[0]}`;
+  const legacyIdentity = `${file.name}:${file.size}:${file.lastModified}:${metadata.adapter}:${metadata.format}:${metadata.entityTypes[0]}${metadata.programmeSlug ? `:${metadata.programmeSlug}` : ''}`;
   return {
     key: `myota-geodata-upload:v2:${await sha256(new TextEncoder().encode(identity))}`,
     legacyKey: `myota-geodata-upload:${await sha256(new TextEncoder().encode(legacyIdentity))}`,

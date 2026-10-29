@@ -69,7 +69,9 @@ jobs:
               web/participant/*) printf '%s\n' participant-web ;;
               deploy/images/database/*) printf '%s\n' postgres postgis ;;
               deploy/images/nats/*) printf '%s\n' nats ;;
+              deploy/db/migrations/*) printf '%s\n' tools ;;
               deploy/Dockerfile.tools) printf '%s\n' tools ;;
+              .github/workflows/publish-testing-images.yml) printf '%s\n' tools ;;
               contracts/openapi.yaml) printf '%s\n' geodata admin-web ;;
               contracts/schemas/events/geodata-*|contracts/schemas/work/geodata-*)
                 printf '%s\n' geodata geodata-worker geodata-importer

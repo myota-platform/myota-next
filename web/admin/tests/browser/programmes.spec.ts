@@ -146,7 +146,15 @@ test('creates a programme with policy and shared category settings', async ({
     await page.getByLabel('Activation validity').selectOption('finite');
     await page.getByLabel('Validity days').fill('30');
     await page.getByLabel('Require public access').check();
-    await page.getByRole('combobox').nth(1).selectOption('SOTA');
+    await page.getByLabel('Enable programme entity IDs').check();
+    await page.getByLabel('Programme ID prefix').fill('PJE');
+    await page.getByLabel('Qualifier source').selectOption('LOCATION');
+    await page.getByLabel('Location field').selectOption('provinceCode');
+    await page.getByLabel('Serial number width').selectOption('5');
+    await page
+      .getByLabel('Assignment policy')
+      .selectOption('QUALIFIER_SEQUENCE');
+    await page.getByLabel('Assign shared category').selectOption('SOTA');
   };
 
   await fillProgramme();
@@ -182,6 +190,13 @@ test('creates a programme with policy and shared category settings', async ({
       activationValidityDays: 30,
       publicAccessRequired: true,
       excludeOverlappingProgrammes: false,
+    },
+    entityNumbering: {
+      identifier: 'PJE',
+      qualifierMode: 'LOCATION',
+      qualifierField: 'provinceCode',
+      serialWidth: 5,
+      assignmentMode: 'QUALIFIER_SEQUENCE',
     },
     entityTypes: [
       {

@@ -131,6 +131,8 @@ jobs:
         run: |
           python3 -m pip install --disable-pip-version-check --no-cache-dir zizmor==1.31.1
           zizmor .github/workflows
+      - name: Check Observe mock token scanner
+        run: node tools/check-observe-mock-token-scanner.mjs
       - name: Provision bounded JetStream topology for CI
         run: npm run provision:jetstream
         env:

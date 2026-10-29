@@ -64,6 +64,17 @@ It accepts only gzip telemetry at `/applications/telemetry`, validates the
 test-only app key and secret, and logs service IDs, trace IDs, operation names,
 and record counts. It does not log credentials or telemetry payloads.
 
+The mock also provides a credential-protected token scan for short, controlled
+security checks. Register a random scan ID, a request ID, and the exact test
+token with `POST /__test/token-scans`; the marker remains only in process
+memory for at most two minutes. Read `GET /__test/token-scans/{id}` to obtain
+only `requestObserved` and `tokenObserved` booleans, then remove it with
+`DELETE /__test/token-scans/{id}`. The scanner checks raw accepted OTLP items
+without retaining them or logging the marker. Do not put real participant
+tokens in files, command history, CI output, or test logs. CI runs
+`node tools/check-observe-mock-token-scanner.mjs`, which verifies that a
+synthetic marker is detected without appearing in collector output.
+
 The local test-only Secret manifest belongs at
 `runtime-secrets/issue10-observe-mock.yaml`; `runtime-secrets/` is ignored by
 Git. Use disposable credentials only. For the temporary test values, enable
@@ -235,3 +246,27 @@ rows and generated Mailpit message were invalidated or deleted afterward. This c
 trace delivery and pod-log token exclusion, not token exclusion from every trace field
 or hosted Observe delivery. See
 [Participant password reset](https://github.com/myota-platform/myota-next/issues/114).
+
+### Deployed raw-batch scanner check — 2026-10-29
+
+After PR [#302](https://github.com/myota-platform/myota-next/pull/302) passed
+post-merge Node CI ([run 40798409242](https://github.com/myota-platform/myota-next/actions/runs/40798409242)),
+the test-only collector was updated in `myota-test` and its Deployment rolled
+out Ready. A synthetic request ID and marker were registered, then sent in a
+gzip telemetry batch. The deployed scanner returned `requestObserved: true`
+and `tokenObserved: true`; the marker did not appear in collector logs, and
+the temporary scan state was deleted. No participant credential or real reset
+token was used. This proves the deployed scanner examines raw accepted batches
+and returns only booleans.
+
+A second scan registered a synthetic marker and submitted it as the `token`
+value to the deployed `POST /v1/identity/auth/recovery/reset` endpoint with a
+unique `X-Request-ID`. The endpoint returned HTTP 400 for the invalid token.
+The scanner observed the request in both Gateway and Identity telemetry while
+returning `tokenObserved: false`. The marker was absent from Gateway, Identity,
+and mock collector logs; the scan state was deleted. This checks token-field
+exclusion on the deployed reset endpoint without using a valid credential. The
+valid Mailpit reset flow is documented in the
+[Identity parity record](../parity/identity-programmes.md). Hosted Observe
+delivery remains open under [#90](https://github.com/myota-platform/myota-next/issues/90)
+and Phase 6 issue [#10](https://github.com/myota-platform/myota-next/issues/10).

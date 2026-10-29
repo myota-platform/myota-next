@@ -45,6 +45,7 @@ describe('GeodataImportMutationRepository candidate validation parity', () => {
       release: () => undefined,
     } as unknown as PoolClient;
     const promotion = {
+      loadProgrammeNumberingPolicies: async () => new Map(),
       promoteCandidateInTransaction: async (
         transaction: PoolClient,
         queue: unknown,
@@ -464,5 +465,72 @@ describe('GeodataImportMutationRepository candidate validation parity', () => {
     ).rejects.toThrow('candidate conflict');
     expect(fixture.queries.at(-1)?.sql).toBe('ROLLBACK');
     expect(fixture.queries.some((query) => query.sql === 'COMMIT')).toBe(false);
+  });
+});
+
+describe('GeodataImportMutationRepository entity ID suggestions', () => {
+  it('returns a scoped manual suggestion without reserving its serial', async () => {
+    const queries: Array<{ sql: string; values: unknown[] }> = [];
+    const client = {
+      query: async (sql: string, values: unknown[] = []) => {
+        queries.push({ sql, values });
+        if (sql.includes('existing_identifier'))
+          return {
+            rows: [
+              {
+                programme_slug: 'judicial',
+                entity_payload: { name: 'Example' },
+                existing_identifier: null,
+              },
+            ],
+          };
+        if (sql.includes('WITH used AS'))
+          return { rows: [{ next_serial: '8' }] };
+        return { rows: [] };
+      },
+      release: () => undefined,
+    };
+    const promotion = {
+      loadProgrammeNumberingPolicies: async () =>
+        new Map([
+          [
+            'judicial',
+            {
+              identifier: 'PJE',
+              qualifierMode: 'MANUAL',
+              serialWidth: 4,
+              assignmentMode: 'MANUAL',
+            },
+          ],
+        ]),
+    };
+    const repository = new GeodataImportMutationRepository(
+      { connect: async () => client } as never,
+      promotion as never,
+    );
+
+    await expect(
+      repository.suggestEntityIdentifier(
+        '11111111-1111-4111-8111-111111111111',
+        '22222222-2222-4222-8222-222222222222',
+        {
+          qualifier: 'A Coruña',
+        },
+      ),
+    ).resolves.toEqual({
+      entityIdentifier: 'PJE-ACORUNA-0008',
+      serial: 8,
+      paddedSerial: '0008',
+      qualifier: 'ACORUNA',
+      assigned: false,
+      reserved: false,
+    });
+    expect(queries.some(({ sql }) => sql.includes('WITH used AS'))).toBe(true);
+    expect(
+      queries.some(({ sql }) =>
+        sql.includes("qualifier_scope=$2 OR qualifier_scope=''"),
+      ),
+    ).toBe(true);
+    expect(queries.some(({ sql }) => sql.includes('INSERT INTO'))).toBe(false);
   });
 });

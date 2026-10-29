@@ -58,6 +58,13 @@ facts or commands through APIs and the event/work transport. Keep service-local
 outbox, idempotency, checkpoint, lease, and dead-letter records beside the
 owning domain data.
 
+Programme-scoped entity numbering follows the same boundary: Core owns each
+programme's numbering policy and globally reserved programme identifier;
+Geodata owns the assigned entity ID and serial-allocation state. Geodata reads
+the current policy through the Programmes API, then allocates and stores the ID
+in the same Geodata transaction as the entity mutation. Policy changes never
+rewrite assigned IDs, and no transaction spans the Core and Geodata databases.
+
 Geodata JSON writes with an `Idempotency-Key` share the request contract in
 [`geodata-request-idempotency.ts`](../apps/geodata/src/geodata-request-idempotency.ts):
 keys are scoped by authenticated owner and request URL, request fingerprints

@@ -377,6 +377,8 @@ export class AwardsService {
       facts = null;
     }
     const award = await this.getAwardDefinitionOrThrow(body.awardId);
+    if (award.status === 'DELETING')
+      throw new ConflictException('award deletion is in progress');
     if (
       award.status === 'PUBLISHED' &&
       !(await this.awardsRepository.isActivePublishedAward(String(award.id)))
@@ -401,6 +403,26 @@ export class AwardsService {
     return this.repository.getJob(id);
   }
 
+  async requestAwardDeletion(
+    authorization: string | undefined,
+    key: string | undefined,
+    awardId: string,
+  ) {
+    const claims = verifyAccessToken(authorization);
+    authorizeGlobalAwardDeletion(claims);
+    if (!awardId) throw new BadRequestException('awardId is required');
+    return this.awardsRepository.enqueueAwardDeletion(awardId, claims.sub, key);
+  }
+
+  async getAwardDeletionJob(authorization: string | undefined, jobId: string) {
+    const claims = verifyAccessToken(authorization);
+    authorizeGlobalAwardDeletion(claims);
+    const job = await this.repository.getJob(jobId);
+    if (job.kind !== 'AWARD_DELETE')
+      throw new NotFoundException('award deletion job not found');
+    return job;
+  }
+
   async progress(
     authorization: string | undefined,
     awardId: string,
@@ -419,6 +441,8 @@ export class AwardsService {
     if (!awardId || !participantId)
       throw new BadRequestException('awardId and participantId are required');
     const award = await this.getAwardDefinitionOrThrow(awardId);
+    if (award.status === 'DELETING')
+      throw new ConflictException('award deletion is in progress');
     if (
       award.status === 'PUBLISHED' &&
       !(await this.awardsRepository.isActivePublishedAward(awardId))
@@ -449,6 +473,8 @@ export class AwardsService {
   ) {
     this.authorizeHeader(authorization, ['awards.admin']);
     const award = await this.getAwardDefinitionOrThrow(awardId);
+    if (award.status === 'DELETING')
+      throw new ConflictException('award deletion is in progress');
     const subjects = pythonTruthy(body.subjectIds) ? body.subjectIds : [];
     if (!Array.isArray(subjects))
       throw new BadRequestException('subjectIds must be an array');
@@ -500,6 +526,8 @@ export class AwardsService {
     else this.authorize(claims.scp, ['awards.request', 'awards.admin']);
 
     const award = await this.getAwardDefinitionOrThrow(body.awardId);
+    if (award.status === 'DELETING')
+      throw new ConflictException('award deletion is in progress');
     if (!(await this.awardsRepository.isActivePublishedAward(String(award.id))))
       throw new BadRequestException(
         'only the active published award can be requested',
@@ -1050,6 +1078,17 @@ function assertAwardConfiguration(
     throw new BadRequestException(
       `award configuration is invalid: ${formatAwardValidationIssues(issues)}`,
     );
+}
+
+function authorizeGlobalAwardDeletion(
+  claims: ReturnType<typeof verifyAccessToken>,
+) {
+  if (
+    !claims.roles?.some((role) =>
+      ['GLOBAL_ADMIN', 'GLOBAL_OPERATOR'].includes(String(role.role)),
+    )
+  )
+    throw new ForbiddenException('global administrator role is required');
 }
 
 async function imageMetadata(content: Buffer) {
