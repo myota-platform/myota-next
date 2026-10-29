@@ -103,8 +103,8 @@ confirmation. The synthetic account was restored to its original address and log
 all generated messages were removed and Mailpit was empty. Email-change delivery recovery
 after a temporary SMTP outage is also verified. Deployed recovery throttling across six
 signed client addresses, reset-token exclusion from test-namespace logs, and raw request
-telemetry field exclusion are verified under #114. Hosted Observe delivery remains
-tracked under #90. A revision 73 reset test rejected
+telemetry field exclusion are verified under #114. Hosted Observe delivery
+remains unqualified and is recorded as an operational limit. A revision 73 reset test rejected
 two pre-reset access sessions and both refresh credentials; the temporary password worked
 and the original password was restored. See [Identity and Programme parity](parity/identity-programmes.md)
 and the [Phase 6 readiness record](operations/phase6-readiness.md).
