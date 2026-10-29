@@ -104,7 +104,8 @@ function popupText(entity: GeoEntity): string {
   const programmes = (entity.programmes || [])
     .map((item) => (typeof item === 'string' ? item : item.name || item.slug))
     .join(', ');
-  return `<div class="myota-entity-popup-content"><strong>${escapeHtml(entity.name)}</strong><br>Status: ${escapeHtml(entity.status)}<br>Category: ${escapeHtml(categories || entity.entityType || '—')}<br>Programmes: ${escapeHtml(programmes || 'Unassigned')}<br>Location: ${escapeHtml([values(entity, 'city'), values(entity, 'region'), values(entity, 'country')].filter(Boolean).join(', ') || '—')}</div>`;
+  const contrastStyle = 'background:#fff !important;color:#142b2d !important;';
+  return `<div class="myota-entity-popup-content" style="${contrastStyle}"><strong style="${contrastStyle}">${escapeHtml(entity.name)}</strong><br>Status: ${escapeHtml(entity.status)}<br>Category: ${escapeHtml(categories || entity.entityType || '—')}<br>Programmes: ${escapeHtml(programmes || 'Unassigned')}<br>Location: ${escapeHtml([values(entity, 'city'), values(entity, 'region'), values(entity, 'country')].filter(Boolean).join(', ') || '—')}</div>`;
 }
 function feature(entity: GeoEntity): any {
   return {
