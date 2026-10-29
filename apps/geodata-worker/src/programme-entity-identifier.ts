@@ -203,7 +203,15 @@ export async function allocateProgrammeEntityIdentifier(
 }
 
 export function normalizeEntityIdentifierQualifier(value: unknown): string {
-  if (typeof value !== 'string' || !value.trim())
+  if (value === undefined || value === null || value === '')
+    throw new ProgrammeEntityIdentifierError(
+      'a qualifier value is required by this programme numbering policy',
+    );
+  if (typeof value !== 'string')
+    throw new ProgrammeEntityIdentifierError(
+      'the qualifier source must contain a single text value',
+    );
+  if (!value.trim())
     throw new ProgrammeEntityIdentifierError(
       'a qualifier value is required by this programme numbering policy',
     );

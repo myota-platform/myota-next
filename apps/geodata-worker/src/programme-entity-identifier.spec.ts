@@ -1,6 +1,7 @@
 import {
   allocateProgrammeEntityIdentifier,
   findNextFreeProgrammeEntitySerial,
+  normalizeEntityIdentifierQualifier,
   ProgrammeEntityIdentifierError,
   suggestProgrammeEntityIdentifier,
   type ProgrammeEntityNumberingPolicy,
@@ -46,10 +47,57 @@ describe('suggestProgrammeEntityIdentifier', () => {
     ).toBe('PJE-ACORUNA-0001');
   });
 
+  it('rejects missing and ambiguous location qualifier values explicitly', () => {
+    const locationPolicy: ProgrammeEntityNumberingPolicy = {
+      ...policy,
+      qualifierMode: 'LOCATION',
+      qualifierField: 'provinceCode',
+    };
+
+    for (const value of [undefined, null, '', '   '])
+      expect(() =>
+        suggestProgrammeEntityIdentifier(
+          locationPolicy,
+          { location: { provinceCode: value } },
+          undefined,
+          1,
+        ),
+      ).toThrow('a qualifier value is required');
+
+    expect(() =>
+      suggestProgrammeEntityIdentifier(
+        locationPolicy,
+        { location: { provinceCode: ['G', 'M'] } },
+        undefined,
+        1,
+      ),
+    ).toThrow('single text value');
+  });
+
   it('returns an explicit error at serial exhaustion', () => {
     expect(() =>
       suggestProgrammeEntityIdentifier(policy, {}, { qualifier: 'X' }, 10_000),
     ).toThrow(ProgrammeEntityIdentifierError);
+  });
+});
+
+describe('normalizeEntityIdentifierQualifier', () => {
+  it('normalizes accented and punctuated text deterministically', () => {
+    expect(normalizeEntityIdentifierQualifier(' A Coruña / Norte ')).toBe(
+      'ACORUNANORTE',
+    );
+  });
+
+  it('rejects non-text, empty, non-alphanumeric, and overlong values', () => {
+    expect(() => normalizeEntityIdentifierQualifier(['G', 'M'])).toThrow(
+      'single text value',
+    );
+    expect(() => normalizeEntityIdentifierQualifier('---')).toThrow(
+      '1 to 24 letters or digits',
+    );
+    expect(() => normalizeEntityIdentifierQualifier('A'.repeat(25))).toThrow(
+      '1 to 24 letters or digits',
+    );
   });
 });
 
