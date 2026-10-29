@@ -23,6 +23,12 @@ The directories preserve three independent database owners:
 - `activity/` — Activity PostgreSQL for activations, QSOs, awards, and jobs.
 - `geo/` — Geodata PostgreSQL with PostGIS for spatial data and imports.
 
+`geo/010_programme_entity_identifier_immutability.sql` makes programme entity
+IDs write-once, requires each assigned value to match its durable reservation,
+prevents reservation edits or deletion, and prevents identified entities from
+moving between programmes. Entity deletion deliberately leaves its reservation
+in place so the identifier cannot be reused.
+
 ## Backup and restore
 
 The owner databases can be backed up together into one timestamped directory
