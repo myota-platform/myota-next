@@ -18,6 +18,7 @@ import { dirtyEditorSections } from '../lib/entityEditor';
 import type { EntityCategory, GeoEntity } from '../types';
 
 const props = defineProps<{ mode: 'review' | 'management' }>();
+const unassignedProgrammeFilterValue = '__unassigned_entities__';
 const isPendingDeletionStatus = (status: unknown) =>
   pendingDeletionStatuses.has(String(status).toUpperCase());
 const store = useAppStore();
@@ -435,7 +436,9 @@ function query(
     page: String(requestedPage),
     pageSize: String(requestedPageSize),
   });
-  if (scope.programme) params.set('programme', scope.programme);
+  if (scope.programme === unassignedProgrammeFilterValue)
+    params.set('programmeUnassigned', 'true');
+  else if (scope.programme) params.set('programme', scope.programme);
   scope.status.forEach((status) => params.append('status', status));
   if (scope.entityType) params.set('entityType', scope.entityType);
   for (const key of ['continent', 'country', 'region', 'province', 'city']) {
@@ -1685,7 +1688,10 @@ function toggleNewType(code: string): void {
 function toggleCreate(): void {
   creating.value = !creating.value;
   if (creating.value) {
-    newProgrammeSlug.value = filters.programme;
+    newProgrammeSlug.value =
+      filters.programme === unassignedProgrammeFilterValue
+        ? ''
+        : filters.programme;
     newQualifierValue.value = '';
     newManualSerial.value = '';
     newIdentifierPreview.value = '';
@@ -1971,6 +1977,9 @@ onMounted(async () => {
       <label
         >Programme<select v-model="filters.programme">
           <option value="">All programmes, including unassigned</option>
+          <option v-if="isManagement" :value="unassignedProgrammeFilterValue">
+            Unassigned entities
+          </option>
           <option
             v-for="programme in store.programmes"
             :key="programme.slug"

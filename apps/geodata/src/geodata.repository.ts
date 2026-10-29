@@ -40,7 +40,27 @@ export class GeodataRepository {
       filters.push(fragment.replace('?', `$${values.length}`));
     };
     const programme = firstQueryValue(query.programme);
-    if (programme) add('programme_slug=?', programme);
+    const programmeUnassigned = firstQueryValue(
+      query.programmeUnassigned,
+    )?.toLowerCase();
+    if (
+      programmeUnassigned !== undefined &&
+      programmeUnassigned !== 'true' &&
+      programmeUnassigned !== 'false'
+    ) {
+      throw new BadRequestException(
+        'programmeUnassigned must be true or false',
+      );
+    }
+    if (programmeUnassigned === 'true') {
+      if (programme)
+        throw new BadRequestException(
+          'programme and programmeUnassigned cannot be combined',
+        );
+      filters.push('programme_slug IS NULL');
+    } else if (programme) {
+      add('programme_slug=?', programme);
+    }
     const statuses = listValues(query.status)
       .flatMap((value) => value.split(','))
       .map((value) => trimPythonWhitespace(value).toUpperCase())

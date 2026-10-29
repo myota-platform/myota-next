@@ -604,6 +604,12 @@ paths:
           name: programme
           schema: { type: string }
         - in: query
+          name: programmeUnassigned
+          description: >-
+            Set to true to return only entities with no programme assignment.
+            Cannot be combined with programme.
+          schema: { type: boolean, default: false }
+        - in: query
           name: status
           description: Repeat or comma-separate values for a multi-status filter; omit for all statuses.
           style: form
