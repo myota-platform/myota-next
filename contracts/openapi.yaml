@@ -668,6 +668,61 @@ paths:
                   page: { type: integer }
                   pageSize: { type: integer }
                   nextPage: { type: integer, nullable: true }
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Create one Geodata candidate synchronously
+      description: Creates and audits one manual candidate in a transaction. Identifier allocation and reservation are committed with the entity. Bulk sources must use the asynchronous import workflow.
+      operationId: createManualGeodataEntity
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, programmeSlug, entityTypeCodes, geometry]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 240 }
+                programmeSlug: { type: string }
+                entityTypeCodes:
+                  type: array
+                  minItems: 1
+                  uniqueItems: true
+                  items: { type: string }
+                geometry: { type: object, description: GeoJSON Geometry }
+                location: { type: object }
+                website: { type: string, nullable: true }
+                description: { type: string, nullable: true }
+                jurisdiction: { type: string, nullable: true }
+                qualifier: { type: string }
+                serial: { type: string }
+      responses:
+        '201': { description: Candidate created and identifier assigned atomically }
+        '400': { description: Invalid entity fields, geometry, or numbering policy }
+        '409': { description: Identifier was assigned concurrently; retry with a new suggestion }
+  /v1/geodata/entity-id-preview:
+    post:
+      tags: [Geodata]
+      security: [{ bearerAuth: [] }]
+      summary: Preview the next programme entity ID
+      operationId: previewManualGeodataEntityId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [programmeSlug, entityTypeCode]
+              properties:
+                programmeSlug: { type: string }
+                entityTypeCode: { type: string }
+                location: { type: object }
+                qualifier: { type: string }
+      responses:
+        '200': { description: Non-reserving identifier preview }
+        '400': { description: Invalid scope or missing qualifier }
+
   /v1/geodata/imports:
     get:
       tags: [Geodata]
