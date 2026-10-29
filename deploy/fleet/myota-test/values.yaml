@@ -1,7 +1,7 @@
 activityLimits:
   maxBatchQsos: 5000
   uploadMaxBytes: 26214400
-buildVersion: testing-1f8c0ab
+buildVersion: testing-f7de67a
 commonResources:
   limits:
     cpu: '1'
@@ -98,13 +98,13 @@ images:
     digest: sha256:0d32d368c6a778deef1f53fd77e2ffd01db26cb23f40b845dea150f77739b826
     repository: ghcr.io/myota-platform/myota-next-gateway
   geodata:
-    digest: sha256:82721830086f1e4c7fca23dd0f10e0cf822cf70ebb3f65683d9b5e0145412b02
+    digest: sha256:d4cd49eef41fccf3ebd7aad4acb71a508ce58a0eb72324a53a3e617d9d316e18
     repository: ghcr.io/myota-platform/myota-next-geodata
   geodata-importer:
     digest: sha256:ff45d587f612ac78b86d42a92ae2f05a287e6e1accb508c5cc61e068dbf5dc55
     repository: ghcr.io/myota-platform/myota-next-geodata-importer
   geodata-worker:
-    digest: sha256:f334bb78ad095b7f050f4f802b36e36725444d1a1a26b44fc5e5b8a4460dd50c
+    digest: sha256:225258a5e51d6b14e7b6485b287d719eb743fb4f95d1cd24251a365626ab090a
     repository: ghcr.io/myota-platform/myota-next-geodata-worker
   identity:
     digest: sha256:e9dbec83efaf8abf0ee5737c12360251354154664801c1488d52fc9d849f547c
