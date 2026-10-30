@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { stringifyJsonWithBigInts } from '../../../libs/platform/src/json-bigint.js';
 
 const databaseUrl = process.env.GEO_DATABASE_URL;
 const describeWithPostgis = databaseUrl ? describe : describe.skip;
@@ -70,7 +71,7 @@ describeWithPostgis('PostGIS map geometry generalization', () => {
                 ST_NumPoints(ST_ExteriorRing(ST_GeometryN(low_zoom,1))) AS low_points,
                 ST_NumPoints(ST_ExteriorRing(ST_GeometryN(high_zoom,1))) AS high_points
          FROM variants`,
-        [JSON.stringify(fixture)],
+        [stringifyJsonWithBigInts(fixture)],
       );
 
       expect(result.rows).toHaveLength(1);
