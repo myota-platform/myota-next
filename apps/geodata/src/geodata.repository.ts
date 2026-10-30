@@ -73,7 +73,14 @@ export class GeodataRepository {
         `EXISTS (SELECT 1 FROM geodata_entity_category c WHERE c.entity_id=geodata_entity.id AND lower(c.category_code)=lower(?))`,
         entityType,
       );
-    for (const field of ['continent', 'country', 'region', 'province']) {
+    for (const field of [
+      'continent',
+      'country',
+      'region',
+      'province',
+      'county',
+      'locality',
+    ]) {
       const value = firstQueryValue(query[field]);
       if (value) add(`lower(COALESCE(${field},''))=lower(?)`, value);
     }
@@ -344,7 +351,47 @@ export class GeodataRepository {
     }
   }
 
-  async getTile(zoom: number, x: number, y: number) {
+  async getProgrammeMapExtent(programme: string) {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `SELECT count(*) AS total,
+          ST_XMin(ST_Extent(geom)::box2d) AS min_lon,
+          ST_YMin(ST_Extent(geom)::box2d) AS min_lat,
+          ST_XMax(ST_Extent(geom)::box2d) AS max_lon,
+          ST_YMax(ST_Extent(geom)::box2d) AS max_lat
+         FROM geodata_entity
+         WHERE programme_slug=$1 AND lifecycle_status=ANY($2::text[])`,
+        [programme, ['APPROVED', 'CANDIDATE']],
+      );
+      const row = result.rows[0];
+      const total = parsePageTotal(row?.total ?? '0');
+      const coordinates = [
+        row?.min_lon,
+        row?.min_lat,
+        row?.max_lon,
+        row?.max_lat,
+      ];
+      return {
+        programme,
+        total,
+        bbox:
+          total && coordinates.every((value) => value != null)
+            ? coordinates.map(Number)
+            : null,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async getTile(
+    zoom: number,
+    x: number,
+    y: number,
+    programme?: string,
+    statuses: string[] = ['APPROVED', 'CANDIDATE'],
+  ) {
     if (
       !Number.isInteger(zoom) ||
       !Number.isInteger(x) ||
@@ -370,16 +417,31 @@ export class GeodataRepository {
     try {
       const queryStarted = performance.now();
       let result;
+      const filters = [
+        'geom && ST_MakeEnvelope($1,$2,$3,$4,4326)',
+        'ST_Intersects(geom,ST_MakeEnvelope($1,$2,$3,$4,4326))',
+      ];
+      const values: unknown[] = bounds;
+      if (programme) {
+        values.push(programme);
+        filters.push(`programme_slug=$${values.length}`);
+      }
+      if (statuses.length) {
+        values.push(statuses);
+        filters.push(`lifecycle_status=ANY($${values.length}::text[])`);
+      }
       try {
         result = await client.query(
-          `SELECT id::text,programme_slug,entity_type_code,name,
-            lifecycle_status AS status,ST_AsGeoJSON(geom)::jsonb AS geometry,
+          `SELECT id::text,programme_slug,entity_identifier,entity_type_code,name,
+            lifecycle_status AS status,ST_AsGeoJSON(ST_Intersection(geom,ST_MakeEnvelope($1,$2,$3,$4,4326)))::jsonb AS geometry,
+            ST_X(ST_PointOnSurface(geom)) AS centroid_lon,
+            ST_Y(ST_PointOnSurface(geom)) AS centroid_lat,
+            country,region,province,county,city,municipality,
             public_properties,website,description
            FROM geodata_entity
-           WHERE geom && ST_MakeEnvelope($1,$2,$3,$4,4326)
-             AND ST_Intersects(geom,ST_MakeEnvelope($1,$2,$3,$4,4326))
+           WHERE ${filters.join(' AND ')}
            ORDER BY name,id LIMIT 501`,
-          bounds,
+          values,
         );
       } finally {
         this.queryMetrics.observePostgisQuery(
@@ -397,11 +459,24 @@ export class GeodataRepository {
           geometry: row.geometry,
           properties: {
             name: row.name,
+            entityIdentifier: row.entity_identifier,
             website: row.website,
             description: row.description,
             programmeSlug: row.programme_slug,
             status: row.status,
             entityType: row.entity_type_code,
+            centroid: {
+              lon: Number(row.centroid_lon),
+              lat: Number(row.centroid_lat),
+            },
+            location: {
+              country: row.country,
+              region: row.region,
+              province: row.province,
+              county: row.county,
+              city: row.city,
+              municipality: row.municipality,
+            },
             entityTypes: pythonTruthy(properties.entityTypes)
               ? properties.entityTypes
               : row.entity_type_code,
@@ -415,8 +490,8 @@ export class GeodataRepository {
       });
       const cacheInput = {
         bbox: bounds,
-        programme: null,
-        status: null,
+        programme: programme ?? null,
+        status: statuses,
         minute: Math.floor(Date.now() / 60_000),
       };
       const cacheKey = createHash('sha256')

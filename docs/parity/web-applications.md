@@ -61,8 +61,12 @@ publishes it, then verifies the Core record, outbox lifecycle, and public
 programme-content response. The Admin Awards screen uses independent bounded paging for
 award definitions, requests, and issuances; the asset catalogue follows its API pages
 for design selection. The Participant client includes localized published programme
-content, paged approved/candidate entity catalogue and map, map-picked point proposals
-and existing-candidate proposals, published award and level catalogue with
+content, an extent-fitted programme map backed by programme-filtered spatial tiles,
+and a compact paged entity catalogue with location filters, prominent immutable
+programme IDs, and public activation/QSO summaries. Map and list selection stay
+synchronized, and map popups link to an entity activity detail view. The catalogue
+supports map-picked point proposals and existing-candidate proposals, a published
+award and level catalogue with
 eligible-level requests and owner-scoped request status using the current Identity
 account and callsign data, rotating Identity refresh-session recovery for authenticated
 requests, activation creation and complete paged own-activation history for QSO

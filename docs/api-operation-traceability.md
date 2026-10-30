@@ -4,7 +4,7 @@ This generated index groups contract operations by service and links each one to
 
 Regenerate with `npm run docs:api-traceability`. The mapping must cover every operation in the copied contract; target-only operations are documented separately in [API baseline notes](api-baseline.md).
 
-Contract baseline: [157 operations](../contracts/openapi.yaml).
+Contract baseline: [159 operations](../contracts/openapi.yaml).
 
 ## Identity
 
@@ -104,20 +104,21 @@ Contract baseline: [157 operations](../contracts/openapi.yaml).
 - `POST /v1/geodata/import-uploads/{uploadId}/complete` — [geodata-imports.controller.ts#L88](../apps/geodata/src/geodata-imports.controller.ts#L88)
 - `GET /v1/geodata/location-options` — [geodata.controller.ts#L197](../apps/geodata/src/geodata.controller.ts#L197)
 - `GET /v1/geodata/adapters` — [geodata.controller.ts#L116](../apps/geodata/src/geodata.controller.ts#L116)
-- `GET /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L215](../apps/geodata/src/geodata.controller.ts#L215)
-- `PATCH /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L220](../apps/geodata/src/geodata.controller.ts#L220)
+- `GET /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L236](../apps/geodata/src/geodata.controller.ts#L236)
+- `PATCH /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L241](../apps/geodata/src/geodata.controller.ts#L241)
 - `GET /v1/geodata/entities/{entityId}/audit` — [geodata.controller.ts#L107](../apps/geodata/src/geodata.controller.ts#L107)
-- `POST /v1/geodata/entities/{entityId}/location-enrichment-requests` — [geodata.controller.ts#L246](../apps/geodata/src/geodata.controller.ts#L246)
+- `POST /v1/geodata/entities/{entityId}/location-enrichment-requests` — [geodata.controller.ts#L267](../apps/geodata/src/geodata.controller.ts#L267)
 - `GET /v1/geodata/tiles/{z}/{x}/{y}` — [geodata.controller.ts#L205](../apps/geodata/src/geodata.controller.ts#L205)
+- `GET /v1/geodata/map/extent` — [geodata.controller.ts#L227](../apps/geodata/src/geodata.controller.ts#L227)
 - `GET /v1/geodata/refresh-schedules` — [geodata-operations.controller.ts#L86](../apps/geodata/src/geodata-operations.controller.ts#L86)
 - `POST /v1/geodata/refresh-schedules` — [geodata-operations.controller.ts#L95](../apps/geodata/src/geodata-operations.controller.ts#L95)
 - `POST /v1/geodata/refresh-schedules/{scheduleId}/run` — [geodata-operations.controller.ts#L117](../apps/geodata/src/geodata-operations.controller.ts#L117)
 - `GET /v1/geodata/conflation` — [geodata.controller.ts#L164](../apps/geodata/src/geodata.controller.ts#L164)
 - `POST /v1/geodata/conflation/{candidateId}/resolve` — [geodata.controller.ts#L173](../apps/geodata/src/geodata.controller.ts#L173)
 - `POST /v1/geodata/proposals` — [geodata-operations.controller.ts#L142](../apps/geodata/src/geodata-operations.controller.ts#L142)
-- `PUT /v1/geodata/entities/{entityId}/geometry` — [geodata.controller.ts#L326](../apps/geodata/src/geodata.controller.ts#L326)
-- `PUT /v1/geodata/entities/{entityId}/categories` — [geodata.controller.ts#L300](../apps/geodata/src/geodata.controller.ts#L300)
-- `POST /v1/geodata/entities/{entityId}/reviews` — [geodata.controller.ts#L273](../apps/geodata/src/geodata.controller.ts#L273)
+- `PUT /v1/geodata/entities/{entityId}/geometry` — [geodata.controller.ts#L347](../apps/geodata/src/geodata.controller.ts#L347)
+- `PUT /v1/geodata/entities/{entityId}/categories` — [geodata.controller.ts#L321](../apps/geodata/src/geodata.controller.ts#L321)
+- `POST /v1/geodata/entities/{entityId}/reviews` — [geodata.controller.ts#L294](../apps/geodata/src/geodata.controller.ts#L294)
 - `POST /v1/geodata/entity-deletion-jobs` — [geodata-operations.controller.ts#L34](../apps/geodata/src/geodata-operations.controller.ts#L34)
 - `GET /v1/geodata/entity-deletion-jobs/{jobId}` — [geodata-operations.controller.ts#L55](../apps/geodata/src/geodata-operations.controller.ts#L55)
 - `POST /v1/geodata/entity-deletion-jobs/{jobId}/confirm` — [geodata-operations.controller.ts#L63](../apps/geodata/src/geodata-operations.controller.ts#L63)
@@ -166,7 +167,8 @@ Contract baseline: [157 operations](../contracts/openapi.yaml).
 - `GET /v1/qso-corrections` — [qso-admin.controller.ts#L9](../apps/activity/src/qso-admin.controller.ts#L9)
 - `GET /v1/public/activations` — [public-activity.controller.ts#L9](../apps/activity/src/public-activity.controller.ts#L9)
 - `GET /v1/public/leaderboards` — [public-activity.controller.ts#L22](../apps/activity/src/public-activity.controller.ts#L22)
-- `GET /v1/public/results` — [public-activity.controller.ts#L33](../apps/activity/src/public-activity.controller.ts#L33)
+- `GET /v1/public/entity-statistics` — [public-activity.controller.ts#L33](../apps/activity/src/public-activity.controller.ts#L33)
+- `GET /v1/public/results` — [public-activity.controller.ts#L44](../apps/activity/src/public-activity.controller.ts#L44)
 - `POST /v1/statistics/rebuild-jobs` — [activity-operations.controller.ts#L35](../apps/activity/src/activity-operations.controller.ts#L35)
 - `GET /v1/statistics/rebuild-jobs/{jobId}` — [activity-operations.controller.ts#L44](../apps/activity/src/activity-operations.controller.ts#L44)
 - `GET /v1/statistics` — [activity-operations.controller.ts#L18](../apps/activity/src/activity-operations.controller.ts#L18)
