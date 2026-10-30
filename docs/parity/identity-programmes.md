@@ -167,7 +167,9 @@ NestJS. Public self-registration now creates only a base `PARTICIPANT` account i
 unverified state, sends a single-use verification link through the Email work flow,
 and prevents login until verification succeeds. Responses for registration and resend
 are generic; verification tokens are stored hashed, expire after 24 hours, and are
-invalidated after use or resend. Requests are rate-limited. `PARTICIPANT_ADMIN` is a
+invalidated after use or resend. Requests are rate-limited. Licensed-operator
+registrations require a callsign, stored as self-asserted and unverified with the
+new Participant account; SWL registrations omit callsign data. `PARTICIPANT_ADMIN` is a
 separate system role with participant-account management scope, and its API list/update
 operations filter to Participant accounts and revoke sessions on suspension. Focused
 Identity and Email worker tests cover these paths. The isolated deployment workflow,

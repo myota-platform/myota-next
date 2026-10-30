@@ -25,6 +25,10 @@ import { pythonTruthy } from '@app/platform/python-truthiness.js';
 import { canonicalPythonGeneratedJson } from './geodata-request-fingerprint.js';
 import { GeodataQueryMetrics } from './geodata-query-metrics.service.js';
 
+export function mapSimplificationToleranceMeters(zoom: number): number {
+  return Math.max(0.05, (156543.03392804097 / 2 ** zoom) * 0.65);
+}
+
 @Injectable()
 export class GeodataRepository {
   constructor(
@@ -391,6 +395,7 @@ export class GeodataRepository {
     y: number,
     programme?: string,
     statuses: string[] = ['APPROVED', 'CANDIDATE'],
+    limit = 500,
   ) {
     if (
       !Number.isInteger(zoom) ||
@@ -406,6 +411,10 @@ export class GeodataRepository {
       throw new BadRequestException(
         'tile coordinates are outside the valid range',
       );
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500)
+      throw new BadRequestException(
+        'tile feature limit must be between 1 and 500',
+      );
     const count = 2 ** zoom;
     const minLon = (x / count) * 360 - 180;
     const maxLon = ((x + 1) / count) * 360 - 180;
@@ -413,6 +422,9 @@ export class GeodataRepository {
       (Math.atan(Math.sinh(Math.PI * (1 - (2 * tileRow) / count))) * 180) /
       Math.PI;
     const bounds = [minLon, latitude(y + 1), maxLon, latitude(y)];
+    const centerLon = (minLon + maxLon) / 2;
+    const centerLat = (bounds[1] + bounds[3]) / 2;
+    const simplifyTolerance = mapSimplificationToleranceMeters(zoom);
     const client = await this.connect();
     try {
       const queryStarted = performance.now();
@@ -430,17 +442,21 @@ export class GeodataRepository {
         values.push(statuses);
         filters.push(`lifecycle_status=ANY($${values.length}::text[])`);
       }
+      values.push(centerLon, centerLat);
+      values.push(simplifyTolerance);
+      values.push(limit + 1);
       try {
         result = await client.query(
           `SELECT id::text,programme_slug,entity_identifier,entity_type_code,name,
-            lifecycle_status AS status,ST_AsGeoJSON(ST_Intersection(geom,ST_MakeEnvelope($1,$2,$3,$4,4326)))::jsonb AS geometry,
+            lifecycle_status AS status,ST_AsGeoJSON(ST_Transform(ST_SimplifyPreserveTopology(ST_Transform(ST_Intersection(geom,ST_MakeEnvelope($1,$2,$3,$4,4326)),3857),$${values.length - 1}),4326))::jsonb AS geometry,
             ST_X(ST_PointOnSurface(geom)) AS centroid_lon,
             ST_Y(ST_PointOnSurface(geom)) AS centroid_lat,
             country,region,province,county,city,municipality,
             public_properties,website,description
            FROM geodata_entity
            WHERE ${filters.join(' AND ')}
-           ORDER BY name,id LIMIT 501`,
+           ORDER BY ST_Distance(ST_PointOnSurface(geom),ST_SetSRID(ST_MakePoint($${values.length - 3},$${values.length - 2}),4326)),name,id
+           LIMIT $${values.length}`,
           values,
         );
       } finally {
@@ -448,8 +464,8 @@ export class GeodataRepository {
           (performance.now() - queryStarted) / 1000,
         );
       }
-      const truncated = result.rows.length > 500;
-      const features = result.rows.slice(0, 500).map((row) => {
+      const truncated = result.rows.length > limit;
+      const features = result.rows.slice(0, limit).map((row) => {
         const properties = isRecord(row.public_properties)
           ? row.public_properties
           : {};
@@ -490,8 +506,10 @@ export class GeodataRepository {
       });
       const cacheInput = {
         bbox: bounds,
+        zoom,
         programme: programme ?? null,
         status: statuses,
+        limit,
         minute: Math.floor(Date.now() / 60_000),
       };
       const cacheKey = createHash('sha256')

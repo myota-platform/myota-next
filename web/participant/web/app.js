@@ -1225,6 +1225,7 @@ function publicTileMap() {
       const query = new URLSearchParams({
         programme: $('programme-select').value,
         status: 'APPROVED,CANDIDATE',
+        limit: String(Math.max(1, Math.floor(500 / tileKeys.length))),
       });
       try {
         return await api(
@@ -1260,6 +1261,37 @@ function publicTileMap() {
           ],
         };
       }
+    const allFeatures = [...features.values()];
+    const projectedCenter = publicProject(
+      [publicMapState.lon, publicMapState.lat],
+      width,
+      height,
+    );
+    const visibleFeatures = allFeatures
+      .sort((left, right) => {
+        const leftSelected = String(left.id) === selectedMapEntityId ? 0 : 1;
+        const rightSelected = String(right.id) === selectedMapEntityId ? 0 : 1;
+        if (leftSelected !== rightSelected) return leftSelected - rightSelected;
+        const distance = (feature) => {
+          const centroid = feature.properties?.centroid;
+          if (
+            !centroid ||
+            !Number.isFinite(centroid.lon) ||
+            !Number.isFinite(centroid.lat)
+          )
+            return Number.POSITIVE_INFINITY;
+          const [x, y] = publicProject(
+            [centroid.lon, centroid.lat],
+            width,
+            height,
+          );
+          return (x - projectedCenter[0]) ** 2 + (y - projectedCenter[1]) ** 2;
+        };
+        const distanceDifference = distance(left) - distance(right);
+        if (distanceDifference) return distanceDifference;
+        return String(left.id).localeCompare(String(right.id));
+      })
+      .slice(0, 500);
     publicMapFeatureIndex = new Map(
       [...features.values()].map((feature) => [
         String(feature.id),
@@ -1271,7 +1303,7 @@ function publicTileMap() {
         },
       ]),
     );
-    overlay.innerHTML = [...features.values()]
+    overlay.innerHTML = visibleFeatures
       .map((feature) => {
         const entity = publicMapFeatureIndex.get(String(feature.id));
         const geometry = feature.geometry;
@@ -1345,10 +1377,13 @@ function publicTileMap() {
             : '';
         };
         const positions = geometryPositions(geometry);
-        if (!positions.length) return '';
-        const first = publicProject(positions[0], width, height);
-        const shape = drawGeometry(geometry);
-        if (!shape) return '';
+        const centroid = entity.centroid;
+        if (!positions.length && !centroid) return '';
+        const anchor = positions[0] || [centroid.lon, centroid.lat];
+        const first = publicProject(anchor, width, height);
+        const shape =
+          drawGeometry(geometry) ||
+          `<circle cx="${first[0]}" cy="${first[1]}" r="7" class="public-entity-point ${status}"/>`;
         const selected = entity.id === selectedMapEntityId;
         const label =
           publicMapState.zoom >= 9
@@ -1372,9 +1407,9 @@ function publicTileMap() {
         }
       });
     });
-    if (tiles.some((tile) => tile?.truncated))
+    if (allFeatures.length > 500 || tiles.some((tile) => tile?.truncated))
       $('map-status').textContent =
-        'Map detail is limited at this zoom level. Zoom in to inspect dense areas.';
+        'Showing up to 500 entities. Zoom in to see more.';
     if (!tiles.some(Boolean) && programmeMapExtent)
       $('map-status').textContent =
         'Map entities are temporarily unavailable; the programme extent is still shown.';
@@ -2209,6 +2244,20 @@ $('participant-login').onsubmit = (event) => {
       $('participant-auth-status').textContent = error.message;
     });
 };
+function updateRegistrationCallsignField() {
+  const licensedOperator =
+    $('register-participation-type').value === 'OPERATOR';
+  const field = $('register-callsign-field');
+  const input = $('register-callsign');
+  field.hidden = !licensedOperator;
+  input.required = licensedOperator;
+  if (!licensedOperator) input.value = '';
+}
+$('register-participation-type').addEventListener(
+  'change',
+  updateRegistrationCallsignField,
+);
+updateRegistrationCallsignField();
 $('participant-register').onsubmit = async (event) => {
   event.preventDefault();
   const button = $('participant-register').querySelector(
@@ -2225,10 +2274,14 @@ $('participant-register').onsubmit = async (event) => {
         email: $('register-email').value,
         password: $('register-password').value,
         participationType: $('register-participation-type').value,
+        ...($('register-participation-type').value === 'OPERATOR'
+          ? { callsign: $('register-callsign').value.trim() }
+          : {}),
       }),
     });
     $('resend-email').value = $('register-email').value;
     $('participant-register').reset();
+    updateRegistrationCallsignField();
     $('participant-auth-status').textContent = result.message;
   } catch (error) {
     $('participant-auth-status').textContent = error.message;

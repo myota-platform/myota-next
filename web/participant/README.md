@@ -8,6 +8,15 @@ callsign authorization, and eligibility decisions remain owned by the APIs.
 Participants can also upload an ADIF log to an open activation and follow its
 processing status and accepted/rejected record counts.
 
+The programme map requests at most 500 features across the visible tiles at a
+time. Dense areas show a zoom-in prompt. The Geodata API simplifies display
+geometry by zoom level while preserving the stored entity geometry.
+
+Public registration requires a callsign for licensed operators. SWL
+registrations omit the callsign field. A newly registered operator's callsign
+is recorded as self-asserted and unverified until account verification is
+completed through the existing callsign evidence workflow.
+
 The source is under `web/`. Build its image from this directory with:
 
 ```sh

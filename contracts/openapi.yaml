@@ -2443,6 +2443,10 @@ paths:
         - { in: path, name: y, required: true, schema: { type: integer } }
         - { in: query, name: programme, schema: { type: string } }
         - in: query
+          name: limit
+          description: Per-tile feature limit, up to 500; the participant map divides its 500-feature display budget across visible tiles.
+          schema: { type: integer, minimum: 1, maximum: 500, default: 500 }
+        - in: query
           name: status
           style: form
           explode: true
@@ -2451,7 +2455,7 @@ paths:
             items: { type: string, enum: [APPROVED, CANDIDATE] }
       responses:
         '200':
-          description: GeoJSON FeatureCollection with tile metadata, capped at 500 features
+          description: GeoJSON FeatureCollection with zoom-simplified geometry and tile metadata, capped at the requested limit (500 by default)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/GeodataTileCollection' }
@@ -3570,6 +3574,19 @@ components:
       type: object
       required: [displayName, email, password, participationType]
       additionalProperties: false
+      allOf:
+        - if:
+            properties:
+              participationType: { const: OPERATOR }
+            required: [participationType]
+          then:
+            required: [callsign]
+        - if:
+            properties:
+              participationType: { const: SWL }
+            required: [participationType]
+          then:
+            not: { required: [callsign] }
       properties:
         displayName: { type: string, minLength: 1, maxLength: 120 }
         email: { type: string, format: email, maxLength: 254 }
@@ -3581,7 +3598,15 @@ components:
             format: password,
             writeOnly: true,
           }
-        participationType: { type: string, enum: [OPERATOR, SWL] }
+        participationType:
+          type: string
+          enum: [OPERATOR, SWL]
+          description: Licensed operators must supply a callsign; SWLs must omit it.
+        callsign:
+          type: string
+          minLength: 1
+          maxLength: 32
+          description: Required for OPERATOR, omitted for SWL, normalized to uppercase.
     RegistrationResend:
       type: object
       required: [email]

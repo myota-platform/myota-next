@@ -25,6 +25,7 @@ describe('AuthController registration delegation', () => {
       email: 'casey@example.test',
       password: 'long-enough-test-password',
       participationType: 'OPERATOR',
+      callsign: 'EA7URS',
     };
     const request = {
       get: () => undefined,

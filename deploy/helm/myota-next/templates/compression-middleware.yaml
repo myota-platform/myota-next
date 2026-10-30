@@ -1,0 +1,15 @@
+{{- if and .Values.ingress.enabled .Values.ingress.compression.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "myota-next.name" . }}-response-compression
+  labels:
+    {{- include "myota-next.labels" . | nindent 4 }}
+spec:
+  compress:
+    minResponseBodyBytes: {{ .Values.ingress.compression.minResponseBodyBytes }}
+    encodings:
+      {{- toYaml .Values.ingress.compression.encodings | nindent 6 }}
+    includedContentTypes:
+      {{- toYaml .Values.ingress.compression.includedContentTypes | nindent 6 }}
+{{- end }}

@@ -38,13 +38,33 @@ export class IdentityRegistrationService {
     const email = unicodeCaseFold(emailInput);
     const password = typeof body.password === 'string' ? body.password : '';
     const participationType = body.participationType ?? 'OPERATOR';
+    const callsignInput =
+      typeof body.callsign === 'string'
+        ? trimPythonWhitespace(body.callsign)
+        : '';
+    const callsign = callsignInput.toUpperCase();
+    if (participationType === 'OPERATOR' && !callsign) {
+      throw new BadRequestException(
+        'callsign is required for licensed-operator registration',
+      );
+    }
+    if (participationType === 'SWL' && Object.hasOwn(body, 'callsign')) {
+      throw new BadRequestException(
+        'callsign must be omitted for SWL registration',
+      );
+    }
     if (
       Object.keys(body).some(
         (field) =>
-          !['displayName', 'email', 'password', 'participationType'].includes(
-            field,
-          ),
+          ![
+            'displayName',
+            'email',
+            'password',
+            'participationType',
+            'callsign',
+          ].includes(field),
       ) ||
+      callsign.length > 32 ||
       Array.from(displayName).length < 1 ||
       Array.from(displayName).length > 120 ||
       email.length > 254 ||
@@ -59,6 +79,7 @@ export class IdentityRegistrationService {
       displayName,
       password,
       participationType,
+      callsign || null,
       remoteAddr,
     );
   }
@@ -77,7 +98,7 @@ export class IdentityRegistrationService {
       email.length > 254
     )
       throw new BadRequestException('email is invalid');
-    await this.createOrResend(email, null, null, null, remoteAddr);
+    await this.createOrResend(email, null, null, null, null, remoteAddr);
     return { message: GENERIC_RESPONSE };
   }
 
@@ -139,6 +160,7 @@ export class IdentityRegistrationService {
     displayName: string | null,
     password: string | null,
     participationType: string | null,
+    callsign: string | null,
     remoteAddr: string | null,
   ): Promise<{ message: string }> {
     const participantUrl = process.env.MYOTA_PARTICIPANT_PUBLIC_URL?.trim();
@@ -219,6 +241,64 @@ export class IdentityRegistrationService {
            VALUES ($1, $2, 'PARTICIPANT', '[]'::jsonb)`,
           [randomUUID(), account.id],
         );
+        let initialCallsign: {
+          id: string;
+          value: string;
+          status: string;
+          source: string;
+          verificationSource: null;
+          verifiedAt: null;
+          validFrom: null;
+          validTo: null;
+          evidenceIds: string[];
+          createdAt: string;
+          updatedAt: string;
+        } | null = null;
+        if (participationType === 'OPERATOR' && callsign) {
+          const callsignId = randomUUID();
+          const insertedCallsign = await client.query<{
+            created_at: string;
+            updated_at: string;
+          }>(
+            `INSERT INTO public.callsign
+               (id, account_id, value, lifecycle_status, source,
+                verification_source, verified_at, valid_from, valid_to,
+                created_at, updated_at)
+             VALUES ($1, $2, $3, 'UNVERIFIED', 'self-asserted', NULL,
+                     NULL, NULL, NULL, clock_timestamp(), clock_timestamp())
+             RETURNING to_char(created_at AT TIME ZONE 'UTC',
+                        'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
+                       to_char(updated_at AT TIME ZONE 'UTC',
+                        'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
+            [callsignId, account.id, callsign],
+          );
+          await client.query(
+            `INSERT INTO public.account_primary_callsign (account_id, callsign_id)
+             VALUES ($1, $2)`,
+            [account.id, callsignId],
+          );
+          const updatedAccount = await client.query<{ updated_at: string }>(
+            `UPDATE public.account SET updated_at = clock_timestamp()
+              WHERE id = $1
+              RETURNING to_char(updated_at AT TIME ZONE 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
+            [account.id],
+          );
+          account.updated_at = updatedAccount.rows[0].updated_at;
+          initialCallsign = {
+            id: callsignId,
+            value: callsign,
+            status: 'UNVERIFIED',
+            source: 'self-asserted',
+            verificationSource: null,
+            verifiedAt: null,
+            validFrom: null,
+            validTo: null,
+            evidenceIds: [],
+            createdAt: insertedCallsign.rows[0].created_at,
+            updatedAt: insertedCallsign.rows[0].updated_at,
+          };
+        }
         await writeOutboxEvent(client, {
           eventType: 'identity.account.created.v1',
           aggregateType: 'account',
@@ -231,8 +311,8 @@ export class IdentityRegistrationService {
               email,
               participationType,
               status: 'PENDING_SETUP',
-              callsigns: [],
-              primaryCallsignId: null,
+              callsigns: initialCallsign ? [initialCallsign] : [],
+              primaryCallsignId: initialCallsign?.id ?? null,
               createdAt: account.created_at!,
               updatedAt: account.updated_at!,
             },

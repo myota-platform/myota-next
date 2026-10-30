@@ -27,16 +27,16 @@ components:
     env:
       NODE_EXTRA_CA_CERTS: /run/myota-smtp-ca/ca.crt
     extraVolumeMounts:
-    - mountPath: /run/myota-smtp-ca
-      name: smtp-ca
-      readOnly: true
+      - mountPath: /run/myota-smtp-ca
+        name: smtp-ca
+        readOnly: true
     extraVolumes:
-    - name: smtp-ca
-      secret:
-        items:
-        - key: ca.crt
-          path: ca.crt
-        secretName: myota-smtp-qualification-server
+      - name: smtp-ca
+        secret:
+          items:
+            - key: ca.crt
+              path: ca.crt
+          secretName: myota-smtp-qualification-server
   geodata:
     env:
       MYOTA_LOAD_TEST_CLEANUP_ENABLED: '1'
@@ -126,7 +126,7 @@ ingress:
   apiHost: myota-test.spainip.es
   enabled: true
   entryPoints:
-  - websecure
+    - websecure
   middlewares: []
   objectStorageHost: myota-s3-test.spainip.es
   objectStoragePort: 8333
@@ -135,6 +135,11 @@ ingress:
   tls:
     certResolver: acmeresolver
     secretName: ''
+  compression:
+    enabled: true
+    minResponseBodyBytes: 128
+    encodings: [br, gzip]
+    includedContentTypes: [application/json]
 jetstreamProvisioner:
   capacity:
     activityWorkMaxAgeSeconds: '604800'

@@ -79,6 +79,7 @@ test('participant registration, resend, verification, sign-in, and sign-out are 
   await page.getByLabel('Display name').fill('Casey Operator');
   await page.locator('#register-email').fill('casey@example.test');
   await page.locator('#register-password').fill('long-enough-test-password');
+  await page.locator('#register-callsign').fill('EA7URS');
   await page
     .getByRole('button', { name: 'Create account and send verification email' })
     .click();
@@ -95,6 +96,7 @@ test('participant registration, resend, verification, sign-in, and sign-out are 
     email: 'casey@example.test',
     password: 'long-enough-test-password',
     participationType: 'OPERATOR',
+    callsign: 'EA7URS',
   });
 
   await page.locator('#participant-resend-details > summary').click();
@@ -125,6 +127,58 @@ test('participant registration, resend, verification, sign-in, and sign-out are 
   expect(
     requests.some((request) => request.path === '/v1/identity/auth/logout'),
   ).toBe(true);
+});
+
+test('callsign is required for licensed operators and hidden for SWLs', async ({
+  page,
+}) => {
+  let submittedRegistration: unknown;
+  await page.route('**/v1/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/v1/identity/auth/register') {
+      submittedRegistration = route.request().postDataJSON();
+      return route.fulfill({
+        json: {
+          message:
+            'If registration can proceed, a verification email will be sent.',
+        },
+      });
+    }
+    if (url.pathname === '/v1/programmes')
+      return route.fulfill({ json: { items: [], nextPage: null } });
+    return route.fulfill({
+      json: { items: [], page: 1, total: 0, nextPage: null },
+    });
+  });
+  await page.goto('http://127.0.0.1:8091/');
+  await page.locator('#participant-register-details > summary').click();
+  const callsign = page.locator('#register-callsign');
+  const participation = page.locator('#register-participation-type');
+  await expect(callsign).toBeVisible();
+  await expect(callsign).toHaveAttribute('required', '');
+  await callsign.fill('EA7URS');
+  await participation.selectOption('SWL');
+  await expect(callsign).toBeHidden();
+  await expect(callsign).not.toHaveAttribute('required', '');
+  await expect(callsign).toHaveValue('');
+  await page.getByLabel('Display name').fill('Casey Listener');
+  await page.locator('#register-email').fill('listener@example.test');
+  await page.locator('#register-password').fill('long-enough-test-password');
+  await page
+    .getByRole('button', { name: 'Create account and send verification email' })
+    .click();
+  await expect(page.locator('#participant-auth-status')).toContainText(
+    'verification email will be sent',
+  );
+  expect(submittedRegistration).toEqual({
+    displayName: 'Casey Listener',
+    email: 'listener@example.test',
+    password: 'long-enough-test-password',
+    participationType: 'SWL',
+  });
+  await participation.selectOption('OPERATOR');
+  await expect(callsign).toBeVisible();
+  await expect(callsign).toHaveAttribute('required', '');
 });
 
 test('reports an invalid verification link and removes its token from the URL', async ({
