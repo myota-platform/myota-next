@@ -103,6 +103,12 @@
               geodata API
             </div>
           </div>
+          <p
+            id="map-status"
+            class="small map-status"
+            role="status"
+            aria-live="polite"
+          ></p>
         </div>
         <aside class="panel">
           <div class="panel-head"><h3>Programme rules</h3></div>
@@ -144,6 +150,74 @@
           role="status"
           aria-live="polite"
         ></p>
+        <div id="entity-list-controls" class="entity-list-controls">
+          <p class="small entity-filter-help">
+            Filter by exact location names; matching ignores letter case.
+          </p>
+          <form
+            id="entity-filters"
+            class="entity-filters"
+            aria-label="Filter entities by location"
+          >
+            <label
+              >Country<input
+                id="entity-filter-country"
+                name="country"
+                autocomplete="off"
+            /></label>
+            <label
+              >Region<input
+                id="entity-filter-region"
+                name="region"
+                autocomplete="off"
+            /></label>
+            <label
+              >Province<input
+                id="entity-filter-province"
+                name="province"
+                autocomplete="off"
+            /></label>
+            <label
+              >County<input
+                id="entity-filter-county"
+                name="county"
+                autocomplete="off"
+            /></label>
+            <label
+              >City / municipality<input
+                id="entity-filter-city"
+                name="city"
+                autocomplete="off"
+            /></label>
+            <label
+              >Entity type<select id="entity-filter-type" name="entityType">
+                <option value="">All types</option>
+              </select></label
+            >
+            <div class="entity-filter-actions">
+              <button type="submit">Apply filters</button>
+              <button id="entity-filter-clear" type="reset" class="secondary">
+                Clear
+              </button>
+            </div>
+          </form>
+          <nav
+            class="entity-pagination entity-pagination-top"
+            aria-label="Entity pages"
+          >
+            <button id="entity-prev" type="button" class="secondary" disabled>
+              Previous
+            </button>
+            <span
+              id="entity-page-status"
+              class="small"
+              aria-live="polite"
+            ></span>
+            <button id="entity-next" type="button" class="secondary" disabled>
+              Next
+            </button>
+          </nav>
+        </div>
         <div
           class="table-wrap"
           role="region"
@@ -153,25 +227,16 @@
           <table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Type</th>
+                <th>Programme entity ID and name</th>
+                <th>Location</th>
+                <th>Activity</th>
                 <th>Status</th>
-                <th>Source</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody id="entities"></tbody>
           </table>
         </div>
-        <nav class="entity-pagination" aria-label="Entity pages">
-          <button id="entity-prev" type="button" class="secondary" disabled>
-            Previous
-          </button>
-          <span id="entity-page-status" class="small" aria-live="polite"></span>
-          <button id="entity-next" type="button" class="secondary" disabled>
-            Next
-          </button>
-        </nav>
         <form id="new-proposal-form" class="profile-form proposal-form">
           <h4>Suggest a geographic entity</h4>
           <p class="small">
@@ -219,6 +284,51 @@
           </button>
           <button type="submit">Submit location proposal</button>
         </form>
+      </section>
+      <section
+        class="panel entity-statistics-panel"
+        id="entity-statistics"
+        hidden
+        aria-labelledby="entity-statistics-heading"
+      >
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">ENTITY ACTIVITY</p>
+            <h3 id="entity-statistics-heading">Entity statistics</h3>
+            <p id="entity-statistics-location" class="small"></p>
+          </div>
+          <a href="#entity-catalogue" id="entity-statistics-back"
+            >Back to entities</a
+          >
+        </div>
+        <p
+          id="entity-statistics-status"
+          class="small"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <dl class="entity-statistics-grid">
+          <div>
+            <dt>Valid activations</dt>
+            <dd id="entity-statistics-activations">—</dd>
+          </div>
+          <div>
+            <dt>Valid QSOs at this entity</dt>
+            <dd id="entity-statistics-qsos">—</dd>
+          </div>
+          <div>
+            <dt>Activation QSOs</dt>
+            <dd id="entity-statistics-activation-qsos">—</dd>
+          </div>
+          <div>
+            <dt>Hunter QSOs</dt>
+            <dd id="entity-statistics-hunter-qsos">—</dd>
+          </div>
+          <div>
+            <dt>Last activation</dt>
+            <dd id="entity-statistics-last-activation">—</dd>
+          </div>
+        </dl>
       </section>
       <section
         class="panel community-panel"

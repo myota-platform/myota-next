@@ -404,6 +404,33 @@ export class ActivityService {
     };
   }
 
+  async publicEntityStatistics(
+    programme: string | undefined,
+    entityIds: string | string[] | undefined,
+  ) {
+    const selectedProgramme = programme?.trim();
+    if (!selectedProgramme)
+      throw new BadRequestException('programme is required');
+    const selectedEntityIds = (
+      Array.isArray(entityIds) ? entityIds : [entityIds]
+    )
+      .flatMap((value) => (value ?? '').split(','))
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const uniqueEntityIds = [...new Set(selectedEntityIds)];
+    if (!uniqueEntityIds.length)
+      throw new BadRequestException('at least one entityId is required');
+    if (uniqueEntityIds.length > 100)
+      throw new BadRequestException('at most 100 entityIds may be requested');
+    return {
+      programme: selectedProgramme,
+      items: await this.repository.entityStatistics(
+        selectedProgramme,
+        uniqueEntityIds,
+      ),
+    };
+  }
+
   async publicResults(programme?: string, format = 'json') {
     const selectedProgramme = programme || undefined;
     const items = await this.repository.list(selectedProgramme);

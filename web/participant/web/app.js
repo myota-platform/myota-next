@@ -6,6 +6,9 @@ let participantEmailChangeToken = window.myotaEmailChangeToken || '';
 window.myotaEmailChangeToken = '';
 let programmes = [];
 let entities = [];
+let entityStatistics = new Map();
+let entityStatisticsState = 'loading';
+let entityStatisticsRequest = 0;
 let entityPage = 1;
 let entityHasNext = false;
 let entityPageRequest = 0;
@@ -325,7 +328,11 @@ async function loadProgrammes() {
         `<option value="${escapeHtml(p.slug)}">${escapeHtml(p.name)}</option>`,
     )
     .join('');
-  const requestedSlug = location.hash.slice(1);
+  const currentUrl = new URL(window.location.href);
+  const hashSlug = currentUrl.hash.slice(1);
+  const requestedSlug =
+    currentUrl.searchParams.get('programme') ||
+    (hashSlug === 'entity-statistics' ? '' : hashSlug);
   const selectedSlug = programmes.some(
     (programme) => programme.slug === requestedSlug,
   )
@@ -335,9 +342,12 @@ async function loadProgrammes() {
   if (requestedSlug && requestedSlug !== selectedSlug)
     location.hash = selectedSlug;
   await loadProgramme($('programme-select').value);
+  const entityId = currentUrl.searchParams.get('entity');
+  if (entityId) await loadEntityDetails(entityId);
 }
 async function loadProgramme(slug) {
   const generation = ++programmeLoadGeneration;
+  publicMapRequest += 1;
   entityPageRequest += 1;
   entityPage = 1;
   entityHasNext = false;
@@ -345,12 +355,27 @@ async function loadProgramme(slug) {
   $('entity-next').disabled = true;
   activationEntityOptions = new Map();
   entities = [];
+  entityStatistics = new Map();
+  entityStatisticsState = 'loading';
+  for (const id of [
+    'entity-filter-country',
+    'entity-filter-region',
+    'entity-filter-province',
+    'entity-filter-county',
+    'entity-filter-city',
+    'entity-filter-type',
+  ])
+    $(id).value = '';
+  $('entity-filter-type').innerHTML = '<option value="">All types</option>';
   $('entities').replaceChildren();
   $('entity-count').textContent = '…';
   $('entity-page-status').textContent = '';
   $('entity-retry').hidden = true;
   $('activation-entity').replaceChildren();
-  renderMarkers();
+  selectedMapEntityId = null;
+  programmeMapExtent = null;
+  $('map-status').textContent = 'Loading programme geography…';
+  $('entity-map-popup')?.remove();
   const programme =
     programmes.find((p) => p.slug === slug) ||
     (await api(`/v1/programmes/${encodeURIComponent(slug)}`));
@@ -395,6 +420,21 @@ async function loadProgramme(slug) {
           );
         })
     : (programme.entityTypeCodes || []).map((code) => ({ code, name: code }));
+  const entityTypes = Array.isArray(programme.entityTypes)
+    ? programme.entityTypes
+        .map((item) =>
+          typeof item === 'string' ? { code: item, name: item } : item,
+        )
+        .filter((item) => typeof item?.code === 'string')
+    : (programme.entityTypeCodes || []).map((code) => ({ code, name: code }));
+  $('entity-filter-type').innerHTML =
+    '<option value="">All types</option>' +
+    entityTypes
+      .map(
+        (item) =>
+          `<option value="${escapeHtml(item.code)}">${escapeHtml(item.name || item.label || item.code)}</option>`,
+      )
+      .join('');
   $('proposal-entity-type').innerHTML = proposalTypes
     .map(
       (item) =>
@@ -406,9 +446,15 @@ async function loadProgramme(slug) {
   if (generation !== programmeLoadGeneration) return;
   await loadProgrammeEntities(slug, 1, generation);
   if (generation !== programmeLoadGeneration) return;
+  // Refresh participant activity as soon as the entity picker is ready. The
+  // remaining public map, awards, and community requests can finish later;
+  // they must not clear a status message from an activation started meanwhile.
+  await loadActivations();
+  if (generation !== programmeLoadGeneration) return;
+  await loadProgrammeMap(slug, generation);
+  if (generation !== programmeLoadGeneration) return;
   await loadPublicAwards(slug);
   await loadPublicActivity(slug);
-  await loadActivations();
 }
 
 async function loadProgrammeEntities(
@@ -423,12 +469,29 @@ async function loadProgrammeEntities(
   $('entities').replaceChildren();
   $('entity-count').textContent = '…';
   $('entity-page-status').textContent = `Loading page ${page}…`;
-  renderMarkers();
+  entityStatisticsRequest += 1;
+  entityStatistics = new Map();
+  entityStatisticsState = 'loading';
   $('loading').textContent = 'Loading entities…';
   try {
-    const result = await api(
-      `/v1/geodata/entities?programme=${encodeURIComponent(slug)}&status=APPROVED,CANDIDATE&page=${page}&pageSize=${entityPageSize}`,
-    );
+    const query = new URLSearchParams({
+      programme: slug,
+      status: 'APPROVED,CANDIDATE',
+      page: String(page),
+      pageSize: String(entityPageSize),
+    });
+    for (const [name, elementId] of Object.entries({
+      country: 'entity-filter-country',
+      region: 'entity-filter-region',
+      province: 'entity-filter-province',
+      county: 'entity-filter-county',
+      city: 'entity-filter-city',
+      entityType: 'entity-filter-type',
+    })) {
+      const value = $(elementId).value.trim();
+      if (value) query.set(name, value);
+    }
+    const result = await api(`/v1/geodata/entities?${query}`);
     if (generation !== programmeLoadGeneration || request !== entityPageRequest)
       return;
     entities = result.items || [];
@@ -442,6 +505,7 @@ async function loadProgrammeEntities(
     $('loading').textContent =
       total === 0 ? 'No entities' : `Showing ${first}–${last} of ${total}`;
     renderEntities();
+    void loadEntityStatistics(entities, generation, request);
     for (const entity of entities)
       if (['ACTIVE', 'APPROVED'].includes(entity.status))
         activationEntityOptions.set(entity.id, entity);
@@ -454,13 +518,14 @@ async function loadProgrammeEntities(
       .join('');
     if (activationEntityOptions.has(previousEntityId))
       $('activation-entity').value = previousEntityId;
-    renderMarkers();
     $('entity-page-status').textContent =
       `Page ${entityPage} · ${total} entities`;
   } catch (error) {
     if (generation !== programmeLoadGeneration || request !== entityPageRequest)
       return;
     entities = [];
+    entityStatistics = new Map();
+    entityStatisticsState = 'unavailable';
     entityPage = 1;
     entityHasNext = false;
     activationEntityOptions.clear();
@@ -471,7 +536,7 @@ async function loadProgrammeEntities(
       'The entity catalogue is temporarily unavailable.';
     $('entity-page-status').textContent = error.message;
     $('entity-retry').hidden = false;
-    renderMarkers();
+    renderEntities();
   } finally {
     if (
       generation === programmeLoadGeneration &&
@@ -546,13 +611,60 @@ async function loadProgrammeContent(slug, locale) {
       `Programme information is temporarily unavailable. Use “Refresh programme data” to retry. ${error.message}`;
   }
 }
+function entityLocationSummary(entity) {
+  const location = entity.location || {};
+  return [
+    entity.locality || location.locality,
+    entity.city ||
+      location.city ||
+      entity.municipality ||
+      location.municipality,
+    entity.county || location.county,
+    entity.province || location.province,
+    entity.region || location.region,
+    entity.country || location.country,
+  ]
+    .filter((value, index, values) => value && values.indexOf(value) === index)
+    .join(', ');
+}
+function formatEntityDate(value) {
+  if (!value) return 'No valid activation recorded';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? 'Activation date unavailable'
+    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+}
+function entityActivitySummary(entityId) {
+  if (entityStatisticsState === 'unavailable')
+    return '<span class="small entity-stats-unavailable">Activity summary unavailable</span>';
+  if (entityStatisticsState === 'loading' && !entityStatistics.has(entityId))
+    return '<span class="small" role="status">Loading activity…</span>';
+  const statistics = entityStatistics.get(entityId) || {
+    activationCount: 0,
+    activationQsoCount: 0,
+    hunterQsoCount: 0,
+    qsoCount: 0,
+    lastActivationAt: null,
+  };
+  return `<strong>${statistics.activationCount} valid activations · ${statistics.qsoCount} QSOs</strong><span class="small">${statistics.activationQsoCount} activation · ${statistics.hunterQsoCount} hunter</span><span class="small">Last: ${escapeHtml(formatEntityDate(statistics.lastActivationAt))}</span>`;
+}
 function renderEntities() {
   $('entities').innerHTML = entities
-    .map(
-      (e) =>
-        `<tr><td><strong>${escapeHtml(e.name)}</strong><div class="small">${escapeHtml(e.entityIdentifier || `${e.id.slice(0, 8)}…`)}</div></td><td>${escapeHtml(e.entityType)}</td><td><span class="badge ${escapeHtml(e.status.toLowerCase())}">${escapeHtml(e.status)}</span></td><td>${escapeHtml(e.provenance?.adapter || '—')}</td><td>${e.status === 'CANDIDATE' ? `<button data-id="${escapeHtml(e.id)}" class="propose">Propose</button>` : '<span class="small">Reference active</span>'}</td></tr>`,
-    )
+    .map((entity) => {
+      const identifier = entity.entityIdentifier || 'Programme ID pending';
+      const location =
+        entityLocationSummary(entity) || 'Location details unavailable';
+      const selected = entity.id === selectedMapEntityId;
+      return `<tr class="${selected ? 'entity-row-selected' : ''}" data-entity-row="${escapeHtml(entity.id)}"><td><button type="button" class="entity-focus" data-id="${escapeHtml(entity.id)}" aria-pressed="${selected}"><span class="programme-entity-id">${escapeHtml(identifier)}</span><strong>${escapeHtml(entity.name)}</strong><span class="small">${escapeHtml(entity.entityType || 'Entity')}</span></button></td><td>${escapeHtml(location)}</td><td class="entity-activity-cell">${entityActivitySummary(entity.id)}</td><td><span class="badge ${escapeHtml(String(entity.status || '').toLowerCase())}">${escapeHtml(entity.status || 'Status unavailable')}</span></td><td>${entity.status === 'CANDIDATE' ? `<button data-id="${escapeHtml(entity.id)}" class="propose secondary" type="button">Propose</button>` : '<span class="small">Approved reference</span>'}</td></tr>`;
+    })
     .join('');
+  document.querySelectorAll('.entity-focus').forEach(
+    (button) =>
+      (button.onclick = () => {
+        const entity = entities.find((item) => item.id === button.dataset.id);
+        if (entity) focusMapEntity(entity);
+      }),
+  );
   document.querySelectorAll('.propose').forEach(
     (b) =>
       (b.onclick = async () => {
@@ -572,6 +684,43 @@ function renderEntities() {
         }
       }),
   );
+}
+async function loadEntityStatistics(items, generation, pageRequest) {
+  const request = ++entityStatisticsRequest;
+  if (!items.length) {
+    entityStatistics = new Map();
+    entityStatisticsState = 'available';
+    renderEntities();
+    return;
+  }
+  entityStatisticsState = 'loading';
+  try {
+    const query = new URLSearchParams({
+      programme: $('programme-select').value,
+    });
+    for (const entity of items) query.append('entityIds', entity.id);
+    const result = await api(`/v1/public/entity-statistics?${query}`);
+    if (
+      request !== entityStatisticsRequest ||
+      generation !== programmeLoadGeneration ||
+      pageRequest !== entityPageRequest
+    )
+      return;
+    entityStatistics = new Map(
+      (result.items || []).map((item) => [item.entityId, item]),
+    );
+    entityStatisticsState = 'available';
+  } catch {
+    if (
+      request !== entityStatisticsRequest ||
+      generation !== programmeLoadGeneration ||
+      pageRequest !== entityPageRequest
+    )
+      return;
+    entityStatistics = new Map();
+    entityStatisticsState = 'unavailable';
+  }
+  renderEntities();
 }
 async function submitProposal(entityType, feature) {
   if (!awardAccessToken) {
@@ -639,7 +788,12 @@ $('new-proposal-form').onsubmit = async (event) => {
   }
 };
 $('programme-select').onchange = async (e) => {
-  location.hash = e.target.value;
+  const url = new URL(window.location.href);
+  url.searchParams.set('programme', e.target.value);
+  url.searchParams.delete('entity');
+  url.hash = e.target.value;
+  window.history.replaceState({}, '', url);
+  $('entity-statistics').hidden = true;
   try {
     await loadProgramme(e.target.value);
     $('programme-status').textContent = '';
@@ -662,6 +816,18 @@ $('entity-retry').onclick = () =>
       $('entity-retry').hidden = false;
     },
   );
+$('entity-filters').onsubmit = (event) => {
+  event.preventDefault();
+  loadProgrammeEntities($('programme-select').value, 1).catch((error) => {
+    $('entity-page-status').textContent = error.message;
+  });
+};
+$('entity-filters').onreset = () =>
+  window.setTimeout(() => {
+    loadProgrammeEntities($('programme-select').value, 1).catch((error) => {
+      $('entity-page-status').textContent = error.message;
+    });
+  }, 0);
 $('public-activity-prev').onclick = () =>
   loadPublicActivity(
     $('programme-select').value,
@@ -721,6 +887,24 @@ $('entity-next').onclick = () =>
       $('loading').textContent = error.message;
     },
   );
+$('entity-statistics-back').onclick = (event) => {
+  event.preventDefault();
+  const url = new URL(window.location.href);
+  url.searchParams.delete('entity');
+  url.hash = 'entity-catalogue';
+  window.history.pushState({}, '', url);
+  $('entity-statistics').hidden = true;
+  $('entity-catalogue').scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+window.addEventListener('popstate', () => {
+  const url = new URL(window.location.href);
+  const entityId = url.searchParams.get('entity');
+  if (entityId) {
+    void loadEntityDetails(entityId, undefined, true);
+  } else {
+    $('entity-statistics').hidden = true;
+  }
+});
 $('content-locale').onchange = () =>
   loadProgrammeContent($('programme-select').value, $('content-locale').value);
 $('refresh').onclick = () =>
@@ -734,12 +918,21 @@ loadProgrammes().catch((e) => {
   $('programme-retry').hidden = false;
 });
 
-let publicMapState = { lat: 37.395, lon: -5.995, zoom: 12 };
+let publicMapState = { lat: 0, lon: 0, zoom: 2 };
+let programmeMapExtent = null;
+let publicMapRequest = 0;
+let publicMapFeatureIndex = new Map();
+let selectedMapEntityId = null;
+let entityDetailsRequest = 0;
 let proposalLocationPickActive = false;
 function publicWorld(lon, lat, zoom) {
+  const safeLatitude = Math.max(
+    -85.05112878,
+    Math.min(85.05112878, Number(lat)),
+  );
   const size = 256 * 2 ** zoom,
     x = ((Number(lon) + 180) / 360) * size,
-    sin = Math.sin((Number(lat) * Math.PI) / 180),
+    sin = Math.sin((safeLatitude * Math.PI) / 180),
     y = (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * size;
   return { x, y, size };
 }
@@ -784,10 +977,205 @@ function setProposalLocationPick(active) {
 }
 $('proposal-location-pick').onclick = () =>
   setProposalLocationPick(!proposalLocationPickActive);
+async function loadProgrammeMap(slug, generation) {
+  const request = ++publicMapRequest;
+  try {
+    const extent = await api(
+      `/v1/geodata/map/extent?programme=${encodeURIComponent(slug)}`,
+    );
+    if (request !== publicMapRequest || generation !== programmeLoadGeneration)
+      return;
+    programmeMapExtent = extent.bbox;
+    if (programmeMapExtent) fitPublicMapExtent(programmeMapExtent);
+    $('map-status').textContent = extent.total
+      ? `Showing the programme geography · ${extent.total} entities`
+      : 'This programme has no mapped entities yet.';
+    void publicTileMap();
+  } catch (error) {
+    if (request !== publicMapRequest || generation !== programmeLoadGeneration)
+      return;
+    programmeMapExtent = null;
+    $('map-status').textContent =
+      `Programme map is temporarily unavailable. ${error.message}`;
+    void publicTileMap();
+  }
+}
+function fitPublicMapExtent(bbox) {
+  const [minLon, minLat, maxLon, maxLat] = bbox.map(Number);
+  if (![minLon, minLat, maxLon, maxLat].every(Number.isFinite)) return;
+  const map = $('map');
+  const width = Math.max(map.clientWidth || 900, 300);
+  const height = Math.max(map.clientHeight || 420, 280);
+  const min = publicWorld(minLon, minLat, 0);
+  const max = publicWorld(maxLon, maxLat, 0);
+  const rawSpanX = Math.abs(max.x - min.x);
+  const globalExtent = rawSpanX > 128;
+  const spanX = globalExtent ? 256 : rawSpanX;
+  const spanY = Math.abs(max.y - min.y);
+  const scaleX = (width - 96) / Math.max(spanX, 0.002);
+  const scaleY = (height - 96) / Math.max(spanY, 0.002);
+  const zoom = Math.max(
+    2,
+    Math.min(18, Math.floor(Math.log2(Math.min(scaleX, scaleY)))),
+  );
+  const centerLon = globalExtent ? 0 : (minLon + maxLon) / 2;
+  publicMapState = {
+    lat: (minLat + maxLat) / 2,
+    lon: centerLon,
+    zoom,
+  };
+}
+function publicEntityDetailsUrl(programme, entityId) {
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.searchParams.set('programme', programme);
+  url.searchParams.set('entity', entityId);
+  url.hash = 'entity-statistics';
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+function showEntityMapPopup(entity) {
+  selectedMapEntityId = entity.id;
+  renderEntities();
+  const popup = $('entity-map-popup');
+  if (!popup) return;
+  const location = entityLocationSummary(entity);
+  const identifier = entity.entityIdentifier || 'Programme ID pending';
+  popup.innerHTML = `<button type="button" class="entity-map-popup-close secondary" aria-label="Close entity details">×</button><p class="eyebrow">${escapeHtml(entity.status || 'Entity')}</p><h4 id="entity-map-popup-heading">${escapeHtml(entity.name || 'Geographic entity')}</h4><p class="programme-entity-id">${escapeHtml(identifier)}</p><p>${escapeHtml(location || 'Location details unavailable')}</p><a class="entity-statistics-link" href="${escapeHtml(publicEntityDetailsUrl(entity.programmeSlug || $('programme-select').value, entity.id))}">View activation and hunter QSO statistics</a>`;
+  popup.setAttribute('aria-labelledby', 'entity-map-popup-heading');
+  popup.hidden = false;
+  popup.querySelector('.entity-map-popup-close').onclick = () => {
+    popup.hidden = true;
+  };
+  popup.querySelector('.entity-statistics-link').onclick = (event) => {
+    event.preventDefault();
+    openEntityDetails(
+      entity.programmeSlug || $('programme-select').value,
+      entity.id,
+      entity,
+    );
+  };
+  popup.onkeydown = (event) => {
+    if (event.key === 'Escape') popup.hidden = true;
+  };
+}
+function entityMapCenter(entity) {
+  const centroid = entity.centroid;
+  if (
+    Number.isFinite(Number(centroid?.lon)) &&
+    Number.isFinite(Number(centroid?.lat))
+  )
+    return [Number(centroid.lon), Number(centroid.lat)];
+  const coordinates = [];
+  const visit = (value) => {
+    if (
+      Array.isArray(value) &&
+      value.length >= 2 &&
+      value.slice(0, 2).every((coordinate) => typeof coordinate === 'number')
+    ) {
+      coordinates.push(value);
+    } else if (Array.isArray(value)) {
+      value.forEach(visit);
+    }
+  };
+  visit(entity.geometry?.coordinates);
+  if (!coordinates.length) return null;
+  const longitudes = coordinates.map((coordinate) => coordinate[0]);
+  const latitudes = coordinates.map((coordinate) => coordinate[1]);
+  return [
+    (Math.min(...longitudes) + Math.max(...longitudes)) / 2,
+    (Math.min(...latitudes) + Math.max(...latitudes)) / 2,
+  ];
+}
+function focusMapEntity(entity) {
+  const center = entityMapCenter(entity);
+  if (!center) {
+    $('map-status').textContent =
+      `No map geometry is available for ${entity.name}.`;
+    return;
+  }
+  publicMapState.lon = center[0];
+  publicMapState.lat = center[1];
+  publicMapState.zoom = Math.max(publicMapState.zoom, 12);
+  $('map-status').textContent = `Map centered on ${entity.name}.`;
+  void publicTileMap();
+  showEntityMapPopup({
+    ...entity,
+    id: entity.id,
+    programmeSlug: entity.programmeSlug || $('programme-select').value,
+  });
+  $('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+async function openEntityDetails(programme, entityId, entity) {
+  const url = new URL(
+    publicEntityDetailsUrl(programme, entityId),
+    window.location.origin,
+  );
+  window.history.pushState({}, '', url);
+  await loadEntityDetails(entityId, entity, true);
+}
+async function loadEntityDetails(entityId, suppliedEntity, scroll = false) {
+  const request = ++entityDetailsRequest;
+  $('entity-statistics').hidden = false;
+  $('entity-statistics-heading').textContent = 'Loading entity activity…';
+  $('entity-statistics-location').textContent = '';
+  $('entity-statistics-status').textContent =
+    'Loading public activity statistics…';
+  for (const field of [
+    'entity-statistics-activations',
+    'entity-statistics-qsos',
+    'entity-statistics-activation-qsos',
+    'entity-statistics-hunter-qsos',
+    'entity-statistics-last-activation',
+  ])
+    $(field).textContent = '—';
+  try {
+    const entity =
+      suppliedEntity ||
+      entities.find((item) => item.id === entityId) ||
+      (await api(`/v1/geodata/entities/${encodeURIComponent(entityId)}`));
+    if (request !== entityDetailsRequest) return;
+    $('entity-statistics-heading').textContent =
+      `${entity.entityIdentifier || 'Programme ID pending'} · ${entity.name}`;
+    document.title = `${entity.name} · MyOTA`;
+    $('entity-statistics-location').textContent =
+      `${entity.entityType || 'Geographic entity'} · ${entityLocationSummary(entity) || 'Location details unavailable'}`;
+    const query = new URLSearchParams({
+      programme: $('programme-select').value,
+      entityIds: entityId,
+    });
+    const result = await api(`/v1/public/entity-statistics?${query}`);
+    if (request !== entityDetailsRequest) return;
+    const statistics = (result.items || []).find(
+      (item) => item.entityId === entityId,
+    );
+    if (!statistics) throw new Error('Entity statistics were not returned.');
+    $('entity-statistics-activations').textContent = statistics.activationCount;
+    $('entity-statistics-qsos').textContent = statistics.qsoCount;
+    $('entity-statistics-activation-qsos').textContent =
+      statistics.activationQsoCount;
+    $('entity-statistics-hunter-qsos').textContent = statistics.hunterQsoCount;
+    $('entity-statistics-last-activation').textContent = formatEntityDate(
+      statistics.lastActivationAt,
+    );
+    $('entity-statistics-status').textContent = '';
+    if (scroll)
+      $('entity-statistics').scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+  } catch (error) {
+    if (request !== entityDetailsRequest) return;
+    $('entity-statistics-heading').textContent = 'Entity activity statistics';
+    $('entity-statistics-status').textContent =
+      `Entity details are temporarily unavailable. ${error.message}`;
+  }
+}
 function publicTileMap() {
-  const map = $('map'),
-    width = Math.max(map.clientWidth || 700, 300),
-    height = 355,
+  const request = ++publicMapRequest;
+  const map = $('map');
+  if (!$('programme-select').value) return;
+  const width = Math.max(map.clientWidth || 700, 300),
+    height = Math.max(map.clientHeight || 420, 280),
     center = publicWorld(
       publicMapState.lon,
       publicMapState.lat,
@@ -796,11 +1184,11 @@ function publicTileMap() {
     surface = document.createElement('div');
   surface.className = 'public-tile-surface';
   map.innerHTML =
-    '<div id="public-tile-layer"></div><svg id="public-map-overlay" class="public-map-overlay" viewBox="0 0 ' +
+    '<div id="public-tile-layer"></div><svg id="public-map-overlay" class="public-map-overlay" role="group" viewBox="0 0 ' +
     width +
     ' ' +
     height +
-    '" aria-label="OpenStreetMap entity map"></svg><div class="public-map-controls"><button type="button" data-public-zoom="in" aria-label="Zoom in">+</button><button type="button" data-public-zoom="out" aria-label="Zoom out">−</button><button type="button" data-public-reset="true" aria-label="Reset map view">⌂</button></div><a class="public-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>';
+    '" aria-label="Entity map"></svg><div id="entity-map-popup" class="entity-map-popup" role="dialog" aria-live="polite" hidden></div><div class="public-map-controls"><button type="button" data-public-zoom="in" aria-label="Zoom in">+</button><button type="button" data-public-zoom="out" aria-label="Zoom out">−</button><button type="button" data-public-reset="true" aria-label="Reset map view">⌂</button></div><a class="public-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>';
   const layer = $('public-tile-layer');
   layer.className = 'public-tile-surface';
   const firstX = Math.floor((center.x - width / 2) / 256),
@@ -823,79 +1211,179 @@ function publicTileMap() {
       layer.appendChild(image);
     }
   const overlay = $('public-map-overlay');
-  overlay.innerHTML = entities
-    .map((entity) => {
-      const geometry = entity.geometry;
-      if (!geometry?.type || !Array.isArray(geometry.coordinates)) return '';
-      const status = escapeHtml(String(entity.status || '').toLowerCase());
-      const projectLine = (coordinates) =>
-        coordinates
-          .map((coordinate) => publicProject(coordinate, width, height))
-          .map(([x, y]) => `${x},${y}`)
-          .join(' ');
-      const projectRing = (coordinates) => {
-        const points = coordinates.map((coordinate) =>
-          publicProject(coordinate, width, height),
+  const tileKeys = [];
+  for (let x = firstX; x <= lastX; x += 1)
+    for (let y = firstY; y <= lastY; y += 1) {
+      if (y < 0 || y >= count) continue;
+      const tileX = ((x % count) + count) % count;
+      const key = `${tileX}/${y}`;
+      if (!tileKeys.includes(key)) tileKeys.push(key);
+    }
+  Promise.all(
+    tileKeys.map(async (key) => {
+      const [tileX, tileY] = key.split('/');
+      const query = new URLSearchParams({
+        programme: $('programme-select').value,
+        status: 'APPROVED,CANDIDATE',
+      });
+      try {
+        return await api(
+          `/v1/geodata/tiles/${publicMapState.zoom}/${tileX}/${tileY}?${query}`,
         );
-        if (points.length < 3) return '';
-        return `M ${points.map(([x, y]) => `${x} ${y}`).join(' L ')} Z`;
-      };
-      const allPositions = (coordinates) => {
-        if (
-          Array.isArray(coordinates) &&
-          coordinates.length >= 2 &&
-          coordinates.slice(0, 2).every((value) => typeof value === 'number')
-        ) {
-          return [coordinates];
-        }
-        return Array.isArray(coordinates)
-          ? coordinates.flatMap(allPositions)
-          : [];
-      };
-      const positions = allPositions(geometry.coordinates);
-      if (!positions.length) return '';
-      const first = publicProject(positions[0], width, height);
-      let shape = '';
-      if (geometry.type === 'Point') {
-        shape = `<circle cx="${first[0]}" cy="${first[1]}" r="8" class="public-entity-point ${status}"/>`;
-      } else if (geometry.type === 'MultiPoint') {
-        shape = positions
-          .map(([lon, lat]) => {
-            const [x, y] = publicProject([lon, lat], width, height);
-            return `<circle cx="${x}" cy="${y}" r="7" class="public-entity-point ${status}"/>`;
-          })
-          .join('');
-      } else if (geometry.type === 'LineString') {
-        shape = `<polyline points="${projectLine(geometry.coordinates)}" class="public-entity-line ${status}"/>`;
-      } else if (geometry.type === 'MultiLineString') {
-        shape = geometry.coordinates
-          .map(
-            (line) =>
-              `<polyline points="${projectLine(line)}" class="public-entity-line ${status}"/>`,
-          )
-          .join('');
-      } else if (geometry.type === 'Polygon') {
-        const path = geometry.coordinates
-          .map(projectRing)
-          .filter(Boolean)
-          .join(' ');
-        shape = `<path d="${path}" fill-rule="evenodd" class="public-entity-polygon ${status}"/>`;
-      } else if (geometry.type === 'MultiPolygon') {
-        const path = geometry.coordinates
-          .flatMap((polygon) => polygon.map(projectRing))
-          .filter(Boolean)
-          .join(' ');
-        shape = `<path d="${path}" fill-rule="evenodd" class="public-entity-polygon ${status}"/>`;
+      } catch {
+        return null;
       }
-      if (!shape) return '';
-      return `<g><title>${escapeHtml(entity.name)} · ${escapeHtml(entity.status)}</title>${shape}<text x="${first[0] + 10}" y="${first[1] - 9}" class="public-map-label">${escapeHtml(entity.name)}</text></g>`;
-    })
-    .join('');
+    }),
+  ).then((tiles) => {
+    if (request !== publicMapRequest) return;
+    const features = new Map();
+    for (const tile of tiles)
+      for (const feature of tile?.features || []) {
+        if (!feature.id) continue;
+        const id = String(feature.id);
+        const existing = features.get(id);
+        if (!existing) {
+          features.set(id, feature);
+          continue;
+        }
+        const geometries = (geometry) =>
+          geometry?.type === 'GeometryCollection'
+            ? geometry.geometries || []
+            : geometry
+              ? [geometry]
+              : [];
+        existing.geometry = {
+          type: 'GeometryCollection',
+          geometries: [
+            ...geometries(existing.geometry),
+            ...geometries(feature.geometry),
+          ],
+        };
+      }
+    publicMapFeatureIndex = new Map(
+      [...features.values()].map((feature) => [
+        String(feature.id),
+        {
+          ...feature.properties,
+          id: String(feature.id),
+          geometry: feature.geometry,
+          centroid: feature.properties?.centroid,
+        },
+      ]),
+    );
+    overlay.innerHTML = [...features.values()]
+      .map((feature) => {
+        const entity = publicMapFeatureIndex.get(String(feature.id));
+        const geometry = feature.geometry;
+        if (!entity || !geometry?.type) return '';
+        const status = escapeHtml(String(entity.status || '').toLowerCase());
+        const projectLine = (coordinates) =>
+          coordinates
+            .map((coordinate) => publicProject(coordinate, width, height))
+            .map(([x, y]) => `${x},${y}`)
+            .join(' ');
+        const projectRing = (coordinates) => {
+          const points = coordinates.map((coordinate) =>
+            publicProject(coordinate, width, height),
+          );
+          if (points.length < 3) return '';
+          return `M ${points.map(([x, y]) => `${x} ${y}`).join(' L ')} Z`;
+        };
+        const allPositions = (coordinates) => {
+          if (
+            Array.isArray(coordinates) &&
+            coordinates.length >= 2 &&
+            coordinates.slice(0, 2).every((value) => typeof value === 'number')
+          ) {
+            return [coordinates];
+          }
+          return Array.isArray(coordinates)
+            ? coordinates.flatMap(allPositions)
+            : [];
+        };
+        const geometryPositions = (item) =>
+          item.type === 'GeometryCollection'
+            ? (item.geometries || []).flatMap(geometryPositions)
+            : allPositions(item.coordinates);
+        const drawGeometry = (item) => {
+          if (item.type === 'GeometryCollection')
+            return (item.geometries || []).map(drawGeometry).join('');
+          const positions = allPositions(item.coordinates);
+          if (!positions.length) return '';
+          if (item.type === 'Point') {
+            const [x, y] = publicProject(positions[0], width, height);
+            return `<circle cx="${x}" cy="${y}" r="8" class="public-entity-point ${status}"/>`;
+          }
+          if (item.type === 'MultiPoint')
+            return positions
+              .map(([lon, lat]) => {
+                const [x, y] = publicProject([lon, lat], width, height);
+                return `<circle cx="${x}" cy="${y}" r="7" class="public-entity-point ${status}"/>`;
+              })
+              .join('');
+          if (item.type === 'LineString')
+            return `<polyline points="${projectLine(item.coordinates)}" class="public-entity-line ${status}"/>`;
+          if (item.type === 'MultiLineString')
+            return item.coordinates
+              .map(
+                (line) =>
+                  `<polyline points="${projectLine(line)}" class="public-entity-line ${status}"/>`,
+              )
+              .join('');
+          const polygons =
+            item.type === 'Polygon'
+              ? [item.coordinates]
+              : item.type === 'MultiPolygon'
+                ? item.coordinates
+                : [];
+          const path = polygons
+            .flatMap((polygon) => polygon.map(projectRing))
+            .filter(Boolean)
+            .join(' ');
+          return path
+            ? `<path d="${path}" fill-rule="evenodd" class="public-entity-polygon ${status}"/>`
+            : '';
+        };
+        const positions = geometryPositions(geometry);
+        if (!positions.length) return '';
+        const first = publicProject(positions[0], width, height);
+        const shape = drawGeometry(geometry);
+        if (!shape) return '';
+        const selected = entity.id === selectedMapEntityId;
+        const label =
+          publicMapState.zoom >= 9
+            ? `<text x="${first[0] + 10}" y="${first[1] - 9}" class="public-map-label">${escapeHtml(entity.name)}</text>`
+            : '';
+        return `<g data-map-entity="${escapeHtml(entity.id)}" class="public-map-entity ${selected ? 'selected' : ''}" role="button" tabindex="0" aria-pressed="${selected}" aria-label="Show ${escapeHtml(entity.name)} details"><title>${escapeHtml(entity.name)} · ${escapeHtml(entity.status)}</title>${shape}${label}</g>`;
+      })
+      .join('');
+    overlay.querySelectorAll('[data-map-entity]').forEach((featureElement) => {
+      const show = () => {
+        const entity = publicMapFeatureIndex.get(
+          featureElement.dataset.mapEntity,
+        );
+        if (entity) showEntityMapPopup(entity);
+      };
+      featureElement.addEventListener('click', show);
+      featureElement.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          show();
+        }
+      });
+    });
+    if (tiles.some((tile) => tile?.truncated))
+      $('map-status').textContent =
+        'Map detail is limited at this zoom level. Zoom in to inspect dense areas.';
+    if (!tiles.some(Boolean) && programmeMapExtent)
+      $('map-status').textContent =
+        'Map entities are temporarily unavailable; the programme extent is still shown.';
+  });
   document.querySelectorAll('[data-public-zoom]').forEach(
     (button) =>
       (button.onclick = () => {
         publicMapState.zoom = Math.max(
-          10,
+          2,
           Math.min(
             18,
             publicMapState.zoom + (button.dataset.publicZoom === 'in' ? 1 : -1),
@@ -905,19 +1393,28 @@ function publicTileMap() {
       }),
   );
   document.querySelector('[data-public-reset]').onclick = () => {
-    publicMapState = { lat: 37.395, lon: -5.995, zoom: 12 };
-    publicTileMap();
+    if (programmeMapExtent) fitPublicMapExtent(programmeMapExtent);
+    else publicMapState = { lat: 0, lon: 0, zoom: 2 };
+    void publicTileMap();
   };
   let drag = null;
   overlay.addEventListener('pointerdown', (event) => {
-    drag = { x: event.clientX, y: event.clientY, moved: false };
-    overlay.setPointerCapture(event.pointerId);
+    drag = {
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+      captured: false,
+    };
   });
   overlay.addEventListener('pointermove', (event) => {
     if (!drag) return;
     drag.moved ||=
       Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 3;
     if (!drag.moved) return;
+    if (!drag.captured) {
+      overlay.setPointerCapture(event.pointerId);
+      drag.captured = true;
+    }
     layer.style.transform = `translate(${event.clientX - drag.x}px,${event.clientY - drag.y}px)`;
     overlay.style.transform = `translate(${event.clientX - drag.x}px,${event.clientY - drag.y}px)`;
   });
@@ -954,7 +1451,7 @@ function publicTileMap() {
     (event) => {
       event.preventDefault();
       publicMapState.zoom = Math.max(
-        10,
+        2,
         Math.min(18, publicMapState.zoom + (event.deltaY < 0 ? 1 : -1)),
       );
       publicTileMap();
@@ -963,7 +1460,12 @@ function publicTileMap() {
   );
 }
 function renderMarkers() {
-  publicTileMap();
+  void publicTileMap();
+}
+if ('ResizeObserver' in window) {
+  new ResizeObserver(() => {
+    if ($('programme-select').value) void publicTileMap();
+  }).observe($('map'));
 }
 async function loadPublicAwards(slug) {
   const request = ++publicAwardsRequest;

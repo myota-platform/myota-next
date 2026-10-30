@@ -207,9 +207,30 @@ export class GeodataController {
     @Param('z') zoom: string,
     @Param('x') x: string,
     @Param('y') y: string,
+    @Query('programme') programme?: string,
+    @Query('status') status?: string | string[],
   ) {
     const coordinates = parseTileCoordinates(zoom, x, y);
-    return this.repository.getTile(...coordinates);
+    const rawStatuses: string[] = Array.isArray(status)
+      ? status
+      : [status ?? 'APPROVED,CANDIDATE'];
+    const statuses = rawStatuses
+      .flatMap((value) => value.split(','))
+      .map((value) => trimPythonWhitespace(value).toUpperCase())
+      .filter(Boolean);
+    if (!statuses.length) statuses.push('APPROVED', 'CANDIDATE');
+    if (statuses.some((value) => !['APPROVED', 'CANDIDATE'].includes(value)))
+      throw new BadRequestException('map status must be APPROVED or CANDIDATE');
+    return this.repository.getTile(...coordinates, programme, statuses);
+  }
+
+  @Get('map/extent')
+  programmeMapExtent(@Query('programme') programme?: string) {
+    if (!programme || !trimPythonWhitespace(programme))
+      throw new BadRequestException('programme is required');
+    return this.repository.getProgrammeMapExtent(
+      trimPythonWhitespace(programme),
+    );
   }
 
   @Get('entities/:entityId')

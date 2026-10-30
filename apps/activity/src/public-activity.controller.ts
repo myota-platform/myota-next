@@ -30,6 +30,17 @@ export class PublicActivityController {
     );
   }
 
+  @Get('entity-statistics')
+  entityStatistics(
+    @Query('programme') programme?: string | string[],
+    @Query('entityIds') entityIds?: string | string[],
+  ) {
+    return this.activity.publicEntityStatistics(
+      firstQueryValue(programme),
+      entityIds,
+    );
+  }
+
   @Get('results')
   results(
     @Query('programme') programme?: string | string[],

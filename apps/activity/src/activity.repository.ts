@@ -151,6 +151,78 @@ export class ActivityRepository {
     }
   }
 
+  async entityStatistics(programme: string, entityIds: string[]) {
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `WITH targets AS (
+           SELECT unnest($2::text[]) AS entity_id
+         ), valid_activations AS (
+           SELECT id,entity_id,started_at
+           FROM activity_activation
+           WHERE programme_slug=$1 AND status='CLOSED'
+             AND entity_id=ANY($2::text[])
+         ), activation_counts AS (
+           SELECT entity_id,count(*) AS activation_count,max(started_at) AS last_activation_at
+           FROM valid_activations WHERE entity_id=ANY($2::text[])
+           GROUP BY entity_id
+         ), activation_qso_counts AS (
+           SELECT a.entity_id,count(*) AS qso_count
+           FROM activity_qso q JOIN valid_activations a ON a.id=q.activation_id
+           WHERE q.status IN ('VALID','CORRECTED')
+             AND a.entity_id=ANY($2::text[])
+           GROUP BY a.entity_id
+         ), hunter_qso_counts AS (
+           SELECT q.worked_entity_id AS entity_id,count(*) AS qso_count
+           FROM activity_qso q
+           JOIN activity_activation a ON a.id=q.activation_id
+           WHERE q.status IN ('VALID','CORRECTED')
+             AND a.programme_slug=$1 AND a.status='CLOSED'
+             AND q.worked_entity_id=ANY($2::text[])
+           GROUP BY q.worked_entity_id
+         ), associated_qsos AS (
+           SELECT a.entity_id,q.id AS qso_id
+           FROM activity_qso q JOIN valid_activations a ON a.id=q.activation_id
+           WHERE q.status IN ('VALID','CORRECTED')
+             AND a.entity_id=ANY($2::text[])
+           UNION
+           SELECT q.worked_entity_id AS entity_id,q.id AS qso_id
+           FROM activity_qso q
+           JOIN activity_activation a ON a.id=q.activation_id
+           WHERE q.status IN ('VALID','CORRECTED')
+             AND a.programme_slug=$1 AND a.status='CLOSED'
+             AND q.worked_entity_id=ANY($2::text[])
+         ), total_qso_counts AS (
+           SELECT entity_id,count(*) AS qso_count
+           FROM associated_qsos GROUP BY entity_id
+         )
+         SELECT t.entity_id,
+           COALESCE(ac.activation_count,0) AS activation_count,
+           COALESCE(aqc.qso_count,0) AS activation_qso_count,
+           COALESCE(hqc.qso_count,0) AS hunter_qso_count,
+           COALESCE(tqc.qso_count,0) AS qso_count,
+           ac.last_activation_at
+         FROM targets t
+         LEFT JOIN activation_counts ac ON ac.entity_id=t.entity_id
+         LEFT JOIN activation_qso_counts aqc ON aqc.entity_id=t.entity_id
+         LEFT JOIN hunter_qso_counts hqc ON hqc.entity_id=t.entity_id
+         LEFT JOIN total_qso_counts tqc ON tqc.entity_id=t.entity_id
+         ORDER BY t.entity_id`,
+        [programme, entityIds],
+      );
+      return result.rows.map((row) => ({
+        entityId: String(row.entity_id),
+        activationCount: parsePageTotal(row.activation_count),
+        activationQsoCount: parsePageTotal(row.activation_qso_count),
+        hunterQsoCount: parsePageTotal(row.hunter_qso_count),
+        qsoCount: parsePageTotal(row.qso_count),
+        lastActivationAt: timestamp(row.last_activation_at),
+      }));
+    } finally {
+      client.release();
+    }
+  }
+
   async listStatisticsPage(
     programme: string | undefined,
     page: PageInteger,
