@@ -52,6 +52,8 @@ jobs:
             > "$RUNNER_TEMP/myota-test-rendered.yaml"
           grep -F 'Host(`myota-test.spainip.es`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
           grep -F 'Host(`myota-admin-test.spainip.es`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
+          admin_route="$(awk '/match: Host\(`myota-admin-test.spainip.es`\)/ { in_admin=1 } in_admin { print } in_admin && /services:/ { exit }' "$RUNNER_TEMP/myota-test-rendered.yaml")"
+          grep -E 'name: .*response-compression' <<< "$admin_route"
           grep -F 'Host(`myota-participant-test.spainip.es`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
           grep -F 'Host(`myota-participant-test.spainip.es`) && PathPrefix(`/v1/`)' "$RUNNER_TEMP/myota-test-rendered.yaml"
           grep -F 'certResolver: "acmeresolver"' "$RUNNER_TEMP/myota-test-rendered.yaml"

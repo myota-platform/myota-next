@@ -26,46 +26,56 @@ function request(url, acceptEncoding) {
   });
 }
 
-const origin =
-  process.env.MYOTA_TEST_API_URL || 'https://myota-test.spainip.es';
-const url = new URL(
-  '/v1/geodata/tiles/5/15/12?status=APPROVED%2CCANDIDATE',
-  origin,
-).toString();
-const [plain, encoded] = await Promise.all([
-  request(url, 'identity'),
-  request(url, 'br, gzip'),
-]);
+const tilePath = '/v1/geodata/tiles/5/15/12?status=APPROVED%2CCANDIDATE';
+const origins = [
+  process.env.MYOTA_TEST_API_URL || 'https://myota-test.spainip.es',
+  process.env.MYOTA_TEST_ADMIN_URL || 'https://myota-admin-test.spainip.es',
+];
 
-assert.equal(plain.status, 200, `identity request returned ${plain.status}`);
-assert.equal(
-  encoded.status,
-  200,
-  `compressed request returned ${encoded.status}`,
-);
-const encoding = String(
-  encoded.headers['content-encoding'] || '',
-).toLowerCase();
-assert.ok(
-  ['br', 'gzip'].includes(encoding),
-  `unexpected encoding: ${encoding}`,
-);
-assert.match(String(encoded.headers.vary || ''), /accept-encoding/i);
+for (const origin of origins) {
+  const url = new URL(tilePath, origin).toString();
+  const [plain, brotli, gzip] = await Promise.all([
+    request(url, 'identity'),
+    request(url, 'br'),
+    request(url, 'gzip'),
+  ]);
 
-const decoded =
-  encoding === 'br'
-    ? zlib.brotliDecompressSync(encoded.body)
-    : zlib.gunzipSync(encoded.body);
-assert.deepEqual(
-  decoded,
-  plain.body,
-  'compressed tile differs from identity response',
-);
-assert.ok(
-  encoded.body.length < plain.body.length,
-  'compression did not reduce payload size',
-);
-assert.equal(JSON.parse(decoded.toString('utf8')).type, 'FeatureCollection');
-console.log(
-  `Verified ${encoding}: ${plain.body.length} -> ${encoded.body.length} bytes (${url})`,
-);
+  assert.equal(plain.status, 200, `identity request returned ${plain.status}`);
+  assert.equal(brotli.status, 200, `Brotli request returned ${brotli.status}`);
+  assert.equal(
+    String(brotli.headers['content-encoding'] || '').toLowerCase(),
+    'br',
+    `Brotli was not negotiated from ${origin}`,
+  );
+  assert.equal(gzip.status, 200, `gzip request returned ${gzip.status}`);
+  assert.equal(
+    String(gzip.headers['content-encoding'] || '').toLowerCase(),
+    'gzip',
+    `gzip fallback was not negotiated from ${origin}`,
+  );
+  assert.match(String(plain.headers.vary || ''), /accept-encoding/i);
+
+  for (const [encoding, response, decompress] of [
+    ['br', brotli, zlib.brotliDecompressSync],
+    ['gzip', gzip, zlib.gunzipSync],
+  ]) {
+    assert.match(String(response.headers.vary || ''), /accept-encoding/i);
+    const decoded = decompress(response.body);
+    assert.deepEqual(
+      decoded,
+      plain.body,
+      `${encoding} tile differs from identity response from ${origin}`,
+    );
+    assert.ok(
+      response.body.length < plain.body.length,
+      `${encoding} did not reduce payload size from ${origin}`,
+    );
+    assert.equal(
+      JSON.parse(decoded.toString('utf8')).type,
+      'FeatureCollection',
+    );
+    console.log(
+      `Verified ${encoding}: ${plain.body.length} -> ${response.body.length} bytes (${url})`,
+    );
+  }
+}

@@ -12,6 +12,7 @@ test('explores a persisted Geodata entity through the live Admin map', async ({
 
   const entityId = randomUUID();
   const entityName = `Live map fixture ${entityId}`;
+  const requestedZooms: number[] = [];
   const pool = new Pool({ connectionString: databaseUrl, max: 1 });
   const fixture = await pool.connect();
 
@@ -33,6 +34,11 @@ test('explores a persisted Geodata entity through the live Admin map', async ({
     await page.route('https://tile.openstreetmap.org/**', (route) =>
       route.abort(),
     );
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (url.pathname === '/v1/geodata/map/entities')
+        requestedZooms.push(Number(url.searchParams.get('zoom')));
+    });
     await page.goto('/entity-map');
     await expect(page).toHaveURL(/\/login\?redirect=\/entity-map$/);
     await page
@@ -49,13 +55,17 @@ test('explores a persisted Geodata entity through the live Admin map', async ({
       );
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page).toHaveURL(/\/entity-map$/);
-    await expect(page.getByText(/entities loaded$/)).toBeVisible();
+    await expect(page.getByText(/entities in this view$/)).toBeVisible();
+    await expect.poll(() => requestedZooms.length).toBeGreaterThan(0);
     const directory = page.locator('.entity-map-directory');
     const directorySummary = directory.locator('summary');
     await activateByKeyboard(page, directorySummary);
     const entityOption = directory.getByRole('button', { name: entityName });
     await activateByKeyboard(page, entityOption);
     await expect(entityOption).toHaveAttribute('aria-pressed', 'true');
+    await expect
+      .poll(() => requestedZooms.some((zoom) => zoom > requestedZooms[0]!))
+      .toBe(true);
 
     const selected = page.locator('.selected-entity');
     await expect(
@@ -66,6 +76,7 @@ test('explores a persisted Geodata entity through the live Admin map', async ({
     await expect(selected).toContainText('Spain');
     await expect(selected).toContainText('Andalusia');
     await expect(selected).toContainText('Granada');
+    await page.locator(`.leaflet-marker-icon[title="${entityName}"]`).click();
     const popup = page.locator('.myota-entity-popup-content');
     await expect(popup).toHaveCSS('color', 'rgb(20, 43, 45)');
     await expect(popup).toHaveCSS('background-color', 'rgb(255, 255, 255)');

@@ -4,6 +4,10 @@ import { expectResponsiveAccessible } from '../../../a11y';
 test('approves a candidate with a version-checked review decision', async ({
   page,
 }) => {
+  const mapSimplificationRequests: Array<{
+    zoom: number;
+    items: Array<{ id: string; geometry: unknown }>;
+  }> = [];
   const reviewRequests: Array<{
     body: unknown;
     ifMatch: string;
@@ -69,6 +73,18 @@ test('approves a candidate with a version-checked review decision', async ({
       return;
     }
 
+    if (url.pathname === '/v1/geodata/map/simplify' && method === 'POST') {
+      const payload = request.postDataJSON() as {
+        zoom: number;
+        items: Array<{ id: string; geometry: unknown }>;
+      };
+      mapSimplificationRequests.push(payload);
+      await route.fulfill({
+        json: { zoom: payload.zoom, items: payload.items },
+      });
+      return;
+    }
+
     if (url.pathname === '/v1/geodata/entities/candidate-1/audit') {
       await route.fulfill({ json: { items: [] } });
       return;
@@ -104,6 +120,16 @@ test('approves a candidate with a version-checked review decision', async ({
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/geodata$/);
+  await expect.poll(() => mapSimplificationRequests.length).toBeGreaterThan(0);
+  expect(mapSimplificationRequests[0]).toMatchObject({
+    zoom: expect.any(Number),
+    items: [
+      {
+        id: 'candidate-1',
+        geometry: { type: 'Point', coordinates: [7.2, 46.1] },
+      },
+    ],
+  });
 
   await page
     .locator('button.entity-link')

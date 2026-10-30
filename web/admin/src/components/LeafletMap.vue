@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { apiRequest } from '../lib/api';
 import type { GeoEntity } from '../types';
+
+type Geometry = NonNullable<GeoEntity['geometry']>;
 
 declare global {
   interface Window {
@@ -18,18 +21,30 @@ const props = withDefaults(
     drawing?: boolean;
     drawingMode?: 'POINT' | 'WAY' | 'POLYGON';
     showClusters?: boolean;
+    viewportManaged?: boolean;
+    geometrySimplification?: 'auto' | 'server' | 'none';
+    initialView?: { center: [number, number]; zoom: number };
   }>(),
   {
     height: '620px',
     drawing: false,
     drawingMode: 'POLYGON',
     showClusters: true,
+    viewportManaged: false,
+    geometrySimplification: 'auto',
+    initialView: () => ({ center: [37.395, -5.995], zoom: 12 }),
   },
 );
 const emit = defineEmits<{
   select: [entity: GeoEntity];
   'geometry-change': [geometry: { type: string; coordinates: unknown }];
   'draw-created': [geometry: { type: string; coordinates: unknown }];
+  'viewport-change': [
+    viewport: {
+      bbox: [number, number, number, number];
+      zoom: number;
+    },
+  ];
 }>();
 
 const mapElement = ref<HTMLElement | null>(null);
@@ -41,6 +56,9 @@ let editingLayer: any = null;
 let drawingLayer: any = null;
 let resizeObserver: ResizeObserver | undefined;
 let mapWasVisible = false;
+let simplificationTimer: number | undefined;
+let simplificationRequest = 0;
+const simplifiedGeometryByZoom = new Map<number, Map<string, Geometry>>();
 
 // Maps can now live in dialogs and collapsed catalogue panels. Recompute tile
 // placement when the actual container becomes visible or changes size.
@@ -57,14 +75,20 @@ onMounted(() => {
     }
     map.invalidateSize({ pan: false });
     if (!mapWasVisible) {
-      if (props.selectedId) focusSelected(false);
+      if (props.viewportManaged) emitViewportChange();
+      else if (props.selectedId) focusSelected(false);
       else fitAll();
     }
     mapWasVisible = true;
   });
   resizeObserver.observe(mapElement.value);
 });
-onBeforeUnmount(() => resizeObserver?.disconnect());
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
+  if (simplificationTimer !== undefined)
+    window.clearTimeout(simplificationTimer);
+  simplificationRequest += 1;
+});
 
 const colors: Record<string, [string, string]> = {
   CANDIDATE: ['#fbbf24', '#7c5410'],
@@ -116,12 +140,25 @@ function popupText(entity: GeoEntity): HTMLElement {
   });
   return content;
 }
-function feature(entity: GeoEntity): any {
+function geometryForDisplay(entity: GeoEntity): Geometry | undefined {
+  if (entity.id === props.editableId) return entity.geometry;
+  if (props.geometrySimplification !== 'none' && map) {
+    return (
+      simplifiedGeometryByZoom.get(Math.floor(map.getZoom()))?.get(entity.id) ||
+      entity.geometry
+    );
+  }
+  return entity.geometry;
+}
+function feature(
+  entity: GeoEntity,
+  geometry = geometryForDisplay(entity),
+): any {
   return {
     type: 'Feature',
     id: entity.id,
     properties: { name: entity.name, status: entity.status },
-    geometry: entity.geometry,
+    geometry,
   };
 }
 function layerGeometry(
@@ -157,10 +194,11 @@ function isClusteredPoint(entity: GeoEntity): boolean {
 }
 
 function addEntity(entity: GeoEntity): void {
-  if (!map || !window.L || !entity.geometry) return;
+  const geometry = geometryForDisplay(entity);
+  if (!map || !window.L || !geometry) return;
   const selected = entity.id === props.selectedId;
   const baseStyle = styleFor(entity, selected);
-  const line = ['LineString', 'MultiLineString'].includes(entity.geometry.type)
+  const line = ['LineString', 'MultiLineString'].includes(geometry.type)
     ? { ...baseStyle, dashArray: '8 6', lineCap: 'round', lineJoin: 'round' }
     : baseStyle;
   // MarkerCluster only manages regular markers. Keep the point currently being
@@ -174,7 +212,7 @@ function addEntity(entity: GeoEntity): void {
           title: entity.name || 'Unnamed entity',
         })
       : window.L.circleMarker(latlng, line);
-  const group = window.L.geoJSON(feature(entity), {
+  const group = window.L.geoJSON(feature(entity, geometry), {
     style: line,
     pointToLayer,
   });
@@ -204,14 +242,95 @@ function addEntity(entity: GeoEntity): void {
   const target = clusteredPoint ? pointCluster : geometryLayers;
   group.addTo(target);
 }
-function renderLayers(): void {
+function renderLayers(fit = true): void {
   if (!map || !window.L) return;
   geometryLayers?.clearLayers();
   pointCluster?.clearLayers();
   layerById = new Map();
   props.entities.filter((entity) => entity.geometry).forEach(addEntity);
-  if (!props.selectedId) fitAll();
+  if (fit && !props.selectedId && !props.viewportManaged) fitAll();
   applyEditing();
+}
+function emitViewportChange(): void {
+  if (!map || !props.viewportManaged) return;
+  const bounds = map.getBounds();
+  emit('viewport-change', {
+    bbox: [
+      bounds.getWest(),
+      bounds.getSouth(),
+      bounds.getEast(),
+      bounds.getNorth(),
+    ],
+    zoom: Math.max(0, Math.floor(map.getZoom())),
+  });
+}
+async function simplifyForCurrentZoom(): Promise<void> {
+  if (!map || !window.L || props.geometrySimplification !== 'auto') return;
+  if (simplificationTimer !== undefined) {
+    window.clearTimeout(simplificationTimer);
+    simplificationTimer = undefined;
+  }
+  const zoom = Math.max(0, Math.floor(map.getZoom()));
+  simplificationRequest += 1;
+  if (simplifiedGeometryByZoom.has(zoom)) return;
+  const candidates = props.entities
+    .filter((entity) => entity.geometry && entity.id !== props.editableId)
+    .map((entity) => ({ id: entity.id, geometry: entity.geometry }));
+  if (!candidates.length) return;
+  const request = simplificationRequest;
+  simplificationTimer = window.setTimeout(() => {
+    simplificationTimer = undefined;
+    const batches: Array<typeof candidates> = [];
+    let batch: typeof candidates = [];
+    let batchBytes = 0;
+    for (const item of candidates) {
+      const itemBytes = JSON.stringify(item).length;
+      if (itemBytes > 3 * 1024 * 1024) continue;
+      if (batch.length >= 500 || batchBytes + itemBytes > 3 * 1024 * 1024) {
+        batches.push(batch);
+        batch = [];
+        batchBytes = 0;
+      }
+      batch.push(item);
+      batchBytes += itemBytes;
+    }
+    if (batch.length) batches.push(batch);
+    void Promise.all(
+      batches.map((items) =>
+        apiRequest<{ items?: Array<{ id: string; geometry: Geometry }> }>(
+          '/v1/geodata/map/simplify',
+          { method: 'POST', body: JSON.stringify({ zoom, items }) },
+        ),
+      ),
+    )
+      .then((results) => {
+        if (
+          request !== simplificationRequest ||
+          !map ||
+          Math.floor(map.getZoom()) !== zoom
+        )
+          return;
+        simplifiedGeometryByZoom.set(
+          zoom,
+          new Map(
+            results.flatMap((result) =>
+              (result.items || []).map(
+                (item) => [item.id, item.geometry] as const,
+              ),
+            ),
+          ),
+        );
+        while (simplifiedGeometryByZoom.size > 2) {
+          const oldestZoom = simplifiedGeometryByZoom.keys().next().value;
+          if (oldestZoom === undefined) break;
+          simplifiedGeometryByZoom.delete(oldestZoom);
+        }
+        renderLayers(false);
+      })
+      .catch(() => {
+        // Keep the canonical geometry visible if map generalization is unavailable.
+      });
+  }, 100);
 }
 function fitAll(): void {
   const bounds = window.L.latLngBounds([]);
@@ -227,9 +346,6 @@ function fitAll(): void {
 function focusSelected(animate = true): void {
   const entity = props.entities.find((item) => item.id === props.selectedId);
   if (!map || !entity?.geometry || !window.L) return;
-  const layer = layerById.get(entity.id);
-  if (layer && pointCluster?.hasLayer?.(layer) && pointCluster.zoomToShowLayer)
-    pointCluster.zoomToShowLayer(layer, () => layer.openPopup?.());
   const bounds = window.L.geoJSON(feature(entity)).getBounds();
   if (!bounds.isValid()) return;
   if (entity.geometry.type === 'Point')
@@ -319,19 +435,35 @@ onMounted(async () => {
       : geometryLayers;
   if (pointCluster !== geometryLayers) pointCluster.addTo(map);
   map.on('pm:create', handleCreate);
-  map.setView([37.395, -5.995], 12);
+  map.setView(props.initialView.center, props.initialView.zoom);
+  map.on('moveend', emitViewportChange);
+  map.on('zoomend', () => {
+    emitViewportChange();
+    void simplifyForCurrentZoom();
+  });
   renderLayers();
   syncDrawing();
   window.setTimeout(() => {
     map?.invalidateSize?.();
+    emitViewportChange();
+    void simplifyForCurrentZoom();
     focusSelected();
   }, 0);
 });
-watch(() => props.entities, renderLayers, { deep: true });
+watch(
+  () => props.entities,
+  () => {
+    simplifiedGeometryByZoom.clear();
+    renderLayers();
+    void simplifyForCurrentZoom();
+  },
+  { deep: true },
+);
 watch(
   () => props.selectedId,
   () => {
     renderLayers();
+    void simplifyForCurrentZoom();
     focusSelected();
   },
 );
@@ -339,6 +471,7 @@ watch(
   () => props.editableId,
   () => {
     renderLayers();
+    void simplifyForCurrentZoom();
     focusSelected();
   },
 );

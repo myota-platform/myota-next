@@ -36,7 +36,7 @@ spec:
     {{- if and .Values.ingress.adminHost $admin.enabled }}
     - kind: Rule
       match: Host(`{{ .Values.ingress.adminHost }}`)
-      {{- with .Values.ingress.middlewares }}
+      {{- with $apiMiddlewares }}
       middlewares:
         {{- toYaml . | nindent 8 }}
       {{- end }}

@@ -289,5 +289,5 @@ jobs:
             "$VALUES_JSON" \
             "$EXPECTED_JSON"
 
-      - name: Verify Brotli or gzip compression on public geodata tiles
+      - name: Verify Brotli or gzip compression on public and Admin geodata tiles
         run: node tools/verify-geodata-compression.mjs
