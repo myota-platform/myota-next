@@ -16,6 +16,7 @@ import {
 } from '@app/platform/pagination.js';
 import { firstQueryValue } from '@app/platform/query.js';
 import { parseJsonWithExactIntegers } from '@app/platform/json-exact.js';
+import { stringifyJsonWithBigInts } from '@app/platform/json-bigint.js';
 import {
   pythonKeyErrorDetail,
   trimPythonWhitespace,
@@ -127,6 +128,110 @@ export class GeodataRepository {
         total,
         nextPage: nextPageIfMore(page, pageSize, total),
       };
+    } finally {
+      client.release();
+    }
+  }
+
+  async getAdminMapEntities(query: Record<string, unknown>) {
+    const bounds = parseBounds(query);
+    if (!bounds)
+      throw new BadRequestException(
+        'map bounds are required for an entity map',
+      );
+    const zoom = parseMapZoom(firstQueryValue(query.zoom));
+    const limit = 500;
+    const tolerance = mapSimplificationToleranceMeters(zoom);
+    const envelope = 'ST_MakeEnvelope($1,$2,$3,$4,4326)';
+    const clipped = `ST_Transform(ST_Intersection(geom,${envelope}),3857)`;
+    const simplifiedGeometry = `ST_AsGeoJSON(ST_Transform(
+      CASE WHEN GeometryType(${clipped}) IN ('POLYGON','MULTIPOLYGON','LINESTRING','MULTILINESTRING')
+           THEN ST_SimplifyPreserveTopology(${clipped},$5)
+           ELSE ${clipped} END,4326))::jsonb`;
+    const projection = entityProjectionWithGeometry(simplifiedGeometry);
+    const [minLon, minLat, maxLon, maxLat] = bounds;
+    const centerLon = (minLon + maxLon) / 2;
+    const centerLat = (minLat + maxLat) / 2;
+    const values = [...bounds, tolerance, centerLon, centerLat, limit + 1];
+    const envelopeFilter = `geom && ${envelope} AND ST_Intersects(geom,${envelope})`;
+    const client = await this.connect();
+    try {
+      const counted = await client.query(
+        `SELECT count(*) AS total FROM geodata_entity WHERE ${envelopeFilter}`,
+        bounds,
+      );
+      const rows = await client.query(
+        `SELECT ${projection} AS entity FROM geodata_entity
+         WHERE ${envelopeFilter}
+         ORDER BY ST_Distance(ST_PointOnSurface(geom),ST_SetSRID(ST_MakePoint($6,$7),4326)),lower(name),id
+         LIMIT $8`,
+        values,
+      );
+      const total = parsePageTotal(counted.rows[0]?.total ?? '0');
+      return {
+        items: rows.rows.slice(0, limit).map((row) => row.entity),
+        total,
+        limit,
+        truncated: total > limit,
+        zoom,
+        bbox: bounds,
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async simplifyMapGeometries(input: unknown) {
+    if (!isRecord(input) || !Array.isArray(input.items))
+      throw new BadRequestException('map simplification items are required');
+    const zoom = parseMapZoom(input.zoom);
+    if (input.items.length > 500)
+      throw new BadRequestException(
+        'at most 500 map geometries may be simplified',
+      );
+    const items = input.items.map((item, index) => {
+      if (
+        !isRecord(item) ||
+        typeof item.id !== 'string' ||
+        item.id.length < 1 ||
+        item.id.length > 200 ||
+        !isRecord(item.geometry) ||
+        typeof item.geometry.type !== 'string' ||
+        (!('coordinates' in item.geometry) && !('geometries' in item.geometry))
+      )
+        throw new BadRequestException(`map geometry ${index + 1} is invalid`);
+      return { id: item.id, geometry: item.geometry };
+    });
+    const serializedItems = stringifyJsonWithBigInts(items);
+    if (Buffer.byteLength(serializedItems, 'utf8') > 4 * 1024 * 1024)
+      throw new BadRequestException('map simplification payload exceeds 4 MiB');
+    if (!items.length) return { items: [], zoom };
+
+    const tolerance = mapSimplificationToleranceMeters(zoom);
+    const client = await this.connect();
+    try {
+      const result = await client.query(
+        `WITH input AS (
+           SELECT item->>'id' AS id,
+                  ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON((item->'geometry')::text),4326),3857) AS geom,
+                  ordinal
+           FROM jsonb_array_elements($1::jsonb) WITH ORDINALITY AS payload(item,ordinal)
+         ), candidates AS (
+           SELECT id,ordinal,geom,
+                  CASE WHEN GeometryType(geom) IN ('POLYGON','MULTIPOLYGON','LINESTRING','MULTILINESTRING')
+                       THEN ST_SimplifyPreserveTopology(geom,$2)
+                       ELSE geom END AS simplified
+           FROM input
+         )
+         SELECT jsonb_agg(jsonb_build_object(
+           'id',id,
+           'geometry',ST_AsGeoJSON(ST_Transform(
+             CASE WHEN ST_IsEmpty(simplified) THEN geom ELSE simplified END,4326))::jsonb
+         ) ORDER BY ordinal) AS items
+         FROM candidates`,
+        [serializedItems, tolerance],
+      );
+      return { items: result.rows[0]?.items ?? [], zoom };
     } finally {
       client.release();
     }
@@ -554,10 +659,11 @@ function isCanonicalUuid(value: string) {
   return /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
 }
 
-export const entityProjection = `public_properties || jsonb_build_object(
+function entityProjectionWithGeometry(geometryExpression: string) {
+  return `public_properties || jsonb_build_object(
   'id',id::text,'programmeSlug',programme_slug,'entityIdentifier',entity_identifier,'entityType',entity_type_code,
   'name',name,'website',website,'description',description,'status',lifecycle_status,
-  'geometry',ST_AsGeoJSON(geom)::jsonb,
+  'geometry',${geometryExpression},
   'centroid',jsonb_build_object('lon',ST_X(COALESCE(centroid,ST_Centroid(geom)::geography)::geometry),'lat',ST_Y(COALESCE(centroid,ST_Centroid(geom)::geography)::geometry)),
   'maidenheadGridSquares4',maidenhead_grid_squares_4,'maidenheadLocators6',maidenhead_locators_6,
   'sourceState',source_state,'jurisdiction',jurisdiction,'attachments',attachments,'version',revision,
@@ -575,6 +681,11 @@ export const entityProjection = `public_properties || jsonb_build_object(
     'provinceCode',province_code,'county',county,'countyCode',county_code,'city',city,
     'municipality',municipality,'locality',locality)
 )`;
+}
+
+export const entityProjection = entityProjectionWithGeometry(
+  'ST_AsGeoJSON(geom)::jsonb',
+);
 
 export const importProjection = `(source_metadata - 'sourceFeatureHashOverrides') || jsonb_build_object(
   'id',id::text,'adapter',adapter_code,'status',status,'startedAt',started_at,
@@ -649,11 +760,27 @@ function parseBounds(query: Record<string, unknown>) {
   } else {
     return null;
   }
-  if (raw[0] >= raw[2] || raw[1] >= raw[3])
+  if (
+    !raw.every(Number.isFinite) ||
+    raw[0]! < -180 ||
+    raw[0]! >= raw[2]! ||
+    raw[2]! > 180 ||
+    raw[1]! < -90 ||
+    raw[1]! >= raw[3]! ||
+    raw[3]! > 90
+  )
     throw new BadRequestException(
-      'map bounds must have minimum values below maximum values',
+      'map bounds must be a valid WGS 84 bounding box',
     );
   return raw;
+}
+
+function parseMapZoom(value: unknown): number {
+  const zoom =
+    typeof value === 'number' ? value : Number(firstQueryValue(value));
+  if (!Number.isInteger(zoom) || zoom < 0 || zoom > 22)
+    throw new BadRequestException('map zoom must be an integer from 0 to 22');
+  return zoom;
 }
 
 function parseBoundsValues(values: string[], message: string): number[] {

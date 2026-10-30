@@ -4,7 +4,7 @@ This generated index groups contract operations by service and links each one to
 
 Regenerate with `npm run docs:api-traceability`. The mapping must cover every operation in the copied contract; target-only operations are documented separately in [API baseline notes](api-baseline.md).
 
-Contract baseline: [159 operations](../contracts/openapi.yaml).
+Contract baseline: [161 operations](../contracts/openapi.yaml).
 
 ## Identity
 
@@ -104,21 +104,23 @@ Contract baseline: [159 operations](../contracts/openapi.yaml).
 - `POST /v1/geodata/import-uploads/{uploadId}/complete` — [geodata-imports.controller.ts#L88](../apps/geodata/src/geodata-imports.controller.ts#L88)
 - `GET /v1/geodata/location-options` — [geodata.controller.ts#L197](../apps/geodata/src/geodata.controller.ts#L197)
 - `GET /v1/geodata/adapters` — [geodata.controller.ts#L116](../apps/geodata/src/geodata.controller.ts#L116)
-- `GET /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L243](../apps/geodata/src/geodata.controller.ts#L243)
-- `PATCH /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L248](../apps/geodata/src/geodata.controller.ts#L248)
+- `GET /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L262](../apps/geodata/src/geodata.controller.ts#L262)
+- `PATCH /v1/geodata/entities/{entityId}` — [geodata.controller.ts#L267](../apps/geodata/src/geodata.controller.ts#L267)
 - `GET /v1/geodata/entities/{entityId}/audit` — [geodata.controller.ts#L107](../apps/geodata/src/geodata.controller.ts#L107)
-- `POST /v1/geodata/entities/{entityId}/location-enrichment-requests` — [geodata.controller.ts#L274](../apps/geodata/src/geodata.controller.ts#L274)
+- `POST /v1/geodata/entities/{entityId}/location-enrichment-requests` — [geodata.controller.ts#L293](../apps/geodata/src/geodata.controller.ts#L293)
 - `GET /v1/geodata/tiles/{z}/{x}/{y}` — [geodata.controller.ts#L205](../apps/geodata/src/geodata.controller.ts#L205)
 - `GET /v1/geodata/map/extent` — [geodata.controller.ts#L234](../apps/geodata/src/geodata.controller.ts#L234)
+- `GET /v1/geodata/map/entities` — [geodata.controller.ts#L243](../apps/geodata/src/geodata.controller.ts#L243)
+- `POST /v1/geodata/map/simplify` — [geodata.controller.ts#L252](../apps/geodata/src/geodata.controller.ts#L252)
 - `GET /v1/geodata/refresh-schedules` — [geodata-operations.controller.ts#L86](../apps/geodata/src/geodata-operations.controller.ts#L86)
 - `POST /v1/geodata/refresh-schedules` — [geodata-operations.controller.ts#L95](../apps/geodata/src/geodata-operations.controller.ts#L95)
 - `POST /v1/geodata/refresh-schedules/{scheduleId}/run` — [geodata-operations.controller.ts#L117](../apps/geodata/src/geodata-operations.controller.ts#L117)
 - `GET /v1/geodata/conflation` — [geodata.controller.ts#L164](../apps/geodata/src/geodata.controller.ts#L164)
 - `POST /v1/geodata/conflation/{candidateId}/resolve` — [geodata.controller.ts#L173](../apps/geodata/src/geodata.controller.ts#L173)
 - `POST /v1/geodata/proposals` — [geodata-operations.controller.ts#L142](../apps/geodata/src/geodata-operations.controller.ts#L142)
-- `PUT /v1/geodata/entities/{entityId}/geometry` — [geodata.controller.ts#L354](../apps/geodata/src/geodata.controller.ts#L354)
-- `PUT /v1/geodata/entities/{entityId}/categories` — [geodata.controller.ts#L328](../apps/geodata/src/geodata.controller.ts#L328)
-- `POST /v1/geodata/entities/{entityId}/reviews` — [geodata.controller.ts#L301](../apps/geodata/src/geodata.controller.ts#L301)
+- `PUT /v1/geodata/entities/{entityId}/geometry` — [geodata.controller.ts#L373](../apps/geodata/src/geodata.controller.ts#L373)
+- `PUT /v1/geodata/entities/{entityId}/categories` — [geodata.controller.ts#L347](../apps/geodata/src/geodata.controller.ts#L347)
+- `POST /v1/geodata/entities/{entityId}/reviews` — [geodata.controller.ts#L320](../apps/geodata/src/geodata.controller.ts#L320)
 - `POST /v1/geodata/entity-deletion-jobs` — [geodata-operations.controller.ts#L34](../apps/geodata/src/geodata-operations.controller.ts#L34)
 - `GET /v1/geodata/entity-deletion-jobs/{jobId}` — [geodata-operations.controller.ts#L55](../apps/geodata/src/geodata-operations.controller.ts#L55)
 - `POST /v1/geodata/entity-deletion-jobs/{jobId}/confirm` — [geodata-operations.controller.ts#L63](../apps/geodata/src/geodata-operations.controller.ts#L63)

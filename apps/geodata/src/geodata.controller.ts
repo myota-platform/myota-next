@@ -240,6 +240,25 @@ export class GeodataController {
     );
   }
 
+  @Get('map/entities')
+  adminMapEntities(
+    @Headers('authorization') authorization: string | undefined,
+    @Query() query: Record<string, unknown>,
+  ) {
+    authorizeBearer(authorization);
+    return this.repository.getAdminMapEntities(query);
+  }
+
+  @Post('map/simplify')
+  @HttpCode(200)
+  simplifyMapGeometries(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    authorizeBearer(authorization);
+    return this.repository.simplifyMapGeometries(body);
+  }
+
   @Get('entities/:entityId')
   getEntity(@Param('entityId') id: string) {
     return this.repository.getEntity(id);

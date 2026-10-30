@@ -72,6 +72,12 @@ reject changed-body reuse, and successful results are stored with the owning
 Geodata transaction. Resumable upload sessions retain their session-specific
 owner and part-checksum rules.
 
+Map payloads are compressed at the Traefik ingress when the client advertises
+Brotli, with gzip fallback. Admin-host API responses use the same negotiated
+compression middleware as the public API and participant API routes. See the
+[map rendering strategy](map-rendering.md) for zoom simplification, viewport
+limits, and the distinction between display geometry and stored geometry.
+
 ## Asynchronous work
 
 Persist work intent and domain state in the owning database before publishing.

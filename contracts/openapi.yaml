@@ -2486,6 +2486,54 @@ paths:
                     maxItems: 4
                     items: { type: number, format: double }
         '400': { description: Programme is required }
+  /v1/geodata/map/entities:
+    get:
+      tags: [Geodata]
+      summary: Get up to 500 entities intersecting the Admin map viewport
+      description: Returns viewport-clipped geometries simplified for the supplied zoom level and the full matching count. When truncated is true, zoom in to load a smaller area.
+      operationId: getAdminGeodataMapEntities
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: bbox
+          required: true
+          description: minLon,minLat,maxLon,maxLat in WGS 84 coordinates.
+          schema: { type: string, maxLength: 160 }
+        - in: query
+          name: zoom
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 22 }
+      responses:
+        '200':
+          description: Viewport entities, limited to 500, with total match count and truncation status
+          content:
+            application/json:
+              schema:
+                { $ref: '#/components/schemas/AdminGeodataMapEntityCollection' }
+        '400': { description: Invalid viewport bounds or zoom }
+        '401': { description: Bearer authentication required }
+  /v1/geodata/map/simplify:
+    post:
+      tags: [Geodata]
+      summary: Generalize geometries for rendering at a map zoom level
+      description: Returns zoom-matched display geometries for up to 500 GeoJSON features. Stored entity geometry is not modified.
+      operationId: simplifyGeodataMapGeometries
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: '#/components/schemas/GeodataMapSimplificationRequest' }
+      responses:
+        '200':
+          description: Zoom-matched display geometries
+          content:
+            application/json:
+              schema:
+                { $ref: '#/components/schemas/GeodataMapSimplificationResult' }
+        '400': { description: Invalid or oversized geometry batch }
+        '401': { description: Bearer authentication required }
   /v1/geodata/refresh-schedules:
     get:
       tags: [Geodata]
@@ -4673,6 +4721,51 @@ components:
             x: { type: integer, minimum: 0 }
             y: { type: integer, minimum: 0 }
         format: { const: geojson-vector }
+    AdminGeodataMapEntityCollection:
+      type: object
+      required: [items, total, limit, truncated, zoom, bbox]
+      properties:
+        items:
+          type: array
+          maxItems: 500
+          items: { $ref: '#/components/schemas/GeoEntity' }
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, const: 500 }
+        truncated: { type: boolean }
+        zoom: { type: integer, minimum: 0, maximum: 22 }
+        bbox:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: { type: number, format: double }
+    GeodataMapSimplificationRequest:
+      type: object
+      required: [zoom, items]
+      properties:
+        zoom: { type: integer, minimum: 0, maximum: 22 }
+        items:
+          type: array
+          maxItems: 500
+          items:
+            type: object
+            required: [id, geometry]
+            properties:
+              id: { type: string, minLength: 1, maxLength: 200 }
+              geometry: { type: object, additionalProperties: true }
+    GeodataMapSimplificationResult:
+      type: object
+      required: [zoom, items]
+      properties:
+        zoom: { type: integer, minimum: 0, maximum: 22 }
+        items:
+          type: array
+          maxItems: 500
+          items:
+            type: object
+            required: [id, geometry]
+            properties:
+              id: { type: string }
+              geometry: { type: object, additionalProperties: true }
     GeodataEntityMetadataPatch:
       type: object
       required: [editorId]

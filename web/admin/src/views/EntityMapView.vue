@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import PageHeader from '../components/PageHeader.vue';
-import { onMounted, ref } from 'vue';
+import { onBeforeUnmount, ref } from 'vue';
 import { apiRequest } from '../lib/api';
 import LeafletMap from '../components/LeafletMap.vue';
 import type { GeoEntity } from '../types';
@@ -10,30 +10,63 @@ const selected = ref<GeoEntity | null>(null);
 const loading = ref(false);
 const error = ref('');
 const total = ref(0);
-const page = ref(1);
-async function load(more = false): Promise<void> {
-  if (loading.value) return;
+const capReached = ref(false);
+const limit = 500;
+const viewport = ref<{
+  bbox: [number, number, number, number];
+  zoom: number;
+} | null>(null);
+let viewportTimer: number | undefined;
+let requestSequence = 0;
+async function loadViewport(): Promise<void> {
+  const current = viewport.value;
+  if (!current) return;
+  const sequence = ++requestSequence;
   loading.value = true;
   error.value = '';
-  const next = more ? page.value + 1 : 1;
   try {
-    const data = await apiRequest<{ items: GeoEntity[]; total?: number }>(
-      `/v1/geodata/entities?page=${next}&pageSize=100`,
-    );
-    entities.value = more
-      ? [...entities.value, ...(data.items || [])]
-      : data.items || [];
-    total.value = data.total ?? entities.value.length;
-    page.value = next;
+    const params = new URLSearchParams({
+      bbox: current.bbox.join(','),
+      zoom: String(current.zoom),
+    });
+    const data = await apiRequest<{
+      items: GeoEntity[];
+      total: number;
+      limit: number;
+      truncated: boolean;
+    }>(`/v1/geodata/map/entities?${params}`);
+    if (sequence !== requestSequence) return;
+    entities.value = (data.items || []).slice(0, limit);
+    total.value = Number(data.total || 0);
+    capReached.value = data.truncated === true || total.value >= limit;
     if (selected.value)
       selected.value =
         entities.value.find((item) => item.id === selected.value?.id) || null;
   } catch (e) {
+    if (sequence !== requestSequence) return;
     error.value = e instanceof Error ? e.message : 'Unable to load entities.';
   } finally {
-    loading.value = false;
+    if (sequence === requestSequence) loading.value = false;
   }
 }
+function updateViewport(next: {
+  bbox: [number, number, number, number];
+  zoom: number;
+}): void {
+  viewport.value = next;
+  if (viewportTimer !== undefined) window.clearTimeout(viewportTimer);
+  viewportTimer = window.setTimeout(() => {
+    viewportTimer = undefined;
+    void loadViewport();
+  }, 120);
+}
+function refreshViewport(): void {
+  if (viewport.value) void loadViewport();
+}
+onBeforeUnmount(() => {
+  requestSequence += 1;
+  if (viewportTimer !== undefined) window.clearTimeout(viewportTimer);
+});
 function select(entity: GeoEntity): void {
   selected.value = entity;
 }
@@ -51,11 +84,10 @@ function programmes(entity: GeoEntity): string {
       .join(', ') || 'Unassigned'
   );
 }
-onMounted(() => load());
 </script>
 
 <template>
-  <PageHeader :refresh="() => load()" :busy="loading" />
+  <PageHeader :refresh="refreshViewport" :busy="loading" />
   <div v-if="error" class="error-card" role="alert">{{ error }}</div>
   <article class="panel map-panel">
     <div class="panel-heading">
@@ -63,23 +95,23 @@ onMounted(() => load());
         {{
           loading
             ? 'Loading…'
-            : `${entities.length} of ${total} entities loaded`
+            : `${entities.length} of ${total} entities in this view`
         }}
       </h2>
-      <button
-        v-if="entities.length < total"
-        class="secondary"
-        :disabled="loading"
-        @click="load(true)"
-      >
-        Load next 100
-      </button>
+      <p v-if="capReached" class="notice" role="status" aria-live="polite">
+        The 500-entity map limit is reached. Zoom in to see entities in a
+        smaller area.
+      </p>
     </div>
     <LeafletMap
       :entities="entities"
       :selected-id="selected?.id"
       height="760px"
+      :viewport-managed="true"
+      geometry-simplification="server"
+      :initial-view="{ center: [20, 0], zoom: 2 }"
       @select="select"
+      @viewport-change="updateViewport"
     ></LeafletMap>
     <details class="entity-map-directory">
       <summary>Browse loaded entities by name ({{ entities.length }})</summary>
