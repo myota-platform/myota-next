@@ -16,7 +16,15 @@ consumers on the configured NATS server.
   environment, resource requests/limits, and health checks.
 - `ingress` configures Traefik entry points, API/Admin/Participant/S3
   hostnames, middleware references, TLS certificate resolver, and optional
-  TLS Secret. The test cluster uses `websecure` with `acmeresolver`.
+  TLS Secret. API routes can use the configurable Traefik compression
+  middleware (`br` and `gzip` for JSON responses by default); Admin, static
+  Participant pages, and object storage routes do not receive it. The test
+  cluster uses `websecure` with `acmeresolver`.
+  Set `ingress.compression.enabled: false` to disable it, or configure its
+  minimum response size, encodings, and content types. The `myota-test` deploy
+  workflow sends both identity and compressed requests to a public geodata tile,
+  checks the response encoding and `Vary` header, decompresses the result, and
+  compares it with the uncompressed response.
 - `secrets`, `dependencies`, `migrations`, `observe`, `prometheus.serviceMonitor`,
   `prometheus.rules`, `prometheus.alertmanagerConfig`, and
   `jetstreamProvisioner` configure secret references, external endpoints,

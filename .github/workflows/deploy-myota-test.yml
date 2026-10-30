@@ -9,6 +9,7 @@ on:
       - .github/workflows/deploy-myota-test.yml
       - tools/upgrade-myota-test-catalog.mjs
       - tools/myota-test-catalog-recovery.mjs
+      - tools/verify-geodata-compression.mjs
   workflow_dispatch:
     inputs:
       simulate_recovery_failure:
@@ -287,3 +288,6 @@ jobs:
           node tools/upgrade-myota-test-catalog.mjs \
             "$VALUES_JSON" \
             "$EXPECTED_JSON"
+
+      - name: Verify Brotli or gzip compression on public geodata tiles
+        run: node tools/verify-geodata-compression.mjs

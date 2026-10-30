@@ -497,10 +497,18 @@
             /></label>
             <label
               >Participant type<select id="register-participation-type">
-                <option value="OPERATOR">Operator</option>
+                <option value="OPERATOR">Licensed operator</option>
                 <option value="SWL">SWL</option>
               </select></label
             >
+            <label id="register-callsign-field"
+              >Callsign<input
+                id="register-callsign"
+                autocomplete="off"
+                autocapitalize="characters"
+                maxlength="32"
+                required
+            /></label>
             <button type="submit">
               Create account and send verification email
             </button>

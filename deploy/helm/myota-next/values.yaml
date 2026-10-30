@@ -430,6 +430,14 @@ ingress:
     certResolver: acmeresolver
     secretName: ''
   middlewares: []
+  compression:
+    enabled: true
+    minResponseBodyBytes: 128
+    encodings:
+      - br
+      - gzip
+    includedContentTypes:
+      - application/json
   priority: 0
 imagePullSecrets: []
 serviceAccountName: ''

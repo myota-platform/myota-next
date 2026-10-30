@@ -60,6 +60,7 @@ test('programme map and entity catalogue support global discovery and entity act
   const entityRequests: URL[] = [];
   const tileRequests: URL[] = [];
   const pageErrors: string[] = [];
+  let tooManyMapFeatures = false;
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.route('https://tile.openstreetmap.org/**', async (route) => {
     await route.fulfill({
@@ -110,12 +111,19 @@ test('programme map and entity catalogue support global discovery and entity act
     }
     if (url.pathname.startsWith('/v1/geodata/tiles/')) {
       tileRequests.push(url);
+      const tileEntities = tooManyMapFeatures
+        ? Array.from({ length: 501 }, (_, index) => ({
+            ...entities[index % entities.length],
+            id: `tile-entity-${index}`,
+            name: `Tile entity ${index}`,
+          }))
+        : entities;
       await route.fulfill({
         json: {
           type: 'FeatureCollection',
-          count: 3,
-          truncated: false,
-          features: entities.map((entity) => ({
+          count: tileEntities.length,
+          truncated: tooManyMapFeatures,
+          features: tileEntities.map((entity) => ({
             type: 'Feature',
             id: entity.id,
             geometry: entity.geometry,
@@ -207,7 +215,10 @@ test('programme map and entity catalogue support global discovery and entity act
   expect(entityRequests[0].searchParams.get('pageSize')).toBe('50');
   expect(
     tileRequests.every(
-      (url) => url.searchParams.get('programme') === 'world-radio',
+      (url) =>
+        url.searchParams.get('programme') === 'world-radio' &&
+        Number(url.searchParams.get('limit')) >= 1 &&
+        Number(url.searchParams.get('limit')) <= 500,
     ),
   ).toBeTruthy();
 
@@ -242,6 +253,14 @@ test('programme map and entity catalogue support global discovery and entity act
   await expect(
     page.locator(`[data-entity-row="${entityIds[0]}"] .entity-focus`),
   ).toHaveAttribute('aria-pressed', 'true');
+  tooManyMapFeatures = true;
+  await page.getByRole('button', { name: 'Zoom in' }).click();
+  await expect(page.locator('#map-status')).toHaveText(
+    'Showing up to 500 entities. Zoom in to see more.',
+  );
+  await expect(
+    page.locator('#public-map-overlay [data-map-entity]'),
+  ).toHaveCount(500);
   await expect(pageErrors).toEqual([]);
   await expectResponsiveAccessible(page, 'Phase 7 programme map and catalogue');
 });

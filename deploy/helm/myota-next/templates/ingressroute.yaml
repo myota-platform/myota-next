@@ -1,6 +1,13 @@
 {{- if .Values.ingress.enabled }}
 {{- $admin := index .Values.components "admin-web" }}
 {{- $participant := index .Values.components "participant-web" }}
+{{- $apiMiddlewares := list }}
+{{- range .Values.ingress.middlewares }}
+{{- $apiMiddlewares = append $apiMiddlewares . }}
+{{- end }}
+{{- if .Values.ingress.compression.enabled }}
+{{- $apiMiddlewares = append $apiMiddlewares (dict "name" (printf "%s-response-compression" (include "myota-next.name" .))) }}
+{{- end }}
 {{- if not .Values.ingress.apiHost }}
 {{- fail "ingress.apiHost is required when ingress is enabled" }}
 {{- end }}
@@ -19,7 +26,7 @@ spec:
       {{- if .Values.ingress.priority }}
       priority: {{ .Values.ingress.priority }}
       {{- end }}
-      {{- with .Values.ingress.middlewares }}
+      {{- with $apiMiddlewares }}
       middlewares:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -41,7 +48,7 @@ spec:
     - kind: Rule
       match: Host(`{{ .Values.ingress.participantHost }}`) && PathPrefix(`/v1/`)
       priority: 100
-      {{- with .Values.ingress.middlewares }}
+      {{- with $apiMiddlewares }}
       middlewares:
         {{- toYaml . | nindent 8 }}
       {{- end }}

@@ -97,3 +97,8 @@ ingress:
   tls:
     certResolver: acmeresolver
     secretName: ''
+  compression:
+    enabled: true
+    minResponseBodyBytes: 128
+    encodings: [br, gzip]
+    includedContentTypes: [application/json]

@@ -209,6 +209,7 @@ export class GeodataController {
     @Param('y') y: string,
     @Query('programme') programme?: string,
     @Query('status') status?: string | string[],
+    @Query('limit') limit?: string,
   ) {
     const coordinates = parseTileCoordinates(zoom, x, y);
     const rawStatuses: string[] = Array.isArray(status)
@@ -221,7 +222,13 @@ export class GeodataController {
     if (!statuses.length) statuses.push('APPROVED', 'CANDIDATE');
     if (statuses.some((value) => !['APPROVED', 'CANDIDATE'].includes(value)))
       throw new BadRequestException('map status must be APPROVED or CANDIDATE');
-    return this.repository.getTile(...coordinates, programme, statuses);
+    const featureLimit = limit === undefined ? 500 : Number(limit);
+    return this.repository.getTile(
+      ...coordinates,
+      programme,
+      statuses,
+      featureLimit,
+    );
   }
 
   @Get('map/extent')

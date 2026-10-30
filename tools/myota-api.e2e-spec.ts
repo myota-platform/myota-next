@@ -89,7 +89,7 @@ describeWithDatabases(
           .expect(400)
           .expect(({ body }) => {
             expect(JSON.stringify(body)).toContain(
-              'registration details are invalid',
+              'callsign is required for licensed-operator registration',
             );
           });
 

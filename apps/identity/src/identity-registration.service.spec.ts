@@ -32,6 +32,21 @@ function registrationHarness(existingAccount = false, emailVerified = false) {
       };
     if (sql.includes('FROM public.account') && sql.includes('FOR UPDATE'))
       return { rows: account ? [account] : [], rowCount: account ? 1 : 0 };
+    if (sql.includes('INSERT INTO public.callsign'))
+      return {
+        rows: [
+          {
+            created_at: '2026-10-26T09:00:00.000000Z',
+            updated_at: '2026-10-26T09:00:00.000000Z',
+          },
+        ],
+        rowCount: 1,
+      };
+    if (sql.includes('UPDATE public.account SET updated_at'))
+      return {
+        rows: [{ updated_at: '2026-10-26T09:00:01.000000Z' }],
+        rowCount: 1,
+      };
     if (sql.includes('INSERT INTO public.account\n'))
       return {
         rows: [
@@ -119,6 +134,7 @@ describe('IdentityRegistrationService', () => {
         email: ' Casey@Example.Test ',
         password: 'long-enough-test-password',
         participationType: 'OPERATOR',
+        callsign: ' ea7urs ',
       },
       '192.0.2.10',
     );
@@ -141,11 +157,17 @@ describe('IdentityRegistrationService', () => {
     const created = harness.events.find(
       (event) => event.eventType === 'identity.account.created.v1',
     );
-    expect(created?.payload.account).toMatchObject({
+    expect(created).toBeDefined();
+    const createdAccount = created!.payload.account as Record<string, unknown>;
+    expect(createdAccount).toMatchObject({
       id: accountId,
       email: 'casey@example.test',
       status: 'PENDING_SETUP',
     });
+    expect(createdAccount.callsigns).toEqual([
+      expect.objectContaining({ value: 'EA7URS', status: 'UNVERIFIED' }),
+    ]);
+    expect(createdAccount.primaryCallsignId).toBeTruthy();
     const delivery = harness.events.find(
       (event) => event.eventType === 'email.send.v1',
     );
@@ -178,6 +200,7 @@ describe('IdentityRegistrationService', () => {
         email: 'casey@example.test',
         password: 'long-enough-test-password',
         participationType: 'OPERATOR',
+        callsign: 'EA7URS',
       },
       '192.0.2.10',
     );
@@ -200,6 +223,35 @@ describe('IdentityRegistrationService', () => {
     await expect(harness.service.verify({ token })).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+
+  it('registers an SWL without a callsign or primary callsign', async () => {
+    vi.stubEnv(
+      'MYOTA_PARTICIPANT_PUBLIC_URL',
+      'https://participant.example.test',
+    );
+    const harness = registrationHarness();
+    await harness.service.register(
+      {
+        displayName: 'Casey Listener',
+        email: 'listener@example.test',
+        password: 'long-enough-test-password',
+        participationType: 'SWL',
+      },
+      '192.0.2.10',
+    );
+    const created = harness.events.find(
+      (event) => event.eventType === 'identity.account.created.v1',
+    );
+    expect(created?.payload.account).toMatchObject({
+      callsigns: [],
+      primaryCallsignId: null,
+    });
+    expect(
+      harness.query.mock.calls.some(([sql]) =>
+        String(sql).includes('INSERT INTO public.callsign'),
+      ),
+    ).toBe(false);
   });
 
   it('uses the same generic response for an existing unverified address', async () => {
@@ -251,6 +303,7 @@ describe('IdentityRegistrationService', () => {
         email: 'casey@example.test',
         password: 'long-enough-test-password',
         participationType: 'OPERATOR',
+        callsign: 'EA7URS',
       },
       '192.0.2.10',
     );
@@ -267,6 +320,29 @@ describe('IdentityRegistrationService', () => {
     await expect(harness.service.verify({ token })).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+
+  it('requires callsigns for licensed operators and rejects them for SWLs', async () => {
+    const harness = registrationHarness();
+    const base = {
+      displayName: 'Casey Operator',
+      email: 'casey@example.test',
+      password: 'long-enough-test-password',
+    };
+    await expect(
+      harness.service.register(
+        { ...base, participationType: 'OPERATOR' },
+        '192.0.2.10',
+      ),
+    ).rejects.toThrow(
+      'callsign is required for licensed-operator registration',
+    );
+    await expect(
+      harness.service.register(
+        { ...base, participationType: 'SWL', callsign: 'EA7URS' },
+        '192.0.2.10',
+      ),
+    ).rejects.toThrow('callsign must be omitted for SWL registration');
   });
 
   it('resends only for an unverified account and invalidates the previous token', async () => {

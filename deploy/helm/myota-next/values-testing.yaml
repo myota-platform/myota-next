@@ -157,6 +157,11 @@ ingress:
     certResolver: acmeresolver
     secretName: ''
   middlewares: []
+  compression:
+    enabled: true
+    minResponseBodyBytes: 128
+    encodings: [br, gzip]
+    includedContentTypes: [application/json]
 
 commonResources:
   requests: { cpu: 50m, memory: 96Mi }
