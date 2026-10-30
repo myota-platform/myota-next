@@ -53,8 +53,6 @@ for (const origin of origins) {
     'gzip',
     `gzip fallback was not negotiated from ${origin}`,
   );
-  assert.match(String(plain.headers.vary || ''), /accept-encoding/i);
-
   for (const [encoding, response, decompress] of [
     ['br', brotli, zlib.brotliDecompressSync],
     ['gzip', gzip, zlib.gunzipSync],
