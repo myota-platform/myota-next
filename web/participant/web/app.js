@@ -446,11 +446,15 @@ async function loadProgramme(slug) {
   if (generation !== programmeLoadGeneration) return;
   await loadProgrammeEntities(slug, 1, generation);
   if (generation !== programmeLoadGeneration) return;
+  // Refresh participant activity as soon as the entity picker is ready. The
+  // remaining public map, awards, and community requests can finish later;
+  // they must not clear a status message from an activation started meanwhile.
+  await loadActivations();
+  if (generation !== programmeLoadGeneration) return;
   await loadProgrammeMap(slug, generation);
   if (generation !== programmeLoadGeneration) return;
   await loadPublicAwards(slug);
   await loadPublicActivity(slug);
-  await loadActivations();
 }
 
 async function loadProgrammeEntities(
