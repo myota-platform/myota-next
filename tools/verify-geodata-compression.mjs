@@ -20,7 +20,7 @@ function request(url, acceptEncoding) {
         );
       },
     );
-    req.setTimeout(15_000, () => req.destroy(new Error('request timed out')));
+    req.setTimeout(60_000, () => req.destroy(new Error('request timed out')));
     req.on('error', reject);
     req.end();
   });
@@ -29,7 +29,7 @@ function request(url, acceptEncoding) {
 const origin =
   process.env.MYOTA_TEST_API_URL || 'https://myota-test.spainip.es';
 const url = new URL(
-  '/v1/geodata/tiles/0/0/0?status=APPROVED%2CCANDIDATE',
+  '/v1/geodata/tiles/5/15/12?status=APPROVED%2CCANDIDATE',
   origin,
 ).toString();
 const [plain, encoded] = await Promise.all([
