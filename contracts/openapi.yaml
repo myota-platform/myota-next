@@ -633,6 +633,8 @@ paths:
             schema: { type: string },
           }
         - { in: query, name: province, schema: { type: string } }
+        - { in: query, name: county, schema: { type: string } }
+        - { in: query, name: locality, schema: { type: string } }
         - {
             in: query,
             name: city,
@@ -2439,12 +2441,47 @@ paths:
         - { in: path, name: z, required: true, schema: { type: integer } }
         - { in: path, name: x, required: true, schema: { type: integer } }
         - { in: path, name: y, required: true, schema: { type: integer } }
+        - { in: query, name: programme, schema: { type: string } }
+        - in: query
+          name: status
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: string, enum: [APPROVED, CANDIDATE] }
       responses:
         '200':
           description: GeoJSON FeatureCollection with tile metadata, capped at 500 features
           content:
             application/json:
               schema: { $ref: '#/components/schemas/GeodataTileCollection' }
+  /v1/geodata/map/extent:
+    get:
+      tags: [Geodata]
+      summary: Get the programme entity extent for the participant map
+      operationId: getProgrammeMapExtent
+      parameters:
+        - in: query
+          name: programme
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Entity count and bounding box for approved and candidate programme entities
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [programme, total, bbox]
+                properties:
+                  programme: { type: string }
+                  total: { type: integer, minimum: 0 }
+                  bbox:
+                    type: [array, 'null']
+                    minItems: 4
+                    maxItems: 4
+                    items: { type: number, format: double }
+        '400': { description: Programme is required }
   /v1/geodata/refresh-schedules:
     get:
       tags: [Geodata]
@@ -2976,6 +3013,59 @@ paths:
           },
         ]
       responses: { '200': { description: Public leaderboard } }
+  /v1/public/entity-statistics:
+    get:
+      tags: [Activity]
+      summary: Get public valid activity statistics for selected entities
+      operationId: getPublicEntityStatistics
+      parameters:
+        - in: query
+          name: programme
+          required: true
+          schema: { type: string }
+        - in: query
+          name: entityIds
+          required: true
+          style: form
+          explode: true
+          description: One to 100 entity identifiers; may be repeated or comma-separated.
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 100
+            items: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Activity totals without participant-identifying information
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [programme, items]
+                properties:
+                  programme: { type: string }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        [
+                          entityId,
+                          activationCount,
+                          activationQsoCount,
+                          hunterQsoCount,
+                          qsoCount,
+                          lastActivationAt,
+                        ]
+                      properties:
+                        entityId: { type: string }
+                        activationCount: { type: integer, minimum: 0 }
+                        activationQsoCount: { type: integer, minimum: 0 }
+                        hunterQsoCount: { type: integer, minimum: 0 }
+                        qsoCount: { type: integer, minimum: 0 }
+                        lastActivationAt:
+                          { type: [string, 'null'], format: date-time }
+        '400': { description: Invalid or missing programme/entity identifiers }
   /v1/public/results:
     get:
       tags: [Activity]
@@ -4532,6 +4622,19 @@ components:
               properties:
                 type: object
                 additionalProperties: true
+                properties:
+                  name: { type: string }
+                  entityIdentifier: { type: string, nullable: true }
+                  programmeSlug: { type: string, nullable: true }
+                  entityType: { type: string, nullable: true }
+                  status: { type: string }
+                  location: { type: object, additionalProperties: true }
+                  centroid:
+                    type: object
+                    required: [lon, lat]
+                    properties:
+                      lon: { type: number, format: double }
+                      lat: { type: number, format: double }
         count: { type: integer, minimum: 0, maximum: 500 }
         truncated: { type: boolean }
         cacheTtlSeconds: { type: integer, const: 60 }

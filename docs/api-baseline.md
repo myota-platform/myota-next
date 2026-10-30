@@ -136,6 +136,7 @@ Every operation below has a matching NestJS route decorator. The controller link
 - `GET /v1/geodata/entities/{entityId}/audit` — Get entity review, geometry, and lifecycle audit context (route owner [controller](../apps/geodata/src/geodata.controller.ts))
 - `POST /v1/geodata/entities/{entityId}/location-enrichment-requests` — Queue reverse-geocoding for missing entity location metadata (route owner [controller](../apps/geodata/src/geodata.controller.ts); operation ID `postGeodataEntityLocationEnrichmentRequest`)
 - `GET /v1/geodata/tiles/{z}/{x}/{y}` — Get a GeoJSON vector collection for a Web Mercator tile (route owner [controller](../apps/geodata/src/geodata.controller.ts))
+- `GET /v1/geodata/map/extent` — Get the approved and candidate entity extent for one programme (route owner [controller](../apps/geodata/src/geodata.controller.ts))
 - `GET /v1/geodata/refresh-schedules` — List geodata refresh schedules (route owner [controller](../apps/geodata/src/geodata.controller.ts))
 - `POST /v1/geodata/refresh-schedules` — Create a geodata refresh schedule (route owner [controller](../apps/geodata/src/geodata.controller.ts))
 - `POST /v1/geodata/refresh-schedules/{scheduleId}/run` — Run a geodata refresh schedule (route owner [controller](../apps/geodata/src/geodata.controller.ts))
@@ -202,4 +203,5 @@ Every operation below has a matching NestJS route decorator. The controller link
 - `GET /v1/public/programmes/{slug}/content` — Get effective published programme content (route owner [module](../apps/programmes/src/programmes.module.ts); operation ID `getPublishedProgrammeContent`)
 - `GET /v1/public/activations` — List public activation history (route owner [controller](../apps/activity/src/public-activity.controller.ts))
 - `GET /v1/public/leaderboards` — List public programme leaderboards (route owner [controller](../apps/activity/src/public-activity.controller.ts))
+- `GET /v1/public/entity-statistics` — Get valid activation and QSO totals for up to 100 entities in one programme, without participant-identifying data (route owner [controller](../apps/activity/src/public-activity.controller.ts))
 - `GET /v1/public/results` — Download public activation results (route owner [controller](../apps/activity/src/public-activity.controller.ts))
