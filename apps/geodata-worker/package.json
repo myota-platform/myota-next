@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@nestjs/observe": "^0.3.17"
+    "@nestjs/observe": "^0.3.20"
   }
 }
