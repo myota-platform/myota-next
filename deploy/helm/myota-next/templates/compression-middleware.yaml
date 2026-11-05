@@ -2,6 +2,7 @@
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
+  namespace: {{ .Release.Namespace | quote }}
   name: {{ include "myota-next.name" . }}-response-compression
   labels:
     {{- include "myota-next.labels" . | nindent 4 }}

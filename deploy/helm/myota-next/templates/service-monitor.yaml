@@ -2,6 +2,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
+  namespace: {{ .Release.Namespace | quote }}
   name: {{ include "myota-next.name" . }}-apis
   labels:
     {{- include "myota-next.labels" . | nindent 4 }}
@@ -30,6 +31,7 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
+  namespace: {{ .Release.Namespace | quote }}
   name: {{ include "myota-next.name" . }}-workers
   labels:
     {{- include "myota-next.labels" . | nindent 4 }}

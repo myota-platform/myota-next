@@ -6,6 +6,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
+  namespace: {{ .Release.Namespace | quote }}
   name: {{ include "myota-next.name" . }}-jetstream-provisioner-{{ .Release.Revision }}
   labels:
     {{- include "myota-next.labels" . | nindent 4 }}

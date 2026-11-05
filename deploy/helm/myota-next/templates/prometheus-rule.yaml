@@ -2,6 +2,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
+  namespace: {{ .Release.Namespace | quote }}
   name: {{ include "myota-next.name" . }}-alerts
   labels:
     {{- include "myota-next.labels" . | nindent 4 }}

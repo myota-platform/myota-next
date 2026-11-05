@@ -22,6 +22,14 @@ Rancher App status, Helm revision, pod readiness, and health endpoints after
 the catalog workflow completes. A failed sync must be resolved before
 accepting the deployment.
 
+The `myota-test` release must always target namespace `myota-test`. The chart
+rejects that release name in other namespaces and renders explicit namespaces
+on its resources. Never copy application Secrets into `default` to make
+accidental workloads start. Before deployment, verify required Secret names and
+keys in `myota-test` without printing their values. See
+[namespace and missing-Secret recovery](../../../docs/operations/myota-test-namespace-recovery.md)
+for the 2026-11-05 incident, safe cleanup and post-deployment checks.
+
 The `myota-next-testing` ClusterRepo reads only the `/testing` chart index and
 runs chart operations as `myota-test-catalog-upgrader` in the explicitly set
 `myota-test` namespace. Its Kubernetes Role is confined to that namespace and
