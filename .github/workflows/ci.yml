@@ -69,6 +69,20 @@ jobs:
           grep -F 'kind: PrometheusRule' "$RUNNER_TEMP/myota-test-fleet-rendered.yaml"
           grep -F 'alert: MyOTAScrapeTargetUnavailable' "$RUNNER_TEMP/myota-test-fleet-rendered.yaml"
           grep -F 'alert: MyOTAWorkerDependencyUnavailable' "$RUNNER_TEMP/myota-test-fleet-rendered.yaml"
+          test "$(grep -c '^kind:' "$RUNNER_TEMP/myota-test-fleet-rendered.yaml")" \
+            -eq "$(grep -c '^  namespace: "myota-test"$' "$RUNNER_TEMP/myota-test-fleet-rendered.yaml")"
+          for wrong_namespace in default accidental-test; do
+            if helm template myota-test deploy/helm/myota-next \
+              --namespace "$wrong_namespace" \
+              -f deploy/fleet/myota-test/values.yaml \
+              > "$RUNNER_TEMP/myota-wrong-namespace.yaml" \
+              2> "$RUNNER_TEMP/myota-wrong-namespace.log"; then
+              echo "myota-test unexpectedly rendered in $wrong_namespace" >&2
+              exit 1
+            fi
+            grep -F 'Release myota-test must use namespace myota-test' \
+              "$RUNNER_TEMP/myota-wrong-namespace.log"
+          done
       - name: Build and start hardened test dependencies
         run: |
           docker buildx build --load \

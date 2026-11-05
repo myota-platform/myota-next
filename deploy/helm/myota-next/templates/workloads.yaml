@@ -8,6 +8,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: {{ $.Release.Namespace | quote }}
   name: {{ printf "%s-%s" (include "myota-next.name" $) $name | trunc 63 | trimSuffix "-" }}
   labels:
     {{- include "myota-next.labels" $ | nindent 4 }}

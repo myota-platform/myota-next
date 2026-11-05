@@ -1,0 +1,3 @@
+{{- if and (eq .Release.Name "myota-test") (ne .Release.Namespace "myota-test") -}}
+{{- fail "Release myota-test must use namespace myota-test; specify --namespace myota-test. Never provision its Secrets in default." -}}
+{{- end -}}

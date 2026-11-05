@@ -185,6 +185,13 @@ helm upgrade --install myota-next deploy/helm/myota-next \
 
 ## Rancher catalog and versioning
 
+The deployed test release is named `myota-test` in namespace `myota-test`, using
+the approved Rancher workflow. Chart rendering rejects this release name in
+any other namespace. Every namespaced resource includes its release namespace,
+so rendered manifests retain the target when subsequently applied. Always
+specify the namespace explicitly for both Helm and kubectl commands. See the
+[missing-Secret and wrong-namespace runbook](../../../docs/operations/myota-test-namespace-recovery.md).
+
 The public chart repository is
 `https://myota-platform.github.io/myota-next`. Add it as a Rancher Cluster
 Repository / Helm repository to make the chart visible under Applications. The

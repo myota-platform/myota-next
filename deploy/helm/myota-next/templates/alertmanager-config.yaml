@@ -3,6 +3,7 @@
 apiVersion: monitoring.coreos.com/v1alpha1
 kind: AlertmanagerConfig
 metadata:
+  namespace: {{ .Release.Namespace | quote }}
   name: {{ include "myota-next.name" . }}-test-alerts
   labels:
     {{- include "myota-next.labels" . | nindent 4 }}
