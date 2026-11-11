@@ -79,7 +79,7 @@
     "@nestjs/platform-express": "12.2.0",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.223.0",
-    "@opentelemetry/core": "^2.12.0",
+    "@opentelemetry/core": "^3.0.0",
     "@opentelemetry/exporter-logs-otlp-grpc": "^0.223.0",
     "@opentelemetry/exporter-metrics-otlp-grpc": "^0.223.0",
     "@opentelemetry/exporter-trace-otlp-grpc": "^0.223.0",
