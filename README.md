@@ -1,3 +1,9 @@
+> [!IMPORTANT]
+> **Development has moved.** This repository was archived on 2026-11-27 and is
+> read-only. All MyOTA development continues in
+> [`myota-platform/myota-new`](https://github.com/myota-platform/myota-new).
+> Open new issues and pull requests there.
+
 # MyOTA Next
 
 This is a clean implementation of MyOTA, with the current platform used as the
