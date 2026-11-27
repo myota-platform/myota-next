@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS nats-build
+FROM --platform=$BUILDPLATFORM golang:1.27.4-alpine3.24@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS nats-build
 ARG TARGETOS
 ARG TARGETARCH
 ARG NATS_COMMIT=b2fd3efc7456b11b06a54877ad6f6ccfb911edb4
@@ -14,5 +14,5 @@ RUN mkdir -p /out \
     && CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" \
     go build -trimpath -buildvcs=false -ldflags='-s -w' -o /out/nats-server .
 
-FROM nats:2.15.1-alpine3.22@sha256:7ae34c25dfd6fe2e01c6483eabef20d796690fdcac6c4d94ca780a6cf9877fde
+FROM nats:2.15.3-alpine3.22@sha256:558394a23dd3c36f2d3a64b51865fd09908010e80a542cea5e75c2af543ed62a
 COPY --from=nats-build --chmod=0755 /out/nats-server /usr/local/bin/nats-server
