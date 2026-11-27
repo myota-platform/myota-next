@@ -1,4 +1,4 @@
-FROM node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS build
+FROM node:25-trixie-slim@sha256:aabbe39553d15ede8a97cc60c9e1a97034ff772afcf696ea42b94e7f5f2ec71b AS build
 
 ARG APP_NAME
 WORKDIR /workspace
@@ -23,7 +23,7 @@ RUN test -n "$APP_NAME" \
   && npx nest build "$APP_NAME" \
   && test -f "dist/apps/$APP_NAME/main.js"
 
-FROM node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS osmium-build
+FROM node:25-trixie-slim@sha256:aabbe39553d15ede8a97cc60c9e1a97034ff772afcf696ea42b94e7f5f2ec71b AS osmium-build
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends osmium-tool \
@@ -44,7 +44,7 @@ RUN apt-get update \
         cp -L "$library" "$destination"; \
       done
 
-FROM node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS production-dependencies
+FROM node:25-trixie-slim@sha256:aabbe39553d15ede8a97cc60c9e1a97034ff772afcf696ea42b94e7f5f2ec71b AS production-dependencies
 
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -52,7 +52,7 @@ COPY vendor/shapefile ./vendor/shapefile
 RUN npm ci --omit=dev \
   && npm cache clean --force
 
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:cb606325b7ec4af55462cb0b424a53b452a5b4a894ffe841fcf1048d216fb9f8 AS runtime
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:675c532423b908f9e56f9d60a4e62309b63cd2a3175acb90a46b96f7ee68e121 AS runtime
 
 ARG APP_NAME
 ENV APP_NAME=${APP_NAME}
